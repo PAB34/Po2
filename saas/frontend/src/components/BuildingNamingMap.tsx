@@ -234,8 +234,10 @@ export function BuildingNamingMap({
         weight: 2,
       });
       centerMarker.bindPopup?.(`<strong>${addressLabel}</strong><br/>Source de centrage : ${usedSource}`);
-      const centerLayer = runtime.layerGroup([centerMarker]).addTo(map);
-      focusGroup.addLayer(centerLayer);
+      const centerLayer = runtime.featureGroup();
+      centerLayer.addLayer(centerMarker);
+      centerLayer.addTo(map);
+      focusGroup.addLayer(centerMarker);
       centerLayerRef.current = centerLayer;
     }
 
