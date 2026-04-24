@@ -44,6 +44,7 @@ _APP_STATE: dict[str, Any] = {
     "cache_geocode": {},
     "cache_ign_features": {},
     "cache_ign_toponymy": {},
+    "cache_naming_dataset": {},
     "last_call_by_host": {},
 }
 
@@ -793,7 +794,15 @@ def list_majic_columns() -> list[str]:
     return list(dataframe.columns)
 
 
-def get_building_naming_rows(city_name: str | None = None) -> dict[str, Any]:
+def _build_naming_dataset_cache_key(city_name: str | None) -> str:
+    file_path = _get_majic_file_path()
+    file_stat = file_path.stat()
+    normalized_city = _normalize_text(city_name)
+    return f"{file_path.resolve()}::{file_stat.st_mtime_ns}::{file_stat.st_size}::{normalized_city}"
+
+
+def _build_building_naming_rows(city_name: str | None = None) -> dict[str, Any]:
+    started_at = time.perf_counter()
     filename, dataframe = _read_majic_file()
     mapping = {key: _find_column(list(dataframe.columns), candidates) for key, candidates in _MAJIC_EXPECTED.items()}
     missing = [key for key in ["departmentcode", "municipalitycode", "section", "number", "street_type", "street_name", "city_name"] if not mapping.get(key)]
@@ -857,14 +866,45 @@ def get_building_naming_rows(city_name: str | None = None) -> dict[str, Any]:
                 "majic_door_values": sorted({value for value in subset["majic_door"].tolist() if value}),
             }
         )
+    build_duration_ms = int((time.perf_counter() - started_at) * 1000)
     return {
         "filename": filename,
         "columns": list(dataframe.columns),
         "mapping": mapping,
         "total_rows": int(len(work)),
         "unique_addresses": len(grouped_rows),
+        "filtered_city_name": city_name,
+        "group_person_column": group_person_column,
+        "group_person_filter": "4 - Commune / 4 - Commune du fichier",
+        "cache_status": "miss",
+        "build_duration_ms": build_duration_ms,
+        "served_duration_ms": build_duration_ms,
         "rows": grouped_rows,
     }
+
+
+def get_building_naming_rows(city_name: str | None = None) -> dict[str, Any]:
+    started_at = time.perf_counter()
+    cache_key = _build_naming_dataset_cache_key(city_name)
+    cached = _APP_STATE["cache_naming_dataset"].get(cache_key)
+    if cached is not None:
+        served_duration_ms = int((time.perf_counter() - started_at) * 1000)
+        return {
+            **cached,
+            "cache_status": "hit",
+            "served_duration_ms": served_duration_ms,
+        }
+    dataset = _build_building_naming_rows(city_name=city_name)
+    _APP_STATE["cache_naming_dataset"][cache_key] = dataset
+    return {
+        **dataset,
+        "cache_status": "miss",
+        "served_duration_ms": int((time.perf_counter() - started_at) * 1000),
+    }
+
+
+def warm_building_naming_cache(city_name: str | None = None) -> dict[str, Any]:
+    return get_building_naming_rows(city_name=city_name)
 
 
 def lookup_building_candidates(unique_key: str, city_name: str | None = None) -> dict[str, Any]:
