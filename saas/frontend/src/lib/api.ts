@@ -129,6 +129,12 @@ export type BuildingNamingDataset = {
   mapping: Record<string, string | null>;
   total_rows: number;
   unique_addresses: number;
+  filtered_city_name: string | null;
+  group_person_column: string;
+  group_person_filter: string;
+  cache_status: string;
+  build_duration_ms: number;
+  served_duration_ms: number;
   rows: BuildingNamingRow[];
 };
 
