@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { GeoJsonFeatureCollection } from "../lib/api";
 
@@ -48,7 +48,9 @@ type RuntimeGeoJsonLayer = RuntimeLayer & {
 
 type LeafletRuntime = {
   map: (element: HTMLDivElement, options: Record<string, unknown>) => RuntimeMap;
-  tileLayer: (url: string, options: Record<string, unknown>) => RuntimeLayer;
+  tileLayer: ((url: string, options: Record<string, unknown>) => RuntimeLayer) & {
+    wms?: (url: string, options: Record<string, unknown>) => RuntimeLayer;
+  };
   circleMarker: (coords: [number, number], options: Record<string, unknown>) => RuntimeLayer;
   layerGroup: (layers?: RuntimeLayer[]) => RuntimeLayer;
   geoJSON: (data?: unknown, options?: Record<string, unknown>) => RuntimeGeoJsonLayer;
@@ -144,6 +146,7 @@ export function BuildingNamingMap({
   const centerLayerRef = useRef<RuntimeLayer | null>(null);
   const parcelLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const buildingLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   const osmUrl = useMemo(() => {
     if (lat == null || lon == null) {
@@ -173,17 +176,31 @@ export function BuildingNamingMap({
       const map = runtime.map(containerRef.current, {
         zoomControl: true,
         attributionControl: true,
-      }).setView([46.8, 2.5], 6);
-      runtime.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 22,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
+        preferCanvas: true,
+      }).setView([43.4028, 3.6928], 13);
+      if (runtime.tileLayer.wms) {
+        runtime.tileLayer.wms("https://data.geopf.fr/wms-r?", {
+          layers: "GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2",
+          format: "image/png",
+          transparent: false,
+          version: "1.3.0",
+          attribution: "&copy; IGN Géoplateforme",
+        }).addTo(map);
+      } else {
+        runtime.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 22,
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+      }
       mapRef.current = map;
+      setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
+      window.setTimeout(() => map.invalidateSize?.(), 80);
     }
     void mountMap();
     return () => {
       disposed = true;
+      setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
       centerLayerRef.current = null;
@@ -195,7 +212,7 @@ export function BuildingNamingMap({
   useEffect(() => {
     const runtime = runtimeRef.current;
     const map = mapRef.current;
-    if (!runtime || !map) {
+    if (!runtime || !map || !mapReady) {
       return;
     }
 
@@ -277,18 +294,30 @@ export function BuildingNamingMap({
       buildingLayerRef.current = buildingLayer;
     }
 
-    const bounds = focusGroup.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.18));
+    if (featureCollection?.features?.length && buildingLayerRef.current) {
+      const buildingBounds = focusGroup.getBounds();
+      if (buildingBounds.isValid()) {
+        map.fitBounds(buildingBounds.pad(0.12));
+      } else if (lat != null && lon != null) {
+        map.setView([lat, lon], 19);
+      }
+    } else if (parcelFeatureCollection?.features?.length) {
+      const parcelBounds = focusGroup.getBounds();
+      if (parcelBounds.isValid()) {
+        map.fitBounds(parcelBounds.pad(0.12));
+      } else if (lat != null && lon != null) {
+        map.setView([lat, lon], 19);
+      }
     } else if (lat != null && lon != null) {
-      map.setView([lat, lon], 18);
+      map.setView([lat, lon], 19);
     }
     map.invalidateSize?.();
+    window.setTimeout(() => map.invalidateSize?.(), 50);
 
     return () => {
       focusGroup.clearLayers();
     };
-  }, [addressLabel, featureCollection, lat, lon, onSelectFeatureId, parcelFeatureCollection, selectedFeatureId, usedSource]);
+  }, [addressLabel, featureCollection, lat, lon, mapReady, onSelectFeatureId, parcelFeatureCollection, selectedFeatureId, usedSource]);
 
   return (
     <div className="map-shell">

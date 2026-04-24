@@ -33,6 +33,38 @@ function buildMajicAddressLine(row: BuildingNamingRow) {
 type NamingCandidateEntry = Record<string, unknown>;
 type AttributeEntry = [string, string];
 
+function dedupeToponymyCandidates(entries: NamingCandidateEntry[]) {
+  const seen = new Set<string>();
+  const output: NamingCandidateEntry[] = [];
+  for (const entry of entries) {
+    const key = [
+      String(entry.id ?? ""),
+      String(entry.name ?? entry.label ?? "").trim().toLowerCase(),
+      String(entry.source ?? "").trim().toLowerCase(),
+      String(entry.typename ?? "").trim().toLowerCase(),
+    ].join("|");
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(entry);
+  }
+  return output;
+}
+
+function sortToponymyCandidates(entries: NamingCandidateEntry[]) {
+  return [...entries].sort((left, right) => {
+    const leftDistance = Number(left.distance_m);
+    const rightDistance = Number(right.distance_m);
+    const normalizedLeft = Number.isFinite(leftDistance) ? leftDistance : Number.POSITIVE_INFINITY;
+    const normalizedRight = Number.isFinite(rightDistance) ? rightDistance : Number.POSITIVE_INFINITY;
+    if (normalizedLeft !== normalizedRight) {
+      return normalizedLeft - normalizedRight;
+    }
+    return String(left.name ?? left.label ?? "").localeCompare(String(right.name ?? right.label ?? ""), "fr");
+  });
+}
+
 function readResolvedNameCandidates(feature: GeoJsonFeature | null) {
   const properties = (feature?.properties ?? {}) as Record<string, unknown>;
   const rawCandidates = properties.resolved_name_candidates;
@@ -53,6 +85,31 @@ function readIgnAttributes(feature: GeoJsonFeature | null) {
   return Object.entries(rawAttributes as Record<string, unknown>)
     .map(([key, value]) => [key, value == null ? "" : String(value)] as AttributeEntry)
     .sort(([left], [right]) => left.localeCompare(right, "fr"));
+}
+
+function collectToponymyCandidatesFromCollection(features: GeoJsonFeature[]) {
+  const flattened: NamingCandidateEntry[] = [];
+  for (const feature of features) {
+    const properties = (feature.properties ?? {}) as Record<string, unknown>;
+    const directCandidates = readResolvedNameCandidates(feature);
+    if (directCandidates.length > 0) {
+      flattened.push(...directCandidates);
+      continue;
+    }
+    const fallbackName = String(properties.resolved_name ?? properties.name ?? properties.resolved_label ?? properties.label ?? "").trim();
+    if (!fallbackName) {
+      continue;
+    }
+    flattened.push({
+      name: fallbackName,
+      label: String(properties.resolved_label ?? fallbackName),
+      source: String(properties.resolved_name_source ?? properties.ign_layer ?? ""),
+      id: String(properties.ign_id ?? properties.id ?? ""),
+      typename: String(properties.ign_typename ?? ""),
+      distance_m: properties.resolved_name_distance_m,
+    });
+  }
+  return sortToponymyCandidates(dedupeToponymyCandidates(flattened));
 }
 
 export function BuildingsPage() {
@@ -134,6 +191,8 @@ export function BuildingsPage() {
   }) ?? null;
   const selectedFeatureProperties = (selectedFeature?.properties ?? {}) as Record<string, unknown>;
   const selectedFeatureCandidates = useMemo(() => readResolvedNameCandidates(selectedFeature), [selectedFeature]);
+  const aggregatedToponymyCandidates = useMemo(() => collectToponymyCandidatesFromCollection(candidateFeatures), [candidateFeatures]);
+  const displayedToponymyCandidates = selectedFeature ? selectedFeatureCandidates : aggregatedToponymyCandidates;
   const selectedFeatureAttributes = useMemo(() => readIgnAttributes(selectedFeature), [selectedFeature]);
 
   async function handleCreateFromSelection() {
@@ -413,15 +472,35 @@ export function BuildingsPage() {
                 </div>
               )}
 
-              {selectedFeatureCandidates.length > 0 && (
+              {displayedToponymyCandidates.length > 0 && (
                 <div className="section-block">
                   <div className="section-heading">
                     <h3>Toponymies IGN candidates</h3>
-                    <p>Ces propositions sont les noms voisins détectés par le moteur de rapprochement autour du bâtiment sélectionné.</p>
+                    <p>
+                      {selectedFeature
+                        ? "Ces propositions sont les noms voisins détectés autour du bâtiment sélectionné."
+                        : "Ces propositions sont agrégées sur les objets IGN chargés. Tu peux en choisir une avant de cliquer un bâtiment précis."}
+                    </p>
                   </div>
                   <div className="candidate-list">
-                    {selectedFeatureCandidates.map((candidate: NamingCandidateEntry, index: number) => (
-                      <article key={`${String(candidate.id ?? "")}-${index}`} className="candidate-card">
+                    {displayedToponymyCandidates.map((candidate: NamingCandidateEntry, index: number) => (
+                      <article
+                        key={`${String(candidate.id ?? "")}-${index}`}
+                        className="candidate-card"
+                        onClick={() => {
+                          const pickedName = String(candidate.name ?? candidate.label ?? "").trim();
+                          if (!pickedName) {
+                            return;
+                          }
+                          setValidatedName(pickedName);
+                          setSuccess(null);
+                          setError(
+                            selectedFeature
+                              ? null
+                              : `Toponymie sélectionnée : ${pickedName}. Clique aussi un bâtiment si tu veux le lier précisément à un objet IGN.`
+                          );
+                        }}
+                      >
                         <strong>{String(candidate.name ?? candidate.label ?? "Toponyme")}</strong>
                         <span>
                           {String(candidate.source ?? "IGN")}
