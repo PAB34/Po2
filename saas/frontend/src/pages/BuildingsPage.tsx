@@ -11,6 +11,7 @@ import {
   type BuildingNamingRow,
   type GeoJsonFeature,
 } from "../lib/api";
+import { BuildingNamingMap } from "../components/BuildingNamingMap";
 import { useAuth } from "../providers/AuthProvider";
 
 function buildAddressLine(
@@ -27,6 +28,31 @@ function buildAddressLine(
 function buildMajicAddressLine(row: BuildingNamingRow) {
   const parts = [row.numero_voirie, row.indice_repetition, row.nature_voie, row.nom_voie].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" ")}, ${row.nom_commune}` : row.address_display;
+}
+
+type NamingCandidateEntry = Record<string, unknown>;
+type AttributeEntry = [string, string];
+
+function readResolvedNameCandidates(feature: GeoJsonFeature | null) {
+  const properties = (feature?.properties ?? {}) as Record<string, unknown>;
+  const rawCandidates = properties.resolved_name_candidates;
+  if (!Array.isArray(rawCandidates)) {
+    return [] as NamingCandidateEntry[];
+  }
+  return rawCandidates.filter(
+    (candidate): candidate is NamingCandidateEntry => Boolean(candidate) && typeof candidate === "object" && !Array.isArray(candidate)
+  );
+}
+
+function readIgnAttributes(feature: GeoJsonFeature | null) {
+  const properties = (feature?.properties ?? {}) as Record<string, unknown>;
+  const rawAttributes = properties.attributes;
+  if (!rawAttributes || typeof rawAttributes !== "object" || Array.isArray(rawAttributes)) {
+    return [] as AttributeEntry[];
+  }
+  return Object.entries(rawAttributes as Record<string, unknown>)
+    .map(([key, value]) => [key, value == null ? "" : String(value)] as AttributeEntry)
+    .sort(([left], [right]) => left.localeCompare(right, "fr"));
 }
 
 export function BuildingsPage() {
@@ -106,6 +132,9 @@ export function BuildingsPage() {
     const featureId = String(properties.ign_id ?? properties.id ?? "");
     return featureId === selectedFeatureId;
   }) ?? null;
+  const selectedFeatureProperties = (selectedFeature?.properties ?? {}) as Record<string, unknown>;
+  const selectedFeatureCandidates = useMemo(() => readResolvedNameCandidates(selectedFeature), [selectedFeature]);
+  const selectedFeatureAttributes = useMemo(() => readIgnAttributes(selectedFeature), [selectedFeature]);
 
   async function handleCreateFromSelection() {
     if (!selectedUniqueKey) {
@@ -120,6 +149,11 @@ export function BuildingsPage() {
 
     setError(null);
     setSuccess(null);
+
+    if (!selectedFeature && !validatedName.trim()) {
+      setError("Sélectionne un objet IGN sur la carte ou saisis un nom manuel avant de créer le bâtiment.");
+      return;
+    }
 
     await createBuildingMutation.mutateAsync({
       unique_key: selectedUniqueKey,
@@ -163,6 +197,19 @@ export function BuildingsPage() {
             Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
           </p>
         </div>
+        {namingDatasetQuery.data ? (
+          <div className="info-banner">
+            <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}.
+            {" "}
+            <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}.
+            {" "}
+            <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}.
+            {" "}
+            <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms.
+            {" "}
+            <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
+          </div>
+        ) : null}
         <div className="detail-grid">
           <div className="detail-card">
             <span>Lignes source</span>
@@ -266,7 +313,22 @@ export function BuildingsPage() {
                   <span>Parcelles détectées</span>
                   <strong>{namingLookupQuery.data.parcel_labels.join(", ") || "Aucune parcelle retrouvée"}</strong>
                 </div>
+                <div className="detail-card">
+                  <span>Adresse de géocodage</span>
+                  <strong>{String(namingLookupQuery.data.geocoder.display_name ?? namingLookupQuery.data.input_address)}</strong>
+                </div>
               </div>
+
+              <BuildingNamingMap
+                addressLabel={namingLookupQuery.data.input_address}
+                lat={namingLookupQuery.data.lat}
+                lon={namingLookupQuery.data.lon}
+                usedSource={namingLookupQuery.data.used_source}
+                parcelFeatureCollection={namingLookupQuery.data.parcel_feature_collection}
+                featureCollection={namingLookupQuery.data.feature_collection}
+                selectedFeatureId={selectedFeatureId}
+                onSelectFeatureId={setSelectedFeatureId}
+              />
 
               <label className="field">
                 <span>Candidat IGN retenu</span>
@@ -305,35 +367,87 @@ export function BuildingsPage() {
                 />
               </label>
 
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setSelectedFeatureId("");
+                    setSuccess(null);
+                    setError(null);
+                  }}
+                >
+                  Aucun objet bâti retenu
+                </button>
+              </div>
+
               {selectedFeature && (
                 <div className="resource-card">
                   <div className="resource-card-header">
                     <div>
-                      <h3>{String(selectedFeature.properties.resolved_label ?? selectedFeature.properties.label ?? "Objet IGN")}</h3>
+                      <h3>{String(selectedFeatureProperties.resolved_label ?? selectedFeatureProperties.label ?? "Objet IGN")}</h3>
                       <p>
-                        {String(selectedFeature.properties.ign_layer ?? "IGN")} • {String(selectedFeature.properties.ign_typename ?? "")}
+                        {String(selectedFeatureProperties.ign_layer ?? "IGN")} • {String(selectedFeatureProperties.ign_typename ?? "")}
                       </p>
                     </div>
                     <span className="resource-badge">
-                      {selectedFeature.properties.resolved_name_distance_m != null
-                        ? `${selectedFeature.properties.resolved_name_distance_m} m`
+                      {selectedFeatureProperties.resolved_name_distance_m != null
+                        ? `${selectedFeatureProperties.resolved_name_distance_m} m`
                         : "distance inconnue"}
                     </span>
                   </div>
                   <dl className="resource-metadata">
                     <div>
                       <dt>Nom brut IGN</dt>
-                      <dd>{String(selectedFeature.properties.name ?? "-")}</dd>
+                      <dd>{String(selectedFeatureProperties.name ?? "-")}</dd>
                     </div>
                     <div>
                       <dt>Nom proposé</dt>
-                      <dd>{String(selectedFeature.properties.resolved_name ?? "-")}</dd>
+                      <dd>{String(selectedFeatureProperties.resolved_name ?? "-")}</dd>
                     </div>
                     <div>
                       <dt>Source de nomination</dt>
-                      <dd>{String(selectedFeature.properties.resolved_name_source ?? "-")}</dd>
+                      <dd>{String(selectedFeatureProperties.resolved_name_source ?? "-")}</dd>
                     </div>
                   </dl>
+                </div>
+              )}
+
+              {selectedFeatureCandidates.length > 0 && (
+                <div className="section-block">
+                  <div className="section-heading">
+                    <h3>Toponymies IGN candidates</h3>
+                    <p>Ces propositions sont les noms voisins détectés par le moteur de rapprochement autour du bâtiment sélectionné.</p>
+                  </div>
+                  <div className="candidate-list">
+                    {selectedFeatureCandidates.map((candidate: NamingCandidateEntry, index: number) => (
+                      <article key={`${String(candidate.id ?? "")}-${index}`} className="candidate-card">
+                        <strong>{String(candidate.name ?? candidate.label ?? "Toponyme")}</strong>
+                        <span>
+                          {String(candidate.source ?? "IGN")}
+                          {candidate.distance_m != null ? ` • ${String(candidate.distance_m)} m` : ""}
+                        </span>
+                        <small>{String(candidate.typename ?? "")}</small>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedFeatureAttributes.length > 0 && (
+                <div className="section-block">
+                  <div className="section-heading">
+                    <h3>Attributs IGN</h3>
+                    <p>Vue détaillée des attributs bruts fournis par l’objet IGN sélectionné.</p>
+                  </div>
+                  <div className="attribute-table">
+                    {selectedFeatureAttributes.map(([key, value]: AttributeEntry) => (
+                      <div key={key} className="attribute-row">
+                        <dt>{key}</dt>
+                        <dd>{value || "-"}</dd>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -342,7 +456,11 @@ export function BuildingsPage() {
 
               <div className="form-actions">
                 <button type="button" onClick={handleCreateFromSelection} disabled={createBuildingMutation.isPending}>
-                  {createBuildingMutation.isPending ? "Création..." : "Créer le bâtiment depuis cette sélection"}
+                  {createBuildingMutation.isPending
+                    ? "Création..."
+                    : selectedFeature
+                      ? "Créer le bâtiment depuis cette sélection"
+                      : "Créer le bâtiment avec le nom saisi"}
                 </button>
               </div>
             </>
@@ -364,7 +482,7 @@ export function BuildingsPage() {
           </div>
         )}
         <div className="resource-list">
-          {buildingsQuery.data?.map((building) => (
+          {buildingsQuery.data?.map((building: Building) => (
             <article key={building.id} className="resource-card">
               <div className="resource-card-header">
                 <div>
