@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     database_url: str = "postgresql+psycopg://patrimoineop:patrimoineop@db:5432/patrimoineop"
     backend_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    dgfip_majic_file_path: str = ""
     secret_key: str = "change-this-secret-key-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440

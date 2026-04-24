@@ -1,4 +1,4 @@
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "/api";
+const apiBaseUrl = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
 
 export type HealthResponse = {
   status: string;
@@ -64,9 +64,14 @@ export type City = {
 export type Building = {
   id: number;
   city_id: number | null;
+  dgfip_unique_key: string | null;
+  dgfip_source_file: string | null;
+  dgfip_source_rows_json: string | null;
+  dgfip_reference_norm: string | null;
   nom_batiment: string | null;
   nom_commune: string;
   numero_voirie: string | null;
+  indice_repetition: string | null;
   nature_voie: string | null;
   nom_voie: string | null;
   prefixe: string | null;
@@ -75,10 +80,93 @@ export type Building = {
   adresse_reconstituee: string | null;
   latitude: number | null;
   longitude: number | null;
+  ign_layer: string | null;
+  ign_typename: string | null;
+  ign_id: string | null;
+  ign_name: string | null;
+  ign_label: string | null;
+  ign_name_proposed: string | null;
+  ign_name_source: string | null;
+  ign_name_distance_m: number | null;
+  ign_attributes_json: string | null;
+  ign_toponym_candidates_json: string | null;
+  parcel_labels_json: string | null;
+  majic_building_values_json: string | null;
+  majic_entry_values_json: string | null;
+  majic_level_values_json: string | null;
+  majic_door_values_json: string | null;
   source_creation: string;
   statut_geocodage: string;
   created_at: string;
   updated_at: string;
+};
+
+export type BuildingNamingRow = {
+  unique_key: string;
+  address_display: string;
+  duplicate_count: number;
+  source_rows: number[];
+  reference_count: number;
+  references: string[];
+  first_reference_norm: string;
+  nom_commune: string;
+  numero_voirie: string | null;
+  indice_repetition: string | null;
+  nature_voie: string | null;
+  nom_voie: string | null;
+  prefixe: string | null;
+  section: string | null;
+  numero_plan: string | null;
+  majic_building_values: string[];
+  majic_entry_values: string[];
+  majic_level_values: string[];
+  majic_door_values: string[];
+};
+
+export type BuildingNamingDataset = {
+  filename: string;
+  columns: string[];
+  mapping: Record<string, string | null>;
+  total_rows: number;
+  unique_addresses: number;
+  rows: BuildingNamingRow[];
+};
+
+export type GeoJsonFeature = {
+  type: string;
+  geometry: {
+    type: string;
+    coordinates: unknown;
+  } | null;
+  properties: Record<string, unknown>;
+};
+
+export type GeoJsonFeatureCollection = {
+  type: string;
+  features: GeoJsonFeature[];
+};
+
+export type BuildingNamingLookup = {
+  unique_key: string;
+  input_address: string;
+  duplicate_count: number;
+  source_rows: number[];
+  reference_count: number;
+  references: string[];
+  lat: number | null;
+  lon: number | null;
+  used_source: string;
+  parcel_feature_collection: GeoJsonFeatureCollection;
+  parcel_labels: string[];
+  geocoder: Record<string, unknown>;
+  feature_collection: GeoJsonFeatureCollection;
+};
+
+export type CreateBuildingFromNamingPayload = {
+  unique_key: string;
+  validated_name?: string;
+  city_id?: number;
+  selected_feature?: GeoJsonFeature | null;
 };
 
 export type CreateBuildingPayload = {
@@ -86,6 +174,7 @@ export type CreateBuildingPayload = {
   nom_batiment?: string;
   nom_commune?: string;
   numero_voirie?: string;
+  indice_repetition?: string;
   nature_voie?: string;
   nom_voie?: string;
   prefixe?: string;
@@ -229,6 +318,35 @@ export async function fetchBuildings(token: string): Promise<Building[]> {
   });
 
   return parseResponse<Building[]>(response);
+}
+
+export async function fetchBuildingNamingDataset(token: string): Promise<BuildingNamingDataset> {
+  const response = await fetch(`${apiBaseUrl}/buildings/naming/dataset`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<BuildingNamingDataset>(response);
+}
+
+export async function fetchBuildingNamingLookup(token: string, uniqueKey: string): Promise<BuildingNamingLookup> {
+  const response = await fetch(`${apiBaseUrl}/buildings/naming/${encodeURIComponent(uniqueKey)}`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<BuildingNamingLookup>(response);
+}
+
+export async function createBuildingFromNamingSelection(
+  token: string,
+  payload: CreateBuildingFromNamingPayload,
+): Promise<Building> {
+  const response = await fetch(`${apiBaseUrl}/buildings/naming/selection`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Building>(response);
 }
 
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {

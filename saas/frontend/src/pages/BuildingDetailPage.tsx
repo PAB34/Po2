@@ -29,6 +29,48 @@ function buildAddressLine(
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
 }
 
+function parseJsonArray(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseCandidateLabels(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item) => {
+        if (item && typeof item === "object") {
+          const candidate = item as { name?: unknown; label?: unknown; source?: unknown };
+          const label = String(candidate.name ?? candidate.label ?? "").trim();
+          const source = String(candidate.source ?? "").trim();
+          if (!label) {
+            return "";
+          }
+          return source ? `${label} (${source})` : label;
+        }
+        return String(item);
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export function BuildingDetailPage() {
   const { buildingId } = useParams();
   const parsedBuildingId = Number(buildingId);
@@ -37,6 +79,7 @@ export function BuildingDetailPage() {
 
   const [nomBatiment, setNomBatiment] = useState("");
   const [numeroVoirie, setNumeroVoirie] = useState("");
+  const [indiceRepetition, setIndiceRepetition] = useState("");
   const [natureVoie, setNatureVoie] = useState("");
   const [nomVoie, setNomVoie] = useState("");
   const [prefixe, setPrefixe] = useState("");
@@ -87,6 +130,7 @@ export function BuildingDetailPage() {
 
     setNomBatiment(buildingQuery.data.nom_batiment ?? "");
     setNumeroVoirie(buildingQuery.data.numero_voirie ?? "");
+    setIndiceRepetition(buildingQuery.data.indice_repetition ?? "");
     setNatureVoie(buildingQuery.data.nature_voie ?? "");
     setNomVoie(buildingQuery.data.nom_voie ?? "");
     setPrefixe(buildingQuery.data.prefixe ?? "");
@@ -188,6 +232,7 @@ export function BuildingDetailPage() {
     await updateBuildingMutation.mutateAsync({
       nom_batiment: nomBatiment || undefined,
       numero_voirie: numeroVoirie || undefined,
+      indice_repetition: indiceRepetition || undefined,
       nature_voie: natureVoie || undefined,
       nom_voie: nomVoie || undefined,
       prefixe: prefixe || undefined,
@@ -322,6 +367,90 @@ export function BuildingDetailPage() {
 
           <div className="section-block">
             <div className="section-heading">
+              <h3>Traçabilité DGFIP</h3>
+              <p>Résumé des données cadastrales et MAJIC qui ont servi à créer ce bâtiment.</p>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-card">
+                <span>Clé DGFIP</span>
+                <strong>{buildingQuery.data.dgfip_unique_key || "Non renseignée"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Fichier source</span>
+                <strong>{buildingQuery.data.dgfip_source_file || "Non renseigné"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Lignes source</span>
+                <strong>{parseJsonArray(buildingQuery.data.dgfip_source_rows_json).join(", ") || "Non renseignées"}</strong>
+              </div>
+            </div>
+            <div className="resource-list">
+              <article className="resource-card">
+                <div className="resource-card-header">
+                  <div>
+                    <h3>Indices MAJIC détectés</h3>
+                    <p>Valeurs présentes dans le fichier source pour aider à qualifier le bâtiment.</p>
+                  </div>
+                </div>
+                <dl className="resource-metadata">
+                  <div>
+                    <dt>Bâtiment</dt>
+                    <dd>{parseJsonArray(buildingQuery.data.majic_building_values_json).join(", ") || "Aucun"}</dd>
+                  </div>
+                  <div>
+                    <dt>Entrée</dt>
+                    <dd>{parseJsonArray(buildingQuery.data.majic_entry_values_json).join(", ") || "Aucune"}</dd>
+                  </div>
+                  <div>
+                    <dt>Niveau / Porte</dt>
+                    <dd>
+                      {[
+                        parseJsonArray(buildingQuery.data.majic_level_values_json).join(", "),
+                        parseJsonArray(buildingQuery.data.majic_door_values_json).join(", "),
+                      ]
+                        .filter(Boolean)
+                        .join(" • ") || "Aucun détail complémentaire"}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            </div>
+          </div>
+
+          <div className="section-block">
+            <div className="section-heading">
+              <h3>Rapprochement IGN</h3>
+              <p>Données IGN conservées lors de la validation du bâtiment.</p>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-card">
+                <span>Couche IGN</span>
+                <strong>{buildingQuery.data.ign_layer || "Aucune"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Nom IGN brut</span>
+                <strong>{buildingQuery.data.ign_name || "Aucun"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Nom IGN proposé</span>
+                <strong>{buildingQuery.data.ign_name_proposed || "Aucune proposition"}</strong>
+              </div>
+            </div>
+            <div className="resource-list">
+              <article className="resource-card">
+                <div className="resource-card-header">
+                  <div>
+                    <h3>Candidats de toponymie retenus</h3>
+                    <p>Liste des noms IGN proposés autour de l’objet sélectionné.</p>
+                  </div>
+                </div>
+                <p>{parseCandidateLabels(buildingQuery.data.ign_toponym_candidates_json).join(" | ") || "Aucun candidat enregistré."}</p>
+              </article>
+            </div>
+          </div>
+
+          <div className="section-block">
+            <div className="section-heading">
               <h3>Éditer le bâtiment</h3>
               <p>Met à jour les informations d’adresse et d’identification cadastrale.</p>
             </div>
@@ -338,29 +467,35 @@ export function BuildingDetailPage() {
               </div>
               <div className="form-grid">
                 <label className="field">
+                  <span>Indice de répétition</span>
+                  <input type="text" value={indiceRepetition} onChange={(event) => setIndiceRepetition(event.target.value)} />
+                </label>
+                <label className="field">
                   <span>Nature de voie</span>
                   <input type="text" value={natureVoie} onChange={(event) => setNatureVoie(event.target.value)} />
                 </label>
+              </div>
+              <div className="form-grid">
                 <label className="field">
                   <span>Nom de voie</span>
                   <input type="text" value={nomVoie} onChange={(event) => setNomVoie(event.target.value)} />
                 </label>
-              </div>
-              <div className="form-grid">
                 <label className="field">
                   <span>Préfixe</span>
                   <input type="text" value={prefixe} onChange={(event) => setPrefixe(event.target.value)} />
                 </label>
+              </div>
+              <div className="form-grid">
                 <label className="field">
                   <span>Section</span>
                   <input type="text" value={section} onChange={(event) => setSection(event.target.value)} />
                 </label>
-              </div>
-              <div className="form-grid">
                 <label className="field">
                   <span>Numéro de plan</span>
                   <input type="text" value={numeroPlan} onChange={(event) => setNumeroPlan(event.target.value)} />
                 </label>
+              </div>
+              <div className="form-grid">
                 <label className="field">
                   <span>Adresse reconstituée</span>
                   <input type="text" value={adresseReconstituee} onChange={(event) => setAdresseReconstituee(event.target.value)} />

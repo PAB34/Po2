@@ -17,6 +17,8 @@ services:
       - ../.env
     depends_on:
       - db
+    volumes:
+      - ../../:/workspace:ro
 
   frontend:
     build:

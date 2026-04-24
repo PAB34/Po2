@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -6,7 +7,8 @@ from app.models.building import Building
 from app.models.city import City
 from app.models.local import Local
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingUpdate, LocalCreate, LocalUpdate
+from app.schemas.building import BuildingCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate
+from app.services.building_naming import build_building_payload
 from app.services.cities import get_city_by_id
 
 
@@ -41,28 +43,52 @@ def _build_default_local_name(building: Building) -> str:
     return building.nom_batiment or "Local principal"
 
 
+def _apply_building_payload(building: Building, payload: BuildingCreate, nom_commune: str) -> Building:
+    building.dgfip_unique_key = payload.dgfip_unique_key.strip() if payload.dgfip_unique_key else None
+    building.dgfip_source_file = payload.dgfip_source_file.strip() if payload.dgfip_source_file else None
+    building.dgfip_source_rows_json = payload.dgfip_source_rows_json.strip() if payload.dgfip_source_rows_json else None
+    building.dgfip_reference_norm = payload.dgfip_reference_norm.strip() if payload.dgfip_reference_norm else None
+    building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
+    building.nom_commune = nom_commune
+    building.numero_voirie = payload.numero_voirie.strip() if payload.numero_voirie else None
+    building.indice_repetition = payload.indice_repetition.strip() if payload.indice_repetition else None
+    building.nature_voie = payload.nature_voie.strip() if payload.nature_voie else None
+    building.nom_voie = payload.nom_voie.strip() if payload.nom_voie else None
+    building.prefixe = payload.prefixe.strip() if payload.prefixe else None
+    building.section = payload.section.strip() if payload.section else None
+    building.numero_plan = payload.numero_plan.strip() if payload.numero_plan else None
+    building.adresse_reconstituee = payload.adresse_reconstituee.strip() if payload.adresse_reconstituee else None
+    building.latitude = payload.latitude
+    building.longitude = payload.longitude
+    building.ign_layer = payload.ign_layer.strip() if payload.ign_layer else None
+    building.ign_typename = payload.ign_typename.strip() if payload.ign_typename else None
+    building.ign_id = payload.ign_id.strip() if payload.ign_id else None
+    building.ign_name = payload.ign_name.strip() if payload.ign_name else None
+    building.ign_label = payload.ign_label.strip() if payload.ign_label else None
+    building.ign_name_proposed = payload.ign_name_proposed.strip() if payload.ign_name_proposed else None
+    building.ign_name_source = payload.ign_name_source.strip() if payload.ign_name_source else None
+    building.ign_name_distance_m = payload.ign_name_distance_m
+    building.ign_attributes_json = payload.ign_attributes_json.strip() if payload.ign_attributes_json else None
+    building.ign_toponym_candidates_json = (
+        payload.ign_toponym_candidates_json.strip() if payload.ign_toponym_candidates_json else None
+    )
+    building.parcel_labels_json = payload.parcel_labels_json.strip() if payload.parcel_labels_json else None
+    building.majic_building_values_json = payload.majic_building_values_json.strip() if payload.majic_building_values_json else None
+    building.majic_entry_values_json = payload.majic_entry_values_json.strip() if payload.majic_entry_values_json else None
+    building.majic_level_values_json = payload.majic_level_values_json.strip() if payload.majic_level_values_json else None
+    building.majic_door_values_json = payload.majic_door_values_json.strip() if payload.majic_door_values_json else None
+    building.source_creation = payload.source_creation or building.source_creation or "MANUEL"
+    building.statut_geocodage = payload.statut_geocodage or building.statut_geocodage or "NON_FAIT"
+    return building
+
+
 def create_building(db: Session, payload: BuildingCreate, current_user: User) -> Building:
     city = _resolve_city(db, payload, current_user)
     nom_commune = city.nom_commune if city else (payload.nom_commune.strip() if payload.nom_commune else None)
     if nom_commune is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La commune est obligatoire.")
 
-    building = Building(
-        city_id=city.id if city else None,
-        nom_batiment=payload.nom_batiment.strip() if payload.nom_batiment else None,
-        nom_commune=nom_commune,
-        numero_voirie=payload.numero_voirie.strip() if payload.numero_voirie else None,
-        nature_voie=payload.nature_voie.strip() if payload.nature_voie else None,
-        nom_voie=payload.nom_voie.strip() if payload.nom_voie else None,
-        prefixe=payload.prefixe.strip() if payload.prefixe else None,
-        section=payload.section.strip() if payload.section else None,
-        numero_plan=payload.numero_plan.strip() if payload.numero_plan else None,
-        adresse_reconstituee=payload.adresse_reconstituee.strip() if payload.adresse_reconstituee else None,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        source_creation="MANUEL",
-        statut_geocodage="NON_FAIT",
-    )
+    building = _apply_building_payload(Building(city_id=city.id if city else None), payload, nom_commune)
     db.add(building)
     db.flush()
 
@@ -77,9 +103,70 @@ def create_building(db: Session, payload: BuildingCreate, current_user: User) ->
     return building
 
 
+def create_building_from_naming_selection(
+    db: Session,
+    payload: BuildingNamingSelectionPayload,
+    current_user: User,
+) -> Building:
+    generated_payload = build_building_payload(
+        unique_key=payload.unique_key,
+        selected_feature=dict(payload.selected_feature) if payload.selected_feature else None,
+        validated_name=payload.validated_name,
+    )
+    target_city_id = current_user.city_id if current_user.city_id is not None else payload.city_id
+    existing_statement = select(Building).where(Building.dgfip_unique_key == generated_payload["unique_key"])
+    if target_city_id is not None:
+        existing_statement = existing_statement.where(Building.city_id == target_city_id)
+    existing_building = db.scalar(existing_statement)
+    if existing_building is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette adresse DGFIP a déjà été transformée en bâtiment dans votre périmètre.",
+        )
+
+    building_payload = BuildingCreate(
+        city_id=target_city_id,
+        dgfip_unique_key=generated_payload["unique_key"],
+        dgfip_source_file=generated_payload["source_file"],
+        dgfip_source_rows_json=json.dumps(generated_payload["source_rows"], ensure_ascii=False),
+        dgfip_reference_norm=generated_payload["reference_norm"],
+        nom_batiment=generated_payload["nom_batiment"],
+        nom_commune=generated_payload["nom_commune"],
+        numero_voirie=generated_payload["numero_voirie"],
+        indice_repetition=generated_payload["indice_repetition"],
+        nature_voie=generated_payload["nature_voie"],
+        nom_voie=generated_payload["nom_voie"],
+        prefixe=generated_payload["prefixe"],
+        section=generated_payload["section"],
+        numero_plan=generated_payload["numero_plan"],
+        adresse_reconstituee=generated_payload["adresse_reconstituee"],
+        latitude=generated_payload["latitude"],
+        longitude=generated_payload["longitude"],
+        ign_layer=generated_payload["ign_layer"],
+        ign_typename=generated_payload["ign_typename"],
+        ign_id=generated_payload["ign_id"],
+        ign_name=generated_payload["ign_name"],
+        ign_label=generated_payload["ign_label"],
+        ign_name_proposed=generated_payload["ign_name_proposed"],
+        ign_name_source=generated_payload["ign_name_source"],
+        ign_name_distance_m=generated_payload["ign_name_distance_m"],
+        ign_attributes_json=generated_payload["ign_attributes_json"],
+        ign_toponym_candidates_json=generated_payload["ign_toponym_candidates_json"],
+        parcel_labels_json=generated_payload["parcel_labels_json"],
+        majic_building_values_json=generated_payload["majic_building_values_json"],
+        majic_entry_values_json=generated_payload["majic_entry_values_json"],
+        majic_level_values_json=generated_payload["majic_level_values_json"],
+        majic_door_values_json=generated_payload["majic_door_values_json"],
+        source_creation=generated_payload["source_creation"],
+        statut_geocodage=generated_payload["statut_geocodage"],
+    )
+    return create_building(db, building_payload, current_user)
+
+
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
     building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
     building.numero_voirie = payload.numero_voirie.strip() if payload.numero_voirie else None
+    building.indice_repetition = payload.indice_repetition.strip() if payload.indice_repetition else None
     building.nature_voie = payload.nature_voie.strip() if payload.nature_voie else None
     building.nom_voie = payload.nom_voie.strip() if payload.nom_voie else None
     building.prefixe = payload.prefixe.strip() if payload.prefixe else None

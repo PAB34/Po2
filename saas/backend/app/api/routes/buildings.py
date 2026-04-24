@@ -1,12 +1,24 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingRead, BuildingUpdate, LocalCreate, LocalRead, LocalUpdate
+from app.schemas.building import (
+    BuildingCreate,
+    BuildingNamingDataset,
+    BuildingNamingLookupRead,
+    BuildingNamingSelectionPayload,
+    BuildingRead,
+    BuildingUpdate,
+    LocalCreate,
+    LocalRead,
+    LocalUpdate,
+)
+from app.services.building_naming import get_building_naming_rows, lookup_building_candidates
 from app.services.buildings import (
     create_building,
+    create_building_from_naming_selection,
     create_local,
     delete_local,
     get_building_or_404,
@@ -18,6 +30,44 @@ from app.services.buildings import (
 )
 
 router = APIRouter(prefix="/buildings", tags=["buildings"])
+
+
+def _raise_naming_http_error(error: ValueError) -> None:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+
+@router.get("/naming/dataset", response_model=BuildingNamingDataset)
+def get_building_naming_dataset(
+    current_user: User = Depends(get_current_user),
+) -> BuildingNamingDataset:
+    try:
+        return BuildingNamingDataset.model_validate(get_building_naming_rows())
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.get("/naming/{unique_key}", response_model=BuildingNamingLookupRead)
+def get_building_naming_lookup(
+    unique_key: str,
+    current_user: User = Depends(get_current_user),
+) -> BuildingNamingLookupRead:
+    try:
+        return BuildingNamingLookupRead.model_validate(lookup_building_candidates(unique_key))
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.post("/naming/selection", response_model=BuildingRead, status_code=status.HTTP_201_CREATED)
+def post_building_from_naming_selection(
+    payload: BuildingNamingSelectionPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingRead:
+    try:
+        building = create_building_from_naming_selection(db, payload, current_user)
+        return BuildingRead.model_validate(building)
+    except ValueError as error:
+        _raise_naming_http_error(error)
 
 
 @router.get("", response_model=list[BuildingRead])
