@@ -1,7 +1,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0002_create_cities_buildings_locals"
+revision = "0002_cities_buildings_locals"
 down_revision = "0001_create_users"
 branch_labels = None
 depends_on = None
