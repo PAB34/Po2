@@ -117,7 +117,8 @@ export function BuildingsPage() {
   const { token } = useAuth();
   const [selectedUniqueKey, setSelectedUniqueKey] = useState<string | null>(null);
   const [validatedName, setValidatedName] = useState("");
-  const [selectedFeatureId, setSelectedFeatureId] = useState<string>("");
+  const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([]);
+  const [activeFeatureId, setActiveFeatureId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -151,7 +152,8 @@ export function BuildingsPage() {
       setSuccess(`Bâtiment « ${building.nom_batiment || `#${building.id}`} » créé avec succès.`);
       setError(null);
       setValidatedName("");
-      setSelectedFeatureId("");
+      setSelectedFeatureIds([]);
+      setActiveFeatureId("");
       await queryClient.invalidateQueries({ queryKey: ["buildings"] });
     },
     onError: (mutationError: unknown) => {
@@ -166,7 +168,7 @@ export function BuildingsPage() {
     if (!query) {
       return rows;
     }
-    return rows.filter((row) => {
+    return rows.filter((row: BuildingNamingRow) => {
       return [row.address_display, row.nom_commune, row.numero_voirie, row.nom_voie, row.first_reference_norm]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
@@ -184,16 +186,43 @@ export function BuildingsPage() {
   }, [buildingsQuery.data]);
 
   const candidateFeatures = (namingLookupQuery.data?.feature_collection.features ?? []) as GeoJsonFeature[];
+  const activeOrLastSelectedFeatureId = activeFeatureId || selectedFeatureIds[selectedFeatureIds.length - 1] || "";
   const selectedFeature = candidateFeatures.find((feature) => {
     const properties = feature.properties ?? {};
     const featureId = String(properties.ign_id ?? properties.id ?? "");
-    return featureId === selectedFeatureId;
+    return featureId === activeOrLastSelectedFeatureId;
   }) ?? null;
   const selectedFeatureProperties = (selectedFeature?.properties ?? {}) as Record<string, unknown>;
   const selectedFeatureCandidates = useMemo(() => readResolvedNameCandidates(selectedFeature), [selectedFeature]);
   const aggregatedToponymyCandidates = useMemo(() => collectToponymyCandidatesFromCollection(candidateFeatures), [candidateFeatures]);
   const displayedToponymyCandidates = selectedFeature ? selectedFeatureCandidates : aggregatedToponymyCandidates;
   const selectedFeatureAttributes = useMemo(() => readIgnAttributes(selectedFeature), [selectedFeature]);
+
+  function toggleFeatureSelection(featureId: string) {
+    setSelectedFeatureIds((current: string[]) => {
+      const exists = current.includes(featureId);
+      const next = exists ? current.filter((entry: string) => entry !== featureId) : [...current, featureId];
+      setActiveFeatureId((currentActive: string) => {
+        if (!exists) {
+          return featureId;
+        }
+        if (currentActive && currentActive !== featureId) {
+          return currentActive;
+        }
+        return next[next.length - 1] ?? "";
+      });
+      return next;
+    });
+    setSuccess(null);
+    setError(null);
+  }
+
+  function focusSingleFeature(featureId: string) {
+    setActiveFeatureId(featureId);
+    setSelectedFeatureIds((current: string[]) => (current.includes(featureId) ? current : [...current, featureId]));
+    setSuccess(null);
+    setError(null);
+  }
 
   async function handleCreateFromSelection() {
     if (!selectedUniqueKey) {
@@ -233,7 +262,7 @@ export function BuildingsPage() {
   }
 
   return (
-    <section className="panel stack-lg">
+    <section className="panel stack-lg buildings-workspace-panel">
       <div className="panel-header">
         <div>
           <h2>Bâtiments</h2>
@@ -248,105 +277,111 @@ export function BuildingsPage() {
         </div>
       </div>
 
-      <div className="section-block">
-        <div className="section-heading">
-          <h3>Source DGFIP / MAJIC</h3>
-          <p>
-            Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename ?? "non configuré"}</strong>.
-            Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
-          </p>
-        </div>
-        {namingDatasetQuery.data ? (
-          <div className="info-banner">
-            <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}.
-            {" "}
-            <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}.
-            {" "}
-            <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}.
-            {" "}
-            <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms.
-            {" "}
-            <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
-          </div>
-        ) : null}
-        <div className="detail-grid">
-          <div className="detail-card">
-            <span>Lignes source</span>
-            <strong>{namingDatasetQuery.data?.total_rows ?? 0}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Adresses uniques</span>
-            <strong>{namingDatasetQuery.data?.unique_addresses ?? 0}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Colonnes détectées</span>
-            <strong>{namingDatasetQuery.data?.columns.length ?? 0}</strong>
-          </div>
-        </div>
-      </div>
-
-      <div className="section-block">
-        <div className="section-heading">
-          <h3>Adresses DGFIP à traiter</h3>
-          <p>Choisis une adresse unique pour charger ses parcelles et ses candidats de bâtiments IGN.</p>
-        </div>
-        <label className="field">
-          <span>Recherche d’une adresse ou d’une référence cadastrale</span>
-          <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} />
-        </label>
-        {namingDatasetQuery.isLoading && <p>Chargement des données DGFIP...</p>}
-        {namingDatasetQuery.error instanceof Error && <p className="error-text">{namingDatasetQuery.error.message}</p>}
-        <div className="resource-list">
-          {filteredRows.map((row) => {
-            const existingBuilding = existingBuildingByUniqueKey.get(row.unique_key);
-            return (
-            <article key={row.unique_key} className="resource-card">
-              <div className="resource-card-header">
-                <div>
-                  <h3>{buildMajicAddressLine(row)}</h3>
-                  <p>{row.address_display}</p>
-                </div>
-                <span className="resource-badge">{existingBuilding ? "Déjà créé" : `${row.duplicate_count} ligne(s)`}</span>
+      <div className="buildings-workspace">
+        <aside className="buildings-sidebar">
+          <div className="section-block">
+            <div className="section-heading">
+              <h3>Source DGFIP / MAJIC</h3>
+              <p>
+                Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename ?? "non configuré"}</strong>.
+                Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
+              </p>
+            </div>
+            {namingDatasetQuery.data ? (
+              <div className="info-banner">
+                <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}.
+                {" "}
+                <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}.
+                {" "}
+                <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}.
+                {" "}
+                <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms.
+                {" "}
+                <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
               </div>
-              <dl className="resource-metadata">
-                <div>
-                  <dt>Commune</dt>
-                  <dd>{row.nom_commune}</dd>
-                </div>
-                <div>
-                  <dt>Références</dt>
-                  <dd>{row.references.join(", ") || "Aucune"}</dd>
-                </div>
-                <div>
-                  <dt>Indices MAJIC</dt>
-                  <dd>{row.majic_building_values.join(", ") || "Aucun bâtiment MAJIC"}</dd>
-                </div>
-              </dl>
-              <div className="resource-card-actions">
-                {existingBuilding ? (
-                  <Link className="secondary-link" to={`/buildings/${existingBuilding.id}`}>
-                    Ouvrir le bâtiment existant
-                  </Link>
-                ) : null}
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => {
-                    setSelectedUniqueKey(row.unique_key);
-                    setValidatedName("");
-                    setSelectedFeatureId("");
-                  }}
-                >
-                  {selectedUniqueKey === row.unique_key ? "Sélection active" : "Analyser cette adresse"}
-                </button>
+            ) : null}
+            <div className="detail-grid">
+              <div className="detail-card">
+                <span>Lignes source</span>
+                <strong>{namingDatasetQuery.data?.total_rows ?? 0}</strong>
               </div>
-            </article>
-            );
-          })}
-        </div>
-      </div>
+              <div className="detail-card">
+                <span>Adresses uniques</span>
+                <strong>{namingDatasetQuery.data?.unique_addresses ?? 0}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Colonnes détectées</span>
+                <strong>{namingDatasetQuery.data?.columns.length ?? 0}</strong>
+              </div>
+            </div>
+          </div>
 
-      {selectedUniqueKey && (
+          <div className="section-block buildings-addresses-section">
+            <div className="section-heading">
+              <h3>Adresses DGFIP à traiter</h3>
+              <p>Choisis une adresse unique pour charger ses parcelles et ses candidats de bâtiments IGN.</p>
+            </div>
+            <label className="field">
+              <span>Recherche d’une adresse ou d’une référence cadastrale</span>
+              <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} />
+            </label>
+            {namingDatasetQuery.isLoading && <p>Chargement des données DGFIP...</p>}
+            {namingDatasetQuery.error instanceof Error && <p className="error-text">{namingDatasetQuery.error.message}</p>}
+            <div className="resource-list buildings-address-list">
+              {filteredRows.map((row) => {
+                const existingBuilding = existingBuildingByUniqueKey.get(row.unique_key);
+                const isActive = selectedUniqueKey === row.unique_key;
+                return (
+                <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                  <div className="resource-card-header">
+                    <div>
+                      <h3>{buildMajicAddressLine(row)}</h3>
+                      <p>{row.address_display}</p>
+                    </div>
+                    <span className="resource-badge">{existingBuilding ? "Déjà créé" : `${row.duplicate_count} ligne(s)`}</span>
+                  </div>
+                  <dl className="resource-metadata">
+                    <div>
+                      <dt>Commune</dt>
+                      <dd>{row.nom_commune}</dd>
+                    </div>
+                    <div>
+                      <dt>Références</dt>
+                      <dd>{row.references.join(", ") || "Aucune"}</dd>
+                    </div>
+                    <div>
+                      <dt>Indices MAJIC</dt>
+                      <dd>{row.majic_building_values.join(", ") || "Aucun bâtiment MAJIC"}</dd>
+                    </div>
+                  </dl>
+                  <div className="resource-card-actions">
+                    {existingBuilding ? (
+                      <Link className="secondary-link" to={`/buildings/${existingBuilding.id}`}>
+                        Ouvrir le bâtiment existant
+                      </Link>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setSelectedUniqueKey(row.unique_key);
+                        setValidatedName("");
+                        setSelectedFeatureIds([]);
+                        setActiveFeatureId("");
+                      }}
+                    >
+                      {isActive ? "Sélection active" : "Analyser cette adresse"}
+                    </button>
+                  </div>
+                </article>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
+
+        <div className="buildings-main-content">
+          {selectedUniqueKey ? (
         <div className="section-block">
           <div className="section-heading">
             <h3>Rapprochement IGN</h3>
@@ -385,13 +420,13 @@ export function BuildingsPage() {
                 usedSource={namingLookupQuery.data.used_source}
                 parcelFeatureCollection={namingLookupQuery.data.parcel_feature_collection}
                 featureCollection={namingLookupQuery.data.feature_collection}
-                selectedFeatureId={selectedFeatureId}
-                onSelectFeatureId={setSelectedFeatureId}
+                selectedFeatureIds={selectedFeatureIds}
+                onToggleFeatureId={toggleFeatureSelection}
               />
 
               <label className="field">
-                <span>Candidat IGN retenu</span>
-                <select value={selectedFeatureId} onChange={(event) => setSelectedFeatureId(event.target.value)}>
+                <span>Bâtiment IGN actif</span>
+                <select value={activeOrLastSelectedFeatureId} onChange={(event) => focusSingleFeature(event.target.value)}>
                   <option value="">Aucun objet IGN retenu</option>
                   {candidateFeatures.map((feature) => {
                     const properties = feature.properties ?? {};
@@ -400,12 +435,49 @@ export function BuildingsPage() {
                     const source = String(properties.resolved_name_source ?? properties.ign_layer ?? "IGN");
                     return (
                       <option key={featureId} value={featureId}>
-                        {label} — {source}
+                        {selectedFeatureIds.includes(featureId) ? "✓ " : ""}{label} — {source}
                       </option>
                     );
                   })}
                 </select>
               </label>
+
+              <div className="info-banner">
+                <strong>Sélection carte :</strong> {selectedFeatureIds.length} bâtiment(s) IGN sélectionné(s).
+                {" "}
+                Clique un bâtiment pour l’ajouter, reclique dessus pour le retirer, sans perdre les autres.
+              </div>
+
+              {selectedFeatureIds.length > 0 ? (
+                <div className="candidate-list">
+                  {selectedFeatureIds.map((featureId: string) => {
+                    const feature = candidateFeatures.find((entry) => {
+                      const properties = entry.properties ?? {};
+                      return String(properties.ign_id ?? properties.id ?? "") === featureId;
+                    }) ?? null;
+                    if (!feature) {
+                      return null;
+                    }
+                    const properties = feature.properties ?? {};
+                    const label = String(properties.resolved_label ?? properties.label ?? properties.name ?? "Objet IGN");
+                    const isActive = featureId === activeOrLastSelectedFeatureId;
+                    return (
+                      <article key={featureId} className={`candidate-card ${isActive ? "candidate-card-active" : ""}`}>
+                        <strong>{label}</strong>
+                        <span>{String(properties.resolved_name_source ?? properties.ign_layer ?? "IGN")}</span>
+                        <div className="resource-card-actions candidate-card-actions">
+                          <button type="button" className="secondary-button" onClick={() => focusSingleFeature(featureId)}>
+                            {isActive ? "Bâtiment actif" : "Afficher les détails"}
+                          </button>
+                          <button type="button" className="secondary-button" onClick={() => toggleFeatureSelection(featureId)}>
+                            Retirer de la sélection
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               <label className="field">
                 <span>Nom du bâtiment validé</span>
@@ -431,7 +503,8 @@ export function BuildingsPage() {
                   type="button"
                   className="secondary-button"
                   onClick={() => {
-                    setSelectedFeatureId("");
+                    setSelectedFeatureIds([]);
+                    setActiveFeatureId("");
                     setSuccess(null);
                     setError(null);
                   }}
@@ -545,52 +618,59 @@ export function BuildingsPage() {
             </>
           )}
         </div>
-      )}
+          ) : (
+            <div className="empty-state buildings-empty-workspace">
+              <strong>Aucune adresse sélectionnée.</strong>
+              <span>Choisis une adresse dans la colonne de gauche pour afficher la carte, sélectionner un ou plusieurs bâtiments et valider les informations.</span>
+            </div>
+          )}
 
-      <div className="section-block">
-        <div className="section-heading">
-          <h3>Liste des bâtiments de la collectivité</h3>
-          <p>Liste finale des bâtiments enregistrés, enrichis avec les données cadastrales et les éléments IGN validés.</p>
-        </div>
-        {buildingsQuery.isLoading && <p>Chargement des bâtiments...</p>}
-        {buildingsQuery.error instanceof Error && <p className="error-text">{buildingsQuery.error.message}</p>}
-        {!buildingsQuery.isLoading && !buildingsQuery.error && (buildingsQuery.data?.length ?? 0) === 0 && (
-          <div className="empty-state">
-            <strong>Aucun bâtiment pour le moment.</strong>
-            <span>Commence par sélectionner une adresse DGFIP et valider son nom de bâtiment.</span>
+          <div className="section-block">
+            <div className="section-heading">
+              <h3>Liste des bâtiments de la collectivité</h3>
+              <p>Liste finale des bâtiments enregistrés, enrichis avec les données cadastrales et les éléments IGN validés.</p>
+            </div>
+            {buildingsQuery.isLoading && <p>Chargement des bâtiments...</p>}
+            {buildingsQuery.error instanceof Error && <p className="error-text">{buildingsQuery.error.message}</p>}
+            {!buildingsQuery.isLoading && !buildingsQuery.error && (buildingsQuery.data?.length ?? 0) === 0 && (
+              <div className="empty-state">
+                <strong>Aucun bâtiment pour le moment.</strong>
+                <span>Commence par sélectionner une adresse DGFIP et valider son nom de bâtiment.</span>
+              </div>
+            )}
+            <div className="resource-list">
+              {buildingsQuery.data?.map((building: Building) => (
+                <article key={building.id} className="resource-card">
+                  <div className="resource-card-header">
+                    <div>
+                      <h3>{building.nom_batiment || `Bâtiment #${building.id}`}</h3>
+                      <p>{buildAddressLine(building)}</p>
+                    </div>
+                    <span className="resource-badge">{building.statut_geocodage}</span>
+                  </div>
+                  <dl className="resource-metadata">
+                    <div>
+                      <dt>Commune</dt>
+                      <dd>{building.nom_commune}</dd>
+                    </div>
+                    <div>
+                      <dt>Référence DGFIP</dt>
+                      <dd>{building.dgfip_reference_norm ?? ([building.prefixe, building.section, building.numero_plan].filter(Boolean).join(" ") || "Non renseignée")}</dd>
+                    </div>
+                    <div>
+                      <dt>Nom IGN proposé</dt>
+                      <dd>{building.ign_name_proposed || building.ign_name || "Aucun rapprochement IGN"}</dd>
+                    </div>
+                  </dl>
+                  <div className="resource-card-actions">
+                    <Link className="secondary-link" to={`/buildings/${building.id}`}>
+                      Ouvrir la fiche
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        )}
-        <div className="resource-list">
-          {buildingsQuery.data?.map((building: Building) => (
-            <article key={building.id} className="resource-card">
-              <div className="resource-card-header">
-                <div>
-                  <h3>{building.nom_batiment || `Bâtiment #${building.id}`}</h3>
-                  <p>{buildAddressLine(building)}</p>
-                </div>
-                <span className="resource-badge">{building.statut_geocodage}</span>
-              </div>
-              <dl className="resource-metadata">
-                <div>
-                  <dt>Commune</dt>
-                  <dd>{building.nom_commune}</dd>
-                </div>
-                <div>
-                  <dt>Référence DGFIP</dt>
-                  <dd>{building.dgfip_reference_norm ?? ([building.prefixe, building.section, building.numero_plan].filter(Boolean).join(" ") || "Non renseignée")}</dd>
-                </div>
-                <div>
-                  <dt>Nom IGN proposé</dt>
-                  <dd>{building.ign_name_proposed || building.ign_name || "Aucun rapprochement IGN"}</dd>
-                </div>
-              </dl>
-              <div className="resource-card-actions">
-                <Link className="secondary-link" to={`/buildings/${building.id}`}>
-                  Ouvrir la fiche
-                </Link>
-              </div>
-            </article>
-          ))}
         </div>
       </div>
     </section>

@@ -9,8 +9,8 @@ type BuildingNamingMapProps = {
   usedSource: string;
   parcelFeatureCollection?: GeoJsonFeatureCollection | null;
   featureCollection?: GeoJsonFeatureCollection | null;
-  selectedFeatureId: string;
-  onSelectFeatureId: (featureId: string) => void;
+  selectedFeatureIds: string[];
+  onToggleFeatureId: (featureId: string) => void;
 };
 
 type RuntimeFeature = {
@@ -137,8 +137,8 @@ export function BuildingNamingMap({
   usedSource,
   parcelFeatureCollection,
   featureCollection,
-  selectedFeatureId,
-  onSelectFeatureId,
+  selectedFeatureIds,
+  onToggleFeatureId,
 }: BuildingNamingMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<LeafletRuntime | null>(null);
@@ -260,7 +260,7 @@ export function BuildingNamingMap({
       const buildingLayer = runtime.geoJSON(undefined, {
         style: (feature: RuntimeFeature) => {
           const featureId = getFeatureId(feature);
-          const isSelected = featureId !== "" && featureId === selectedFeatureId;
+          const isSelected = featureId !== "" && selectedFeatureIds.includes(featureId);
           return {
             color: isSelected ? "#f97316" : "#facc15",
             weight: isSelected ? 3 : 2,
@@ -270,7 +270,7 @@ export function BuildingNamingMap({
         },
         pointToLayer: (feature: RuntimeFeature, latlng: { lat: number; lng: number }) => {
           const featureId = getFeatureId(feature);
-          const isSelected = featureId !== "" && featureId === selectedFeatureId;
+          const isSelected = featureId !== "" && selectedFeatureIds.includes(featureId);
           return runtime.circleMarker([latlng.lat, latlng.lng], {
             radius: isSelected ? 8 : 6,
             color: isSelected ? "#f97316" : "#facc15",
@@ -285,7 +285,7 @@ export function BuildingNamingMap({
           layer.bindPopup?.(`<strong>${label}</strong><br/>ID IGN : ${featureId || "inconnu"}`);
           layer.on?.("click", () => {
             if (featureId) {
-              onSelectFeatureId(featureId);
+              onToggleFeatureId(featureId);
             }
           });
         },
@@ -319,7 +319,7 @@ export function BuildingNamingMap({
     return () => {
       focusGroup.clearLayers();
     };
-  }, [addressLabel, featureCollection, lat, lon, mapReady, onSelectFeatureId, parcelFeatureCollection, selectedFeatureId, usedSource]);
+  }, [addressLabel, featureCollection, lat, lon, mapReady, onToggleFeatureId, parcelFeatureCollection, selectedFeatureIds, usedSource]);
 
   return (
     <div className="map-shell">
@@ -345,7 +345,7 @@ export function BuildingNamingMap({
         <span><strong>Bleu</strong> : point de centrage</span>
         <span><strong>Vert</strong> : parcelles détectées</span>
         <span><strong>Jaune</strong> : candidats IGN</span>
-        <span><strong>Orange</strong> : bâtiment sélectionné</span>
+        <span><strong>Orange</strong> : bâtiments sélectionnés</span>
       </div>
     </div>
   );
