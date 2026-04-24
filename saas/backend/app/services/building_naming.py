@@ -33,6 +33,11 @@ _MAJIC_EXPECTED = {
     "level_col": ["Niveau"],
     "door_col": ["Porte"],
 }
+_MAJIC_GROUP_PERSON_COLUMN_CANDIDATES = ["Groupe personne", "Groupe de personne", "Groupe de personnes"]
+_MAJIC_GROUP_PERSON_ALLOWED_VALUES = {
+    "4 - Commune",
+    "4 - Commune du fichier",
+}
 
 _APP_STATE: dict[str, Any] = {
     "cache_geopf": {},
@@ -89,6 +94,15 @@ def _find_column(columns: list[str], candidates: list[str]) -> str | None:
         if key in normalized:
             return normalized[key]
     return None
+
+
+def _is_allowed_group_person_value(value: Any) -> bool:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return False
+    if normalized in {_normalize_text(item) for item in _MAJIC_GROUP_PERSON_ALLOWED_VALUES}:
+        return True
+    return normalized.startswith("4 ") and "COMMUNE" in normalized
 
 
 def _build_reference_norm(row: pd.Series, mapping: dict[str, str | None]) -> str:
@@ -779,13 +793,27 @@ def list_majic_columns() -> list[str]:
     return list(dataframe.columns)
 
 
-def get_building_naming_rows() -> dict[str, Any]:
+def get_building_naming_rows(city_name: str | None = None) -> dict[str, Any]:
     filename, dataframe = _read_majic_file()
     mapping = {key: _find_column(list(dataframe.columns), candidates) for key, candidates in _MAJIC_EXPECTED.items()}
     missing = [key for key in ["departmentcode", "municipalitycode", "section", "number", "street_type", "street_name", "city_name"] if not mapping.get(key)]
     if missing:
         raise ValueError(f"Colonnes MAJIC non trouvées : {', '.join(missing)}")
     work = dataframe.copy()
+    group_person_column = _find_column(list(work.columns), _MAJIC_GROUP_PERSON_COLUMN_CANDIDATES)
+    if not group_person_column:
+        raise ValueError("Colonne MAJIC 'Groupe personne' introuvable dans le fichier source.")
+    work = work[work[group_person_column].map(_is_allowed_group_person_value)].copy()
+    if work.empty:
+        raise ValueError(
+            "Aucune ligne MAJIC ne correspond au filtre 'Groupe personne = 4 - Commune'."
+        )
+    if city_name:
+        city_name_normalized = _normalize_text(city_name)
+        city_column = mapping["city_name"]
+        work = work[work[city_column].map(lambda value: _normalize_text(value) == city_name_normalized)].copy()
+        if work.empty:
+            raise ValueError(f"Aucune adresse MAJIC trouvée pour la commune '{city_name}'.")
     work["_source_row_number"] = range(1, len(work) + 1)
     work["reference_norm"] = work.apply(lambda row: _build_reference_norm(row, mapping), axis=1)
     work["address_display"] = work.apply(lambda row: _build_address_display(row, mapping), axis=1)
@@ -833,14 +861,14 @@ def get_building_naming_rows() -> dict[str, Any]:
         "filename": filename,
         "columns": list(dataframe.columns),
         "mapping": mapping,
-        "total_rows": int(len(dataframe)),
+        "total_rows": int(len(work)),
         "unique_addresses": len(grouped_rows),
         "rows": grouped_rows,
     }
 
 
-def lookup_building_candidates(unique_key: str) -> dict[str, Any]:
-    data = get_building_naming_rows()
+def lookup_building_candidates(unique_key: str, city_name: str | None = None) -> dict[str, Any]:
+    data = get_building_naming_rows(city_name=city_name)
     row = next((item for item in data["rows"] if item["unique_key"] == str(unique_key)), None)
     if row is None:
         raise ValueError(f"Clé inconnue : {unique_key}")
@@ -863,8 +891,13 @@ def lookup_building_candidates(unique_key: str) -> dict[str, Any]:
     }
 
 
-def build_building_payload(unique_key: str, selected_feature: dict[str, Any] | None, validated_name: str | None) -> dict[str, Any]:
-    data = get_building_naming_rows()
+def build_building_payload(
+    unique_key: str,
+    selected_feature: dict[str, Any] | None,
+    validated_name: str | None,
+    city_name: str | None = None,
+) -> dict[str, Any]:
+    data = get_building_naming_rows(city_name=city_name)
     row = next((item for item in data["rows"] if item["unique_key"] == str(unique_key)), None)
     if row is None:
         raise ValueError(f"Clé inconnue : {unique_key}")

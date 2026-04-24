@@ -28,6 +28,7 @@ from app.services.buildings import (
     update_building,
     update_local,
 )
+from app.services.cities import get_city_by_id
 
 router = APIRouter(prefix="/buildings", tags=["buildings"])
 
@@ -36,12 +37,21 @@ def _raise_naming_http_error(error: ValueError) -> None:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
 
 
+def _get_current_user_city_name(db: Session, current_user: User) -> str | None:
+    if current_user.city_id is None:
+        return None
+    city = get_city_by_id(db, current_user.city_id)
+    return city.nom_commune if city is not None else None
+
+
 @router.get("/naming/dataset", response_model=BuildingNamingDataset)
 def get_building_naming_dataset(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BuildingNamingDataset:
     try:
-        return BuildingNamingDataset.model_validate(get_building_naming_rows())
+        city_name = _get_current_user_city_name(db, current_user)
+        return BuildingNamingDataset.model_validate(get_building_naming_rows(city_name=city_name))
     except ValueError as error:
         _raise_naming_http_error(error)
 
@@ -49,10 +59,12 @@ def get_building_naming_dataset(
 @router.get("/naming/{unique_key}", response_model=BuildingNamingLookupRead)
 def get_building_naming_lookup(
     unique_key: str,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BuildingNamingLookupRead:
     try:
-        return BuildingNamingLookupRead.model_validate(lookup_building_candidates(unique_key))
+        city_name = _get_current_user_city_name(db, current_user)
+        return BuildingNamingLookupRead.model_validate(lookup_building_candidates(unique_key, city_name=city_name))
     except ValueError as error:
         _raise_naming_http_error(error)
 

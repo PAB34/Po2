@@ -108,12 +108,15 @@ def create_building_from_naming_selection(
     payload: BuildingNamingSelectionPayload,
     current_user: User,
 ) -> Building:
+    target_city_id = current_user.city_id if current_user.city_id is not None else payload.city_id
+    target_city = get_city_by_id(db, target_city_id) if target_city_id is not None else None
+    target_city_name = target_city.nom_commune if target_city is not None else None
     generated_payload = build_building_payload(
         unique_key=payload.unique_key,
         selected_feature=dict(payload.selected_feature) if payload.selected_feature else None,
         validated_name=payload.validated_name,
+        city_name=target_city_name,
     )
-    target_city_id = current_user.city_id if current_user.city_id is not None else payload.city_id
     existing_statement = select(Building).where(Building.dgfip_unique_key == generated_payload["unique_key"])
     if target_city_id is not None:
         existing_statement = existing_statement.where(Building.city_id == target_city_id)
