@@ -332,7 +332,7 @@ export function BuildingDetailPage() {
           <p>Identifiant de bâtiment invalide.</p>
         </div>
         <div className="form-actions">
-          <Link className="secondary-link" to="/buildings">
+          <Link className="secondary-link" to="/buildings/manual">
             Retour à la liste
           </Link>
         </div>
@@ -349,7 +349,7 @@ export function BuildingDetailPage() {
           <p>{buildingQuery.data ? buildAddressLine(buildingQuery.data) : "Chargement de l'adresse..."}</p>
         </div>
         <div className="form-actions">
-          <Link className="secondary-link" to="/buildings">
+          <Link className="secondary-link" to="/buildings/manual">
             Retour à la liste
           </Link>
         </div>
