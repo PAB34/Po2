@@ -40,6 +40,12 @@ class BuildingNamingDataset(BaseModel):
     mapping: dict[str, str | None]
     total_rows: int
     unique_addresses: int
+    filtered_city_name: str | None = None
+    group_person_column: str
+    group_person_filter: str
+    cache_status: str
+    build_duration_ms: int
+    served_duration_ms: int
     rows: list[BuildingNamingRow]
 
 
@@ -99,6 +105,8 @@ class BuildingCreate(BaseModel):
     majic_entry_values_json: str | None = None
     majic_level_values_json: str | None = None
     majic_door_values_json: str | None = None
+    source_external_id: str | None = Field(default=None, max_length=255)
+    source_payload_json: str | None = None
     source_creation: str | None = Field(default=None, max_length=20)
     statut_geocodage: str | None = Field(default=None, max_length=20)
 
@@ -153,6 +161,8 @@ class BuildingRead(BaseModel):
     majic_entry_values_json: str | None
     majic_level_values_json: str | None
     majic_door_values_json: str | None
+    source_external_id: str | None
+    source_payload_json: str | None
     source_creation: str
     statut_geocodage: str
     created_at: datetime
@@ -167,6 +177,8 @@ class LocalCreate(BaseModel):
     usage: str | None = Field(default=None, max_length=120)
     statut_occupation: str | None = Field(default=None, max_length=120)
     commentaire: str | None = Field(default=None, max_length=500)
+    source_external_id: str | None = Field(default=None, max_length=255)
+    source_payload_json: str | None = None
 
 
 class LocalUpdate(BaseModel):
@@ -191,5 +203,76 @@ class LocalRead(BaseModel):
     usage: str | None
     statut_occupation: str | None
     commentaire: str | None
+    source_external_id: str | None
+    source_payload_json: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class BuildingImportConfig(BaseModel):
+    sheet_name: str | None = None
+    header_row_index: int = Field(default=0, ge=0)
+    row_type_column: str | None = None
+    building_row_types: list[str] = Field(default_factory=list)
+    local_row_types: list[str] = Field(default_factory=list)
+    mapping: dict[str, str | None] = Field(default_factory=dict)
+    skip_existing_buildings: bool = True
+    create_missing_buildings_for_locals: bool = True
+
+
+class BuildingImportAnalysisRead(BaseModel):
+    filename: str
+    available_sheets: list[str]
+    selected_sheet: str
+    header_row_index: int
+    columns: list[str]
+    total_rows: int
+    sample_rows: list[dict[str, str]]
+    detected_row_type_values: list[str]
+    suggested_config: BuildingImportConfig
+
+
+class BuildingImportBuildingPreviewRow(BaseModel):
+    source_row_number: int
+    action: str
+    identifier: str
+    nom_batiment: str | None = None
+    adresse_reconstituee: str | None = None
+    nom_commune: str | None = None
+    dgfip_reference_norm: str | None = None
+    source_external_id: str | None = None
+    warnings: list[str]
+
+
+class BuildingImportLocalPreviewRow(BaseModel):
+    source_row_number: int
+    action: str
+    parent_identifier: str
+    nom_local: str | None = None
+    type_local: str | None = None
+    niveau: str | None = None
+    usage: str | None = None
+    statut_occupation: str | None = None
+    source_external_id: str | None = None
+    warnings: list[str]
+
+
+class BuildingImportPreviewRead(BaseModel):
+    filename: str
+    selected_sheet: str
+    total_rows: int
+    building_rows_detected: int
+    local_rows_detected: int
+    building_preview: list[BuildingImportBuildingPreviewRow]
+    local_preview: list[BuildingImportLocalPreviewRow]
+    warnings: list[str]
+
+
+class BuildingImportResultRead(BaseModel):
+    filename: str
+    selected_sheet: str
+    created_buildings: int
+    skipped_existing_buildings: int
+    created_locals: int
+    skipped_existing_locals: int
+    warnings: list[str]

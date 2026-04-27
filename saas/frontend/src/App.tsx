@@ -3,6 +3,7 @@ import { useAuth } from "./providers/AuthProvider";
 
 import { AccountPage } from "./pages/AccountPage";
 import { BuildingDetailPage } from "./pages/BuildingDetailPage";
+import { BuildingImportPage } from "./pages/BuildingImportPage";
 import { BuildingsPage } from "./pages/BuildingsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -30,6 +31,7 @@ export default function App() {
         <nav>
           <Link to="/">Accueil</Link>
           <Link to="/buildings">Bâtiments</Link>
+          <Link to="/buildings/import">Import patrimoine</Link>
           <Link to="/login">Connexion</Link>
           <Link to="/register">Inscription</Link>
           <Link to="/account">Compte</Link>
@@ -39,6 +41,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/buildings" element={<BuildingsPage />} />
+          <Route path="/buildings/import" element={<BuildingImportPage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

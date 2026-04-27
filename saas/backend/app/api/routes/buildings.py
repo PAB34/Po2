@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -6,6 +6,9 @@ from app.core.db import get_db
 from app.models.user import User
 from app.schemas.building import (
     BuildingCreate,
+    BuildingImportAnalysisRead,
+    BuildingImportPreviewRead,
+    BuildingImportResultRead,
     BuildingNamingDataset,
     BuildingNamingLookupRead,
     BuildingNamingSelectionPayload,
@@ -14,6 +17,12 @@ from app.schemas.building import (
     LocalCreate,
     LocalRead,
     LocalUpdate,
+)
+from app.services.building_imports import (
+    analyze_building_import_file,
+    execute_building_import,
+    parse_import_config,
+    preview_building_import,
 )
 from app.services.building_naming import get_building_naming_rows, lookup_building_candidates
 from app.services.buildings import (
@@ -42,6 +51,51 @@ def _get_current_user_city_name(db: Session, current_user: User) -> str | None:
         return None
     city = get_city_by_id(db, current_user.city_id)
     return city.nom_commune if city is not None else None
+
+
+@router.post("/imports/analyze", response_model=BuildingImportAnalysisRead)
+def post_building_import_analysis(
+    file: UploadFile = File(...),
+    sheet_name: str | None = Form(default=None),
+    header_row_index: int = Form(default=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingImportAnalysisRead:
+    del db, current_user
+    try:
+        return BuildingImportAnalysisRead.model_validate(
+            analyze_building_import_file(file, sheet_name=sheet_name, header_row_index=header_row_index)
+        )
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.post("/imports/preview", response_model=BuildingImportPreviewRead)
+def post_building_import_preview(
+    file: UploadFile = File(...),
+    config_json: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingImportPreviewRead:
+    try:
+        config = parse_import_config(config_json)
+        return BuildingImportPreviewRead.model_validate(preview_building_import(db, file, config, current_user))
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.post("/imports/execute", response_model=BuildingImportResultRead, status_code=status.HTTP_201_CREATED)
+def post_building_import_execute(
+    file: UploadFile = File(...),
+    config_json: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingImportResultRead:
+    try:
+        config = parse_import_config(config_json)
+        return BuildingImportResultRead.model_validate(execute_building_import(db, file, config, current_user))
+    except ValueError as error:
+        _raise_naming_http_error(error)
 
 
 @router.get("/naming/dataset", response_model=BuildingNamingDataset)

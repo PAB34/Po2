@@ -95,10 +95,81 @@ export type Building = {
   majic_entry_values_json: string | null;
   majic_level_values_json: string | null;
   majic_door_values_json: string | null;
+  source_external_id: string | null;
+  source_payload_json: string | null;
   source_creation: string;
   statut_geocodage: string;
   created_at: string;
   updated_at: string;
+};
+
+export type BuildingImportConfig = {
+  sheet_name?: string | null;
+  header_row_index: number;
+  row_type_column?: string | null;
+  building_row_types: string[];
+  local_row_types: string[];
+  mapping: Record<string, string | null>;
+  skip_existing_buildings: boolean;
+  create_missing_buildings_for_locals: boolean;
+};
+
+export type BuildingImportAnalysis = {
+  filename: string;
+  available_sheets: string[];
+  selected_sheet: string;
+  header_row_index: number;
+  columns: string[];
+  total_rows: number;
+  sample_rows: Record<string, string>[];
+  detected_row_type_values: string[];
+  suggested_config: BuildingImportConfig;
+};
+
+export type BuildingImportBuildingPreviewRow = {
+  source_row_number: number;
+  action: string;
+  identifier: string;
+  nom_batiment: string | null;
+  adresse_reconstituee: string | null;
+  nom_commune: string | null;
+  dgfip_reference_norm: string | null;
+  source_external_id: string | null;
+  warnings: string[];
+};
+
+export type BuildingImportLocalPreviewRow = {
+  source_row_number: number;
+  action: string;
+  parent_identifier: string;
+  nom_local: string | null;
+  type_local: string | null;
+  niveau: string | null;
+  usage: string | null;
+  statut_occupation: string | null;
+  source_external_id: string | null;
+  warnings: string[];
+};
+
+export type BuildingImportPreview = {
+  filename: string;
+  selected_sheet: string;
+  total_rows: number;
+  building_rows_detected: number;
+  local_rows_detected: number;
+  building_preview: BuildingImportBuildingPreviewRow[];
+  local_preview: BuildingImportLocalPreviewRow[];
+  warnings: string[];
+};
+
+export type BuildingImportResult = {
+  filename: string;
+  selected_sheet: string;
+  created_buildings: number;
+  skipped_existing_buildings: number;
+  created_locals: number;
+  skipped_existing_locals: number;
+  warnings: string[];
 };
 
 export type BuildingNamingRow = {
@@ -203,6 +274,8 @@ export type Local = {
   usage: string | null;
   statut_occupation: string | null;
   commentaire: string | null;
+  source_external_id: string | null;
+  source_payload_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -215,6 +288,8 @@ export type CreateLocalPayload = {
   usage?: string;
   statut_occupation?: string;
   commentaire?: string;
+  source_external_id?: string;
+  source_payload_json?: string;
 };
 
 export type UpdateLocalPayload = {
@@ -255,6 +330,17 @@ function buildHeaders(token?: string): HeadersInit {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+function buildAuthHeaders(token?: string): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function appendOptionalFormValue(formData: FormData, key: string, value: string | number | null | undefined) {
+  if (value === undefined || value === null || value === "") {
+    return;
+  }
+  formData.append(key, String(value));
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
@@ -353,6 +439,61 @@ export async function createBuildingFromNamingSelection(
   });
 
   return parseResponse<Building>(response);
+}
+
+export async function analyzeBuildingImportFile(
+  token: string,
+  file: File,
+  options?: { sheet_name?: string | null; header_row_index?: number },
+): Promise<BuildingImportAnalysis> {
+  const formData = new FormData();
+  formData.append("file", file);
+  appendOptionalFormValue(formData, "sheet_name", options?.sheet_name ?? undefined);
+  appendOptionalFormValue(formData, "header_row_index", options?.header_row_index ?? 0);
+
+  const response = await fetch(`${apiBaseUrl}/buildings/imports/analyze`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+
+  return parseResponse<BuildingImportAnalysis>(response);
+}
+
+export async function previewBuildingImportFile(
+  token: string,
+  file: File,
+  config: BuildingImportConfig,
+): Promise<BuildingImportPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("config_json", JSON.stringify(config));
+
+  const response = await fetch(`${apiBaseUrl}/buildings/imports/preview`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+
+  return parseResponse<BuildingImportPreview>(response);
+}
+
+export async function executeBuildingImportFile(
+  token: string,
+  file: File,
+  config: BuildingImportConfig,
+): Promise<BuildingImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("config_json", JSON.stringify(config));
+
+  const response = await fetch(`${apiBaseUrl}/buildings/imports/execute`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+
+  return parseResponse<BuildingImportResult>(response);
 }
 
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {
