@@ -165,36 +165,6 @@ export function BuildingsListPage() {
                 />
               </div>
 
-              {selectedBuilding ? (
-                <div className="resource-card resource-card-active">
-                  <div className="resource-card-header">
-                    <div>
-                      <h3>{selectedBuilding.nom_batiment || `Bâtiment #${selectedBuilding.id}`}</h3>
-                      <p>{buildAddressLine(selectedBuilding)}</p>
-                    </div>
-                    <span className="resource-badge">{selectedBuilding.statut_geocodage}</span>
-                  </div>
-                  <dl className="resource-metadata">
-                    <div>
-                      <dt>Commune</dt>
-                      <dd>{selectedBuilding.nom_commune}</dd>
-                    </div>
-                    <div>
-                      <dt>Création</dt>
-                      <dd>{selectedBuilding.source_creation}</dd>
-                    </div>
-                    <div>
-                      <dt>Nom IGN proposé</dt>
-                      <dd>{selectedBuilding.ign_name_proposed || selectedBuilding.ign_name || "Aucun"}</dd>
-                    </div>
-                  </dl>
-                  <div className="resource-card-actions">
-                    <Link className="secondary-link" to={`/buildings/${selectedBuilding.id}`}>
-                      Ouvrir la fiche bâtiment
-                    </Link>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
             <aside className="buildings-sidebar">
@@ -211,7 +181,12 @@ export function BuildingsListPage() {
                   {filteredBuildings.map((building: Building) => {
                     const isActive = selectedBuilding?.id === building.id;
                     return (
-                      <article key={building.id} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                      <article
+                        key={building.id}
+                        className={`resource-card ${isActive ? "resource-card-active" : ""}`}
+                        onClick={() => setSelectedBuildingId(building.id)}
+                        style={{ cursor: "pointer" }}
+                      >
                         <div className="resource-card-header">
                           <div>
                             <h3>{building.nom_batiment || `Bâtiment #${building.id}`}</h3>
@@ -237,12 +212,13 @@ export function BuildingsListPage() {
                           </div>
                         </dl>
                         <div className="resource-card-actions">
-                          <Link className="secondary-link" to={`/buildings/${building.id}`}>
-                            Modifier la fiche
+                          <Link
+                            className="secondary-link"
+                            to={`/buildings/${building.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Ouvrir la fiche bâtiment
                           </Link>
-                          <button type="button" className="secondary-button" onClick={() => setSelectedBuildingId(building.id)}>
-                            {isActive ? "Bâtiment actif" : "Afficher sur la carte"}
-                          </button>
                         </div>
                       </article>
                     );
