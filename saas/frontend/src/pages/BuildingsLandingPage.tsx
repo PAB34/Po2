@@ -1,9 +1,20 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
+import { fetchBuildings } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 export function BuildingsLandingPage() {
   const { token } = useAuth();
+
+  const buildingsQuery = useQuery({
+    queryKey: ["buildings", token],
+    queryFn: () => fetchBuildings(token as string),
+    enabled: Boolean(token),
+  });
+
+  const buildingsCount = buildingsQuery.data?.length ?? 0;
+  const canAccessBuildingsList = buildingsCount > 0;
 
   if (!token) {
     return (
@@ -23,7 +34,7 @@ export function BuildingsLandingPage() {
           <p className="eyebrow">Bâtiments</p>
           <h2>Entrées métier</h2>
           <p>
-            Choisis l’espace de travail correspondant à ton besoin. Pour ce lot, l’entrée <strong>Créer / Modifier bâtiments</strong> est pleinement opérationnelle.
+            Choisis l’espace de travail correspondant à ton besoin. Le parcours principal permet désormais de <strong>constituer la liste patrimoniale</strong> avant d’ouvrir l’espace de consultation et de modification.
           </p>
         </div>
       </div>
@@ -31,24 +42,32 @@ export function BuildingsLandingPage() {
       <div className="buildings-entry-grid">
         <article className="resource-card buildings-entry-card buildings-entry-card-primary">
           <div className="section-heading">
-            <h3>Créer / Modifier bâtiments</h3>
+            <h3>Constituer la liste patrimoniale</h3>
             <p>
-              Importe un listing patrimoine ou travaille à partir de la liste vierge DGFIP / MAJIC, puis rattache les adresses aux bâtiments IGN.
+              Démarre un parcours en étapes : choix du mode, préparation de la liste, puis validation de la liste patrimoniale avant exploitation.
             </p>
           </div>
           <div className="resource-card-actions">
             <Link className="secondary-link buildings-entry-link" to="/buildings/create-edit">
-              Ouvrir cet espace
+              Démarrer le parcours
             </Link>
           </div>
         </article>
 
-        <article className="resource-card buildings-entry-card">
+        <article className={`resource-card buildings-entry-card ${canAccessBuildingsList ? "" : "resource-card-disabled"}`}>
           <div className="section-heading">
             <h3>Liste des bâtiments</h3>
-            <p>Entrée dédiée à la consultation transverse du parc bâtimentaire.</p>
+            <p>Carte du parc bâtimentaire, liste filtrable et accès aux fiches de modification des bâtiments validés.</p>
           </div>
-          <span className="resource-badge">Bientôt disponible</span>
+          {canAccessBuildingsList ? (
+            <div className="resource-card-actions">
+              <Link className="secondary-link buildings-entry-link" to="/buildings/list">
+                Ouvrir la liste
+              </Link>
+            </div>
+          ) : (
+            <span className="resource-badge">Accessible après constitution de la liste</span>
+          )}
         </article>
 
         <article className="resource-card buildings-entry-card">

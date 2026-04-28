@@ -274,6 +274,49 @@ h2 {
   align-items: flex-start;
 }
 
+.resource-card-disabled {
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.buildings-stepper {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.step-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 180px;
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.step-chip span {
+  color: #cbd5e1;
+  font-size: 0.92rem;
+}
+
+.step-chip-active {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+}
+
+.workflow-step-hero {
+  padding: 4px 0;
+}
+
+.buildings-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.buildings-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .mode-switch {
   display: flex;
   gap: 12px;
@@ -682,9 +725,22 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .buildings-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
   .buildings-header-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .buildings-stepper {
+    flex-direction: column;
+  }
+
+  .step-chip {
+    width: 100%;
+    min-width: 0;
   }
 
   .import-sample-row {
@@ -696,6 +752,10 @@ button:disabled {
   }
 
   .buildings-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .buildings-summary-grid {
     grid-template-columns: 1fr;
   }
 

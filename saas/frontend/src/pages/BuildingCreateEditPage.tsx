@@ -25,6 +25,7 @@ import {
 import { useAuth } from "../providers/AuthProvider";
 
 type CreationMode = "blank" | "import";
+type WorkflowStep = 1 | 2 | 3;
 
 type ImportedRowState = BuildingImportRow & {
   editableName: string;
@@ -141,7 +142,9 @@ function buildImportedBuildingPayload(
 export function BuildingCreateEditPage() {
   const queryClient = useQueryClient();
   const { token, user } = useAuth();
+  const [activeStep, setActiveStep] = useState<WorkflowStep>(1);
   const [mode, setMode] = useState<CreationMode>("import");
+  const [listValidationAcknowledged, setListValidationAcknowledged] = useState(false);
 
   const [selectedUniqueKey, setSelectedUniqueKey] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -439,12 +442,18 @@ export function BuildingCreateEditPage() {
     );
   }
 
+  const buildingsCount = buildingsQuery.data?.length ?? 0;
+  const currentModeLabel = mode === "import" ? "Import d’un fichier patrimoine" : "Liste vierge DGFIP / MAJIC";
+  const canAdvanceToValidation = mode === "import" ? importRows.length > 0 || buildingsCount > 0 : Boolean(selectedUniqueKey) || buildingsCount > 0;
+  const canValidatePortfolioList = buildingsCount > 0;
+  const readyToOpenBuildingsList = canValidatePortfolioList && listValidationAcknowledged;
+
   if (!token) {
     return (
       <section className="panel stack-lg">
         <div>
-          <h2>Créer / Modifier bâtiments</h2>
-          <p>Connecte-toi pour importer un listing patrimoine ou créer des bâtiments depuis la liste vierge.</p>
+          <h2>Constituer la liste patrimoniale</h2>
+          <p>Connecte-toi pour choisir un mode de constitution, préparer la liste puis la valider.</p>
         </div>
       </section>
     );
@@ -455,10 +464,10 @@ export function BuildingCreateEditPage() {
       <div className="panel-header">
         <div>
           <p className="eyebrow">Bâtiments</p>
-          <h2>Créer / Modifier bâtiments</h2>
+          <h2>Constituer la liste patrimoniale</h2>
           <p>
-            Choisis soit un import de listing patrimoine avec validation des adresses, soit le travail à partir de la
-            liste vierge DGFIP / MAJIC déjà en place.
+            Passe par un parcours guidé : choisis un mode de constitution, prépare ta liste patrimoniale, puis valide-la
+            avant d’ouvrir l’espace de consultation et de modification.
           </p>
         </div>
         <div className="buildings-header-actions">
@@ -472,392 +481,561 @@ export function BuildingCreateEditPage() {
         </div>
       </div>
 
-      <div className="mode-switch">
-        <button type="button" className={mode === "import" ? "mode-switch-button mode-switch-button-active" : "mode-switch-button"} onClick={() => setMode("import")}>
-          Importer un listing patrimoine
+      <div className="buildings-stepper">
+        <button type="button" className={activeStep === 1 ? "step-chip step-chip-active" : "step-chip"} onClick={() => setActiveStep(1)}>
+          <strong>Étape 1</strong>
+          <span>Choix du mode</span>
         </button>
-        <button type="button" className={mode === "blank" ? "mode-switch-button mode-switch-button-active" : "mode-switch-button"} onClick={() => setMode("blank")}>
-          Partir d’une liste vierge
+        <button type="button" className={activeStep === 2 ? "step-chip step-chip-active" : "step-chip"} onClick={() => setActiveStep(2)}>
+          <strong>Étape 2</strong>
+          <span>Préparer la liste</span>
+        </button>
+        <button
+          type="button"
+          className={activeStep === 3 ? "step-chip step-chip-active" : "step-chip"}
+          onClick={() => {
+            if (canAdvanceToValidation) {
+              setActiveStep(3);
+            }
+          }}
+          disabled={!canAdvanceToValidation}
+        >
+          <strong>Étape 3</strong>
+          <span>Valider la liste</span>
         </button>
       </div>
 
-      {mode === "blank" ? (
-        <div className="buildings-workspace">
-          <aside className="buildings-sidebar">
-            <div className="section-block">
-              <div className="section-heading">
-                <h3>Source DGFIP / MAJIC</h3>
-                <p>
-                  Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename ?? "non configuré"}</strong>.
-                  Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
-                </p>
-              </div>
-              {namingDatasetQuery.data ? (
-                <div className="info-banner">
-                  <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}. <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}. <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}. <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms. <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
-                </div>
-              ) : null}
-              <div className="detail-grid">
-                <div className="detail-card">
-                  <span>Lignes source</span>
-                  <strong>{namingDatasetQuery.data?.total_rows ?? 0}</strong>
-                </div>
-                <div className="detail-card">
-                  <span>Adresses uniques</span>
-                  <strong>{namingDatasetQuery.data?.unique_addresses ?? 0}</strong>
-                </div>
-                <div className="detail-card">
-                  <span>Colonnes détectées</span>
-                  <strong>{namingDatasetQuery.data?.columns.length ?? 0}</strong>
-                </div>
-              </div>
+      {activeStep === 1 ? (
+        <div className="stack-lg">
+          <div className="workflow-step-hero">
+            <div className="section-heading">
+              <h3>Étape 1 · Choisir le mode de constitution</h3>
+              <p>
+                Commence par indiquer si tu veux importer un fichier patrimoine ou partir d’une liste vierge pour construire progressivement la liste patrimoniale.
+              </p>
             </div>
-
-            <div className="section-block buildings-addresses-section">
-              <div className="section-heading">
-                <h3>Adresses DGFIP à traiter</h3>
-                <p>Choisis une adresse unique pour charger ses parcelles et ses candidats de bâtiments IGN.</p>
-              </div>
-              <label className="field">
-                <span>Recherche d’une adresse ou d’une référence cadastrale</span>
-                <input type="text" value={search} onChange={(event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value)} />
-              </label>
-              {namingDatasetQuery.isLoading ? <p>Chargement des données DGFIP...</p> : null}
-              {namingDatasetQuery.error instanceof Error ? <p className="error-text">{namingDatasetQuery.error.message}</p> : null}
-              <div className="resource-list buildings-address-list">
-                {filteredRows.map((row: BuildingNamingRow) => {
-                  const existingBuilding = existingBuildingByUniqueKey.get(row.unique_key);
-                  const isActive = selectedUniqueKey === row.unique_key;
-                  return (
-                    <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
-                      <div className="resource-card-header">
-                        <div>
-                          <h3>{buildMajicAddressLine(row)}</h3>
-                          <p>{row.address_display}</p>
-                        </div>
-                        <span className="resource-badge">{existingBuilding ? "Déjà créé" : `${row.duplicate_count} ligne(s)`}</span>
-                      </div>
-                      <dl className="resource-metadata">
-                        <div>
-                          <dt>Commune</dt>
-                          <dd>{row.nom_commune}</dd>
-                        </div>
-                        <div>
-                          <dt>Références</dt>
-                          <dd>{row.references.join(", ") || "Aucune"}</dd>
-                        </div>
-                        <div>
-                          <dt>Indices MAJIC</dt>
-                          <dd>{row.majic_building_values.join(", ") || "Aucun bâtiment MAJIC"}</dd>
-                        </div>
-                      </dl>
-                      <div className="resource-card-actions">
-                        {existingBuilding ? (
-                          <Link className="secondary-link" to={`/buildings/${existingBuilding.id}`}>
-                            Ouvrir le bâtiment existant
-                          </Link>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          onClick={() => {
-                            setSelectedUniqueKey(row.unique_key);
-                            setBlankError(null);
-                            setBlankSuccess(null);
-                          }}
-                        >
-                          {isActive ? "Sélection active" : "Analyser cette adresse"}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
-          </aside>
-
-          <div className="buildings-main-content">
-            {namingLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-            {namingLookupQuery.error instanceof Error ? <p className="error-text">{namingLookupQuery.error.message}</p> : null}
-            <BuildingSelectionWorkspace
-              lookupData={(namingLookupQuery.data ?? null) as BuildingNamingLookup | null}
-              emptyTitle="Aucune adresse sélectionnée."
-              emptyDescription="Choisis une adresse dans la colonne de gauche pour afficher la carte, sélectionner un ou plusieurs bâtiments et valider les informations."
-              createPending={createBlankBuildingMutation.isPending}
-              error={blankError}
-              success={blankSuccess}
-              createLabelWithSelection="Créer le bâtiment depuis cette sélection"
-              createLabelWithoutSelection="Créer le bâtiment avec le nom saisi"
-              onCreate={handleBlankCreate}
-            />
           </div>
-        </div>
-      ) : (
-        <div className="buildings-workspace">
-          <aside className="buildings-sidebar">
-            <div className="section-block">
+
+          <div className="buildings-choice-grid">
+            <article className={`resource-card buildings-entry-card ${mode === "import" ? "resource-card-active" : ""}`}>
               <div className="section-heading">
-                <h3>Import d’un listing patrimoine</h3>
+                <h3>Importer un fichier</h3>
                 <p>
-                  Uploade un fichier CSV, XLS, XLSX ou XLSM, choisis les colonnes <strong>Nom bâtiment</strong> et <strong>Adresse</strong>, puis vérifie la compatibilité IGN de chaque adresse.
+                  Recommandé si tu disposes déjà d’un listing patrimoine. Tu pourras mapper les colonnes, corriger les adresses puis rattacher les bâtiments à l’IGN.
                 </p>
               </div>
-              <label className="field">
-                <span>Fichier patrimoine</span>
-                <input type="file" accept=".csv,.xls,.xlsx,.xlsm" onChange={handleImportFileChange} />
-              </label>
-              <div className="form-actions">
-                <button type="button" className="secondary-button" onClick={() => void handlePreviewImportFile()} disabled={!importFile}>
-                  Analyser le fichier
+              <div className="resource-card-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("import");
+                    setActiveStep(2);
+                    setListValidationAcknowledged(false);
+                  }}
+                >
+                  Choisir l’import
                 </button>
               </div>
-              {importPreview ? (
+            </article>
+
+            <article className={`resource-card buildings-entry-card ${mode === "blank" ? "resource-card-active" : ""}`}>
+              <div className="section-heading">
+                <h3>Partir d’une liste vierge</h3>
+                <p>
+                  Utilise la base DGFIP / MAJIC déjà préparée, sélectionne une adresse source puis crée les bâtiments retenus à partir des rapprochements IGN.
+                </p>
+              </div>
+              <div className="resource-card-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("blank");
+                    setActiveStep(2);
+                    setListValidationAcknowledged(false);
+                  }}
+                >
+                  Choisir la liste vierge
+                </button>
+              </div>
+            </article>
+          </div>
+        </div>
+      ) : null}
+
+      {activeStep === 2 ? (
+        <div className="stack-lg">
+          <div className="panel-header">
+            <div>
+              <h3>Étape 2 · Préparer la liste patrimoniale</h3>
+              <p>
+                Mode actuel : <strong>{currentModeLabel}</strong>. Prépare les éléments à intégrer, crée les bâtiments retenus, puis passe à l’étape de validation lorsque tu es prêt.
+              </p>
+            </div>
+            <div className="buildings-header-actions">
+              <button type="button" className="secondary-button" onClick={() => setActiveStep(1)}>
+                Changer de mode
+              </button>
+              <button type="button" onClick={() => setActiveStep(3)} disabled={!canAdvanceToValidation}>
+                Passer à la validation
+              </button>
+            </div>
+          </div>
+
+          {mode === "blank" ? (
+            <div className="buildings-workspace">
+              <aside className="buildings-sidebar">
                 <div className="section-block">
+                  <div className="section-heading">
+                    <h3>Source DGFIP / MAJIC</h3>
+                    <p>
+                      Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename ?? "non configuré"}</strong>. Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
+                    </p>
+                  </div>
+                  {namingDatasetQuery.data ? (
+                    <div className="info-banner">
+                      <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}. <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}. <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}. <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms. <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
+                    </div>
+                  ) : null}
                   <div className="detail-grid">
                     <div className="detail-card">
-                      <span>Fichier</span>
-                      <strong>{importPreview.filename}</strong>
+                      <span>Lignes source</span>
+                      <strong>{namingDatasetQuery.data?.total_rows ?? 0}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Adresses uniques</span>
+                      <strong>{namingDatasetQuery.data?.unique_addresses ?? 0}</strong>
                     </div>
                     <div className="detail-card">
                       <span>Colonnes détectées</span>
-                      <strong>{importPreview.columns.length}</strong>
+                      <strong>{namingDatasetQuery.data?.columns.length ?? 0}</strong>
                     </div>
-                    <div className="detail-card">
-                      <span>Lignes source</span>
-                      <strong>{importPreview.total_rows}</strong>
-                    </div>
-                  </div>
-                  <div className="import-sample-table">
-                    <div className="import-sample-row import-sample-row-head">
-                      {importPreview.columns.slice(0, 4).map((column: string) => (
-                        <strong key={column}>{column}</strong>
-                      ))}
-                    </div>
-                    {importPreview.sample_rows.map((row: Record<string, string>, index: number) => (
-                      <div key={`sample-${index}`} className="import-sample-row">
-                        {importPreview.columns.slice(0, 4).map((column: string) => (
-                          <span key={`${index}-${column}`}>{row[column] || "-"}</span>
-                        ))}
-                      </div>
-                    ))}
                   </div>
                 </div>
-              ) : null}
-              {importPreview ? (
-                <>
+
+                <div className="section-block buildings-addresses-section">
+                  <div className="section-heading">
+                    <h3>Adresses DGFIP à traiter</h3>
+                    <p>Choisis une adresse unique pour charger ses parcelles et ses candidats de bâtiments IGN.</p>
+                  </div>
                   <label className="field">
-                    <span>Colonne Nom bâtiment</span>
-                    <select value={importNameColumn} onChange={(event: ChangeEvent<HTMLSelectElement>) => setImportNameColumn(event.target.value)}>
-                      <option value="">Sélectionne une colonne</option>
-                      {importPreview.columns.map((column: string) => (
-                        <option key={`name-${column}`} value={column}>
-                          {column}
-                        </option>
-                      ))}
-                    </select>
+                    <span>Recherche d’une adresse ou d’une référence cadastrale</span>
+                    <input type="text" value={search} onChange={(event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value)} />
                   </label>
+                  {namingDatasetQuery.isLoading ? <p>Chargement des données DGFIP...</p> : null}
+                  {namingDatasetQuery.error instanceof Error ? <p className="error-text">{namingDatasetQuery.error.message}</p> : null}
+                  <div className="resource-list buildings-address-list">
+                    {filteredRows.map((row: BuildingNamingRow) => {
+                      const existingBuilding = existingBuildingByUniqueKey.get(row.unique_key);
+                      const isActive = selectedUniqueKey === row.unique_key;
+                      return (
+                        <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                          <div className="resource-card-header">
+                            <div>
+                              <h3>{buildMajicAddressLine(row)}</h3>
+                              <p>{row.address_display}</p>
+                            </div>
+                            <span className="resource-badge">{existingBuilding ? "Déjà créé" : `${row.duplicate_count} ligne(s)`}</span>
+                          </div>
+                          <dl className="resource-metadata">
+                            <div>
+                              <dt>Commune</dt>
+                              <dd>{row.nom_commune}</dd>
+                            </div>
+                            <div>
+                              <dt>Références</dt>
+                              <dd>{row.references.join(", ") || "Aucune"}</dd>
+                            </div>
+                            <div>
+                              <dt>Indices MAJIC</dt>
+                              <dd>{row.majic_building_values.join(", ") || "Aucun bâtiment MAJIC"}</dd>
+                            </div>
+                          </dl>
+                          <div className="resource-card-actions">
+                            {existingBuilding ? (
+                              <Link className="secondary-link" to={`/buildings/${existingBuilding.id}`}>
+                                Ouvrir le bâtiment existant
+                              </Link>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                setSelectedUniqueKey(row.unique_key);
+                                setBlankError(null);
+                                setBlankSuccess(null);
+                                setListValidationAcknowledged(false);
+                              }}
+                            >
+                              {isActive ? "Sélection active" : "Analyser cette adresse"}
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </aside>
+
+              <div className="buildings-main-content">
+                {namingLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+                {namingLookupQuery.error instanceof Error ? <p className="error-text">{namingLookupQuery.error.message}</p> : null}
+                <BuildingSelectionWorkspace
+                  lookupData={(namingLookupQuery.data ?? null) as BuildingNamingLookup | null}
+                  emptyTitle="Aucune adresse sélectionnée."
+                  emptyDescription="Choisis une adresse dans la colonne de gauche pour afficher la carte, sélectionner un ou plusieurs bâtiments et valider les informations."
+                  createPending={createBlankBuildingMutation.isPending}
+                  error={blankError}
+                  success={blankSuccess}
+                  createLabelWithSelection="Créer le bâtiment depuis cette sélection"
+                  createLabelWithoutSelection="Créer le bâtiment avec le nom saisi"
+                  onCreate={handleBlankCreate}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="buildings-workspace">
+              <aside className="buildings-sidebar">
+                <div className="section-block">
+                  <div className="section-heading">
+                    <h3>Import d’un listing patrimoine</h3>
+                    <p>
+                      Uploade un fichier CSV, XLS, XLSX ou XLSM, choisis les colonnes <strong>Nom bâtiment</strong> et <strong>Adresse</strong>, puis vérifie la compatibilité IGN de chaque adresse.
+                    </p>
+                  </div>
                   <label className="field">
-                    <span>Colonne Adresse</span>
-                    <select value={importAddressColumn} onChange={(event: ChangeEvent<HTMLSelectElement>) => setImportAddressColumn(event.target.value)}>
-                      <option value="">Sélectionne une colonne</option>
-                      {importPreview.columns.map((column: string) => (
-                        <option key={`address-${column}`} value={column}>
-                          {column}
-                        </option>
-                      ))}
-                    </select>
+                    <span>Fichier patrimoine</span>
+                    <input type="file" accept=".csv,.xls,.xlsx,.xlsm" onChange={handleImportFileChange} />
                   </label>
                   <div className="form-actions">
-                    <button type="button" onClick={() => void handleLoadImportRows()}>
-                      Charger les lignes importées
+                    <button type="button" className="secondary-button" onClick={() => void handlePreviewImportFile()} disabled={!importFile}>
+                      Analyser le fichier
                     </button>
                   </div>
-                </>
-              ) : null}
-              {importError ? <p className="error-text">{importError}</p> : null}
-              {importSuccess ? <p className="success-text">{importSuccess}</p> : null}
-            </div>
-
-            {importRows.length > 0 ? (
-              <div className="section-block buildings-addresses-section">
-                <div className="section-heading">
-                  <h3>Lignes patrimoine à traiter</h3>
-                  <p>Les lignes en rouge doivent être corrigées manuellement avant l’analyse IGN.</p>
-                </div>
-                <div className="detail-grid">
-                  <div className="detail-card">
-                    <span>Valides</span>
-                    <strong>{importStats.valid}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>À corriger</span>
-                    <strong>{importStats.invalid}</strong>
-                  </div>
-                  <div className="detail-card">
-                    <span>Créées</span>
-                    <strong>{importStats.created}</strong>
-                  </div>
-                </div>
-                <label className="field">
-                  <span>Recherche dans les lignes importées</span>
-                  <input type="text" value={importSearch} onChange={(event: ChangeEvent<HTMLInputElement>) => setImportSearch(event.target.value)} />
-                </label>
-                {selectedImportRow ? (
-                  <div className="resource-card import-edit-card">
-                    <div className="resource-card-header">
-                      <div>
-                        <h3>Ligne {selectedImportRow.row_number}</h3>
-                        <p>Corrige l’adresse puis relance la vérification si nécessaire.</p>
+                  {importPreview ? (
+                    <div className="section-block">
+                      <div className="detail-grid">
+                        <div className="detail-card">
+                          <span>Fichier</span>
+                          <strong>{importPreview.filename}</strong>
+                        </div>
+                        <div className="detail-card">
+                          <span>Colonnes détectées</span>
+                          <strong>{importPreview.columns.length}</strong>
+                        </div>
+                        <div className="detail-card">
+                          <span>Lignes source</span>
+                          <strong>{importPreview.total_rows}</strong>
+                        </div>
                       </div>
-                      <span className={`resource-badge ${selectedImportRow.validation_status === "invalid" ? "resource-badge-danger" : "resource-badge-success"}`}>
-                        {selectedImportRow.validation_status === "valid" ? "Adresse compatible" : "À corriger"}
-                      </span>
+                      <div className="import-sample-table">
+                        <div className="import-sample-row import-sample-row-head">
+                          {importPreview.columns.slice(0, 4).map((column: string) => (
+                            <strong key={column}>{column}</strong>
+                          ))}
+                        </div>
+                        {importPreview.sample_rows.map((row: Record<string, string>, index: number) => (
+                          <div key={`sample-${index}`} className="import-sample-row">
+                            {importPreview.columns.slice(0, 4).map((column: string) => (
+                              <span key={`${index}-${column}`}>{row[column] || "-"}</span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {importPreview ? (
+                    <>
+                      <label className="field">
+                        <span>Colonne Nom bâtiment</span>
+                        <select value={importNameColumn} onChange={(event: ChangeEvent<HTMLSelectElement>) => setImportNameColumn(event.target.value)}>
+                          <option value="">Sélectionne une colonne</option>
+                          {importPreview.columns.map((column: string) => (
+                            <option key={`name-${column}`} value={column}>
+                              {column}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Colonne Adresse</span>
+                        <select value={importAddressColumn} onChange={(event: ChangeEvent<HTMLSelectElement>) => setImportAddressColumn(event.target.value)}>
+                          <option value="">Sélectionne une colonne</option>
+                          {importPreview.columns.map((column: string) => (
+                            <option key={`address-${column}`} value={column}>
+                              {column}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="form-actions">
+                        <button type="button" onClick={() => void handleLoadImportRows()}>
+                          Charger les lignes importées
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                  {importError ? <p className="error-text">{importError}</p> : null}
+                  {importSuccess ? <p className="success-text">{importSuccess}</p> : null}
+                </div>
+
+                {importRows.length > 0 ? (
+                  <div className="section-block buildings-addresses-section">
+                    <div className="section-heading">
+                      <h3>Lignes patrimoine à traiter</h3>
+                      <p>Les lignes en rouge doivent être corrigées manuellement avant l’analyse IGN.</p>
+                    </div>
+                    <div className="detail-grid">
+                      <div className="detail-card">
+                        <span>Valides</span>
+                        <strong>{importStats.valid}</strong>
+                      </div>
+                      <div className="detail-card">
+                        <span>À corriger</span>
+                        <strong>{importStats.invalid}</strong>
+                      </div>
+                      <div className="detail-card">
+                        <span>Créées</span>
+                        <strong>{importStats.created}</strong>
+                      </div>
                     </div>
                     <label className="field">
-                      <span>Nom bâtiment</span>
-                      <input
-                        type="text"
-                        value={selectedImportRow.editableName}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                          const value = event.target.value;
-                          updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
-                            ...row,
-                            editableName: value,
-                          }));
-                        }}
-                      />
+                      <span>Recherche dans les lignes importées</span>
+                      <input type="text" value={importSearch} onChange={(event: ChangeEvent<HTMLInputElement>) => setImportSearch(event.target.value)} />
                     </label>
-                    <label className="field">
-                      <span>Adresse</span>
-                      <input
-                        type="text"
-                        value={selectedImportRow.editableAddress}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                          const value = event.target.value;
-                          updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
-                            ...row,
-                            editableAddress: value,
-                            address_display: value,
-                            validation_status: value.trim() ? "pending" : "invalid",
-                            validation_message: value.trim()
-                              ? "Adresse modifiée. Vérifie-la avant de lancer l’analyse IGN."
-                              : "Adresse absente ou vide.",
-                            lat: null,
-                            lon: null,
-                          }));
-                        }}
-                      />
-                    </label>
-                    <div className="form-actions">
-                      <button type="button" className="secondary-button" onClick={() => void handleValidateSelectedImportRow()} disabled={validatingRowNumber === selectedImportRow.row_number}>
-                        {validatingRowNumber === selectedImportRow.row_number ? "Vérification..." : "Vérifier cette adresse"}
-                      </button>
-                      {selectedImportRow.createdBuildingId ? (
-                        <Link className="secondary-link" to={`/buildings/${selectedImportRow.createdBuildingId}`}>
-                          Ouvrir le bâtiment créé
-                        </Link>
-                      ) : null}
-                    </div>
-                    {selectedImportRow.validation_message ? <p>{selectedImportRow.validation_message}</p> : null}
-                  </div>
-                ) : null}
-                <div className="resource-list buildings-address-list">
-                  {filteredImportRows.map((row: ImportedRowState) => {
-                    const isActive = selectedImportRowNumber === row.row_number;
-                    const stateClass = row.createdBuildingId
-                      ? "resource-card-success"
-                      : row.validation_status === "valid"
-                        ? "resource-card-valid"
-                        : row.validation_status === "invalid"
-                          ? "resource-card-invalid"
-                          : "resource-card-pending";
-                    const badgeLabel = row.createdBuildingId
-                      ? "Créé"
-                      : row.validation_status === "valid"
-                        ? "Adresse OK"
-                        : row.validation_status === "invalid"
-                          ? "Adresse KO"
-                          : "À vérifier";
-                    return (
-                      <article key={row.row_number} className={`resource-card ${stateClass} ${isActive ? "resource-card-active" : ""}`}>
+                    {selectedImportRow ? (
+                      <div className="resource-card import-edit-card">
                         <div className="resource-card-header">
                           <div>
-                            <h3>{row.editableName || `Ligne ${row.row_number}`}</h3>
-                            <p>{row.editableAddress || row.source_address || "Adresse manquante"}</p>
+                            <h3>Ligne {selectedImportRow.row_number}</h3>
+                            <p>Corrige l’adresse puis relance la vérification si nécessaire.</p>
                           </div>
-                          <span className="resource-badge">{badgeLabel}</span>
+                          <span className={`resource-badge ${selectedImportRow.validation_status === "invalid" ? "resource-badge-danger" : "resource-badge-success"}`}>
+                            {selectedImportRow.validation_status === "valid" ? "Adresse compatible" : "À corriger"}
+                          </span>
                         </div>
-                        <dl className="resource-metadata">
-                          <div>
-                            <dt>Ligne source</dt>
-                            <dd>{row.row_number}</dd>
-                          </div>
-                          <div>
-                            <dt>Latitude</dt>
-                            <dd>{row.lat ?? "-"}</dd>
-                          </div>
-                          <div>
-                            <dt>Longitude</dt>
-                            <dd>{row.lon ?? "-"}</dd>
-                          </div>
-                        </dl>
-                        {row.validation_message ? <p>{row.validation_message}</p> : null}
-                        <div className="resource-card-actions">
-                          {row.createdBuildingId ? (
-                            <Link className="secondary-link" to={`/buildings/${row.createdBuildingId}`}>
+                        <label className="field">
+                          <span>Nom bâtiment</span>
+                          <input
+                            type="text"
+                            value={selectedImportRow.editableName}
+                            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                              const value = event.target.value;
+                              updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
+                                ...row,
+                                editableName: value,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Adresse</span>
+                          <input
+                            type="text"
+                            value={selectedImportRow.editableAddress}
+                            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                              const value = event.target.value;
+                              updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
+                                ...row,
+                                editableAddress: value,
+                                address_display: value,
+                                validation_status: value.trim() ? "pending" : "invalid",
+                                validation_message: value.trim()
+                                  ? "Adresse modifiée. Vérifie-la avant de lancer l’analyse IGN."
+                                  : "Adresse absente ou vide.",
+                                lat: null,
+                                lon: null,
+                              }));
+                            }}
+                          />
+                        </label>
+                        <div className="form-actions">
+                          <button type="button" className="secondary-button" onClick={() => void handleValidateSelectedImportRow()} disabled={validatingRowNumber === selectedImportRow.row_number}>
+                            {validatingRowNumber === selectedImportRow.row_number ? "Vérification..." : "Vérifier cette adresse"}
+                          </button>
+                          {selectedImportRow.createdBuildingId ? (
+                            <Link className="secondary-link" to={`/buildings/${selectedImportRow.createdBuildingId}`}>
                               Ouvrir le bâtiment créé
                             </Link>
                           ) : null}
-                          <button
-                            type="button"
-                            className="secondary-button"
-                            onClick={() => {
-                              setSelectedImportRowNumber(row.row_number);
-                              setImportError(null);
-                              setImportSuccess(null);
-                            }}
-                          >
-                            {isActive ? "Ligne active" : row.validation_status === "valid" ? "Analyser cette ligne" : "Corriger cette ligne"}
-                          </button>
                         </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </aside>
+                        {selectedImportRow.validation_message ? <p>{selectedImportRow.validation_message}</p> : null}
+                      </div>
+                    ) : null}
+                    <div className="resource-list buildings-address-list">
+                      {filteredImportRows.map((row: ImportedRowState) => {
+                        const isActive = selectedImportRowNumber === row.row_number;
+                        const stateClass = row.createdBuildingId
+                          ? "resource-card-success"
+                          : row.validation_status === "valid"
+                            ? "resource-card-valid"
+                            : row.validation_status === "invalid"
+                              ? "resource-card-invalid"
+                              : "resource-card-pending";
+                        const badgeLabel = row.createdBuildingId
+                          ? "Créé"
+                          : row.validation_status === "valid"
+                            ? "Adresse OK"
+                            : row.validation_status === "invalid"
+                              ? "Adresse KO"
+                              : "À vérifier";
+                        return (
+                          <article key={row.row_number} className={`resource-card ${stateClass} ${isActive ? "resource-card-active" : ""}`}>
+                            <div className="resource-card-header">
+                              <div>
+                                <h3>{row.editableName || `Ligne ${row.row_number}`}</h3>
+                                <p>{row.editableAddress || row.source_address || "Adresse manquante"}</p>
+                              </div>
+                              <span className="resource-badge">{badgeLabel}</span>
+                            </div>
+                            <dl className="resource-metadata">
+                              <div>
+                                <dt>Ligne source</dt>
+                                <dd>{row.row_number}</dd>
+                              </div>
+                              <div>
+                                <dt>Latitude</dt>
+                                <dd>{row.lat ?? "-"}</dd>
+                              </div>
+                              <div>
+                                <dt>Longitude</dt>
+                                <dd>{row.lon ?? "-"}</dd>
+                              </div>
+                            </dl>
+                            {row.validation_message ? <p>{row.validation_message}</p> : null}
+                            <div className="resource-card-actions">
+                              {row.createdBuildingId ? (
+                                <Link className="secondary-link" to={`/buildings/${row.createdBuildingId}`}>
+                                  Ouvrir le bâtiment créé
+                                </Link>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setSelectedImportRowNumber(row.row_number);
+                                  setImportError(null);
+                                  setImportSuccess(null);
+                                  setListValidationAcknowledged(false);
+                                }}
+                              >
+                                {isActive ? "Ligne active" : row.validation_status === "valid" ? "Analyser cette ligne" : "Corriger cette ligne"}
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </aside>
 
-          <div className="buildings-main-content">
-            {selectedImportRow && selectedImportRow.validation_status === "valid" && importLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-            {importLookupQuery.error instanceof Error ? <p className="error-text">{importLookupQuery.error.message}</p> : null}
-            <BuildingSelectionWorkspace
-              lookupData={(importLookupQuery.data ?? null) as FreeAddressLookup | null}
-              emptyTitle={
-                selectedImportRow
-                  ? selectedImportRow.validation_status === "valid"
-                    ? "Chargement du rapprochement IGN..."
-                    : "Adresse à corriger avant analyse IGN"
-                  : "Aucune ligne importée sélectionnée."
-              }
-              emptyDescription={
-                selectedImportRow
-                  ? selectedImportRow.validation_status === "valid"
-                    ? "La carte va apparaître dès que le lookup IGN sera disponible."
-                    : "Corrige l’adresse dans la colonne de gauche puis clique sur “Vérifier cette adresse”."
-                  : "Charge tes lignes patrimoine, puis sélectionne-en une pour afficher la carte et rattacher le bâtiment à l’IGN."
-              }
-              initialValidatedName={selectedImportRow?.editableName ?? ""}
-              createPending={createImportBuildingMutation.isPending}
-              error={importError}
-              success={importSuccess}
-              createLabelWithSelection="Créer le bâtiment importé depuis cette sélection"
-              createLabelWithoutSelection="Créer le bâtiment importé avec le nom saisi"
-              onCreate={handleImportCreate}
-            />
-          </div>
+              <div className="buildings-main-content">
+                {selectedImportRow && selectedImportRow.validation_status === "valid" && importLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+                {importLookupQuery.error instanceof Error ? <p className="error-text">{importLookupQuery.error.message}</p> : null}
+                <BuildingSelectionWorkspace
+                  lookupData={(importLookupQuery.data ?? null) as FreeAddressLookup | null}
+                  emptyTitle={
+                    selectedImportRow
+                      ? selectedImportRow.validation_status === "valid"
+                        ? "Chargement du rapprochement IGN..."
+                        : "Adresse à corriger avant analyse IGN"
+                      : "Aucune ligne importée sélectionnée."
+                  }
+                  emptyDescription={
+                    selectedImportRow
+                      ? selectedImportRow.validation_status === "valid"
+                        ? "La carte va apparaître dès que le lookup IGN sera disponible."
+                        : "Corrige l’adresse dans la colonne de gauche puis clique sur “Vérifier cette adresse”."
+                      : "Charge tes lignes patrimoine, puis sélectionne-en une pour afficher la carte et rattacher le bâtiment à l’IGN."
+                  }
+                  initialValidatedName={selectedImportRow?.editableName ?? ""}
+                  createPending={createImportBuildingMutation.isPending}
+                  error={importError}
+                  success={importSuccess}
+                  createLabelWithSelection="Créer le bâtiment importé depuis cette sélection"
+                  createLabelWithoutSelection="Créer le bâtiment importé avec le nom saisi"
+                  onCreate={handleImportCreate}
+                />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
+
+      {activeStep === 3 ? (
+        <div className="stack-lg">
+          <div className="panel-header">
+            <div>
+              <h3>Étape 3 · Valider la liste patrimoniale</h3>
+              <p>
+                Vérifie que les bâtiments à conserver ont bien été créés, puis confirme la validation pour basculer dans l’espace <strong>Liste des bâtiments</strong>.
+              </p>
+            </div>
+            <div className="buildings-header-actions">
+              <button type="button" className="secondary-button" onClick={() => setActiveStep(2)}>
+                Revenir à la préparation
+              </button>
+              <button type="button" onClick={() => setListValidationAcknowledged(true)} disabled={!canValidatePortfolioList}>
+                Valider la liste patrimoniale
+              </button>
+            </div>
+          </div>
+
+          <div className="detail-grid buildings-summary-grid">
+            <div className="detail-card">
+              <span>Mode retenu</span>
+              <strong>{currentModeLabel}</strong>
+            </div>
+            <div className="detail-card">
+              <span>Bâtiments actuellement créés</span>
+              <strong>{buildingsCount}</strong>
+            </div>
+            <div className="detail-card">
+              <span>État du parcours</span>
+              <strong>{canAdvanceToValidation ? "Prêt pour validation" : "Préparation à compléter"}</strong>
+            </div>
+          </div>
+
+          {mode === "import" ? (
+            <div className="detail-grid buildings-summary-grid">
+              <div className="detail-card">
+                <span>Lignes chargées</span>
+                <strong>{importRows.length}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Adresses valides</span>
+                <strong>{importStats.valid}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Bâtiments créés depuis l’import</span>
+                <strong>{importStats.created}</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="info-banner">
+              <strong>Mode liste vierge :</strong> sélectionne une adresse DGFIP / MAJIC, rapproche-la avec l’IGN puis crée les bâtiments retenus. La validation finale devient disponible dès qu’au moins un bâtiment est présent dans la liste.
+            </div>
+          )}
+
+          {!canValidatePortfolioList ? (
+            <div className="empty-state">
+              <strong>La liste n’est pas encore prête à être validée.</strong>
+              <span>Valider une adresse ou visualiser un candidat IGN ne suffit pas encore : crée au moins un bâtiment à l’étape 2 pour ouvrir ensuite l’espace “Liste des bâtiments”.</span>
+            </div>
+          ) : null}
+
+          {readyToOpenBuildingsList ? (
+            <div className="info-banner">
+              <strong>Liste patrimoniale validée.</strong> Tu peux maintenant ouvrir la liste des bâtiments pour consulter la carte, la liste filtrable et modifier les fiches existantes.
+              <div className="form-actions">
+                <Link className="secondary-link" to="/buildings/list">
+                  Ouvrir la liste des bâtiments
+                </Link>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

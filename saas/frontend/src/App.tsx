@@ -4,6 +4,7 @@ import { useAuth } from "./providers/AuthProvider";
 import { AccountPage } from "./pages/AccountPage";
 import { BuildingCreateEditPage } from "./pages/BuildingCreateEditPage";
 import { BuildingDetailPage } from "./pages/BuildingDetailPage";
+import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -40,6 +41,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/buildings" element={<BuildingsLandingPage />} />
+          <Route path="/buildings/list" element={<BuildingsListPage />} />
           <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
