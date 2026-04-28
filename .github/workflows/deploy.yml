@@ -24,10 +24,41 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             set -e
-            if [ ! -d "${{ secrets.VPS_APP_PATH }}/.git" ]; then
-              git clone ${{ secrets.REPO_SSH_URL }} ${{ secrets.VPS_APP_PATH }}
+            TARGET_DIR="${{ secrets.VPS_APP_PATH }}"
+            REPO_URL="${{ secrets.REPO_SSH_URL }}"
+            BRANCH_REF="origin/${{ github.ref_name }}"
+
+            mkdir -p "$TARGET_DIR"
+
+            if [ -d "$TARGET_DIR/.git" ]; then
+              REPO_DIR="$TARGET_DIR"
+            elif [ -d "$TARGET_DIR/repo/.git" ]; then
+              REPO_DIR="$TARGET_DIR/repo"
+            else
+              git clone "$REPO_URL" "$TARGET_DIR/repo"
+              REPO_DIR="$TARGET_DIR/repo"
             fi
-            cd ${{ secrets.VPS_APP_PATH }}
+
+            cd "$REPO_DIR"
             git fetch --all
-            git reset --hard origin/${{ github.ref_name }}
-            docker compose -f saas/infra/docker-compose.prod.yml --env-file saas/.env up -d --build
+            git reset --hard "$BRANCH_REF"
+
+            if [ -f "$REPO_DIR/saas/infra/docker-compose.prod.yml" ]; then
+              APP_DIR="$REPO_DIR/saas"
+            elif [ -f "$REPO_DIR/infra/docker-compose.prod.yml" ]; then
+              APP_DIR="$REPO_DIR"
+            else
+              echo "docker-compose.prod.yml introuvable depuis $REPO_DIR" >&2
+              exit 1
+            fi
+
+            if [ -f "$APP_DIR/.env" ]; then
+              ENV_FILE="$APP_DIR/.env"
+            elif [ -f "$REPO_DIR/.env" ]; then
+              ENV_FILE="$REPO_DIR/.env"
+            else
+              echo ".env introuvable dans $APP_DIR ou $REPO_DIR" >&2
+              exit 1
+            fi
+
+            docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --env-file "$ENV_FILE" up -d --build
