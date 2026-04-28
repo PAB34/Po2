@@ -6,25 +6,24 @@ from app.core.db import get_db
 from app.models.user import User
 from app.schemas.building import (
     BuildingCreate,
-    BuildingImportAnalysisRead,
-    BuildingImportPreviewRead,
-    BuildingImportResultRead,
+    BuildingImportPreview,
     BuildingNamingDataset,
     BuildingNamingLookupRead,
     BuildingNamingSelectionPayload,
     BuildingRead,
     BuildingUpdate,
+    FreeAddressLookupPayload,
+    FreeAddressLookupRead,
     LocalCreate,
     LocalRead,
     LocalUpdate,
 )
-from app.services.building_imports import (
-    analyze_building_import_file,
-    execute_building_import,
-    parse_import_config,
-    preview_building_import,
+from app.services.building_naming import (
+    get_building_naming_rows,
+    lookup_building_candidates,
+    lookup_free_address_candidates,
+    preview_building_import_file,
 )
-from app.services.building_naming import get_building_naming_rows, lookup_building_candidates
 from app.services.buildings import (
     create_building,
     create_building_from_naming_selection,
@@ -53,51 +52,6 @@ def _get_current_user_city_name(db: Session, current_user: User) -> str | None:
     return city.nom_commune if city is not None else None
 
 
-@router.post("/imports/analyze", response_model=BuildingImportAnalysisRead)
-def post_building_import_analysis(
-    file: UploadFile = File(...),
-    sheet_name: str | None = Form(default=None),
-    header_row_index: int = Form(default=0),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> BuildingImportAnalysisRead:
-    del db, current_user
-    try:
-        return BuildingImportAnalysisRead.model_validate(
-            analyze_building_import_file(file, sheet_name=sheet_name, header_row_index=header_row_index)
-        )
-    except ValueError as error:
-        _raise_naming_http_error(error)
-
-
-@router.post("/imports/preview", response_model=BuildingImportPreviewRead)
-def post_building_import_preview(
-    file: UploadFile = File(...),
-    config_json: str = Form(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> BuildingImportPreviewRead:
-    try:
-        config = parse_import_config(config_json)
-        return BuildingImportPreviewRead.model_validate(preview_building_import(db, file, config, current_user))
-    except ValueError as error:
-        _raise_naming_http_error(error)
-
-
-@router.post("/imports/execute", response_model=BuildingImportResultRead, status_code=status.HTTP_201_CREATED)
-def post_building_import_execute(
-    file: UploadFile = File(...),
-    config_json: str = Form(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> BuildingImportResultRead:
-    try:
-        config = parse_import_config(config_json)
-        return BuildingImportResultRead.model_validate(execute_building_import(db, file, config, current_user))
-    except ValueError as error:
-        _raise_naming_http_error(error)
-
-
 @router.get("/naming/dataset", response_model=BuildingNamingDataset)
 def get_building_naming_dataset(
     db: Session = Depends(get_db),
@@ -119,6 +73,41 @@ def get_building_naming_lookup(
     try:
         city_name = _get_current_user_city_name(db, current_user)
         return BuildingNamingLookupRead.model_validate(lookup_building_candidates(unique_key, city_name=city_name))
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.post("/lookup/free-address", response_model=FreeAddressLookupRead)
+def post_free_address_lookup(
+    payload: FreeAddressLookupPayload,
+    current_user: User = Depends(get_current_user),
+) -> FreeAddressLookupRead:
+    del current_user
+    try:
+        return FreeAddressLookupRead.model_validate(lookup_free_address_candidates(payload.address))
+    except ValueError as error:
+        _raise_naming_http_error(error)
+
+
+@router.post("/import/preview", response_model=BuildingImportPreview)
+async def post_building_import_preview(
+    file: UploadFile = File(...),
+    name_column: str | None = Form(default=None),
+    address_column: str | None = Form(default=None),
+    current_user: User = Depends(get_current_user),
+) -> BuildingImportPreview:
+    del current_user
+    filename = file.filename or "import.csv"
+    raw_bytes = await file.read()
+    try:
+        return BuildingImportPreview.model_validate(
+            preview_building_import_file(
+                filename=filename,
+                raw_bytes=raw_bytes,
+                name_column=name_column,
+                address_column=address_column,
+            )
+        )
     except ValueError as error:
         _raise_naming_http_error(error)
 

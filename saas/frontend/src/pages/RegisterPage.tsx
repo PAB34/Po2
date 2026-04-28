@@ -90,6 +90,10 @@ export function RegisterPage() {
             ))}
           </select>
         </label>
+        <p>
+          La commune choisie servira de référence pour filtrer les adresses DGFIP et préparer automatiquement le cache de
+          la page Bâtiments après la création du compte.
+        </p>
         <label className="field">
           <span>Email</span>
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
@@ -119,7 +123,7 @@ export function RegisterPage() {
         {error && <p className="error-text">{error}</p>}
         <div className="form-actions">
           <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Création..." : "Créer mon compte"}
+            {isSubmitting ? "Création du compte et préparation de la commune..." : "Créer mon compte"}
           </button>
         </div>
       </form>

@@ -2,10 +2,9 @@ import { Link, Route, Routes } from "react-router-dom";
 import { useAuth } from "./providers/AuthProvider";
 
 import { AccountPage } from "./pages/AccountPage";
+import { BuildingCreateEditPage } from "./pages/BuildingCreateEditPage";
 import { BuildingDetailPage } from "./pages/BuildingDetailPage";
-import { BuildingHubPage } from "./pages/BuildingHubPage";
-import { BuildingImportPage } from "./pages/BuildingImportPage";
-import { BuildingsPage } from "./pages/BuildingsPage";
+import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -40,9 +39,8 @@ export default function App() {
       <main className="content">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/buildings" element={<BuildingHubPage />} />
-          <Route path="/buildings/manual" element={<BuildingsPage />} />
-          <Route path="/buildings/import" element={<BuildingImportPage />} />
+          <Route path="/buildings" element={<BuildingsLandingPage />} />
+          <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

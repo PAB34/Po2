@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -13,12 +13,18 @@ from app.services.auth import (
     update_user_password,
     update_user_profile,
 )
+from app.services.building_naming import warm_building_naming_cache
+from app.services.cities import get_city_by_id
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserRead:
+def register(
+    payload: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> UserRead:
     try:
         user = create_user(db, payload)
     except ValueError as exc:
@@ -33,6 +39,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserRea
                 detail="La ville sélectionnée est inconnue.",
             ) from exc
         raise
+    if user.city_id is not None:
+        city = get_city_by_id(db, user.city_id)
+        if city is not None:
+            background_tasks.add_task(warm_building_naming_cache, city.nom_commune)
 
     return UserRead.model_validate(user)
 

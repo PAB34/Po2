@@ -95,81 +95,10 @@ export type Building = {
   majic_entry_values_json: string | null;
   majic_level_values_json: string | null;
   majic_door_values_json: string | null;
-  source_external_id: string | null;
-  source_payload_json: string | null;
   source_creation: string;
   statut_geocodage: string;
   created_at: string;
   updated_at: string;
-};
-
-export type BuildingImportConfig = {
-  sheet_name?: string | null;
-  header_row_index: number;
-  row_type_column?: string | null;
-  building_row_types: string[];
-  local_row_types: string[];
-  mapping: Record<string, string | null>;
-  skip_existing_buildings: boolean;
-  create_missing_buildings_for_locals: boolean;
-};
-
-export type BuildingImportAnalysis = {
-  filename: string;
-  available_sheets: string[];
-  selected_sheet: string;
-  header_row_index: number;
-  columns: string[];
-  total_rows: number;
-  sample_rows: Record<string, string>[];
-  detected_row_type_values: string[];
-  suggested_config: BuildingImportConfig;
-};
-
-export type BuildingImportBuildingPreviewRow = {
-  source_row_number: number;
-  action: string;
-  identifier: string;
-  nom_batiment: string | null;
-  adresse_reconstituee: string | null;
-  nom_commune: string | null;
-  dgfip_reference_norm: string | null;
-  source_external_id: string | null;
-  warnings: string[];
-};
-
-export type BuildingImportLocalPreviewRow = {
-  source_row_number: number;
-  action: string;
-  parent_identifier: string;
-  nom_local: string | null;
-  type_local: string | null;
-  niveau: string | null;
-  usage: string | null;
-  statut_occupation: string | null;
-  source_external_id: string | null;
-  warnings: string[];
-};
-
-export type BuildingImportPreview = {
-  filename: string;
-  selected_sheet: string;
-  total_rows: number;
-  building_rows_detected: number;
-  local_rows_detected: number;
-  building_preview: BuildingImportBuildingPreviewRow[];
-  local_preview: BuildingImportLocalPreviewRow[];
-  warnings: string[];
-};
-
-export type BuildingImportResult = {
-  filename: string;
-  selected_sheet: string;
-  created_buildings: number;
-  skipped_existing_buildings: number;
-  created_locals: number;
-  skipped_existing_locals: number;
-  warnings: string[];
 };
 
 export type BuildingNamingRow = {
@@ -239,6 +168,40 @@ export type BuildingNamingLookup = {
   feature_collection: GeoJsonFeatureCollection;
 };
 
+export type BuildingImportRow = {
+  row_number: number;
+  source_name: string;
+  source_address: string;
+  address_display: string;
+  validation_status: string;
+  validation_message: string | null;
+  lat: number | null;
+  lon: number | null;
+};
+
+export type BuildingImportPreview = {
+  filename: string;
+  columns: string[];
+  total_rows: number;
+  sample_rows: Array<Record<string, string>>;
+  name_column: string | null;
+  address_column: string | null;
+  rows: BuildingImportRow[];
+};
+
+export type BuildingImportConfig = {
+  name_column?: string | null;
+  address_column?: string | null;
+  sheet_name?: string | null;
+  header_row_index?: number | null;
+  row_type_column?: string | null;
+  [key: string]: unknown;
+};
+
+export type BuildingImportResult = BuildingImportPreview;
+
+export type FreeAddressLookup = BuildingNamingLookup;
+
 export type CreateBuildingFromNamingPayload = {
   unique_key: string;
   validated_name?: string;
@@ -248,6 +211,10 @@ export type CreateBuildingFromNamingPayload = {
 
 export type CreateBuildingPayload = {
   city_id?: number;
+  dgfip_unique_key?: string;
+  dgfip_source_file?: string;
+  dgfip_source_rows_json?: string;
+  dgfip_reference_norm?: string;
   nom_batiment?: string;
   nom_commune?: string;
   numero_voirie?: string;
@@ -260,9 +227,38 @@ export type CreateBuildingPayload = {
   adresse_reconstituee?: string;
   latitude?: number;
   longitude?: number;
+  ign_layer?: string;
+  ign_typename?: string;
+  ign_id?: string;
+  ign_name?: string;
+  ign_label?: string;
+  ign_name_proposed?: string;
+  ign_name_source?: string;
+  ign_name_distance_m?: number;
+  ign_attributes_json?: string;
+  ign_toponym_candidates_json?: string;
+  parcel_labels_json?: string;
+  majic_building_values_json?: string;
+  majic_entry_values_json?: string;
+  majic_level_values_json?: string;
+  majic_door_values_json?: string;
+  source_creation?: string;
+  statut_geocodage?: string;
 };
 
-export type UpdateBuildingPayload = Omit<CreateBuildingPayload, "city_id" | "nom_commune">;
+export type UpdateBuildingPayload = {
+  nom_batiment?: string;
+  numero_voirie?: string;
+  indice_repetition?: string;
+  nature_voie?: string;
+  nom_voie?: string;
+  prefixe?: string;
+  section?: string;
+  numero_plan?: string;
+  adresse_reconstituee?: string;
+  latitude?: number;
+  longitude?: number;
+};
 
 export type Local = {
   id: number;
@@ -274,8 +270,6 @@ export type Local = {
   usage: string | null;
   statut_occupation: string | null;
   commentaire: string | null;
-  source_external_id: string | null;
-  source_payload_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -288,8 +282,6 @@ export type CreateLocalPayload = {
   usage?: string;
   statut_occupation?: string;
   commentaire?: string;
-  source_external_id?: string;
-  source_payload_json?: string;
 };
 
 export type UpdateLocalPayload = {
@@ -334,13 +326,6 @@ function buildHeaders(token?: string): HeadersInit {
 
 function buildAuthHeaders(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function appendOptionalFormValue(formData: FormData, key: string, value: string | number | null | undefined) {
-  if (value === undefined || value === null || value === "") {
-    return;
-  }
-  formData.append(key, String(value));
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
@@ -428,48 +413,31 @@ export async function fetchBuildingNamingLookup(token: string, uniqueKey: string
   return parseResponse<BuildingNamingLookup>(response);
 }
 
-export async function createBuildingFromNamingSelection(
-  token: string,
-  payload: CreateBuildingFromNamingPayload,
-): Promise<Building> {
-  const response = await fetch(`${apiBaseUrl}/buildings/naming/selection`, {
+export async function fetchFreeAddressLookup(token: string, address: string): Promise<FreeAddressLookup> {
+  const response = await fetch(`${apiBaseUrl}/buildings/lookup/free-address`, {
     method: "POST",
     headers: buildHeaders(token),
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ address }),
   });
 
-  return parseResponse<Building>(response);
-}
-
-export async function analyzeBuildingImportFile(
-  token: string,
-  file: File,
-  options?: { sheet_name?: string | null; header_row_index?: number },
-): Promise<BuildingImportAnalysis> {
-  const formData = new FormData();
-  formData.append("file", file);
-  appendOptionalFormValue(formData, "sheet_name", options?.sheet_name ?? undefined);
-  appendOptionalFormValue(formData, "header_row_index", options?.header_row_index ?? 0);
-
-  const response = await fetch(`${apiBaseUrl}/buildings/imports/analyze`, {
-    method: "POST",
-    headers: buildAuthHeaders(token),
-    body: formData,
-  });
-
-  return parseResponse<BuildingImportAnalysis>(response);
+  return parseResponse<FreeAddressLookup>(response);
 }
 
 export async function previewBuildingImportFile(
   token: string,
   file: File,
-  config: BuildingImportConfig,
+  nameColumn?: string,
+  addressColumn?: string,
 ): Promise<BuildingImportPreview> {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("config_json", JSON.stringify(config));
-
-  const response = await fetch(`${apiBaseUrl}/buildings/imports/preview`, {
+  if (nameColumn) {
+    formData.append("name_column", nameColumn);
+  }
+  if (addressColumn) {
+    formData.append("address_column", addressColumn);
+  }
+  const response = await fetch(`${apiBaseUrl}/buildings/import/preview`, {
     method: "POST",
     headers: buildAuthHeaders(token),
     body: formData,
@@ -481,19 +449,22 @@ export async function previewBuildingImportFile(
 export async function executeBuildingImportFile(
   token: string,
   file: File,
-  config: BuildingImportConfig,
+  config?: BuildingImportConfig,
 ): Promise<BuildingImportResult> {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("config_json", JSON.stringify(config));
+  return previewBuildingImportFile(token, file, config?.name_column ?? undefined, config?.address_column ?? undefined);
+}
 
-  const response = await fetch(`${apiBaseUrl}/buildings/imports/execute`, {
+export async function createBuildingFromNamingSelection(
+  token: string,
+  payload: CreateBuildingFromNamingPayload,
+): Promise<Building> {
+  const response = await fetch(`${apiBaseUrl}/buildings/naming/selection`, {
     method: "POST",
-    headers: buildAuthHeaders(token),
-    body: formData,
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
   });
 
-  return parseResponse<BuildingImportResult>(response);
+  return parseResponse<Building>(response);
 }
 
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {

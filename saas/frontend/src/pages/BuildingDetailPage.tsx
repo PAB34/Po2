@@ -42,19 +42,6 @@ function parseJsonArray(value: string | null): string[] {
   }
 }
 
-function parseJsonObject(value: string | null): Record<string, unknown> | null {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
 function parseCandidateLabels(value: string | null): string[] {
   if (!value) {
     return [];
@@ -332,7 +319,7 @@ export function BuildingDetailPage() {
           <p>Identifiant de bâtiment invalide.</p>
         </div>
         <div className="form-actions">
-          <Link className="secondary-link" to="/buildings/manual">
+          <Link className="secondary-link" to="/buildings">
             Retour à la liste
           </Link>
         </div>
@@ -349,7 +336,7 @@ export function BuildingDetailPage() {
           <p>{buildingQuery.data ? buildAddressLine(buildingQuery.data) : "Chargement de l'adresse..."}</p>
         </div>
         <div className="form-actions">
-          <Link className="secondary-link" to="/buildings/manual">
+          <Link className="secondary-link" to="/buildings">
             Retour à la liste
           </Link>
         </div>
@@ -460,42 +447,6 @@ export function BuildingDetailPage() {
                 <p>{parseCandidateLabels(buildingQuery.data.ign_toponym_candidates_json).join(" | ") || "Aucun candidat enregistré."}</p>
               </article>
             </div>
-          </div>
-
-          <div className="section-block">
-            <div className="section-heading">
-              <h3>Traçabilité import externe</h3>
-              <p>Informations de provenance quand le bâtiment a été créé depuis un fichier patrimonial utilisateur.</p>
-            </div>
-            <div className="detail-grid">
-              <div className="detail-card">
-                <span>Mode de création</span>
-                <strong>{buildingQuery.data.source_creation}</strong>
-              </div>
-              <div className="detail-card">
-                <span>ID externe</span>
-                <strong>{buildingQuery.data.source_external_id || "Aucun"}</strong>
-              </div>
-              <div className="detail-card">
-                <span>Payload source</span>
-                <strong>{parseJsonObject(buildingQuery.data.source_payload_json) ? "Disponible" : "Absent"}</strong>
-              </div>
-            </div>
-            {parseJsonObject(buildingQuery.data.source_payload_json) ? (
-              <div className="attribute-table">
-                {Object.entries(parseJsonObject(buildingQuery.data.source_payload_json) ?? {}).map(([key, value]) => (
-                  <dl key={key} className="attribute-row">
-                    <dt>{key}</dt>
-                    <dd>{typeof value === "string" ? value : JSON.stringify(value)}</dd>
-                  </dl>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <strong>Aucune donnée source externe enregistrée.</strong>
-                <span>Cette section se remplit automatiquement pour les bâtiments importés depuis un fichier utilisateur.</span>
-              </div>
-            )}
           </div>
 
           <div className="section-block">
@@ -653,10 +604,6 @@ export function BuildingDetailPage() {
                 <div>
                   <dt>Occupation</dt>
                   <dd>{local.statut_occupation || "Non renseignée"}</dd>
-                </div>
-                <div>
-                  <dt>ID externe</dt>
-                  <dd>{local.source_external_id || "Aucun"}</dd>
                 </div>
               </dl>
               {local.commentaire && <p>{local.commentaire}</p>}

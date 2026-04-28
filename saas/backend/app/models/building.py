@@ -43,8 +43,6 @@ class Building(Base):
     majic_entry_values_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     majic_level_values_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     majic_door_values_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    source_payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_creation: Mapped[str] = mapped_column(String(20), nullable=False, default="MANUEL")
     statut_geocodage: Mapped[str] = mapped_column(String(20), nullable=False, default="NON_FAIT")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

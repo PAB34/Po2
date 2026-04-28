@@ -77,21 +77,12 @@ def _apply_building_payload(building: Building, payload: BuildingCreate, nom_com
     building.majic_entry_values_json = payload.majic_entry_values_json.strip() if payload.majic_entry_values_json else None
     building.majic_level_values_json = payload.majic_level_values_json.strip() if payload.majic_level_values_json else None
     building.majic_door_values_json = payload.majic_door_values_json.strip() if payload.majic_door_values_json else None
-    building.source_external_id = payload.source_external_id.strip() if payload.source_external_id else None
-    building.source_payload_json = payload.source_payload_json.strip() if payload.source_payload_json else None
     building.source_creation = payload.source_creation or building.source_creation or "MANUEL"
     building.statut_geocodage = payload.statut_geocodage or building.statut_geocodage or "NON_FAIT"
     return building
 
 
-def create_building(
-    db: Session,
-    payload: BuildingCreate,
-    current_user: User,
-    *,
-    create_default_local: bool = True,
-    commit: bool = True,
-) -> Building:
+def create_building(db: Session, payload: BuildingCreate, current_user: User) -> Building:
     city = _resolve_city(db, payload, current_user)
     nom_commune = city.nom_commune if city else (payload.nom_commune.strip() if payload.nom_commune else None)
     if nom_commune is None:
@@ -101,17 +92,14 @@ def create_building(
     db.add(building)
     db.flush()
 
-    if create_default_local:
-        default_local = Local(
-            building_id=building.id,
-            nom_local=_build_default_local_name(building),
-            type_local="PRINCIPAL",
-        )
-        db.add(default_local)
-
-    if commit:
-        db.commit()
-        db.refresh(building)
+    default_local = Local(
+        building_id=building.id,
+        nom_local=_build_default_local_name(building),
+        type_local="PRINCIPAL",
+    )
+    db.add(default_local)
+    db.commit()
+    db.refresh(building)
     return building
 
 
@@ -209,7 +197,7 @@ def get_local_or_404(db: Session, building: Building, local_id: int) -> Local:
     return local
 
 
-def create_local(db: Session, building: Building, payload: LocalCreate, *, commit: bool = True) -> Local:
+def create_local(db: Session, building: Building, payload: LocalCreate) -> Local:
     local = Local(
         building_id=building.id,
         nom_local=payload.nom_local.strip(),
@@ -219,15 +207,10 @@ def create_local(db: Session, building: Building, payload: LocalCreate, *, commi
         usage=payload.usage.strip() if payload.usage else None,
         statut_occupation=payload.statut_occupation.strip() if payload.statut_occupation else None,
         commentaire=payload.commentaire.strip() if payload.commentaire else None,
-        source_external_id=payload.source_external_id.strip() if payload.source_external_id else None,
-        source_payload_json=payload.source_payload_json.strip() if payload.source_payload_json else None,
     )
     db.add(local)
-    if commit:
-        db.commit()
-        db.refresh(local)
-    else:
-        db.flush()
+    db.commit()
+    db.refresh(local)
     return local
 
 

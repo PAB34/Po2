@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from io import BytesIO
 import json
 import math
 import re
@@ -764,6 +765,122 @@ def _resolve_point_and_parcels(address_display: str, references: list[str]) -> d
         "parcel_feature_collection": {"type": "FeatureCollection", "features": parcel_features},
         "parcel_labels": parcel_labels,
         "geocoder": geocoder_data or {"display_name": address_display},
+    }
+
+
+def _read_uploaded_tabular_file(filename: str, raw_bytes: bytes) -> pd.DataFrame:
+    suffix = Path(filename).suffix.lower()
+    buffer = BytesIO(raw_bytes)
+    if suffix == ".csv":
+        dataframe = pd.read_csv(buffer, sep=None, engine="python", dtype=str)
+    elif suffix in {".xlsx", ".xlsm"}:
+        dataframe = pd.read_excel(buffer, dtype=str)
+    elif suffix == ".xls":
+        dataframe = pd.read_excel(buffer, dtype=str, engine="xlrd")
+    else:
+        raise ValueError("Format non pris en charge. Utilise CSV, XLS, XLSX ou XLSM.")
+    dataframe = dataframe.fillna("")
+    dataframe.columns = [str(column).strip() for column in dataframe.columns]
+    return dataframe
+
+
+def preview_building_import_file(
+    *,
+    filename: str,
+    raw_bytes: bytes,
+    name_column: str | None = None,
+    address_column: str | None = None,
+) -> dict[str, Any]:
+    dataframe = _read_uploaded_tabular_file(filename, raw_bytes)
+    columns = list(dataframe.columns)
+    sample_rows = [
+        {column: _display_text(row.get(column)) for column in columns}
+        for _, row in dataframe.head(5).iterrows()
+    ]
+    rows: list[dict[str, Any]] = []
+    if name_column is not None or address_column is not None:
+        if not name_column or name_column not in columns:
+            raise ValueError("La colonne 'Nom bâtiment' sélectionnée est introuvable dans le fichier.")
+        if not address_column or address_column not in columns:
+            raise ValueError("La colonne 'Adresse' sélectionnée est introuvable dans le fichier.")
+        validation_cache: dict[str, dict[str, Any]] = {}
+        for row_index, (_, row) in enumerate(dataframe.iterrows(), start=2):
+            source_name = _display_text(row.get(name_column))
+            source_address = _display_text(row.get(address_column))
+            address_display = re.sub(r"\s+", " ", source_address).strip()
+            validation_status = "invalid"
+            validation_message = "Adresse absente ou vide."
+            lat = None
+            lon = None
+            if address_display:
+                cached_validation = validation_cache.get(address_display)
+                if cached_validation is None:
+                    try:
+                        geocoded = _geocode_address(address_display)
+                        cached_validation = {
+                            "validation_status": "valid",
+                            "validation_message": str(geocoded.get("display_name") or "Adresse compatible avec la recherche IGN."),
+                            "lat": geocoded.get("lat"),
+                            "lon": geocoded.get("lon"),
+                        }
+                    except Exception as error:
+                        cached_validation = {
+                            "validation_status": "invalid",
+                            "validation_message": str(error),
+                            "lat": None,
+                            "lon": None,
+                        }
+                    validation_cache[address_display] = cached_validation
+                validation_status = str(cached_validation["validation_status"])
+                validation_message = str(cached_validation["validation_message"])
+                lat = _safe_float(cached_validation.get("lat"))
+                lon = _safe_float(cached_validation.get("lon"))
+            rows.append(
+                {
+                    "row_number": row_index,
+                    "source_name": source_name,
+                    "source_address": source_address,
+                    "address_display": address_display,
+                    "validation_status": validation_status,
+                    "validation_message": validation_message,
+                    "lat": lat,
+                    "lon": lon,
+                }
+            )
+    return {
+        "filename": filename,
+        "columns": columns,
+        "total_rows": int(len(dataframe)),
+        "sample_rows": sample_rows,
+        "name_column": name_column,
+        "address_column": address_column,
+        "rows": rows,
+    }
+
+
+def lookup_free_address_candidates(address: str) -> dict[str, Any]:
+    address_display = re.sub(r"\s+", " ", str(address).strip()).strip()
+    if len(address_display) < 3:
+        raise ValueError("L'adresse doit contenir au moins 3 caractères.")
+    point_and_parcels = _resolve_point_and_parcels(address_display, [])
+    lat = _safe_float(point_and_parcels.get("lat"))
+    lon = _safe_float(point_and_parcels.get("lon"))
+    if lat is None or lon is None:
+        raise ValueError(f"Impossible de géolocaliser l'adresse : {address_display}")
+    return {
+        "unique_key": _normalize_text(address_display) or "MANUAL_ADDRESS",
+        "input_address": address_display,
+        "duplicate_count": 1,
+        "source_rows": [],
+        "reference_count": 0,
+        "references": [],
+        "lat": lat,
+        "lon": lon,
+        "used_source": str(point_and_parcels.get("used_source") or "address"),
+        "parcel_feature_collection": point_and_parcels.get("parcel_feature_collection") or {"type": "FeatureCollection", "features": []},
+        "parcel_labels": point_and_parcels.get("parcel_labels") or [],
+        "geocoder": point_and_parcels.get("geocoder") or {"display_name": address_display},
+        "feature_collection": _ign_buildings(lat, lon, radius_m=55),
     }
 
 

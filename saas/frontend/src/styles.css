@@ -243,6 +243,51 @@ h2 {
   color: #e2e8f0;
 }
 
+.buildings-entry-panel {
+  max-width: min(1200px, calc(100vw - 80px));
+  width: 100%;
+}
+
+.buildings-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.buildings-entry-card {
+  min-height: 220px;
+  justify-content: space-between;
+}
+
+.buildings-entry-card-primary {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+}
+
+.buildings-entry-link {
+  width: 100%;
+}
+
+.buildings-header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mode-switch-button {
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.mode-switch-button-active {
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+}
+
 .buildings-workspace-panel {
   max-width: min(1600px, calc(100vw - 80px));
   width: 100%;
@@ -282,108 +327,6 @@ h2 {
 .buildings-empty-workspace {
   min-height: 220px;
   justify-content: center;
-}
-
-.workflow-choice-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-
-.workflow-choice-card {
-  min-height: 100%;
-}
-
-.import-layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.import-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.import-main-content {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  min-width: 0;
-}
-
-.import-mapping-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.toggle-field {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(30, 41, 59, 0.72);
-}
-
-.toggle-field input {
-  margin-top: 3px;
-}
-
-.toggle-field span {
-  color: #cbd5e1;
-}
-
-.table-shell {
-  overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 720px;
-}
-
-.data-table th,
-.data-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  text-align: left;
-  vertical-align: top;
-}
-
-.data-table thead th {
-  background: rgba(15, 23, 42, 0.95);
-  color: #cbd5e1;
-  position: sticky;
-  top: 0;
-}
-
-.data-table tbody tr:nth-child(odd) {
-  background: rgba(30, 41, 59, 0.72);
-}
-
-.data-table tbody tr:nth-child(even) {
-  background: rgba(15, 23, 42, 0.56);
-}
-
-.warning-list {
-  display: grid;
-  gap: 10px;
-}
-
-.warning-card {
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  background: rgba(120, 53, 15, 0.35);
-  color: #fde68a;
 }
 
 .map-shell {
@@ -443,6 +386,34 @@ h2 {
   color: #94a3b8;
 }
 
+.import-sample-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.import-sample-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(30, 41, 59, 0.72);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.import-sample-row span,
+.import-sample-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-sample-row-head {
+  background: rgba(15, 23, 42, 0.92);
+}
+
 .candidate-card-active {
   border-color: rgba(249, 115, 22, 0.6);
   box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.2);
@@ -500,6 +471,37 @@ h2 {
 .resource-card-active {
   border-color: rgba(56, 189, 248, 0.55);
   box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.18);
+}
+
+.resource-card-valid {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.resource-card-invalid {
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.1);
+}
+
+.resource-card-pending {
+  border-color: rgba(250, 204, 21, 0.3);
+}
+
+.resource-card-success {
+  border-color: rgba(14, 165, 233, 0.45);
+}
+
+.resource-badge-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+.resource-badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.import-edit-card {
+  border-color: rgba(56, 189, 248, 0.35);
 }
 
 .resource-card-header {
@@ -676,23 +678,24 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .buildings-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buildings-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .import-sample-row {
+    grid-template-columns: 1fr;
+  }
+
   .buildings-workspace-panel {
     max-width: 100%;
   }
 
   .buildings-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .import-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .workflow-choice-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .import-mapping-grid {
     grid-template-columns: 1fr;
   }
 
