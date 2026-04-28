@@ -797,13 +797,13 @@ def preview_building_import_file(
         {column: _display_text(row.get(column)) for column in columns}
         for _, row in dataframe.head(5).iterrows()
     ]
+    validation_cache: dict[str, dict[str, Any]] = {}
     rows: list[dict[str, Any]] = []
     if name_column is not None or address_column is not None:
         if not name_column or name_column not in columns:
             raise ValueError("La colonne 'Nom bâtiment' sélectionnée est introuvable dans le fichier.")
         if not address_column or address_column not in columns:
             raise ValueError("La colonne 'Adresse' sélectionnée est introuvable dans le fichier.")
-        validation_cache: dict[str, dict[str, Any]] = {}
         for row_index, (_, row) in enumerate(dataframe.iterrows(), start=2):
             source_name = _display_text(row.get(name_column))
             source_address = _display_text(row.get(address_column))
@@ -816,12 +816,20 @@ def preview_building_import_file(
                 cached_validation = validation_cache.get(address_display)
                 if cached_validation is None:
                     try:
-                        geocoded = _geocode_address(address_display)
+                        lookup = lookup_free_address_candidates(address_display)
+                        geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
+                        display_name = str(geocoder.get("display_name") or address_display)
+                        feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
+                        feature_count = len(feature_collection.get("features") or [])
                         cached_validation = {
-                            "validation_status": "valid",
-                            "validation_message": str(geocoded.get("display_name") or "Adresse compatible avec la recherche IGN."),
-                            "lat": geocoded.get("lat"),
-                            "lon": geocoded.get("lon"),
+                            "validation_status": "valid" if feature_count > 0 else "invalid",
+                            "validation_message": (
+                                f"Adresse géolocalisée : {display_name}. {feature_count} bâtiment(s) IGN détecté(s)."
+                                if feature_count > 0
+                                else f"Adresse géolocalisée : {display_name}. Aucun bâtiment IGN n’a été détecté à proximité."
+                            ),
+                            "lat": lookup.get("lat"),
+                            "lon": lookup.get("lon"),
                         }
                     except Exception as error:
                         cached_validation = {

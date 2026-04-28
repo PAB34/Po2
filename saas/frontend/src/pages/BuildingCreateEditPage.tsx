@@ -18,7 +18,6 @@ import {
   type BuildingNamingLookup,
   type BuildingNamingRow,
   type CreateBuildingPayload,
-  type FreeAddressLookup,
   type GeoJsonFeature,
   type User,
 } from "../lib/api";
@@ -80,62 +79,26 @@ type ImportStats = {
   created: number;
 };
 
-function deriveImportCommune(user: User | null, row: ImportedRowState, lookup: FreeAddressLookup) {
+function deriveImportCommune(user: User | null, row: ImportedRowState) {
   if (user?.city_id != null) {
     return undefined;
   }
-  const geocoderRecord = toRecord(lookup.geocoder);
-  const geocoderProperties = toRecord(geocoderRecord?.properties);
-  const commune = pickString(
-    geocoderProperties?.city ?? geocoderProperties?.municipality ?? geocoderProperties?.commune ?? geocoderProperties?.name,
-  );
-  if (commune) {
-    return commune;
-  }
-  const rawAddress = pickString(lookup.geocoder.display_name) ?? row.editableAddress;
-  const segments = rawAddress
+  const segments = (pickString(row.editableAddress) ?? "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   return segments.length > 0 ? segments[segments.length - 1] : undefined;
 }
 
-function buildImportedBuildingPayload(
-  row: ImportedRowState,
-  lookup: FreeAddressLookup,
-  selectedFeature: GeoJsonFeature | null | undefined,
-  validatedName: string | undefined,
-  user: User | null,
-): CreateBuildingPayload {
-  const properties = (selectedFeature?.properties ?? {}) as Record<string, unknown>;
-  const selectedName = pickString(validatedName);
-  const fallbackName =
-    selectedName ??
-    pickString(row.editableName) ??
-    pickString(properties.resolved_name) ??
-    pickString(properties.name) ??
-    pickString(properties.label);
-  const attributes = toRecord(properties.attributes);
-  const candidates = Array.isArray(properties.resolved_name_candidates) ? properties.resolved_name_candidates : [];
+function buildImportedBuildingPayload(row: ImportedRowState, user: User | null): CreateBuildingPayload {
   return {
-    nom_batiment: fallbackName,
-    nom_commune: deriveImportCommune(user, row, lookup),
-    adresse_reconstituee: pickString(row.editableAddress) ?? lookup.input_address,
-    latitude: lookup.lat ?? row.lat ?? undefined,
-    longitude: lookup.lon ?? row.lon ?? undefined,
-    ign_layer: pickString(properties.ign_layer),
-    ign_typename: pickString(properties.ign_typename),
-    ign_id: pickString(properties.ign_id ?? properties.id),
-    ign_name: pickString(properties.name),
-    ign_label: pickString(properties.resolved_label ?? properties.label),
-    ign_name_proposed: pickString(properties.resolved_name ?? properties.name ?? properties.label),
-    ign_name_source: pickString(properties.resolved_name_source ?? properties.ign_layer),
-    ign_name_distance_m: pickNumber(properties.resolved_name_distance_m),
-    ign_attributes_json: attributes ? JSON.stringify(attributes) : undefined,
-    ign_toponym_candidates_json: candidates.length > 0 ? JSON.stringify(candidates) : undefined,
-    parcel_labels_json: lookup.parcel_labels.length > 0 ? JSON.stringify(lookup.parcel_labels) : undefined,
+    nom_batiment: pickString(row.editableName) ?? `Import ligne ${row.row_number}`,
+    nom_commune: deriveImportCommune(user, row),
+    adresse_reconstituee: pickString(row.editableAddress),
+    latitude: row.lat ?? undefined,
+    longitude: row.lon ?? undefined,
     source_creation: "IMPORT",
-    statut_geocodage: lookup.lat != null && lookup.lon != null ? "OK" : "NON_FAIT",
+    statut_geocodage: row.validation_status === "valid" ? "A_VERIFIER" : "NON_FAIT",
   };
 }
 
@@ -161,6 +124,7 @@ export function BuildingCreateEditPage() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   const [validatingRowNumber, setValidatingRowNumber] = useState<number | null>(null);
+  const [portfolioValidationPending, setPortfolioValidationPending] = useState(false);
 
   const buildingsQuery = useQuery({
     queryKey: ["buildings", token],
@@ -185,17 +149,6 @@ export function BuildingCreateEditPage() {
     [importRows, selectedImportRowNumber],
   );
 
-  const importLookupQuery = useQuery({
-    queryKey: ["buildings", "free-address", selectedImportRow?.row_number, selectedImportRow?.editableAddress, token],
-    queryFn: () => fetchFreeAddressLookup(token as string, selectedImportRow?.editableAddress as string),
-    enabled:
-      Boolean(token) &&
-      mode === "import" &&
-      Boolean(selectedImportRow) &&
-      selectedImportRow?.validation_status === "valid" &&
-      Boolean(selectedImportRow?.editableAddress.trim()),
-  });
-
   const createBlankBuildingMutation = useMutation({
     mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null }) =>
       createBuildingFromNamingSelection(token as string, payload),
@@ -207,24 +160,6 @@ export function BuildingCreateEditPage() {
     onError: (mutationError: unknown) => {
       setBlankSuccess(null);
       setBlankError(mutationError instanceof Error ? mutationError.message : "Création du bâtiment impossible depuis la sélection IGN.");
-    },
-  });
-
-  const createImportBuildingMutation = useMutation({
-    mutationFn: (payload: CreateBuildingPayload) => createBuildingRequest(token as string, payload),
-    onSuccess: async (building: Building) => {
-      setImportSuccess(`Bâtiment « ${building.nom_batiment || `#${building.id}`} » créé avec succès.`);
-      setImportError(null);
-      setImportRows((current: ImportedRowState[]) =>
-        current.map((row: ImportedRowState) =>
-          row.row_number === selectedImportRowNumber ? { ...row, createdBuildingId: building.id } : row,
-        ),
-      );
-      await queryClient.invalidateQueries({ queryKey: ["buildings"] });
-    },
-    onError: (mutationError: unknown) => {
-      setImportSuccess(null);
-      setImportError(mutationError instanceof Error ? mutationError.message : "Création du bâtiment importé impossible.");
     },
   });
 
@@ -392,20 +327,27 @@ export function BuildingCreateEditPage() {
     setValidatingRowNumber(selectedImportRow.row_number);
     try {
       const lookup = await fetchFreeAddressLookup(token, address);
+      const featureCount = lookup.feature_collection.features.length;
+      const normalizedMessage = String(lookup.geocoder.display_name ?? lookup.input_address);
       updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
         ...row,
         editableAddress: lookup.input_address,
         address_display: lookup.input_address,
-        validation_status: "valid",
-        validation_message: String(lookup.geocoder.display_name ?? "Adresse compatible avec la recherche IGN."),
+        validation_status: featureCount > 0 ? "valid" : "invalid",
+        validation_message:
+          featureCount > 0
+            ? `Adresse géolocalisée : ${normalizedMessage}. ${featureCount} bâtiment(s) IGN détecté(s).`
+            : `Adresse géolocalisée : ${normalizedMessage}. Aucun bâtiment IGN n’a été détecté à proximité.`,
         lat: lookup.lat,
         lon: lookup.lon,
       }));
-      setImportError(null);
-      setImportSuccess(`Adresse validée pour la ligne ${selectedImportRow.row_number}.`);
-      await queryClient.invalidateQueries({
-        queryKey: ["buildings", "free-address", selectedImportRow.row_number],
-      });
+      if (featureCount > 0) {
+        setImportError(null);
+        setImportSuccess(`Adresse validée pour la ligne ${selectedImportRow.row_number}.`);
+      } else {
+        setImportError(`La ligne ${selectedImportRow.row_number} reste à corriger avant intégration.`);
+        setImportSuccess(null);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Vérification de l’adresse impossible.";
       updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
@@ -422,31 +364,72 @@ export function BuildingCreateEditPage() {
     }
   }
 
-  async function handleImportCreate(payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) {
-    if (!selectedImportRow) {
-      setImportError("Sélectionne une ligne importée avant de créer un bâtiment.");
+  async function handleValidatePortfolioList() {
+    if (mode !== "import") {
+      setListValidationAcknowledged(true);
       return;
     }
     if (!token) {
       setImportError("Authentification requise.");
       return;
     }
-    if (!importLookupQuery.data) {
-      setImportError("Valide d’abord l’adresse de cette ligne pour charger les candidats IGN.");
+    const rowsToCreate = importRows.filter((row: ImportedRowState) => row.validation_status === "valid" && !row.createdBuildingId);
+    const alreadyCreatedCount = importRows.filter((row: ImportedRowState) => row.createdBuildingId).length;
+    if (rowsToCreate.length === 0) {
+      if (alreadyCreatedCount > 0 || buildingsCount > 0) {
+        setListValidationAcknowledged(true);
+        return;
+      }
+      setImportError("Aucune ligne valide à intégrer. Corrige au moins une adresse avant de valider la liste.");
+      setImportSuccess(null);
       return;
     }
+
+    setPortfolioValidationPending(true);
     setImportError(null);
     setImportSuccess(null);
-    await createImportBuildingMutation.mutateAsync(
-      buildImportedBuildingPayload(selectedImportRow, importLookupQuery.data, payload.selectedFeature, payload.validatedName, user),
-    );
+
+    let createdCount = 0;
+    const failures: string[] = [];
+    for (const row of rowsToCreate) {
+      try {
+        const building = await createBuildingRequest(token, buildImportedBuildingPayload(row, user));
+        createdCount += 1;
+        setImportRows((current: ImportedRowState[]) =>
+          current.map((entry: ImportedRowState) =>
+            entry.row_number === row.row_number ? { ...entry, createdBuildingId: building.id } : entry,
+          ),
+        );
+      } catch (error) {
+        failures.push(`Ligne ${row.row_number} : ${error instanceof Error ? error.message : "création impossible"}`);
+      }
+    }
+
+    await queryClient.invalidateQueries({ queryKey: ["buildings"] });
+
+    const invalidCount = importRows.filter((row: ImportedRowState) => row.validation_status === "invalid").length;
+    if (createdCount > 0 || alreadyCreatedCount > 0 || buildingsCount > 0) {
+      setListValidationAcknowledged(true);
+    }
+    if (createdCount > 0) {
+      setImportSuccess(
+        `${createdCount} bâtiment(s) créé(s) automatiquement. ${invalidCount > 0 ? `${invalidCount} ligne(s) en anomalie n’ont pas été intégrées.` : "Toutes les lignes compatibles ont été intégrées."}`,
+      );
+    } else if (invalidCount > 0) {
+      setImportSuccess(`${invalidCount} ligne(s) en anomalie restent à corriger avant toute intégration supplémentaire.`);
+    }
+    setImportError(failures.length > 0 ? failures.slice(0, 3).join(" ") : null);
+    setPortfolioValidationPending(false);
   }
 
   const buildingsCount = buildingsQuery.data?.length ?? 0;
   const currentModeLabel = mode === "import" ? "Import d’un fichier patrimoine" : "Liste vierge DGFIP / MAJIC";
   const canAdvanceToValidation = mode === "import" ? importRows.length > 0 || buildingsCount > 0 : Boolean(selectedUniqueKey) || buildingsCount > 0;
-  const canValidatePortfolioList = buildingsCount > 0;
-  const readyToOpenBuildingsList = canValidatePortfolioList && listValidationAcknowledged;
+  const canValidatePortfolioList = mode === "import" ? importStats.valid > 0 || importStats.created > 0 || buildingsCount > 0 : buildingsCount > 0;
+  const readyToOpenBuildingsList =
+    mode === "import"
+      ? listValidationAcknowledged && (importStats.created > 0 || buildingsCount > 0)
+      : canValidatePortfolioList && listValidationAcknowledged;
 
   if (!token) {
     return (
@@ -930,32 +913,77 @@ export function BuildingCreateEditPage() {
               </aside>
 
               <div className="buildings-main-content">
-                {selectedImportRow && selectedImportRow.validation_status === "valid" && importLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-                {importLookupQuery.error instanceof Error ? <p className="error-text">{importLookupQuery.error.message}</p> : null}
-                <BuildingSelectionWorkspace
-                  lookupData={(importLookupQuery.data ?? null) as FreeAddressLookup | null}
-                  emptyTitle={
-                    selectedImportRow
-                      ? selectedImportRow.validation_status === "valid"
-                        ? "Chargement du rapprochement IGN..."
-                        : "Adresse à corriger avant analyse IGN"
-                      : "Aucune ligne importée sélectionnée."
-                  }
-                  emptyDescription={
-                    selectedImportRow
-                      ? selectedImportRow.validation_status === "valid"
-                        ? "La carte va apparaître dès que le lookup IGN sera disponible."
-                        : "Corrige l’adresse dans la colonne de gauche puis clique sur “Vérifier cette adresse”."
-                      : "Charge tes lignes patrimoine, puis sélectionne-en une pour afficher la carte et rattacher le bâtiment à l’IGN."
-                  }
-                  initialValidatedName={selectedImportRow?.editableName ?? ""}
-                  createPending={createImportBuildingMutation.isPending}
-                  error={importError}
-                  success={importSuccess}
-                  createLabelWithSelection="Créer le bâtiment importé depuis cette sélection"
-                  createLabelWithoutSelection="Créer le bâtiment importé avec le nom saisi"
-                  onCreate={handleImportCreate}
-                />
+                <div className="section-block">
+                  <div className="section-heading">
+                    <h3>Contrôle des adresses importées</h3>
+                    <p>
+                      Dans ce mode, l’import sert uniquement à vérifier le géocodage et la compatibilité IGN des adresses. Les lignes valides seront créées automatiquement à l’étape 3. L’<strong>Attachement GEO</strong> détaillé se fera ensuite depuis chaque fiche bâtiment.
+                    </p>
+                  </div>
+
+                  <div className="detail-grid buildings-summary-grid">
+                    <div className="detail-card">
+                      <span>Adresses prêtes</span>
+                      <strong>{importStats.valid}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Anomalies à corriger</span>
+                      <strong>{importStats.invalid}</strong>
+                    </div>
+                    <div className="detail-card">
+                      <span>Déjà intégrées</span>
+                      <strong>{importStats.created}</strong>
+                    </div>
+                  </div>
+
+                  {selectedImportRow ? (
+                    <div className={`resource-card ${selectedImportRow.validation_status === "invalid" ? "resource-card-invalid" : selectedImportRow.validation_status === "valid" ? "resource-card-valid" : "resource-card-pending"}`}>
+                      <div className="resource-card-header">
+                        <div>
+                          <h3>{selectedImportRow.editableName || `Ligne ${selectedImportRow.row_number}`}</h3>
+                          <p>{selectedImportRow.editableAddress || "Adresse manquante"}</p>
+                        </div>
+                        <span className="resource-badge">
+                          {selectedImportRow.createdBuildingId
+                            ? "Créée"
+                            : selectedImportRow.validation_status === "valid"
+                              ? "Prête pour validation"
+                              : selectedImportRow.validation_status === "invalid"
+                                ? "À corriger"
+                                : "En attente"}
+                        </span>
+                      </div>
+                      <dl className="resource-metadata">
+                        <div>
+                          <dt>Latitude</dt>
+                          <dd>{selectedImportRow.lat ?? "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>Longitude</dt>
+                          <dd>{selectedImportRow.lon ?? "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>Étape suivante</dt>
+                          <dd>
+                            {selectedImportRow.validation_status === "valid"
+                              ? "Cette ligne sera intégrée automatiquement à l’étape 3."
+                              : "Corrige l’adresse puis relance la vérification pour l’intégrer."}
+                          </dd>
+                        </div>
+                      </dl>
+                      {selectedImportRow.validation_message ? <p>{selectedImportRow.validation_message}</p> : null}
+                    </div>
+                  ) : (
+                    <div className="empty-state buildings-empty-workspace">
+                      <strong>Aucune ligne importée sélectionnée.</strong>
+                      <span>Choisis une ligne dans la colonne de gauche pour contrôler son géocodage et corriger son adresse si nécessaire.</span>
+                    </div>
+                  )}
+
+                  <div className="info-banner">
+                    <strong>Validation finale :</strong> à l’étape 3, seules les lignes vertes seront créées dans la liste des bâtiments. Les lignes rouges resteront exclues tant qu’elles ne sont pas corrigées.
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -968,15 +996,17 @@ export function BuildingCreateEditPage() {
             <div>
               <h3>Étape 3 · Valider la liste patrimoniale</h3>
               <p>
-                Vérifie que les bâtiments à conserver ont bien été créés, puis confirme la validation pour basculer dans l’espace <strong>Liste des bâtiments</strong>.
+                {mode === "import"
+                  ? "Confirme la liste pour créer automatiquement les lignes compatibles, ignorer les anomalies restantes et basculer ensuite dans l’espace Liste des bâtiments."
+                  : "Vérifie que les bâtiments à conserver ont bien été créés, puis confirme la validation pour basculer dans l’espace Liste des bâtiments."}
               </p>
             </div>
             <div className="buildings-header-actions">
               <button type="button" className="secondary-button" onClick={() => setActiveStep(2)}>
                 Revenir à la préparation
               </button>
-              <button type="button" onClick={() => setListValidationAcknowledged(true)} disabled={!canValidatePortfolioList}>
-                Valider la liste patrimoniale
+              <button type="button" onClick={() => void handleValidatePortfolioList()} disabled={!canValidatePortfolioList || portfolioValidationPending}>
+                {portfolioValidationPending ? "Validation en cours..." : "Valider la liste patrimoniale"}
               </button>
             </div>
           </div>
@@ -1020,7 +1050,11 @@ export function BuildingCreateEditPage() {
           {!canValidatePortfolioList ? (
             <div className="empty-state">
               <strong>La liste n’est pas encore prête à être validée.</strong>
-              <span>Valider une adresse ou visualiser un candidat IGN ne suffit pas encore : crée au moins un bâtiment à l’étape 2 pour ouvrir ensuite l’espace “Liste des bâtiments”.</span>
+              <span>
+                {mode === "import"
+                  ? "Aucune ligne importée n’est encore compatible avec l’IGN. Corrige au moins une adresse rouge pour pouvoir l’intégrer automatiquement à la validation finale."
+                  : "Valider une adresse ou visualiser un candidat IGN ne suffit pas encore : crée au moins un bâtiment à l’étape 2 pour ouvrir ensuite l’espace “Liste des bâtiments”."}
+              </span>
             </div>
           ) : null}
 

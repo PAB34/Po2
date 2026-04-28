@@ -166,6 +166,78 @@ def create_building_from_naming_selection(
     return create_building(db, building_payload, current_user)
 
 
+def attach_building_geo(
+    db: Session,
+    building: Building,
+    payload: BuildingNamingSelectionPayload,
+    current_user: User,
+) -> Building:
+    target_city_id = building.city_id or current_user.city_id or payload.city_id
+    target_city = get_city_by_id(db, target_city_id) if target_city_id is not None else None
+    target_city_name = target_city.nom_commune if target_city is not None else building.nom_commune
+    generated_payload = build_building_payload(
+        unique_key=payload.unique_key,
+        selected_feature=dict(payload.selected_feature) if payload.selected_feature else None,
+        validated_name=payload.validated_name,
+        city_name=target_city_name,
+    )
+    existing_statement = select(Building).where(
+        Building.dgfip_unique_key == generated_payload["unique_key"],
+        Building.id != building.id,
+    )
+    if target_city_id is not None:
+        existing_statement = existing_statement.where(Building.city_id == target_city_id)
+    existing_building = db.scalar(existing_statement)
+    if existing_building is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette adresse DGFIP est déjà rattachée à un autre bâtiment dans votre périmètre.",
+        )
+
+    building_payload = BuildingCreate(
+        city_id=target_city_id,
+        dgfip_unique_key=generated_payload["unique_key"],
+        dgfip_source_file=generated_payload["source_file"],
+        dgfip_source_rows_json=json.dumps(generated_payload["source_rows"], ensure_ascii=False),
+        dgfip_reference_norm=generated_payload["reference_norm"],
+        nom_batiment=generated_payload["nom_batiment"] or building.nom_batiment,
+        nom_commune=generated_payload["nom_commune"] or building.nom_commune,
+        numero_voirie=generated_payload["numero_voirie"],
+        indice_repetition=generated_payload["indice_repetition"],
+        nature_voie=generated_payload["nature_voie"],
+        nom_voie=generated_payload["nom_voie"],
+        prefixe=generated_payload["prefixe"],
+        section=generated_payload["section"],
+        numero_plan=generated_payload["numero_plan"],
+        adresse_reconstituee=generated_payload["adresse_reconstituee"],
+        latitude=generated_payload["latitude"],
+        longitude=generated_payload["longitude"],
+        ign_layer=generated_payload["ign_layer"],
+        ign_typename=generated_payload["ign_typename"],
+        ign_id=generated_payload["ign_id"],
+        ign_name=generated_payload["ign_name"],
+        ign_label=generated_payload["ign_label"],
+        ign_name_proposed=generated_payload["ign_name_proposed"],
+        ign_name_source=generated_payload["ign_name_source"],
+        ign_name_distance_m=generated_payload["ign_name_distance_m"],
+        ign_attributes_json=generated_payload["ign_attributes_json"],
+        ign_toponym_candidates_json=generated_payload["ign_toponym_candidates_json"],
+        parcel_labels_json=generated_payload["parcel_labels_json"],
+        majic_building_values_json=generated_payload["majic_building_values_json"],
+        majic_entry_values_json=generated_payload["majic_entry_values_json"],
+        majic_level_values_json=generated_payload["majic_level_values_json"],
+        majic_door_values_json=generated_payload["majic_door_values_json"],
+        source_creation=building.source_creation,
+        statut_geocodage=generated_payload["statut_geocodage"],
+    )
+    updated_building = _apply_building_payload(building, building_payload, target_city_name or building.nom_commune)
+    updated_building.city_id = target_city_id
+    db.add(updated_building)
+    db.commit()
+    db.refresh(updated_building)
+    return updated_building
+
+
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
     building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
     building.numero_voirie = payload.numero_voirie.strip() if payload.numero_voirie else None

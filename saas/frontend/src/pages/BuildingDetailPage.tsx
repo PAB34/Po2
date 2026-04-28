@@ -1,15 +1,22 @@
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorkspace";
 import {
+  attachBuildingGeoRequest,
   createLocalRequest,
   deleteLocalRequest,
   fetchBuilding,
   fetchBuildingLocals,
+  fetchBuildingNamingDataset,
+  fetchBuildingNamingLookup,
   type Building,
+  type BuildingNamingLookup,
+  type BuildingNamingRow,
   type CreateLocalPayload,
+  type GeoJsonFeature,
   type Local,
   type UpdateBuildingPayload,
   type UpdateLocalPayload,
@@ -27,6 +34,11 @@ function buildAddressLine(
 
   const parts = [building.numero_voirie, building.nature_voie, building.nom_voie].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
+}
+
+function buildMajicAddressLine(row: BuildingNamingRow) {
+  const parts = [row.numero_voirie, row.indice_repetition, row.nature_voie, row.nom_voie].filter(Boolean);
+  return parts.length > 0 ? `${parts.join(" ")}, ${row.nom_commune}` : row.address_display;
 }
 
 function parseJsonArray(value: string | null): string[] {
@@ -111,6 +123,12 @@ export function BuildingDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [showGeoAttachment, setShowGeoAttachment] = useState(false);
+  const [geoSelectedUniqueKey, setGeoSelectedUniqueKey] = useState<string | null>(null);
+  const [geoSearch, setGeoSearch] = useState("");
+  const [geoAttachError, setGeoAttachError] = useState<string | null>(null);
+  const [geoAttachSuccess, setGeoAttachSuccess] = useState<string | null>(null);
+
   const buildingQuery = useQuery({
     queryKey: ["building", parsedBuildingId, token],
     queryFn: () => fetchBuilding(token as string, parsedBuildingId),
@@ -122,6 +140,29 @@ export function BuildingDetailPage() {
     queryFn: () => fetchBuildingLocals(token as string, parsedBuildingId),
     enabled: Boolean(token) && Number.isInteger(parsedBuildingId),
   });
+
+  const namingDatasetQuery = useQuery({
+    queryKey: ["buildings", "naming-dataset", token],
+    queryFn: () => fetchBuildingNamingDataset(token as string),
+    enabled: Boolean(token) && showGeoAttachment,
+  });
+
+  const namingLookupQuery = useQuery({
+    queryKey: ["buildings", "naming-lookup", geoSelectedUniqueKey, token],
+    queryFn: () => fetchBuildingNamingLookup(token as string, geoSelectedUniqueKey as string),
+    enabled: Boolean(token) && Boolean(geoSelectedUniqueKey) && showGeoAttachment,
+  });
+
+  const filteredGeoRows = useMemo(() => {
+    const rows = namingDatasetQuery.data?.rows ?? [];
+    const query = geoSearch.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row: BuildingNamingRow) =>
+      [row.address_display, row.nom_commune, row.numero_voirie, row.nom_voie, row.first_reference_norm]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [namingDatasetQuery.data?.rows, geoSearch]);
 
   useEffect(() => {
     if (!buildingQuery.data) {
@@ -138,6 +179,23 @@ export function BuildingDetailPage() {
     setNumeroPlan(buildingQuery.data.numero_plan ?? "");
     setAdresseReconstituee(buildingQuery.data.adresse_reconstituee ?? "");
   }, [buildingQuery.data]);
+
+  const attachGeoMutation = useMutation({
+    mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null }) =>
+      attachBuildingGeoRequest(token as string, parsedBuildingId, payload),
+    onSuccess: async (building: Building) => {
+      setGeoAttachSuccess(`Attachement GEO réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
+      setGeoAttachError(null);
+      setShowGeoAttachment(false);
+      setGeoSelectedUniqueKey(null);
+      await queryClient.invalidateQueries({ queryKey: ["building", parsedBuildingId] });
+      await queryClient.invalidateQueries({ queryKey: ["buildings"] });
+    },
+    onError: (mutationError: unknown) => {
+      setGeoAttachSuccess(null);
+      setGeoAttachError(mutationError instanceof Error ? mutationError.message : "Attachement GEO impossible.");
+    },
+  });
 
   const updateBuildingMutation = useMutation({
     mutationFn: (payload: UpdateBuildingPayload) => updateBuildingRequest(token as string, parsedBuildingId, payload),
@@ -216,6 +274,20 @@ export function BuildingDetailPage() {
     });
     setError(null);
     setSuccess(null);
+  }
+
+  async function handleGeoAttach(payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) {
+    if (!geoSelectedUniqueKey) {
+      setGeoAttachError("Sélectionne une adresse source DGFIP avant de lancer l'attachement.");
+      return;
+    }
+    setGeoAttachError(null);
+    setGeoAttachSuccess(null);
+    await attachGeoMutation.mutateAsync({
+      unique_key: geoSelectedUniqueKey,
+      validated_name: payload.validatedName,
+      selected_feature: payload.selectedFeature,
+    });
   }
 
   async function handleBuildingSubmit(event: FormEvent<HTMLFormElement>) {
@@ -509,6 +581,112 @@ export function BuildingDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+
+          <div className="section-block">
+            <div className="panel-header">
+              <div className="section-heading">
+                <h3>Attachement GEO</h3>
+                <p>Rattache ce bâtiment à une adresse DGFIP / MAJIC et sélectionne le bâtiment IGN correspondant pour enrichir la fiche.</p>
+              </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setShowGeoAttachment(!showGeoAttachment);
+                    setGeoSelectedUniqueKey(null);
+                    setGeoSearch("");
+                    setGeoAttachError(null);
+                    setGeoAttachSuccess(null);
+                  }}
+                >
+                  {showGeoAttachment ? "Fermer l'attachement GEO" : "Lancer l'attachement GEO"}
+                </button>
+              </div>
+            </div>
+            {geoAttachError && <p className="error-text">{geoAttachError}</p>}
+            {geoAttachSuccess && <p className="success-text">{geoAttachSuccess}</p>}
+            {showGeoAttachment ? (
+              <div className="buildings-workspace">
+                <aside className="buildings-sidebar">
+                  <div className="section-block buildings-addresses-section">
+                    <div className="section-heading">
+                      <h3>Adresses DGFIP à rapprocher</h3>
+                      <p>Choisis l'adresse source qui correspond à ce bâtiment.</p>
+                    </div>
+                    <label className="field">
+                      <span>Recherche</span>
+                      <input
+                        type="text"
+                        value={geoSearch}
+                        onChange={(event: ChangeEvent<HTMLInputElement>) => setGeoSearch(event.target.value)}
+                      />
+                    </label>
+                    {namingDatasetQuery.isLoading ? <p>Chargement des données DGFIP...</p> : null}
+                    {namingDatasetQuery.error instanceof Error ? (
+                      <p className="error-text">{namingDatasetQuery.error.message}</p>
+                    ) : null}
+                    <div className="resource-list buildings-address-list">
+                      {filteredGeoRows.map((row: BuildingNamingRow) => {
+                        const isActive = geoSelectedUniqueKey === row.unique_key;
+                        return (
+                          <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                            <div className="resource-card-header">
+                              <div>
+                                <h3>{buildMajicAddressLine(row)}</h3>
+                                <p>{row.address_display}</p>
+                              </div>
+                              <span className="resource-badge">{row.duplicate_count} ligne(s)</span>
+                            </div>
+                            <dl className="resource-metadata">
+                              <div>
+                                <dt>Commune</dt>
+                                <dd>{row.nom_commune}</dd>
+                              </div>
+                              <div>
+                                <dt>Indices MAJIC</dt>
+                                <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
+                              </div>
+                            </dl>
+                            <div className="resource-card-actions">
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setGeoSelectedUniqueKey(row.unique_key);
+                                  setGeoAttachError(null);
+                                  setGeoAttachSuccess(null);
+                                }}
+                              >
+                                {isActive ? "Sélection active" : "Sélectionner cette adresse"}
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </aside>
+                <div className="buildings-main-content">
+                  {namingLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+                  {namingLookupQuery.error instanceof Error ? (
+                    <p className="error-text">{namingLookupQuery.error.message}</p>
+                  ) : null}
+                  <BuildingSelectionWorkspace
+                    lookupData={(namingLookupQuery.data ?? null) as BuildingNamingLookup | null}
+                    emptyTitle="Aucune adresse DGFIP sélectionnée."
+                    emptyDescription="Choisis une adresse dans la colonne de gauche pour afficher la carte IGN, sélectionner le bâtiment correspondant et valider l'attachement."
+                    createPending={attachGeoMutation.isPending}
+                    error={geoAttachError}
+                    success={geoAttachSuccess}
+                    createLabelWithSelection="Rattacher ce bâtiment à la sélection IGN"
+                    createLabelWithoutSelection="Rattacher ce bâtiment sans sélection IGN"
+                    onCreate={handleGeoAttach}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         </>
       )}

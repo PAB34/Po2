@@ -467,6 +467,21 @@ export async function createBuildingFromNamingSelection(
   return parseResponse<Building>(response);
 }
 
+
+export async function attachBuildingGeoRequest(
+  token: string,
+  buildingId: number,
+  payload: CreateBuildingFromNamingPayload,
+): Promise<Building> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/geo-attachment`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Building>(response);
+}
+
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}`, {
     headers: buildHeaders(token),

@@ -25,6 +25,7 @@ from app.services.building_naming import (
     preview_building_import_file,
 )
 from app.services.buildings import (
+    attach_building_geo,
     create_building,
     create_building_from_naming_selection,
     create_local,
@@ -163,6 +164,21 @@ def put_building(
     building = get_building_or_404(db, building_id, current_user)
     updated_building = update_building(db, building, payload)
     return BuildingRead.model_validate(updated_building)
+
+
+@router.post("/{building_id}/geo-attachment", response_model=BuildingRead)
+def post_building_geo_attachment(
+    building_id: int,
+    payload: BuildingNamingSelectionPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingRead:
+    try:
+        building = get_building_or_404(db, building_id, current_user)
+        updated_building = attach_building_geo(db, building, payload, current_user)
+        return BuildingRead.model_validate(updated_building)
+    except ValueError as error:
+        _raise_naming_http_error(error)
 
 
 @router.get("/{building_id}/locals", response_model=list[LocalRead])
