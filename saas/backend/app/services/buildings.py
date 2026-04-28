@@ -302,6 +302,17 @@ def update_local(db: Session, local: Local, payload: LocalUpdate) -> Local:
     return local
 
 
+def delete_all_buildings(db: Session, current_user: User) -> int:
+    statement = select(Building)
+    if current_user.city_id is not None:
+        statement = statement.where(Building.city_id == current_user.city_id)
+    buildings = list(db.scalars(statement))
+    for building in buildings:
+        db.delete(building)
+    db.commit()
+    return len(buildings)
+
+
 def delete_local(db: Session, local: Local) -> None:
     db.delete(local)
     db.commit()

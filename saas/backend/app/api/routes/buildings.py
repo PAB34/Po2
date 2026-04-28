@@ -29,6 +29,7 @@ from app.services.buildings import (
     create_building,
     create_building_from_naming_selection,
     create_local,
+    delete_all_buildings,
     delete_local,
     get_building_or_404,
     get_local_or_404,
@@ -127,6 +128,15 @@ def post_building_from_naming_selection(
         return BuildingRead.model_validate(building)
     except ValueError as error:
         _raise_naming_http_error(error)
+
+
+@router.delete("", status_code=status.HTTP_200_OK)
+def delete_buildings_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    count = delete_all_buildings(db, current_user)
+    return {"deleted": count}
 
 
 @router.get("", response_model=list[BuildingRead])

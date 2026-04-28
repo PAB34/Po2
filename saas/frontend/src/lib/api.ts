@@ -538,6 +538,15 @@ export async function updateLocalRequest(token: string, buildingId: number, loca
   return parseResponse<Local>(response);
 }
 
+export async function deleteAllBuildingsRequest(token: string): Promise<{ deleted: number }> {
+  const response = await fetch(`${apiBaseUrl}/buildings`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<{ deleted: number }>(response);
+}
+
 export async function deleteLocalRequest(token: string, buildingId: number, localId: number): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/locals/${localId}`, {
     method: "DELETE",

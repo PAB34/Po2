@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { BuildingPortfolioMap } from "../components/BuildingPortfolioMap";
-import { fetchBuildings, type Building } from "../lib/api";
+import { fetchBuildings, deleteAllBuildingsRequest, type Building } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 function buildAddressLine(building: Pick<Building, "numero_voirie" | "nature_voie" | "nom_voie" | "adresse_reconstituee" | "nom_commune">) {
@@ -20,6 +20,21 @@ export function BuildingsListPage() {
   const { token } = useAuth();
   const [search, setSearch] = useState("");
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => deleteAllBuildingsRequest(token as string),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      alert(`${data.deleted} bâtiment(s) supprimé(s).`);
+    },
+  });
+
+  function handleDeleteAll() {
+    const count = buildingsQuery.data?.length ?? 0;
+    if (!window.confirm(`Supprimer les ${count} bâtiment(s) de ta ville ? Cette action est irréversible.`)) return;
+    deleteAllMutation.mutate();
+  }
 
   const buildingsQuery = useQuery({
     queryKey: ["buildings", token],
@@ -91,6 +106,16 @@ export function BuildingsListPage() {
             <strong>{buildingsQuery.data?.length ?? 0}</strong>
             <span>bâtiment(s)</span>
           </div>
+          {(buildingsQuery.data?.length ?? 0) > 0 ? (
+            <button
+              type="button"
+              className="danger-button"
+              onClick={handleDeleteAll}
+              disabled={deleteAllMutation.isPending}
+            >
+              {deleteAllMutation.isPending ? "Suppression..." : "Supprimer tout le listing"}
+            </button>
+          ) : null}
         </div>
       </div>
 
