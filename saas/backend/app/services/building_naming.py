@@ -414,18 +414,30 @@ def _geopf_parcel(reference_norm: str) -> dict[str, Any]:
     return result
 
 
-def _geocode_address(address: str) -> dict[str, Any]:
-    if address in _APP_STATE["cache_geocode"]:
-        return _APP_STATE["cache_geocode"][address]
+def _city_in_address(address: str, city_name: str) -> bool:
+    return _normalize_text(city_name) in _normalize_text(address)
+
+
+def _geocode_address(address: str, city_hint: str | None = None) -> dict[str, Any]:
+    address_for_geocode = address
+    city_appended = False
+    if city_hint and not _city_in_address(address, city_hint):
+        address_for_geocode = f"{address}, {city_hint}"
+        city_appended = True
+
+    cache_key = address_for_geocode
+    if cache_key in _APP_STATE["cache_geocode"]:
+        return _APP_STATE["cache_geocode"][cache_key]
+
     response = _rate_limited_get(
         GEOPF_SEARCH_URL,
-        {"q": address, "limit": 1},
+        {"q": address_for_geocode, "limit": 1},
         host_key="geopf_search",
         timeout=30,
     )
     features = response.json().get("features", [])
     if not features:
-        raise ValueError(f"Aucun résultat de géocodage pour : {address}")
+        raise ValueError(f"Aucun résultat de géocodage pour : {address_for_geocode}")
     feature = features[0]
     properties = feature.get("properties", {}) or {}
     geometry = feature.get("geometry", {}) or {}
@@ -433,11 +445,13 @@ def _geocode_address(address: str) -> dict[str, Any]:
     result = {
         "lat": lat,
         "lon": lon,
-        "display_name": properties.get("label") or properties.get("name") or address,
+        "display_name": properties.get("label") or properties.get("name") or address_for_geocode,
         "properties": properties,
         "raw": feature,
+        "city_appended": city_appended,
+        "city_hint": city_hint,
     }
-    _APP_STATE["cache_geocode"][address] = result
+    _APP_STATE["cache_geocode"][cache_key] = result
     return result
 
 
@@ -734,7 +748,7 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
     return collection
 
 
-def _resolve_point_and_parcels(address_display: str, references: list[str]) -> dict[str, Any]:
+def _resolve_point_and_parcels(address_display: str, references: list[str], city_hint: str | None = None) -> dict[str, Any]:
     parcel_features = []
     used_source = "address"
     lat = None
@@ -754,7 +768,7 @@ def _resolve_point_and_parcels(address_display: str, references: list[str]) -> d
         except Exception:
             continue
     if lat is None or lon is None:
-        geocoder_data = _geocode_address(address_display)
+        geocoder_data = _geocode_address(address_display, city_hint=city_hint)
         lat = geocoder_data["lat"]
         lon = geocoder_data["lon"]
         used_source = "address"
@@ -790,6 +804,7 @@ def preview_building_import_file(
     raw_bytes: bytes,
     name_column: str | None = None,
     address_column: str | None = None,
+    city_name: str | None = None,
 ) -> dict[str, Any]:
     dataframe = _read_uploaded_tabular_file(filename, raw_bytes)
     columns = list(dataframe.columns)
@@ -816,17 +831,19 @@ def preview_building_import_file(
                 cached_validation = validation_cache.get(address_display)
                 if cached_validation is None:
                     try:
-                        lookup = lookup_free_address_candidates(address_display)
+                        lookup = lookup_free_address_candidates(address_display, city_name=city_name)
                         geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
                         display_name = str(geocoder.get("display_name") or address_display)
+                        city_appended = bool(geocoder.get("city_appended"))
                         feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
                         feature_count = len(feature_collection.get("features") or [])
+                        city_note = f" (ville ‘{city_name}’ ajoutée automatiquement)" if city_appended else ""
                         cached_validation = {
                             "validation_status": "valid" if feature_count > 0 else "invalid",
                             "validation_message": (
-                                f"Adresse géolocalisée : {display_name}. {feature_count} bâtiment(s) IGN détecté(s)."
+                                f"Adresse géolocalisée : {display_name}{city_note}. {feature_count} bâtiment(s) IGN détecté(s)."
                                 if feature_count > 0
-                                else f"Adresse géolocalisée : {display_name}. Aucun bâtiment IGN n’a été détecté à proximité."
+                                else f"Adresse géolocalisée : {display_name}{city_note}. Aucun bâtiment IGN n’a été détecté à proximité."
                             ),
                             "lat": lookup.get("lat"),
                             "lon": lookup.get("lon"),
@@ -866,11 +883,11 @@ def preview_building_import_file(
     }
 
 
-def lookup_free_address_candidates(address: str) -> dict[str, Any]:
+def lookup_free_address_candidates(address: str, city_name: str | None = None) -> dict[str, Any]:
     address_display = re.sub(r"\s+", " ", str(address).strip()).strip()
     if len(address_display) < 3:
         raise ValueError("L'adresse doit contenir au moins 3 caractères.")
-    point_and_parcels = _resolve_point_and_parcels(address_display, [])
+    point_and_parcels = _resolve_point_and_parcels(address_display, [], city_hint=city_name)
     lat = _safe_float(point_and_parcels.get("lat"))
     lon = _safe_float(point_and_parcels.get("lon"))
     if lat is None or lon is None:

@@ -81,11 +81,12 @@ def get_building_naming_lookup(
 @router.post("/lookup/free-address", response_model=FreeAddressLookupRead)
 def post_free_address_lookup(
     payload: FreeAddressLookupPayload,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FreeAddressLookupRead:
-    del current_user
     try:
-        return FreeAddressLookupRead.model_validate(lookup_free_address_candidates(payload.address))
+        city_name = _get_current_user_city_name(db, current_user)
+        return FreeAddressLookupRead.model_validate(lookup_free_address_candidates(payload.address, city_name=city_name))
     except ValueError as error:
         _raise_naming_http_error(error)
 
@@ -95,9 +96,10 @@ async def post_building_import_preview(
     file: UploadFile = File(...),
     name_column: str | None = Form(default=None),
     address_column: str | None = Form(default=None),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BuildingImportPreview:
-    del current_user
+    city_name = _get_current_user_city_name(db, current_user)
     filename = file.filename or "import.csv"
     raw_bytes = await file.read()
     try:
@@ -107,6 +109,7 @@ async def post_building_import_preview(
                 raw_bytes=raw_bytes,
                 name_column=name_column,
                 address_column=address_column,
+                city_name=city_name,
             )
         )
     except ValueError as error:
