@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 
-import type { BuildingNamingLookup, FreeAddressLookup, GeoJsonFeature } from "../lib/api";
+import type { BuildingNamingLookup, FreeAddressLookup, GeoJsonFeature, NearbyDgfipRow } from "../lib/api";
 import { BuildingNamingMap } from "./BuildingNamingMap";
 
 type NamingCandidateEntry = Record<string, unknown>;
@@ -20,6 +20,7 @@ type BuildingSelectionWorkspaceProps = {
   createLabelWithSelection: string;
   createLabelWithoutSelection: string;
   onCreate: (payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) => Promise<void> | void;
+  nearbyDgfipMarkers?: NearbyDgfipRow[];
 };
 
 function dedupeToponymyCandidates(entries: NamingCandidateEntry[]) {
@@ -112,6 +113,7 @@ export function BuildingSelectionWorkspace({
   createLabelWithSelection,
   createLabelWithoutSelection,
   onCreate,
+  nearbyDgfipMarkers,
 }: BuildingSelectionWorkspaceProps) {
   const [validatedName, setValidatedName] = useState(initialValidatedName);
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>([]);
@@ -227,6 +229,7 @@ export function BuildingSelectionWorkspace({
         featureCollection={lookupData.feature_collection}
         selectedFeatureIds={selectedFeatureIds}
         onToggleFeatureId={toggleFeatureSelection}
+        nearbyDgfipMarkers={nearbyDgfipMarkers}
       />
 
       <label className="field">

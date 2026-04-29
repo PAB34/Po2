@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { GeoJsonFeatureCollection } from "../lib/api";
 
+type NearbyDgfipMarker = {
+  lat: number;
+  lon: number;
+  address_display: string;
+  distance_m: number;
+};
+
 type BuildingNamingMapProps = {
   addressLabel: string;
   lat: number | null;
@@ -11,6 +18,7 @@ type BuildingNamingMapProps = {
   featureCollection?: GeoJsonFeatureCollection | null;
   selectedFeatureIds: string[];
   onToggleFeatureId: (featureId: string) => void;
+  nearbyDgfipMarkers?: NearbyDgfipMarker[];
 };
 
 type RuntimeFeature = {
@@ -139,6 +147,7 @@ export function BuildingNamingMap({
   featureCollection,
   selectedFeatureIds,
   onToggleFeatureId,
+  nearbyDgfipMarkers,
 }: BuildingNamingMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<LeafletRuntime | null>(null);
@@ -146,6 +155,7 @@ export function BuildingNamingMap({
   const centerLayerRef = useRef<RuntimeLayer | null>(null);
   const parcelLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const buildingLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
+  const dgfipLayerRef = useRef<RuntimeLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   const osmUrl = useMemo(() => {
@@ -219,9 +229,11 @@ export function BuildingNamingMap({
     centerLayerRef.current?.remove?.();
     parcelLayerRef.current?.remove?.();
     buildingLayerRef.current?.remove?.();
+    dgfipLayerRef.current?.remove?.();
     centerLayerRef.current = null;
     parcelLayerRef.current = null;
     buildingLayerRef.current = null;
+    dgfipLayerRef.current = null;
 
     const focusGroup = runtime.featureGroup();
 
@@ -296,6 +308,23 @@ export function BuildingNamingMap({
       buildingLayerRef.current = buildingLayer;
     }
 
+    if (nearbyDgfipMarkers?.length) {
+      const dgfipGroup = runtime.featureGroup();
+      for (const marker of nearbyDgfipMarkers) {
+        const m = runtime.circleMarker([marker.lat, marker.lon], {
+          radius: 6,
+          color: "#a855f7",
+          fillColor: "#c084fc",
+          fillOpacity: 0.85,
+          weight: 2,
+        });
+        m.bindPopup?.(`<strong>${marker.address_display}</strong><br/>Distance : ${Math.round(marker.distance_m)} m`);
+        dgfipGroup.addLayer(m);
+      }
+      dgfipGroup.addTo(map);
+      dgfipLayerRef.current = dgfipGroup;
+    }
+
     if (featureCollection?.features?.length && buildingLayerRef.current) {
       const buildingBounds = focusGroup.getBounds();
       if (buildingBounds.isValid()) {
@@ -319,7 +348,7 @@ export function BuildingNamingMap({
     return () => {
       focusGroup.clearLayers();
     };
-  }, [addressLabel, featureCollection, lat, lon, mapReady, onToggleFeatureId, parcelFeatureCollection, selectedFeatureIds, usedSource]);
+  }, [addressLabel, featureCollection, lat, lon, mapReady, nearbyDgfipMarkers, onToggleFeatureId, parcelFeatureCollection, selectedFeatureIds, usedSource]);
 
   return (
     <div className="map-shell">
@@ -346,6 +375,7 @@ export function BuildingNamingMap({
         <span><strong>Vert</strong> : parcelles détectées</span>
         <span><strong>Jaune</strong> : candidats IGN</span>
         <span><strong>Orange</strong> : bâtiments sélectionnés</span>
+        <span><strong>Violet</strong> : adresses DGFIP proches</span>
       </div>
     </div>
   );

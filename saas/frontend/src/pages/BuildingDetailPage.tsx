@@ -683,15 +683,15 @@ export function BuildingDetailPage() {
                 <aside className="buildings-sidebar">
                   <div className="section-block buildings-addresses-section">
                     <div className="section-heading">
-                      <h3>Adresses DGFIP à 50 m</h3>
-                      <p>Adresses DGFIP / MAJIC situées dans un rayon de 50 m autour du point de référence. En sélectionner une recadre la carte IGN sur sa parcelle cadastrale.</p>
+                      <h3>Adresses DGFIP à 200 m</h3>
+                      <p>Adresses DGFIP / MAJIC situées dans un rayon de 200 m autour du point de référence. En sélectionner une recadre la carte IGN sur sa parcelle cadastrale.</p>
                     </div>
                     {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
                     {nearbyDgfipQuery.error instanceof Error ? (
                       <p className="error-text">{nearbyDgfipQuery.error.message}</p>
                     ) : null}
                     {nearbyDgfipQuery.data && nearbyDgfipQuery.data.length === 0 ? (
-                      <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 50 m.</p>
+                      <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 200 m.</p>
                     ) : null}
                     <div className="resource-list buildings-address-list">
                       {(nearbyDgfipQuery.data ?? []).map((row: NearbyDgfipRow) => {
@@ -748,6 +748,7 @@ export function BuildingDetailPage() {
                     createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
                     createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
                     onCreate={handleGeoAttach}
+                    nearbyDgfipMarkers={nearbyDgfipQuery.data}
                   />
                 </div>
               </div>
