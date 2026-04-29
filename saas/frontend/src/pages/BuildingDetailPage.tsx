@@ -1,23 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorkspace";
 import {
   attachBuildingGeoRequest,
+  attachBuildingIgnRequest,
   createLocalRequest,
   deleteLocalRequest,
   fetchBuilding,
   fetchBuildingLocals,
-  fetchBuildingNamingDataset,
   fetchBuildingNamingLookup,
+  fetchFreeAddressLookup,
+  fetchNearbyDgfip,
   type Building,
+  type BuildingIgnAttachmentPayload,
   type BuildingNamingLookup,
-  type BuildingNamingRow,
   type CreateLocalPayload,
+  type FreeAddressLookup,
   type GeoJsonFeature,
   type Local,
+  type NearbyDgfipRow,
   type UpdateBuildingPayload,
   type UpdateLocalPayload,
   updateBuildingRequest,
@@ -36,9 +40,14 @@ function buildAddressLine(
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
 }
 
-function buildMajicAddressLine(row: BuildingNamingRow) {
-  const parts = [row.numero_voirie, row.indice_repetition, row.nature_voie, row.nom_voie].filter(Boolean);
-  return parts.length > 0 ? `${parts.join(" ")}, ${row.nom_commune}` : row.address_display;
+function buildAttachmentAddress(building: Building): string | null {
+  if (building.adresse_reconstituee?.trim()) {
+    return building.adresse_reconstituee.trim();
+  }
+  const parts = [building.numero_voirie, building.nature_voie, building.nom_voie, building.nom_commune].filter(
+    (p): p is string => Boolean(p?.trim()),
+  );
+  return parts.length >= 2 ? parts.join(" ") : null;
 }
 
 function parseJsonArray(value: string | null): string[] {
@@ -126,8 +135,7 @@ export function BuildingDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [showGeoAttachment, setShowGeoAttachment] = useState(false);
-  const [geoSelectedUniqueKey, setGeoSelectedUniqueKey] = useState<string | null>(null);
-  const [geoSearch, setGeoSearch] = useState("");
+  const [selectedDgfipKey, setSelectedDgfipKey] = useState<string | null>(null);
   const [geoAttachError, setGeoAttachError] = useState<string | null>(null);
   const [geoAttachSuccess, setGeoAttachSuccess] = useState<string | null>(null);
 
@@ -143,28 +151,27 @@ export function BuildingDetailPage() {
     enabled: Boolean(token) && Number.isInteger(parsedBuildingId),
   });
 
-  const namingDatasetQuery = useQuery({
-    queryKey: ["buildings", "naming-dataset", token],
-    queryFn: () => fetchBuildingNamingDataset(token as string),
-    enabled: Boolean(token) && showGeoAttachment,
+  const attachmentAddress = buildingQuery.data ? buildAttachmentAddress(buildingQuery.data) : null;
+
+  const freeAddressLookupQuery = useQuery({
+    queryKey: ["buildings", "free-address-lookup", attachmentAddress, token],
+    queryFn: () => fetchFreeAddressLookup(token as string, attachmentAddress as string),
+    enabled: Boolean(token) && Boolean(attachmentAddress) && showGeoAttachment && !selectedDgfipKey,
   });
 
-  const namingLookupQuery = useQuery({
-    queryKey: ["buildings", "naming-lookup", geoSelectedUniqueKey, token],
-    queryFn: () => fetchBuildingNamingLookup(token as string, geoSelectedUniqueKey as string),
-    enabled: Boolean(token) && Boolean(geoSelectedUniqueKey) && showGeoAttachment,
+  const dgfipNamingLookupQuery = useQuery({
+    queryKey: ["buildings", "naming-lookup", selectedDgfipKey, token],
+    queryFn: () => fetchBuildingNamingLookup(token as string, selectedDgfipKey as string),
+    enabled: Boolean(token) && Boolean(selectedDgfipKey) && showGeoAttachment,
   });
 
-  const filteredGeoRows = useMemo(() => {
-    const rows = namingDatasetQuery.data?.rows ?? [];
-    const query = geoSearch.trim().toLowerCase();
-    if (!query) return rows;
-    return rows.filter((row: BuildingNamingRow) =>
-      [row.address_display, row.nom_commune, row.numero_voirie, row.nom_voie, row.first_reference_norm]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [namingDatasetQuery.data?.rows, geoSearch]);
+  const nearbyDgfipQuery = useQuery({
+    queryKey: ["buildings", "nearby-dgfip", parsedBuildingId, token],
+    queryFn: () => fetchNearbyDgfip(token as string, parsedBuildingId),
+    enabled: Boolean(token) && Number.isInteger(parsedBuildingId) && showGeoAttachment,
+  });
+
+  const activeLookupQuery = selectedDgfipKey ? dgfipNamingLookupQuery : freeAddressLookupQuery;
 
   useEffect(() => {
     if (!buildingQuery.data) {
@@ -188,16 +195,33 @@ export function BuildingDetailPage() {
     mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null }) =>
       attachBuildingGeoRequest(token as string, parsedBuildingId, payload),
     onSuccess: async (building: Building) => {
-      setGeoAttachSuccess(`Attachement GEO réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
+      setGeoAttachSuccess(`Attachement DGFIP + IGN réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
       setGeoAttachError(null);
       setShowGeoAttachment(false);
-      setGeoSelectedUniqueKey(null);
+      setSelectedDgfipKey(null);
       await queryClient.invalidateQueries({ queryKey: ["building", parsedBuildingId] });
       await queryClient.invalidateQueries({ queryKey: ["buildings"] });
     },
     onError: (mutationError: unknown) => {
       setGeoAttachSuccess(null);
       setGeoAttachError(mutationError instanceof Error ? mutationError.message : "Attachement GEO impossible.");
+    },
+  });
+
+  const attachIgnMutation = useMutation({
+    mutationFn: (payload: BuildingIgnAttachmentPayload) =>
+      attachBuildingIgnRequest(token as string, parsedBuildingId, payload),
+    onSuccess: async (building: Building) => {
+      setGeoAttachSuccess(`Attachement IGN réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
+      setGeoAttachError(null);
+      setShowGeoAttachment(false);
+      setSelectedDgfipKey(null);
+      await queryClient.invalidateQueries({ queryKey: ["building", parsedBuildingId] });
+      await queryClient.invalidateQueries({ queryKey: ["buildings"] });
+    },
+    onError: (mutationError: unknown) => {
+      setGeoAttachSuccess(null);
+      setGeoAttachError(mutationError instanceof Error ? mutationError.message : "Attachement IGN impossible.");
     },
   });
 
@@ -281,17 +305,23 @@ export function BuildingDetailPage() {
   }
 
   async function handleGeoAttach(payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) {
-    if (!geoSelectedUniqueKey) {
-      setGeoAttachError("Sélectionne une adresse source DGFIP avant de lancer l'attachement.");
-      return;
-    }
     setGeoAttachError(null);
     setGeoAttachSuccess(null);
-    await attachGeoMutation.mutateAsync({
-      unique_key: geoSelectedUniqueKey,
-      validated_name: payload.validatedName,
-      selected_feature: payload.selectedFeature,
-    });
+    if (selectedDgfipKey) {
+      await attachGeoMutation.mutateAsync({
+        unique_key: selectedDgfipKey,
+        validated_name: payload.validatedName,
+        selected_feature: payload.selectedFeature,
+      });
+    } else {
+      const lookupData = activeLookupQuery.data;
+      await attachIgnMutation.mutateAsync({
+        validated_name: payload.validatedName,
+        selected_feature: payload.selectedFeature,
+        lat: lookupData?.lat ?? null,
+        lon: lookupData?.lon ?? null,
+      });
+    }
   }
 
   async function handleBuildingSubmit(event: FormEvent<HTMLFormElement>) {
@@ -607,7 +637,11 @@ export function BuildingDetailPage() {
             <div className="panel-header">
               <div className="section-heading">
                 <h3>Attachement GEO</h3>
-                <p>Rattache ce bâtiment à une adresse DGFIP / MAJIC et sélectionne le bâtiment IGN correspondant pour enrichir la fiche.</p>
+                <p>
+                  {attachmentAddress
+                    ? `Adresse de référence : « ${attachmentAddress} ».`
+                    : "Aucune adresse renseignée — complétez la fiche avant de lancer l'attachement."}
+                </p>
               </div>
               <div className="form-actions">
                 <button
@@ -615,8 +649,7 @@ export function BuildingDetailPage() {
                   className="secondary-button"
                   onClick={() => {
                     setShowGeoAttachment(!showGeoAttachment);
-                    setGeoSelectedUniqueKey(null);
-                    setGeoSearch("");
+                    setSelectedDgfipKey(null);
                     setGeoAttachError(null);
                     setGeoAttachSuccess(null);
                   }}
@@ -632,38 +665,29 @@ export function BuildingDetailPage() {
                 <aside className="buildings-sidebar">
                   <div className="section-block buildings-addresses-section">
                     <div className="section-heading">
-                      <h3>Adresses DGFIP à rapprocher</h3>
-                      <p>Choisis l'adresse source qui correspond à ce bâtiment.</p>
+                      <h3>Adresses DGFIP à 50 m</h3>
+                      <p>Adresses DGFIP / MAJIC situées dans un rayon de 50 m autour du point de référence. En sélectionner une recadre la carte IGN sur sa parcelle cadastrale.</p>
                     </div>
-                    <label className="field">
-                      <span>Recherche</span>
-                      <input
-                        type="text"
-                        value={geoSearch}
-                        onChange={(event: ChangeEvent<HTMLInputElement>) => setGeoSearch(event.target.value)}
-                      />
-                    </label>
-                    {namingDatasetQuery.isLoading ? <p>Chargement des données DGFIP...</p> : null}
-                    {namingDatasetQuery.error instanceof Error ? (
-                      <p className="error-text">{namingDatasetQuery.error.message}</p>
+                    {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
+                    {nearbyDgfipQuery.error instanceof Error ? (
+                      <p className="error-text">{nearbyDgfipQuery.error.message}</p>
+                    ) : null}
+                    {nearbyDgfipQuery.data && nearbyDgfipQuery.data.length === 0 ? (
+                      <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 50 m.</p>
                     ) : null}
                     <div className="resource-list buildings-address-list">
-                      {filteredGeoRows.map((row: BuildingNamingRow) => {
-                        const isActive = geoSelectedUniqueKey === row.unique_key;
+                      {(nearbyDgfipQuery.data ?? []).map((row: NearbyDgfipRow) => {
+                        const isActive = selectedDgfipKey === row.unique_key;
                         return (
                           <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
                             <div className="resource-card-header">
                               <div>
-                                <h3>{buildMajicAddressLine(row)}</h3>
-                                <p>{row.address_display}</p>
+                                <h3>{row.address_display}</h3>
+                                <p>{row.nom_commune}</p>
                               </div>
-                              <span className="resource-badge">{row.duplicate_count} ligne(s)</span>
+                              <span className="resource-badge">{row.distance_m} m</span>
                             </div>
                             <dl className="resource-metadata">
-                              <div>
-                                <dt>Commune</dt>
-                                <dd>{row.nom_commune}</dd>
-                              </div>
                               <div>
                                 <dt>Indices MAJIC</dt>
                                 <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
@@ -674,12 +698,11 @@ export function BuildingDetailPage() {
                                 type="button"
                                 className="secondary-button"
                                 onClick={() => {
-                                  setGeoSelectedUniqueKey(row.unique_key);
+                                  setSelectedDgfipKey(isActive ? null : row.unique_key);
                                   setGeoAttachError(null);
-                                  setGeoAttachSuccess(null);
                                 }}
                               >
-                                {isActive ? "Sélection active" : "Sélectionner cette adresse"}
+                                {isActive ? "Désélectionner" : "Sélectionner cette adresse DGFIP"}
                               </button>
                             </div>
                           </article>
@@ -689,19 +712,23 @@ export function BuildingDetailPage() {
                   </div>
                 </aside>
                 <div className="buildings-main-content">
-                  {namingLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-                  {namingLookupQuery.error instanceof Error ? (
-                    <p className="error-text">{namingLookupQuery.error.message}</p>
+                  {activeLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+                  {activeLookupQuery.error instanceof Error ? (
+                    <p className="error-text">{activeLookupQuery.error.message}</p>
                   ) : null}
                   <BuildingSelectionWorkspace
-                    lookupData={(namingLookupQuery.data ?? null) as BuildingNamingLookup | null}
-                    emptyTitle="Aucune adresse DGFIP sélectionnée."
-                    emptyDescription="Choisis une adresse dans la colonne de gauche pour afficher la carte IGN, sélectionner le bâtiment correspondant et valider l'attachement."
-                    createPending={attachGeoMutation.isPending}
+                    lookupData={(activeLookupQuery.data ?? null) as BuildingNamingLookup | FreeAddressLookup | null}
+                    emptyTitle={attachmentAddress ? "Chargement de la carte IGN..." : "Adresse manquante."}
+                    emptyDescription={
+                      attachmentAddress
+                        ? "La carte IGN se charge à partir de l'adresse de la fiche."
+                        : "Renseignez l'adresse reconstituée ou les champs de voirie dans la fiche bâtiment."
+                    }
+                    createPending={attachGeoMutation.isPending || attachIgnMutation.isPending}
                     error={geoAttachError}
                     success={geoAttachSuccess}
-                    createLabelWithSelection="Rattacher ce bâtiment à la sélection IGN"
-                    createLabelWithoutSelection="Rattacher ce bâtiment sans sélection IGN"
+                    createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
+                    createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
                     onCreate={handleGeoAttach}
                   />
                 </div>

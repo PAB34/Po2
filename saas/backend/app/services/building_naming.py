@@ -1130,3 +1130,67 @@ def build_building_payload(
         "ign_toponym_candidates_json": json.dumps(resolved_candidates, ensure_ascii=False) if resolved_candidates else None,
         "parcel_labels_json": json.dumps(resolved["parcel_labels"], ensure_ascii=False) if resolved["parcel_labels"] else None,
     }
+
+
+def _haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def find_nearby_dgfip_rows(
+    ref_lat: float | None,
+    ref_lon: float | None,
+    address: str | None,
+    nom_voie: str | None,
+    city_name: str | None = None,
+    radius_m: float = 50,
+) -> list[dict[str, Any]]:
+    if ref_lat is not None and ref_lon is not None:
+        lat, lon = ref_lat, ref_lon
+    elif address:
+        try:
+            geocoded = _geocode_address(address)
+            lat, lon = geocoded["lat"], geocoded["lon"]
+        except Exception:
+            return []
+    else:
+        return []
+
+    data = get_building_naming_rows(city_name=city_name)
+    rows: list[dict[str, Any]] = data.get("rows", [])
+
+    # Pre-filter by street name to avoid geocoding the entire dataset
+    nom_voie_norm = _normalize_text(nom_voie).lower() if nom_voie else ""
+    candidates = (
+        [r for r in rows if _normalize_text(r.get("nom_voie", "")).lower() == nom_voie_norm]
+        if nom_voie_norm
+        else rows
+    )
+
+    results: list[dict[str, Any]] = []
+    for row in candidates:
+        try:
+            geocoded = _geocode_address(row["address_display"])
+            row_lat, row_lon = geocoded["lat"], geocoded["lon"]
+            distance = _haversine_distance_m(lat, lon, row_lat, row_lon)
+            if distance <= radius_m:
+                results.append({
+                    "unique_key": row["unique_key"],
+                    "address_display": row["address_display"],
+                    "nom_commune": row["nom_commune"],
+                    "lat": row_lat,
+                    "lon": row_lon,
+                    "distance_m": round(distance, 1),
+                    "majic_building_values": row.get("majic_building_values", []),
+                    "majic_entry_values": row.get("majic_entry_values", []),
+                    "majic_level_values": row.get("majic_level_values", []),
+                    "majic_door_values": row.get("majic_door_values", []),
+                })
+        except Exception:
+            continue
+
+    return sorted(results, key=lambda r: r["distance_m"])

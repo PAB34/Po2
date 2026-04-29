@@ -6,6 +6,7 @@ from app.core.db import get_db
 from app.models.user import User
 from app.schemas.building import (
     BuildingCreate,
+    BuildingIgnAttachmentPayload,
     BuildingImportPreview,
     BuildingNamingDataset,
     BuildingNamingLookupRead,
@@ -17,8 +18,10 @@ from app.schemas.building import (
     LocalCreate,
     LocalRead,
     LocalUpdate,
+    NearbyDgfipRow,
 )
 from app.services.building_naming import (
+    find_nearby_dgfip_rows,
     get_building_naming_rows,
     lookup_building_candidates,
     lookup_free_address_candidates,
@@ -26,6 +29,7 @@ from app.services.building_naming import (
 )
 from app.services.buildings import (
     attach_building_geo,
+    attach_building_ign,
     create_building,
     create_building_from_naming_selection,
     create_local,
@@ -192,6 +196,44 @@ def post_building_geo_attachment(
         return BuildingRead.model_validate(updated_building)
     except ValueError as error:
         _raise_naming_http_error(error)
+
+
+@router.post("/{building_id}/ign-attachment", response_model=BuildingRead)
+def post_building_ign_attachment(
+    building_id: int,
+    payload: BuildingIgnAttachmentPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingRead:
+    building = get_building_or_404(db, building_id, current_user)
+    updated_building = attach_building_ign(db, building, payload)
+    return BuildingRead.model_validate(updated_building)
+
+
+@router.get("/{building_id}/nearby-dgfip", response_model=list[NearbyDgfipRow])
+def get_nearby_dgfip(
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[NearbyDgfipRow]:
+    building = get_building_or_404(db, building_id, current_user)
+    city_name = _get_current_user_city_name(db, current_user)
+    address: str | None = None
+    if building.adresse_reconstituee:
+        address = building.adresse_reconstituee.strip()
+    else:
+        parts = [building.numero_voirie, building.nature_voie, building.nom_voie, building.nom_commune]
+        clean = [p.strip() for p in parts if p and p.strip()]
+        if len(clean) >= 2:
+            address = " ".join(clean)
+    rows = find_nearby_dgfip_rows(
+        ref_lat=building.latitude,
+        ref_lon=building.longitude,
+        address=address,
+        nom_voie=building.nom_voie,
+        city_name=city_name,
+    )
+    return [NearbyDgfipRow.model_validate(r) for r in rows]
 
 
 @router.get("/{building_id}/locals", response_model=list[LocalRead])

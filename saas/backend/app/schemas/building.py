@@ -113,6 +113,26 @@ class BuildingNamingSelectionPayload(BaseModel):
     selected_feature: dict[str, object] | None = None
 
 
+class BuildingIgnAttachmentPayload(BaseModel):
+    validated_name: str | None = Field(default=None, max_length=255)
+    selected_feature: dict[str, object] | None = None
+    lat: float | None = None
+    lon: float | None = None
+
+
+class NearbyDgfipRow(BaseModel):
+    unique_key: str
+    address_display: str
+    nom_commune: str
+    lat: float
+    lon: float
+    distance_m: float
+    majic_building_values: list[str]
+    majic_entry_values: list[str]
+    majic_level_values: list[str]
+    majic_door_values: list[str]
+
+
 class BuildingCreate(BaseModel):
     city_id: int | None = None
     dgfip_unique_key: str | None = Field(default=None, max_length=40)

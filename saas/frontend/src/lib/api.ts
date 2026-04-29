@@ -203,6 +203,26 @@ export type BuildingImportResult = BuildingImportPreview;
 
 export type FreeAddressLookup = BuildingNamingLookup;
 
+export type NearbyDgfipRow = {
+  unique_key: string;
+  address_display: string;
+  nom_commune: string;
+  lat: number;
+  lon: number;
+  distance_m: number;
+  majic_building_values: string[];
+  majic_entry_values: string[];
+  majic_level_values: string[];
+  majic_door_values: string[];
+};
+
+export type BuildingIgnAttachmentPayload = {
+  validated_name?: string;
+  selected_feature?: GeoJsonFeature | null;
+  lat?: number | null;
+  lon?: number | null;
+};
+
 export type CreateBuildingFromNamingPayload = {
   unique_key: string;
   validated_name?: string;
@@ -483,6 +503,28 @@ export async function attachBuildingGeoRequest(
   });
 
   return parseResponse<Building>(response);
+}
+
+export async function attachBuildingIgnRequest(
+  token: string,
+  buildingId: number,
+  payload: BuildingIgnAttachmentPayload,
+): Promise<Building> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/ign-attachment`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Building>(response);
+}
+
+export async function fetchNearbyDgfip(token: string, buildingId: number): Promise<NearbyDgfipRow[]> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/nearby-dgfip`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<NearbyDgfipRow[]>(response);
 }
 
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {

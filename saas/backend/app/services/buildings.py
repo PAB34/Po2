@@ -7,8 +7,8 @@ from app.models.building import Building
 from app.models.city import City
 from app.models.local import Local
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate
-from app.services.building_naming import build_building_payload
+from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate
+from app.services.building_naming import _dedupe_candidate_dicts, build_building_payload
 from app.services.cities import get_city_by_id
 
 
@@ -236,6 +236,48 @@ def attach_building_geo(
     db.commit()
     db.refresh(updated_building)
     return updated_building
+
+
+def attach_building_ign(
+    db: Session,
+    building: Building,
+    payload: BuildingIgnAttachmentPayload,
+) -> Building:
+    feature_properties = (payload.selected_feature or {}).get("properties", {}) or {}
+    attributes = feature_properties.get("attributes", {}) or {}
+    resolved_candidates = _dedupe_candidate_dicts(feature_properties.get("resolved_name_candidates") or [])
+
+    proposed_name = str(
+        payload.validated_name
+        or feature_properties.get("resolved_name")
+        or feature_properties.get("name")
+        or building.nom_batiment
+        or ""
+    ).strip()
+
+    if proposed_name:
+        building.nom_batiment = proposed_name
+    if payload.selected_feature:
+        building.ign_layer = feature_properties.get("ign_layer")
+        building.ign_typename = feature_properties.get("ign_typename")
+        building.ign_id = feature_properties.get("ign_id")
+        building.ign_name = feature_properties.get("name")
+        building.ign_label = feature_properties.get("label")
+        building.ign_name_proposed = feature_properties.get("resolved_name")
+        building.ign_name_source = feature_properties.get("resolved_name_source")
+        building.ign_name_distance_m = feature_properties.get("resolved_name_distance_m")
+        building.ign_attributes_json = json.dumps(attributes, ensure_ascii=False) if attributes else None
+        building.ign_toponym_candidates_json = json.dumps(resolved_candidates, ensure_ascii=False) if resolved_candidates else None
+        building.statut_geocodage = "IGN_VALIDE"
+    if payload.lat is not None:
+        building.latitude = payload.lat
+    if payload.lon is not None:
+        building.longitude = payload.lon
+
+    db.add(building)
+    db.commit()
+    db.refresh(building)
+    return building
 
 
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
