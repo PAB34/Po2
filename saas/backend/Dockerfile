@@ -11,9 +11,8 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
-COPY entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+COPY entrypoint.py ./entrypoint.py
 
 EXPOSE 8000
 
-CMD ["./entrypoint.sh"]
+CMD ["python", "entrypoint.py"]
