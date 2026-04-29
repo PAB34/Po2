@@ -905,7 +905,7 @@ def lookup_free_address_candidates(address: str, city_name: str | None = None) -
         "parcel_feature_collection": point_and_parcels.get("parcel_feature_collection") or {"type": "FeatureCollection", "features": []},
         "parcel_labels": point_and_parcels.get("parcel_labels") or [],
         "geocoder": point_and_parcels.get("geocoder") or {"display_name": address_display},
-        "feature_collection": _ign_buildings(lat, lon, radius_m=55),
+        "feature_collection": _ign_buildings(lat, lon, radius_m=200),
     }
 
 
@@ -1055,7 +1055,7 @@ def lookup_building_candidates(unique_key: str, city_name: str | None = None) ->
     if row is None:
         raise ValueError(f"Clé inconnue : {unique_key}")
     resolved = _resolve_point_and_parcels(row["address_display"], row["references"])
-    feature_collection = _ign_buildings(resolved["lat"], resolved["lon"], radius_m=50)
+    feature_collection = _ign_buildings(resolved["lat"], resolved["lon"], radius_m=200)
     return {
         "unique_key": row["unique_key"],
         "input_address": row["address_display"],
@@ -1147,7 +1147,7 @@ def find_nearby_dgfip_rows(
     address: str | None,
     nom_voie: str | None,
     city_name: str | None = None,
-    radius_m: float = 50,
+    radius_m: float = 200,
 ) -> list[dict[str, Any]]:
     if ref_lat is not None and ref_lon is not None:
         lat, lon = ref_lat, ref_lon
