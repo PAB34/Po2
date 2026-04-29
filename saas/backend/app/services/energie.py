@@ -11,7 +11,7 @@ def _csv_rows(filename: str) -> list[dict[str, str]]:
     path = Path(settings.energie_dir) / filename
     if not path.exists():
         return []
-    with open(path, encoding="utf-8", newline="") as f:
+    with open(path, encoding="utf-8-sig", newline="") as f:
         return list(csv.DictReader(f))
 
 
