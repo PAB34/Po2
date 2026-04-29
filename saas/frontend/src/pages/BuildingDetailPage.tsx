@@ -63,30 +63,15 @@ function parseJsonArray(value: string | null): string[] {
   }
 }
 
-function parseCandidateLabels(value: string | null): string[] {
-  if (!value) {
-    return [];
-  }
-
+function parseIgnAttributes(value: string | null): [string, string][] {
+  if (!value) return [];
   try {
     const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .map((item) => {
-        if (item && typeof item === "object") {
-          const candidate = item as { name?: unknown; label?: unknown; source?: unknown };
-          const label = String(candidate.name ?? candidate.label ?? "").trim();
-          const source = String(candidate.source ?? "").trim();
-          if (!label) {
-            return "";
-          }
-          return source ? `${label} (${source})` : label;
-        }
-        return String(item);
-      })
-      .filter(Boolean);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    return Object.entries(parsed as Record<string, unknown>)
+      .map(([k, v]) => [k, v == null ? "" : String(v)] as [string, string])
+      .filter(([, v]) => v !== "")
+      .sort(([a], [b]) => a.localeCompare(b, "fr"));
   } catch {
     return [];
   }
@@ -532,33 +517,66 @@ export function BuildingDetailPage() {
           <div className="section-block">
             <div className="section-heading">
               <h3>Rapprochement IGN</h3>
-              <p>Données IGN conservées lors de la validation du bâtiment.</p>
+              <p>Données topographiques IGN rattachées à ce bâtiment.</p>
             </div>
             <div className="detail-grid">
               <div className="detail-card">
                 <span>Couche IGN</span>
-                <strong>{buildingQuery.data.ign_layer || "Aucune"}</strong>
+                <strong>{buildingQuery.data.ign_layer || "Non renseignée"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Identifiant IGN</span>
+                <strong>{buildingQuery.data.ign_id || "Non renseigné"}</strong>
               </div>
               <div className="detail-card">
                 <span>Nom IGN brut</span>
                 <strong>{buildingQuery.data.ign_name || "Aucun"}</strong>
               </div>
               <div className="detail-card">
-                <span>Nom IGN proposé</span>
-                <strong>{buildingQuery.data.ign_name_proposed || "Aucune proposition"}</strong>
+                <span>Nom IGN retenu</span>
+                <strong>{buildingQuery.data.ign_name_proposed || "Aucun"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Source du nom</span>
+                <strong>{buildingQuery.data.ign_name_source || "Non renseignée"}</strong>
+              </div>
+              <div className="detail-card">
+                <span>Distance toponymie</span>
+                <strong>
+                  {buildingQuery.data.ign_name_distance_m != null
+                    ? `${buildingQuery.data.ign_name_distance_m} m`
+                    : "Non renseignée"}
+                </strong>
+              </div>
+              <div className="detail-card">
+                <span>Coordonnées</span>
+                <strong>
+                  {buildingQuery.data.latitude != null && buildingQuery.data.longitude != null
+                    ? `${buildingQuery.data.latitude.toFixed(6)}, ${buildingQuery.data.longitude.toFixed(6)}`
+                    : "Non renseignées"}
+                </strong>
+              </div>
+              <div className="detail-card">
+                <span>Parcelles cadastrales</span>
+                <strong>{parseJsonArray(buildingQuery.data.parcel_labels_json).join(", ") || "Aucune"}</strong>
               </div>
             </div>
-            <div className="resource-list">
-              <article className="resource-card">
-                <div className="resource-card-header">
-                  <div>
-                    <h3>Candidats de toponymie retenus</h3>
-                    <p>Liste des noms IGN proposés autour de l’objet sélectionné.</p>
-                  </div>
+            {parseIgnAttributes(buildingQuery.data.ign_attributes_json).length > 0 && (
+              <div className="section-block">
+                <div className="section-heading">
+                  <h3>Attributs topographiques IGN</h3>
+                  <p>Attributs bruts de l’objet IGN sélectionné (BD TOPO).</p>
                 </div>
-                <p>{parseCandidateLabels(buildingQuery.data.ign_toponym_candidates_json).join(" | ") || "Aucun candidat enregistré."}</p>
-              </article>
-            </div>
+                <div className="attribute-table">
+                  {parseIgnAttributes(buildingQuery.data.ign_attributes_json).map(([key, value]) => (
+                    <div key={key} className="attribute-row">
+                      <dt>{key}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="section-block">
