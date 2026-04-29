@@ -1,0 +1,268 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "alimentation_auto",
+    "description" : "Cette API vous permet de consulter les informations techniques de connexion d’un compteur dont le titulaire a autorisé votre entité à accéder aux données. <br>Les données suivantes sont consultables :<br>-La tension d’alimentation<br>-Le nombre de Phase(s)<br>-La puissance de raccordement ou puissance limite de soutirage",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/alimentation_auto/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/{usage_point_id}" : {
+      "get" : {
+        "tags" : [ "situation-alimentation" ],
+        "summary" : "Récupération de la situation alimentation d'un PRM",
+        "operationId" : "getSituationAlimentation",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "path",
+          "description" : "Identifiant du point (PRM) dont on souhaite récuperer la situation alimentation",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Situation alimentation du PRM",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/connection"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "L'utilisateur n'est pas identifié"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressources",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas autorisé pour le point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Situation alimentation ou PRM non existant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Situation alimentation ou PRM non existant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "connection" : {
+        "type" : "object",
+        "properties" : {
+          "serial_number" : {
+            "type" : "number",
+            "description" : "identifiant technique de la sitaution d'alimentation dans SGE"
+          },
+          "connection_state" : {
+            "type" : "string",
+            "description" : "indique si le point est alimenté, coupé, limité, non alimenté ou non raccordé",
+            "example" : "Alimenté"
+          },
+          "voltage_level" : {
+            "type" : "string",
+            "description" : "domaine de tension en fonction de la tension de raccordement",
+            "example" : "HTA"
+          },
+          "phase_count" : {
+            "type" : "string",
+            "description" : "nombre de fils de branchement"
+          },
+          "consumption_connection_power" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number",
+                "description" : "valeur de la grandeur physique"
+              },
+              "unit" : {
+                "type" : "string",
+                "description" : "unité de la grandeur physique"
+              }
+            },
+            "description" : "Puissance raccordement de l'injection"
+          },
+          "generation_connection_power" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number",
+                "description" : "valeur de la grandeur physique"
+              },
+              "unit" : {
+                "type" : "string",
+                "description" : "unité de la grandeur physique"
+              }
+            },
+            "description" : "Puissance raccordement du soutirage"
+          },
+          "nominal_service_voltage" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number",
+                "description" : "valeur de la grandeur physique"
+              },
+              "unit" : {
+                "type" : "string",
+                "description" : "unité de la grandeur physique"
+              }
+            },
+            "description" : "Tension contractuelle"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

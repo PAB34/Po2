@@ -1,0 +1,199 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "customer_connection_asyn_auto",
+    "description" : "Cette API vous permet de télécharger les informations techniques de connexion d’une liste de compteurs dont le titulaire a autorisé votre entité à accéder aux données. Après traitement, les données sont mis à disposition en asynchrone sur un canal FTP de votre choix. Le nombre maximum par appel est de 1000 compteurs. Les données suivantes sont transmises :<br> -\tTension d’alimentation <br> -\tNombre de Phase(s)<br> -\tPuissance de raccordement ou puissance limite de soutirage.",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/customer_connection_asyn_auto/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/connection" : {
+      "post" : {
+        "tags" : [ "publicationConnection" ],
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/publicationConnection"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "L'ordre de publication a été pris en compte",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/messageReponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Requête invalide",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non implémentée pour l'instant",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited",
+        "x-codegen-request-body-name" : "body"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "publicationConnection" : {
+        "required" : [ "canal_contact_id" ],
+        "type" : "object",
+        "properties" : {
+          "canal_contact_id" : {
+            "type" : "string",
+            "description" : "Id de canal",
+            "example" : "99"
+          },
+          "unique_point_id" : {
+            "type" : "array",
+            "description" : "Liste d'identifiant des PRM demandés. Le nombre de PRM est limité à 1000",
+            "items" : {
+              "type" : "string",
+              "example" : "99999999999999"
+            }
+          }
+        }
+      },
+      "messageReponse" : {
+        "type" : "object",
+        "properties" : {
+          "dossierId" : {
+            "type" : "string",
+            "description" : "id du dossier créée",
+            "example" : "999999"
+          }
+        }
+      },
+      "error" : {
+        "required" : [ "error", "error_description" ],
+        "type" : "object",
+        "properties" : {
+          "error" : {
+            "type" : "string"
+          },
+          "error_description" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

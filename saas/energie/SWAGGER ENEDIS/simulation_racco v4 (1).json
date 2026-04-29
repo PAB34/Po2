@@ -1,0 +1,935 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "Simulation de raccordement",
+    "description" : "Cette API permet de simuler le niveau de complexité d’un raccordement au réseau d'ENEDIS",
+    "termsOfService" : "urn:tos",
+    "contact" : { },
+    "license" : {
+      "name" : "Apache 2.0",
+      "url" : "http://www.apache.org/licenses/LICENSE-2.0"
+    },
+    "version" : "v4"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/grid_connection_simulation/v4"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "tags" : [ {
+    "name" : "LV"
+  }, {
+    "name" : "MV"
+  } ],
+  "paths" : {
+    "/LV" : {
+      "post" : {
+        "tags" : [ "LV" ],
+        "summary" : "Demande de simulation d'un raccordement monopoint en BT",
+        "description" : "Donne la complexité ainsi qu’éventuellement le coût d'un raccordement BT monopoint dont l'identifiant de demande est passé en paramètre",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "5b5f2bee-1808-3f7e-bdfa-9415ea3708b8"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "ext.hml.api.enedis.fr"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "required" : [ "installation_gps_location", "serviced_plot", "usage" ],
+                "type" : "object",
+                "properties" : {
+                  "installation_gps_location" : {
+                    "required" : [ "latitude", "longitude" ],
+                    "type" : "object",
+                    "properties" : {
+                      "latitude" : {
+                        "type" : "number",
+                        "description" : "the angular distance to the equator (90 being north pole, -90 being south pole)",
+                        "example" : 44.069055
+                      },
+                      "longitude" : {
+                        "type" : "number",
+                        "description" : "the angular distance to Greenwich meridian (0 being Greenwich, 180/-180 being near Waiyevo)",
+                        "example" : 4.142446
+                      }
+                    }
+                  },
+                  "usage" : {
+                    "type" : "string",
+                    "description" : "The types of usage",
+                    "example" : "ProductionOverConsumption",
+                    "enum" : [ "Consumption", "Production ", "ConsumptionAndProduction", "ProductionOverConsumption" ]
+                  },
+                  "serviced_plot" : {
+                    "type" : "boolean",
+                    "description" : "True means there are facilities on the landspot that make installation easier.",
+                    "example" : false
+                  },
+                  "adapt_power" : {
+                    "type" : "boolean",
+                    "description" : "True if TeR@ has to adapt power to remove constraints",
+                    "example" : false
+                  },
+                  "injected_power" : {
+                    "type" : "number",
+                    "description" : "The power that is injected (produced) by the producer in kVA or kW",
+                    "format" : "double",
+                    "example" : 16.0
+                  },
+                  "subscribed_power" : {
+                    "type" : "number",
+                    "description" : "The power that is extracted (consumed) by the client in kVA or kW",
+                    "format" : "double",
+                    "example" : 16.0
+                  },
+                  "installed_phase" : {
+                    "type" : "string",
+                    "description" : "The nature of the cable already installed. AN for monophasic, ABCN for triphasic",
+                    "example" : "AN",
+                    "enum" : [ "AN", "ABCN" ]
+                  },
+                  "sales_strategy" : {
+                    "type" : "string",
+                    "description" : "THow the produced current will be sold to Enedis. Surplus being 'we want to sell what we do not consume localy'. Totality being 'we sell everything and rebuy what we consume'.",
+                    "example" : "Surplus",
+                    "enum" : [ "Surplus", "Totality" ]
+                  }
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "La demande a bien été traitée, mais le calcul est encore en cours. L'estimation de temps restant est mise à jour.",
+            "headers" : {
+              "X-CreationTime" : {
+                "description" : "Horodate de création de la simulation. Format HTTP-date (cf. RFC 7231)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-RemainingTimeHigh" : {
+                "description" : "Estimation haute de la durée du traitement : nombre de secondes que l'on peut par exemple afficher à l'utilisateur final",
+                "schema" : {
+                  "type" : "number"
+                }
+              },
+              "Location" : {
+                "description" : "Identifiant du numéro de demande générée par le SI au format : Location: https://{API endpoint}/tera_externe/1.4/simulation/{request_id}",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-RemainingTimeLow" : {
+                "description" : "Estimation basse de la durée du traitement : nombre de secondes minimal à attendre avant la prochaine tentative de récupération de la réponse",
+                "schema" : {
+                  "type" : "number"
+                }
+              }
+            },
+            "content" : { }
+          },
+          "400" : {
+            "description" : "Mauvais format",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "title" : "WrongFormatException",
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "bad_request",
+                      "enum" : [ "bad_request" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "Lattitude must be in range [-90.000000 , 90.000000]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur Serveur",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "technical_error"
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "technical error, please try again later"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited",
+        "x-codegen-request-body-name" : "body"
+      }
+    },
+    "/LV/{request_id}" : {
+      "get" : {
+        "tags" : [ "LV" ],
+        "summary" : "Résultat de la demande de simulation d'un raccordement monopoint en BT",
+        "description" : "Donne la complexité ainsi qu’éventuellement le coût d'un raccordement BT monopoint dont l'identifiant de demande est passé en paramètre",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "5b5f2bee-1808-3f7e-bdfa-9415ea3708b8"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "ext.hml.api.enedis.fr"
+        }, {
+          "name" : "request_id",
+          "in" : "path",
+          "description" : "Numéro de la demande de simulation renvoyée dans la réponse de la création de demande (voir methode POST)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : ""
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "required" : [ "insee_code", "result_code" ],
+                  "type" : "object",
+                  "properties" : {
+                    "insee_code" : {
+                      "type" : "string",
+                      "description" : "Designate the town where the Meter is. Note, this is a string. For instance, Ajaccio Insee code is '2A004'",
+                      "example" : "48198"
+                    },
+                    "result_code" : {
+                      "type" : "string",
+                      "description" : "Status of the calculation",
+                      "example" : "OutOfEnedisZone",
+                      "enum" : [ "OutOfEnedisZone", "TooFarFromGrid", "LVGridWorks", "LVLongConnection", "ShortConnection" ]
+                    },
+                    "tan_phi" : {
+                      "type" : "number",
+                      "description" : "Tangeant Phi. Phi being the phase shift. Also known as power factor",
+                      "format" : "double",
+                      "example" : 0.4
+                    },
+                    "connection_length" : {
+                      "type" : "number",
+                      "description" : "Length of the connection (meters)",
+                      "format" : "double",
+                      "example" : 9.37
+                    },
+                    "tried_to_adapt_power" : {
+                      "type" : "boolean",
+                      "description" : "True if this result was an attempt to adapt power to remove constraints",
+                      "example" : true
+                    },
+                    "has_adapted_power" : {
+                      "type" : "boolean",
+                      "description" : "True if this result provides an adapted power",
+                      "example" : false
+                    },
+                    "adapted_power" : {
+                      "type" : "number",
+                      "description" : "Power adaptation result in kVA",
+                      "format" : "double",
+                      "example" : 120.0
+                    },
+                    "cost" : {
+                      "type" : "object",
+                      "properties" : {
+                        "status" : {
+                          "type" : "string",
+                          "description" : "Status on cost estimation",
+                          "example" : "Estimated",
+                          "enum" : [ "Estimated", "QuoteNeeded" ]
+                        },
+                        "fixed_part" : {
+                          "type" : "number",
+                          "description" : "How much the connection works will cost to the customer, without the linear part",
+                          "example" : 2705.76
+                        },
+                        "linear_part" : {
+                          "type" : "number",
+                          "description" : "How much the connection works will cost to the customer, linear part. May equals 0.",
+                          "example" : 138.19
+                        }
+                      },
+                      "description" : "This point has a cost estimation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202" : {
+            "description" : "La demande a bien été traitée, mais le calcul est encore en cours. L'estimation de temps restant est mise à jour.",
+            "headers" : {
+              "X-RemainingTimeHigh" : {
+                "description" : "Estimation haute de la durée du traitement : nombre de secondes que l'on peut par exemple afficher à l'utilisateur final",
+                "schema" : {
+                  "type" : "number"
+                }
+              },
+              "X-RemainingTimeLow" : {
+                "description" : "Estimation basse de la durée du traitement : nombre de secondes minimal à attendre avant la prochaine tentative de récupération de la réponse",
+                "schema" : {
+                  "type" : "number"
+                }
+              }
+            },
+            "content" : { }
+          },
+          "400" : {
+            "description" : "Mauvais format",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "title" : "WrongFormatException",
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "bad_request",
+                      "enum" : [ "bad_request" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "Lattitude must be in range [-90.000000 , 90.000000]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource introuvable",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "no_data_found",
+                      "enum" : [ "no_data_found" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "The requested information was not found",
+                      "enum" : [ "The requested information was not found" ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur Serveur",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "technical_error"
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "technical error, please try again later"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/MV" : {
+      "post" : {
+        "tags" : [ "MV" ],
+        "summary" : "Demande de simulation d'un raccordement monopoint en HTA",
+        "description" : "Crée une demande de simulation de raccordement monopoint sur le réseau d'électricité HTA le plus proche pour une installation sur la base de sa localisation et de la puissance de raccordement envisagée",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "5b5f2bee-1808-3f7e-bdfa-9415ea3708b8"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "ext.hml.api.enedis.fr"
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "required" : [ "installation_gps_location", "serviced_plot", "usage" ],
+                "type" : "object",
+                "properties" : {
+                  "installation_gps_location" : {
+                    "required" : [ "latitude", "longitude" ],
+                    "type" : "object",
+                    "properties" : {
+                      "latitude" : {
+                        "type" : "number",
+                        "description" : "the angular distance to the equator (90 being north pole, -90 being south pole)",
+                        "example" : 44.069055
+                      },
+                      "longitude" : {
+                        "type" : "number",
+                        "description" : "the angular distance to Greenwich meridian (0 being Greenwich, 180/-180 being near Waiyevo)",
+                        "example" : 4.142446
+                      }
+                    }
+                  },
+                  "usage" : {
+                    "type" : "string",
+                    "description" : "The types of usage",
+                    "example" : "ProductionOverConsumption",
+                    "enum" : [ "Consumption", "Production ", "ConsumptionAndProduction", "ProductionOverConsumption" ]
+                  },
+                  "serviced_plot" : {
+                    "type" : "boolean",
+                    "description" : "True means there are facilities on the landspot that make installation easier.",
+                    "example" : false
+                  },
+                  "adapt_power" : {
+                    "type" : "boolean",
+                    "description" : "True if TeR@ has to adapt power to remove constraints",
+                    "example" : false
+                  },
+                  "injected_power" : {
+                    "type" : "number",
+                    "description" : "The power that is injected (produced) by the producer in kVA or kW",
+                    "format" : "double",
+                    "example" : 16.0
+                  },
+                  "subscribed_power" : {
+                    "type" : "number",
+                    "description" : "The power that is extracted (consumed) by the client in kVA or kW",
+                    "format" : "double",
+                    "example" : 16.0
+                  },
+                  "installed_phase" : {
+                    "type" : "string",
+                    "description" : "The nature of the cable already installed. AN for monophasic, ABCN for triphasic",
+                    "example" : "AN",
+                    "enum" : [ "AN", "ABCN" ]
+                  },
+                  "sales_strategy" : {
+                    "type" : "string",
+                    "description" : "THow the produced current will be sold to Enedis. Surplus being 'we want to sell what we do not consume localy'. Totality being 'we sell everything and rebuy what we consume'.",
+                    "example" : "Surplus",
+                    "enum" : [ "Surplus", "Totality" ]
+                  }
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "La demande a bien été traitée, mais le calcul est encore en cours. L'estimation de temps restant est mise à jour.",
+            "headers" : {
+              "X-CreationTime" : {
+                "description" : "Horodate de création de la simulation. Format HTTP-date (cf. RFC 7231)",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-RemainingTimeHigh" : {
+                "description" : "Estimation haute de la durée du traitement : nombre de secondes que l'on peut par exemple afficher à l'utilisateur final",
+                "schema" : {
+                  "type" : "number"
+                }
+              },
+              "Location" : {
+                "description" : "Identifiant du numéro de demande générée par le SI au format : Location: https://{API endpoint}/tera_externe/1.4/simulation/{request_id}",
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-RemainingTimeLow" : {
+                "description" : "Estimation basse de la durée du traitement : nombre de secondes minimal à attendre avant la prochaine tentative de récupération de la réponse",
+                "schema" : {
+                  "type" : "number"
+                }
+              }
+            },
+            "content" : { }
+          },
+          "400" : {
+            "description" : "Mauvais format",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "title" : "WrongFormatException",
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "bad_request",
+                      "enum" : [ "bad_request" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "Lattitude must be in range [-90.000000 , 90.000000]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur Serveur",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "technical_error"
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "technical error, please try again later"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited",
+        "x-codegen-request-body-name" : "body"
+      }
+    },
+    "/MV/{request_id}" : {
+      "get" : {
+        "tags" : [ "MV" ],
+        "summary" : "Résultat de la demande de simulation d'un raccordement monopoint en HTA",
+        "description" : "Donne la complexité ainsi qu’éventuellement le coût d'un raccordement HTA monopoint dont l'identifiant de demande est passé en paramètre",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "5b5f2bee-1808-3f7e-bdfa-9415ea3708b8"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "ext.hml.api.enedis.fr"
+        }, {
+          "name" : "request_id",
+          "in" : "path",
+          "description" : "Numéro de la demande de simulation renvoyée dans la réponse de la création de demande (voir methode POST)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : ""
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "required" : [ "insee_code", "result_code" ],
+                  "type" : "object",
+                  "properties" : {
+                    "capacity_data_status" : {
+                      "type" : "string",
+                      "description" : "Status on capacity data",
+                      "example" : "None",
+                      "enum" : [ "None", "Valid", "Corrupted" ]
+                    },
+                    "s3renr_remaining_capacity" : {
+                      "type" : "number",
+                      "description" : "If we do not take clients to plug waiting line in account, this is the power the substation can handle",
+                      "format" : "double",
+                      "example" : 140.98
+                    },
+                    "s3renr_capacity_through_works" : {
+                      "type" : "number",
+                      "description" : "What power will be set aside for RE on this substation, due to S3REnR, after works",
+                      "format" : "double",
+                      "example" : 140.98
+                    },
+                    "s3renr_capacity_no_works" : {
+                      "type" : "number",
+                      "description" : "What power will be set aside for RE on this substation, due to S3REnR, without any works",
+                      "format" : "double",
+                      "example" : 140.98
+                    },
+                    "insee_code" : {
+                      "type" : "string",
+                      "description" : "Designate the town where the Meter is. Note, this is a string. For instance, Ajaccio Insee code is '2A004'",
+                      "example" : "48198"
+                    },
+                    "substation_name" : {
+                      "type" : "string",
+                      "description" : "Designate the RTE name from the substation the Meter is attached to",
+                      "example" : "PLANCHAMP"
+                    },
+                    "result_code" : {
+                      "type" : "string",
+                      "description" : "Status of the calculation",
+                      "example" : "MVLongConnection",
+                      "enum" : [ "Error", "OutOfEnedisZone", "NoSubStationWithTotalCapacity", "MVLongConnection", "NoSubStationWithRECapacity", "SubstationWorks", "MVGridWorks" ]
+                    },
+                    "tan_phi" : {
+                      "type" : "number",
+                      "description" : "Tangeant Phi. Phi being the phase shift. Also known as power factor",
+                      "format" : "double",
+                      "example" : 0.4
+                    },
+                    "connection_length" : {
+                      "type" : "number",
+                      "description" : "Length of the connection (meters)",
+                      "format" : "double",
+                      "example" : 9.37
+                    },
+                    "substation_gps" : {
+                      "type" : "object",
+                      "properties" : {
+                        "substation_longitude" : {
+                          "type" : "number",
+                          "description" : "the angular distance to Greenwich meridian (0 being Greenwich, 180/-180 being near Waiyevo)",
+                          "format" : "double",
+                          "example" : 4.142446
+                        },
+                        "substation_latitude" : {
+                          "type" : "number",
+                          "description" : "the angular distance to the equator (90 being north pole, -90 being south pole)",
+                          "format" : "double",
+                          "example" : 44.069055
+                        }
+                      }
+                    },
+                    "cost" : {
+                      "type" : "object",
+                      "properties" : {
+                        "status" : {
+                          "type" : "string",
+                          "description" : "Status on cost estimation",
+                          "example" : "Estimated",
+                          "enum" : [ "Estimated", "QuoteNeeded" ]
+                        },
+                        "fixed_part" : {
+                          "type" : "number",
+                          "description" : "How much the connection works will cost to the customer, without the linear part",
+                          "example" : 2705.76
+                        },
+                        "linear_part" : {
+                          "type" : "number",
+                          "description" : "How much the connection works will cost to the customer, linear part. May equals 0.",
+                          "example" : 138.19
+                        }
+                      },
+                      "description" : "This point has a cost estimation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202" : {
+            "description" : "La demande a bien été traitée, mais le calcul est encore en cours. L'estimation de temps restant est mise à jour.",
+            "headers" : {
+              "X-RemainingTimeHigh" : {
+                "description" : "Estimation haute de la durée du traitement : nombre de secondes que l'on peut par exemple afficher à l'utilisateur final",
+                "schema" : {
+                  "type" : "number"
+                }
+              },
+              "X-RemainingTimeLow" : {
+                "description" : "Estimation basse de la durée du traitement : nombre de secondes minimal à attendre avant la prochaine tentative de récupération de la réponse",
+                "schema" : {
+                  "type" : "number"
+                }
+              }
+            },
+            "content" : { }
+          },
+          "400" : {
+            "description" : "Mauvais format",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "title" : "WrongFormatException",
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "bad_request",
+                      "enum" : [ "bad_request" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "Lattitude must be in range [-90.000000 , 90.000000]"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource introuvable",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "required" : [ "error", "error_description" ],
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Le code identifiant l'erreur",
+                      "example" : "no_data_found",
+                      "enum" : [ "no_data_found" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Le message expliquant l'erreur",
+                      "example" : "The requested information was not found",
+                      "enum" : [ "The requested information was not found" ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur Serveur",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "technical_error"
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "technical error, please try again later"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

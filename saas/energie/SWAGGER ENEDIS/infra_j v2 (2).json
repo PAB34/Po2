@@ -1,0 +1,228 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "infra_j",
+    "description" : "L'API Infra-J permet au demandeur de disposer, pour un compteur actif, des données brutes de courbe de charge, courbe de tension et paramètres de tarifs dynamiques issues du compteur sur les dernières 24 heures, avec une fraicheur des données de 30 min (Prestation F375A/P375A)\nLa réponse de ce service est instantanée. ",
+    "version" : "2.0"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/daily_metering_data_request/v2"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/" : {
+      "post" : {
+        "summary" : "Demande de transmission de données de mesures infra-journalières",
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête (application/json)",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l’équipement qui a émis la requete (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom du serveur du service provider (client)",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "*/*" : {
+              "schema" : {
+                "required" : [ "consumption", "contact_canal_id", "dynamic_tarification_parameters", "holder_agreement_declaration", "index", "load_curve", "production", "usage_point_Id" ],
+                "type" : "object",
+                "properties" : {
+                  "usage_point_Id" : {
+                    "type" : "string",
+                    "description" : "Identifiant PRM du point faisant l'objet de la demande"
+                  },
+                  "holder_agreement_declaration" : {
+                    "type" : "array",
+                    "description" : "Déclaration de détenir l’accord du (ou des) titulaire(s) du point pour accéder à ses (leurs) données d'injection et/ou de soutirage",
+                    "items" : {
+                      "required" : [ "consumption_agreement", "holder_name", "production_agreement" ],
+                      "type" : "object",
+                      "properties" : {
+                        "holder_name" : {
+                          "type" : "string",
+                          "description" : "Dénomination sociale du titulaire en injection et/ou soutirage du point"
+                        },
+                        "production_agreement" : {
+                          "type" : "string",
+                          "description" : "Booléen précisant s’il s’agit d’une déclaration d’accord sur les données en injection : <br/>\n- « true » si la déclaration d’accord porte sur les données en injection \n- « false » sinon",
+                          "example" : "true",
+                          "enum" : [ "true", "false" ]
+                        },
+                        "consumption_agreement" : {
+                          "type" : "string",
+                          "description" : "Booléen précisant s’il s’agit d’une déclaration d’accord sur les données en soutirage : <br/>\n- « true » si la déclaration d’accord porte sur les données en soutirage\n- « false » sinon",
+                          "example" : "true",
+                          "enum" : [ "true", "false" ]
+                        }
+                      }
+                    }
+                  },
+                  "contact_canal_id" : {
+                    "type" : "string",
+                    "description" : "Canal de mise à disposition des fichiers de données demandées"
+                  },
+                  "production" : {
+                    "type" : "string",
+                    "description" : "Booléen précisant si les données en injection sont demandées :<br/>\n- «true» pour demander les données en injection<br/>\n- «false» sinon<br/>\n\nCeci s’applique aux données de courbe de charge, de tension et d’index.",
+                    "example" : "true",
+                    "enum" : [ "true", "false" ]
+                  },
+                  "consumption" : {
+                    "type" : "string",
+                    "description" : "Booléen précisant si les données en soutirage sont demandées :<br/>\n- «true» pour demander les données en soutirage<br/>\n- «false» sinon<br/>\n\nCeci s’applique aux données de courbe de charge et de tension, d’index et aux paramètres de tarification dynamique.",
+                    "example" : "true",
+                    "enum" : [ "true", "false" ]
+                  },
+                  "load_curve" : {
+                    "type" : "string",
+                    "description" : "Booléen précisant si les données des courbes de charge et de la courbe de tension sont demandées :<br/>\n- «true»  pour demander les données des courbes de charge et la courbe de tension <br/>\n- «false» sinon",
+                    "example" : "true",
+                    "enum" : [ "true", "false" ]
+                  },
+                  "index" : {
+                    "type" : "string",
+                    "description" : "Booléen précisant si les données d’index sont demandées :<br/>\n- «true» pour demander les données d’index <br/>\n- «false» sinon",
+                    "example" : "true",
+                    "enum" : [ "true", "false" ]
+                  },
+                  "dynamic_tarification_parameters" : {
+                    "type" : "string",
+                    "description" : "Booléen précisant si les données de gestion de la tarification dynamique sont demandées :\n- «true» pour demander les paramètres de tarification dynamique <br/>\n- «false» sinon <br/>",
+                    "example" : "true",
+                    "enum" : [ "true", "false" ]
+                  }
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "200 OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "required" : [ "request_Id" ],
+                  "type" : "object",
+                  "properties" : {
+                    "request_Id" : {
+                      "type" : "string",
+                      "description" : "Identifiant de la demande. Cet identifiant sera dans le nom du fichier généré à l’issu du traitement.",
+                      "example" : "M005MSEJ"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Bad Request",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "Invalid_request",
+                      "enum" : [ "Invalid_request", "ADAM-ERR0117", "ADAM-ERR0118", "ADAM-ERR0116", "ADAM-ERR0110", "ADAM-ERR0007", "ADAM-ERR0010", "ADAM-ERR0011", "ADAM-ERR0012", "ADAM-ERR0013", "ADAM-ERR0019", "ADAM-ERR0023", "ADAM-ERR0024", "ADAM-ERR0059", "ADAM-ERR0094", "ADAM-ERR0106", "ADAM-ERR0111", "ADAM-ERR0112", "ADAM-ERR0115", "ADAM-ERR0067", "ADAM-ERR0109", "ADAM-ERR0120" ]
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "Empty header, bad request format, partial or incorrect data",
+                      "enum" : [ "Empty header, bad request format, partial or incorrect data", "Votre demande nécessite l'autorisation expresse du client pour l'injection.", "Votre demande nécessite l'autorisation expresse du client pour le soutirage.", "Le sens de la mesure (injection et/ou soutirage) doit être précisé dans la demande.", "La demande ne peut pas aboutir, vous avez une demande strictement identique en cours qui date de moins de 30 minutes.", "La demande ne peut pas aboutir car le point n’est pas en service.", "La demande ne peut pas aboutir, le dispositif de comptage du point porte une particularité différente de standard.", "La demande ne peut pas aboutir car une prestation de raccordement provisoire courte durée est en cours sur le point.", "La demande ne peut pas aboutir car le point est coupé.", "La demande ne peut pas aboutir car le point est sur un contrat producteur.", "La demande ne peut pas aboutir car le point est un point fictif de regroupement TURPE.", "La demande ne peut pas aboutir car le point ne dispose pas d’un compteur téléopérable. Une intervention comptage doit être demandée (changement de compteur ou intervention sur le dispositif de télécommunication).", "La demande ne peut pas aboutir car l’installation de comptage du point est bloquée.", "La demande ne peut pas aboutir, le point n'est pas alimenté.", "La demande ne peut pas aboutir car le point est Limité.", "La demande ne peut pas aboutir car le média de relevé n’est pas un boitier IP.", "La demande ne peut pas aboutir, le SI contractuel du point n'est pas compatible avec la demande.", "La demande ne peut pas aboutir, la donnée n'est pas disponible sur ce type de compteur.", "Le compteur n'est pas de type PME-PMI, ICE, ICE4Q ou SAPHIR.", "La demande ne peut pas aboutir car le titulaire du point ne peut pas être identifié", "Aucun rôle n'est actif à date de traitement.", "La demande ne peut pas aboutir, l'entreprise demandeuse n'est pas reconnue comme référent du point à date de la demande." ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Unauthorized",
+            "content" : { }
+          },
+          "500" : {
+            "description" : "Internal Error",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "error" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système.",
+                      "example" : "technical_error"
+                    },
+                    "error_description" : {
+                      "type" : "string",
+                      "description" : "Description de l’erreur correspondant au code.",
+                      "example" : "Technical error. Please try later."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503" : {
+            "description" : "Le serveur est momentanément inaccessible",
+            "content" : { }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-codegen-request-body-name" : "body"
+      }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

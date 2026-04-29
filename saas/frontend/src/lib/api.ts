@@ -600,3 +600,117 @@ export async function deleteLocalRequest(token: string, buildingId: number, loca
 
   return parseResponse<void>(response);
 }
+
+// --- Energie ---
+
+export type EnergieKpis = {
+  total_prms: number;
+  total_subscribed_kva: number;
+};
+
+export type PrmListItem = {
+  usage_point_id: string;
+  name: string;
+  address: string;
+  contractor: string;
+  subscribed_power_kva: number | null;
+  tariff: string | null;
+  segment: string | null;
+  connection_state: string | null;
+  services_level: string | null;
+};
+
+export type EnergieOverview = {
+  kpis: EnergieKpis;
+  prms: PrmListItem[];
+};
+
+export type PrmContract = {
+  usage_point_id: string;
+  contract_start: string | null;
+  contract_type: string | null;
+  contractor: string | null;
+  tariff: string | null;
+  subscribed_power_kva: number | null;
+  segment: string | null;
+  organization_name: string | null;
+  name: string | null;
+};
+
+export type PrmAddress = {
+  address_number_street_name: string | null;
+  address_postal_code_city: string | null;
+  address_staircase_floor_apartment: string | null;
+  address_building: string | null;
+  address_insee_code: string | null;
+};
+
+export type PrmConnection = {
+  serial_number: string | null;
+  connection_state: string | null;
+  voltage_level: string | null;
+  subscribed_kva: number | null;
+};
+
+export type PrmSummary = {
+  segment: string | null;
+  activation_date: string | null;
+  last_power_change_date: string | null;
+  services_level: string | null;
+};
+
+export type PrmDetail = {
+  usage_point_id: string;
+  contract: PrmContract;
+  address: PrmAddress;
+  connection: PrmConnection;
+  summary: PrmSummary;
+};
+
+export type MaxPowerPoint = {
+  date: string;
+  value_va: number;
+};
+
+export type PrmMaxPowerData = {
+  usage_point_id: string;
+  points: MaxPowerPoint[];
+};
+
+export type LoadCurvePoint = {
+  datetime: string;
+  value_w: number;
+};
+
+export type PrmLoadCurveData = {
+  usage_point_id: string;
+  points: LoadCurvePoint[];
+};
+
+export async function fetchEnergieOverview(token: string): Promise<EnergieOverview> {
+  const response = await fetch(`${apiBaseUrl}/energie`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergieOverview>(response);
+}
+
+export async function fetchPrmDetail(token: string, prmId: string): Promise<PrmDetail> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmDetail>(response);
+}
+
+export async function fetchPrmMaxPower(token: string, prmId: string): Promise<PrmMaxPowerData> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/max-power`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmMaxPowerData>(response);
+}
+
+export async function fetchPrmLoadCurve(token: string, prmId: string, days = 7): Promise<PrmLoadCurveData> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/load-curve?days=${days}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmLoadCurveData>(response);
+}

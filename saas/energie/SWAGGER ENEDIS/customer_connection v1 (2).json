@@ -1,0 +1,226 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "customer_connection",
+    "description" : "Cette API vous permet de consulter les informations techniques de connexion d’un de vos compteurs avec le réseau de distribution public géré par Enedis.<br>Les données suivantes sont consultables :<br> -\tTension d’alimentation<br> -\tNombre de Phase(s)<br> -\tPuissance de raccordement ou puissance limite de soutirage",
+    "version" : "1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/connection/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/{usage_point_id}" : {
+      "get" : {
+        "tags" : [ "connection" ],
+        "summary" : "Récupération de la connexion d'un PRM",
+        "operationId" : "getDonneesGenerales",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "haQIisPSLX466GzBuOe81lpJwWSbyEjGR1Xowfio89zDNWjNK2qg1G"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;\nx-example: ext.hml.api.enedis.fr  ",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "usage_point_id",
+          "in" : "path",
+          "description" : "Identifiant du PRM",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "siren",
+          "in" : "header",
+          "description" : "siren de la colloc demandant les donnees",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Connexion du PRM.",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/connection"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Requête invalide",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressources",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Connexion ou PRM non existant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "connection" : {
+        "type" : "object",
+        "properties" : {
+          "serial_number" : {
+            "type" : "number"
+          },
+          "connection_state" : {
+            "type" : "string",
+            "example" : "Alimenté"
+          },
+          "voltage_level" : {
+            "type" : "string",
+            "example" : "HTA"
+          },
+          "phase_count" : {
+            "type" : "string"
+          },
+          "consumption_connection_power" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number"
+              },
+              "unit" : {
+                "type" : "string"
+              }
+            }
+          },
+          "generation_connection_power" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number"
+              },
+              "unit" : {
+                "type" : "string"
+              }
+            }
+          },
+          "nominal_service_voltage" : {
+            "type" : "object",
+            "properties" : {
+              "value" : {
+                "type" : "number"
+              },
+              "unit" : {
+                "type" : "string"
+              }
+            }
+          }
+        }
+      },
+      "error" : {
+        "required" : [ "code", "libelle" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "libelle" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

@@ -1,0 +1,244 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "API usage_point_id_perimeter synchrone",
+    "description" : "Cette API vous permet de retrouver l’ensemble des identifiants de vos compteurs (numéro de PRM).Des critères de filtre sont possibles (SIRET, code postal, segment de consommation / production, puissance souscrite).",
+    "version" : "1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/usage_point_id_perimeter/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/usage_point_id" : {
+      "post" : {
+        "tags" : [ "usage_point_id" ],
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requ�te",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de r�ponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth d�livr� � l�application cliente lors de la phase pr�alable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "haQIisPSLX466GzBuOe81lpJwWSbyEjGR1Xowfio89zDNWjNK2qg1G"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'�quipement qui a �mis la requ�tes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et num�ro de port TCP si diff�rent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;\nx-example: ext.hml.api.enedis.fr  ",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/usagePointIdRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "L'ordre de publication a été pris en compte",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/usagePointIdResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Requête invalide",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressource",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non implémentée pour l'instant",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited",
+        "x-codegen-request-body-name" : "body"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "usagePointIdRequest" : {
+        "required" : [ "page_number" ],
+        "type" : "object",
+        "properties" : {
+          "page_number" : {
+            "type" : "integer",
+            "description" : "Ce champ correspond au numéro de la page retournée par PRM. Chaque page contiendra 3000 PRM. Exemple :si une collectivité a 6500 compteurs, l'API retournera 3 pages. Il faudra effectuer 3 appels. L'appel de la page 1 contiendra les premiers 3000 PRM retournés par la requête, puis l'appel de la page 2 contiendra les 3000 suivants et enfin l'appel de la page 3 les 500 restants.",
+            "example" : 1
+          },
+          "siret_number" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : "string"
+            }
+          },
+          "postal_code_city" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : "string"
+            }
+          },
+          "segment" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "example" : "C5"
+            }
+          },
+          "subscribed_power" : {
+            "type" : "object",
+            "properties" : {
+              "lower_value" : {
+                "type" : "number",
+                "example" : 0.1
+              },
+              "higher_value" : {
+                "type" : "number",
+                "example" : 10.0
+              }
+            }
+          }
+        }
+      },
+      "usagePointIdResponse" : {
+        "type" : "object",
+        "properties" : {
+          "query_parameters" : {
+            "type" : "object",
+            "properties" : {
+              "usage_point_id_total_count" : {
+                "type" : "number",
+                "description" : "le nombre total de PRM renvoyés par la requête"
+              },
+              "page_total_count" : {
+                "type" : "number",
+                "description" : "le nombre de pages retournées par le SI cœur . Chaque page contiendra au max 3000 PRM",
+                "example" : 1.0
+              },
+              "actual_page_number" : {
+                "type" : "number",
+                "description" : "le numéro de page courante",
+                "example" : 1.0
+              },
+              "usage_point_id" : {
+                "type" : "array",
+                "items" : {
+                  "type" : "string",
+                  "example" : "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "error" : {
+        "required" : [ "code", "libelle" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "libelle" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

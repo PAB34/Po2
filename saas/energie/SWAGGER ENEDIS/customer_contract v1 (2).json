@@ -1,0 +1,387 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "customer_contract",
+    "description" : "Cette API vous permet de consulter toutes les informations contractuelles d’un de vos compteurs.\n Les données suivantes sont consultables (liste non exhaustive) :\n - La ou les puissance(s) souscrite(s)\n - Structure tarifaire\n - Identification et coordonnées du client final\n",
+    "version" : "1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/contract/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/{usage_point_id}" : {
+      "get" : {
+        "tags" : [ "contract" ],
+        "summary" : "Récupération des situations contractuelles courantes d'un PRM",
+        "operationId" : "getSituationsContractuelles",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l’application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "haQIisPSLX466GzBuOe81lpJwWSbyEjGR1Xowfio89zDNWjNK2qg1G"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;\nx-example: ext.hml.api.enedis.fr  ",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "usage_point_id",
+          "in" : "path",
+          "description" : "Identifiant du PRM",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "siren",
+          "in" : "query",
+          "description" : "siren de la colloc demandant les donnees",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Situations contractuelles courantes du PRM",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/contracts"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Requête invalide",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressource",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Situation contractuelle ou PRM non existant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "contracts" : {
+        "type" : "array",
+        "items" : {
+          "type" : "object",
+          "properties" : {
+            "usage_point_id" : {
+              "type" : "string",
+              "example" : "999999"
+            },
+            "contract_start" : {
+              "$ref" : "#/components/schemas/date"
+            },
+            "contract_type" : {
+              "type" : "string",
+              "example" : "Contrat 1"
+            },
+            "contractor" : {
+              "type" : "string",
+              "example" : "VILLE"
+            },
+            "balance_responsable_party" : {
+              "type" : "string",
+              "example" : "ACM_999"
+            },
+            "pricing_structure" : {
+              "type" : "string",
+              "example" : "STRUCTURE"
+            },
+            "distribution_tariff" : {
+              "type" : "string",
+              "example" : "Tarif HTA Courte Utilisation"
+            },
+            "supplier_tariff_profile" : {
+              "type" : "array",
+              "items" : {
+                "type" : "object",
+                "properties" : {
+                  "name" : {
+                    "type" : "string",
+                    "example" : "Heures Creuses Hiver/Saison Haute"
+                  },
+                  "power" : {
+                    "$ref" : "#/components/schemas/power"
+                  }
+                }
+              }
+            },
+            "distribution_tariff_profile" : {
+              "type" : "array",
+              "items" : {
+                "type" : "object",
+                "properties" : {
+                  "name" : {
+                    "type" : "string",
+                    "example" : "Heures Creuses Hiver/Saison Haute"
+                  },
+                  "power" : {
+                    "$ref" : "#/components/schemas/power"
+                  }
+                }
+              }
+            },
+            "supplier_mobile_peak" : {
+              "type" : "string",
+              "description" : "Concerne les compteurs dont le contrat comprend une pointe mobile. L’énergie consommée est alors comptabilisée selon une grille tarifaire spécifique. Concerne les compteurs communicants"
+            },
+            "distribution_mobile_peak" : {
+              "type" : "string",
+              "description" : "Concerne les compteur ayant une pointe mobile distributeur :<br> concerne les compteurs en contrat CARD et les C2/C3/C4 qui doivent s’effacer en cas de pointe PP1 définie par RTE."
+            },
+            "subscribed_power" : {
+              "$ref" : "#/components/schemas/power"
+            },
+            "segment" : {
+              "type" : "string",
+              "example" : "P1"
+            },
+            "customer" : {
+              "type" : "object",
+              "properties" : {
+                "customer" : {
+                  "type" : "object",
+                  "properties" : {
+                    "adress" : {
+                      "$ref" : "#/components/schemas/address"
+                    },
+                    "contact_data" : {
+                      "$ref" : "#/components/schemas/contact_data"
+                    },
+                    "person" : {
+                      "$ref" : "#/components/schemas/person"
+                    },
+                    "organization" : {
+                      "$ref" : "#/components/schemas/organization"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "address" : {
+        "type" : "object",
+        "properties" : {
+          "line1" : {
+            "type" : "string",
+            "description" : "Nom et prénom"
+          },
+          "line2" : {
+            "type" : "string",
+            "description" : "Appartement/Etage"
+          },
+          "line3" : {
+            "type" : "string",
+            "description" : "Batiment, Residence"
+          },
+          "line4" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "line5" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "line6" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "line7" : {
+            "type" : "string",
+            "example" : "string"
+          }
+        }
+      },
+      "contact_data" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "landline" : {
+            "type" : "string",
+            "example" : "9.9999999"
+          },
+          "phone" : {
+            "type" : "string",
+            "example" : "9.9999999"
+          }
+        }
+      },
+      "organization" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "commercial_name" : {
+            "type" : "string",
+            "description" : "Nom de l'entreprise client"
+          },
+          "business_code" : {
+            "type" : "string",
+            "description" : "Code NAF"
+          },
+          "siret_number" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "siren_number" : {
+            "type" : "string",
+            "example" : "string"
+          }
+        }
+      },
+      "person" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "lastname" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "firstname" : {
+            "type" : "string",
+            "example" : "string"
+          }
+        }
+      },
+      "date" : {
+        "pattern" : "^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}\\:\\d{2}\\:\\d{2}\\+\\d{4}$",
+        "type" : "string",
+        "description" : "Date au format ISO-8601 avec fuseau horaire",
+        "example" : "2021-01-01T00:00:00+0100"
+      },
+      "power" : {
+        "type" : "object",
+        "properties" : {
+          "unit" : {
+            "type" : "string",
+            "example" : "kW"
+          },
+          "value" : {
+            "type" : "string",
+            "example" : "30"
+          }
+        }
+      },
+      "error" : {
+        "required" : [ "code", "libelle" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "libelle" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

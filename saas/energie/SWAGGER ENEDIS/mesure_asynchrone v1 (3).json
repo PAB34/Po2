@@ -1,0 +1,249 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "mesure_asynchrone",
+    "description" : "Cette API vous permet de consulter les données quotidiennes de comptage du soutirage (consommation d’électricité) et d'injection (production d’électricité), sur le réseau général de distribution d’électricité, d’une liste de compteurs communicants dont vous êtes titulaire. Elle vous permet de recevoir en asynchrone les données d’une liste de compteurs sur un canal FTP de votre choix.Le nombre maximum par appel est de 1000 compteurs.\n Les données mesurées disponibles sont : \n* La consommation et/ou la production quotidienne\n* La courbe de charge de consommation et/ou de production\n* Les données d'index de consommation et/ou de production\n* La puissance maximum de consommation",
+    "termsOfService" : "urn:tos",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/publication_mesures/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "tags" : [ {
+    "name" : "dossier-rest",
+    "description" : "Dossier Rest"
+  } ],
+  "paths" : {
+    "/commanderPublicationPonctuelle" : {
+      "post" : {
+        "tags" : [ "dossier-rest" ],
+        "summary" : "Commande publication ponctuelle",
+        "description" : "Permet d'effectuer des demandes de publication ponctuelles",
+        "operationId" : "commanderPublicationPonctuelleUsingPOST",
+        "parameters" : [ {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes(hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "description" : "commanderBody",
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CommanderPublicationPonctuelleDemande"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DossierReponse"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Unauthorized",
+            "content" : { }
+          },
+          "403" : {
+            "description" : "Forbidden",
+            "content" : { }
+          },
+          "404" : {
+            "description" : "Not Found",
+            "content" : { }
+          },
+          "500" : {
+            "description" : "Not Found",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited",
+        "x-codegen-request-body-name" : "commanderBody"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "CanauxContact" : {
+        "title" : "CanauxContact",
+        "type" : "object",
+        "properties" : {
+          "proprietaireCanal" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ProprietaireCanal"
+            }
+          }
+        },
+        "description" : "Liste des canaux de contact sur lesquels les mesures seront publiées."
+      },
+      "CanauxId" : {
+        "title" : "CanauxId",
+        "type" : "object",
+        "properties" : {
+          "canalContactId" : {
+            "type" : "string",
+            "description" : "Identifiant du canal de contact",
+            "example" : "999999999"
+          }
+        }
+      },
+      "CommanderPublicationPonctuelleDemande" : {
+        "title" : "CommanderPublicationPonctuelleDemande",
+        "type" : "object",
+        "properties" : {
+          "donneesGenerales" : {
+            "$ref" : "#/components/schemas/DonneesGenerales"
+          },
+          "listePoints" : {
+            "$ref" : "#/components/schemas/ListePoints"
+          }
+        }
+      },
+      "DonneesGenerales" : {
+        "title" : "DonneesGenerales",
+        "type" : "object",
+        "properties" : {
+          "canauxContact" : {
+            "$ref" : "#/components/schemas/CanauxContact"
+          },
+          "dateDebut" : {
+            "type" : "string",
+            "description" : "Date de début de la période demandée (yyyy-MM-DD). La profondeur de données autorisée dépend du type de données: Pour ENERGIE/PMAX/IDX, la profondeur de données maximale autorisée est de 3 ans. Pour CDC,la profondeur de données maximale autorisée est de 2 ans. ",
+            "example" : "2025-01-21"
+          },
+          "dateFin" : {
+            "type" : "string",
+            "description" : "Date de fin de la période demandée (yyyy-MM-DD)",
+            "example" : "2025-01-25"
+          },
+          "typeDonnee" : {
+            "type" : "string",
+            "description" : "Type des mesures à publier. Les mesures autorisées sont: La puissance maximum atteinte (PMAX), les énergies quotidiennes (ENERGIE), la courbe de charge (CDC), et les index (IDX).NB: les demandes PMAX sont autorisées uniquement pour les prm C5.",
+            "example" : "2025-01-25",
+            "enum" : [ "PMAX", "ENERGIE", "IDX", "CDC" ]
+          }
+        }
+      },
+      "DossierReponse" : {
+        "title" : "DossierReponse",
+        "type" : "object",
+        "properties" : {
+          "dossierId" : {
+            "type" : "integer",
+            "description" : "Identifiant du dossier de suivi de la demande",
+            "format" : "int64"
+          }
+        }
+      },
+      "ListePoints" : {
+        "title" : "ListePoints",
+        "type" : "object",
+        "properties" : {
+          "injection" : {
+            "type" : "boolean",
+            "description" : "Valorisé à true pour demander la publication des mesures en production. NB: Un seul des deux booléens injection et soutirage doit être à true, et l'autre à false.",
+            "example" : false
+          },
+          "soutirage" : {
+            "type" : "boolean",
+            "description" : "Valorisé à true pour demander la publication des mesures en consommation",
+            "example" : true
+          },
+          "points" : {
+            "type" : "array",
+            "description" : "Liste des points de livraison. NB: une demande peut contenir au maximum 1000 points de livraison. Au delà de cette limite, le service renverra un message d'erreur. NB: Un seul des deux booléens injection et soutirage doit être à true, et l'autre à false.",
+            "items" : {
+              "$ref" : "#/components/schemas/Point"
+            }
+          }
+        }
+      },
+      "Point" : {
+        "title" : "Point",
+        "type" : "object",
+        "properties" : {
+          "pointId" : {
+            "type" : "string",
+            "description" : "Identifiant du point de livraison (PRM)",
+            "example" : "99999999999999"
+          }
+        }
+      },
+      "ProprietaireCanal" : {
+        "title" : "ProprietaireCanal",
+        "type" : "object",
+        "properties" : {
+          "canauxId" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/CanauxId"
+            }
+          }
+        },
+        "description" : "Objet contenant les informations relatives à un canal de contact"
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

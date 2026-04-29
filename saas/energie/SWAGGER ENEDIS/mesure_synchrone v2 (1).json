@@ -1,0 +1,2031 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "mesure_synchrone",
+    "description" : "Cette API vous permet de consulter les données quotidiennes de comptage du soutirage (consommation d’électricité) et d'injection (production d’électricité) sur le réseau général de distribution d’électricité, des compteurs communicants dont vous êtes titulaire. La réponse de ce service est instantanée. \n\nLes données mesurées disponibles sont :\n* La consommation et/ou la production quotidienne\n* La courbe de charge de consommation et/ou de production\n* Les données d'index de consommation et/ou de production\n* La puissance maximum de consommation",
+    "version" : "v2"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/mesures/v2"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/metering_data/consumption_load_curve" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Récupérer la puissance moyenne consommée quotidiennement, sur l'intervalle de mesure du compteur (par défaut 30 min)",
+        "description" : "Cette sous ressource renvoie les valeurs correspondant à des journées de mesure de la courbe de charge de consommation d'un client pour chaque jour de la période demandée. Les valeurs retournées sont des puissances moyennes de consommation sur l'intervalle de mesure du compteur (par défaut 30 minutes). Chaque valeur est horodatée. La courbe de charge s'obtient sur des journées complètes de minuit à minuit du jour suivant en heures locales. Un appel peut porter au maximum sur 7 jours consécutifs.  Un appel peut porter sur des données datant au maximum de 24 mois et 15 jours avant la date d'appel.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée, au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée, au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille. La date de fin ne peut être égale à la date de début.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "required" : [ "end", "interval_reading", "quality", "start", "usage_point_id" ],
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "description" : "Identifiant du point de livraison (PRM)",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2019-05-06T00:00:00.000Z"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2019-05-12T00:00:00.000Z"
+                        },
+                        "quality" : {
+                          "type" : "string",
+                          "example" : "BRUT",
+                          "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                        },
+                        "reading_type" : {
+                          "required" : [ "flow_direction", "unit" ],
+                          "type" : "object",
+                          "properties" : {
+                            "flow_direction" : {
+                              "type" : "string",
+                              "example" : "forward"
+                            },
+                            "measurement_kind" : {
+                              "type" : "string",
+                              "example" : "power"
+                            },
+                            "unit" : {
+                              "type" : "string",
+                              "description" : "Unité des données de mesure",
+                              "example" : "W",
+                              "enum" : [ "W", "kW", "MW", "VAr", "V" ]
+                            },
+                            "aggregate" : {
+                              "type" : "string",
+                              "example" : "average"
+                            }
+                          }
+                        },
+                        "interval_reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "required" : [ "date", "interval_length", "value" ],
+                            "type" : "object",
+                            "properties" : {
+                              "value" : {
+                                "type" : "string",
+                                "description" : "Valeur du point",
+                                "example" : "540"
+                              },
+                              "date" : {
+                                "type" : "string",
+                                "example" : "2019-05-06T03:00:00.000Z"
+                              },
+                              "interval_length" : {
+                                "type" : "string",
+                                "example" : "PT30M",
+                                "enum" : [ "PT10M : Pas de 10 minutes", "PT15M : Pas de 15 minutes", "PT30M : Pas de 30 minutes", "PT60M : Pas de 60 minutes" ]
+                              },
+                              "measure_type" : {
+                                "type" : "string",
+                                "description" : "Qualifie le type de mesure",
+                                "example" : "B",
+                                "enum" : [ "B : BRUT", "C : Corrigé", "R : Réel", "H : Puissance reconstituée", "P : Puissance reconstituée et coupure secteur", "D : Importé manuellement par le métier Enedis", "S : Coupure Secteur", "T : Coupure secteur courte", "F : Début de coupure secteur", "G : Fin de coupure secteur", "E : Estimé" ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Service non disponible."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "SLA dépassé."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/index_consumption" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Accès aux données d'index.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "description" : "Identifiant du point de livraison (PRM)",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2023-11-04"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2023-11-06"
+                        },
+                        "reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "quality" : {
+                                "type" : "string",
+                                "example" : "BRUT",
+                                "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                              },
+                              "context" : {
+                                "type" : "string",
+                                "description" : "Contexte de relève",
+                                "example" : "COL",
+                                "enum" : [ "COL : Collecte", "TOP : Teleoperation", "FMR : Flux de mesure regulier", "CRD : Compte rendu de demande ponctuelle", "CRI : Compte rendu d'intervention" ]
+                              }
+                            }
+                          }
+                        },
+                        "reading_type" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "flow_direction" : {
+                                "type" : "string",
+                                "example" : "forward"
+                              },
+                              "measurement_kind" : {
+                                "type" : "string",
+                                "example" : "DD",
+                                "enum" : [ "DD : Durée de dépassement", "DE : Dépassement énergétique", "DQ : Dépassement quadratique", "EA : Energie Active", "ER : Energie Réactive", "ERC : Energie Réactive Capacitive", "ERI : Energie Réactive Inductive", "PMA : Puissance Maximale Atteinte", "TF : Temps de fonctionnement", "TOUT : Ensemble des grandeurs physiques" ]
+                              },
+                              "unit" : {
+                                "type" : "string",
+                                "description" : "Unité des données de mesure",
+                                "enum" : [ "s", "Wh", "W", "VA", "VArh" ]
+                              }
+                            }
+                          }
+                        },
+                        "calendar" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "id_calendar" : {
+                                "type" : "string",
+                                "example" : "DIXXXXXX"
+                              },
+                              "label_calendar" : {
+                                "type" : "string",
+                                "description" : "Libellé du calendrier",
+                                "example" : "Avec différenciation temporelle et saisonnière"
+                              },
+                              "temporal_class" : {
+                                "type" : "array",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "id_temporal_class" : {
+                                      "type" : "string",
+                                      "description" : "Identifiant de la classe temporelle",
+                                      "example" : "HC"
+                                    },
+                                    "label_temporal_class" : {
+                                      "type" : "string",
+                                      "description" : "Libellé de la classe temporelle",
+                                      "example" : "Heures Creuses"
+                                    },
+                                    "id_quadrant" : {
+                                      "type" : "string",
+                                      "example" : "IDX_EAS_T"
+                                    },
+                                    "values" : {
+                                      "type" : "array",
+                                      "items" : {
+                                        "type" : "object",
+                                        "properties" : {
+                                          "date" : {
+                                            "type" : "string",
+                                            "example" : "2021-01-20 00:34:04"
+                                          },
+                                          "value" : {
+                                            "type" : "integer",
+                                            "description" : "Valeur de l'index",
+                                            "example" : 2503757000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "temporal_class_totalizer" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "id_quadrant" : {
+                                "type" : "string",
+                                "description" : "Code du cadran",
+                                "example" : "IDX_EAS_T"
+                              },
+                              "values" : {
+                                "type" : "array",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "date" : {
+                                      "type" : "string",
+                                      "example" : "2021-01-19 00:34:04"
+                                    },
+                                    "value" : {
+                                      "type" : "integer",
+                                      "description" : "Valeur de l'index",
+                                      "example" : 6681
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Service non disponible."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "SLA dépassé."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Code de l’erreur retourné par le système."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/index_production" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Accès aux données d'index.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2023-11-04"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2023-11-06"
+                        },
+                        "reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "quality" : {
+                                "type" : "string",
+                                "example" : "BRUT",
+                                "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                              },
+                              "context" : {
+                                "type" : "string",
+                                "example" : "COL",
+                                "enum" : [ "COL : Collecte", "TOP : Teleoperation", "FMR : Flux de mesure regulier", "CRD : Compte rendu de demande ponctuelle", "CRI : Compte rendu d'intervention" ]
+                              }
+                            }
+                          }
+                        },
+                        "reading_type" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "flow_direction" : {
+                                "type" : "string",
+                                "example" : "forward"
+                              },
+                              "measurement_kind" : {
+                                "type" : "string",
+                                "example" : "DD",
+                                "enum" : [ "DD : Durée de dépassement", "DE : Dépassement énergétique", "DQ : Dépassement quadratique", "EA : Energie Active", "ER : Energie Réactive", "ERC : Energie Réactive Capacitive", "ERI : Energie Réactive Inductive", "PMA : Puissance Maximale Atteinte", "TF : Temps de fonctionnement", "TOUT : Ensemble des grandeurs physiques" ]
+                              },
+                              "unit" : {
+                                "type" : "string",
+                                "description" : "Unité des données de mesure",
+                                "enum" : [ "s", "Wh", "W", "VA", "VArh" ]
+                              }
+                            }
+                          }
+                        },
+                        "calendar" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "id_calendar" : {
+                                "type" : "string",
+                                "example" : "DIXXXXXX"
+                              },
+                              "label_calendar" : {
+                                "type" : "string",
+                                "example" : "Avec différenciation temporelle et saisonnière"
+                              },
+                              "temporal_class" : {
+                                "type" : "array",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "id_temporal_class" : {
+                                      "type" : "string",
+                                      "example" : "HC"
+                                    },
+                                    "label_temporal_class" : {
+                                      "type" : "string",
+                                      "example" : "Heures Creuses"
+                                    },
+                                    "id_quadrant" : {
+                                      "type" : "string",
+                                      "example" : "IDX_EAS_T"
+                                    },
+                                    "values" : {
+                                      "type" : "array",
+                                      "items" : {
+                                        "type" : "object",
+                                        "properties" : {
+                                          "date" : {
+                                            "type" : "string",
+                                            "example" : "2021-01-20 00:34:04"
+                                          },
+                                          "value" : {
+                                            "type" : "integer",
+                                            "example" : 2503757000
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "temporal_class_totalizer" : {
+                          "type" : "array",
+                          "items" : {
+                            "type" : "object",
+                            "properties" : {
+                              "id_quadrant" : {
+                                "type" : "string",
+                                "example" : "IDX_EAS_T"
+                              },
+                              "values" : {
+                                "type" : "array",
+                                "items" : {
+                                  "type" : "object",
+                                  "properties" : {
+                                    "date" : {
+                                      "type" : "string",
+                                      "example" : "2021-01-19 00:34:04"
+                                    },
+                                    "value" : {
+                                      "type" : "integer",
+                                      "example" : 6681
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "Service non disponible."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string",
+                      "description" : "SLA dépassé."
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/production_load_curve" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Récupérer la puissance moyenne produite quotidiennement, sur l'intervalle de mesure du compteur (par défaut 30 min)",
+        "description" : "Cette sous ressource renvoie les valeurs correspondant à des journées de mesure de la courbe de charge de production d'un client pour chaque jour de la période demandée. Les valeurs retournées sont des puissances moyennes de production sur l'intervalle de mesure du compteur (par défaut 30 minutes). Chaque valeur est horodatée. La courbe de charge s'obtient sur des journées complètes de minuit à minuit du jour suivant en heures locales. Un appel peut porter au maximum sur 7 jours consécutifs.  Un appel peut porter sur des données datant au maximum de 24 mois et 15 jours avant la date d'appel.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée, au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée, au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille. La date de fin ne peut être égale à la date de début.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "required" : [ "end", "interval_reading", "quality", "start", "usage_point_id" ],
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2019-05-06T00:00:00.000Z"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2019-05-12T00:00:00.000Z"
+                        },
+                        "quality" : {
+                          "type" : "string",
+                          "example" : "BRUT",
+                          "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                        },
+                        "reading_type" : {
+                          "required" : [ "flow_direction", "measurement_kind", "unit" ],
+                          "type" : "object",
+                          "properties" : {
+                            "flow_direction" : {
+                              "type" : "string",
+                              "example" : "reverse"
+                            },
+                            "measurement_kind" : {
+                              "type" : "string",
+                              "example" : "power"
+                            },
+                            "unit" : {
+                              "type" : "string",
+                              "description" : "Unité des données de mesure",
+                              "example" : "W",
+                              "enum" : [ "W", "kW", "MW", "VAr", "V" ]
+                            },
+                            "aggregate" : {
+                              "type" : "string",
+                              "example" : "average"
+                            }
+                          }
+                        },
+                        "interval_reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "required" : [ "date", "interval_length", "value" ],
+                            "type" : "object",
+                            "properties" : {
+                              "value" : {
+                                "type" : "string",
+                                "example" : "540"
+                              },
+                              "date" : {
+                                "type" : "string",
+                                "example" : "2019-05-06T03:00:00.000Z"
+                              },
+                              "interval_length" : {
+                                "type" : "string",
+                                "example" : "PT30M",
+                                "enum" : [ "PT5M : Pas de 5 minutes", "PT10M : Pas de 10 minutes", "PT15M : Pas de 15 minutes", "PT30M : Pas de 30 minutes", "PT60M : Pas de 60 minutes" ]
+                              },
+                              "measure_type" : {
+                                "type" : "string",
+                                "example" : "B",
+                                "enum" : [ "B : BRUT", "C : Corrigé", "R : Réel", "H : Puissance reconstituée", "P : Puissance reconstituée et coupure secteur", "D : Importé manuellement par le métier Enedis", "S : Coupure Secteur", "T : Coupure secteur courte", "F : Début de coupure secteur", "G : Fin de coupure secteur", "E : Estimé" ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/daily_consumption_max_power" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Récupérer la puissance maximale de consommation atteinte quotidiennement",
+        "description" : "Cette sous ressource renvoie les valeurs correspondant à des puissances maximales de consommation (en W) atteintes quotidiennement pour chaque jour de la période demandée. Chaque valeur est datée. La courbe de charge s'obtient sur des journées complètes de minuit à minuit du jour suivant en heures locales.  Un appel peut porter sur des données datant au maximum de 36 mois et 15 jours avant la date d'appel.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        }, {
+          "name" : "measuring_period",
+          "in" : "query",
+          "description" : "Pas de mesure renseigné pour les données de mesure de type PMAX. Le pas peut être quotidien (P1D) ou mensuel (P1M)",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "P1D : pas quotidien", "P1M : pas mensuel" ]
+          },
+          "example" : "P1D"
+        }, {
+          "name" : "grandeurPhysique",
+          "in" : "query",
+          "description" : "Sélectionner pour le champ grandeurPhysique, la valeur :<br>-PMA pour ne récupérer que la Puissance Maximale « équivalent monophasé »<br>-TOUT pour récupérer sur la base d'un PRM triphasé le détail de l'ensemble des phases et la Puissance Maximale \"équivalent monophasé\"",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "PMA", "TOUT" ]
+          },
+          "example" : "PMA"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "required" : [ "end", "interval_reading", "quality", "reading_type", "start", "usage_point_id" ],
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2019-05-06T00:00:00.000Z"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2019-05-12T00:00:00.000Z"
+                        },
+                        "quality" : {
+                          "type" : "string",
+                          "example" : "BRUT",
+                          "enum" : [ "BRUT : Données brutes" ]
+                        },
+                        "reading_type" : {
+                          "required" : [ "aggregate", "flow_direction", "measurement_kind", "measuring_period", "unit" ],
+                          "type" : "object",
+                          "properties" : {
+                            "flow_direction" : {
+                              "type" : "string",
+                              "example" : "forward"
+                            },
+                            "measurement_kind" : {
+                              "type" : "string",
+                              "example" : "power"
+                            },
+                            "measuring_period" : {
+                              "type" : "string",
+                              "example" : "P1D"
+                            },
+                            "unit" : {
+                              "type" : "string",
+                              "description" : "Unité des données de mesure",
+                              "example" : "VA",
+                              "enum" : [ "VA", "kVA", "MVA" ]
+                            },
+                            "aggregate" : {
+                              "type" : "string",
+                              "example" : "maximum"
+                            }
+                          }
+                        },
+                        "interval_reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "required" : [ "date", "value" ],
+                            "type" : "object",
+                            "properties" : {
+                              "value" : {
+                                "type" : "string",
+                                "description" : "Valeur du point",
+                                "example" : "540"
+                              },
+                              "date" : {
+                                "type" : "string",
+                                "example" : "2019-05-06T03:00:00.000Z"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/daily_consumption" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Récupérer la consommation quotidienne",
+        "description" : "Cette sous ressource renvoie les valeurs correspondant à la consommation quotidienne (en Wh) sur chaque jour de la période demandée. Chaque valeur est daté.  Un appel peut porter sur des données datant au maximum de 36 mois et 15 jours avant la date d'appel.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "required" : [ "end", "interval_reading", "quality", "reading_type", "start", "usage_point_id" ],
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2019-05-06T00:00:00.000Z"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2019-05-12T00:00:00.000Z"
+                        },
+                        "quality" : {
+                          "type" : "string",
+                          "example" : "BRUT",
+                          "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                        },
+                        "reading_type" : {
+                          "required" : [ "flow_direction", "measurement_kind", "unit" ],
+                          "type" : "object",
+                          "properties" : {
+                            "flow_direction" : {
+                              "type" : "string",
+                              "example" : "forward"
+                            },
+                            "measurement_kind" : {
+                              "type" : "string",
+                              "example" : "energy"
+                            },
+                            "unit" : {
+                              "type" : "string",
+                              "example" : "Wh",
+                              "enum" : [ "Wh", "kWh", "MWh" ]
+                            }
+                          }
+                        },
+                        "interval_reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "required" : [ "date", "value" ],
+                            "type" : "object",
+                            "properties" : {
+                              "value" : {
+                                "type" : "string",
+                                "example" : "540"
+                              },
+                              "date" : {
+                                "type" : "string",
+                                "example" : "2019-05-06T00:00:00.000Z"
+                              },
+                              "accumulation_kindd" : {
+                                "type" : "string",
+                                "example" : "delta_delta"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    },
+    "/metering_data/daily_production" : {
+      "get" : {
+        "tags" : [ "Metering Data" ],
+        "summary" : "Récupérer la production quotidienne",
+        "description" : "Cette sous ressource renvoie les valeurs correspondant à la production quotidienne (en Wh) sur chaque jour de la période demandée. Chaque valeur est daté.  Un appel peut porter sur des données datant au maximum de 36 mois et 15 jours avant la date d'appel.",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "query",
+          "description" : "Identifiant du point de livraison (PRM)",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        }, {
+          "name" : "start",
+          "in" : "query",
+          "description" : "Jour de début de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées inclueront la date de démarrage.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-01"
+        }, {
+          "name" : "end",
+          "in" : "query",
+          "description" : "Jour de fin de la plage demandée au format full-date de la RFC 3339, à savoir YYYY-MM-DD. Les données retournées n'inclueront pas la date de fin et s'arrêteront la veille.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "2025-05-06"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "required" : [ "meter_reading" ],
+                  "type" : "object",
+                  "properties" : {
+                    "meter_reading" : {
+                      "required" : [ "end", "interval_reading", "quality", "reading_type", "start", "usage_point_id" ],
+                      "type" : "object",
+                      "properties" : {
+                        "usage_point_id" : {
+                          "type" : "string",
+                          "example" : "string"
+                        },
+                        "start" : {
+                          "type" : "string",
+                          "example" : "2019-05-06T00:00:00.000Z"
+                        },
+                        "end" : {
+                          "type" : "string",
+                          "example" : "2019-05-12T00:00:00.000Z"
+                        },
+                        "quality" : {
+                          "type" : "string",
+                          "example" : "BRUT",
+                          "enum" : [ "BRUT : Données brutes", "BEST : Données corrigées" ]
+                        },
+                        "reading_type" : {
+                          "required" : [ "flow_direction", "measurement_kind", "unit" ],
+                          "type" : "object",
+                          "properties" : {
+                            "flow_direction" : {
+                              "type" : "string",
+                              "example" : "forward"
+                            },
+                            "measurement_kind" : {
+                              "type" : "string",
+                              "example" : "energy"
+                            },
+                            "unit" : {
+                              "type" : "string",
+                              "example" : "Wh",
+                              "enum" : [ "Wh", "kWh", "MWh" ]
+                            }
+                          }
+                        },
+                        "interval_reading" : {
+                          "type" : "array",
+                          "items" : {
+                            "required" : [ "date", "value" ],
+                            "type" : "object",
+                            "properties" : {
+                              "value" : {
+                                "type" : "string",
+                                "example" : "540"
+                              },
+                              "date" : {
+                                "type" : "string",
+                                "example" : "2019-05-06T00:00:00.000Z"
+                              },
+                              "accumulation_kindd" : {
+                                "type" : "string",
+                                "example" : "delta_delta"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Erreur dans le format de la requête",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas titulaire du point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Ressource non trouvée.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Pas de mesure trouvée pour ce point"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429" : {
+            "description" : "L’application a dépassé son quota d’appels",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "SLA dépassé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Erreur interne de serveur.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

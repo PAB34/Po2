@@ -1,0 +1,333 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "situation_contrat_auto",
+    "description" : "Cette API vous permet de consulter toutes les informations contractuelles d’un compteur dont le titulaire a autorisé votre entité à accéder aux données.<br>Les données suivantes sont consultables (liste non exhaustive) :<br>-La ou les puissance(s) souscrite(s)<br>-La structure tarifaire<br>-L’identification et les coordonnées du client titulaire",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/situation_contrat_auto/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/{usage_point_id}" : {
+      "get" : {
+        "tags" : [ "situation-contractuelle" ],
+        "summary" : "Récupération des situations contractuelles courantes d'un PRM",
+        "operationId" : "getSituationsContractuelles",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête. Ce header est déterminé automatiquement lorsqu'un body est renseigné dans la requête de l'appel API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Bearer Token généré par l'api Authentification à renseigner.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Bearer HPt7dXk6OBY4aoeyqbIvOM6"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software). Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API.",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur. Ce header est déterminé automatiquement lorsque vous renseignez l'url de l'API. Attention, si le port :443 apparait dans l'url, veuillez le supprimer pour que l'appel API soit fonctionnel.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "gw.ext.prod.api.enedis.fr"
+        }, {
+          "name" : "usage_point_id",
+          "in" : "path",
+          "description" : "Identifiant du point (PRM) )dont on souhaite récuperer les situations contractuelles",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "99999999999999"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Situations contractuelles courantes du PRM",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/contracts"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "La syntaxe de la requête est erronée.",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le paramètre usage_point_id est obligatoire"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "L'utilisateur n'est pas identifié"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressources",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Le client n'est pas autorisé pour le point demandé"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Situation contractuelle ou PRM non existant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Situation contractuelle ou PRM non existant"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "object",
+                  "properties" : {
+                    "code" : {
+                      "type" : "string"
+                    },
+                    "message" : {
+                      "type" : "string",
+                      "example" : "Problème technique dans l'interrogation du SI coeur"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "contracts" : {
+        "type" : "object"
+      },
+      "address" : {
+        "type" : "object",
+        "properties" : {
+          "line1" : {
+            "type" : "string",
+            "description" : "Nom et prénom"
+          },
+          "line2" : {
+            "type" : "string",
+            "description" : "Appartement/Etage"
+          },
+          "line3" : {
+            "type" : "string",
+            "description" : "Batiment, Residence"
+          },
+          "line4" : {
+            "type" : "string",
+            "description" : "Numéro et libellé de la voie",
+            "example" : "string"
+          },
+          "line5" : {
+            "type" : "string",
+            "description" : "Lieu-dit ou service particulier de distribution",
+            "example" : "string"
+          },
+          "line6" : {
+            "type" : "string",
+            "description" : "Code Postal et Commune",
+            "example" : "string"
+          },
+          "line7" : {
+            "type" : "string",
+            "description" : "Pays",
+            "example" : "string"
+          }
+        },
+        "description" : "adresse du client et non du PRM"
+      },
+      "contact_data" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "description" : "adresse mail",
+            "example" : "string"
+          },
+          "landline" : {
+            "type" : "string",
+            "description" : "telephone fixe",
+            "example" : "string"
+          },
+          "phone" : {
+            "type" : "string",
+            "description" : "telephone portable",
+            "example" : "string"
+          }
+        },
+        "description" : "Coordonnees de contact"
+      },
+      "organization" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "example" : "string"
+          },
+          "commercial_name" : {
+            "type" : "string",
+            "description" : "Nom de l'entreprise client"
+          },
+          "business_code" : {
+            "type" : "string",
+            "description" : "Code NAF"
+          },
+          "siret_number" : {
+            "type" : "string",
+            "description" : "numero de SIRET",
+            "example" : "string"
+          },
+          "siren_number" : {
+            "type" : "string",
+            "description" : "numero de SIREN",
+            "example" : "string"
+          }
+        }
+      },
+      "person" : {
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "type" : "string",
+            "description" : "civilite de la personne",
+            "example" : "string"
+          },
+          "lastname" : {
+            "type" : "string",
+            "description" : "nom de famille",
+            "example" : "string"
+          },
+          "firstname" : {
+            "type" : "string",
+            "description" : "prénom",
+            "example" : "string"
+          }
+        }
+      },
+      "date" : {
+        "pattern" : "^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}\\:\\d{2}\\:\\d{2}\\+\\d{4}$",
+        "type" : "string",
+        "description" : "Date au format ISO-8601 avec fuseau horaire",
+        "example" : "2021-01-01T00:00:00+0100"
+      },
+      "power" : {
+        "type" : "object",
+        "properties" : {
+          "unit" : {
+            "type" : "string",
+            "description" : "unite de la grandeur physique",
+            "example" : "kW"
+          },
+          "value" : {
+            "type" : "string",
+            "description" : "valeur de la grandeur physique",
+            "example" : "30"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

@@ -1,0 +1,213 @@
+{
+  "openapi" : "3.0.1",
+  "info" : {
+    "title" : "customer_contract_summary",
+    "description" : "Cette API vous permet de consulter les informations contractuelles synthétiques d’un de vos compteurs.Les données suivantes sont consultables:<br> - Segment contractuel <br> - Date de dernière mise en service <br> - Date de dernière modification de puissance de raccordement ou puissance limite de soutirage.",
+    "version" : "1"
+  },
+  "servers" : [ {
+    "url" : "https://gw.ext.prod.api.enedis.fr:443/contract_summary/v1"
+  } ],
+  "security" : [ {
+    "default" : [ ]
+  } ],
+  "paths" : {
+    "/{usage_point_id}" : {
+      "get" : {
+        "tags" : [ "contract summary" ],
+        "summary" : "Récupération de l asynthèse contractuelle'un PRM",
+        "operationId" : "getDonneesGenerales",
+        "parameters" : [ {
+          "name" : "Content-Type",
+          "in" : "header",
+          "description" : "Format du body de la requête",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json;charset=UTF-8"
+        }, {
+          "name" : "Accept",
+          "in" : "header",
+          "description" : "Format de réponse acceptable",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "application/json"
+        }, {
+          "name" : "Authorization",
+          "in" : "header",
+          "description" : "Token Oauth délivré à l'application cliente lors de la phase préalable d'autorisation. \nFormat : Bearer &lt;Valeur du token&gt;.",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "haQIisPSLX466GzBuOe81lpJwWSbyEjGR1Xowfio89zDNWjNK2qg1G"
+        }, {
+          "name" : "User-Agent",
+          "in" : "header",
+          "description" : "Description de l'équipement qui a émis la requêtes (hardware/software)",
+          "schema" : {
+            "type" : "string"
+          },
+          "example" : "Mozilla/5.0 (Linux; U; Android 4.0.3; fr-fr; LG-L160L Build/IML74K)"
+        }, {
+          "name" : "Host",
+          "in" : "header",
+          "description" : "Nom de domaine du serveur et numéro de port TCP si différent du port 80.\nFormat : &lt;Nom de domaine&gt;:&lt;port TCP&gt;\nx-example: ext.hml.api.enedis.fr  ",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "usage_point_id",
+          "in" : "path",
+          "description" : "Identifiant du PRM",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "siren",
+          "in" : "query",
+          "description" : "siren de la colloc demandant les donnees",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "synthese contractuelle du PRM",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/syntheseContractuelle"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Requête invalide",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : "Utilisateur non identifié",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "403" : {
+            "description" : "Utilisateur non autorisé pour ce endpoint/ressources",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Synthese contractuelle ou PRM non existant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          },
+          "500" : {
+            "description" : "Une erreur technique est survenue",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/error"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "default" : [ ]
+        } ],
+        "x-auth-type" : "Application & Application User",
+        "x-throttling-tier" : "Unlimited"
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "syntheseContractuelle" : {
+        "type" : "object",
+        "properties" : {
+          "segments" : {
+            "$ref" : "#/components/schemas/segments"
+          },
+          "generation_last_activation_date" : {
+            "$ref" : "#/components/schemas/date"
+          },
+          "consumption_last_activation_date" : {
+            "$ref" : "#/components/schemas/date"
+          },
+          "last_subscribed_power_change_date" : {
+            "$ref" : "#/components/schemas/date"
+          },
+          "services_level" : {
+            "type" : "string",
+            "description" : "Niveaux d’ouverture aux services du compteur:<br> - 0 :compteur non communicant<br> - 1 :compteur Linky communicant<br> - 2 :compteur communicant ouvert aux services de mesures(transmission de la courbe de charge possible…)<br>"
+          }
+        }
+      },
+      "date" : {
+        "pattern" : "^\\d{4}\\-\\d{2}\\-\\d{2}T\\d{2}\\:\\d{2}\\:\\d{2}\\+\\d{4}$",
+        "type" : "string",
+        "description" : "Date au format ISO-8601 avec fuseau horaire",
+        "example" : "2099-12-02T00:00:00+0100"
+      },
+      "segments" : {
+        "type" : "array",
+        "items" : {
+          "type" : "object",
+          "properties" : {
+            "segment" : {
+              "type" : "string",
+              "example" : "string"
+            }
+          }
+        }
+      },
+      "error" : {
+        "required" : [ "code", "libelle" ],
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "libelle" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "default" : {
+        "type" : "oauth2",
+        "flows" : {
+          "implicit" : {
+            "authorizationUrl" : "https://gw.ext.prod.api.enedis.fr:443/authorize",
+            "scopes" : { }
+          }
+        }
+      }
+    }
+  },
+  "x-original-swagger-version" : "2.0"
+}

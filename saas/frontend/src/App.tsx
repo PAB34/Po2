@@ -6,6 +6,8 @@ import { BuildingCreateEditPage } from "./pages/BuildingCreateEditPage";
 import { BuildingDetailPage } from "./pages/BuildingDetailPage";
 import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
+import { EnergieDetailPage } from "./pages/EnergieDetailPage";
+import { EnergiePage } from "./pages/EnergiePage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -32,6 +34,7 @@ export default function App() {
         <nav>
           <Link to="/">Accueil</Link>
           <Link to="/buildings">Bâtiments</Link>
+          <Link to="/energie">Énergie</Link>
           <Link to="/login">Connexion</Link>
           <Link to="/register">Inscription</Link>
           <Link to="/account">Compte</Link>
@@ -44,6 +47,8 @@ export default function App() {
           <Route path="/buildings/list" element={<BuildingsListPage />} />
           <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
+          <Route path="/energie" element={<EnergiePage />} />
+          <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/account" element={<AccountPage />} />
