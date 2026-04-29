@@ -121,6 +121,7 @@ class BuildingCreate(BaseModel):
     dgfip_reference_norm: str | None = Field(default=None, max_length=32)
     nom_batiment: str | None = Field(default=None, max_length=255)
     nom_commune: str | None = Field(default=None, max_length=255)
+    code_postal: str | None = Field(default=None, max_length=10)
     numero_voirie: str | None = Field(default=None, max_length=40)
     indice_repetition: str | None = Field(default=None, max_length=40)
     nature_voie: str | None = Field(default=None, max_length=80)
@@ -152,6 +153,8 @@ class BuildingCreate(BaseModel):
 
 class BuildingUpdate(BaseModel):
     nom_batiment: str | None = Field(default=None, max_length=255)
+    nom_commune: str | None = Field(default=None, max_length=255)
+    code_postal: str | None = Field(default=None, max_length=10)
     numero_voirie: str | None = Field(default=None, max_length=40)
     indice_repetition: str | None = Field(default=None, max_length=40)
     nature_voie: str | None = Field(default=None, max_length=80)
@@ -175,6 +178,7 @@ class BuildingRead(BaseModel):
     dgfip_reference_norm: str | None
     nom_batiment: str | None
     nom_commune: str
+    code_postal: str | None
     numero_voirie: str | None
     indice_repetition: str | None
     nature_voie: str | None

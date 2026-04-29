@@ -240,6 +240,9 @@ def attach_building_geo(
 
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
     building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
+    if payload.nom_commune:
+        building.nom_commune = payload.nom_commune.strip()
+    building.code_postal = payload.code_postal.strip() if payload.code_postal else None
     building.numero_voirie = payload.numero_voirie.strip() if payload.numero_voirie else None
     building.indice_repetition = payload.indice_repetition.strip() if payload.indice_repetition else None
     building.nature_voie = payload.nature_voie.strip() if payload.nature_voie else None

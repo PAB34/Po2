@@ -90,6 +90,8 @@ export function BuildingDetailPage() {
   const { token } = useAuth();
 
   const [nomBatiment, setNomBatiment] = useState("");
+  const [nomCommune, setNomCommune] = useState("");
+  const [codePostal, setCodePostal] = useState("");
   const [numeroVoirie, setNumeroVoirie] = useState("");
   const [indiceRepetition, setIndiceRepetition] = useState("");
   const [natureVoie, setNatureVoie] = useState("");
@@ -170,6 +172,8 @@ export function BuildingDetailPage() {
     }
 
     setNomBatiment(buildingQuery.data.nom_batiment ?? "");
+    setNomCommune(buildingQuery.data.nom_commune ?? "");
+    setCodePostal(buildingQuery.data.code_postal ?? "");
     setNumeroVoirie(buildingQuery.data.numero_voirie ?? "");
     setIndiceRepetition(buildingQuery.data.indice_repetition ?? "");
     setNatureVoie(buildingQuery.data.nature_voie ?? "");
@@ -303,6 +307,8 @@ export function BuildingDetailPage() {
 
     await updateBuildingMutation.mutateAsync({
       nom_batiment: nomBatiment || undefined,
+      nom_commune: nomCommune || undefined,
+      code_postal: codePostal || undefined,
       numero_voirie: numeroVoirie || undefined,
       indice_repetition: indiceRepetition || undefined,
       nature_voie: natureVoie || undefined,
@@ -425,6 +431,10 @@ export function BuildingDetailPage() {
               <strong>{buildingQuery.data.nom_commune}</strong>
             </div>
             <div className="detail-card">
+              <span>Code postal</span>
+              <strong>{buildingQuery.data.code_postal || "Non renseigné"}</strong>
+            </div>
+            <div className="detail-card">
               <span>Statut géocodage</span>
               <strong>{buildingQuery.data.statut_geocodage}</strong>
             </div>
@@ -535,6 +545,16 @@ export function BuildingDetailPage() {
                 <label className="field">
                   <span>Numéro de voirie</span>
                   <input type="text" value={numeroVoirie} onChange={(event) => setNumeroVoirie(event.target.value)} />
+                </label>
+              </div>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Commune</span>
+                  <input type="text" value={nomCommune} onChange={(event) => setNomCommune(event.target.value)} />
+                </label>
+                <label className="field">
+                  <span>Code postal</span>
+                  <input type="text" value={codePostal} onChange={(event) => setCodePostal(event.target.value)} maxLength={10} />
                 </label>
               </div>
               <div className="form-grid">

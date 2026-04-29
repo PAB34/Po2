@@ -70,6 +70,7 @@ export type Building = {
   dgfip_reference_norm: string | null;
   nom_batiment: string | null;
   nom_commune: string;
+  code_postal: string | null;
   numero_voirie: string | null;
   indice_repetition: string | null;
   nature_voie: string | null;
@@ -248,6 +249,8 @@ export type CreateBuildingPayload = {
 
 export type UpdateBuildingPayload = {
   nom_batiment?: string;
+  nom_commune?: string;
+  code_postal?: string;
   numero_voirie?: string;
   indice_repetition?: string;
   nature_voie?: string;

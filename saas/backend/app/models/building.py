@@ -18,6 +18,7 @@ class Building(Base):
     dgfip_reference_norm: Mapped[str | None] = mapped_column(String(32), nullable=True)
     nom_batiment: Mapped[str | None] = mapped_column(String(255), nullable=True)
     nom_commune: Mapped[str] = mapped_column(String(255), nullable=False)
+    code_postal: Mapped[str | None] = mapped_column(String(10), nullable=True)
     numero_voirie: Mapped[str | None] = mapped_column(String(40), nullable=True)
     indice_repetition: Mapped[str | None] = mapped_column(String(40), nullable=True)
     nature_voie: Mapped[str | None] = mapped_column(String(80), nullable=True)
