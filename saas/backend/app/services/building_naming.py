@@ -675,7 +675,7 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
     seen: set[tuple[str, str]] = set()
     for type_name, short_layer in layer_specs:
         try:
-            data = _wfs_layer_features(type_name, bbox, count=150)
+            data = _wfs_layer_features(type_name, bbox, count=500)
         except Exception:
             continue
         for feature in data.get("features", []) or []:
