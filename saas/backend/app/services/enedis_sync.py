@@ -301,9 +301,11 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
         effective_history = history_days or settings.enedis_history_days
         today = date.today()
 
-        if last_sync:
+        if last_sync and history_days is None:
+            # Sync incrémentale : reprend au lendemain de la dernière sync
             start_d = date.fromisoformat(last_sync) + timedelta(days=1)
         else:
+            # Backfill explicite : ignore last_sync, force le recalcul complet
             start_d = today - timedelta(days=effective_history)
 
         end_d = today - timedelta(days=1)  # ENEDIS J-1
