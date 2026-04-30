@@ -1096,3 +1096,16 @@ button:disabled {
   outline: 2px solid #38bdf8;
   outline-offset: 1px;
 }
+
+.supplier-pie-wrapper {
+  padding: 16px 24px 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.55);
+}
+
+.supplier-pie-title {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #cbd5e1;
+}

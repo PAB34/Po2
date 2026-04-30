@@ -12,12 +12,14 @@ import {
   XAxis,
   YAxis,
   Legend,
+  Cell,
 } from "recharts";
 import {
   fetchPrmDetail,
   fetchPrmLoadCurve,
   fetchPrmMaxPower,
   fetchPrmAnnualProfile,
+  fetchPrmDailyConsumption,
   PrmCalibration,
   AnnualYearProfile,
 } from "../lib/api";
@@ -188,6 +190,12 @@ export function EnergieDetailPage() {
     enabled: !!token && !!prmId,
   });
 
+  const dailyConsumptionQuery = useQuery({
+    queryKey: ["prm-daily-consumption", prmId],
+    queryFn: () => fetchPrmDailyConsumption(token!, prmId!, 90),
+    enabled: !!token && !!prmId,
+  });
+
   const detail = detailQuery.data;
 
   const maxPowerPoints = (maxPowerQuery.data?.points ?? []).map((p) => ({
@@ -291,6 +299,45 @@ export function EnergieDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Daily Consumption */}
+      <div className="chart-section">
+        <h3>Consommation journalière (kWh) — 90 derniers jours</h3>
+        {dailyConsumptionQuery.isLoading && <p>Chargement du graphique…</p>}
+        {dailyConsumptionQuery.error && <p className="error-text">{(dailyConsumptionQuery.error as Error).message}</p>}
+        {dailyConsumptionQuery.data && dailyConsumptionQuery.data.points.length > 0 ? (
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart
+              data={dailyConsumptionQuery.data.points.map((p) => ({
+                label: fmtDateShort(p.date),
+                kwh: p.value_kwh,
+              }))}
+              margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11 }}
+                interval={Math.max(0, Math.floor(dailyConsumptionQuery.data.points.length / 12) - 1)}
+              />
+              <YAxis tick={{ fontSize: 11 }} unit=" kWh" width={72} />
+              <Tooltip
+                formatter={(value: number) => [`${value.toLocaleString("fr-FR")} kWh`, "Consommation"]}
+                labelFormatter={(label) => `Date : ${label}`}
+              />
+              <Bar dataKey="kwh" fill="#2563eb" maxBarSize={16} radius={[3, 3, 0, 0]}>
+                {dailyConsumptionQuery.data.points.map((_, i) => (
+                  <Cell key={i} fill="#2563eb" fillOpacity={0.8} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          !dailyConsumptionQuery.isLoading && (
+            <p className="cell-empty">Aucune donnée de consommation journalière disponible.</p>
+          )
+        )}
+      </div>
 
       {/* Annual Profile N/N-1/N-2 */}
       <div className="chart-section">

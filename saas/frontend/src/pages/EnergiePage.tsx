@@ -1,8 +1,46 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchEnergieOverview, PrmListItem } from "../lib/api";
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { fetchEnergieOverview, PrmListItem, SupplierDistributionItem } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
+
+const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899"];
+
+function SupplierPieChart({ data }: { data: SupplierDistributionItem[] }) {
+  if (data.length === 0) return null;
+  const pieData = data.map((s) => ({ name: s.supplier, value: s.total_kva, count: s.prm_count }));
+  return (
+    <div className="supplier-pie-wrapper">
+      <h3 className="supplier-pie-title">Répartition par fournisseur (kVA souscrit)</h3>
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie
+            data={pieData}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            outerRadius={80}
+            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            labelLine={false}
+          >
+            {pieData.map((_, i) => (
+              <Cell key={i} fill={SUPPLIER_COLORS[i % SUPPLIER_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value: number, name: string, props) => [
+              `${value.toLocaleString("fr-FR")} kVA — ${(props.payload as { count: number }).count} PRM`,
+              name,
+            ]}
+          />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 function connectionBadge(state: string | null): string {
   if (!state) return "";
@@ -108,18 +146,7 @@ export function EnergiePage() {
             )}
           </div>
 
-          {data.supplier_distribution.length > 0 && (
-            <div className="supplier-bar-row">
-              {data.supplier_distribution.map((s) => (
-                <div key={s.supplier} className="supplier-bar-item">
-                  <span className="supplier-name">{s.supplier}</span>
-                  <span className="supplier-stats">
-                    {s.prm_count} PRM — {s.total_kva.toLocaleString("fr-FR")} kVA
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <SupplierPieChart data={data.supplier_distribution} />
 
           <div className="list-toolbar">
             <input
