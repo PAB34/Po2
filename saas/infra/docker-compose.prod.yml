@@ -19,6 +19,7 @@ services:
       - db
     volumes:
       - ../../:/workspace:ro
+      - ../../saas/energie/output:/workspace/saas/energie/output
 
   frontend:
     build:
