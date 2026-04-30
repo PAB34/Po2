@@ -404,10 +404,12 @@ def _invalidate_energie_caches() -> None:
             _daily_consumption_index,
             _consumption_by_month,
             _max_power_index,
+            get_data_ranges,
         )
         _daily_consumption_index.cache_clear()
         _consumption_by_month.cache_clear()
         _max_power_index.cache_clear()
+        get_data_ranges.cache_clear()
         _log("Caches LRU invalidés — nouvelles données disponibles immédiatement.")
     except Exception as exc:
         LOG.warning("Cache invalidation failed: %s", exc)
@@ -633,8 +635,9 @@ def run_max_power_sync(history_days: int | None = None) -> None:
         _save_mp_state(end_str)
 
         try:
-            from app.services.energie import _max_power_index  # noqa: PLC0415
+            from app.services.energie import _max_power_index, get_data_ranges  # noqa: PLC0415
             _max_power_index.cache_clear()
+            get_data_ranges.cache_clear()
             _mp_log("Cache puissance max invalidé.")
         except Exception:
             pass

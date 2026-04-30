@@ -1365,3 +1365,74 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* ---- Data coverage bar ---- */
+
+.data-coverage-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 4px;
+}
+
+.data-coverage-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.data-coverage-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-coverage-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  border: 1px solid;
+}
+
+.data-coverage-chip.chip-ok {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.3);
+}
+
+.data-coverage-chip.chip-empty {
+  background: rgba(100, 116, 139, 0.08);
+  border-color: rgba(100, 116, 139, 0.2);
+}
+
+.chip-label {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.chip-dates {
+  color: #cbd5e1;
+  font-family: monospace;
+  font-size: 0.76rem;
+}
+
+.chip-empty .chip-dates {
+  color: #475569;
+  font-style: italic;
+}
+
+.chip-count {
+  color: #64748b;
+  font-size: 0.72rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+  padding-left: 6px;
+  margin-left: 2px;
+}

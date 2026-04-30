@@ -890,3 +890,24 @@ export async function startDjuSync(token: string): Promise<{ message: string }> 
   });
   return parseResponse<{ message: string }>(response);
 }
+
+export type DataSourceRange = {
+  first_date: string | null;
+  last_date: string | null;
+  row_count: number;
+};
+
+export type DataRanges = {
+  consumption: DataSourceRange;
+  max_power: DataSourceRange;
+  load_curve: DataSourceRange;
+  dju: DataSourceRange;
+  contracts: { count: number };
+};
+
+export async function fetchDataRanges(token: string): Promise<DataRanges> {
+  const response = await fetch(`${apiBaseUrl}/energie/data-ranges`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<DataRanges>(response);
+}

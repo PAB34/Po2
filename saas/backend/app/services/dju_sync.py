@@ -201,9 +201,10 @@ def run_dju_sync() -> None:
         _log(f"OK — {added} nouveaux jours ({len(rows)} traités)")
 
         try:
-            from app.services.energie import _dju_monthly_index, _dju_rows  # noqa: PLC0415
+            from app.services.energie import _dju_monthly_index, _dju_rows, get_data_ranges  # noqa: PLC0415
             _dju_monthly_index.cache_clear()
             _dju_rows.cache_clear()
+            get_data_ranges.cache_clear()
             _log("Caches DJU invalidés.")
         except Exception:
             pass

@@ -6,7 +6,8 @@ import {
   fetchEnergieOverview, fetchSyncStatus, startSync,
   fetchMaxPowerSyncStatus, startMaxPowerSync,
   fetchDjuSyncStatus, startDjuSync,
-  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus,
+  fetchDataRanges,
+  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, DataRanges,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -264,6 +265,52 @@ function calibBadge(status: string | null, ratio: number | null) {
   );
 }
 
+function DataCoverageBar({ token }: { token: string }) {
+  const { data } = useQuery<DataRanges>({
+    queryKey: ["energie-data-ranges"],
+    queryFn: () => fetchDataRanges(token),
+    staleTime: 60_000,
+  });
+
+  const sources: { key: keyof Omit<DataRanges, "contracts">; label: string }[] = [
+    { key: "consumption", label: "Conso. journalière" },
+    { key: "max_power", label: "Puissance max" },
+    { key: "load_curve", label: "Courbe de charge" },
+    { key: "dju", label: "DJU météo" },
+  ];
+
+  if (!data) return null;
+
+  return (
+    <div className="data-coverage-bar">
+      <span className="data-coverage-title">Couverture des données</span>
+      <div className="data-coverage-sources">
+        {sources.map(({ key, label }) => {
+          const src = data[key];
+          const hasData = src.first_date != null;
+          return (
+            <div key={key} className={`data-coverage-chip ${hasData ? "chip-ok" : "chip-empty"}`}>
+              <span className="chip-label">{label}</span>
+              {hasData ? (
+                <span className="chip-dates">{src.first_date} → {src.last_date}</span>
+              ) : (
+                <span className="chip-dates">Aucune donnée</span>
+              )}
+              {src.row_count > 0 && (
+                <span className="chip-count">{src.row_count.toLocaleString("fr-FR")} lignes</span>
+              )}
+            </div>
+          );
+        })}
+        <div className="data-coverage-chip chip-ok">
+          <span className="chip-label">Contrats</span>
+          <span className="chip-dates">{data.contracts.count.toLocaleString("fr-FR")} PRMs</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EnergiePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -295,6 +342,7 @@ export function EnergiePage() {
         <p className="page-subtitle">Électricité ENEDIS — Points de livraison (PRMs)</p>
       </div>
 
+      <DataCoverageBar token={token!} />
       <SyncPanel token={token!} />
 
       {isLoading && <p>Chargement…</p>}

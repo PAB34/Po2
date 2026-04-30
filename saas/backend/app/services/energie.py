@@ -7,6 +7,53 @@ from typing import Any
 from app.core.config import settings
 
 
+def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
+    """Scanne un CSV en streaming pour trouver première/dernière date et nombre de lignes."""
+    path = Path(settings.energie_dir) / rel_path
+    if not path.exists() or path.stat().st_size == 0:
+        return {"first_date": None, "last_date": None, "row_count": 0}
+    min_d = max_d = None
+    count = 0
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader, None)
+        if not header:
+            return {"first_date": None, "last_date": None, "row_count": 0}
+        try:
+            col_idx = header.index(date_col)
+        except ValueError:
+            return {"first_date": None, "last_date": None, "row_count": 0}
+        for row in reader:
+            if len(row) > col_idx:
+                d = row[col_idx][:10]
+                if len(d) == 10:
+                    count += 1
+                    if min_d is None or d < min_d:
+                        min_d = d
+                    if max_d is None or d > max_d:
+                        max_d = d
+    return {"first_date": min_d, "last_date": max_d, "row_count": count}
+
+
+@lru_cache(maxsize=1)
+def get_data_ranges() -> dict[str, Any]:
+    """Retourne les plages de dates disponibles pour chaque source de données."""
+    # Contrats : simple comptage
+    contracts_count = 0
+    cp = Path(settings.energie_dir) / "enedis_contracts.csv"
+    if cp.exists():
+        with open(cp, encoding="utf-8-sig") as f:
+            contracts_count = max(0, sum(1 for _ in f) - 1)
+
+    return {
+        "consumption": _scan_csv_dates("enedis_data.csv", "date"),
+        "max_power": _scan_csv_dates("enedis_max_power.csv", "date"),
+        "load_curve": _scan_csv_dates("enedis_load_curve.csv", "datetime"),
+        "dju": _scan_csv_dates("DJU/dju_sete.csv", "date"),
+        "contracts": {"count": contracts_count},
+    }
+
+
 def _csv_rows(filename: str) -> list[dict[str, str]]:
     path = Path(settings.energie_dir) / filename
     if not path.exists():

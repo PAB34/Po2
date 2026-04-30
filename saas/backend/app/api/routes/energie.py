@@ -13,6 +13,7 @@ from app.schemas.energie import (
     PrmMaxPowerData,
 )
 from app.services.energie import (
+    get_data_ranges,
     get_dju_monthly,
     get_energie_overview,
     get_prm_annual_profile,
@@ -34,6 +35,11 @@ def get_overview(
 
 
 # Static sub-paths must come before /{prm_id} to avoid being caught as a path param.
+@router.get("/data-ranges")
+def get_ranges(current_user: User = Depends(get_current_user)) -> dict:
+    return get_data_ranges()
+
+
 @router.get("/dju/monthly", response_model=list[DjuMonthPoint])
 def get_dju(
     current_user: User = Depends(get_current_user),
