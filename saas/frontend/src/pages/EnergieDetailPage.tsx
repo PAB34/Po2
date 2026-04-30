@@ -20,7 +20,9 @@ import {
   fetchPrmMaxPower,
   fetchPrmAnnualProfile,
   fetchPrmDailyConsumption,
+  fetchPrmDjuPerformance,
   PrmCalibration,
+  PrmDjuPerformance,
   AnnualYearProfile,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -161,6 +163,131 @@ function AnnualProfileChart({
   );
 }
 
+const DJU_STATUS_LABEL: Record<string, string> = {
+  dans_cible: "Dans la cible",
+  depassement: "Dépassement",
+  economie: "Économie",
+};
+
+const DJU_STATUS_CLASS: Record<string, string> = {
+  dans_cible: "badge-green",
+  depassement: "badge-red",
+  economie: "badge-blue",
+};
+
+function fmtMonth(ym: string): string {
+  try {
+    const [y, m] = ym.split("-");
+    return `${MONTHS_FR[parseInt(m, 10) - 1]} ${y}`;
+  } catch {
+    return ym;
+  }
+}
+
+function DjuPerformanceSection({ data }: { data: PrmDjuPerformance }) {
+  if (!data.has_data) {
+    return (
+      <div className="chart-section">
+        <h3>Performance DJU — kWh/DJU chauffage</h3>
+        <p className="cell-empty dju-pending">
+          Données insuffisantes — disponible après accumulation de consommation journalière (enedis_data).
+          Relancer le notebook <code>04_backfill_daily_consumption.py</code> pour rapatrier l'historique.
+        </p>
+      </div>
+    );
+  }
+
+  const chartData = data.timeseries.map((p) => ({
+    label: fmtMonth(p.month),
+    ratio: p.ratio_kwh_per_dju,
+    kwh: p.kwh,
+    dju: p.dju_chauffe,
+  }));
+
+  return (
+    <div className="chart-section">
+      <h3>Performance DJU — kWh/DJU chauffage (mois de chauffe)</h3>
+
+      <div className="dju-kpi-row">
+        {data.is_reliable && data.baseline_ratio_kwh_per_dju != null ? (
+          <div className="dju-kpi-card">
+            <span className="dju-kpi-label">Intensité cible (baseline)</span>
+            <span className="dju-kpi-value">{data.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU</span>
+            <span className="dju-kpi-sub">{data.months_in_baseline} mois chauffage</span>
+          </div>
+        ) : (
+          <div className="dju-kpi-card dju-kpi-card--pending">
+            <span className="dju-kpi-label">Baseline</span>
+            <span className="dju-kpi-value">—</span>
+            <span className="dju-kpi-sub">Minimum 3 mois requis ({data.months_in_baseline} disponible{data.months_in_baseline > 1 ? "s" : ""})</span>
+          </div>
+        )}
+
+        {data.last_month && data.last_month_status && (
+          <div className="dju-kpi-card">
+            <span className="dju-kpi-label">Dernier mois de chauffe ({fmtMonth(data.last_month.month)})</span>
+            <div className="dju-status-row">
+              <span className={`badge badge-lg ${DJU_STATUS_CLASS[data.last_month_status] ?? "badge-gray"}`}>
+                {DJU_STATUS_LABEL[data.last_month_status] ?? data.last_month_status}
+              </span>
+              {data.last_month_ecart_percent != null && (
+                <span className="dju-ecart">
+                  {data.last_month_ecart_percent > 0 ? "+" : ""}{data.last_month_ecart_percent}%
+                </span>
+              )}
+            </div>
+            <span className="dju-kpi-sub">
+              {data.last_month.kwh.toLocaleString("fr-FR")} kWh — {data.last_month.dju_chauffe} DJU — {data.last_month.ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
+            </span>
+          </div>
+        )}
+      </div>
+
+      {chartData.length > 0 && (
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={Math.max(0, Math.floor(chartData.length / 10) - 1)} />
+            <YAxis tick={{ fontSize: 11 }} unit=" kWh/DJU" width={88} />
+            <Tooltip
+              formatter={(value: number, name: string) => {
+                if (name === "ratio") return [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Ratio observé"];
+                return [value, name];
+              }}
+              labelFormatter={(label) => `Mois : ${label}`}
+            />
+            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
+              <ReferenceLine
+                y={data.baseline_ratio_kwh_per_dju}
+                stroke="#16a34a"
+                strokeDasharray="6 3"
+                label={{ value: `Cible : ${data.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, position: "insideTopRight", fontSize: 11, fill: "#16a34a" }}
+              />
+            )}
+            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
+              <ReferenceLine
+                y={data.baseline_ratio_kwh_per_dju * 1.10}
+                stroke="#dc2626"
+                strokeDasharray="3 3"
+                strokeOpacity={0.5}
+              />
+            )}
+            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
+              <ReferenceLine
+                y={data.baseline_ratio_kwh_per_dju * 0.90}
+                stroke="#2563eb"
+                strokeDasharray="3 3"
+                strokeOpacity={0.5}
+              />
+            )}
+            <Line type="monotone" dataKey="ratio" stroke="#f97316" dot={{ r: 4 }} strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
+}
+
 export function EnergieDetailPage() {
   const { prmId } = useParams<{ prmId: string }>();
   const { token } = useAuth();
@@ -193,6 +320,12 @@ export function EnergieDetailPage() {
   const dailyConsumptionQuery = useQuery({
     queryKey: ["prm-daily-consumption", prmId],
     queryFn: () => fetchPrmDailyConsumption(token!, prmId!, 90),
+    enabled: !!token && !!prmId,
+  });
+
+  const djuPerfQuery = useQuery({
+    queryKey: ["prm-dju-performance", prmId],
+    queryFn: () => fetchPrmDjuPerformance(token!, prmId!),
     enabled: !!token && !!prmId,
   });
 
@@ -338,6 +471,12 @@ export function EnergieDetailPage() {
           )
         )}
       </div>
+
+      {/* DJU Performance */}
+      {djuPerfQuery.isLoading && (
+        <div className="chart-section"><p>Chargement performance DJU…</p></div>
+      )}
+      {djuPerfQuery.data && <DjuPerformanceSection data={djuPerfQuery.data} />}
 
       {/* Annual Profile N/N-1/N-2 */}
       <div className="chart-section">

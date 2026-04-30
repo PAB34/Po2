@@ -8,6 +8,7 @@ from app.schemas.energie import (
     PrmAnnualProfile,
     PrmDailyConsumption,
     PrmDetail,
+    PrmDjuPerformance,
     PrmLoadCurveData,
     PrmMaxPowerData,
 )
@@ -17,6 +18,7 @@ from app.services.energie import (
     get_prm_annual_profile,
     get_prm_daily_consumption,
     get_prm_detail,
+    get_prm_dju_performance,
     get_prm_load_curve,
     get_prm_max_power,
 )
@@ -82,3 +84,11 @@ def get_daily_consumption(
     current_user: User = Depends(get_current_user),
 ) -> PrmDailyConsumption:
     return PrmDailyConsumption.model_validate(get_prm_daily_consumption(prm_id, days=days))
+
+
+@router.get("/{prm_id}/dju-performance", response_model=PrmDjuPerformance)
+def get_dju_performance(
+    prm_id: str,
+    current_user: User = Depends(get_current_user),
+) -> PrmDjuPerformance:
+    return PrmDjuPerformance.model_validate(get_prm_dju_performance(prm_id))

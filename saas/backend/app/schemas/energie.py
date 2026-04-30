@@ -138,3 +138,29 @@ class DjuMonthPoint(BaseModel):
     month: str
     dju_chauffe: float
     dju_froid: float
+
+
+class DjuPerfPoint(BaseModel):
+    month: str
+    kwh: float
+    dju_chauffe: float
+    ratio_kwh_per_dju: float
+
+
+class DjuLastMonth(BaseModel):
+    month: str
+    kwh: float
+    dju_chauffe: float
+    ratio_kwh_per_dju: float
+
+
+class PrmDjuPerformance(BaseModel):
+    usage_point_id: str
+    baseline_ratio_kwh_per_dju: float | None
+    months_in_baseline: int
+    last_month: DjuLastMonth | None
+    last_month_ecart_percent: float | None
+    last_month_status: str | None
+    timeseries: list[DjuPerfPoint]
+    has_data: bool
+    is_reliable: bool

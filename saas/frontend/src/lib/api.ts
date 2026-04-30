@@ -790,3 +790,36 @@ export async function fetchDjuMonthly(token: string): Promise<DjuMonthPoint[]> {
   });
   return parseResponse<DjuMonthPoint[]>(response);
 }
+
+export type DjuPerfPoint = {
+  month: string;
+  kwh: number;
+  dju_chauffe: number;
+  ratio_kwh_per_dju: number;
+};
+
+export type DjuLastMonth = {
+  month: string;
+  kwh: number;
+  dju_chauffe: number;
+  ratio_kwh_per_dju: number;
+};
+
+export type PrmDjuPerformance = {
+  usage_point_id: string;
+  baseline_ratio_kwh_per_dju: number | null;
+  months_in_baseline: number;
+  last_month: DjuLastMonth | null;
+  last_month_ecart_percent: number | null;
+  last_month_status: string | null;
+  timeseries: DjuPerfPoint[];
+  has_data: boolean;
+  is_reliable: boolean;
+};
+
+export async function fetchPrmDjuPerformance(token: string, prmId: string): Promise<PrmDjuPerformance> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/dju-performance`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmDjuPerformance>(response);
+}
