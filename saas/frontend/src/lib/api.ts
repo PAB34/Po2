@@ -851,3 +851,42 @@ export async function startSync(token: string, historyDays?: number): Promise<{ 
   });
   return parseResponse<{ message: string }>(response);
 }
+
+export async function fetchMaxPowerSyncStatus(token: string): Promise<SyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/max-power/status`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<SyncStatus>(response);
+}
+
+export async function startMaxPowerSync(token: string, historyDays?: number): Promise<{ message: string }> {
+  const params = historyDays ? `?history_days=${historyDays}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/max-power/start${params}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
+
+export type DjuSyncStatus = {
+  status: string;
+  last_sync_date: string | null;
+  rows_added: number;
+  error: string | null;
+  log: string[];
+};
+
+export async function fetchDjuSyncStatus(token: string): Promise<DjuSyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/dju/status`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<DjuSyncStatus>(response);
+}
+
+export async function startDjuSync(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/dju/start`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}

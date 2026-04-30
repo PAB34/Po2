@@ -2,117 +2,188 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { fetchEnergieOverview, fetchSyncStatus, startSync, PrmListItem, SupplierDistributionItem, SyncStatus } from "../lib/api";
+import {
+  fetchEnergieOverview, fetchSyncStatus, startSync,
+  fetchMaxPowerSyncStatus, startMaxPowerSync,
+  fetchDjuSyncStatus, startDjuSync,
+  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus,
+} from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899"];
+
+const STATUS_LABEL: Record<string, string> = { idle: "En attente", running: "En cours…", success: "Succès", error: "Erreur" };
+const STATUS_CLASS: Record<string, string> = { idle: "badge-gray", running: "badge-blue", success: "badge-green", error: "badge-red" };
+
+function SubSyncRow({
+  label,
+  status,
+  lastDate,
+  rowsAdded,
+  error,
+  log,
+  isRunning,
+  isPending,
+  progress,
+  onIncremental,
+  onBackfill,
+}: {
+  label: string;
+  status: string | undefined;
+  lastDate: string | null | undefined;
+  rowsAdded?: number;
+  error?: string | null;
+  log?: string[];
+  isRunning: boolean;
+  isPending: boolean;
+  progress?: number | null;
+  onIncremental: () => void;
+  onBackfill?: () => void;
+}) {
+  return (
+    <div className="sync-sub-row">
+      <div className="sync-sub-header">
+        <span className="sync-sub-label">{label}</span>
+        <div className="sync-panel-meta">
+          {status && (
+            <span className={`badge ${STATUS_CLASS[status] ?? "badge-gray"}`}>
+              {STATUS_LABEL[status] ?? status}
+            </span>
+          )}
+          {lastDate && <span className="sync-last-date">Dernière sync : {lastDate}</span>}
+        </div>
+      </div>
+      {isRunning && progress != null && (
+        <div className="sync-progress-row">
+          <div className="sync-progress-bar"><div className="sync-progress-fill" style={{ width: `${progress}%` }} /></div>
+          <span className="sync-progress-label">{progress}%</span>
+        </div>
+      )}
+      {status === "success" && rowsAdded != null && rowsAdded > 0 && (
+        <p className="sync-result-ok">{rowsAdded.toLocaleString("fr-FR")} nouvelles lignes intégrées</p>
+      )}
+      {error && <p className="sync-error">{error}</p>}
+      <div className="sync-actions">
+        <button type="button" className="btn-primary" disabled={isRunning || isPending} onClick={onIncremental}>
+          {isRunning ? "En cours…" : "Sync incrémentale"}
+        </button>
+        {onBackfill && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={isRunning || isPending}
+            onClick={() => {
+              if (lastDate && !window.confirm(`Des données existent déjà (dernière sync : ${lastDate}).\n\nRelancer le backfill 3 ans va re-télécharger tout l'historique. Continuer ?`)) return;
+              onBackfill();
+            }}
+            title="Backfill complet sur 3 ans"
+          >
+            Backfill 3 ans
+          </button>
+        )}
+      </div>
+      {log && log.length > 0 && (
+        <pre className="sync-log">{log.slice(-10).join("\n")}</pre>
+      )}
+    </div>
+  );
+}
 
 function SyncPanel({ token }: { token: string }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
 
-  const { data: syncStatus, refetch } = useQuery({
+  const { data: syncStatus, refetch: refetchConso } = useQuery({
     queryKey: ["sync-status"],
     queryFn: () => fetchSyncStatus(token),
-    refetchInterval: (query) => {
-      const s = query.state.data as SyncStatus | undefined;
-      return s?.status === "running" ? 2000 : false;
-    },
+    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 2000 : false,
   });
 
-  const startMutation = useMutation({
+  const { data: mpStatus, refetch: refetchMp } = useQuery({
+    queryKey: ["sync-max-power-status"],
+    queryFn: () => fetchMaxPowerSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 2000 : false,
+  });
+
+  const { data: djuStatus, refetch: refetchDju } = useQuery({
+    queryKey: ["sync-dju-status"],
+    queryFn: () => fetchDjuSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as DjuSyncStatus | undefined)?.status === "running" ? 2000 : false,
+  });
+
+  const consoMutation = useMutation({
     mutationFn: (historyDays?: number) => startSync(token, historyDays),
-    onSuccess: () => {
-      setTimeout(() => refetch(), 500);
-    },
+    onSuccess: () => { setTimeout(() => refetchConso(), 500); queryClient.invalidateQueries({ queryKey: ["energie-overview"] }); },
   });
 
-  const isRunning = syncStatus?.status === "running";
-  const progress = syncStatus && syncStatus.prms_total > 0
-    ? Math.round((syncStatus.prms_done / syncStatus.prms_total) * 100)
-    : null;
+  const mpMutation = useMutation({
+    mutationFn: (historyDays?: number) => startMaxPowerSync(token, historyDays),
+    onSuccess: () => { setTimeout(() => refetchMp(), 500); },
+  });
 
-  const statusLabel: Record<string, string> = {
-    idle: "En attente",
-    running: "En cours…",
-    success: "Succès",
-    error: "Erreur",
-  };
+  const djuMutation = useMutation({
+    mutationFn: () => startDjuSync(token),
+    onSuccess: () => { setTimeout(() => refetchDju(), 500); },
+  });
 
-  const statusClass: Record<string, string> = {
-    idle: "badge-gray",
-    running: "badge-blue",
-    success: "badge-green",
-    error: "badge-red",
-  };
+  const consoProgress = syncStatus && syncStatus.prms_total > 0
+    ? Math.round((syncStatus.prms_done / syncStatus.prms_total) * 100) : null;
+  const mpProgress = mpStatus && mpStatus.prms_total > 0
+    ? Math.round((mpStatus.prms_done / mpStatus.prms_total) * 100) : null;
+
+  const anyRunning = syncStatus?.status === "running" || mpStatus?.status === "running" || djuStatus?.status === "running";
 
   return (
     <div className="sync-panel">
       <div className="sync-panel-header" onClick={() => setExpanded((v) => !v)}>
-        <span className="sync-panel-title">Synchronisation ENEDIS</span>
+        <span className="sync-panel-title">Synchronisation ENEDIS / DJU</span>
         <div className="sync-panel-meta">
-          {syncStatus && (
-            <span className={`badge ${statusClass[syncStatus.status] ?? "badge-gray"}`}>
-              {statusLabel[syncStatus.status] ?? syncStatus.status}
-            </span>
-          )}
-          {syncStatus?.last_sync_date && (
-            <span className="sync-last-date">Dernière sync : {syncStatus.last_sync_date}</span>
-          )}
+          {anyRunning && <span className="badge badge-blue">En cours…</span>}
           <span className="sync-toggle">{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
       {expanded && (
         <div className="sync-panel-body">
-          {isRunning && progress !== null && (
-            <div className="sync-progress-row">
-              <div className="sync-progress-bar">
-                <div className="sync-progress-fill" style={{ width: `${progress}%` }} />
-              </div>
-              <span className="sync-progress-label">
-                {syncStatus!.prms_done}/{syncStatus!.prms_total} PRMs ({progress}%)
-                {syncStatus!.date_from && ` — ${syncStatus!.date_from} → ${syncStatus!.date_to}`}
-              </span>
-            </div>
-          )}
+          <SubSyncRow
+            label="Consommation journalière (kWh)"
+            status={syncStatus?.status}
+            lastDate={syncStatus?.last_sync_date}
+            rowsAdded={syncStatus?.rows_added}
+            error={syncStatus?.error}
+            log={syncStatus?.log}
+            isRunning={syncStatus?.status === "running"}
+            isPending={consoMutation.isPending}
+            progress={consoProgress}
+            onIncremental={() => consoMutation.mutate(undefined)}
+            onBackfill={() => consoMutation.mutate(1095)}
+          />
 
-          {syncStatus?.status === "success" && syncStatus.rows_added > 0 && (
-            <p className="sync-result-ok">
-              {syncStatus.rows_added.toLocaleString("fr-FR")} nouvelles lignes intégrées
-              ({syncStatus.date_from} → {syncStatus.date_to})
-            </p>
-          )}
+          <SubSyncRow
+            label="Puissance max journalière (VA)"
+            status={mpStatus?.status}
+            lastDate={mpStatus?.last_sync_date}
+            rowsAdded={mpStatus?.rows_added}
+            error={mpStatus?.error}
+            log={mpStatus?.log}
+            isRunning={mpStatus?.status === "running"}
+            isPending={mpMutation.isPending}
+            progress={mpProgress}
+            onIncremental={() => mpMutation.mutate(undefined)}
+            onBackfill={() => mpMutation.mutate(1095)}
+          />
 
-          {syncStatus?.error && (
-            <p className="sync-error">{syncStatus.error}</p>
-          )}
-
-          <div className="sync-actions">
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={isRunning || startMutation.isPending}
-              onClick={() => startMutation.mutate(undefined)}
-            >
-              {isRunning ? "Synchronisation en cours…" : "Lancer la sync (incrémentale)"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={isRunning || startMutation.isPending}
-              onClick={() => startMutation.mutate(1095)}
-              title="Backfill complet sur 3 ans"
-            >
-              Backfill 3 ans
-            </button>
-          </div>
-
-          {syncStatus?.log && syncStatus.log.length > 0 && (
-            <pre className="sync-log">
-              {syncStatus.log.slice(-20).join("\n")}
-            </pre>
-          )}
+          <SubSyncRow
+            label="DJU météo (Open-Meteo — Sète)"
+            status={djuStatus?.status}
+            lastDate={djuStatus?.last_sync_date}
+            rowsAdded={djuStatus?.rows_added}
+            error={djuStatus?.error}
+            log={djuStatus?.log}
+            isRunning={djuStatus?.status === "running"}
+            isPending={djuMutation.isPending}
+            onIncremental={() => djuMutation.mutate()}
+          />
         </div>
       )}
     </div>
