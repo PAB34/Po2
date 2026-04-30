@@ -17,10 +17,37 @@ function communicantBadge(level: string | null): string {
   return "badge-gray";
 }
 
+type CalibStatus = "sous_dimensionne" | "proche_seuil" | "bien_calibre" | "sur_souscrit";
+
+const CALIB_LABEL: Record<CalibStatus, string> = {
+  sous_dimensionne: "Sous-dim.",
+  proche_seuil: "Proche seuil",
+  bien_calibre: "Bien calibré",
+  sur_souscrit: "Sur-souscrit",
+};
+
+const CALIB_CLASS: Record<CalibStatus, string> = {
+  sous_dimensionne: "badge-red",
+  proche_seuil: "badge-orange",
+  bien_calibre: "badge-green",
+  sur_souscrit: "badge-blue",
+};
+
+function calibBadge(status: string | null, ratio: number | null) {
+  if (!status) return null;
+  const s = status as CalibStatus;
+  return (
+    <span className={`badge ${CALIB_CLASS[s] ?? "badge-gray"}`} title={ratio != null ? `${ratio}%` : undefined}>
+      {CALIB_LABEL[s] ?? status}
+    </span>
+  );
+}
+
 export function EnergiePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [calibFilter, setCalibFilter] = useState<string>("all");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["energie-overview"],
@@ -29,6 +56,7 @@ export function EnergiePage() {
   });
 
   const filtered: PrmListItem[] = (data?.prms ?? []).filter((prm) => {
+    if (calibFilter !== "all" && prm.calibration_status !== calibFilter) return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -60,7 +88,38 @@ export function EnergiePage() {
               <span className="kpi-label">Puissance souscrite totale</span>
               <span className="kpi-value">{data.kpis.total_subscribed_kva.toLocaleString("fr-FR")} kVA</span>
             </div>
+            {data.kpis.sous_dimensionnes > 0 && (
+              <div className="kpi-card kpi-card--alert">
+                <span className="kpi-label">Sous-dimensionnés</span>
+                <span className="kpi-value">{data.kpis.sous_dimensionnes}</span>
+              </div>
+            )}
+            {data.kpis.proche_seuil > 0 && (
+              <div className="kpi-card kpi-card--warn">
+                <span className="kpi-label">Proches du seuil</span>
+                <span className="kpi-value">{data.kpis.proche_seuil}</span>
+              </div>
+            )}
+            {data.kpis.sur_souscrits > 0 && (
+              <div className="kpi-card kpi-card--info">
+                <span className="kpi-label">Sur-souscrits</span>
+                <span className="kpi-value">{data.kpis.sur_souscrits}</span>
+              </div>
+            )}
           </div>
+
+          {data.supplier_distribution.length > 0 && (
+            <div className="supplier-bar-row">
+              {data.supplier_distribution.map((s) => (
+                <div key={s.supplier} className="supplier-bar-item">
+                  <span className="supplier-name">{s.supplier}</span>
+                  <span className="supplier-stats">
+                    {s.prm_count} PRM — {s.total_kva.toLocaleString("fr-FR")} kVA
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="list-toolbar">
             <input
@@ -70,6 +129,17 @@ export function EnergiePage() {
               onChange={(e) => setSearch(e.target.value)}
               className="search-input"
             />
+            <select
+              value={calibFilter}
+              onChange={(e) => setCalibFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Tous calibrages</option>
+              <option value="sous_dimensionne">Sous-dimensionnés</option>
+              <option value="proche_seuil">Proches du seuil</option>
+              <option value="bien_calibre">Bien calibrés</option>
+              <option value="sur_souscrit">Sur-souscrits</option>
+            </select>
             <span className="result-count">{filtered.length} résultat{filtered.length !== 1 ? "s" : ""}</span>
           </div>
 
@@ -81,7 +151,9 @@ export function EnergiePage() {
                   <th>PRM</th>
                   <th>Adresse</th>
                   <th>Fournisseur</th>
-                  <th>kVA</th>
+                  <th>Souscrit</th>
+                  <th>Pic 3 ans</th>
+                  <th>Calibrage</th>
                   <th>État</th>
                   <th>Communicant</th>
                 </tr>
@@ -97,7 +169,9 @@ export function EnergiePage() {
                     <td className="cell-mono">{prm.usage_point_id}</td>
                     <td>{prm.address}</td>
                     <td>{prm.contractor}</td>
-                    <td className="cell-number">{prm.subscribed_power_kva ?? "—"}</td>
+                    <td className="cell-number">{prm.subscribed_power_kva != null ? `${prm.subscribed_power_kva} kVA` : "—"}</td>
+                    <td className="cell-number">{prm.peak_kva_3y != null ? `${prm.peak_kva_3y} kVA` : "—"}</td>
+                    <td>{calibBadge(prm.calibration_status, prm.calibration_ratio)}</td>
                     <td>
                       {prm.connection_state && (
                         <span className={`badge ${connectionBadge(prm.connection_state)}`}>
@@ -116,7 +190,7 @@ export function EnergiePage() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="cell-empty">Aucun résultat</td>
+                    <td colSpan={9} className="cell-empty">Aucun résultat</td>
                   </tr>
                 )}
               </tbody>

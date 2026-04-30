@@ -606,6 +606,15 @@ export async function deleteLocalRequest(token: string, buildingId: number, loca
 export type EnergieKpis = {
   total_prms: number;
   total_subscribed_kva: number;
+  sous_dimensionnes: number;
+  proche_seuil: number;
+  sur_souscrits: number;
+};
+
+export type SupplierDistributionItem = {
+  supplier: string;
+  total_kva: number;
+  prm_count: number;
 };
 
 export type PrmListItem = {
@@ -618,10 +627,14 @@ export type PrmListItem = {
   segment: string | null;
   connection_state: string | null;
   services_level: string | null;
+  peak_kva_3y: number | null;
+  calibration_status: string | null;
+  calibration_ratio: number | null;
 };
 
 export type EnergieOverview = {
   kpis: EnergieKpis;
+  supplier_distribution: SupplierDistributionItem[];
   prms: PrmListItem[];
 };
 
@@ -659,12 +672,21 @@ export type PrmSummary = {
   services_level: string | null;
 };
 
+export type PrmCalibration = {
+  subscribed_kva: number | null;
+  peak_kva_3y: number | null;
+  ratio_percent: number | null;
+  status: string | null;
+  recommendation: string | null;
+};
+
 export type PrmDetail = {
   usage_point_id: string;
   contract: PrmContract;
   address: PrmAddress;
   connection: PrmConnection;
   summary: PrmSummary;
+  calibration: PrmCalibration;
 };
 
 export type MaxPowerPoint = {
@@ -674,7 +696,40 @@ export type MaxPowerPoint = {
 
 export type PrmMaxPowerData = {
   usage_point_id: string;
+  subscribed_kva: number | null;
   points: MaxPowerPoint[];
+};
+
+export type AnnualMonthPoint = {
+  month: string;
+  max_kva: number;
+};
+
+export type AnnualYearProfile = {
+  year: string;
+  months: AnnualMonthPoint[];
+};
+
+export type PrmAnnualProfile = {
+  usage_point_id: string;
+  subscribed_kva: number | null;
+  profiles: AnnualYearProfile[];
+};
+
+export type DailyConsumptionPoint = {
+  date: string;
+  value_kwh: number;
+};
+
+export type PrmDailyConsumption = {
+  usage_point_id: string;
+  points: DailyConsumptionPoint[];
+};
+
+export type DjuMonthPoint = {
+  month: string;
+  dju_chauffe: number;
+  dju_froid: number;
 };
 
 export type LoadCurvePoint = {
@@ -713,4 +768,25 @@ export async function fetchPrmLoadCurve(token: string, prmId: string, days = 7):
     headers: buildHeaders(token),
   });
   return parseResponse<PrmLoadCurveData>(response);
+}
+
+export async function fetchPrmAnnualProfile(token: string, prmId: string): Promise<PrmAnnualProfile> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/annual-profile`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmAnnualProfile>(response);
+}
+
+export async function fetchPrmDailyConsumption(token: string, prmId: string, days = 90): Promise<PrmDailyConsumption> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/daily-consumption?days=${days}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmDailyConsumption>(response);
+}
+
+export async function fetchDjuMonthly(token: string): Promise<DjuMonthPoint[]> {
+  const response = await fetch(`${apiBaseUrl}/energie/dju/monthly`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<DjuMonthPoint[]>(response);
 }

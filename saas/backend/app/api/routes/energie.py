@@ -3,13 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.schemas.energie import (
+    DjuMonthPoint,
     EnergieOverview,
+    PrmAnnualProfile,
+    PrmDailyConsumption,
     PrmDetail,
     PrmLoadCurveData,
     PrmMaxPowerData,
 )
 from app.services.energie import (
+    get_dju_monthly,
     get_energie_overview,
+    get_prm_annual_profile,
+    get_prm_daily_consumption,
     get_prm_detail,
     get_prm_load_curve,
     get_prm_max_power,
@@ -23,6 +29,14 @@ def get_overview(
     current_user: User = Depends(get_current_user),
 ) -> EnergieOverview:
     return EnergieOverview.model_validate(get_energie_overview())
+
+
+# Static sub-paths must come before /{prm_id} to avoid being caught as a path param.
+@router.get("/dju/monthly", response_model=list[DjuMonthPoint])
+def get_dju(
+    current_user: User = Depends(get_current_user),
+) -> list[DjuMonthPoint]:
+    return [DjuMonthPoint.model_validate(r) for r in get_dju_monthly()]
 
 
 @router.get("/{prm_id}", response_model=PrmDetail)
@@ -51,3 +65,20 @@ def get_load_curve(
     current_user: User = Depends(get_current_user),
 ) -> PrmLoadCurveData:
     return PrmLoadCurveData.model_validate(get_prm_load_curve(prm_id, days=days))
+
+
+@router.get("/{prm_id}/annual-profile", response_model=PrmAnnualProfile)
+def get_annual_profile(
+    prm_id: str,
+    current_user: User = Depends(get_current_user),
+) -> PrmAnnualProfile:
+    return PrmAnnualProfile.model_validate(get_prm_annual_profile(prm_id))
+
+
+@router.get("/{prm_id}/daily-consumption", response_model=PrmDailyConsumption)
+def get_daily_consumption(
+    prm_id: str,
+    days: int | None = Query(default=90, ge=1, le=730),
+    current_user: User = Depends(get_current_user),
+) -> PrmDailyConsumption:
+    return PrmDailyConsumption.model_validate(get_prm_daily_consumption(prm_id, days=days))
