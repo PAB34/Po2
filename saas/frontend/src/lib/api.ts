@@ -883,6 +883,35 @@ export async function fetchDjuSyncStatus(token: string): Promise<DjuSyncStatus> 
   return parseResponse<DjuSyncStatus>(response);
 }
 
+export type LoadCurveSyncStatus = {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  chunks_total: number;
+  chunks_done: number;
+  rows_added: number;
+  date_from: string | null;
+  date_to: string | null;
+  last_sync_date: string | null;
+  error: string | null;
+  log: string[];
+};
+
+export async function fetchLoadCurveSyncStatus(token: string): Promise<LoadCurveSyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/load-curve/status`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LoadCurveSyncStatus>(response);
+}
+
+export async function startLoadCurveSync(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/load-curve/start`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
+
 export async function startDjuSync(token: string): Promise<{ message: string }> {
   const response = await fetch(`${apiBaseUrl}/energie/sync/dju/start`, {
     method: "POST",

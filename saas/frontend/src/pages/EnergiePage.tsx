@@ -5,9 +5,10 @@ import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recha
 import {
   fetchEnergieOverview, fetchSyncStatus, startSync,
   fetchMaxPowerSyncStatus, startMaxPowerSync,
+  fetchLoadCurveSyncStatus, startLoadCurveSync,
   fetchDjuSyncStatus, startDjuSync,
   fetchDataRanges,
-  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, DataRanges,
+  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, LoadCurveSyncStatus, DataRanges,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -106,6 +107,12 @@ function SyncPanel({ token }: { token: string }) {
     refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 2000 : false,
   });
 
+  const { data: lcStatus, refetch: refetchLc } = useQuery({
+    queryKey: ["sync-lc-status"],
+    queryFn: () => fetchLoadCurveSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as LoadCurveSyncStatus | undefined)?.status === "running" ? 3000 : false,
+  });
+
   const { data: djuStatus, refetch: refetchDju } = useQuery({
     queryKey: ["sync-dju-status"],
     queryFn: () => fetchDjuSyncStatus(token),
@@ -122,6 +129,11 @@ function SyncPanel({ token }: { token: string }) {
     onSuccess: () => { setTimeout(() => refetchMp(), 500); },
   });
 
+  const lcMutation = useMutation({
+    mutationFn: () => startLoadCurveSync(token),
+    onSuccess: () => { setTimeout(() => refetchLc(), 500); },
+  });
+
   const djuMutation = useMutation({
     mutationFn: () => startDjuSync(token),
     onSuccess: () => { setTimeout(() => refetchDju(), 500); },
@@ -131,8 +143,11 @@ function SyncPanel({ token }: { token: string }) {
     ? Math.round((syncStatus.prms_done / syncStatus.prms_total) * 100) : null;
   const mpProgress = mpStatus && mpStatus.prms_total > 0
     ? Math.round((mpStatus.prms_done / mpStatus.prms_total) * 100) : null;
+  const lcProgress = lcStatus && lcStatus.chunks_total > 0
+    ? Math.round((lcStatus.chunks_done / lcStatus.chunks_total) * 100) : null;
 
-  const anyRunning = syncStatus?.status === "running" || mpStatus?.status === "running" || djuStatus?.status === "running";
+  const anyRunning = syncStatus?.status === "running" || mpStatus?.status === "running"
+    || lcStatus?.status === "running" || djuStatus?.status === "running";
 
   return (
     <div className="sync-panel">
@@ -172,6 +187,19 @@ function SyncPanel({ token }: { token: string }) {
             progress={mpProgress}
             onIncremental={() => mpMutation.mutate(undefined)}
             onBackfill={() => mpMutation.mutate(1095)}
+          />
+
+          <SubSyncRow
+            label="Courbe de charge 30 min (depuis 01/01/2026)"
+            status={lcStatus?.status}
+            lastDate={lcStatus?.last_sync_date}
+            rowsAdded={lcStatus?.rows_added}
+            error={lcStatus?.error}
+            log={lcStatus?.log}
+            isRunning={lcStatus?.status === "running"}
+            isPending={lcMutation.isPending}
+            progress={lcProgress}
+            onIncremental={() => lcMutation.mutate()}
           />
 
           <SubSyncRow

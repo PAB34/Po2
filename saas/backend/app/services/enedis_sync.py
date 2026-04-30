@@ -657,3 +657,267 @@ def run_max_power_sync(history_days: int | None = None) -> None:
         LOG.exception("Max power sync error")
         with _MP_LOCK:
             _MP_STATE.update({"status": "error", "finished_at": datetime.utcnow().isoformat(), "error": msg})
+
+
+# ---------------------------------------------------------------------------
+# Courbe de charge 30 min (consumption_load_curve) — depuis 2026-01-01
+# Limite ENEDIS : 7 jours max par appel → chunks de 7 jours, append CSV
+# ---------------------------------------------------------------------------
+
+_LC_LOCK = threading.Lock()
+_LC_STATE: dict[str, Any] = {
+    "status": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "chunks_total": 0,
+    "chunks_done": 0,
+    "rows_added": 0,
+    "date_from": None,
+    "date_to": None,
+    "last_sync_date": None,
+    "error": None,
+    "log": [],
+}
+_LC_CHUNK_DAYS = 7   # limite API ENEDIS
+_LC_FIELDNAMES = ["usage_point_id", "datetime", "value_w", "unit", "quality", "_ingested_at_utc"]
+
+
+def _lc_log(msg: str) -> None:
+    LOG.info(msg)
+    with _LC_LOCK:
+        _LC_STATE["log"].append(f"{datetime.utcnow().strftime('%H:%M:%S')} {msg}")
+        if len(_LC_STATE["log"]) > _MAX_LOG_LINES:
+            _LC_STATE["log"] = _LC_STATE["log"][-_MAX_LOG_LINES:]
+
+
+def get_load_curve_status() -> dict[str, Any]:
+    persistent = _load_lc_state()
+    with _LC_LOCK:
+        snap = dict(_LC_STATE)
+    if not snap["last_sync_date"] and persistent.get("last_sync_date"):
+        snap["last_sync_date"] = persistent["last_sync_date"]
+    return snap
+
+
+def is_load_curve_running() -> bool:
+    with _LC_LOCK:
+        return _LC_STATE["status"] == "running"
+
+
+def _lc_state_path() -> Path:
+    return Path(settings.energie_dir) / "enedis_lc_state.json"
+
+
+def _load_lc_state() -> dict[str, Any]:
+    p = _lc_state_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_lc_state(last_date: str) -> None:
+    p = _lc_state_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    state = _load_lc_state()
+    state["last_sync_date"] = last_date
+    p.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _append_lc_csv(rows: list[dict], csv_path: Path) -> int:
+    """Ajoute des lignes à la fin du CSV courbe de charge (sans relire l'existant)."""
+    if not rows:
+        return 0
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not csv_path.exists() or csv_path.stat().st_size == 0
+    with open(csv_path, "a", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=_LC_FIELDNAMES, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        for row in rows:
+            writer.writerow({k: "" if row.get(k) is None else str(row[k]) for k in _LC_FIELDNAMES})
+    return len(rows)
+
+
+def _fetch_lc_prm(
+    token: str,
+    prm: str,
+    start_date: str,
+    end_date: str,
+    ingested_at: str,
+) -> tuple[list[dict], int, int]:
+    """Fetch courbe de charge pour un PRM sur une fenêtre ≤ 7 jours."""
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    resp = None
+    for attempt in range(4):
+        try:
+            resp = requests.get(
+                settings.enedis_load_curve_url,
+                headers=headers,
+                params={"usage_point_id": prm, "start": start_date, "end": end_date},
+                timeout=45,
+            )
+            if resp.status_code == 429 and attempt < len(_RETRY_429):
+                _lc_log(f"PRM {prm} → 429, attente {_RETRY_429[attempt]}s…")
+                _time.sleep(_RETRY_429[attempt])
+                continue
+            if resp.status_code >= 500:
+                _time.sleep(5 * (attempt + 1))
+                continue
+            break
+        except Exception as exc:
+            if attempt == 3:
+                LOG.warning("PRM %s [load_curve] réseau : %s", prm, exc)
+                return [], 0, 1
+            _time.sleep(5)
+
+    if resp is None:
+        return [], 0, 1
+
+    if resp.status_code == 200:
+        mr = resp.json().get("meter_reading", {})
+        unit = mr.get("reading_type", {}).get("unit", "W")
+        quality = mr.get("quality", "")
+        rows = []
+        for ir in mr.get("interval_reading", []):
+            raw_dt = ir.get("date", "")
+            val = ir.get("value")
+            try:
+                rows.append({
+                    "usage_point_id": prm,
+                    "datetime": raw_dt,
+                    "value_w": float(val) if val not in (None, "") else None,
+                    "unit": unit,
+                    "quality": quality,
+                    "_ingested_at_utc": ingested_at,
+                })
+            except (ValueError, TypeError):
+                continue
+        return rows, 1, 0
+
+    if resp.status_code in (403, 404):
+        return [], 1, 0
+
+    LOG.warning("PRM %s [load_curve] → HTTP %d : %s", prm, resp.status_code, resp.text[:200])
+    return [], 0, 1
+
+
+def run_load_curve_sync() -> None:
+    """
+    Background task : récupère la courbe de charge 30 min pour tous les PRMs
+    depuis settings.enedis_load_curve_start (défaut 2026-01-01), en chunks de 7 jours.
+    """
+    with _LC_LOCK:
+        if _LC_STATE["status"] == "running":
+            return
+        _LC_STATE.update({
+            "status": "running",
+            "started_at": datetime.utcnow().isoformat(),
+            "finished_at": None,
+            "error": None,
+            "log": [],
+            "chunks_total": 0,
+            "chunks_done": 0,
+            "rows_added": 0,
+        })
+
+    try:
+        _lc_log("Démarrage sync courbe de charge 30 min")
+
+        prms = _load_prms()
+        _lc_log(f"{len(prms)} PRMs chargés")
+
+        persistent = _load_lc_state()
+        last_sync = persistent.get("last_sync_date")
+        today = date.today()
+        end_d = today - timedelta(days=1)
+
+        if last_sync:
+            start_d = date.fromisoformat(last_sync) + timedelta(days=1)
+            _lc_log(f"Reprise depuis {start_d} (données jusqu'au {last_sync})")
+        else:
+            start_d = date.fromisoformat(settings.enedis_load_curve_start)
+            _lc_log(f"Premier backfill depuis {start_d}")
+
+        if start_d > end_d:
+            _lc_log("Courbe de charge déjà à jour.")
+            with _LC_LOCK:
+                _LC_STATE.update({"status": "success", "finished_at": datetime.utcnow().isoformat(), "last_sync_date": last_sync})
+            return
+
+        # Calculer le nombre de chunks
+        total_days = (end_d - start_d).days + 1
+        chunks_total = (total_days + _LC_CHUNK_DAYS - 1) // _LC_CHUNK_DAYS
+        with _LC_LOCK:
+            _LC_STATE.update({"chunks_total": chunks_total, "date_from": start_d.isoformat(), "date_to": end_d.isoformat()})
+        _lc_log(f"Fenêtre : {start_d} → {end_d} ({total_days} jours, {chunks_total} chunks de 7j)")
+
+        csv_path = Path(settings.energie_dir) / "enedis_load_curve.csv"
+        token = _get_token()
+        ingested_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        total_rows = 0
+        chunk_start = start_d
+        chunk_idx = 0
+
+        while chunk_start <= end_d:
+            chunk_end = min(chunk_start + timedelta(days=_LC_CHUNK_DAYS - 1), end_d)
+            cs, ce = chunk_start.isoformat(), chunk_end.isoformat()
+            chunk_idx += 1
+            _lc_log(f"Chunk {chunk_idx}/{chunks_total} : {cs} → {ce} ({len(prms)} PRMs)")
+
+            all_rows: list[dict] = []
+            done_count = 0
+
+            with ThreadPoolExecutor(max_workers=_WORKERS) as executor:
+                futures = {
+                    executor.submit(_fetch_lc_prm, token, prm, cs, ce, ingested_at): prm
+                    for prm in prms
+                }
+                for future in as_completed(futures):
+                    rows, _ok, _err = future.result()
+                    all_rows.extend(rows)
+                    done_count += 1
+                    if done_count % 100 == 0 or done_count == len(prms):
+                        _lc_log(f"  {done_count}/{len(prms)} PRMs — {len(all_rows)} pts collectés")
+
+            appended = _append_lc_csv(all_rows, csv_path)
+            total_rows += appended
+            _save_lc_state(ce)
+            with _LC_LOCK:
+                _LC_STATE.update({"chunks_done": chunk_idx, "rows_added": total_rows, "last_sync_date": ce})
+            _lc_log(f"  Chunk OK — {appended} pts écrits ({total_rows} total)")
+
+            chunk_start = chunk_end + timedelta(days=1)
+
+            # Re-auth toutes les 3 chunks (~21 jours)
+            if chunk_idx % 3 == 0 and chunk_start <= end_d:
+                try:
+                    token = _get_token()
+                except Exception:
+                    pass
+
+        try:
+            from app.services.energie import _load_curve_index, get_data_ranges  # noqa: PLC0415
+            _load_curve_index.cache_clear()
+            get_data_ranges.cache_clear()
+            _lc_log("Cache courbe de charge invalidé.")
+        except Exception:
+            pass
+
+        _lc_log(f"Terminé — {total_rows} points écrits, date max : {end_d.isoformat()}")
+        with _LC_LOCK:
+            _LC_STATE.update({
+                "status": "success",
+                "finished_at": datetime.utcnow().isoformat(),
+                "rows_added": total_rows,
+                "last_sync_date": end_d.isoformat(),
+            })
+
+    except Exception as exc:
+        msg = str(exc)
+        _lc_log(f"ERREUR : {msg}")
+        LOG.exception("Load curve sync error")
+        with _LC_LOCK:
+            _LC_STATE.update({"status": "error", "finished_at": datetime.utcnow().isoformat(), "error": msg})

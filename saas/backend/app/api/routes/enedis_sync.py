@@ -5,11 +5,14 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.services.dju_sync import get_dju_sync_status, is_dju_running, run_dju_sync
 from app.services.enedis_sync import (
+    get_load_curve_status,
     get_max_power_status,
     get_sync_status,
+    is_load_curve_running,
     is_max_power_running,
     is_sync_running,
     run_daily_consumption_sync,
+    run_load_curve_sync,
     run_max_power_sync,
 )
 
@@ -78,6 +81,40 @@ def max_power_start(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation puissance max est déjà en cours.")
     background_tasks.add_task(run_max_power_sync, history_days)
     return {"message": "Synchronisation puissance max démarrée."}
+
+
+# ---------------------------------------------------------------------------
+# Courbe de charge 30 min
+# ---------------------------------------------------------------------------
+
+class LoadCurveSyncStatus(BaseModel):
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    chunks_total: int = 0
+    chunks_done: int = 0
+    rows_added: int = 0
+    date_from: str | None = None
+    date_to: str | None = None
+    last_sync_date: str | None = None
+    error: str | None = None
+    log: list[str] = []
+
+
+@router.get("/load-curve/status", response_model=LoadCurveSyncStatus)
+def load_curve_status(current_user: User = Depends(get_current_user)) -> LoadCurveSyncStatus:
+    return LoadCurveSyncStatus.model_validate(get_load_curve_status())
+
+
+@router.post("/load-curve/start", status_code=status.HTTP_202_ACCEPTED)
+def load_curve_start(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if is_load_curve_running():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation courbe de charge est déjà en cours.")
+    background_tasks.add_task(run_load_curve_sync)
+    return {"message": "Synchronisation courbe de charge démarrée."}
 
 
 # ---------------------------------------------------------------------------

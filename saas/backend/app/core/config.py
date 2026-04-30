@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     enedis_base_url: str = "https://gw.ext.prod.api.enedis.fr"
     enedis_sync_url: str = "https://gw.ext.prod.api.enedis.fr/mesures/v2/metering_data/daily_consumption"
     enedis_max_power_url: str = "https://gw.ext.prod.api.enedis.fr/mesures/v2/metering_data/daily_consumption_max_power"
+    enedis_load_curve_url: str = "https://gw.ext.prod.api.enedis.fr/mesures/v2/metering_data/consumption_load_curve"
+    enedis_load_curve_start: str = "2026-01-01"  # date de début historique courbe de charge
     enedis_client_id: str = ""
     enedis_client_secret: str = ""
     enedis_history_days: int = 1095  # 3 ans — limite API 36 mois
