@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     jwt_token_prefix: str = "Bearer"
     jwt_header_name: str = "Authorization"
 
+    # ENEDIS API
+    enedis_auth_url: str = "https://ext.prod.api.enedis.fr/oauth2/v3/token"
+    enedis_base_url: str = "https://gw.ext.prod.api.enedis.fr"
+    enedis_sync_url: str = "https://gw.ext.prod.api.enedis.fr/mesures/v2/metering_data/daily_consumption"
+    enedis_client_id: str = ""
+    enedis_client_secret: str = ""
+    enedis_history_days: int = 1095  # 3 ans — limite API 36 mois
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]

@@ -1,11 +1,123 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { fetchEnergieOverview, PrmListItem, SupplierDistributionItem } from "../lib/api";
+import { fetchEnergieOverview, fetchSyncStatus, startSync, PrmListItem, SupplierDistributionItem, SyncStatus } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899"];
+
+function SyncPanel({ token }: { token: string }) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+
+  const { data: syncStatus, refetch } = useQuery({
+    queryKey: ["sync-status"],
+    queryFn: () => fetchSyncStatus(token),
+    refetchInterval: (query) => {
+      const s = query.state.data as SyncStatus | undefined;
+      return s?.status === "running" ? 2000 : false;
+    },
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (historyDays?: number) => startSync(token, historyDays),
+    onSuccess: () => {
+      setTimeout(() => refetch(), 500);
+    },
+  });
+
+  const isRunning = syncStatus?.status === "running";
+  const progress = syncStatus && syncStatus.prms_total > 0
+    ? Math.round((syncStatus.prms_done / syncStatus.prms_total) * 100)
+    : null;
+
+  const statusLabel: Record<string, string> = {
+    idle: "En attente",
+    running: "En cours…",
+    success: "Succès",
+    error: "Erreur",
+  };
+
+  const statusClass: Record<string, string> = {
+    idle: "badge-gray",
+    running: "badge-blue",
+    success: "badge-green",
+    error: "badge-red",
+  };
+
+  return (
+    <div className="sync-panel">
+      <div className="sync-panel-header" onClick={() => setExpanded((v) => !v)}>
+        <span className="sync-panel-title">Synchronisation ENEDIS</span>
+        <div className="sync-panel-meta">
+          {syncStatus && (
+            <span className={`badge ${statusClass[syncStatus.status] ?? "badge-gray"}`}>
+              {statusLabel[syncStatus.status] ?? syncStatus.status}
+            </span>
+          )}
+          {syncStatus?.last_sync_date && (
+            <span className="sync-last-date">Dernière sync : {syncStatus.last_sync_date}</span>
+          )}
+          <span className="sync-toggle">{expanded ? "▲" : "▼"}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="sync-panel-body">
+          {isRunning && progress !== null && (
+            <div className="sync-progress-row">
+              <div className="sync-progress-bar">
+                <div className="sync-progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+              <span className="sync-progress-label">
+                {syncStatus!.prms_done}/{syncStatus!.prms_total} PRMs ({progress}%)
+                {syncStatus!.date_from && ` — ${syncStatus!.date_from} → ${syncStatus!.date_to}`}
+              </span>
+            </div>
+          )}
+
+          {syncStatus?.status === "success" && syncStatus.rows_added > 0 && (
+            <p className="sync-result-ok">
+              {syncStatus.rows_added.toLocaleString("fr-FR")} nouvelles lignes intégrées
+              ({syncStatus.date_from} → {syncStatus.date_to})
+            </p>
+          )}
+
+          {syncStatus?.error && (
+            <p className="sync-error">{syncStatus.error}</p>
+          )}
+
+          <div className="sync-actions">
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={isRunning || startMutation.isPending}
+              onClick={() => startMutation.mutate(undefined)}
+            >
+              {isRunning ? "Synchronisation en cours…" : "Lancer la sync (incrémentale)"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={isRunning || startMutation.isPending}
+              onClick={() => startMutation.mutate(1095)}
+              title="Backfill complet sur 3 ans"
+            >
+              Backfill 3 ans
+            </button>
+          </div>
+
+          {syncStatus?.log && syncStatus.log.length > 0 && (
+            <pre className="sync-log">
+              {syncStatus.log.slice(-20).join("\n")}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SupplierPieChart({ data }: { data: SupplierDistributionItem[] }) {
   if (data.length === 0) return null;
@@ -111,6 +223,8 @@ export function EnergiePage() {
         <h2>Énergie</h2>
         <p className="page-subtitle">Électricité ENEDIS — Points de livraison (PRMs)</p>
       </div>
+
+      <SyncPanel token={token!} />
 
       {isLoading && <p>Chargement…</p>}
       {error && <p className="error-text">{(error as Error).message}</p>}

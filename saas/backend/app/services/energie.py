@@ -425,76 +425,81 @@ def _consumption_by_month() -> dict[str, dict[str, float]]:
     return result
 
 
-_DJU_HEATING_MIN = 10.0   # seuil minimum DJU chauffage pour considérer le mois comme "saison chauffe"
-_DJU_PERF_TARGET_TOLERANCE = 0.10   # ±10 % autour du ratio cible = "dans la cible"
-_DJU_PERF_MIN_MONTHS = 3           # nombre minimum de mois pour une baseline fiable
+_DJU_HEATING_MIN = 10.0
+_DJU_COOLING_MIN = 5.0
+_DJU_PERF_TOLERANCE = 0.10   # ±10 % = "dans la cible"
+_DJU_PERF_MIN_MONTHS = 3
 
 
-def get_prm_dju_performance(prm_id: str) -> dict[str, Any]:
-    """
-    Compute kWh/DJU_chauffage performance indicator for a PRM.
-
-    Baseline = mean(kWh_month / DJU_chauffe_month) over past completed heating months.
-    A heating month is defined as DJU_chauffe >= _DJU_HEATING_MIN.
-    The current (incomplete) month is excluded from baseline and last-month comparison.
-    """
-    dju_idx = _dju_monthly_index()
-    conso_idx = _consumption_by_month().get(prm_id, {})
-
-    today = date.today()
-    current_ym = today.strftime("%Y-%m")
-
-    # Build monthly performance timeseries (heating months only, past completed)
+def _build_dju_side(
+    dju_idx: dict[str, dict[str, float]],
+    conso_idx: dict[str, float],
+    current_ym: str,
+    dju_key: str,
+    dju_min: float,
+) -> dict[str, Any]:
+    """Compute baseline + last-month indicator for one DJU side (heating or cooling)."""
     timeseries: list[dict[str, Any]] = []
     for ym in sorted(dju_idx.keys()):
         if ym >= current_ym:
             continue
-        dju_m = dju_idx[ym]
-        dju_chauffe = dju_m["dju_chauffe"]
-        if dju_chauffe < _DJU_HEATING_MIN:
+        dju_val = dju_idx[ym].get(dju_key, 0.0)
+        if dju_val < dju_min:
             continue
         kwh = conso_idx.get(ym)
         if kwh is None or kwh <= 0:
             continue
-        ratio = round(kwh / dju_chauffe, 4)
         timeseries.append({
             "month": ym,
             "kwh": round(kwh, 1),
-            "dju_chauffe": round(dju_chauffe, 1),
-            "ratio_kwh_per_dju": ratio,
+            "dju": round(dju_val, 1),
+            "ratio_kwh_per_dju": round(kwh / dju_val, 4),
         })
 
     has_data = len(timeseries) > 0
     is_reliable = len(timeseries) >= _DJU_PERF_MIN_MONTHS
 
-    baseline_ratio: float | None = None
+    baseline: float | None = None
     if is_reliable:
-        baseline_ratio = round(sum(p["ratio_kwh_per_dju"] for p in timeseries) / len(timeseries), 4)
+        baseline = round(sum(p["ratio_kwh_per_dju"] for p in timeseries) / len(timeseries), 4)
 
-    # Last completed heating month
-    last_month_data: dict[str, Any] | None = timeseries[-1] if timeseries else None
-    last_month_ecart: float | None = None
-    last_month_status: str | None = None
+    last = timeseries[-1] if timeseries else None
+    ecart: float | None = None
+    status: str | None = None
 
-    if last_month_data and baseline_ratio:
-        ratio_obs = last_month_data["ratio_kwh_per_dju"]
-        ecart = (ratio_obs - baseline_ratio) / baseline_ratio
-        last_month_ecart = round(ecart * 100, 1)
-        if abs(ecart) <= _DJU_PERF_TARGET_TOLERANCE:
-            last_month_status = "dans_cible"
-        elif ecart > _DJU_PERF_TARGET_TOLERANCE:
-            last_month_status = "depassement"
+    if last and baseline:
+        e = (last["ratio_kwh_per_dju"] - baseline) / baseline
+        ecart = round(e * 100, 1)
+        if abs(e) <= _DJU_PERF_TOLERANCE:
+            status = "dans_cible"
+        elif e > _DJU_PERF_TOLERANCE:
+            status = "depassement"
         else:
-            last_month_status = "economie"
+            status = "economie"
 
     return {
-        "usage_point_id": prm_id,
-        "baseline_ratio_kwh_per_dju": baseline_ratio,
+        "baseline_ratio_kwh_per_dju": baseline,
         "months_in_baseline": len(timeseries),
-        "last_month": last_month_data,
-        "last_month_ecart_percent": last_month_ecart,
-        "last_month_status": last_month_status,
+        "last_month": last,
+        "last_month_ecart_percent": ecart,
+        "last_month_status": status,
         "timeseries": timeseries,
         "has_data": has_data,
         "is_reliable": is_reliable,
+    }
+
+
+def get_prm_dju_performance(prm_id: str) -> dict[str, Any]:
+    """
+    kWh/DJU performance indicator split into heating (DJU_chauffage) and cooling (DJU_froid).
+    Only past completed months are included; the current month is excluded.
+    """
+    dju_idx = _dju_monthly_index()
+    conso_idx = _consumption_by_month().get(prm_id, {})
+    current_ym = date.today().strftime("%Y-%m")
+
+    return {
+        "usage_point_id": prm_id,
+        "heating": _build_dju_side(dju_idx, conso_idx, current_ym, "dju_chauffe", _DJU_HEATING_MIN),
+        "cooling": _build_dju_side(dju_idx, conso_idx, current_ym, "dju_froid", _DJU_COOLING_MIN),
     }

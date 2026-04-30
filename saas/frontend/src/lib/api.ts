@@ -794,22 +794,14 @@ export async function fetchDjuMonthly(token: string): Promise<DjuMonthPoint[]> {
 export type DjuPerfPoint = {
   month: string;
   kwh: number;
-  dju_chauffe: number;
+  dju: number;
   ratio_kwh_per_dju: number;
 };
 
-export type DjuLastMonth = {
-  month: string;
-  kwh: number;
-  dju_chauffe: number;
-  ratio_kwh_per_dju: number;
-};
-
-export type PrmDjuPerformance = {
-  usage_point_id: string;
+export type DjuSidePerf = {
   baseline_ratio_kwh_per_dju: number | null;
   months_in_baseline: number;
-  last_month: DjuLastMonth | null;
+  last_month: DjuPerfPoint | null;
   last_month_ecart_percent: number | null;
   last_month_status: string | null;
   timeseries: DjuPerfPoint[];
@@ -817,9 +809,45 @@ export type PrmDjuPerformance = {
   is_reliable: boolean;
 };
 
+export type PrmDjuPerformance = {
+  usage_point_id: string;
+  heating: DjuSidePerf;
+  cooling: DjuSidePerf;
+};
+
+export type SyncStatus = {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  prms_total: number;
+  prms_done: number;
+  rows_added: number;
+  date_from: string | null;
+  date_to: string | null;
+  last_sync_date: string | null;
+  error: string | null;
+  log: string[];
+};
+
 export async function fetchPrmDjuPerformance(token: string, prmId: string): Promise<PrmDjuPerformance> {
   const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/dju-performance`, {
     headers: buildHeaders(token),
   });
   return parseResponse<PrmDjuPerformance>(response);
+}
+
+export async function fetchSyncStatus(token: string): Promise<SyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/status`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<SyncStatus>(response);
+}
+
+export async function startSync(token: string, historyDays?: number): Promise<{ message: string }> {
+  const params = historyDays ? `?history_days=${historyDays}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/start${params}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
 }

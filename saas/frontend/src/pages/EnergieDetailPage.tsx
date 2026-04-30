@@ -23,6 +23,7 @@ import {
   fetchPrmDjuPerformance,
   PrmCalibration,
   PrmDjuPerformance,
+  DjuSidePerf,
   AnnualYearProfile,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -184,106 +185,104 @@ function fmtMonth(ym: string): string {
   }
 }
 
-function DjuPerformanceSection({ data }: { data: PrmDjuPerformance }) {
-  if (!data.has_data) {
+function DjuSideChart({ side, label, color }: { side: DjuSidePerf; label: string; color: string }) {
+  if (!side.has_data) {
     return (
-      <div className="chart-section">
-        <h3>Performance DJU — kWh/DJU chauffage</h3>
-        <p className="cell-empty dju-pending">
-          Données insuffisantes — disponible après accumulation de consommation journalière (enedis_data).
-          Relancer le notebook <code>04_backfill_daily_consumption.py</code> pour rapatrier l'historique.
-        </p>
-      </div>
+      <p className="cell-empty dju-pending">
+        Données insuffisantes — lancer la sync ENEDIS depuis la page Énergie pour rapatrier l'historique.
+      </p>
     );
   }
 
-  const chartData = data.timeseries.map((p) => ({
+  const chartData = side.timeseries.map((p) => ({
     label: fmtMonth(p.month),
     ratio: p.ratio_kwh_per_dju,
-    kwh: p.kwh,
-    dju: p.dju_chauffe,
   }));
 
   return (
-    <div className="chart-section">
-      <h3>Performance DJU — kWh/DJU chauffage (mois de chauffe)</h3>
-
+    <>
       <div className="dju-kpi-row">
-        {data.is_reliable && data.baseline_ratio_kwh_per_dju != null ? (
+        {side.is_reliable && side.baseline_ratio_kwh_per_dju != null ? (
           <div className="dju-kpi-card">
             <span className="dju-kpi-label">Intensité cible (baseline)</span>
-            <span className="dju-kpi-value">{data.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU</span>
-            <span className="dju-kpi-sub">{data.months_in_baseline} mois chauffage</span>
+            <span className="dju-kpi-value">
+              {side.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
+            </span>
+            <span className="dju-kpi-sub">{side.months_in_baseline} mois {label.toLowerCase()}</span>
           </div>
         ) : (
           <div className="dju-kpi-card dju-kpi-card--pending">
             <span className="dju-kpi-label">Baseline</span>
             <span className="dju-kpi-value">—</span>
-            <span className="dju-kpi-sub">Minimum 3 mois requis ({data.months_in_baseline} disponible{data.months_in_baseline > 1 ? "s" : ""})</span>
+            <span className="dju-kpi-sub">
+              Min. 3 mois requis ({side.months_in_baseline} disponible{side.months_in_baseline > 1 ? "s" : ""})
+            </span>
           </div>
         )}
 
-        {data.last_month && data.last_month_status && (
+        {side.last_month && side.last_month_status && (
           <div className="dju-kpi-card">
-            <span className="dju-kpi-label">Dernier mois de chauffe ({fmtMonth(data.last_month.month)})</span>
+            <span className="dju-kpi-label">Dernier mois {label.toLowerCase()} ({fmtMonth(side.last_month.month)})</span>
             <div className="dju-status-row">
-              <span className={`badge badge-lg ${DJU_STATUS_CLASS[data.last_month_status] ?? "badge-gray"}`}>
-                {DJU_STATUS_LABEL[data.last_month_status] ?? data.last_month_status}
+              <span className={`badge badge-lg ${DJU_STATUS_CLASS[side.last_month_status] ?? "badge-gray"}`}>
+                {DJU_STATUS_LABEL[side.last_month_status] ?? side.last_month_status}
               </span>
-              {data.last_month_ecart_percent != null && (
+              {side.last_month_ecart_percent != null && (
                 <span className="dju-ecart">
-                  {data.last_month_ecart_percent > 0 ? "+" : ""}{data.last_month_ecart_percent}%
+                  {side.last_month_ecart_percent > 0 ? "+" : ""}{side.last_month_ecart_percent}%
                 </span>
               )}
             </div>
             <span className="dju-kpi-sub">
-              {data.last_month.kwh.toLocaleString("fr-FR")} kWh — {data.last_month.dju_chauffe} DJU — {data.last_month.ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
+              {side.last_month.kwh.toLocaleString("fr-FR")} kWh —{" "}
+              {side.last_month.dju} DJU —{" "}
+              {side.last_month.ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
             </span>
           </div>
         )}
       </div>
 
       {chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={Math.max(0, Math.floor(chartData.length / 10) - 1)} />
             <YAxis tick={{ fontSize: 11 }} unit=" kWh/DJU" width={88} />
             <Tooltip
-              formatter={(value: number, name: string) => {
-                if (name === "ratio") return [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Ratio observé"];
-                return [value, name];
-              }}
-              labelFormatter={(label) => `Mois : ${label}`}
+              formatter={(v: number) => [`${v.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Ratio observé"]}
+              labelFormatter={(l) => `Mois : ${l}`}
             />
-            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
-              <ReferenceLine
-                y={data.baseline_ratio_kwh_per_dju}
-                stroke="#16a34a"
-                strokeDasharray="6 3"
-                label={{ value: `Cible : ${data.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, position: "insideTopRight", fontSize: 11, fill: "#16a34a" }}
-              />
+            {side.is_reliable && side.baseline_ratio_kwh_per_dju != null && (
+              <>
+                <ReferenceLine y={side.baseline_ratio_kwh_per_dju} stroke="#16a34a" strokeDasharray="6 3"
+                  label={{ value: `Cible ${side.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}`, position: "insideTopRight", fontSize: 10, fill: "#16a34a" }} />
+                <ReferenceLine y={side.baseline_ratio_kwh_per_dju * 1.10} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.45} />
+                <ReferenceLine y={side.baseline_ratio_kwh_per_dju * 0.90} stroke="#2563eb" strokeDasharray="3 3" strokeOpacity={0.45} />
+              </>
             )}
-            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
-              <ReferenceLine
-                y={data.baseline_ratio_kwh_per_dju * 1.10}
-                stroke="#dc2626"
-                strokeDasharray="3 3"
-                strokeOpacity={0.5}
-              />
-            )}
-            {data.is_reliable && data.baseline_ratio_kwh_per_dju != null && (
-              <ReferenceLine
-                y={data.baseline_ratio_kwh_per_dju * 0.90}
-                stroke="#2563eb"
-                strokeDasharray="3 3"
-                strokeOpacity={0.5}
-              />
-            )}
-            <Line type="monotone" dataKey="ratio" stroke="#f97316" dot={{ r: 4 }} strokeWidth={2} />
+            <Line type="monotone" dataKey="ratio" stroke={color} dot={{ r: 3 }} strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       )}
+    </>
+  );
+}
+
+function DjuPerformanceSection({ data }: { data: PrmDjuPerformance }) {
+  return (
+    <div className="chart-section">
+      <h3>Performance DJU — kWh/DJU (chauffage &amp; refroidissement)</h3>
+
+      <div className="dju-tabs">
+        <div className="dju-tab">
+          <h4 className="dju-tab-title">🔥 Chauffage (DJU ≥ 10)</h4>
+          <DjuSideChart side={data.heating} label="Chauffage" color="#f97316" />
+        </div>
+        <div className="dju-tab">
+          <h4 className="dju-tab-title">❄️ Refroidissement (DJU froid ≥ 5)</h4>
+          <DjuSideChart side={data.cooling} label="Froid" color="#06b6d4" />
+        </div>
+      </div>
     </div>
   );
 }
