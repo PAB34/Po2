@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
+  ComposedChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -201,11 +202,11 @@ function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title:
         <h4 className="dju-tab-title">{icon} {title}</h4>
         {ecart != null ? (
           <div className="dju-season-ecart">
-            <span className="dju-ecart-label">Saison {season.current_label} vs cible par mois :</span>
+            <span className="dju-ecart-label">Bilan saison {season.current_label} (tous mois complétés, pondéré DJU) :</span>
             <span className={`badge badge-lg ${ecartPositif ? "badge-red" : "badge-green"}`}>
               {ecartPositif ? "+" : ""}{ecart}%
             </span>
-            <span className="dju-ecart-sub">{ecartPositif ? "dépassement" : "économie"}</span>
+            <span className="dju-ecart-sub">{ecartPositif ? "vs cible — dépassement" : "vs cible — économie"}</span>
           </div>
         ) : (
           <span className="dju-ecart-label dju-ecart-pending">Saison {season.current_label} — données en cours d'acquisition</span>
@@ -213,7 +214,7 @@ function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title:
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} unit=" kWh/DJU" width={88} />
@@ -240,7 +241,7 @@ function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title:
             dot={{ r: 4, fill: "#16a34a" }}
             connectNulls={false}
           />
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
