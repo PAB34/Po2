@@ -162,3 +162,31 @@ class PrmDjuPerformance(BaseModel):
     usage_point_id: str
     heating: DjuSidePerf
     cooling: DjuSidePerf
+
+
+class DjuSeasonMonthPoint(BaseModel):
+    month_num: str
+    dju: float
+    kwh: float
+    ratio: float
+
+
+class DjuSeasonYear(BaseModel):
+    label: str
+    months: list[DjuSeasonMonthPoint]
+
+
+class DjuSeasonData(BaseModel):
+    months_order: list[str]
+    months_labels: list[str]
+    years: list[DjuSeasonYear]
+    cible_by_month: dict[str, float | None]
+    current_label: str | None
+    current_ecart_percent: float | None
+    has_data: bool
+
+
+class PrmDjuSeasonal(BaseModel):
+    usage_point_id: str
+    winter: DjuSeasonData
+    summer: DjuSeasonData

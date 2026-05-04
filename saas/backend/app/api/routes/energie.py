@@ -9,6 +9,7 @@ from app.schemas.energie import (
     PrmDailyConsumption,
     PrmDetail,
     PrmDjuPerformance,
+    PrmDjuSeasonal,
     PrmLoadCurveData,
     PrmMaxPowerData,
 )
@@ -20,6 +21,7 @@ from app.services.energie import (
     get_prm_daily_consumption,
     get_prm_detail,
     get_prm_dju_performance,
+    get_prm_dju_seasonal,
     get_prm_load_curve,
     get_prm_max_power,
 )
@@ -98,3 +100,11 @@ def get_dju_performance(
     current_user: User = Depends(get_current_user),
 ) -> PrmDjuPerformance:
     return PrmDjuPerformance.model_validate(get_prm_dju_performance(prm_id))
+
+
+@router.get("/{prm_id}/dju-seasonal", response_model=PrmDjuSeasonal)
+def get_dju_seasonal(
+    prm_id: str,
+    current_user: User = Depends(get_current_user),
+) -> PrmDjuSeasonal:
+    return PrmDjuSeasonal.model_validate(get_prm_dju_seasonal(prm_id))

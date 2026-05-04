@@ -550,3 +550,141 @@ def get_prm_dju_performance(prm_id: str) -> dict[str, Any]:
         "heating": _build_dju_side(dju_idx, conso_idx, current_ym, "dju_chauffe", _DJU_HEATING_MIN),
         "cooling": _build_dju_side(dju_idx, conso_idx, current_ym, "dju_froid", _DJU_COOLING_MIN),
     }
+
+
+# ---------------------------------------------------------------------------
+# DJU saisonnier — graphique Hiver (Oct→Avr) et Été (Mai→Sep), multi-années
+# ---------------------------------------------------------------------------
+
+_WINTER_MONTHS = ["10", "11", "12", "01", "02", "03", "04"]
+_WINTER_LABELS = ["Oct", "Nov", "Déc", "Jan", "Fév", "Mar", "Avr"]
+_SUMMER_MONTHS = ["05", "06", "07", "08", "09"]
+_SUMMER_LABELS = ["Mai", "Jun", "Jul", "Aoû", "Sep"]
+
+
+def _linear_trend(xs: list[float], ys: list[float]) -> tuple[float, float]:
+    """Régression linéaire y = slope*x + intercept."""
+    n = len(xs)
+    if n < 2:
+        return 0.0, ys[0] if ys else 0.0
+    sx, sy = sum(xs), sum(ys)
+    sxy = sum(x * y for x, y in zip(xs, ys))
+    sx2 = sum(x * x for x in xs)
+    denom = n * sx2 - sx * sx
+    if denom == 0:
+        return 0.0, sy / n
+    slope = (n * sxy - sx * sy) / denom
+    return slope, (sy - slope * sx) / n
+
+
+def _winter_label(year: int, month: int) -> str:
+    if month >= 10:
+        return f"{year}-{str(year + 1)[2:]}"
+    return f"{year - 1}-{str(year)[2:]}"
+
+
+def _summer_label(year: int) -> str:
+    return str(year)
+
+
+def get_prm_dju_seasonal(prm_id: str) -> dict[str, Any]:
+    """
+    Performance kWh/DJU par saison (Hiver Oct→Avr, Été Mai→Sep), multi-années.
+    Cible par mois = moyenne historique avec correction de tendance linéaire.
+    """
+    dju_idx = _dju_monthly_index()
+    conso_idx = _consumption_by_month().get(prm_id, {})
+    current_ym = date.today().strftime("%Y-%m")
+    today = date.today()
+
+    current_winter_label = _winter_label(today.year, today.month)
+    current_summer_label = _summer_label(today.year)
+
+    winter_by_season: dict[str, dict[str, dict[str, float]]] = {}
+    summer_by_season: dict[str, dict[str, dict[str, float]]] = {}
+
+    for ym in sorted(dju_idx.keys()):
+        if ym >= current_ym:
+            continue
+        y, m = int(ym[:4]), int(ym[5:7])
+        mn = f"{m:02d}"
+        kwh = conso_idx.get(ym)
+        if kwh is None or kwh <= 0:
+            continue
+        dju_vals = dju_idx[ym]
+
+        if mn in _WINTER_MONTHS:
+            dju = dju_vals.get("dju_chauffe", 0.0)
+            if dju > 0:
+                lbl = _winter_label(y, m)
+                winter_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
+
+        if mn in _SUMMER_MONTHS:
+            dju = dju_vals.get("dju_froid", 0.0)
+            if dju > 0:
+                lbl = _summer_label(y)
+                summer_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
+
+    def _build_season(
+        by_season: dict[str, dict[str, dict[str, float]]],
+        months_order: list[str],
+        months_labels: list[str],
+        current_label: str,
+    ) -> dict[str, Any]:
+        ratio_history: dict[str, list[tuple[float, float]]] = {mn: [] for mn in months_order}
+        years_data: list[dict[str, Any]] = []
+
+        for lbl in sorted(by_season.keys()):
+            season_months = []
+            for mn in months_order:
+                d = by_season[lbl].get(mn)
+                if d is None:
+                    continue
+                dju, kwh = d["dju"], d["kwh"]
+                ratio = round(kwh / dju, 4)
+                ratio_history[mn].append((float(lbl[:4]), ratio))
+                season_months.append({"month_num": mn, "dju": dju, "kwh": kwh, "ratio": ratio})
+            if season_months:
+                years_data.append({"label": lbl, "months": season_months})
+
+        # Cible par mois : moyenne historique avec tendance linéaire projetée sur la saison courante
+        current_x = float(current_label[:4])
+        cible_by_month: dict[str, float | None] = {}
+        for mn in months_order:
+            pts = ratio_history[mn]
+            if not pts:
+                cible_by_month[mn] = None
+            elif len(pts) == 1:
+                cible_by_month[mn] = round(pts[0][1], 4)
+            else:
+                slope, intercept = _linear_trend([p[0] for p in pts], [p[1] for p in pts])
+                cible_by_month[mn] = round(max(slope * current_x + intercept, 0.0), 4)
+
+        # Écart saison courante vs cible (pondéré par DJU)
+        current_ecart: float | None = None
+        current_data = by_season.get(current_label, {})
+        if current_data:
+            sum_kwh_actual = sum_kwh_cible = 0.0
+            for mn, d in current_data.items():
+                cible = cible_by_month.get(mn)
+                if cible is not None and cible > 0:
+                    sum_kwh_actual += d["kwh"]
+                    sum_kwh_cible += cible * d["dju"]
+            if sum_kwh_cible > 0:
+                current_ecart = round((sum_kwh_actual / sum_kwh_cible - 1) * 100, 1)
+
+        return {
+            "months_order": months_order,
+            "months_labels": months_labels,
+            "years": years_data,
+            "cible_by_month": cible_by_month,
+            "current_label": current_label,
+            "current_ecart_percent": current_ecart,
+            "has_data": len(years_data) > 0,
+        }
+
+    return {
+        "usage_point_id": prm_id,
+        "winter": _build_season(winter_by_season, _WINTER_MONTHS, _WINTER_LABELS, current_winter_label),
+        "summer": _build_season(summer_by_season, _SUMMER_MONTHS, _SUMMER_LABELS, current_summer_label),
+    }

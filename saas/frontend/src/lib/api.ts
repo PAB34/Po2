@@ -836,6 +836,41 @@ export async function fetchPrmDjuPerformance(token: string, prmId: string): Prom
   return parseResponse<PrmDjuPerformance>(response);
 }
 
+export type DjuSeasonMonthPoint = {
+  month_num: string;
+  dju: number;
+  kwh: number;
+  ratio: number;
+};
+
+export type DjuSeasonYear = {
+  label: string;
+  months: DjuSeasonMonthPoint[];
+};
+
+export type DjuSeasonData = {
+  months_order: string[];
+  months_labels: string[];
+  years: DjuSeasonYear[];
+  cible_by_month: Record<string, number | null>;
+  current_label: string | null;
+  current_ecart_percent: number | null;
+  has_data: boolean;
+};
+
+export type PrmDjuSeasonal = {
+  usage_point_id: string;
+  winter: DjuSeasonData;
+  summer: DjuSeasonData;
+};
+
+export async function fetchPrmDjuSeasonal(token: string, prmId: string): Promise<PrmDjuSeasonal> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/dju-seasonal`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmDjuSeasonal>(response);
+}
+
 export async function fetchSyncStatus(token: string): Promise<SyncStatus> {
   const response = await fetch(`${apiBaseUrl}/energie/sync/status`, {
     headers: buildHeaders(token),

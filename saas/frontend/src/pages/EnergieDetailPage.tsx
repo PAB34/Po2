@@ -21,9 +21,10 @@ import {
   fetchPrmAnnualProfile,
   fetchPrmDailyConsumption,
   fetchPrmDjuPerformance,
+  fetchPrmDjuSeasonal,
   PrmCalibration,
-  PrmDjuPerformance,
-  DjuSidePerf,
+  PrmDjuSeasonal,
+  DjuSeasonData,
   AnnualYearProfile,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -164,29 +165,8 @@ function AnnualProfileChart({
   );
 }
 
-const DJU_STATUS_LABEL: Record<string, string> = {
-  dans_cible: "Dans la cible",
-  depassement: "Dépassement",
-  economie: "Économie",
-};
-
-const DJU_STATUS_CLASS: Record<string, string> = {
-  dans_cible: "badge-green",
-  depassement: "badge-red",
-  economie: "badge-blue",
-};
-
-function fmtMonth(ym: string): string {
-  try {
-    const [y, m] = ym.split("-");
-    return `${MONTHS_FR[parseInt(m, 10) - 1]} ${y}`;
-  } catch {
-    return ym;
-  }
-}
-
-function DjuSideChart({ side, label, color }: { side: DjuSidePerf; label: string; color: string }) {
-  if (!side.has_data) {
+function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title: string; icon: string }) {
+  if (!season.has_data) {
     return (
       <p className="cell-empty dju-pending">
         Données insuffisantes — lancer la sync ENEDIS depuis la page Énergie pour rapatrier l'historique.
@@ -194,95 +174,87 @@ function DjuSideChart({ side, label, color }: { side: DjuSidePerf; label: string
     );
   }
 
-  const chartData = side.timeseries.map((p) => ({
-    label: fmtMonth(p.month),
-    ratio: p.ratio_kwh_per_dju,
+  const years = season.years.map((y) => y.label);
+
+  // Données indexées par numéro de mois pour accès rapide
+  const byMonth: Record<string, Record<string, number>> = {};
+  for (const yr of season.years) {
+    for (const mp of yr.months) {
+      if (!byMonth[mp.month_num]) byMonth[mp.month_num] = {};
+      byMonth[mp.month_num][yr.label] = mp.ratio;
+    }
+  }
+
+  const chartData = season.months_order.map((mn, i) => ({
+    month: season.months_labels[i],
+    month_num: mn,
+    cible: season.cible_by_month[mn] ?? undefined,
+    ...byMonth[mn],
   }));
 
+  const ecart = season.current_ecart_percent;
+  const ecartPositif = ecart != null && ecart > 0;
+
   return (
-    <>
-      <div className="dju-kpi-row">
-        {side.is_reliable && side.baseline_ratio_kwh_per_dju != null ? (
-          <div className="dju-kpi-card">
-            <span className="dju-kpi-label">Intensité cible (baseline)</span>
-            <span className="dju-kpi-value">
-              {side.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
+    <div className="dju-season-block">
+      <div className="dju-season-header">
+        <h4 className="dju-tab-title">{icon} {title}</h4>
+        {ecart != null ? (
+          <div className="dju-season-ecart">
+            <span className="dju-ecart-label">Saison {season.current_label} vs cible par mois :</span>
+            <span className={`badge badge-lg ${ecartPositif ? "badge-red" : "badge-green"}`}>
+              {ecartPositif ? "+" : ""}{ecart}%
             </span>
-            <span className="dju-kpi-sub">{side.months_in_baseline} mois {label.toLowerCase()}</span>
+            <span className="dju-ecart-sub">{ecartPositif ? "dépassement" : "économie"}</span>
           </div>
         ) : (
-          <div className="dju-kpi-card dju-kpi-card--pending">
-            <span className="dju-kpi-label">Baseline</span>
-            <span className="dju-kpi-value">—</span>
-            <span className="dju-kpi-sub">
-              Min. 3 mois requis ({side.months_in_baseline} disponible{side.months_in_baseline > 1 ? "s" : ""})
-            </span>
-          </div>
-        )}
-
-        {side.last_month && side.last_month_status && (
-          <div className="dju-kpi-card">
-            <span className="dju-kpi-label">Dernier mois {label.toLowerCase()} ({fmtMonth(side.last_month.month)})</span>
-            <div className="dju-status-row">
-              <span className={`badge badge-lg ${DJU_STATUS_CLASS[side.last_month_status] ?? "badge-gray"}`}>
-                {DJU_STATUS_LABEL[side.last_month_status] ?? side.last_month_status}
-              </span>
-              {side.last_month_ecart_percent != null && (
-                <span className="dju-ecart">
-                  {side.last_month_ecart_percent > 0 ? "+" : ""}{side.last_month_ecart_percent}%
-                </span>
-              )}
-            </div>
-            <span className="dju-kpi-sub">
-              {side.last_month.kwh.toLocaleString("fr-FR")} kWh —{" "}
-              {side.last_month.dju} DJU —{" "}
-              {side.last_month.ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU
-            </span>
-          </div>
+          <span className="dju-ecart-label dju-ecart-pending">Saison {season.current_label} — données en cours d'acquisition</span>
         )}
       </div>
 
-      {chartData.length > 0 && (
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={Math.max(0, Math.floor(chartData.length / 10) - 1)} />
-            <YAxis tick={{ fontSize: 11 }} unit=" kWh/DJU" width={88} />
-            <Tooltip
-              formatter={(v: number) => [`${v.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Ratio observé"]}
-              labelFormatter={(l) => `Mois : ${l}`}
-            />
-            {side.is_reliable && side.baseline_ratio_kwh_per_dju != null && (
-              <>
-                <ReferenceLine y={side.baseline_ratio_kwh_per_dju} stroke="#16a34a" strokeDasharray="6 3"
-                  label={{ value: `Cible ${side.baseline_ratio_kwh_per_dju.toLocaleString("fr-FR", { maximumFractionDigits: 2 })}`, position: "insideTopRight", fontSize: 10, fill: "#16a34a" }} />
-                <ReferenceLine y={side.baseline_ratio_kwh_per_dju * 1.10} stroke="#dc2626" strokeDasharray="3 3" strokeOpacity={0.45} />
-                <ReferenceLine y={side.baseline_ratio_kwh_per_dju * 0.90} stroke="#2563eb" strokeDasharray="3 3" strokeOpacity={0.45} />
-              </>
-            )}
-            <Line type="monotone" dataKey="ratio" stroke={color} dot={{ r: 3 }} strokeWidth={2} />
-          </LineChart>
-        </ResponsiveContainer>
-      )}
-    </>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} unit=" kWh/DJU" width={88} />
+          <Tooltip
+            formatter={(value: number, name: string) =>
+              name === "cible"
+                ? [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Cible par mois"]
+                : [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, `Saison ${name}`]
+            }
+            labelFormatter={(l) => `Mois : ${l}`}
+          />
+          <Legend
+            formatter={(v) => v === "cible" ? "Cible par mois (tendance historique)" : `Saison ${v}`}
+          />
+          {years.map((yr, i) => (
+            <Bar key={yr} dataKey={yr} fill={YEAR_COLORS[i % YEAR_COLORS.length]} maxBarSize={18} />
+          ))}
+          <Line
+            type="monotone"
+            dataKey="cible"
+            stroke="#16a34a"
+            strokeDasharray="6 3"
+            strokeWidth={2}
+            dot={{ r: 4, fill: "#16a34a" }}
+            connectNulls={false}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
-function DjuPerformanceSection({ data }: { data: PrmDjuPerformance }) {
+function DjuSeasonalSection({ data }: { data: PrmDjuSeasonal }) {
   return (
     <div className="chart-section">
-      <h3>Performance DJU — kWh/DJU (chauffage &amp; refroidissement)</h3>
-
-      <div className="dju-tabs">
-        <div className="dju-tab">
-          <h4 className="dju-tab-title">🔥 Chauffage (DJU ≥ 10)</h4>
-          <DjuSideChart side={data.heating} label="Chauffage" color="#f97316" />
-        </div>
-        <div className="dju-tab">
-          <h4 className="dju-tab-title">❄️ Refroidissement (DJU froid ≥ 5)</h4>
-          <DjuSideChart side={data.cooling} label="Froid" color="#06b6d4" />
-        </div>
-      </div>
+      <h3>Performance DJU — kWh/DJU par mois (saisonnier)</h3>
+      <p className="chart-subtitle">
+        Barres : ratio kWh/DJU observé par saison. Ligne verte pointillée : cible par mois (moyenne historique avec correction de tendance).
+      </p>
+      <DjuSeasonChart season={data.winter} title="Hiver (oct. → avr.)" icon="🔥" />
+      <DjuSeasonChart season={data.summer} title="Été (mai → sep.)" icon="❄️" />
     </div>
   );
 }
@@ -325,6 +297,12 @@ export function EnergieDetailPage() {
   const djuPerfQuery = useQuery({
     queryKey: ["prm-dju-performance", prmId],
     queryFn: () => fetchPrmDjuPerformance(token!, prmId!),
+    enabled: !!token && !!prmId,
+  });
+
+  const djuSeasonalQuery = useQuery({
+    queryKey: ["prm-dju-seasonal", prmId],
+    queryFn: () => fetchPrmDjuSeasonal(token!, prmId!),
     enabled: !!token && !!prmId,
   });
 
@@ -471,11 +449,11 @@ export function EnergieDetailPage() {
         )}
       </div>
 
-      {/* DJU Performance */}
-      {djuPerfQuery.isLoading && (
+      {/* DJU Performance saisonnière */}
+      {djuSeasonalQuery.isLoading && (
         <div className="chart-section"><p>Chargement performance DJU…</p></div>
       )}
-      {djuPerfQuery.data && <DjuPerformanceSection data={djuPerfQuery.data} />}
+      {djuSeasonalQuery.data && <DjuSeasonalSection data={djuSeasonalQuery.data} />}
 
       {/* Annual Profile N/N-1/N-2 */}
       <div className="chart-section">
