@@ -975,3 +975,129 @@ export async function fetchDataRanges(token: string): Promise<DataRanges> {
   });
   return parseResponse<DataRanges>(response);
 }
+
+// ── Billing ─────────────────────────────────────────────────────────────────
+
+export type BillingGroupItem = {
+  supplier: string;
+  tariff_code: string;
+  tariff_label: string;
+  prm_count: number;
+  prm_ids: string[];
+  config_id: number | null;
+  is_configured: boolean;
+};
+
+export type BillingConfigOut = {
+  id: number;
+  city_id: number;
+  supplier: string;
+  tariff_code: string;
+  tariff_label: string | null;
+  has_hphc: boolean;
+  representative_prm_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BillingPriceEntryOut = {
+  id: number;
+  config_id: number;
+  year: number | null;
+  component: string;
+  value: number;
+  unit: string | null;
+};
+
+export type BillingHphcSlotOut = {
+  id: number;
+  config_id: number;
+  day_type: string;
+  start_time: string;
+  end_time: string;
+  period: string;
+};
+
+export type BillingPriceEntryIn = {
+  year: number | null;
+  component: string;
+  value: number;
+  unit: string | null;
+};
+
+export type BillingHphcSlotIn = {
+  day_type: string;
+  start_time: string;
+  end_time: string;
+  period: string;
+};
+
+export async function fetchBillingGroups(token: string): Promise<BillingGroupItem[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/groups`, { headers: buildHeaders(token) });
+  return parseResponse<BillingGroupItem[]>(response);
+}
+
+export async function fetchBillingConfigs(token: string): Promise<BillingConfigOut[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs`, { headers: buildHeaders(token) });
+  return parseResponse<BillingConfigOut[]>(response);
+}
+
+export async function createBillingConfig(
+  token: string,
+  payload: { supplier: string; tariff_code: string; tariff_label?: string; has_hphc?: boolean; representative_prm_id?: string },
+): Promise<BillingConfigOut> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BillingConfigOut>(response);
+}
+
+export async function patchBillingConfig(
+  token: string,
+  configId: number,
+  payload: { has_hphc?: boolean; representative_prm_id?: string; tariff_label?: string },
+): Promise<BillingConfigOut> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs/${configId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BillingConfigOut>(response);
+}
+
+export async function deleteBillingConfig(token: string, configId: number): Promise<void> {
+  await fetch(`${apiBaseUrl}/billing/configs/${configId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+}
+
+export async function fetchBillingPrices(token: string, configId: number): Promise<BillingPriceEntryOut[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs/${configId}/prices`, { headers: buildHeaders(token) });
+  return parseResponse<BillingPriceEntryOut[]>(response);
+}
+
+export async function setBillingPrices(token: string, configId: number, entries: BillingPriceEntryIn[]): Promise<BillingPriceEntryOut[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs/${configId}/prices`, {
+    method: "PUT",
+    headers: buildHeaders(token),
+    body: JSON.stringify(entries),
+  });
+  return parseResponse<BillingPriceEntryOut[]>(response);
+}
+
+export async function fetchBillingHphcSlots(token: string, configId: number): Promise<BillingHphcSlotOut[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs/${configId}/hphc-slots`, { headers: buildHeaders(token) });
+  return parseResponse<BillingHphcSlotOut[]>(response);
+}
+
+export async function setBillingHphcSlots(token: string, configId: number, slots: BillingHphcSlotIn[]): Promise<BillingHphcSlotOut[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/configs/${configId}/hphc-slots`, {
+    method: "PUT",
+    headers: buildHeaders(token),
+    body: JSON.stringify(slots),
+  });
+  return parseResponse<BillingHphcSlotOut[]>(response);
+}
