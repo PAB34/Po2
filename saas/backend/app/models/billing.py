@@ -15,6 +15,7 @@ class BillingConfig(Base):
     supplier: Mapped[str] = mapped_column(String(100), nullable=False)
     tariff_code: Mapped[str] = mapped_column(String(20), nullable=False)
     tariff_label: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    lot: Mapped[str | None] = mapped_column(String(30), nullable=True)
     has_hphc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     representative_prm_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

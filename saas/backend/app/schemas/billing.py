@@ -1,36 +1,36 @@
 from pydantic import BaseModel
 
 
-class BillingGroupItem(BaseModel):
+class BillingSupplierGroup(BaseModel):
     supplier: str
-    tariff_code: str
-    tariff_label: str
     prm_count: int
     prm_ids: list[str]
+    tariff_codes: list[str]
     config_id: int | None
+    lot: str | None
+    has_hphc: bool
     is_configured: bool
 
 
 class BillingConfigCreate(BaseModel):
     supplier: str
-    tariff_code: str
-    tariff_label: str | None = None
+    lot: str | None = None
     has_hphc: bool = False
     representative_prm_id: str | None = None
 
 
 class BillingConfigPatch(BaseModel):
+    lot: str | None = None
     has_hphc: bool | None = None
     representative_prm_id: str | None = None
-    tariff_label: str | None = None
 
 
 class BillingConfigOut(BaseModel):
     id: int
     city_id: int
     supplier: str
-    tariff_code: str
-    tariff_label: str | None
+    tariff_code: str | None
+    lot: str | None
     has_hphc: bool
     representative_prm_id: str | None
     created_at: str

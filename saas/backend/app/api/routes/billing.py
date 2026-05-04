@@ -4,26 +4,25 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.billing import (
-    BillingConfigCreate,
     BillingConfigOut,
     BillingConfigPatch,
-    BillingGroupItem,
     BillingHphcSlotIn,
     BillingHphcSlotOut,
     BillingPriceEntryIn,
     BillingPriceEntryOut,
+    BillingSupplierGroup,
 )
 from app.services.billing import (
-    create_config,
     delete_config,
-    get_billing_groups,
     get_config,
     get_configs,
     get_hphc_slots,
     get_prices,
+    get_supplier_groups,
     patch_config,
     replace_hphc_slots,
     replace_prices,
+    upsert_supplier_config,
 )
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -42,13 +41,13 @@ def _get_cfg_or_404(db: Session, config_id: int, city_id: int):
     return cfg
 
 
-@router.get("/groups", response_model=list[BillingGroupItem])
-def list_groups(
+@router.get("/supplier-groups", response_model=list[BillingSupplierGroup])
+def list_supplier_groups(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     city_id = _require_city(current_user)
-    return get_billing_groups(db, city_id)
+    return get_supplier_groups(db, city_id)
 
 
 @router.get("/configs", response_model=list[BillingConfigOut])
@@ -60,18 +59,26 @@ def list_configs(
     return get_configs(db, city_id)
 
 
-@router.post("/configs", response_model=BillingConfigOut, status_code=status.HTTP_201_CREATED)
-def create_billing_config(
-    payload: BillingConfigCreate,
+@router.put("/configs/supplier/{supplier}", response_model=BillingConfigOut)
+def upsert_config(
+    supplier: str,
+    payload: BillingConfigPatch,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     city_id = _require_city(current_user)
-    return create_config(db, city_id, payload.supplier, payload.tariff_code, payload.tariff_label, payload.has_hphc, payload.representative_prm_id)
+    return upsert_supplier_config(
+        db,
+        city_id,
+        supplier,
+        lot=payload.lot,
+        has_hphc=payload.has_hphc or False,
+        representative_prm_id=payload.representative_prm_id,
+    )
 
 
 @router.patch("/configs/{config_id}", response_model=BillingConfigOut)
-def update_billing_config(
+def update_config(
     config_id: int,
     payload: BillingConfigPatch,
     current_user: User = Depends(get_current_user),
@@ -79,7 +86,7 @@ def update_billing_config(
 ):
     city_id = _require_city(current_user)
     cfg = _get_cfg_or_404(db, config_id, city_id)
-    return patch_config(db, cfg, payload.has_hphc, payload.representative_prm_id, payload.tariff_label)
+    return patch_config(db, cfg, payload.lot, payload.has_hphc, payload.representative_prm_id)
 
 
 @router.delete("/configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
