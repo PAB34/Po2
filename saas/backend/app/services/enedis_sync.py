@@ -1108,7 +1108,7 @@ def run_load_curve_sync() -> None:
 
         csv_path = Path(settings.energie_dir) / "enedis_load_curve.csv"
         token_mgr = _TokenManager()
-        rl = _RateLimiter(rps=5.0, max_concurrent=5, max_hourly=9999)  # TEST: limite horaire désactivée
+        rl = _RateLimiter(rps=5.0, max_concurrent=5, max_hourly=950)
         ingested_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
         # Tracking complet (prm, chunk_start, chunk_end) → (outcome, error_detail)
