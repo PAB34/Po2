@@ -13,7 +13,7 @@ class BillingConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     supplier: Mapped[str] = mapped_column(String(100), nullable=False)
-    tariff_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    tariff_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     tariff_label: Mapped[str | None] = mapped_column(String(300), nullable=True)
     lot: Mapped[str | None] = mapped_column(String(30), nullable=True)
     has_hphc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
