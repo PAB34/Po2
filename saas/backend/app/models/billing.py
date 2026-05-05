@@ -8,7 +8,7 @@ from app.core.db import Base
 
 class BillingConfig(Base):
     __tablename__ = "billing_configs"
-    __table_args__ = (UniqueConstraint("city_id", "supplier", "tariff_code", name="uq_billing_config"),)
+    __table_args__ = (UniqueConstraint("city_id", "supplier", name="uq_billing_config"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

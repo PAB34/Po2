@@ -3,6 +3,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.billing import BillingBpuLine, BillingConfig, BillingHphcSlot, BillingPriceEntry
+from app.services.bpu_templates import get_bpu_template
 from app.services.energie import _csv_rows
 
 # Postes horosaisonniers applicables par code tarifaire TURPE
@@ -59,7 +60,14 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
         by_supplier[supplier]["tariff_codes"][code] = label
         by_supplier[supplier]["tariff_counts"][code] = by_supplier[supplier]["tariff_counts"].get(code, 0) + 1
 
-    configs = {c.supplier: c for c in db.query(BillingConfig).filter_by(city_id=city_id).all()}
+    config_rows = db.query(BillingConfig).filter_by(city_id=city_id).all()
+    seeded_defaults = False
+    for cfg in config_rows:
+        seeded_defaults = ensure_default_bpu_lines(db, cfg) or seeded_defaults
+    if seeded_defaults:
+        db.commit()
+
+    configs = {c.supplier: c for c in config_rows}
     configs_with_bpu = {row[0] for row in db.query(BillingBpuLine.config_id).distinct().all()}
 
     # Ordre d'affichage cohérent avec le BPU (BT≤36 → BT>36 → HTA)
@@ -120,6 +128,8 @@ def upsert_supplier_config(
             representative_prm_id=representative_prm_id,
         )
         db.add(cfg)
+    db.flush()
+    ensure_default_bpu_lines(db, cfg)
     db.commit()
     db.refresh(cfg)
     return cfg
@@ -138,6 +148,8 @@ def patch_config(
         cfg.has_hphc = has_hphc
     if representative_prm_id is not None:
         cfg.representative_prm_id = representative_prm_id
+    db.flush()
+    ensure_default_bpu_lines(db, cfg)
     db.commit()
     db.refresh(cfg)
     return cfg
@@ -208,12 +220,54 @@ def replace_hphc_slots(db: Session, config_id: int, slots: list[dict]) -> list[B
 
 
 def get_bpu_lines(db: Session, config_id: int) -> list[BillingBpuLine]:
+    cfg = db.query(BillingConfig).filter_by(id=config_id).first()
+    if cfg is not None and ensure_default_bpu_lines(db, cfg):
+        db.commit()
+
     return (
         db.query(BillingBpuLine)
         .filter_by(config_id=config_id)
         .order_by(BillingBpuLine.year, BillingBpuLine.tariff_code, BillingBpuLine.poste)
         .all()
     )
+
+
+def ensure_default_bpu_lines(db: Session, cfg: BillingConfig) -> bool:
+    """Seed current BPU lines from the selected lot template when none exist yet."""
+    if not cfg.lot:
+        return False
+
+    template = get_bpu_template(cfg.lot)
+    if not template:
+        return False
+
+    has_current_lines = (
+        db.query(BillingBpuLine.id)
+        .filter(BillingBpuLine.config_id == cfg.id, BillingBpuLine.year.is_(None))
+        .first()
+        is not None
+    )
+    if has_current_lines:
+        return False
+
+    db.add_all(
+        [
+            BillingBpuLine(
+                config_id=cfg.id,
+                year=None,
+                tariff_code=line["tariff_code"],
+                poste=line["poste"],
+                pu_fourniture=line["pu_fourniture"],
+                pu_capacite=line["pu_capacite"],
+                pu_cee=line["pu_cee"],
+                pu_go=line["pu_go"],
+                pu_total=line["pu_total"],
+                observation=line["observation"],
+            )
+            for line in template
+        ]
+    )
+    return True
 
 
 def replace_bpu_lines(db: Session, config_id: int, lines: list[dict]) -> list[BillingBpuLine]:
