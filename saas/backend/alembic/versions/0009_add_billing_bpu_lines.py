@@ -11,7 +11,7 @@ def upgrade() -> None:
     op.create_table(
         "billing_bpu_lines",
         sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("config_id", sa.Integer, nullable=False, index=True),
+        sa.Column("config_id", sa.Integer, nullable=False),
         sa.Column("year", sa.Integer, nullable=True),
         sa.Column("tariff_code", sa.String(20), nullable=False),
         sa.Column("poste", sa.String(20), nullable=False),
