@@ -60,6 +60,7 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
         by_supplier[supplier]["tariff_counts"][code] = by_supplier[supplier]["tariff_counts"].get(code, 0) + 1
 
     configs = {c.supplier: c for c in db.query(BillingConfig).filter_by(city_id=city_id).all()}
+    configs_with_bpu = {row[0] for row in db.query(BillingBpuLine.config_id).distinct().all()}
 
     # Ordre d'affichage cohérent avec le BPU (BT≤36 → BT>36 → HTA)
     tariff_order = ["CU", "CU4", "MU4", "LU", "MUDT", "C4", "C2", "AUTRE"]
@@ -79,7 +80,7 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
                 "lot": cfg.lot if cfg else None,
                 "has_hphc": cfg.has_hphc if cfg else False,
                 "representative_prm_id": cfg.representative_prm_id if cfg else None,
-                "is_configured": cfg is not None and cfg.representative_prm_id is not None,
+                "is_configured": cfg is not None and cfg.lot is not None and cfg.id in configs_with_bpu,
             }
         )
     return result
@@ -98,14 +99,15 @@ def upsert_supplier_config(
     city_id: int,
     supplier: str,
     lot: str | None,
-    has_hphc: bool,
-    representative_prm_id: str | None,
+    has_hphc: bool | None = None,
+    representative_prm_id: str | None = None,
 ) -> BillingConfig:
     cfg = db.query(BillingConfig).filter_by(city_id=city_id, supplier=supplier).first()
     if cfg:
         if lot is not None:
             cfg.lot = lot
-        cfg.has_hphc = has_hphc
+        if has_hphc is not None:
+            cfg.has_hphc = has_hphc
         if representative_prm_id is not None:
             cfg.representative_prm_id = representative_prm_id
     else:
@@ -114,7 +116,7 @@ def upsert_supplier_config(
             supplier=supplier,
             tariff_code=None,
             lot=lot,
-            has_hphc=has_hphc,
+            has_hphc=has_hphc or False,
             representative_prm_id=representative_prm_id,
         )
         db.add(cfg)

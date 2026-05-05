@@ -76,7 +76,7 @@ def upsert_config(
         city_id,
         supplier,
         lot=payload.lot,
-        has_hphc=payload.has_hphc or False,
+        has_hphc=payload.has_hphc,
         representative_prm_id=payload.representative_prm_id,
     )
 

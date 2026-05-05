@@ -215,20 +215,16 @@ function BpuTariffSection({
 function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () => void }) {
   const { token } = useAuth();
   const qc = useQueryClient();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [configId, setConfigId] = useState<number | null>(group.config_id);
 
   // ── Step 1 ───────────────────────────────────────────────────────────
   const [lot, setLot] = useState(group.lot ?? "");
-  const [selectedPrm, setSelectedPrm] = useState(group.representative_prm_id ?? "");
-  const [hasHphc, setHasHphc] = useState(group.has_hphc);
 
   const upsertMut = useMutation({
     mutationFn: () =>
       apiPut<BillingConfigOut>(token!, `/billing/configs/supplier/${encodeURIComponent(group.supplier)}`, {
         lot: lot || null,
-        has_hphc: hasHphc,
-        representative_prm_id: selectedPrm || null,
       }),
     onSuccess: (data) => {
       setConfigId(data.id);
@@ -317,17 +313,9 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["billing-bpu-lines", configId] });
-      setStep(3);
+      qc.invalidateQueries({ queryKey: ["billing-supplier-groups"] });
     },
   });
-
-  // ── Step 3 — Récapitulatif ────────────────────────────────────────────
-  const savedLines = (bpuLinesQuery.data ?? []).filter((l) => l.year === null);
-  const linesByTariff: Record<string, BpuLine[]> = {};
-  for (const line of savedLines) {
-    if (!linesByTariff[line.tariff_code]) linesByTariff[line.tariff_code] = [];
-    linesByTariff[line.tariff_code].push(line);
-  }
 
   return (
     <div className="wizard-overlay" onClick={onClose}>
@@ -344,23 +332,27 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
         </div>
 
         <div className="wizard-steps">
-          {([1, 2, 3] as const).map((s) => (
+          {([1, 2] as const).map((s) => (
             <button
               key={s}
               className={`wizard-step-btn ${step === s ? "active" : ""} ${s > 1 && !configId ? "disabled" : ""}`}
               onClick={() => (s === 1 || configId) && setStep(s)}
             >
-              {s === 1 ? "Lot & référent" : s === 2 ? "BPU par tarif" : "Récapitulatif"}
+              {s === 1 ? "Lot" : "BPU & prix"}
             </button>
           ))}
         </div>
 
         <div className="wizard-body">
 
-          {/* ── Step 1 ── */}
+          {/* ── Step 1 — Lot ── */}
           {step === 1 && (
             <div>
               <p className="field-label" style={{ marginBottom: 8 }}>Lot contractuel</p>
+              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
+                Associe ce fournisseur à un lot du marché. Les prix BPU seront saisis à l'étape suivante,
+                par tarif TURPE détecté sur les {group.prm_count} PRMs.
+              </p>
               <select className="form-input" value={lot} onChange={(e) => setLot(e.target.value)}>
                 <option value="">-- Sélectionner un lot --</option>
                 {LOT_OPTIONS.map((o) => (
@@ -368,31 +360,13 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
                 ))}
               </select>
 
-              <p className="field-label" style={{ marginTop: 20, marginBottom: 8 }}>PRM représentatif</p>
-              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
-                Utilisé pour extraire les données de référence de ce fournisseur.
-              </p>
-              <select className="form-input" value={selectedPrm} onChange={(e) => setSelectedPrm(e.target.value)}>
-                <option value="">-- Choisir un PRM --</option>
-                {group.prm_ids.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-              </select>
-
-              <div className="toggle-row" style={{ marginTop: 20 }}>
-                <label className="toggle-label">
-                  <input type="checkbox" checked={hasHphc} onChange={(e) => setHasHphc(e.target.checked)} />
-                  <span>Contrat avec postes horosaisonniers</span>
-                </label>
-              </div>
-
               <div style={{ marginTop: 24, display: "flex", gap: 8 }}>
                 <button
                   className="btn-primary"
-                  disabled={!lot || !selectedPrm || upsertMut.isPending}
+                  disabled={!lot || upsertMut.isPending}
                   onClick={() => upsertMut.mutate()}
                 >
-                  {upsertMut.isPending ? "Enregistrement…" : "Enregistrer et continuer →"}
+                  {upsertMut.isPending ? "Enregistrement…" : "Enregistrer et saisir le BPU →"}
                 </button>
                 {configId && (
                   <button className="secondary-button" onClick={() => setStep(2)}>Aller au BPU</button>
@@ -434,10 +408,10 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
                   disabled={setBpuLinesMut.isPending}
                   onClick={() => setBpuLinesMut.mutate()}
                 >
-                  {setBpuLinesMut.isPending ? "Enregistrement…" : "Enregistrer et continuer →"}
+                  {setBpuLinesMut.isPending ? "Enregistrement…" : "Enregistrer le BPU"}
                 </button>
-                <button className="secondary-button" onClick={() => setStep(3)}>
-                  Voir le récapitulatif
+                <button className="secondary-button" onClick={onClose}>
+                  Fermer
                 </button>
               </div>
               {setBpuLinesMut.isError && (
@@ -448,67 +422,6 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
             </div>
           )}
 
-          {/* ── Step 3 — Récapitulatif ── */}
-          {step === 3 && configId && (
-            <div>
-              <p className="field-label" style={{ marginBottom: 12 }}>BPU enregistré — tarifs et prix actuels</p>
-
-              {savedLines.length === 0 && (
-                <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>
-                  Aucune ligne BPU enregistrée. Revenez à l'étape 2 pour saisir les prix.
-                </p>
-              )}
-
-              {Object.entries(linesByTariff).map(([tc, lines]) => (
-                <div key={tc} style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span className="badge badge-gray" style={{ fontFamily: "monospace", fontSize: 12 }}>{tc}</span>
-                    <span style={{ fontSize: 13, color: "#475569" }}>{TARIFF_LABELS[tc] ?? tc}</span>
-                  </div>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Poste</th>
-                        <th>Fourniture</th>
-                        <th>Capacité</th>
-                        <th>CEE</th>
-                        <th>GO</th>
-                        <th>Total (€/MWh)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines
-                        .sort((a, b) => {
-                          const order = POSTES_BY_TARIFF[tc] ?? [];
-                          return order.indexOf(a.poste) - order.indexOf(b.poste);
-                        })
-                        .map((line) => (
-                          <tr key={line.poste}>
-                            <td style={{ fontSize: 13 }}>{POSTE_LABELS[line.poste] ?? line.poste}</td>
-                            <td>{line.pu_fourniture?.toFixed(2) ?? "—"}</td>
-                            <td>{line.pu_capacite?.toFixed(2) ?? "—"}</td>
-                            <td>{line.pu_cee?.toFixed(2) ?? "—"}</td>
-                            <td>{line.pu_go?.toFixed(2) ?? "—"}</td>
-                            <td style={{ fontWeight: 600, color: "#1e40af" }}>
-                              {line.pu_total?.toFixed(2) ?? "—"}
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-
-              <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-                <button className="secondary-button" onClick={() => setStep(2)}>
-                  ← Modifier le BPU
-                </button>
-                <button className="btn-primary" onClick={onClose}>
-                  Fermer
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
