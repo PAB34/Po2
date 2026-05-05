@@ -1,15 +1,5 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { useAuth } from "../providers/AuthProvider";
 
 const apiBaseUrl = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
@@ -21,6 +11,7 @@ type SupplierGroup = {
   prm_count: number;
   prm_ids: string[];
   tariff_codes: string[];
+  tariff_prm_counts: Record<string, number>;
   config_id: number | null;
   lot: string | null;
   has_hphc: boolean;
@@ -39,8 +30,32 @@ type BillingConfigOut = {
   updated_at: string;
 };
 
-type PriceEntry = { id: number; config_id: number; year: number | null; component: string; value: number; unit: string | null };
-type HphcSlot = { id: number; config_id: number; day_type: string; start_time: string; end_time: string; period: string };
+type BpuLine = {
+  id: number;
+  config_id: number;
+  year: number | null;
+  tariff_code: string;
+  poste: string;
+  pu_fourniture: number | null;
+  pu_capacite: number | null;
+  pu_cee: number | null;
+  pu_go: number | null;
+  pu_total: number | null;
+  observation: string | null;
+};
+
+type BpuLineIn = {
+  year: number | null;
+  tariff_code: string;
+  poste: string;
+  pu_fourniture: number | null;
+  pu_capacite: number | null;
+  pu_cee: number | null;
+  pu_go: number | null;
+  pu_total: number | null;
+};
+
+type ComposanteInputs = { fourniture: string; capacite: string; cee: string; go: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -58,41 +73,37 @@ const LOT_LABEL: Record<string, string> = {
   autre: "Autre",
 };
 
-const COMPONENTS_BASE = ["abo", "base", "turpe_fix", "turpe_kwh", "cta", "cspe", "tva"] as const;
-const COMPONENTS_HPHC = ["abo", "hp", "hc", "turpe_fix", "turpe_kwh", "cta", "cspe", "tva"] as const;
-type Component = (typeof COMPONENTS_BASE)[number] | (typeof COMPONENTS_HPHC)[number];
-
-const COMPONENT_LABELS: Record<string, string> = {
-  abo: "Abonnement",
-  base: "Énergie base",
-  hp: "Énergie Heures Pleines",
-  hc: "Énergie Heures Creuses",
-  turpe_fix: "TURPE fixe",
-  turpe_kwh: "TURPE variable",
-  cta: "CTA",
-  cspe: "CSPE / TICFE",
-  tva: "TVA",
+// Ordre d'affichage des postes dans chaque section tarifaire
+const POSTES_BY_TARIFF: Record<string, string[]> = {
+  CU:   ["base"],
+  LU:   ["base"],
+  CU4:  ["hph", "hch", "hpe", "hce"],
+  MU4:  ["hph", "hch", "hpe", "hce"],
+  MUDT: ["hp", "hc"],
+  C4:   ["hph", "hch", "hpe", "hce"],
+  C2:   ["pointe", "hph", "hch", "hpe", "hce"],
 };
 
-const COMPONENT_UNITS: Record<string, string> = {
-  abo: "€/mois",
-  base: "€/kWh",
-  hp: "€/kWh",
-  hc: "€/kWh",
-  turpe_fix: "€/mois",
-  turpe_kwh: "€/kWh",
-  cta: "%",
-  cspe: "€/MWh",
-  tva: "%",
+const POSTE_LABELS: Record<string, string> = {
+  base:   "Base",
+  hph:    "HPH — Heures Pleines Saison Haute",
+  hch:    "HCH — Heures Creuses Saison Haute",
+  hpe:    "HPE — Heures Pleines Saison Basse",
+  hce:    "HCE — Heures Creuses Saison Basse",
+  hp:     "HP — Heures Pleines",
+  hc:     "HC — Heures Creuses",
+  pointe: "POINTE — Heure de Pointe",
 };
 
-const DAY_TYPE_LABELS: Record<string, string> = {
-  lun_ven: "Lun–Ven",
-  sam_dim: "Sam–Dim",
-  tous: "Tous les jours",
+const TARIFF_LABELS: Record<string, string> = {
+  CU:   "SDT CU — BT≤36kVA Courte Utilisation (base)",
+  LU:   "SDT LU — BT≤36kVA Longue Utilisation (base)",
+  CU4:  "CU4 — BT≤36kVA Courte Utilisation 4 postes",
+  MU4:  "MU4 — BT≤36kVA Moyenne Utilisation 4 postes",
+  MUDT: "MUDT — BT>36kVA Moyenne Utilisation",
+  C4:   "C4 — BT>36kVA Courte/Longue Utilisation",
+  C2:   "C2 — HTA Courte/Longue Utilisation",
 };
-
-const CHART_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4"];
 
 // ── API helpers ───────────────────────────────────────────────────────────
 
@@ -116,60 +127,91 @@ async function apiPut<T>(token: string, path: string, body: unknown): Promise<T>
   return r.json();
 }
 
-async function apiPatch<T>(token: string, path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${apiBaseUrl}${path}`, {
-    method: "PATCH",
-    headers: buildHeaders(token),
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
+// ── BPU Section ───────────────────────────────────────────────────────────
 
-// ── Sub-components ────────────────────────────────────────────────────────
-
-function HistoricalChart({ prices, components }: { prices: PriceEntry[]; components: readonly string[] }) {
-  const historical = prices.filter((p) => p.year !== null);
-  const years = [...new Set(historical.map((p) => p.year))].sort() as number[];
-  if (years.length === 0) return null;
-
-  const byYear: Record<number, Record<string, number>> = {};
-  historical.forEach((p) => {
-    if (p.year !== null) {
-      byYear[p.year] = byYear[p.year] ?? {};
-      byYear[p.year][p.component] = p.value;
-    }
-  });
-  const data = years.map((y) => ({ year: String(y), ...byYear[y] }));
-  const shown = [...components].filter((c) => years.some((y) => byYear[y]?.[c] !== undefined));
+function BpuTariffSection({
+  tariffCode,
+  prmCount,
+  bpuInputs,
+  onChange,
+}: {
+  tariffCode: string;
+  prmCount: number;
+  bpuInputs: Record<string, Record<string, ComposanteInputs>>;
+  onChange: (tc: string, poste: string, field: keyof ComposanteInputs, value: string) => void;
+}) {
+  const postes = POSTES_BY_TARIFF[tariffCode] ?? ["base"];
 
   return (
-    <div style={{ height: 220, marginBottom: 20 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="year" />
-          <YAxis />
-          <Tooltip formatter={(v: number, name: string) => [`${v} ${COMPONENT_UNITS[name] ?? ""}`, COMPONENT_LABELS[name] ?? name]} />
-          <Legend formatter={(name) => COMPONENT_LABELS[name] ?? name} />
-          {shown.map((comp, i) => (
-            <Line key={comp} type="monotone" dataKey={comp} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={{ r: 4 }} connectNulls />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span className="badge badge-gray" style={{ fontFamily: "monospace", fontSize: 13, letterSpacing: "0.03em" }}>
+          {tariffCode}
+        </span>
+        <span style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>
+          {TARIFF_LABELS[tariffCode] ?? tariffCode}
+        </span>
+        <span style={{ fontSize: 12, color: "#94a3b8" }}>
+          — {prmCount} PRM{prmCount > 1 ? "s" : ""}
+        </span>
+      </div>
+      <table className="data-table" style={{ tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "28%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "15%" }} />
+          <col style={{ width: "12%" }} />
+          <col style={{ width: "15%" }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Poste</th>
+            <th>Fourniture (€/MWh)</th>
+            <th>Capacité (€/MWh)</th>
+            <th>CEE (€/MWh)</th>
+            <th>GO (€/MWh)</th>
+            <th>Total calculé</th>
+          </tr>
+        </thead>
+        <tbody>
+          {postes.map((poste) => {
+            const vals = bpuInputs[tariffCode]?.[poste] ?? { fourniture: "", capacite: "", cee: "", go: "" };
+            const nums = [vals.fourniture, vals.capacite, vals.cee, vals.go].map((v) => parseFloat(v));
+            const hasAny = nums.some((n) => !isNaN(n));
+            const total = nums.reduce((acc, n) => acc + (isNaN(n) ? 0 : n), 0);
+
+            return (
+              <tr key={poste}>
+                <td style={{ fontSize: 13, whiteSpace: "nowrap" }}>{POSTE_LABELS[poste] ?? poste}</td>
+                {(["fourniture", "capacite", "cee", "go"] as const).map((field) => (
+                  <td key={field}>
+                    <input
+                      type="number"
+                      step="any"
+                      className="form-input"
+                      style={{ width: "100%", padding: "3px 6px", fontSize: 13 }}
+                      value={vals[field]}
+                      onChange={(e) => onChange(tariffCode, poste, field, e.target.value)}
+                      placeholder="—"
+                    />
+                  </td>
+                ))}
+                <td style={{ fontWeight: 600, fontSize: 13, color: hasAny ? "#1e40af" : "#cbd5e1" }}>
+                  {hasAny ? total.toFixed(2) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 // ── Wizard ────────────────────────────────────────────────────────────────
 
-function BillingWizard({
-  group,
-  onClose,
-}: {
-  group: SupplierGroup;
-  onClose: () => void;
-}) {
+function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () => void }) {
   const { token } = useAuth();
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -182,7 +224,6 @@ function BillingWizard({
   const [selectedPrm, setSelectedPrm] = useState("");
   const [hasHphc, setHasHphc] = useState(group.has_hphc);
 
-  // Load existing config details
   const configQuery = useQuery({
     queryKey: ["billing-config", group.config_id],
     queryFn: () => apiGet<BillingConfigOut>(token!, `/billing/configs/${group.config_id}`),
@@ -213,90 +254,100 @@ function BillingWizard({
   });
 
   // ── Step 2 ───────────────────────────────────────────────────────────
-  const components: readonly Component[] = hasHphc ? COMPONENTS_HPHC : COMPONENTS_BASE;
+  const [bpuInputs, setBpuInputs] = useState<Record<string, Record<string, ComposanteInputs>>>({});
+  const [bpuInitDone, setBpuInitDone] = useState(false);
 
-  const pricesQuery = useQuery({
-    queryKey: ["billing-prices", configId],
-    queryFn: () => apiGet<PriceEntry[]>(token!, `/billing/configs/${configId}/prices`),
+  const bpuLinesQuery = useQuery({
+    queryKey: ["billing-bpu-lines", configId],
+    queryFn: () => apiGet<BpuLine[]>(token!, `/billing/configs/${configId}/bpu-lines`),
     enabled: !!token && !!configId,
   });
 
-  const currentPrices: Record<string, number> = {};
-  (pricesQuery.data ?? []).filter((e) => e.year === null).forEach((e) => { currentPrices[e.component] = e.value; });
+  // Pré-remplir les inputs depuis les données existantes (une seule fois)
+  useEffect(() => {
+    if (!bpuInitDone && bpuLinesQuery.data && bpuLinesQuery.data.length > 0) {
+      const inputs: Record<string, Record<string, ComposanteInputs>> = {};
+      for (const line of bpuLinesQuery.data.filter((l) => l.year === null)) {
+        if (!inputs[line.tariff_code]) inputs[line.tariff_code] = {};
+        inputs[line.tariff_code][line.poste] = {
+          fourniture: line.pu_fourniture != null ? String(line.pu_fourniture) : "",
+          capacite: line.pu_capacite != null ? String(line.pu_capacite) : "",
+          cee: line.pu_cee != null ? String(line.pu_cee) : "",
+          go: line.pu_go != null ? String(line.pu_go) : "",
+        };
+      }
+      setBpuInputs(inputs);
+      setBpuInitDone(true);
+    }
+  }, [bpuLinesQuery.data, bpuInitDone]);
 
-  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
-  const priceVal = (comp: string) =>
-    priceInputs[comp] !== undefined ? priceInputs[comp] : currentPrices[comp] !== undefined ? String(currentPrices[comp]) : "";
+  const handleBpuChange = (tc: string, poste: string, field: keyof ComposanteInputs, value: string) => {
+    setBpuInputs((prev) => ({
+      ...prev,
+      [tc]: {
+        ...(prev[tc] ?? {}),
+        [poste]: { ...(prev[tc]?.[poste] ?? { fourniture: "", capacite: "", cee: "", go: "" }), [field]: value },
+      },
+    }));
+  };
 
-  const setPricesMut = useMutation({
+  const setBpuLinesMut = useMutation({
     mutationFn: () => {
-      const historical = (pricesQuery.data ?? [])
-        .filter((e) => e.year !== null)
-        .map((e) => ({ year: e.year, component: e.component, value: e.value, unit: e.unit }));
-      const current = [...components]
-        .filter((c) => priceVal(c) !== "")
-        .map((c) => ({ year: null, component: c, value: parseFloat(priceVal(c)), unit: COMPONENT_UNITS[c] ?? null }));
-      return apiPut<PriceEntry[]>(token!, `/billing/configs/${configId}/prices`, [...current, ...historical]);
+      const historical = (bpuLinesQuery.data ?? [])
+        .filter((l) => l.year !== null)
+        .map((l) => ({
+          year: l.year,
+          tariff_code: l.tariff_code,
+          poste: l.poste,
+          pu_fourniture: l.pu_fourniture,
+          pu_capacite: l.pu_capacite,
+          pu_cee: l.pu_cee,
+          pu_go: l.pu_go,
+          pu_total: l.pu_total,
+        }));
+
+      const current: BpuLineIn[] = [];
+      for (const [tc, postes] of Object.entries(bpuInputs)) {
+        for (const [poste, vals] of Object.entries(postes)) {
+          const f = parseFloat(vals.fourniture);
+          const c = parseFloat(vals.capacite);
+          const cee = parseFloat(vals.cee);
+          const go = parseFloat(vals.go);
+          const nums = [f, c, cee, go];
+          if (nums.some((n) => !isNaN(n))) {
+            const total = nums.reduce((acc, n) => acc + (isNaN(n) ? 0 : n), 0);
+            current.push({
+              year: null,
+              tariff_code: tc,
+              poste,
+              pu_fourniture: isNaN(f) ? null : f,
+              pu_capacite: isNaN(c) ? null : c,
+              pu_cee: isNaN(cee) ? null : cee,
+              pu_go: isNaN(go) ? null : go,
+              pu_total: total,
+            });
+          }
+        }
+      }
+      return apiPut<BpuLine[]>(token!, `/billing/configs/${configId}/bpu-lines`, [...current, ...historical]);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["billing-prices", configId] });
+      qc.invalidateQueries({ queryKey: ["billing-bpu-lines", configId] });
       setStep(3);
     },
   });
 
-  // HP/HC slots
-  const slotsQuery = useQuery({
-    queryKey: ["billing-hphc-slots", configId],
-    queryFn: () => apiGet<HphcSlot[]>(token!, `/billing/configs/${configId}/hphc-slots`),
-    enabled: !!token && !!configId && hasHphc,
-  });
-
-  const [slotRows, setSlotRows] = useState<{ day_type: string; start_time: string; end_time: string; period: string }[]>([]);
-  const [slotsInit, setSlotsInit] = useState(false);
-  useEffect(() => {
-    if (!slotsInit && slotsQuery.data && slotsQuery.data.length > 0) {
-      setSlotRows(slotsQuery.data.map(({ day_type, start_time, end_time, period }) => ({ day_type, start_time, end_time, period })));
-      setSlotsInit(true);
-    }
-  }, [slotsQuery.data, slotsInit]);
-
-  const addSlot = () => setSlotRows((r) => [...r, { day_type: "tous", start_time: "06:00", end_time: "22:00", period: "HP" }]);
-  const removeSlot = (i: number) => setSlotRows((r) => r.filter((_, idx) => idx !== i));
-  const updateSlot = (i: number, field: string, value: string) =>
-    setSlotRows((r) => r.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
-
-  const setSlotsMut = useMutation({
-    mutationFn: () => apiPut(token!, `/billing/configs/${configId}/hphc-slots`, slotRows),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["billing-hphc-slots", configId] }),
-  });
-
-  // ── Step 3 ───────────────────────────────────────────────────────────
-  const historicalPrices = (pricesQuery.data ?? []).filter((e) => e.year !== null);
-  const [newHistYear, setNewHistYear] = useState("");
-  const [newHistInputs, setNewHistInputs] = useState<Record<string, string>>({});
-
-  const addHistMut = useMutation({
-    mutationFn: () => {
-      const existing = (pricesQuery.data ?? [])
-        .filter((e) => e.year !== parseInt(newHistYear))
-        .map((e) => ({ year: e.year, component: e.component, value: e.value, unit: e.unit }));
-      const newEntries = [...components]
-        .filter((c) => newHistInputs[c])
-        .map((c) => ({ year: parseInt(newHistYear), component: c, value: parseFloat(newHistInputs[c]), unit: COMPONENT_UNITS[c] ?? null }));
-      return apiPut<PriceEntry[]>(token!, `/billing/configs/${configId}/prices`, [...existing, ...newEntries]);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["billing-prices", configId] });
-      setNewHistYear("");
-      setNewHistInputs({});
-    },
-  });
-
-  const canGoNext = configId && step < 3;
+  // ── Step 3 — Récapitulatif ────────────────────────────────────────────
+  const savedLines = (bpuLinesQuery.data ?? []).filter((l) => l.year === null);
+  const linesByTariff: Record<string, BpuLine[]> = {};
+  for (const line of savedLines) {
+    if (!linesByTariff[line.tariff_code]) linesByTariff[line.tariff_code] = [];
+    linesByTariff[line.tariff_code].push(line);
+  }
 
   return (
     <div className="wizard-overlay" onClick={onClose}>
-      <div className="wizard-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="wizard-panel" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
         <div className="wizard-header">
           <div>
             <h2 className="wizard-title">{group.supplier}</h2>
@@ -315,7 +366,7 @@ function BillingWizard({
               className={`wizard-step-btn ${step === s ? "active" : ""} ${s > 1 && !configId ? "disabled" : ""}`}
               onClick={() => (s === 1 || configId) && setStep(s)}
             >
-              {s === 1 ? "Lot & référent" : s === 2 ? "BPU & prix" : "Historique"}
+              {s === 1 ? "Lot & référent" : s === 2 ? "BPU par tarif" : "Récapitulatif"}
             </button>
           ))}
         </div>
@@ -347,12 +398,9 @@ function BillingWizard({
               <div className="toggle-row" style={{ marginTop: 20 }}>
                 <label className="toggle-label">
                   <input type="checkbox" checked={hasHphc} onChange={(e) => setHasHphc(e.target.checked)} />
-                  <span>Contrat HP/HC (Heures Pleines / Heures Creuses)</span>
+                  <span>Contrat avec postes horosaisonniers</span>
                 </label>
               </div>
-              <p style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                Activer si le BPU distingue HP et HC (typique pour les contrats CU4, MU4).
-              </p>
 
               <div style={{ marginTop: 24, display: "flex", gap: 8 }}>
                 <button
@@ -366,132 +414,113 @@ function BillingWizard({
                   <button className="secondary-button" onClick={() => setStep(2)}>Aller au BPU</button>
                 )}
               </div>
+              {upsertMut.isError && (
+                <p style={{ color: "#dc2626", fontSize: 12, marginTop: 8 }}>
+                  Erreur : {String(upsertMut.error)}
+                </p>
+              )}
             </div>
           )}
 
-          {/* ── Step 2 ── */}
+          {/* ── Step 2 — BPU par tarif ── */}
           {step === 2 && configId && (
             <div>
-              <p className="field-label" style={{ marginBottom: 8 }}>
-                Prix unitaires {hasHphc ? "(HP/HC)" : "(Base)"}
-              </p>
-              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
-                Ces prix s'appliquent à tous les PRMs de <strong>{group.supplier}</strong>.
-                {hasHphc && " La plateforme appliquera HP aux PRMs avec tarif CU4/MU4, et base aux autres."}
+              <p className="field-label" style={{ marginBottom: 4 }}>Prix unitaires BPU par tarif TURPE</p>
+              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
+                Saisissez les prix du BPU pour chaque tarif détecté sur les PRMs de{" "}
+                <strong>{group.supplier}</strong>. Le total est calculé automatiquement.
+                Les prix sont en €/MWh HTT.
               </p>
 
-              <table className="data-table">
-                <thead>
-                  <tr><th>Composante</th><th>Valeur</th><th>Unité</th></tr>
-                </thead>
-                <tbody>
-                  {[...components].map((comp) => (
-                    <tr key={comp}>
-                      <td>{COMPONENT_LABELS[comp]}</td>
-                      <td>
-                        <input
-                          type="number"
-                          step="any"
-                          className="form-input"
-                          style={{ width: 120, padding: "4px 8px" }}
-                          value={priceVal(comp)}
-                          onChange={(e) => setPriceInputs((p) => ({ ...p, [comp]: e.target.value }))}
-                        />
-                      </td>
-                      <td style={{ color: "#64748b", fontSize: 13 }}>{COMPONENT_UNITS[comp]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {bpuLinesQuery.isLoading && <p style={{ color: "#64748b", fontSize: 13 }}>Chargement…</p>}
 
-              {hasHphc && (
-                <div style={{ marginTop: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <p className="field-label" style={{ margin: 0 }}>Plages HP/HC</p>
-                    <button className="secondary-button" style={{ padding: "4px 10px" }} onClick={addSlot}>+ Ajouter</button>
-                  </div>
-                  {slotRows.length === 0 && (
-                    <p style={{ color: "#64748b", fontSize: 13 }}>Aucune plage définie.</p>
-                  )}
-                  {slotRows.map((slot, i) => (
-                    <div key={i} className="hphc-slot-row">
-                      <select className="form-input" style={{ flex: "1 1 110px" }} value={slot.day_type} onChange={(e) => updateSlot(i, "day_type", e.target.value)}>
-                        {Object.entries(DAY_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                      <input type="time" className="form-input" style={{ flex: "0 0 90px" }} value={slot.start_time} onChange={(e) => updateSlot(i, "start_time", e.target.value)} />
-                      <span>→</span>
-                      <input type="time" className="form-input" style={{ flex: "0 0 90px" }} value={slot.end_time} onChange={(e) => updateSlot(i, "end_time", e.target.value)} />
-                      <select className="form-input" style={{ flex: "0 0 70px" }} value={slot.period} onChange={(e) => updateSlot(i, "period", e.target.value)}>
-                        <option value="HP">HP</option>
-                        <option value="HC">HC</option>
-                      </select>
-                      <button className="secondary-button" style={{ padding: "4px 8px" }} onClick={() => removeSlot(i)}>✕</button>
-                    </div>
-                  ))}
-                  {slotRows.length > 0 && (
-                    <button className="secondary-button" style={{ marginTop: 8 }} disabled={setSlotsMut.isPending} onClick={() => setSlotsMut.mutate()}>
-                      {setSlotsMut.isPending ? "Enregistrement…" : "Enregistrer les plages"}
-                    </button>
-                  )}
-                </div>
-              )}
+              {group.tariff_codes.map((tc) => (
+                <BpuTariffSection
+                  key={tc}
+                  tariffCode={tc}
+                  prmCount={group.tariff_prm_counts[tc] ?? 0}
+                  bpuInputs={bpuInputs}
+                  onChange={handleBpuChange}
+                />
+              ))}
 
               <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-                <button className="btn-primary" disabled={setPricesMut.isPending} onClick={() => setPricesMut.mutate()}>
-                  {setPricesMut.isPending ? "Enregistrement…" : "Enregistrer et continuer →"}
+                <button
+                  className="btn-primary"
+                  disabled={setBpuLinesMut.isPending}
+                  onClick={() => setBpuLinesMut.mutate()}
+                >
+                  {setBpuLinesMut.isPending ? "Enregistrement…" : "Enregistrer et continuer →"}
                 </button>
-                <button className="secondary-button" onClick={() => setStep(3)}>Passer à l'historique</button>
+                <button className="secondary-button" onClick={() => setStep(3)}>
+                  Voir le récapitulatif
+                </button>
               </div>
+              {setBpuLinesMut.isError && (
+                <p style={{ color: "#dc2626", fontSize: 12, marginTop: 8 }}>
+                  Erreur : {String(setBpuLinesMut.error)}
+                </p>
+              )}
             </div>
           )}
 
-          {/* ── Step 3 ── */}
+          {/* ── Step 3 — Récapitulatif ── */}
           {step === 3 && configId && (
             <div>
-              {historicalPrices.length > 0 ? (
-                <HistoricalChart prices={pricesQuery.data ?? []} components={components} />
-              ) : (
+              <p className="field-label" style={{ marginBottom: 12 }}>BPU enregistré — tarifs et prix actuels</p>
+
+              {savedLines.length === 0 && (
                 <p style={{ color: "#64748b", fontSize: 13, marginBottom: 16 }}>
-                  Aucune donnée historique. Ajoutez des années passées pour visualiser l'évolution des prix.
+                  Aucune ligne BPU enregistrée. Revenez à l'étape 2 pour saisir les prix.
                 </p>
               )}
 
-              <div className="hist-add-form">
-                <p className="field-label">Ajouter une année historique</p>
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <span style={{ fontSize: 11, color: "#64748b" }}>Année</span>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ width: 90, padding: "4px 8px" }}
-                      placeholder="2024"
-                      value={newHistYear}
-                      onChange={(e) => setNewHistYear(e.target.value)}
-                    />
+              {Object.entries(linesByTariff).map(([tc, lines]) => (
+                <div key={tc} style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span className="badge badge-gray" style={{ fontFamily: "monospace", fontSize: 12 }}>{tc}</span>
+                    <span style={{ fontSize: 13, color: "#475569" }}>{TARIFF_LABELS[tc] ?? tc}</span>
                   </div>
-                  {[...components].map((comp) => (
-                    <div key={comp} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <span style={{ fontSize: 11, color: "#64748b" }}>{COMPONENT_LABELS[comp]}</span>
-                      <input
-                        type="number"
-                        step="any"
-                        className="form-input"
-                        style={{ width: 90, padding: "4px 8px" }}
-                        placeholder={COMPONENT_UNITS[comp]}
-                        value={newHistInputs[comp] ?? ""}
-                        onChange={(e) => setNewHistInputs((p) => ({ ...p, [comp]: e.target.value }))}
-                      />
-                    </div>
-                  ))}
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Poste</th>
+                        <th>Fourniture</th>
+                        <th>Capacité</th>
+                        <th>CEE</th>
+                        <th>GO</th>
+                        <th>Total (€/MWh)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines
+                        .sort((a, b) => {
+                          const order = POSTES_BY_TARIFF[tc] ?? [];
+                          return order.indexOf(a.poste) - order.indexOf(b.poste);
+                        })
+                        .map((line) => (
+                          <tr key={line.poste}>
+                            <td style={{ fontSize: 13 }}>{POSTE_LABELS[line.poste] ?? line.poste}</td>
+                            <td>{line.pu_fourniture?.toFixed(2) ?? "—"}</td>
+                            <td>{line.pu_capacite?.toFixed(2) ?? "—"}</td>
+                            <td>{line.pu_cee?.toFixed(2) ?? "—"}</td>
+                            <td>{line.pu_go?.toFixed(2) ?? "—"}</td>
+                            <td style={{ fontWeight: 600, color: "#1e40af" }}>
+                              {line.pu_total?.toFixed(2) ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
                 </div>
-                <button
-                  className="btn-primary"
-                  style={{ marginTop: 12 }}
-                  disabled={!newHistYear || addHistMut.isPending}
-                  onClick={() => addHistMut.mutate()}
-                >
-                  {addHistMut.isPending ? "Enregistrement…" : "Ajouter"}
+              ))}
+
+              <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
+                <button className="secondary-button" onClick={() => setStep(2)}>
+                  ← Modifier le BPU
+                </button>
+                <button className="btn-primary" onClick={onClose}>
+                  Fermer
                 </button>
               </div>
             </div>
@@ -518,7 +547,6 @@ export function EnergieBillingPage() {
   const groups = groupsQuery.data ?? [];
   const configured = groups.filter((g) => g.is_configured).length;
 
-  // Lot assignment inline (without opening wizard)
   const lotMut = useMutation({
     mutationFn: ({ supplier, lot }: { supplier: string; lot: string }) =>
       apiPut(token!, `/billing/configs/supplier/${encodeURIComponent(supplier)}`, { lot }),
@@ -535,7 +563,7 @@ export function EnergieBillingPage() {
       <div className="page-header">
         <h2>Facturation ENEDIS</h2>
         <p className="page-subtitle">
-          Configurez les prix BPU par fournisseur pour estimer les coûts de chaque PRM.
+          Configurez les prix BPU par fournisseur et par tarif TURPE pour chaque PRM.
         </p>
       </div>
 
@@ -597,7 +625,12 @@ export function EnergieBillingPage() {
                       <td>
                         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                           {g.tariff_codes.map((tc) => (
-                            <span key={tc} className="badge badge-gray" style={{ fontSize: 11 }}>{tc}</span>
+                            <span key={tc} className="badge badge-gray" style={{ fontSize: 11, fontFamily: "monospace" }}>
+                              {tc}
+                              {g.tariff_prm_counts[tc] ? (
+                                <span style={{ marginLeft: 4, opacity: 0.7 }}>×{g.tariff_prm_counts[tc]}</span>
+                              ) : null}
+                            </span>
                           ))}
                         </div>
                       </td>
@@ -627,8 +660,8 @@ export function EnergieBillingPage() {
               <strong>Comment configurer ?</strong>
               <ol style={{ margin: "8px 0 0", paddingLeft: 20, fontSize: 13, color: "#94a3b8" }}>
                 <li>Attribuez un lot à chaque fournisseur via le menu déroulant.</li>
-                <li>Cliquez sur <em>Configurer BPU</em> pour saisir les prix unitaires du BPU.</li>
-                <li>Optionnel : ajoutez les prix des années passées pour suivre l'évolution.</li>
+                <li>Cliquez sur <em>Configurer BPU</em> pour saisir les prix par tarif TURPE.</li>
+                <li>Chaque tarif (CU, CU4, LU…) affiche les postes horosaisonniers applicables.</li>
               </ol>
             </div>
           )}

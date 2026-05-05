@@ -2,42 +2,43 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.billing import BillingConfig, BillingHphcSlot, BillingPriceEntry
+from app.models.billing import BillingBpuLine, BillingConfig, BillingHphcSlot, BillingPriceEntry
 from app.services.energie import _csv_rows
+
+# Postes horosaisonniers applicables par code tarifaire TURPE
+POSTES_BY_TARIFF: dict[str, list[str]] = {
+    "CU":   ["base"],
+    "LU":   ["base"],
+    "CU4":  ["hph", "hch", "hpe", "hce"],
+    "MU4":  ["hph", "hch", "hpe", "hce"],
+    "MUDT": ["hp", "hc"],
+    "C4":   ["hph", "hch", "hpe", "hce"],
+    "C2":   ["pointe", "hph", "hch", "hpe", "hce"],
+}
 
 
 def _extract_tariff_code(label: str) -> str:
+    """Dérive le code tarifaire normalisé depuis le libellé ENEDIS distribution_tariff."""
     s = label.upper()
-    if "CU4" in s:
-        return "CU4"
-    if "MU4" in s:
-        return "MU4"
-    if "MUDT" in s:
-        return "MUDT"
-    if ("COURTE UTILISATION" in s or " CU " in s) and (
-        "PLEINE" in s or "CREUSE" in s or "HP" in s or "HC" in s or "4 POSTE" in s
-    ):
-        return "CU4"
-    if ("MOYENNE UTILISATION" in s or " MU " in s) and (
-        "PLEINE" in s or "CREUSE" in s or "HP" in s or "HC" in s or "4 POSTE" in s
-    ):
-        return "MU4"
-    if "LONGUE UTILISATION" in s or " LU " in s:
-        return "LU"
-    if "COURTE UTILISATION" in s or " CU " in s:
-        return "CU"
-    if "MOYENNE UTILISATION" in s or " MU " in s:
-        return "MU"
-    if "BASE" in s:
-        return "BASE"
-    if "HP" in s or "HC" in s or "HEURE PLEINE" in s or "HEURE CREUSE" in s:
-        return "HPHC"
-    if "C2" in s:
+    # HTA → toujours C2
+    if "HTA" in s:
         return "C2"
-    if "C4" in s:
+    # BT > 36 kVA
+    if "BT>36" in s or "BT > 36" in s:
+        if "MOYENNE" in s or "TURPE 4" in s or "MUDT" in s:
+            return "MUDT"
         return "C4"
-    if "LU" in s:
+    # BT ≤ 36 kVA — ordre important : LU avant CU pour éviter les faux-positifs
+    if "LONGUE UTILISATION" in s:
         return "LU"
+    if "COURTE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s):
+        return "CU4"
+    if "MOYENNE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s):
+        return "MU4"
+    if "COURTE UTILISATION" in s:
+        return "CU"
+    if "MOYENNE UTILISATION" in s:
+        return "MUDT"
     return "AUTRE"
 
 
@@ -52,22 +53,28 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
         uid = row.get("usage_point_id", "")
 
         if supplier not in by_supplier:
-            by_supplier[supplier] = {"prm_ids": [], "tariff_codes": {}}
+            by_supplier[supplier] = {"prm_ids": [], "tariff_codes": {}, "tariff_counts": {}}
         if uid:
             by_supplier[supplier]["prm_ids"].append(uid)
         by_supplier[supplier]["tariff_codes"][code] = label
+        by_supplier[supplier]["tariff_counts"][code] = by_supplier[supplier]["tariff_counts"].get(code, 0) + 1
 
     configs = {c.supplier: c for c in db.query(BillingConfig).filter_by(city_id=city_id).all()}
+
+    # Ordre d'affichage cohérent avec le BPU (BT≤36 → BT>36 → HTA)
+    tariff_order = ["CU", "CU4", "MU4", "LU", "MUDT", "C4", "C2", "AUTRE"]
 
     result = []
     for supplier, data in sorted(by_supplier.items()):
         cfg = configs.get(supplier)
+        sorted_codes = sorted(data["tariff_codes"].keys(), key=lambda c: tariff_order.index(c) if c in tariff_order else 99)
         result.append(
             {
                 "supplier": supplier,
                 "prm_count": len(data["prm_ids"]),
                 "prm_ids": data["prm_ids"],
-                "tariff_codes": sorted(data["tariff_codes"].keys()),
+                "tariff_codes": sorted_codes,
+                "tariff_prm_counts": data["tariff_counts"],
                 "config_id": cfg.id if cfg else None,
                 "lot": cfg.lot if cfg else None,
                 "has_hphc": cfg.has_hphc if cfg else False,
@@ -134,6 +141,7 @@ def patch_config(
 
 
 def delete_config(db: Session, cfg: BillingConfig) -> None:
+    db.query(BillingBpuLine).filter_by(config_id=cfg.id).delete()
     db.query(BillingPriceEntry).filter_by(config_id=cfg.id).delete()
     db.query(BillingHphcSlot).filter_by(config_id=cfg.id).delete()
     db.delete(cfg)
@@ -188,6 +196,39 @@ def replace_hphc_slots(db: Session, config_id: int, slots: list[dict]) -> list[B
             period=s["period"],
         )
         for s in slots
+    ]
+    db.add_all(objs)
+    db.commit()
+    for o in objs:
+        db.refresh(o)
+    return objs
+
+
+def get_bpu_lines(db: Session, config_id: int) -> list[BillingBpuLine]:
+    return (
+        db.query(BillingBpuLine)
+        .filter_by(config_id=config_id)
+        .order_by(BillingBpuLine.year, BillingBpuLine.tariff_code, BillingBpuLine.poste)
+        .all()
+    )
+
+
+def replace_bpu_lines(db: Session, config_id: int, lines: list[dict]) -> list[BillingBpuLine]:
+    db.query(BillingBpuLine).filter_by(config_id=config_id).delete()
+    objs = [
+        BillingBpuLine(
+            config_id=config_id,
+            year=ln.get("year"),
+            tariff_code=ln["tariff_code"],
+            poste=ln["poste"],
+            pu_fourniture=ln.get("pu_fourniture"),
+            pu_capacite=ln.get("pu_capacite"),
+            pu_cee=ln.get("pu_cee"),
+            pu_go=ln.get("pu_go"),
+            pu_total=ln.get("pu_total"),
+            observation=ln.get("observation"),
+        )
+        for ln in lines
     ]
     db.add_all(objs)
     db.commit()

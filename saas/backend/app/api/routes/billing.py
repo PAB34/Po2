@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.billing import (
+    BillingBpuLineIn,
+    BillingBpuLineOut,
     BillingConfigOut,
     BillingConfigPatch,
     BillingHphcSlotIn,
@@ -14,12 +16,14 @@ from app.schemas.billing import (
 )
 from app.services.billing import (
     delete_config,
+    get_bpu_lines,
     get_config,
     get_configs,
     get_hphc_slots,
     get_prices,
     get_supplier_groups,
     patch_config,
+    replace_bpu_lines,
     replace_hphc_slots,
     replace_prices,
     upsert_supplier_config,
@@ -144,3 +148,26 @@ def set_hphc_slots(
     city_id = _require_city(current_user)
     _get_cfg_or_404(db, config_id, city_id)
     return replace_hphc_slots(db, config_id, [s.model_dump() for s in slots])
+
+
+@router.get("/configs/{config_id}/bpu-lines", response_model=list[BillingBpuLineOut])
+def list_bpu_lines(
+    config_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    _get_cfg_or_404(db, config_id, city_id)
+    return get_bpu_lines(db, config_id)
+
+
+@router.put("/configs/{config_id}/bpu-lines", response_model=list[BillingBpuLineOut])
+def set_bpu_lines(
+    config_id: int,
+    lines: list[BillingBpuLineIn],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    _get_cfg_or_404(db, config_id, city_id)
+    return replace_bpu_lines(db, config_id, [ln.model_dump() for ln in lines])

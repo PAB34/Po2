@@ -6,6 +6,7 @@ class BillingSupplierGroup(BaseModel):
     prm_count: int
     prm_ids: list[str]
     tariff_codes: list[str]
+    tariff_prm_counts: dict[str, int]
     config_id: int | None
     lot: str | None
     has_hphc: bool
@@ -73,6 +74,35 @@ class BillingHphcSlotOut(BaseModel):
     start_time: str
     end_time: str
     period: str
+
+    class Config:
+        from_attributes = True
+
+
+class BillingBpuLineIn(BaseModel):
+    year: int | None = None
+    tariff_code: str
+    poste: str
+    pu_fourniture: float | None = None
+    pu_capacite: float | None = None
+    pu_cee: float | None = None
+    pu_go: float | None = None
+    pu_total: float | None = None
+    observation: str | None = None
+
+
+class BillingBpuLineOut(BaseModel):
+    id: int
+    config_id: int
+    year: int | None
+    tariff_code: str
+    poste: str
+    pu_fourniture: float | None
+    pu_capacite: float | None
+    pu_cee: float | None
+    pu_go: float | None
+    pu_total: float | None
+    observation: str | None
 
     class Config:
         from_attributes = True

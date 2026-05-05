@@ -47,3 +47,20 @@ class BillingHphcSlot(Base):
     end_time: Mapped[str] = mapped_column(String(5), nullable=False)
     period: Mapped[str] = mapped_column(String(2), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class BillingBpuLine(Base):
+    __tablename__ = "billing_bpu_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    config_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tariff_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    poste: Mapped[str] = mapped_column(String(20), nullable=False)
+    pu_fourniture: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pu_capacite: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pu_cee: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pu_go: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pu_total: Mapped[float | None] = mapped_column(Float, nullable=True)
+    observation: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
