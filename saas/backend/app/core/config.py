@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     backend_cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     dgfip_majic_file_path: str = ""
     energie_dir: str = "/workspace/saas/energie/output"
+    invoice_storage_dir: str = "/app/storage/invoices"
     secret_key: str = "change-this-secret-key-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440

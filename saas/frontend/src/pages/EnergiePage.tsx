@@ -365,9 +365,14 @@ export function EnergiePage() {
 
   return (
     <div className="page">
-      <div className="page-header">
-        <h2>Énergie</h2>
-        <p className="page-subtitle">Électricité ENEDIS — Points de livraison (PRMs)</p>
+      <div className="page-header page-header-row">
+        <div>
+          <h2>Énergie</h2>
+          <p className="page-subtitle">Électricité ENEDIS — Points de livraison (PRMs)</p>
+        </div>
+        <button type="button" className="secondary-button" onClick={() => navigate("/energie/factures")}>
+          Factures
+        </button>
       </div>
 
       <DataCoverageBar token={token!} />

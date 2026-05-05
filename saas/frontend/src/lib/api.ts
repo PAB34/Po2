@@ -1101,3 +1101,50 @@ export async function setBillingHphcSlots(token: string, configId: number, slots
   });
   return parseResponse<BillingHphcSlotOut[]>(response);
 }
+
+// --- Energy invoice imports ---
+
+export type EnergyInvoiceImport = {
+  id: number;
+  city_id: number;
+  uploaded_by_user_id: number;
+  source: string;
+  original_filename: string;
+  content_type: string | null;
+  file_size_bytes: number;
+  sha256: string;
+  supplier_guess: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  status: string;
+  analysis_status: string;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EnergyInvoiceUploadResponse = {
+  invoice_import: EnergyInvoiceImport;
+  is_duplicate: boolean;
+  message: string;
+};
+
+export async function fetchEnergyInvoiceImports(token: string): Promise<EnergyInvoiceImport[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceImport[]>(response);
+}
+
+export async function uploadEnergyInvoiceImport(token: string, file: File): Promise<EnergyInvoiceUploadResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+  return parseResponse<EnergyInvoiceUploadResponse>(response);
+}

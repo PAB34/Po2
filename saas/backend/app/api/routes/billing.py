@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -14,6 +14,7 @@ from app.schemas.billing import (
     BillingPriceEntryOut,
     BillingSupplierGroup,
 )
+from app.schemas.invoice import EnergyInvoiceImportOut, EnergyInvoiceUploadResponse
 from app.services.billing import (
     delete_config,
     get_bpu_lines,
@@ -28,6 +29,7 @@ from app.services.billing import (
     replace_prices,
     upsert_supplier_config,
 )
+from app.services.invoices import create_invoice_import, get_invoice_import, list_invoice_imports
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -171,3 +173,40 @@ def set_bpu_lines(
     city_id = _require_city(current_user)
     _get_cfg_or_404(db, config_id, city_id)
     return replace_bpu_lines(db, config_id, [ln.model_dump() for ln in lines])
+
+
+@router.get("/invoices/imports", response_model=list[EnergyInvoiceImportOut])
+def list_energy_invoice_imports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return list_invoice_imports(db, city_id)
+
+
+@router.get("/invoices/imports/{invoice_import_id}", response_model=EnergyInvoiceImportOut)
+def get_energy_invoice_import(
+    invoice_import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    return invoice_import
+
+
+@router.post("/invoices/imports", response_model=EnergyInvoiceUploadResponse)
+async def upload_energy_invoice_import(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    invoice_import, is_duplicate = await create_invoice_import(db, city_id, current_user.id, file)
+    return {
+        "invoice_import": invoice_import,
+        "is_duplicate": is_duplicate,
+        "message": "Facture deja importee." if is_duplicate else "Facture importee.",
+    }

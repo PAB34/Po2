@@ -8,6 +8,7 @@ import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
+import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
 import { EnergiePage } from "./pages/EnergiePage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -36,6 +37,7 @@ export default function App() {
           <Link to="/">Accueil</Link>
           <Link to="/buildings">Bâtiments</Link>
           <Link to="/energie">Énergie</Link>
+          <Link to="/energie/factures">Factures</Link>
           <Link to="/energie/facturation">Facturation</Link>
           <Link to="/login">Connexion</Link>
           <Link to="/register">Inscription</Link>
@@ -50,6 +52,7 @@ export default function App() {
           <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
           <Route path="/energie" element={<EnergiePage />} />
+          <Route path="/energie/factures" element={<EnergieInvoicesPage />} />
           <Route path="/energie/facturation" element={<EnergieBillingPage />} />
           <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
