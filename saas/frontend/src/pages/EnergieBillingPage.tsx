@@ -15,6 +15,7 @@ type SupplierGroup = {
   config_id: number | null;
   lot: string | null;
   has_hphc: boolean;
+  representative_prm_id: string | null;
   is_configured: boolean;
 };
 
@@ -215,29 +216,12 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
   const { token } = useAuth();
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [cfg, setCfg] = useState<BillingConfigOut | null>(null);
-
-  const configId = cfg?.id ?? group.config_id;
+  const [configId, setConfigId] = useState<number | null>(group.config_id);
 
   // ── Step 1 ───────────────────────────────────────────────────────────
   const [lot, setLot] = useState(group.lot ?? "");
-  const [selectedPrm, setSelectedPrm] = useState("");
+  const [selectedPrm, setSelectedPrm] = useState(group.representative_prm_id ?? "");
   const [hasHphc, setHasHphc] = useState(group.has_hphc);
-
-  const configQuery = useQuery({
-    queryKey: ["billing-config", group.config_id],
-    queryFn: () => apiGet<BillingConfigOut>(token!, `/billing/configs/${group.config_id}`),
-    enabled: !!token && !!group.config_id,
-  });
-
-  useEffect(() => {
-    if (configQuery.data) {
-      setCfg(configQuery.data);
-      setSelectedPrm(configQuery.data.representative_prm_id ?? "");
-      setHasHphc(configQuery.data.has_hphc);
-      setLot(configQuery.data.lot ?? "");
-    }
-  }, [configQuery.data]);
 
   const upsertMut = useMutation({
     mutationFn: () =>
@@ -247,7 +231,7 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
         representative_prm_id: selectedPrm || null,
       }),
     onSuccess: (data) => {
-      setCfg(data);
+      setConfigId(data.id);
       qc.invalidateQueries({ queryKey: ["billing-supplier-groups"] });
       setStep(2);
     },

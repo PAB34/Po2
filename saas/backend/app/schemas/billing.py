@@ -10,6 +10,7 @@ class BillingSupplierGroup(BaseModel):
     config_id: int | None
     lot: str | None
     has_hphc: bool
+    representative_prm_id: str | None
     is_configured: bool
 
 

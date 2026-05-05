@@ -78,6 +78,7 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
                 "config_id": cfg.id if cfg else None,
                 "lot": cfg.lot if cfg else None,
                 "has_hphc": cfg.has_hphc if cfg else False,
+                "representative_prm_id": cfg.representative_prm_id if cfg else None,
                 "is_configured": cfg is not None and cfg.representative_prm_id is not None,
             }
         )
