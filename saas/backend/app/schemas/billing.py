@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -35,8 +37,8 @@ class BillingConfigOut(BaseModel):
     lot: str | None
     has_hphc: bool
     representative_prm_id: str | None
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
