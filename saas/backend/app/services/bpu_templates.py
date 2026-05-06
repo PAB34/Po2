@@ -52,6 +52,7 @@ BPU_TEMPLATES_BY_LOT: dict[str, list[BpuLineTemplate]] = {
         {"tariff_code": "MU4", "poste": "hce", "pu_fourniture": 51.33, "pu_capacite": 0.0, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": 61.94, "observation": None},
         {"tariff_code": "MUDT", "poste": "hp", "pu_fourniture": None, "pu_capacite": None, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": None, "observation": "Prix fourniture/capacite non renseigne dans le BPU source."},
         {"tariff_code": "MUDT", "poste": "hc", "pu_fourniture": None, "pu_capacite": None, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": None, "observation": "Prix fourniture/capacite non renseigne dans le BPU source."},
+        {"tariff_code": "EP", "poste": "base", "pu_fourniture": 84.84, "pu_capacite": 0.20, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": 95.65, "observation": "Ligne BPU source : BT <= 36 kVA / Eclairage Public / Base."},
         {"tariff_code": "C4", "poste": "hph", "pu_fourniture": 106.14, "pu_capacite": 1.21, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": 117.96, "observation": None},
         {"tariff_code": "C4", "poste": "hch", "pu_fourniture": 78.76, "pu_capacite": 0.0, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": 89.37, "observation": None},
         {"tariff_code": "C4", "poste": "hpe", "pu_fourniture": 46.47, "pu_capacite": 0.0, "pu_cee": 9.09, "pu_go": 1.52, "pu_total": 57.08, "observation": None},

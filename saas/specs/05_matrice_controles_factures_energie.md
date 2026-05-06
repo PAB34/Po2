@@ -106,8 +106,11 @@ Controles actifs :
 
 Precision BPU :
 
-- les factures C5 en `BT <= 36 kVA SDT CU4 / MU4` peuvent exposer une ligne residuelle `Base` ;
-- lorsque le BPU ne contient pas de ligne `CU4/base`, cette ligne est rapprochee du prix `CU/base` si le tarif de livraison reste bien `CU4`.
+- la grille contractuelle est lue comme le couple `Tension d'alimentation` + `Poste horosaisonnier TURPE` du fichier BPU Herault Energie 2026 ;
+- les factures C5 en `BT <= 36 kVA SDT CU4 / MU4` peuvent exposer une ligne residuelle `Base` : elle est rapprochee de `CU/base` lorsque le BPU ne contient pas `CU4/base` ou `MU4/base` ;
+- les libelles facture `Pointe` en C4 sont rapproches de la ligne BPU `C4/hph`, conforme a la grille Lot 1 et Lot 2 ;
+- les libelles saisonniers incoherents avec une formule a un seul poste (`CU`, `LU`, `EP`) sont rapproches de leur poste `base` ;
+- les libelles `hph/hpe/hch/hce` sur `MUDT` sont rapproches de `hp/hc`.
 
 ## 5. Points volontairement gardes pour V2
 

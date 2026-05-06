@@ -15,6 +15,7 @@ POSTES_BY_TARIFF: dict[str, list[str]] = {
     "MUDT": ["hp", "hc"],
     "C4":   ["hph", "hch", "hpe", "hce"],
     "C2":   ["pointe", "hph", "hch", "hpe", "hce"],
+    "EP":   ["base"],
 }
 
 
@@ -32,14 +33,16 @@ def _extract_tariff_code(label: str) -> str:
     # BT ≤ 36 kVA — ordre important : LU avant CU pour éviter les faux-positifs
     if "LONGUE UTILISATION" in s:
         return "LU"
-    if "COURTE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s):
+    if "COURTE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s or "4 PLAGES" in s):
         return "CU4"
-    if "MOYENNE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s):
+    if "MOYENNE UTILISATION" in s and ("PLEINE" in s or "CREUSE" in s or "DEUX SAISONS" in s or "4 PLAGES" in s):
         return "MU4"
     if "COURTE UTILISATION" in s:
         return "CU"
     if "MOYENNE UTILISATION" in s:
         return "MUDT"
+    if "ECLAIRAGE PUBLIC" in s or "ÉCLAIRAGE PUBLIC" in s:
+        return "EP"
     return "AUTRE"
 
 
@@ -71,7 +74,7 @@ def get_supplier_groups(db: Session, city_id: int) -> list[dict[str, Any]]:
     configs_with_bpu = {row[0] for row in db.query(BillingBpuLine.config_id).distinct().all()}
 
     # Ordre d'affichage cohérent avec le BPU (BT≤36 → BT>36 → HTA)
-    tariff_order = ["CU", "CU4", "MU4", "LU", "MUDT", "C4", "C2", "AUTRE"]
+    tariff_order = ["CU", "CU4", "MU4", "LU", "MUDT", "EP", "C4", "C2", "AUTRE"]
 
     result = []
     for supplier, data in sorted(by_supplier.items()):
@@ -233,7 +236,7 @@ def get_bpu_lines(db: Session, config_id: int) -> list[BillingBpuLine]:
 
 
 def ensure_default_bpu_lines(db: Session, cfg: BillingConfig) -> bool:
-    """Seed current BPU lines from the selected lot template when none exist yet."""
+    """Seed missing current BPU lines from the selected lot template."""
     if not cfg.lot:
         return False
 
@@ -241,32 +244,34 @@ def ensure_default_bpu_lines(db: Session, cfg: BillingConfig) -> bool:
     if not template:
         return False
 
-    has_current_lines = (
-        db.query(BillingBpuLine.id)
-        .filter(BillingBpuLine.config_id == cfg.id, BillingBpuLine.year.is_(None))
-        .first()
-        is not None
-    )
-    if has_current_lines:
+    existing_keys = {
+        (line.tariff_code, line.poste)
+        for line in (
+            db.query(BillingBpuLine)
+            .filter(BillingBpuLine.config_id == cfg.id, BillingBpuLine.year.is_(None))
+            .all()
+        )
+    }
+    new_lines = [
+        BillingBpuLine(
+            config_id=cfg.id,
+            year=None,
+            tariff_code=line["tariff_code"],
+            poste=line["poste"],
+            pu_fourniture=line["pu_fourniture"],
+            pu_capacite=line["pu_capacite"],
+            pu_cee=line["pu_cee"],
+            pu_go=line["pu_go"],
+            pu_total=line["pu_total"],
+            observation=line["observation"],
+        )
+        for line in template
+        if (line["tariff_code"], line["poste"]) not in existing_keys
+    ]
+    if not new_lines:
         return False
 
-    db.add_all(
-        [
-            BillingBpuLine(
-                config_id=cfg.id,
-                year=None,
-                tariff_code=line["tariff_code"],
-                poste=line["poste"],
-                pu_fourniture=line["pu_fourniture"],
-                pu_capacite=line["pu_capacite"],
-                pu_cee=line["pu_cee"],
-                pu_go=line["pu_go"],
-                pu_total=line["pu_total"],
-                observation=line["observation"],
-            )
-            for line in template
-        ]
-    )
+    db.add_all(new_lines)
     return True
 
 

@@ -20,6 +20,31 @@ PRICE_TOLERANCE_EUR_MWH = Decimal("0.05")
 AMOUNT_TOLERANCE_EUR = Decimal("0.05")
 
 
+BPU_POSTE_ALIASES: dict[tuple[str, str], list[tuple[str, str]]] = {
+    ("CU4", "base"): [("CU", "base"), ("LU", "base")],
+    ("MU4", "base"): [("CU", "base"), ("LU", "base")],
+    ("C4", "pointe"): [("C4", "hph")],
+    ("MUDT", "hph"): [("MUDT", "hp")],
+    ("MUDT", "hpe"): [("MUDT", "hp")],
+    ("MUDT", "hch"): [("MUDT", "hc")],
+    ("MUDT", "hce"): [("MUDT", "hc")],
+    ("CU", "hph"): [("CU", "base")],
+    ("CU", "hpe"): [("CU", "base")],
+    ("CU", "hch"): [("CU", "base")],
+    ("CU", "hce"): [("CU", "base")],
+    ("LU", "hph"): [("LU", "base")],
+    ("LU", "hpe"): [("LU", "base")],
+    ("LU", "hch"): [("LU", "base")],
+    ("LU", "hce"): [("LU", "base")],
+    ("EP", "hph"): [("EP", "base")],
+    ("EP", "hpe"): [("EP", "base")],
+    ("EP", "hch"): [("EP", "base")],
+    ("EP", "hce"): [("EP", "base")],
+    ("EP", "hp"): [("EP", "base")],
+    ("EP", "hc"): [("EP", "base")],
+}
+
+
 def analyze_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> EnergyInvoiceImport:
     invoice_import.error_message = None
 
@@ -259,7 +284,7 @@ def _check_bpu(
                 issue(
                     "warning",
                     "BPU_PRICE_MISSING",
-                    f"Prix BPU non renseigne pour {component_field} {tariff_code}/{poste}.",
+                    f"Prix BPU non renseigne pour {component_field} {bpu_line.tariff_code}/{bpu_line.poste}.",
                     scope,
                 )
                 continue
@@ -277,7 +302,7 @@ def _check_bpu(
                     "BPU_PRICE_MISMATCH",
                     (
                         f"Prix facture {invoice_value_mwh:.2f} EUR/MWh different du BPU "
-                        f"{expected:.2f} EUR/MWh pour {tariff_code}/{poste}."
+                        f"{expected:.2f} EUR/MWh pour {bpu_line.tariff_code}/{bpu_line.poste}."
                     ),
                     scope,
                 )
@@ -298,11 +323,14 @@ def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -
 def _tariff_code_for_site(site: dict[str, Any]) -> str:
     label = site.get("tariff_option_label") or site.get("segment") or ""
     upper = label.upper()
+    extracted = _extract_tariff_code(label)
     if "SEGMENT C4" in upper or site.get("segment") == "C4":
         return "C4"
     if ("SEGMENT C5" in upper or site.get("segment") == "C5") and "4 PLAGES" in upper:
+        if extracted in {"CU4", "MU4"}:
+            return extracted
         return "CU4"
-    return _extract_tariff_code(label)
+    return extracted
 
 
 def _bpu_component_field(component: str | None) -> str | None:
@@ -328,19 +356,19 @@ def _find_bpu_line_for_invoice_line(
     tariff_code: str,
     poste: str | None,
 ) -> BillingBpuLine | None:
-    if poste and (tariff_code, poste) in bpu_index:
-        return bpu_index[(tariff_code, poste)]
-
-    # Some C5 invoices expose a residual "Base" consumption line although the
-    # delivery tariff is a four-period CU4 formula. In the Herault Energie BPU,
-    # that price is carried by the BT<=36 CU/base line.
-    if poste == "base" and tariff_code == "CU4":
-        return bpu_index.get(("CU", "base"))
-
-    if poste == "base" and tariff_code == "LU":
-        return bpu_index.get(("LU", "base"))
+    for candidate in _bpu_candidate_keys(tariff_code, poste):
+        if candidate in bpu_index:
+            return bpu_index[candidate]
 
     return None
+
+
+def _bpu_candidate_keys(tariff_code: str, poste: str | None) -> list[tuple[str, str]]:
+    if not poste:
+        return []
+    candidates = [(tariff_code, poste)]
+    candidates.extend(BPU_POSTE_ALIASES.get((tariff_code, poste), []))
+    return candidates
 
 
 def _decimal(value: Any) -> Decimal | None:
