@@ -104,6 +104,11 @@ Controles actifs :
 - comparaison BPU sur fourniture, capacite, CEE et electricite verte.
 - recalcul TURPE 7 HTA-BT pour gestion, comptage, soutirage fixe et soutirage variable lorsque la grille applicable est chargee.
 
+Precision BPU :
+
+- les factures C5 en `BT <= 36 kVA SDT CU4 / MU4` peuvent exposer une ligne residuelle `Base` ;
+- lorsque le BPU ne contient pas de ligne `CU4/base`, cette ligne est rapprochee du prix `CU/base` si le tarif de livraison reste bien `CU4`.
+
 ## 5. Points volontairement gardes pour V2
 
 Ces controles sont importants mais pas encore implementes en V1 :

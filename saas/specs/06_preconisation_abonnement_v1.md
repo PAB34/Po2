@@ -33,6 +33,7 @@ Donnees utilisees :
 
 - puissance souscrite actuelle ;
 - historique de puissance maximale ENEDIS ;
+- consommation totale sur 365 jours glissants quand disponible ;
 - pic maximal observe ;
 - profondeur de l'historique ;
 - segment et tarif de distribution.
@@ -71,6 +72,14 @@ La puissance cible est arrondie au kVA superieur.
 - pas de cout de modification ;
 - pas de distinction eclairage public a 0,1 kVA ;
 - pas encore de prise en compte fine des depassements par poste horosaisonnier.
+
+## Tri et priorisation portefeuille
+
+La page `/energie/preconisations` permet de filtrer par fournisseur et de trier les PRM par :
+
+- priorite metier ;
+- consommation annuelle glissante decroissante ;
+- consommation annuelle glissante croissante.
 
 ## Evolution V2
 

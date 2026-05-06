@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from math import ceil
 from typing import Any
 
-from app.services.energie import _addresses, _contracts, _max_power_index, _safe_float
+from app.services.energie import _addresses, _contracts, _daily_consumption_index, _max_power_index, _safe_float
 from app.services.turpe import estimate_power_change_annual_impact
 
 
@@ -45,6 +46,7 @@ def get_prm_power_recommendation(prm_id: str) -> dict[str, Any] | None:
 
     action = _action_from_recommendation(recommended, subscribed_kva, data_quality["status"])
     confidence = _confidence(data_quality, action, current_ratio)
+    annual_consumption = _rolling_annual_consumption(prm_id)
     economic_estimate = _economic_estimate(
         tariff,
         contract.get("0_segment"),
@@ -61,6 +63,10 @@ def get_prm_power_recommendation(prm_id: str) -> dict[str, Any] | None:
         "contractor": contract.get("0_contractor"),
         "tariff": tariff,
         "segment": contract.get("0_segment"),
+        "annual_consumption_kwh": annual_consumption["annual_consumption_kwh"],
+        "annual_consumption_start": annual_consumption["annual_consumption_start"],
+        "annual_consumption_end": annual_consumption["annual_consumption_end"],
+        "annual_consumption_days": annual_consumption["annual_consumption_days"],
         "subscribed_power_kva": subscribed_kva,
         "peak_kva": peak_kva,
         "current_ratio_percent": current_ratio,
@@ -216,6 +222,30 @@ def _economic_estimate(
     target_kva: float | None,
 ) -> dict[str, Any]:
     return estimate_power_change_annual_impact(tariff, segment, subscribed_kva, target_kva)
+
+
+def _rolling_annual_consumption(prm_id: str) -> dict[str, Any]:
+    points = _daily_consumption_index().get(prm_id, [])
+    if not points:
+        return {
+            "annual_consumption_kwh": None,
+            "annual_consumption_start": None,
+            "annual_consumption_end": None,
+            "annual_consumption_days": 0,
+        }
+
+    end = date.fromisoformat(points[-1]["date"])
+    start = end - timedelta(days=364)
+    start_str = start.isoformat()
+    end_str = end.isoformat()
+    selected = [point for point in points if start_str <= point["date"] <= end_str]
+
+    return {
+        "annual_consumption_kwh": round(sum(point["value_wh"] for point in selected) / 1000, 1),
+        "annual_consumption_start": selected[0]["date"] if selected else start_str,
+        "annual_consumption_end": selected[-1]["date"] if selected else end_str,
+        "annual_consumption_days": len({point["date"] for point in selected}),
+    }
 
 
 def _priority_score(

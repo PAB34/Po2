@@ -40,9 +40,23 @@ const RISK_LABEL: Record<string, string> = {
   unknown: "Risque inconnu",
 };
 
+const SORT_LABELS: Record<string, string> = {
+  priority: "Priorite",
+  annual_desc: "Conso annuelle decroissante",
+  annual_asc: "Conso annuelle croissante",
+};
+
 function formatKva(value: number | null | undefined) {
   if (value === null || value === undefined) return "-";
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} kVA`;
+}
+
+function formatKwh(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  if (value >= 1000) {
+    return `${(value / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} MWh`;
+  }
+  return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kWh`;
 }
 
 function formatPercent(value: number | null | undefined) {
@@ -92,6 +106,8 @@ export function EnergieRecommendationsPage() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [confidenceFilter, setConfidenceFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("priority");
 
   const recommendationsQuery = useQuery({
     queryKey: ["power-recommendations"],
@@ -100,11 +116,18 @@ export function EnergieRecommendationsPage() {
   });
 
   const recommendations = recommendationsQuery.data?.recommendations ?? [];
+  const suppliers = useMemo(() => {
+    return Array.from(new Set(recommendations.map((item) => item.contractor).filter(Boolean) as string[])).sort((a, b) =>
+      a.localeCompare(b, "fr"),
+    );
+  }, [recommendations]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return recommendations.filter((item) => {
+    const rows = recommendations.filter((item) => {
       if (actionFilter !== "all" && item.action !== actionFilter) return false;
       if (confidenceFilter !== "all" && item.confidence !== confidenceFilter) return false;
+      if (supplierFilter !== "all" && item.contractor !== supplierFilter) return false;
       if (!q) return true;
       return (
         item.name.toLowerCase().includes(q) ||
@@ -113,7 +136,16 @@ export function EnergieRecommendationsPage() {
         (item.contractor ?? "").toLowerCase().includes(q)
       );
     });
-  }, [recommendations, search, actionFilter, confidenceFilter]);
+    return rows.sort((a, b) => {
+      if (sortMode === "annual_desc") {
+        return (b.annual_consumption_kwh ?? -1) - (a.annual_consumption_kwh ?? -1);
+      }
+      if (sortMode === "annual_asc") {
+        return (a.annual_consumption_kwh ?? Number.MAX_SAFE_INTEGER) - (b.annual_consumption_kwh ?? Number.MAX_SAFE_INTEGER);
+      }
+      return b.priority_score - a.priority_score;
+    });
+  }, [recommendations, search, actionFilter, confidenceFilter, supplierFilter, sortMode]);
 
   const kpis = recommendationsQuery.data?.kpis;
 
@@ -187,6 +219,21 @@ export function EnergieRecommendationsPage() {
           <option value="low">Faible</option>
           <option value="insufficient">Insuffisante</option>
         </select>
+        <select
+          value={supplierFilter}
+          onChange={(event) => setSupplierFilter(event.target.value)}
+          className="filter-select"
+        >
+          <option value="all">Tous fournisseurs</option>
+          {suppliers.map((supplier) => (
+            <option key={supplier} value={supplier}>{supplier}</option>
+          ))}
+        </select>
+        <select value={sortMode} onChange={(event) => setSortMode(event.target.value)} className="filter-select">
+          {Object.entries(SORT_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
         <span className="result-count">{filtered.length} resultat{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
@@ -195,6 +242,7 @@ export function EnergieRecommendationsPage() {
           <thead>
             <tr>
               <th>Site</th>
+              <th>Conso annuelle</th>
               <th>Puissances</th>
               <th>Recommandation</th>
               <th>Scenarios</th>
@@ -213,7 +261,18 @@ export function EnergieRecommendationsPage() {
                   <div className="invoice-file-cell">
                     <strong>{item.name}</strong>
                     <span>{item.usage_point_id}</span>
+                    <span>{item.contractor ?? "-"}</span>
                     <span>{item.address || "-"}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="recommendation-power-cell">
+                    <strong>{formatKwh(item.annual_consumption_kwh)}</strong>
+                    <small>
+                      {item.annual_consumption_days > 0
+                        ? `${item.annual_consumption_days} jours | ${item.annual_consumption_start ?? "-"} - ${item.annual_consumption_end ?? "-"}`
+                        : "Donnees absentes"}
+                    </small>
                   </div>
                 </td>
                 <td>
@@ -258,7 +317,7 @@ export function EnergieRecommendationsPage() {
             ))}
             {!recommendationsQuery.isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="cell-empty">Aucune preconisation</td>
+                <td colSpan={7} className="cell-empty">Aucune preconisation</td>
               </tr>
             )}
           </tbody>

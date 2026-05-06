@@ -714,6 +714,10 @@ export type PrmPowerRecommendation = {
   contractor: string | null;
   tariff: string | null;
   segment: string | null;
+  annual_consumption_kwh: number | null;
+  annual_consumption_start: string | null;
+  annual_consumption_end: string | null;
+  annual_consumption_days: number;
   subscribed_power_kva: number | null;
   peak_kva: number | null;
   current_ratio_percent: number | null;

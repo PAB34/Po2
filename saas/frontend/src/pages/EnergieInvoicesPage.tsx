@@ -276,16 +276,16 @@ export function EnergieInvoicesPage() {
                   <div className="invoice-action-cell">
                     {statusBadge(invoiceImport)}
                     <span className="badge badge-gray">{IMPORT_STATUS_LABEL[invoiceImport.status] ?? invoiceImport.source}</span>
-                    {(invoiceImport.analysis_status === "pending" || invoiceImport.analysis_status === "failed") && (
-                      <button
-                        type="button"
-                        className="btn-secondary btn-compact"
-                        disabled={analyzeMut.isPending}
-                        onClick={() => analyzeMut.mutate(invoiceImport)}
-                      >
-                        Analyser
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn-secondary btn-compact"
+                      disabled={analyzeMut.isPending}
+                      onClick={() => analyzeMut.mutate(invoiceImport)}
+                    >
+                      {invoiceImport.analysis_status === "pending" || invoiceImport.analysis_status === "failed"
+                        ? "Analyser"
+                        : "Relancer"}
+                    </button>
                   </div>
                 </td>
               </tr>

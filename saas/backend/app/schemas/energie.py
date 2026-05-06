@@ -226,6 +226,10 @@ class PrmPowerRecommendation(BaseModel):
     contractor: str | None
     tariff: str | None
     segment: str | None
+    annual_consumption_kwh: float | None
+    annual_consumption_start: str | None
+    annual_consumption_end: str | None
+    annual_consumption_days: int
     subscribed_power_kva: float | None
     peak_kva: float | None
     current_ratio_percent: float | None

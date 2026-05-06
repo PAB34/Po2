@@ -242,7 +242,7 @@ def _check_bpu(
                 continue
 
             poste = line.get("poste") or _first_poste_for_tariff(bpu_index, tariff_code)
-            bpu_line = bpu_index.get((tariff_code, poste)) if poste else None
+            bpu_line = _find_bpu_line_for_invoice_line(bpu_index, site, line, tariff_code, poste)
             if bpu_line is None:
                 bpu_summary["missing_references"] += 1
                 issue(
@@ -318,6 +318,28 @@ def _first_poste_for_tariff(bpu_index: dict[tuple[str, str], BillingBpuLine], ta
     for code, poste in bpu_index:
         if code == tariff_code:
             return poste
+    return None
+
+
+def _find_bpu_line_for_invoice_line(
+    bpu_index: dict[tuple[str, str], BillingBpuLine],
+    site: dict[str, Any],
+    line: dict[str, Any],
+    tariff_code: str,
+    poste: str | None,
+) -> BillingBpuLine | None:
+    if poste and (tariff_code, poste) in bpu_index:
+        return bpu_index[(tariff_code, poste)]
+
+    # Some C5 invoices expose a residual "Base" consumption line although the
+    # delivery tariff is a four-period CU4 formula. In the Herault Energie BPU,
+    # that price is carried by the BT<=36 CU/base line.
+    if poste == "base" and tariff_code == "CU4":
+        return bpu_index.get(("CU", "base"))
+
+    if poste == "base" and tariff_code == "LU":
+        return bpu_index.get(("LU", "base"))
+
     return None
 
 
