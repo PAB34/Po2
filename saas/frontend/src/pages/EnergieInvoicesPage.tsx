@@ -1,6 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { EnergyInvoiceImport, fetchEnergyInvoiceImports, uploadEnergyInvoiceImport } from "../lib/api";
+import {
+  analyzeEnergyInvoiceImport,
+  fetchEnergyInvoiceImports,
+  uploadEnergyInvoiceImport,
+} from "../lib/api";
+import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 const IMPORT_STATUS_LABEL: Record<string, string> = {
@@ -16,9 +21,26 @@ const ANALYSIS_STATUS_LABEL: Record<string, string> = {
   failed: "Echec",
 };
 
+const CONTROL_STATUS_LABEL: Record<string, string> = {
+  valid: "Valide",
+  review: "A controler",
+  invalid: "Invalide",
+  not_checked: "Non controlee",
+};
+
 function formatDate(value: string | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(value));
+}
+
+function formatCurrency(value: number | null) {
+  if (value === null || value === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 }
 
 function formatSize(bytes: number) {
@@ -43,6 +65,23 @@ function statusBadge(invoiceImport: EnergyInvoiceImport) {
   );
 }
 
+function controlBadge(invoiceImport: EnergyInvoiceImport) {
+  const statusClass =
+    invoiceImport.control_status === "invalid"
+      ? "badge-red"
+      : invoiceImport.control_status === "review"
+        ? "badge-orange"
+        : invoiceImport.control_status === "valid"
+          ? "badge-green"
+          : "badge-gray";
+
+  return (
+    <span className={`badge ${statusClass}`}>
+      {CONTROL_STATUS_LABEL[invoiceImport.control_status] ?? invoiceImport.control_status}
+    </span>
+  );
+}
+
 export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
@@ -58,9 +97,10 @@ export function EnergieInvoicesPage() {
 
   const imports = importsQuery.data ?? [];
   const stats = useMemo(() => {
-    const pending = imports.filter((i) => i.analysis_status === "pending").length;
-    const suppliers = new Set(imports.map((i) => i.supplier_guess).filter(Boolean)).size;
-    return { total: imports.length, pending, suppliers };
+    const invalid = imports.filter((i) => i.control_status === "invalid").length;
+    const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
+    const valid = imports.filter((i) => i.control_status === "valid").length;
+    return { total: imports.length, invalid, review, valid };
   }, [imports]);
 
   const uploadMut = useMutation({
@@ -81,6 +121,13 @@ export function EnergieInvoicesPage() {
     },
   });
 
+  const analyzeMut = useMutation({
+    mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+    },
+  });
+
   return (
     <div className="page">
       <div className="page-header page-header-row">
@@ -96,12 +143,16 @@ export function EnergieInvoicesPage() {
           <span className="kpi-value">{stats.total}</span>
         </div>
         <div className="kpi-card kpi-card--info">
-          <span className="kpi-label">En attente d'analyse</span>
-          <span className="kpi-value">{stats.pending}</span>
+          <span className="kpi-label">A controler</span>
+          <span className="kpi-value">{stats.review}</span>
+        </div>
+        <div className="kpi-card kpi-card--alert">
+          <span className="kpi-label">Invalides</span>
+          <span className="kpi-value">{stats.invalid}</span>
         </div>
         <div className="kpi-card">
-          <span className="kpi-label">Fournisseurs detectes</span>
-          <span className="kpi-value">{stats.suppliers}</span>
+          <span className="kpi-label">Valides</span>
+          <span className="kpi-value">{stats.valid}</span>
         </div>
       </div>
 
@@ -110,7 +161,7 @@ export function EnergieInvoicesPage() {
           <p className="field-label">Depot manuel</p>
           <p className="invoice-upload-copy">
             Depose ici les factures telechargees depuis les espaces clients. Cette premiere version stocke les fichiers
-            et prepare leur analyse automatique.
+            et lance le controle automatique ENGIE lorsqu'un PDF est reconnu.
           </p>
         </div>
         <div className="invoice-upload-actions">
@@ -149,11 +200,12 @@ export function EnergieInvoicesPage() {
           <thead>
             <tr>
               <th>Fichier</th>
-              <th>Fournisseur</th>
-              <th>Taille</th>
+              <th>Facture</th>
+              <th>Regroupement</th>
+              <th>Montant</th>
+              <th>Controle</th>
               <th>Import</th>
-              <th>Statut</th>
-              <th>Source</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -162,21 +214,58 @@ export function EnergieInvoicesPage() {
                 <td>
                   <div className="invoice-file-cell">
                     <strong>{invoiceImport.original_filename}</strong>
-                    <span>{invoiceImport.sha256.slice(0, 12)}</span>
+                    <span>{invoiceImport.supplier_guess ?? "-"} | {formatSize(invoiceImport.file_size_bytes)} | {invoiceImport.sha256.slice(0, 12)}</span>
                   </div>
                 </td>
-                <td>{invoiceImport.supplier_guess ?? "-"}</td>
-                <td>{formatSize(invoiceImport.file_size_bytes)}</td>
-                <td>{formatDate(invoiceImport.created_at)}</td>
-                <td>{statusBadge(invoiceImport)}</td>
                 <td>
-                  <span className="badge badge-gray">{IMPORT_STATUS_LABEL[invoiceImport.status] ?? invoiceImport.source}</span>
+                  <div className="invoice-file-cell">
+                    <strong>{invoiceImport.invoice_number ?? "-"}</strong>
+                    <span>{formatShortDate(invoiceImport.invoice_date)}</span>
+                  </div>
+                </td>
+                <td>{invoiceImport.regroupement ?? "-"}</td>
+                <td>
+                  <div className="invoice-file-cell">
+                    <strong>{formatCurrency(invoiceImport.total_ttc)}</strong>
+                    <span>
+                      {invoiceImport.site_count ?? 0} PRM |{" "}
+                      {invoiceImport.total_consumption_kwh !== null
+                        ? `${Math.round(invoiceImport.total_consumption_kwh).toLocaleString("fr-FR")} kWh`
+                        : "-"}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div className="invoice-control-cell">
+                    {controlBadge(invoiceImport)}
+                    <span>
+                      {invoiceImport.control_errors_count} erreur(s), {invoiceImport.control_warnings_count} alerte(s)
+                    </span>
+                    {invoiceImport.control_issues[0] && <small>{invoiceImport.control_issues[0].message}</small>}
+                  </div>
+                </td>
+                <td>{formatDate(invoiceImport.created_at)}</td>
+                <td>
+                  <div className="invoice-action-cell">
+                    {statusBadge(invoiceImport)}
+                    <span className="badge badge-gray">{IMPORT_STATUS_LABEL[invoiceImport.status] ?? invoiceImport.source}</span>
+                    {(invoiceImport.analysis_status === "pending" || invoiceImport.analysis_status === "failed") && (
+                      <button
+                        type="button"
+                        className="btn-secondary btn-compact"
+                        disabled={analyzeMut.isPending}
+                        onClick={() => analyzeMut.mutate(invoiceImport)}
+                      >
+                        Analyser
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
             {!importsQuery.isLoading && imports.length === 0 && (
               <tr>
-                <td colSpan={6} className="cell-empty">Aucune facture importee</td>
+                <td colSpan={7} className="cell-empty">Aucune facture importee</td>
               </tr>
             )}
           </tbody>

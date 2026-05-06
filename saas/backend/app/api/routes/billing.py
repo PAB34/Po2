@@ -29,7 +29,12 @@ from app.services.billing import (
     replace_prices,
     upsert_supplier_config,
 )
-from app.services.invoices import create_invoice_import, get_invoice_import, list_invoice_imports
+from app.services.invoices import (
+    analyze_existing_invoice_import,
+    create_invoice_import,
+    get_invoice_import,
+    list_invoice_imports,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -210,3 +215,16 @@ async def upload_energy_invoice_import(
         "is_duplicate": is_duplicate,
         "message": "Facture deja importee." if is_duplicate else "Facture importee.",
     }
+
+
+@router.post("/invoices/imports/{invoice_import_id}/analyze", response_model=EnergyInvoiceImportOut)
+def analyze_energy_invoice_import(
+    invoice_import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    invoice_import = analyze_existing_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    return invoice_import

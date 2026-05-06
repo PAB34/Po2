@@ -1118,8 +1118,21 @@ export type EnergyInvoiceImport = {
   invoice_date: string | null;
   period_start: string | null;
   period_end: string | null;
+  regroupement: string | null;
+  total_ttc: number | null;
+  total_consumption_kwh: number | null;
+  site_count: number | null;
   status: string;
   analysis_status: string;
+  control_status: string;
+  control_errors_count: number;
+  control_warnings_count: number;
+  control_issues: Array<{
+    severity: string;
+    code: string;
+    message: string;
+    scope: string | null;
+  }>;
   error_message: string | null;
   created_at: string;
   updated_at: string;
@@ -1147,4 +1160,12 @@ export async function uploadEnergyInvoiceImport(token: string, file: File): Prom
     body: formData,
   });
   return parseResponse<EnergyInvoiceUploadResponse>(response);
+}
+
+export async function analyzeEnergyInvoiceImport(token: string, importId: number): Promise<EnergyInvoiceImport> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}/analyze`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceImport>(response);
 }

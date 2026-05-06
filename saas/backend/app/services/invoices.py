@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.invoice import EnergyInvoiceImport
+from app.services.invoice_analysis import analyze_invoice_import
 
 ALLOWED_EXTENSIONS = {".pdf", ".xml", ".csv", ".txt", ".xlsx", ".xls", ".zip"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -49,6 +50,20 @@ def get_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> Ene
     return db.query(EnergyInvoiceImport).filter_by(city_id=city_id, id=invoice_import_id).first()
 
 
+def analyze_existing_invoice_import(
+    db: Session,
+    city_id: int,
+    invoice_import_id: int,
+) -> EnergyInvoiceImport | None:
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        return None
+    analyze_invoice_import(db, invoice_import)
+    db.commit()
+    db.refresh(invoice_import)
+    return invoice_import
+
+
 async def create_invoice_import(
     db: Session,
     city_id: int,
@@ -72,6 +87,10 @@ async def create_invoice_import(
         .first()
     )
     if existing is not None:
+        if existing.analysis_status in {"pending", "failed"}:
+            analyze_invoice_import(db, existing)
+            db.commit()
+            db.refresh(existing)
         return existing, True
 
     target_dir = Path(settings.invoice_storage_dir) / str(city_id)
@@ -96,6 +115,8 @@ async def create_invoice_import(
         analysis_status="pending",
     )
     db.add(invoice_import)
+    db.flush()
+    analyze_invoice_import(db, invoice_import)
     db.commit()
     db.refresh(invoice_import)
     return invoice_import, False
