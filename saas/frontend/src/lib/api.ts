@@ -1207,6 +1207,10 @@ export type EnergyInvoiceImport = {
   control_status: string;
   control_errors_count: number;
   control_warnings_count: number;
+  decision_status: string;
+  decision_comment: string | null;
+  decision_by_user_id: number | null;
+  decision_updated_at: string | null;
   control_issues: Array<{
     severity: string;
     code: string;
@@ -1216,6 +1220,71 @@ export type EnergyInvoiceImport = {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type EnergyInvoiceLine = {
+  family?: string;
+  label?: string;
+  normalized_component?: string | null;
+  poste?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  quantity?: number | null;
+  quantity_unit?: string | null;
+  unit_price_ht?: number | null;
+  unit_price_unit?: string | null;
+  amount_ht?: number | null;
+  vat_rate?: number | null;
+  raw_line?: string | null;
+};
+
+export type EnergyInvoiceSite = {
+  fic_number?: string | null;
+  prm_id?: string | null;
+  site_name?: string | null;
+  regroupement?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  delivery_site_name?: string | null;
+  delivery_address?: string | null;
+  tariff_option_label?: string | null;
+  segment?: string | null;
+  subscribed_power_kva?: number | null;
+  max_reached_power_kva?: number | null;
+  total_ht?: number | null;
+  total_vat?: number | null;
+  total_ttc?: number | null;
+  invoice_lines?: EnergyInvoiceLine[];
+};
+
+export type EnergyInvoiceAnalysisResult = {
+  supplier?: string;
+  document_type?: string;
+  page_count?: number;
+  site_count?: number;
+  fic_count?: number;
+  invoice?: Record<string, unknown>;
+  sites?: EnergyInvoiceSite[];
+  parser_warnings?: string[];
+};
+
+export type EnergyInvoiceControlReport = {
+  status?: string;
+  error_count?: number;
+  warning_count?: number;
+  issues?: EnergyInvoiceImport["control_issues"];
+  bpu?: Record<string, unknown>;
+  turpe?: Record<string, unknown>;
+};
+
+export type EnergyInvoiceImportDetail = EnergyInvoiceImport & {
+  analysis_result: EnergyInvoiceAnalysisResult | null;
+  control_report: EnergyInvoiceControlReport | null;
+};
+
+export type EnergyInvoiceDecisionPayload = {
+  decision_status: "to_review" | "approved" | "rejected" | "dispute_sent";
+  decision_comment?: string | null;
 };
 
 export type TurpeVersion = {
@@ -1253,6 +1322,13 @@ export async function fetchEnergyInvoiceImports(token: string): Promise<EnergyIn
   return parseResponse<EnergyInvoiceImport[]>(response);
 }
 
+export async function fetchEnergyInvoiceImport(token: string, importId: number): Promise<EnergyInvoiceImportDetail> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceImportDetail>(response);
+}
+
 export async function uploadEnergyInvoiceImport(token: string, file: File): Promise<EnergyInvoiceUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -1270,4 +1346,17 @@ export async function analyzeEnergyInvoiceImport(token: string, importId: number
     headers: buildHeaders(token),
   });
   return parseResponse<EnergyInvoiceImport>(response);
+}
+
+export async function updateEnergyInvoiceDecision(
+  token: string,
+  importId: number,
+  payload: EnergyInvoiceDecisionPayload,
+): Promise<EnergyInvoiceImportDetail> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}/decision`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<EnergyInvoiceImportDetail>(response);
 }

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -33,6 +34,10 @@ class EnergyInvoiceImportOut(BaseModel):
     control_status: str
     control_errors_count: int
     control_warnings_count: int
+    decision_status: str
+    decision_comment: str | None
+    decision_by_user_id: int | None
+    decision_updated_at: datetime | None
     control_issues: list[EnergyInvoiceControlIssueOut]
     error_message: str | None
     created_at: datetime
@@ -40,6 +45,16 @@ class EnergyInvoiceImportOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EnergyInvoiceImportDetailOut(EnergyInvoiceImportOut):
+    analysis_result: dict[str, Any] | None
+    control_report: dict[str, Any] | None
+
+
+class EnergyInvoiceDecisionIn(BaseModel):
+    decision_status: Literal["to_review", "approved", "rejected", "dispute_sent"]
+    decision_comment: str | None = None
 
 
 class EnergyInvoiceUploadResponse(BaseModel):

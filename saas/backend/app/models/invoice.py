@@ -34,6 +34,10 @@ class EnergyInvoiceImport(Base):
     control_status: Mapped[str] = mapped_column(String(30), nullable=False, default="not_checked")
     control_errors_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     control_warnings_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    decision_status: Mapped[str] = mapped_column(String(30), nullable=False, default="to_review")
+    decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decision_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    decision_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     analysis_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     control_report_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -52,3 +56,23 @@ class EnergyInvoiceImport(Base):
             return []
         issues = report.get("issues")
         return issues if isinstance(issues, list) else []
+
+    @property
+    def analysis_result(self) -> dict | None:
+        if not self.analysis_result_json:
+            return None
+        try:
+            result = json.loads(self.analysis_result_json)
+        except json.JSONDecodeError:
+            return None
+        return result if isinstance(result, dict) else None
+
+    @property
+    def control_report(self) -> dict | None:
+        if not self.control_report_json:
+            return None
+        try:
+            report = json.loads(self.control_report_json)
+        except json.JSONDecodeError:
+            return None
+        return report if isinstance(report, dict) else None

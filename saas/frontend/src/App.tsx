@@ -8,6 +8,7 @@ import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
+import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
 import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
 import { EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/energie" element={<EnergiePage />} />
           <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
           <Route path="/energie/factures" element={<EnergieInvoicesPage />} />
+          <Route path="/energie/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
           <Route path="/energie/facturation" element={<EnergieBillingPage />} />
           <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
           <Route path="/login" element={<LoginPage />} />

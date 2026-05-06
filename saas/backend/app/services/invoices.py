@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,7 @@ from app.services.invoice_analysis import analyze_invoice_import
 
 ALLOWED_EXTENSIONS = {".pdf", ".xml", ".csv", ".txt", ".xlsx", ".xls", ".zip"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+DECISION_STATUSES = {"to_review", "approved", "rejected", "dispute_sent"}
 
 
 def _safe_original_filename(filename: str | None) -> str:
@@ -59,6 +61,30 @@ def analyze_existing_invoice_import(
     if invoice_import is None:
         return None
     analyze_invoice_import(db, invoice_import)
+    db.commit()
+    db.refresh(invoice_import)
+    return invoice_import
+
+
+def update_invoice_decision(
+    db: Session,
+    city_id: int,
+    invoice_import_id: int,
+    user_id: int,
+    decision_status: str,
+    decision_comment: str | None,
+) -> EnergyInvoiceImport | None:
+    if decision_status not in DECISION_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Statut de decision facture invalide.")
+
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        return None
+
+    invoice_import.decision_status = decision_status
+    invoice_import.decision_comment = (decision_comment or "").strip() or None
+    invoice_import.decision_by_user_id = user_id
+    invoice_import.decision_updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(invoice_import)
     return invoice_import

@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import {
   analyzeEnergyInvoiceImport,
   fetchEnergyInvoiceImports,
@@ -27,6 +28,13 @@ const CONTROL_STATUS_LABEL: Record<string, string> = {
   review: "A controler",
   invalid: "Invalide",
   not_checked: "Non controlee",
+};
+
+const DECISION_STATUS_LABEL: Record<string, string> = {
+  to_review: "A verifier",
+  approved: "Validee",
+  rejected: "Refusee",
+  dispute_sent: "Contestation envoyee",
 };
 
 function formatDate(value: string | null) {
@@ -79,6 +87,23 @@ function controlBadge(invoiceImport: EnergyInvoiceImport) {
   return (
     <span className={`badge ${statusClass}`}>
       {CONTROL_STATUS_LABEL[invoiceImport.control_status] ?? invoiceImport.control_status}
+    </span>
+  );
+}
+
+function decisionBadge(invoiceImport: EnergyInvoiceImport) {
+  const statusClass =
+    invoiceImport.decision_status === "approved"
+      ? "badge-green"
+      : invoiceImport.decision_status === "rejected"
+        ? "badge-red"
+        : invoiceImport.decision_status === "dispute_sent"
+          ? "badge-blue"
+          : "badge-gray";
+
+  return (
+    <span className={`badge ${statusClass}`}>
+      {DECISION_STATUS_LABEL[invoiceImport.decision_status] ?? invoiceImport.decision_status}
     </span>
   );
 }
@@ -231,6 +256,7 @@ export function EnergieInvoicesPage() {
               <th>Regroupement</th>
               <th>Montant</th>
               <th>Controle</th>
+              <th>Decision</th>
               <th>Import</th>
               <th>Action</th>
             </tr>
@@ -271,6 +297,12 @@ export function EnergieInvoicesPage() {
                     {invoiceImport.control_issues[0] && <small>{invoiceImport.control_issues[0].message}</small>}
                   </div>
                 </td>
+                <td>
+                  <div className="invoice-control-cell">
+                    {decisionBadge(invoiceImport)}
+                    {invoiceImport.decision_updated_at && <small>{formatDate(invoiceImport.decision_updated_at)}</small>}
+                  </div>
+                </td>
                 <td>{formatDate(invoiceImport.created_at)}</td>
                 <td>
                   <div className="invoice-action-cell">
@@ -286,13 +318,16 @@ export function EnergieInvoicesPage() {
                         ? "Analyser"
                         : "Relancer"}
                     </button>
+                    <Link to={`/energie/factures/${invoiceImport.id}`} className="btn-secondary btn-compact">
+                      Detail
+                    </Link>
                   </div>
                 </td>
               </tr>
             ))}
             {!importsQuery.isLoading && imports.length === 0 && (
               <tr>
-                <td colSpan={7} className="cell-empty">Aucune facture importee</td>
+                <td colSpan={8} className="cell-empty">Aucune facture importee</td>
               </tr>
             )}
           </tbody>

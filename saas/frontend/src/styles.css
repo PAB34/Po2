@@ -1384,6 +1384,7 @@ button:disabled {
   font-weight: 600;
   cursor: pointer;
   font-size: 0.9rem;
+  text-decoration: none;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -1777,6 +1778,87 @@ button:disabled {
   font-size: 0.78rem;
 }
 
+.invoice-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.invoice-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.58);
+}
+
+.invoice-detail-section h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1rem;
+}
+
+.invoice-decision-panel {
+  gap: 10px;
+}
+
+.invoice-decision-comment {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.invoice-decision-footer,
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.invoice-decision-footer span,
+.section-title-row span,
+.invoice-lines-note {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.invoice-issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invoice-issue-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.invoice-issue-row strong {
+  display: block;
+  color: #e2e8f0;
+}
+
+.invoice-issue-row p {
+  margin: 4px 0;
+  color: #cbd5e1;
+}
+
+.invoice-issue-row span:not(.badge) {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
 @media (max-width: 820px) {
   .page-header-row {
     flex-direction: column;
@@ -1784,6 +1866,10 @@ button:disabled {
 
   .invoice-upload-panel,
   .invoice-upload-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-detail-grid {
     grid-template-columns: 1fr;
   }
 

@@ -15,7 +15,12 @@ from app.schemas.billing import (
     BillingSupplierGroup,
     TurpeVersionOut,
 )
-from app.schemas.invoice import EnergyInvoiceImportOut, EnergyInvoiceUploadResponse
+from app.schemas.invoice import (
+    EnergyInvoiceDecisionIn,
+    EnergyInvoiceImportDetailOut,
+    EnergyInvoiceImportOut,
+    EnergyInvoiceUploadResponse,
+)
 from app.services.billing import (
     delete_config,
     get_bpu_lines,
@@ -35,6 +40,7 @@ from app.services.invoices import (
     create_invoice_import,
     get_invoice_import,
     list_invoice_imports,
+    update_invoice_decision,
 )
 from app.services.turpe import list_turpe_versions
 
@@ -199,7 +205,7 @@ def list_energy_invoice_imports(
     return list_invoice_imports(db, city_id)
 
 
-@router.get("/invoices/imports/{invoice_import_id}", response_model=EnergyInvoiceImportOut)
+@router.get("/invoices/imports/{invoice_import_id}", response_model=EnergyInvoiceImportDetailOut)
 def get_energy_invoice_import(
     invoice_import_id: int,
     current_user: User = Depends(get_current_user),
@@ -207,6 +213,27 @@ def get_energy_invoice_import(
 ):
     city_id = _require_city(current_user)
     invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    return invoice_import
+
+
+@router.patch("/invoices/imports/{invoice_import_id}/decision", response_model=EnergyInvoiceImportDetailOut)
+def patch_energy_invoice_decision(
+    invoice_import_id: int,
+    payload: EnergyInvoiceDecisionIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    invoice_import = update_invoice_decision(
+        db,
+        city_id,
+        invoice_import_id,
+        current_user.id,
+        payload.decision_status,
+        payload.decision_comment,
+    )
     if invoice_import is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
     return invoice_import
