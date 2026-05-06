@@ -116,6 +116,10 @@ export function EnergieInvoiceDetailPage() {
   const issues = invoiceImport?.control_report?.issues ?? invoiceImport?.control_issues ?? [];
   const bpuSummary = invoiceImport?.control_report?.bpu;
   const turpeSummary = invoiceImport?.control_report?.turpe;
+  const taxesSummary = invoiceImport?.control_report?.taxes;
+  const periodsSummary = invoiceImport?.control_report?.periods;
+  const consumptionSummary = invoiceImport?.control_report?.consumption;
+  const powerSummary = invoiceImport?.control_report?.power;
 
   const invoiceLines = useMemo(
     () =>
@@ -266,10 +270,35 @@ export function EnergieInvoiceDetailPage() {
       <section className="invoice-detail-section">
         <div className="section-title-row">
           <h3>Controles</h3>
-          <span>
-            BPU {formatNumber(recordNumber(bpuSummary, "checked_lines"))} ligne(s) | TURPE{" "}
-            {formatNumber(recordNumber(turpeSummary, "checked_components"))} composante(s)
-          </span>
+        </div>
+        <div className="invoice-control-summary-grid">
+          <div>
+            <strong>BPU</strong>
+            <span>{formatNumber(recordNumber(bpuSummary, "checked_lines"))} ligne(s)</span>
+          </div>
+          <div>
+            <strong>TURPE</strong>
+            <span>{formatNumber(recordNumber(turpeSummary, "checked_components"))} composante(s)</span>
+          </div>
+          <div>
+            <strong>Taxes</strong>
+            <span>{formatNumber(recordNumber(taxesSummary, "checked_sites"))} FIC</span>
+          </div>
+          <div>
+            <strong>Periodes</strong>
+            <span>{formatNumber(recordNumber(periodsSummary, "checked_sites"))} FIC</span>
+          </div>
+          <div>
+            <strong>Conso</strong>
+            <span>{formatNumber(recordNumber(consumptionSummary, "checked_sites"))} PRM</span>
+          </div>
+          <div>
+            <strong>Puissance</strong>
+            <span>
+              {formatNumber(recordNumber(powerSummary, "load_curve_checks"))} CDC /{" "}
+              {formatNumber(recordNumber(powerSummary, "max_power_checks"))} max
+            </span>
+          </div>
         </div>
         {issues.length > 0 ? (
           <div className="invoice-issue-list">

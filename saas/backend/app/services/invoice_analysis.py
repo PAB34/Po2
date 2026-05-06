@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+import unicodedata
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -11,13 +12,22 @@ from sqlalchemy.orm import Session
 from app.models.billing import BillingBpuLine, BillingConfig
 from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
-from app.services.energie import _contracts
+from app.services.energie import _contracts, _daily_consumption_index, _load_curve_index, _max_power_index, _safe_float
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
 from app.services.turpe import evaluate_invoice_turpe
 
 
 PRICE_TOLERANCE_EUR_MWH = Decimal("0.05")
 AMOUNT_TOLERANCE_EUR = Decimal("0.05")
+TAX_TOTAL_TOLERANCE_EUR = Decimal("0.10")
+VAT_RECALC_TOLERANCE_EUR = Decimal("0.50")
+CONSUMPTION_TOLERANCE_RATIO = Decimal("0.05")
+CONSUMPTION_TOLERANCE_KWH = Decimal("10")
+MIN_ENEDIS_COVERAGE_RATIO = Decimal("0.80")
+LOAD_CURVE_SLOT_HOURS = Decimal("0.5")
+POWER_TOLERANCE_KVA = Decimal("0.10")
+POWER_ENEDIS_TOLERANCE_KVA = Decimal("0.50")
+POWER_LOAD_CURVE_TOLERANCE_KVA = Decimal("1.00")
 
 
 BPU_POSTE_ALIASES: dict[tuple[str, str], list[tuple[str, str]]] = {
@@ -107,6 +117,17 @@ def _build_control_report(
     issues: list[dict[str, Any]] = []
     bpu_summary = {"checked_lines": 0, "mismatches": 0, "missing_references": 0}
     turpe_summary: dict[str, Any] = {}
+    taxes_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0}
+    period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "missing_references": 0}
+    consumption_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0, "partial_references": 0}
+    power_summary = {
+        "checked_sites": 0,
+        "overruns": 0,
+        "mismatches": 0,
+        "missing_references": 0,
+        "load_curve_checks": 0,
+        "max_power_checks": 0,
+    }
 
     def issue(severity: str, code: str, message: str, scope: str = "document") -> None:
         issues.append({"severity": severity, "code": code, "message": message, "scope": scope})
@@ -119,6 +140,10 @@ def _build_control_report(
     _check_arithmetic(invoice, sites, issue)
     _check_bpu(db, invoice_import.city_id, parsed, issue, bpu_summary)
     _check_turpe(parsed, issue, turpe_summary)
+    _check_tax_and_vat(invoice, sites, issue, taxes_summary)
+    _check_period_continuity(db, invoice_import, sites, issue, period_summary)
+    _check_consumption_against_enedis(sites, issue, consumption_summary)
+    _check_power_controls(sites, issue, power_summary)
 
     error_count = sum(1 for item in issues if item["severity"] == "error")
     warning_count = sum(1 for item in issues if item["severity"] == "warning")
@@ -131,6 +156,10 @@ def _build_control_report(
         "issues": issues,
         "bpu": bpu_summary,
         "turpe": turpe_summary,
+        "taxes": taxes_summary,
+        "periods": period_summary,
+        "consumption": consumption_summary,
+        "power": power_summary,
     }
 
 
@@ -320,6 +349,379 @@ def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -
         )
 
 
+def _check_tax_and_vat(
+    invoice: dict[str, Any],
+    sites: list[dict[str, Any]],
+    issue,
+    taxes_summary: dict[str, int],
+) -> None:
+    site_vat_total = Decimal("0")
+    site_vat_count = 0
+
+    for site in sites:
+        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        total_ht = _decimal(site.get("total_ht"))
+        total_vat = _decimal(site.get("total_vat"))
+        total_ttc = _decimal(site.get("total_ttc"))
+        if total_ht is None or total_vat is None or total_ttc is None:
+            taxes_summary["missing_references"] += 1
+            issue("warning", "TAX_TOTALS_MISSING", f"Totaux HT/TVA/TTC incomplets sur {scope}.", scope)
+            continue
+
+        taxes_summary["checked_sites"] += 1
+        site_vat_total += total_vat
+        site_vat_count += 1
+
+        if abs(total_ht + total_vat - total_ttc) > TAX_TOTAL_TOLERANCE_EUR:
+            taxes_summary["mismatches"] += 1
+            issue(
+                "error",
+                "VAT_TOTAL_MISMATCH",
+                f"Total HT + TVA different du TTC sur {scope}: attendu {(total_ht + total_vat):.2f} EUR, facture {total_ttc:.2f} EUR.",
+                scope,
+            )
+
+        line_vat = Decimal("0")
+        has_line_vat = False
+        for line in site.get("invoice_lines", []):
+            amount = _decimal(line.get("amount_ht"))
+            vat_rate = _decimal(line.get("vat_rate"))
+            if amount is None or vat_rate is None:
+                continue
+            has_line_vat = True
+            line_vat += amount * vat_rate / Decimal("100")
+        if has_line_vat and abs(line_vat - total_vat) > VAT_RECALC_TOLERANCE_EUR:
+            taxes_summary["mismatches"] += 1
+            issue(
+                "error",
+                "VAT_RECALC_MISMATCH",
+                f"TVA recalculée depuis les lignes ({line_vat:.2f} EUR) differente de la TVA facturee ({total_vat:.2f} EUR) sur {scope}.",
+                scope,
+            )
+
+        family_totals = site.get("family_totals") or {}
+        if family_totals:
+            family_total = sum((_decimal(value) or Decimal("0")) for value in family_totals.values())
+            if abs(family_total - total_ht) > TAX_TOTAL_TOLERANCE_EUR:
+                taxes_summary["mismatches"] += 1
+                issue(
+                    "error",
+                    "HT_TOTAL_MISMATCH",
+                    f"Somme des familles HT ({family_total:.2f} EUR) differente du total HT ({total_ht:.2f} EUR) sur {scope}.",
+                    scope,
+                )
+
+    invoice_vat = _decimal(invoice.get("vat_total"))
+    if invoice_vat is not None and site_vat_count and abs(invoice_vat - site_vat_total) > TAX_TOTAL_TOLERANCE_EUR:
+        taxes_summary["mismatches"] += 1
+        issue(
+            "error",
+            "INVOICE_VAT_TOTAL_MISMATCH",
+            f"TVA globale ({invoice_vat:.2f} EUR) differente de la somme des FIC ({site_vat_total:.2f} EUR).",
+        )
+
+
+def _check_period_continuity(
+    db: Session,
+    invoice_import: EnergyInvoiceImport,
+    sites: list[dict[str, Any]],
+    issue,
+    period_summary: dict[str, int],
+) -> None:
+    current_periods: list[tuple[str, date, date]] = []
+    for site in sites:
+        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        prm_id = site.get("prm_id")
+        start = _date_value(site.get("period_start"))
+        end = _date_value(site.get("period_end"))
+        if not prm_id or start is None or end is None:
+            period_summary["missing_references"] += 1
+            issue("warning", "PERIOD_MISSING", f"Periode facturee incomplete sur {scope}.", scope)
+            continue
+        if end < start:
+            period_summary["missing_references"] += 1
+            issue("error", "PERIOD_INVALID", f"Periode facturee incoherente sur {scope}: fin avant debut.", scope)
+            continue
+        period_summary["checked_sites"] += 1
+        current_periods.append((prm_id, start, end))
+
+        for line in site.get("invoice_lines", []):
+            line_start = _date_value(line.get("period_start"))
+            line_end = _date_value(line.get("period_end"))
+            if line_start is None or line_end is None:
+                continue
+            if line_start < start or line_end > end:
+                period_summary["missing_references"] += 1
+                issue(
+                    "warning",
+                    "LINE_PERIOD_OUTSIDE_SITE_PERIOD",
+                    f"Ligne facturee hors periode FIC sur {scope}: {line_start.isoformat()} - {line_end.isoformat()}.",
+                    scope,
+                )
+
+    if not current_periods:
+        return
+
+    previous_by_prm: dict[str, list[tuple[date, date, str]]] = {}
+    previous_imports = (
+        db.query(EnergyInvoiceImport)
+        .filter(EnergyInvoiceImport.city_id == invoice_import.city_id)
+        .filter(EnergyInvoiceImport.id != invoice_import.id)
+        .filter(EnergyInvoiceImport.analysis_result_json.isnot(None))
+        .all()
+    )
+    for previous in previous_imports:
+        label = previous.invoice_number or previous.original_filename
+        for previous_site in _iter_import_sites(previous):
+            prm_id = previous_site.get("prm_id")
+            start = _date_value(previous_site.get("period_start"))
+            end = _date_value(previous_site.get("period_end"))
+            if prm_id and start and end:
+                previous_by_prm.setdefault(prm_id, []).append((start, end, label))
+
+    for prm_id, start, end in current_periods:
+        previous_periods = sorted(previous_by_prm.get(prm_id, []), key=lambda item: item[1])
+        previous_before = [period for period in previous_periods if period[1] < start]
+        if previous_before:
+            previous_start, previous_end, previous_label = previous_before[-1]
+            expected_start = previous_end + timedelta(days=1)
+            if start > expected_start:
+                period_summary["gaps"] += 1
+                issue(
+                    "warning",
+                    "PERIOD_GAP",
+                    f"Trou de facturation detecte sur {prm_id}: precedente fin {previous_end.isoformat()} ({previous_label}), nouvelle debut {start.isoformat()}.",
+                    prm_id,
+                )
+
+        for previous_start, previous_end, previous_label in previous_periods:
+            if previous_start <= end and previous_end >= start:
+                period_summary["overlaps"] += 1
+                issue(
+                    "warning",
+                    "PERIOD_OVERLAP",
+                    f"Chevauchement de periode sur {prm_id} avec {previous_label}: {previous_start.isoformat()} - {previous_end.isoformat()}.",
+                    prm_id,
+                )
+                break
+
+
+def _check_consumption_against_enedis(
+    sites: list[dict[str, Any]],
+    issue,
+    consumption_summary: dict[str, int],
+) -> None:
+    daily_consumption = _daily_consumption_index()
+    load_curve = _load_curve_index()
+
+    for site in sites:
+        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        prm_id = site.get("prm_id")
+        start = _date_value(site.get("period_start"))
+        end = _date_value(site.get("period_end"))
+        invoice_kwh = _invoice_site_consumption_kwh(site)
+        if not prm_id or start is None or end is None or invoice_kwh is None:
+            consumption_summary["missing_references"] += 1
+            issue("warning", "CONSUMPTION_REFERENCE_MISSING", f"Consommation facturee ou periode incomplete sur {scope}.", scope)
+            continue
+
+        load_curve_metrics = _load_curve_metrics(load_curve.get(prm_id, []), start, end)
+        if load_curve_metrics is not None and load_curve_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
+            consumption_summary["checked_sites"] += 1
+            enedis_kwh = load_curve_metrics["energy_kwh"]
+            tolerance = max(CONSUMPTION_TOLERANCE_KWH, invoice_kwh * CONSUMPTION_TOLERANCE_RATIO)
+            delta = abs(invoice_kwh - enedis_kwh)
+            if delta > tolerance:
+                consumption_summary["mismatches"] += 1
+                issue(
+                    "warning",
+                    "CONSUMPTION_LOAD_CURVE_MISMATCH",
+                    (
+                        f"Consommation facturee {invoice_kwh:.1f} kWh differente de la courbe de charge "
+                        f"{enedis_kwh:.1f} kWh sur {scope} (ecart {delta:.1f} kWh)."
+                    ),
+                    scope,
+                )
+            continue
+
+        if load_curve_metrics is not None:
+            consumption_summary["partial_references"] += 1
+            issue(
+                "warning",
+                "LOAD_CURVE_CONSUMPTION_PARTIAL",
+                (
+                    f"Courbe de charge partielle pour controler la consommation sur {scope}: "
+                    f"{load_curve_metrics['covered_slots']}/{load_curve_metrics['expected_slots']} pas 30 min."
+                ),
+                scope,
+            )
+
+        points = [
+            point
+            for point in daily_consumption.get(prm_id, [])
+            if start.isoformat() <= point.get("date", "") <= end.isoformat()
+        ]
+        expected_days = max(1, (end - start).days + 1)
+        covered_days = len({point["date"] for point in points})
+        if not points:
+            consumption_summary["missing_references"] += 1
+            issue("warning", "ENEDIS_CONSUMPTION_MISSING", f"Aucune consommation ENEDIS disponible sur la periode facturee pour {scope}.", scope)
+            continue
+
+        enedis_kwh = sum(Decimal(str(point["value_wh"])) for point in points) / Decimal("1000")
+        coverage_ratio = Decimal(covered_days) / Decimal(expected_days)
+        if coverage_ratio < MIN_ENEDIS_COVERAGE_RATIO:
+            consumption_summary["partial_references"] += 1
+            issue(
+                "warning",
+                "ENEDIS_CONSUMPTION_PARTIAL",
+                f"Consommation ENEDIS partielle sur {scope}: {covered_days}/{expected_days} jour(s).",
+                scope,
+            )
+            continue
+
+        consumption_summary["checked_sites"] += 1
+        tolerance = max(CONSUMPTION_TOLERANCE_KWH, invoice_kwh * CONSUMPTION_TOLERANCE_RATIO)
+        delta = abs(invoice_kwh - enedis_kwh)
+        if delta > tolerance:
+            consumption_summary["mismatches"] += 1
+            issue(
+                "warning",
+                "CONSUMPTION_ENEDIS_MISMATCH",
+                f"Consommation facturee {invoice_kwh:.1f} kWh differente d'ENEDIS {enedis_kwh:.1f} kWh sur {scope} (ecart {delta:.1f} kWh).",
+                scope,
+            )
+
+
+def _check_power_controls(
+    sites: list[dict[str, Any]],
+    issue,
+    power_summary: dict[str, int],
+) -> None:
+    contracts = _contracts()
+    max_power = _max_power_index()
+    load_curve = _load_curve_index()
+
+    for site in sites:
+        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        prm_id = site.get("prm_id")
+        start = _date_value(site.get("period_start"))
+        end = _date_value(site.get("period_end"))
+        invoice_subscribed = _decimal(site.get("subscribed_power_kva"))
+        invoice_reached = _decimal(site.get("max_reached_power_kva"))
+        contract_subscribed = _decimal(_safe_float((contracts.get(prm_id) or {}).get("0_subscribed_power_value")) if prm_id else None)
+
+        if prm_id is None or start is None or end is None:
+            power_summary["missing_references"] += 1
+            issue("warning", "POWER_REFERENCE_MISSING", f"PRM ou periode absent pour controler la puissance sur {scope}.", scope)
+            continue
+
+        checked = False
+        if invoice_subscribed is None:
+            power_summary["missing_references"] += 1
+            issue("warning", "SUBSCRIBED_POWER_MISSING", f"Puissance souscrite absente de la facture sur {scope}.", scope)
+        elif contract_subscribed is not None:
+            checked = True
+            if abs(invoice_subscribed - contract_subscribed) > POWER_TOLERANCE_KVA:
+                power_summary["mismatches"] += 1
+                issue(
+                    "warning",
+                    "SUBSCRIBED_POWER_CONTRACT_MISMATCH",
+                    f"Puissance souscrite facture {invoice_subscribed:.1f} kVA differente du contrat ENEDIS {contract_subscribed:.1f} kVA sur {scope}.",
+                    scope,
+                )
+
+        if invoice_reached is not None and invoice_subscribed is not None:
+            checked = True
+            if invoice_reached > invoice_subscribed + POWER_TOLERANCE_KVA:
+                power_summary["overruns"] += 1
+                issue(
+                    "warning",
+                    "POWER_OVERRUN",
+                    f"Puissance atteinte {invoice_reached:.1f} kVA superieure a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
+                    scope,
+                )
+
+        billed_overrun = _billed_power_overrun_amount(site)
+        if billed_overrun > Decimal("0"):
+            power_summary["overruns"] += 1
+            issue("warning", "POWER_OVERRUN_BILLED", f"Depassement de puissance facture sur {scope}: {billed_overrun:.2f} EUR HT.", scope)
+
+        load_curve_metrics = _load_curve_metrics(load_curve.get(prm_id, []), start, end)
+        if load_curve_metrics is not None and load_curve_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
+            power_summary["load_curve_checks"] += 1
+            enedis_peak = load_curve_metrics["peak_kva"]
+            if invoice_reached is not None:
+                checked = True
+                delta = abs(invoice_reached - enedis_peak)
+                if delta > POWER_LOAD_CURVE_TOLERANCE_KVA:
+                    power_summary["mismatches"] += 1
+                    issue(
+                        "warning",
+                        "POWER_LOAD_CURVE_MISMATCH",
+                        f"Puissance atteinte facture {invoice_reached:.1f} kVA differente du pic courbe de charge {enedis_peak:.1f} kVA sur {scope}.",
+                        scope,
+                    )
+            elif invoice_subscribed is not None and enedis_peak > invoice_subscribed + POWER_TOLERANCE_KVA:
+                power_summary["overruns"] += 1
+                issue(
+                    "warning",
+                    "POWER_LOAD_CURVE_OVERRUN",
+                    f"Pic courbe de charge {enedis_peak:.1f} kVA superieur a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
+                    scope,
+                )
+        else:
+            if load_curve_metrics is not None:
+                power_summary["missing_references"] += 1
+                issue(
+                    "warning",
+                    "LOAD_CURVE_POWER_PARTIAL",
+                    (
+                        f"Courbe de charge partielle sur {scope}: "
+                        f"{load_curve_metrics['covered_slots']}/{load_curve_metrics['expected_slots']} pas 30 min."
+                    ),
+                    scope,
+                )
+            selected_power_points = [
+                point
+                for point in max_power.get(prm_id, [])
+                if start.isoformat() <= point.get("date", "") <= end.isoformat()
+            ]
+            if selected_power_points:
+                power_summary["max_power_checks"] += 1
+                enedis_peak = max(Decimal(str(point["value_va"])) for point in selected_power_points) / Decimal("1000")
+                if invoice_reached is not None:
+                    checked = True
+                    delta = abs(invoice_reached - enedis_peak)
+                    if delta > POWER_ENEDIS_TOLERANCE_KVA:
+                        power_summary["mismatches"] += 1
+                        issue(
+                            "warning",
+                            "POWER_ENEDIS_MISMATCH",
+                            f"Puissance atteinte facture {invoice_reached:.1f} kVA differente du max ENEDIS {enedis_peak:.1f} kVA sur {scope}.",
+                            scope,
+                        )
+                elif invoice_subscribed is not None and enedis_peak > invoice_subscribed + POWER_TOLERANCE_KVA:
+                    power_summary["overruns"] += 1
+                    issue(
+                        "warning",
+                        "POWER_ENEDIS_OVERRUN",
+                        f"Max ENEDIS {enedis_peak:.1f} kVA superieur a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
+                        scope,
+                    )
+            else:
+                power_summary["missing_references"] += 1
+                issue(
+                    "warning",
+                    "ENEDIS_POWER_MISSING",
+                    f"Aucune courbe de charge ni puissance max ENEDIS disponible sur la periode facturee pour {scope}.",
+                    scope,
+                )
+
+        if checked:
+            power_summary["checked_sites"] += 1
+
+
 def _tariff_code_for_site(site: dict[str, Any]) -> str:
     label = site.get("tariff_option_label") or site.get("segment") or ""
     upper = label.upper()
@@ -369,6 +771,87 @@ def _bpu_candidate_keys(tariff_code: str, poste: str | None) -> list[tuple[str, 
     candidates = [(tariff_code, poste)]
     candidates.extend(BPU_POSTE_ALIASES.get((tariff_code, poste), []))
     return candidates
+
+
+def _iter_import_sites(invoice_import: EnergyInvoiceImport) -> list[dict[str, Any]]:
+    parsed = invoice_import.analysis_result
+    if not parsed:
+        return []
+    sites = parsed.get("sites")
+    return sites if isinstance(sites, list) else []
+
+
+def _date_value(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _invoice_site_consumption_kwh(site: dict[str, Any]) -> Decimal | None:
+    total = Decimal("0")
+    has_consumption = False
+    for line in site.get("invoice_lines", []):
+        if line.get("normalized_component") not in {"supply", "network_variable"}:
+            continue
+        quantity = _decimal(line.get("quantity"))
+        if quantity is None:
+            continue
+        has_consumption = True
+        total += quantity
+    if has_consumption:
+        return total
+
+    total_from_reads = Decimal("0")
+    has_reads = False
+    for read in site.get("meter_reads", []):
+        energy = _decimal(read.get("energy_kwh"))
+        if energy is not None:
+            has_reads = True
+            total_from_reads += energy
+    return total_from_reads if has_reads else None
+
+
+def _billed_power_overrun_amount(site: dict[str, Any]) -> Decimal:
+    total = Decimal("0")
+    for line in site.get("invoice_lines", []):
+        normalized = _strip_accents(str(line.get("label") or line.get("raw_line") or "")).lower()
+        if "depassement" not in normalized or "puissance" not in normalized:
+            continue
+        amount = _decimal(line.get("amount_ht"))
+        if amount is not None:
+            total += amount
+    return total
+
+
+def _load_curve_metrics(points: list[dict[str, Any]], start: date, end: date) -> dict[str, Any] | None:
+    selected = [
+        point
+        for point in points
+        if start.isoformat() <= str(point.get("datetime", ""))[:10] <= end.isoformat()
+    ]
+    if not selected:
+        return None
+
+    expected_slots = max(1, (end - start).days + 1) * 48
+    covered_slots = len({str(point.get("datetime")) for point in selected if point.get("datetime")})
+    peak_kva = max(Decimal(str(point["value_w"])) for point in selected) / Decimal("1000")
+    energy_kwh = sum(Decimal(str(point["value_w"])) * LOAD_CURVE_SLOT_HOURS for point in selected) / Decimal("1000")
+    return {
+        "peak_kva": peak_kva,
+        "energy_kwh": energy_kwh,
+        "covered_slots": covered_slots,
+        "expected_slots": expected_slots,
+        "coverage_ratio": Decimal(covered_slots) / Decimal(expected_slots),
+    }
+
+
+def _strip_accents(value: str) -> str:
+    return "".join(char for char in unicodedata.normalize("NFD", value) if unicodedata.category(char) != "Mn")
 
 
 def _decimal(value: Any) -> Decimal | None:

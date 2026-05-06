@@ -1275,6 +1275,10 @@ export type EnergyInvoiceControlReport = {
   issues?: EnergyInvoiceImport["control_issues"];
   bpu?: Record<string, unknown>;
   turpe?: Record<string, unknown>;
+  taxes?: Record<string, unknown>;
+  periods?: Record<string, unknown>;
+  consumption?: Record<string, unknown>;
+  power?: Record<string, unknown>;
 };
 
 export type EnergyInvoiceImportDetail = EnergyInvoiceImport & {

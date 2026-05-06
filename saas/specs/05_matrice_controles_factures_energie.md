@@ -36,6 +36,11 @@ Une facture est invalide si l'un des controles suivants echoue :
 | `UNKNOWN_PRM` | PRM inconnu dans le module Energie | Facture hors perimetre connu ou donnees ENEDIS manquantes. |
 | `TOTAL_TTC_MISMATCH` | Somme des FIC incoherente avec le total facture | Ecart arithmetique au-dela de la tolerance. |
 | `LINE_AMOUNT_MISMATCH` | Quantite x prix unitaire incoherent | Ligne facturee arithmetiquement fausse. |
+| `PERIOD_INVALID` | Periode facturee finissant avant son debut | Facture incoherente. |
+| `VAT_TOTAL_MISMATCH` | Total HT + TVA different du TTC | Ecart de totalisation fiscale. |
+| `VAT_RECALC_MISMATCH` | TVA recalculee depuis les lignes differente de la TVA facturee | Ecart de TVA. |
+| `HT_TOTAL_MISMATCH` | Somme des familles HT differente du total HT | Ecart de totalisation HT. |
+| `INVOICE_VAT_TOTAL_MISMATCH` | TVA globale differente de la somme des FIC | Ecart de TVA globale. |
 | `BPU_PRICE_MISMATCH` | Prix facture different du BPU | Ecart contractuel sur fourniture, capacite, CEE ou GO. |
 | `PARSER_FAILED` | Analyse impossible | Le fichier ne peut pas etre controle. |
 
@@ -62,6 +67,27 @@ Une facture passe en `review` si elle ne contient pas d'erreur bloquante mais qu
 | `TURPE_COMPONENT_UNSUPPORTED` | Composante TURPE non traitee | Controle acheminement incomplet. |
 | `TURPE_PERIOD_MISSING` | Periode de ligne absente | Controle acheminement incomplet. |
 | `TURPE_PERIOD_CROSSES_VERSION` | Ligne a cheval sur deux baremes | Controle acheminement incomplet. |
+| `TAX_TOTALS_MISSING` | Totaux HT/TVA/TTC incomplets | Controle taxes incomplet. |
+| `PERIOD_MISSING` | Periode facturee incomplete | Controle de continuite incomplet. |
+| `LINE_PERIOD_OUTSIDE_SITE_PERIOD` | Ligne facturee hors periode FIC | A verifier avant validation. |
+| `PERIOD_GAP` | Trou de facturation entre deux factures importees | A verifier avant validation. |
+| `PERIOD_OVERLAP` | Chevauchement avec une facture deja importee | Risque de double facturation. |
+| `CONSUMPTION_REFERENCE_MISSING` | Consommation facturee ou periode absente | Controle ENEDIS incomplet. |
+| `CONSUMPTION_LOAD_CURVE_MISMATCH` | Consommation facturee differente de la courbe de charge | Ecart ENEDIS a verifier. |
+| `ENEDIS_CONSUMPTION_MISSING` | Donnees ENEDIS absentes sur la periode | Controle ENEDIS incomplet. |
+| `ENEDIS_CONSUMPTION_PARTIAL` | Donnees ENEDIS partielles | Controle ENEDIS incomplet. |
+| `LOAD_CURVE_CONSUMPTION_PARTIAL` | Courbe de charge partielle pour la consommation | Controle fin incomplet, repli possible sur conso journaliere. |
+| `POWER_REFERENCE_MISSING` | Donnees de puissance ou periode absentes | Controle puissance incomplet. |
+| `SUBSCRIBED_POWER_MISSING` | Puissance souscrite absente de la facture | Controle puissance incomplet. |
+| `SUBSCRIBED_POWER_CONTRACT_MISMATCH` | Puissance facture differente du contrat ENEDIS | Ecart de puissance a verifier. |
+| `POWER_OVERRUN` | Puissance atteinte superieure a la puissance souscrite | Depassement a verifier. |
+| `POWER_OVERRUN_BILLED` | Depassement de puissance facture | Depassement a verifier. |
+| `POWER_LOAD_CURVE_MISMATCH` | Puissance atteinte differente du pic courbe de charge | Ecart ENEDIS a verifier. |
+| `POWER_LOAD_CURVE_OVERRUN` | Pic courbe de charge superieur a la puissance souscrite | Risque de depassement. |
+| `POWER_ENEDIS_MISMATCH` | Puissance atteinte differente du max power ENEDIS | Ecart ENEDIS a verifier. |
+| `POWER_ENEDIS_OVERRUN` | Max power ENEDIS superieur a la puissance souscrite | Risque de depassement. |
+| `ENEDIS_POWER_MISSING` | Courbe de charge et max power absents | Controle puissance incomplet. |
+| `LOAD_CURVE_POWER_PARTIAL` | Courbe de charge partielle pour la puissance | Controle fin incomplet, repli possible sur max power. |
 
 ## 4. Controles ENGIE V1 implementes
 
@@ -103,6 +129,10 @@ Controles actifs :
 - coherence quantite x prix unitaire ;
 - comparaison BPU sur fourniture, capacite, CEE et electricite verte.
 - recalcul TURPE 7 HTA-BT pour gestion, comptage, soutirage fixe et soutirage variable lorsque la grille applicable est chargee.
+- controle HT/TVA/TTC par FIC et au global.
+- controle des periodes et detection de trous/chevauchements entre factures importees.
+- comparaison de la consommation facturee avec la courbe de charge ENEDIS lorsqu'elle couvre la periode, sinon repli sur la consommation journaliere.
+- controle puissance facture vs contrat ENEDIS, puissance atteinte vs courbe de charge, puis repli sur `enedis_max_power.csv` si la courbe de charge est absente ou partielle.
 
 Precision BPU :
 
@@ -116,10 +146,9 @@ Precision BPU :
 
 Ces controles sont importants mais pas encore implementes en V1 :
 
-- recalcul reglementaire des taxes ;
+- controle reglementaire detaille des taxes autres que TVA ;
 - cas TURPE specifiques hors composantes principales (regroupement HTA, alimentations de secours, energie reactive HTA, autoconsommation collective) ;
-- detection des trous/chevauchements entre factures validees ;
-- comparaison fine avec courbes ENEDIS par jour/poste ;
+- comparaison fine avec courbes ENEDIS par poste horosaisonnier ;
 - workflow formel validation/refus ;
 - generation d'un motif de refus Chorus ;
 - gestion des factures gaz GRDF / lot 7.
