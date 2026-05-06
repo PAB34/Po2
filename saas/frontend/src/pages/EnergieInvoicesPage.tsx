@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   analyzeEnergyInvoiceImport,
   fetchEnergyInvoiceImports,
+  fetchTurpeVersions,
   uploadEnergyInvoiceImport,
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
@@ -95,7 +96,14 @@ export function EnergieInvoicesPage() {
     enabled: !!token,
   });
 
+  const turpeVersionsQuery = useQuery({
+    queryKey: ["turpe-versions"],
+    queryFn: () => fetchTurpeVersions(token!),
+    enabled: !!token,
+  });
+
   const imports = importsQuery.data ?? [];
+  const activeTurpeVersion = turpeVersionsQuery.data?.[0];
   const stats = useMemo(() => {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;
     const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
@@ -191,6 +199,25 @@ export function EnergieInvoicesPage() {
         {uploadSummary && <p className="sync-result-ok">{uploadSummary}</p>}
         {uploadMut.isError && <p className="error-text">{(uploadMut.error as Error).message}</p>}
       </section>
+
+      {activeTurpeVersion && (
+        <section className="turpe-reference-panel">
+          <div className="turpe-reference-main">
+            <p className="field-label">Referentiel TURPE</p>
+            <strong>{activeTurpeVersion.label}</strong>
+            <span>
+              Valide du {formatShortDate(activeTurpeVersion.valid_from)} au{" "}
+              {formatShortDate(activeTurpeVersion.valid_to)}
+            </span>
+          </div>
+          <div className="turpe-reference-meta">
+            <span>Prochaine mise a jour attendue : {formatShortDate(activeTurpeVersion.next_expected_update)}</span>
+            <a href={activeTurpeVersion.source_url} target="_blank" rel="noreferrer" className="secondary-link">
+              Source Enedis
+            </a>
+          </div>
+        </section>
+      )}
 
       {importsQuery.isLoading && <p className="loading-text">Chargement des imports...</p>}
       {importsQuery.isError && <p className="error-text">{(importsQuery.error as Error).message}</p>}

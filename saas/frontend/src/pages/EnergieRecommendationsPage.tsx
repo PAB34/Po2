@@ -50,6 +50,11 @@ function formatPercent(value: number | null | undefined) {
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
 }
 
+function formatCurrency(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+}
+
 function actionBadge(item: PrmPowerRecommendation) {
   return (
     <span className={`badge ${ACTION_CLASS[item.action] ?? "badge-gray"}`}>
@@ -151,8 +156,8 @@ export function EnergieRecommendationsPage() {
       <section className="recommendation-note">
         <strong>Garde-fou budgetaire</strong>
         <span>
-          L'impact annuel en euros reste masque tant que les tables TURPE ne sont pas importees et auditees.
-          Les recommandations ci-dessous priorisent les actions techniques.
+          L'impact annuel affiche uniquement la part fixe TURPE lorsque le bareme et la formule
+          d'acheminement sont exploitables.
         </span>
       </section>
 
@@ -235,7 +240,17 @@ export function EnergieRecommendationsPage() {
                 </td>
                 <td>
                   <div className="recommendation-power-cell">
-                    <span className="badge badge-gray">Non chiffre</span>
+                    {item.economic_estimate.available ? (
+                      <span
+                        className={`badge ${
+                          (item.economic_estimate.annual_amount_eur ?? 0) <= 0 ? "badge-green" : "badge-orange"
+                        }`}
+                      >
+                        {formatCurrency(item.economic_estimate.annual_amount_eur)} / an
+                      </span>
+                    ) : (
+                      <span className="badge badge-gray">Non chiffre</span>
+                    )}
                     <small>{item.economic_estimate.reason}</small>
                   </div>
                 </td>
@@ -252,4 +267,3 @@ export function EnergieRecommendationsPage() {
     </div>
   );
 }
-

@@ -13,6 +13,7 @@ from app.schemas.billing import (
     BillingPriceEntryIn,
     BillingPriceEntryOut,
     BillingSupplierGroup,
+    TurpeVersionOut,
 )
 from app.schemas.invoice import EnergyInvoiceImportOut, EnergyInvoiceUploadResponse
 from app.services.billing import (
@@ -35,6 +36,7 @@ from app.services.invoices import (
     get_invoice_import,
     list_invoice_imports,
 )
+from app.services.turpe import list_turpe_versions
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -68,6 +70,14 @@ def list_configs(
 ):
     city_id = _require_city(current_user)
     return get_configs(db, city_id)
+
+
+@router.get("/turpe/versions", response_model=list[TurpeVersionOut])
+def list_turpe_reference_versions(
+    current_user: User = Depends(get_current_user),
+):
+    _require_city(current_user)
+    return list_turpe_versions()
 
 
 @router.put("/configs/supplier/{supplier}", response_model=BillingConfigOut)

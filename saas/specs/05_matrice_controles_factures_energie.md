@@ -56,6 +56,12 @@ Une facture passe en `review` si elle ne contient pas d'erreur bloquante mais qu
 | `BPU_LINES_MISSING` | Configuration fournisseur presente sans lignes BPU | Parametrage incomplet. |
 | `BPU_REFERENCE_MISSING` | Poste/tarif absent du BPU | Controle prix incomplet. |
 | `BPU_PRICE_MISSING` | Prix BPU non renseigne | Controle prix incomplet. |
+| `TURPE_VERSION_MISSING` | Bareme TURPE absent pour la periode | Controle acheminement incomplet. |
+| `TURPE_TARIFF_UNKNOWN` | Formule d'acheminement non reconnue | Controle acheminement incomplet. |
+| `TURPE_TARIFF_UNSUPPORTED` | Tarif hors referentiel charge | Controle acheminement incomplet. |
+| `TURPE_COMPONENT_UNSUPPORTED` | Composante TURPE non traitee | Controle acheminement incomplet. |
+| `TURPE_PERIOD_MISSING` | Periode de ligne absente | Controle acheminement incomplet. |
+| `TURPE_PERIOD_CROSSES_VERSION` | Ligne a cheval sur deux baremes | Controle acheminement incomplet. |
 
 ## 4. Controles ENGIE V1 implementes
 
@@ -96,16 +102,16 @@ Controles actifs :
 - somme TTC FIC vs total facture ;
 - coherence quantite x prix unitaire ;
 - comparaison BPU sur fourniture, capacite, CEE et electricite verte.
+- recalcul TURPE 7 HTA-BT pour gestion, comptage, soutirage fixe et soutirage variable lorsque la grille applicable est chargee.
 
 ## 5. Points volontairement gardes pour V2
 
 Ces controles sont importants mais pas encore implementes en V1 :
 
-- recalcul fin TURPE ;
 - recalcul reglementaire des taxes ;
+- cas TURPE specifiques hors composantes principales (regroupement HTA, alimentations de secours, energie reactive HTA, autoconsommation collective) ;
 - detection des trous/chevauchements entre factures validees ;
 - comparaison fine avec courbes ENEDIS par jour/poste ;
 - workflow formel validation/refus ;
 - generation d'un motif de refus Chorus ;
 - gestion des factures gaz GRDF / lot 7.
-

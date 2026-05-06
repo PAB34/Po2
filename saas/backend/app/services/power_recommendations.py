@@ -4,6 +4,7 @@ from math import ceil
 from typing import Any
 
 from app.services.energie import _addresses, _contracts, _max_power_index, _safe_float
+from app.services.turpe import estimate_power_change_annual_impact
 
 
 SCENARIO_MARGINS = {
@@ -44,7 +45,12 @@ def get_prm_power_recommendation(prm_id: str) -> dict[str, Any] | None:
 
     action = _action_from_recommendation(recommended, subscribed_kva, data_quality["status"])
     confidence = _confidence(data_quality, action, current_ratio)
-    economic_estimate = _economic_estimate_placeholder()
+    economic_estimate = _economic_estimate(
+        tariff,
+        contract.get("0_segment"),
+        subscribed_kva,
+        recommended.get("target_power_kva"),
+    )
     priority_score = _priority_score(action, confidence, current_ratio, subscribed_kva, recommended.get("target_power_kva"))
     address = _addresses().get(prm_id) or {}
 
@@ -203,12 +209,13 @@ def _confidence(data_quality: dict[str, Any], action: str, ratio: float | None) 
     return "low"
 
 
-def _economic_estimate_placeholder() -> dict[str, Any]:
-    return {
-        "available": False,
-        "annual_amount_eur": None,
-        "reason": "Estimation budgetaire masquee : table TURPE non importee et calcul des composantes d'acheminement non auditable.",
-    }
+def _economic_estimate(
+    tariff: str | None,
+    segment: str | None,
+    subscribed_kva: float | None,
+    target_kva: float | None,
+) -> dict[str, Any]:
+    return estimate_power_change_annual_impact(tariff, segment, subscribed_kva, target_kva)
 
 
 def _priority_score(

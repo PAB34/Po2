@@ -13,6 +13,7 @@ from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.energie import _contracts
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
+from app.services.turpe import evaluate_invoice_turpe
 
 
 PRICE_TOLERANCE_EUR_MWH = Decimal("0.05")
@@ -80,6 +81,7 @@ def _build_control_report(
 ) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
     bpu_summary = {"checked_lines": 0, "mismatches": 0, "missing_references": 0}
+    turpe_summary: dict[str, Any] = {}
 
     def issue(severity: str, code: str, message: str, scope: str = "document") -> None:
         issues.append({"severity": severity, "code": code, "message": message, "scope": scope})
@@ -91,6 +93,7 @@ def _build_control_report(
     _check_perimeter(sites, issue)
     _check_arithmetic(invoice, sites, issue)
     _check_bpu(db, invoice_import.city_id, parsed, issue, bpu_summary)
+    _check_turpe(parsed, issue, turpe_summary)
 
     error_count = sum(1 for item in issues if item["severity"] == "error")
     warning_count = sum(1 for item in issues if item["severity"] == "warning")
@@ -102,6 +105,7 @@ def _build_control_report(
         "warning_count": warning_count,
         "issues": issues,
         "bpu": bpu_summary,
+        "turpe": turpe_summary,
     }
 
 
@@ -277,6 +281,18 @@ def _check_bpu(
                     ),
                     scope,
                 )
+
+
+def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
+    report = evaluate_invoice_turpe(parsed)
+    turpe_summary.update(report["summary"])
+    for item in report["issues"]:
+        issue(
+            item.get("severity", "warning"),
+            item.get("code", "TURPE_CONTROL"),
+            item.get("message", "Controle TURPE incomplet."),
+            item.get("scope") or "document",
+        )
 
 
 def _tariff_code_for_site(site: dict[str, Any]) -> str:

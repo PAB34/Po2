@@ -1214,11 +1214,33 @@ export type EnergyInvoiceImport = {
   updated_at: string;
 };
 
+export type TurpeVersion = {
+  code: string;
+  family: string;
+  label: string;
+  valid_from: string;
+  valid_to: string;
+  next_expected_update: string;
+  successor_hint: string;
+  source_label: string;
+  source_url: string;
+  cre_deliberation_url: string;
+  cre_modification_url: string;
+  tariff_keys: string[];
+};
+
 export type EnergyInvoiceUploadResponse = {
   invoice_import: EnergyInvoiceImport;
   is_duplicate: boolean;
   message: string;
 };
+
+export async function fetchTurpeVersions(token: string): Promise<TurpeVersion[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/turpe/versions`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<TurpeVersion[]>(response);
+}
 
 export async function fetchEnergyInvoiceImports(token: string): Promise<EnergyInvoiceImport[]> {
   const response = await fetch(`${apiBaseUrl}/billing/invoices/imports`, {

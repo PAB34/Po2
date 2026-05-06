@@ -14,13 +14,14 @@ La V1 produit :
 - une justification lisible ;
 - une priorisation portefeuille.
 
-Elle ne produit pas encore d'economie annuelle en euros.
+Elle produit maintenant un ordre de grandeur annuel quand la part fixe TURPE est calculable.
 
 ## Garde-fou budgetaire
 
-L'economie en euros reste masquee tant que les tables TURPE ne sont pas importees et auditees.
+L'economie en euros reste limitee a la part fixe TURPE tant que le calcul complet des composantes
+d'acheminement, des depassements et des taxes n'est pas audite.
 
-Sources TURPE a integrer en V2 :
+Sources TURPE chargees ou a maintenir :
 
 - decisions CRE TURPE 7 HTA-BT ;
 - documents/baremes Enedis en vigueur ;
@@ -66,15 +67,14 @@ La puissance cible est arrondie au kVA superieur.
 
 ## Limites V1
 
-- pas de recalcul TURPE ;
-- pas de chiffrage economique annuel ;
+- chiffrage economique limite a la part fixe TURPE pour les tarifs BT <= 36 kVA reconnus ;
 - pas de cout de modification ;
 - pas de distinction eclairage public a 0,1 kVA ;
 - pas encore de prise en compte fine des depassements par poste horosaisonnier.
 
 ## Evolution V2
 
-Ajouter une table `turpe_tariff_terms` avec :
+Migrer le referentiel code vers une table administrable `turpe_tariff_terms` avec :
 
 - periode de validite ;
 - domaine de tension ;
@@ -92,4 +92,3 @@ Le chiffrage annuel pourra alors afficher :
 - economie potentielle ;
 - risque de depassement ;
 - hypotheses utilisees.
-

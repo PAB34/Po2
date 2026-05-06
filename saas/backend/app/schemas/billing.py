@@ -1,6 +1,21 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
+
+
+class TurpeVersionOut(BaseModel):
+    code: str
+    family: str
+    label: str
+    valid_from: date
+    valid_to: date
+    next_expected_update: date
+    successor_hint: str
+    source_label: str
+    source_url: str
+    cre_deliberation_url: str
+    cre_modification_url: str
+    tariff_keys: list[str]
 
 
 class BillingSupplierGroup(BaseModel):
