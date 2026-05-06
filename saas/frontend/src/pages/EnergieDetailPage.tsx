@@ -23,7 +23,9 @@ import {
   fetchPrmDailyConsumption,
   fetchPrmDjuPerformance,
   fetchPrmDjuSeasonal,
+  fetchPrmPowerRecommendation,
   PrmCalibration,
+  PrmPowerRecommendation,
   PrmDjuSeasonal,
   DjuSeasonData,
   AnnualYearProfile,
@@ -104,6 +106,53 @@ function CalibrationCard({ cal }: { cal: PrmCalibration }) {
       </dl>
       {cal.recommendation && (
         <p className="calib-recommendation">{cal.recommendation}</p>
+      )}
+    </div>
+  );
+}
+
+const PRECON_ACTION_LABEL: Record<string, string> = {
+  increase: "Hausse conseillee",
+  decrease: "Baisse possible",
+  maintain: "Maintien",
+  insufficient_data: "Donnees insuffisantes",
+};
+
+const PRECON_ACTION_CLASS: Record<string, string> = {
+  increase: "badge-red",
+  decrease: "badge-blue",
+  maintain: "badge-green",
+  insufficient_data: "badge-gray",
+};
+
+const PRECON_CONFIDENCE_LABEL: Record<string, string> = {
+  high: "confiance haute",
+  medium: "confiance moyenne",
+  low: "confiance faible",
+  insufficient: "confiance insuffisante",
+};
+
+function PowerRecommendationCard({ recommendation }: { recommendation: PrmPowerRecommendation }) {
+  return (
+    <div className="detail-card">
+      <h3>Preconisation abonnement</h3>
+      <div className="calib-status-row">
+        <span className={`badge badge-lg ${PRECON_ACTION_CLASS[recommendation.action] ?? "badge-gray"}`}>
+          {PRECON_ACTION_LABEL[recommendation.action] ?? recommendation.action}
+        </span>
+        <span className="calib-ratio">{PRECON_CONFIDENCE_LABEL[recommendation.confidence] ?? recommendation.confidence}</span>
+      </div>
+      <dl className="detail-list" style={{ marginTop: "0.75rem" }}>
+        <dt>Puissance cible</dt>
+        <dd>{recommendation.recommended_power_kva != null ? `${recommendation.recommended_power_kva} kVA` : "—"}</dd>
+        <dt>Pic observe</dt>
+        <dd>{recommendation.peak_kva != null ? `${recommendation.peak_kva} kVA` : "—"}</dd>
+        <dt>Historique</dt>
+        <dd>{recommendation.data_quality.max_power_months} mois exploitables</dd>
+      </dl>
+      <p className="calib-recommendation">{recommendation.justification}</p>
+      {!recommendation.economic_estimate.available && (
+        <p className="calib-recommendation">{recommendation.economic_estimate.reason}</p>
       )}
     </div>
   );
@@ -307,6 +356,12 @@ export function EnergieDetailPage() {
     enabled: !!token && !!prmId,
   });
 
+  const powerRecommendationQuery = useQuery({
+    queryKey: ["prm-power-recommendation", prmId],
+    queryFn: () => fetchPrmPowerRecommendation(token!, prmId!),
+    enabled: !!token && !!prmId,
+  });
+
   const detail = detailQuery.data;
 
   const maxPowerPoints = (maxPowerQuery.data?.points ?? []).map((p) => ({
@@ -407,6 +462,9 @@ export function EnergieDetailPage() {
             </div>
 
             <CalibrationCard cal={detail.calibration} />
+            {powerRecommendationQuery.data && (
+              <PowerRecommendationCard recommendation={powerRecommendationQuery.data} />
+            )}
           </div>
         </div>
       )}

@@ -680,6 +680,68 @@ export type PrmCalibration = {
   recommendation: string | null;
 };
 
+export type PowerRecommendationDataQuality = {
+  status: string;
+  max_power_days: number;
+  max_power_months: number;
+  max_power_years: number;
+  first_max_power_date: string | null;
+  last_max_power_date: string | null;
+  missing: string[];
+};
+
+export type PowerRecommendationScenario = {
+  key: string;
+  label: string;
+  target_power_kva: number;
+  delta_kva: number;
+  margin_percent: number | null;
+  risk: string;
+  ratio_after_percent: number | null;
+  is_recommended: boolean;
+};
+
+export type PowerRecommendationEconomicEstimate = {
+  available: boolean;
+  annual_amount_eur: number | null;
+  reason: string;
+};
+
+export type PrmPowerRecommendation = {
+  usage_point_id: string;
+  name: string;
+  address: string;
+  contractor: string | null;
+  tariff: string | null;
+  segment: string | null;
+  subscribed_power_kva: number | null;
+  peak_kva: number | null;
+  current_ratio_percent: number | null;
+  calibration_status: string;
+  recommended_power_kva: number | null;
+  recommended_scenario: string | null;
+  action: string;
+  confidence: string;
+  data_quality: PowerRecommendationDataQuality;
+  scenarios: PowerRecommendationScenario[];
+  economic_estimate: PowerRecommendationEconomicEstimate;
+  justification: string;
+  priority_score: number;
+};
+
+export type PowerRecommendationOverview = {
+  kpis: {
+    total: number;
+    increase: number;
+    decrease: number;
+    maintain: number;
+    insufficient_data: number;
+    high_confidence: number;
+    medium_confidence: number;
+  };
+  recommendations: PrmPowerRecommendation[];
+};
+
 export type PrmDetail = {
   usage_point_id: string;
   contract: PrmContract;
@@ -754,6 +816,20 @@ export async function fetchPrmDetail(token: string, prmId: string): Promise<PrmD
     headers: buildHeaders(token),
   });
   return parseResponse<PrmDetail>(response);
+}
+
+export async function fetchPowerRecommendations(token: string): Promise<PowerRecommendationOverview> {
+  const response = await fetch(`${apiBaseUrl}/energie/preconisations`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PowerRecommendationOverview>(response);
+}
+
+export async function fetchPrmPowerRecommendation(token: string, prmId: string): Promise<PrmPowerRecommendation> {
+  const response = await fetch(`${apiBaseUrl}/energie/${encodeURIComponent(prmId)}/preconisation`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PrmPowerRecommendation>(response);
 }
 
 export async function fetchPrmMaxPower(token: string, prmId: string): Promise<PrmMaxPowerData> {

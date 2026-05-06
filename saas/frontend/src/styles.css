@@ -793,6 +793,14 @@ button:disabled {
   gap: 16px;
 }
 
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .page-subtitle {
   color: #94a3b8;
   margin: 0;
@@ -1064,6 +1072,79 @@ button:disabled {
   font-size: 0.88rem;
   color: #94a3b8;
   font-style: italic;
+}
+
+.recommendation-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+  border-radius: 10px;
+  background: rgba(14, 165, 233, 0.06);
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.recommendation-note strong {
+  color: #7dd3fc;
+  white-space: nowrap;
+}
+
+.recommendation-power-cell,
+.recommendation-main-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.recommendation-power-cell span:not(.badge),
+.recommendation-power-cell small,
+.recommendation-main-cell small {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.recommendation-main-cell strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.scenario-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(74px, 1fr));
+  gap: 6px;
+  min-width: 260px;
+}
+
+.scenario-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.scenario-chip--active {
+  border-color: rgba(14, 165, 233, 0.55);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.scenario-chip strong {
+  color: #e2e8f0;
+  font-size: 0.78rem;
+}
+
+.scenario-chip span,
+.scenario-chip small,
+.muted-text {
+  color: #94a3b8;
+  font-size: 0.72rem;
 }
 
 .supplier-bar-row {

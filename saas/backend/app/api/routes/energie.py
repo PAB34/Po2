@@ -5,6 +5,7 @@ from app.models.user import User
 from app.schemas.energie import (
     DjuMonthPoint,
     EnergieOverview,
+    PowerRecommendationOverview,
     PrmAnnualProfile,
     PrmDailyConsumption,
     PrmDetail,
@@ -12,6 +13,7 @@ from app.schemas.energie import (
     PrmDjuSeasonal,
     PrmLoadCurveData,
     PrmMaxPowerData,
+    PrmPowerRecommendation,
 )
 from app.services.energie import (
     get_data_ranges,
@@ -25,6 +27,7 @@ from app.services.energie import (
     get_prm_load_curve,
     get_prm_max_power,
 )
+from app.services.power_recommendations import get_power_recommendations, get_prm_power_recommendation
 
 router = APIRouter(prefix="/energie", tags=["energie"])
 
@@ -47,6 +50,24 @@ def get_dju(
     current_user: User = Depends(get_current_user),
 ) -> list[DjuMonthPoint]:
     return [DjuMonthPoint.model_validate(r) for r in get_dju_monthly()]
+
+
+@router.get("/preconisations", response_model=PowerRecommendationOverview)
+def get_preconisations(
+    current_user: User = Depends(get_current_user),
+) -> PowerRecommendationOverview:
+    return PowerRecommendationOverview.model_validate(get_power_recommendations())
+
+
+@router.get("/{prm_id}/preconisation", response_model=PrmPowerRecommendation)
+def get_preconisation(
+    prm_id: str,
+    current_user: User = Depends(get_current_user),
+) -> PrmPowerRecommendation:
+    recommendation = get_prm_power_recommendation(prm_id)
+    if recommendation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PRM introuvable")
+    return PrmPowerRecommendation.model_validate(recommendation)
 
 
 @router.get("/{prm_id}", response_model=PrmDetail)

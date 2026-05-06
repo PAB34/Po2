@@ -190,3 +190,67 @@ class PrmDjuSeasonal(BaseModel):
     usage_point_id: str
     winter: DjuSeasonData
     summer: DjuSeasonData
+
+
+class PowerRecommendationDataQuality(BaseModel):
+    status: str
+    max_power_days: int
+    max_power_months: int
+    max_power_years: int
+    first_max_power_date: str | None
+    last_max_power_date: str | None
+    missing: list[str]
+
+
+class PowerRecommendationScenario(BaseModel):
+    key: str
+    label: str
+    target_power_kva: float
+    delta_kva: float
+    margin_percent: float | None
+    risk: str
+    ratio_after_percent: float | None
+    is_recommended: bool
+
+
+class PowerRecommendationEconomicEstimate(BaseModel):
+    available: bool
+    annual_amount_eur: float | None
+    reason: str
+
+
+class PrmPowerRecommendation(BaseModel):
+    usage_point_id: str
+    name: str
+    address: str
+    contractor: str | None
+    tariff: str | None
+    segment: str | None
+    subscribed_power_kva: float | None
+    peak_kva: float | None
+    current_ratio_percent: float | None
+    calibration_status: str
+    recommended_power_kva: float | None
+    recommended_scenario: str | None
+    action: str
+    confidence: str
+    data_quality: PowerRecommendationDataQuality
+    scenarios: list[PowerRecommendationScenario]
+    economic_estimate: PowerRecommendationEconomicEstimate
+    justification: str
+    priority_score: float
+
+
+class PowerRecommendationKpis(BaseModel):
+    total: int
+    increase: int
+    decrease: int
+    maintain: int
+    insufficient_data: int
+    high_confidence: int
+    medium_confidence: int
+
+
+class PowerRecommendationOverview(BaseModel):
+    kpis: PowerRecommendationKpis
+    recommendations: list[PrmPowerRecommendation]
