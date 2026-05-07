@@ -278,7 +278,7 @@ export function EnergieInvoiceDetailPage() {
           </div>
           <div>
             <strong>TURPE</strong>
-            <span>{formatNumber(recordNumber(turpeSummary, "checked_components"))} composante(s)</span>
+            <span>{formatNumber(recordNumber(turpeSummary, "checked_lines"))} composante(s)</span>
           </div>
           <div>
             <strong>Taxes</strong>
