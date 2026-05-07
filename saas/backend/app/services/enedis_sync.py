@@ -1076,11 +1076,14 @@ def _generate_lc_report(
     )
 
 
-def run_load_curve_sync() -> None:
+def run_load_curve_sync(reset_state: bool = False) -> None:
     """
     Background task : courbe de charge 30 min pour tous les PRMs.
     Respecte les contraintes API ENEDIS sync (1 PRM/appel, 7j max, rate limits).
     Produit un rapport de complétude dans enedis_lc_report.json.
+
+    Si reset_state=True, supprime enedis_lc_state.json avant démarrage pour
+    forcer un backfill complet depuis settings.enedis_load_curve_start.
     """
     with _LC_LOCK:
         if _LC_STATE["status"] == "running":
@@ -1098,6 +1101,14 @@ def run_load_curve_sync() -> None:
 
     try:
         _lc_log("Démarrage sync courbe de charge 30 min")
+
+        if reset_state:
+            try:
+                _lc_state_path().unlink(missing_ok=True)
+                _lc_log(f"State CDC réinitialisé — backfill complet depuis {settings.enedis_load_curve_start}.")
+            except Exception as exc:
+                LOG.warning("Reset state CDC échoué : %s", exc)
+                _lc_log(f"Reset state CDC échoué : {exc}")
 
         prms = _load_prms()
         _lc_log(f"{len(prms)} PRMs chargés")

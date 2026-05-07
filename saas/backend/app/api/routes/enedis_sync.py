@@ -113,12 +113,18 @@ def load_curve_status(current_user: User = Depends(get_current_user)) -> LoadCur
 @router.post("/load-curve/start", status_code=status.HTTP_202_ACCEPTED)
 def load_curve_start(
     background_tasks: BackgroundTasks,
+    reset_state: bool = Query(default=False),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     if is_load_curve_running():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation courbe de charge est déjà en cours.")
-    background_tasks.add_task(run_load_curve_sync)
-    return {"message": "Synchronisation courbe de charge démarrée."}
+    background_tasks.add_task(run_load_curve_sync, reset_state)
+    msg = "Synchronisation courbe de charge démarrée"
+    if reset_state:
+        msg += " (backfill complet depuis enedis_load_curve_start)."
+    else:
+        msg += " (incrémentale depuis last_sync_date)."
+    return {"message": msg}
 
 
 # ---------------------------------------------------------------------------
