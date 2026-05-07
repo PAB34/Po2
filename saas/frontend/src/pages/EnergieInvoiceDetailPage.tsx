@@ -36,10 +36,19 @@ type ControlIssue = EnergyInvoiceImport["control_issues"][number];
 type SummaryTone = "ok" | "warning" | "error";
 type IssueFamily = "bpu" | "turpe" | "taxes" | "periods" | "consumption" | "power" | "document" | "other";
 
+type HumanSummaryIssueDetail = {
+  severity: string;
+  message: string;
+  scope: string | null;
+  count: number;
+};
+
 type HumanSummaryItem = {
   title: string;
   detail: string;
   tone: SummaryTone;
+  issueDetails?: HumanSummaryIssueDetail[];
+  hiddenIssueCount?: number;
 };
 
 const FAMILY_LABEL: Record<IssueFamily, string> = {
@@ -162,8 +171,39 @@ function issueCountLabel(count: number, label: string) {
   return `${count} ${label}${count !== 1 ? "s" : ""}`;
 }
 
+function severityRank(severity: string) {
+  return severity === "error" ? 0 : 1;
+}
+
+function buildIssueDetails(issues: ControlIssue[], maxDetails = 6) {
+  const grouped = new Map<string, HumanSummaryIssueDetail>();
+
+  for (const issue of issues) {
+    const key = `${issue.severity}|${issue.message}|${issue.scope ?? ""}`;
+    const current =
+      grouped.get(key) ??
+      {
+        severity: issue.severity,
+        message: issue.message,
+        scope: issue.scope,
+        count: 0,
+      };
+    current.count += 1;
+    grouped.set(key, current);
+  }
+
+  const details = Array.from(grouped.values()).sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.count - a.count || a.message.localeCompare(b.message, "fr"),
+  );
+  const visibleDetails = details.slice(0, maxDetails);
+  const hiddenIssueCount = details.slice(maxDetails).reduce((total, detail) => total + detail.count, 0);
+
+  return { visibleDetails, hiddenIssueCount };
+}
+
 function buildAttentionItems(issues: ControlIssue[]): HumanSummaryItem[] {
   const counts = new Map<IssueFamily, { errors: number; warnings: number }>();
+  const groupedIssues = new Map<IssueFamily, ControlIssue[]>();
   for (const issue of issues) {
     const family = issueFamily(issue);
     const current = counts.get(family) ?? { errors: 0, warnings: 0 };
@@ -173,6 +213,9 @@ function buildAttentionItems(issues: ControlIssue[]): HumanSummaryItem[] {
       current.warnings += 1;
     }
     counts.set(family, current);
+    const familyIssues = groupedIssues.get(family) ?? [];
+    familyIssues.push(issue);
+    groupedIssues.set(family, familyIssues);
   }
 
   return Array.from(counts.entries())
@@ -182,10 +225,13 @@ function buildAttentionItems(issues: ControlIssue[]): HumanSummaryItem[] {
         count.errors > 0 ? issueCountLabel(count.errors, "erreur") : null,
         count.warnings > 0 ? issueCountLabel(count.warnings, "alerte") : null,
       ].filter(Boolean);
+      const { visibleDetails, hiddenIssueCount } = buildIssueDetails(groupedIssues.get(family) ?? []);
       return {
         title: FAMILY_LABEL[family],
         detail: `${parts.join(", ")}. ${FAMILY_DETAIL[family]}`,
         tone: count.errors > 0 ? "error" : "warning",
+        issueDetails: visibleDetails,
+        hiddenIssueCount,
       };
     });
 }
@@ -538,6 +584,29 @@ export function EnergieInvoiceDetailPage() {
                     <li key={`${item.title}-${item.detail}`} className={`invoice-human-summary-item--${item.tone}`}>
                       <strong>{item.title}</strong>
                       <span>{item.detail}</span>
+                      {item.issueDetails && item.issueDetails.length > 0 && (
+                        <div className="invoice-human-summary-detail-list">
+                          {item.issueDetails.map((detail, index) => (
+                            <div
+                              key={`${item.title}-${detail.message}-${detail.scope ?? "document"}-${index}`}
+                              className="invoice-human-summary-detail-row"
+                            >
+                              <b className={`invoice-human-summary-detail-severity invoice-human-summary-detail-severity--${detail.severity}`}>
+                                {ISSUE_SEVERITY_LABEL[detail.severity] ?? detail.severity}
+                                {detail.count > 1 ? ` x${detail.count}` : ""}
+                              </b>
+                              <p>{detail.message}</p>
+                              {detail.scope && <small>{detail.scope}</small>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {item.hiddenIssueCount && item.hiddenIssueCount > 0 ? (
+                        <p className="invoice-human-summary-more">
+                          {item.hiddenIssueCount} autre{item.hiddenIssueCount !== 1 ? "s" : ""} point
+                          {item.hiddenIssueCount !== 1 ? "s" : ""} dans le detail des controles.
+                        </p>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
