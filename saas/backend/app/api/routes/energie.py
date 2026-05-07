@@ -5,6 +5,7 @@ from app.models.user import User
 from app.schemas.energie import (
     DjuMonthPoint,
     EnergieOverview,
+    EnergyDataAudit,
     PowerRecommendationOverview,
     PrmAnnualProfile,
     PrmDailyConsumption,
@@ -17,6 +18,7 @@ from app.schemas.energie import (
 )
 from app.services.energie import (
     get_data_ranges,
+    get_data_audit,
     get_dju_monthly,
     get_energie_overview,
     get_prm_annual_profile,
@@ -43,6 +45,11 @@ def get_overview(
 @router.get("/data-ranges")
 def get_ranges(current_user: User = Depends(get_current_user)) -> dict:
     return get_data_ranges()
+
+
+@router.get("/data-audit", response_model=EnergyDataAudit)
+def get_audit(current_user: User = Depends(get_current_user)) -> EnergyDataAudit:
+    return EnergyDataAudit.model_validate(get_data_audit())
 
 
 @router.get("/dju/monthly", response_model=list[DjuMonthPoint])

@@ -35,6 +35,101 @@ def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
     return {"first_date": min_d, "last_date": max_d, "row_count": count}
 
 
+def _source_coverage(rel_path: str, date_col: str) -> dict[str, Any]:
+    path = Path(settings.energie_dir) / rel_path
+    if not path.exists() or path.stat().st_size == 0:
+        return {
+            "first_date": None,
+            "last_date": None,
+            "row_count": 0,
+            "bad_date_rows": 0,
+            "prms": {},
+        }
+
+    first_date = last_date = None
+    row_count = 0
+    bad_date_rows = 0
+    prms: dict[str, dict[str, Any]] = {}
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader, None)
+        if not header:
+            return {
+                "first_date": None,
+                "last_date": None,
+                "row_count": 0,
+                "bad_date_rows": 0,
+                "prms": {},
+            }
+        try:
+            prm_idx = header.index("usage_point_id")
+            date_idx = header.index(date_col)
+        except ValueError:
+            return {
+                "first_date": None,
+                "last_date": None,
+                "row_count": 0,
+                "bad_date_rows": 0,
+                "prms": {},
+            }
+
+        for row in reader:
+            if len(row) <= max(prm_idx, date_idx):
+                continue
+            prm_id = row[prm_idx].strip()
+            raw_date = row[date_idx][:10]
+            if not prm_id:
+                continue
+            try:
+                parsed_date = date.fromisoformat(raw_date)
+            except ValueError:
+                bad_date_rows += 1
+                continue
+
+            row_count += 1
+            if first_date is None or raw_date < first_date:
+                first_date = raw_date
+            if last_date is None or raw_date > last_date:
+                last_date = raw_date
+
+            entry = prms.setdefault(
+                prm_id,
+                {
+                    "row_count": 0,
+                    "dates": set(),
+                    "first_date": raw_date,
+                    "last_date": raw_date,
+                },
+            )
+            entry["row_count"] += 1
+            entry["dates"].add(parsed_date)
+            if raw_date < entry["first_date"]:
+                entry["first_date"] = raw_date
+            if raw_date > entry["last_date"]:
+                entry["last_date"] = raw_date
+
+    normalized_prms = {}
+    for prm_id, entry in prms.items():
+        span_days = (date.fromisoformat(entry["last_date"]) - date.fromisoformat(entry["first_date"])).days + 1
+        covered_days = len(entry["dates"])
+        normalized_prms[prm_id] = {
+            "row_count": entry["row_count"],
+            "covered_days": covered_days,
+            "first_date": entry["first_date"],
+            "last_date": entry["last_date"],
+            "span_days": span_days,
+            "coverage_ratio_in_span": round(covered_days / span_days, 3) if span_days else 0,
+        }
+
+    return {
+        "first_date": first_date,
+        "last_date": last_date,
+        "row_count": row_count,
+        "bad_date_rows": bad_date_rows,
+        "prms": normalized_prms,
+    }
+
+
 @lru_cache(maxsize=1)
 def get_data_ranges() -> dict[str, Any]:
     """Retourne les plages de dates disponibles pour chaque source de données."""
@@ -51,6 +146,194 @@ def get_data_ranges() -> dict[str, Any]:
         "load_curve": _scan_csv_dates("enedis_load_curve.csv", "datetime"),
         "dju": _scan_csv_dates("DJU/dju_sete.csv", "date"),
         "contracts": {"count": contracts_count},
+    }
+
+
+@lru_cache(maxsize=1)
+def get_data_audit() -> dict[str, Any]:
+    contracts = _contracts()
+    summaries = _summaries()
+    connections = _connections()
+    contract_prms = set(contracts)
+    source_configs = {
+        "consumption": {
+            "label": "Consommation journaliere",
+            "filename": "enedis_data.csv",
+            "date_col": "date",
+            "min_days": 30,
+        },
+        "load_curve": {
+            "label": "Courbe de charge",
+            "filename": "enedis_load_curve.csv",
+            "date_col": "datetime",
+            "min_days": 30,
+        },
+        "max_power": {
+            "label": "Puissance max journaliere",
+            "filename": "enedis_max_power.csv",
+            "date_col": "date",
+            "min_days": 30,
+        },
+    }
+    coverages = {
+        key: _source_coverage(config["filename"], config["date_col"])
+        for key, config in source_configs.items()
+    }
+    source_prms = {key: set(value["prms"]) for key, value in coverages.items()}
+    combo_counts: dict[str, int] = {}
+    missing_by_segment: dict[str, dict[str, int]] = {key: {} for key in source_configs}
+    rows: list[dict[str, Any]] = []
+    correctable = {
+        "derive_consumption_from_load_curve": 0,
+        "derive_max_power_from_load_curve": 0,
+        "backfill_consumption": 0,
+        "backfill_load_curve": 0,
+        "backfill_max_power": 0,
+        "check_meter_or_rights": 0,
+    }
+
+    for prm_id in sorted(contract_prms):
+        contract = contracts[prm_id]
+        summary = summaries.get(prm_id) or {}
+        connection = connections.get(prm_id) or {}
+        segment = contract.get("0_segment") or summary.get("segments_0_segment") or "Inconnu"
+        service_level = summary.get("services_level")
+        connection_state = connection.get("connection_state")
+        present_sources = [key for key in source_configs if prm_id in source_prms[key]]
+        missing_sources = [key for key in source_configs if prm_id not in source_prms[key]]
+        weak_sources: list[str] = []
+        coverage_days: dict[str, int] = {}
+        first_dates: dict[str, str | None] = {}
+        last_dates: dict[str, str | None] = {}
+
+        for key, config in source_configs.items():
+            prm_stats = coverages[key]["prms"].get(prm_id)
+            coverage_days[key] = prm_stats["covered_days"] if prm_stats else 0
+            first_dates[key] = prm_stats["first_date"] if prm_stats else None
+            last_dates[key] = prm_stats["last_date"] if prm_stats else None
+            if prm_stats and prm_stats["covered_days"] < config["min_days"]:
+                weak_sources.append(key)
+            if not prm_stats:
+                missing_by_segment[key][segment] = missing_by_segment[key].get(segment, 0) + 1
+
+        combo_key = "+".join(present_sources) if present_sources else "none"
+        combo_counts[combo_key] = combo_counts.get(combo_key, 0) + 1
+
+        actions: list[str] = []
+        probable_reason = "Donnees disponibles sur les trois flux."
+        is_communicating = bool(service_level and "communicant" in service_level.lower())
+        connection_state_lower = (connection_state or "").lower()
+        is_powered = not connection_state or ("aliment" in connection_state_lower and "non aliment" not in connection_state_lower)
+
+        if not present_sources:
+            probable_reason = "Aucun flux mesure disponible sur OVH pour ce PRM."
+            actions.append("Verifier droits API, etat compteur et collecte initiale")
+            correctable["check_meter_or_rights"] += 1
+        elif missing_sources:
+            probable_reason = "Flux partiels : certains fichiers ne contiennent pas ce PRM."
+
+        if "consumption" in missing_sources and "load_curve" in present_sources:
+            actions.append("Deriver la consommation journaliere depuis la courbe de charge")
+            correctable["derive_consumption_from_load_curve"] += 1
+        elif "consumption" in missing_sources:
+            actions.append("Relancer/backfiller la consommation journaliere")
+            correctable["backfill_consumption"] += 1
+
+        if "max_power" in missing_sources and "load_curve" in present_sources:
+            actions.append("Deriver la puissance max journaliere depuis la courbe de charge")
+            correctable["derive_max_power_from_load_curve"] += 1
+        elif "max_power" in missing_sources:
+            actions.append("Relancer/backfiller la puissance max journaliere")
+            correctable["backfill_max_power"] += 1
+
+        if "load_curve" in missing_sources:
+            actions.append("Relancer/backfiller la courbe de charge ou verifier son activation")
+            correctable["backfill_load_curve"] += 1
+
+        if weak_sources:
+            probable_reason = "Historique trop court sur un ou plusieurs flux."
+            for key in weak_sources:
+                if key == "consumption":
+                    correctable["backfill_consumption"] += 1
+                elif key == "load_curve":
+                    correctable["backfill_load_curve"] += 1
+                elif key == "max_power":
+                    correctable["backfill_max_power"] += 1
+            actions.append("Completer l'historique par backfill")
+
+        if not is_communicating:
+            probable_reason = "Compteur non communicant ou niveau de service absent : absence potentiellement normale."
+            actions.append("Verifier le niveau de service ENEDIS")
+        elif not is_powered:
+            probable_reason = "PRM non alimente : absence potentiellement normale selon la periode."
+            actions.append("Verifier l'etat contractuel/alimentation")
+
+        severity = "ok"
+        if missing_sources or weak_sources:
+            severity = "warning"
+        if not present_sources:
+            severity = "critical"
+
+        rows.append(
+            {
+                "usage_point_id": prm_id,
+                "name": contract.get("0_organization_commercial_name") or contract.get("0_organization_name") or prm_id,
+                "segment": segment,
+                "contractor": contract.get("0_contractor"),
+                "tariff": contract.get("0_distribution_tariff"),
+                "subscribed_power_kva": _safe_float(contract.get("0_subscribed_power_value")),
+                "service_level": service_level,
+                "connection_state": connection_state,
+                "present_sources": present_sources,
+                "missing_sources": missing_sources,
+                "weak_sources": weak_sources,
+                "coverage_days": coverage_days,
+                "first_dates": first_dates,
+                "last_dates": last_dates,
+                "probable_reason": probable_reason,
+                "correctable_actions": sorted(set(actions)),
+                "severity": severity,
+            }
+        )
+
+    severity_rank = {"critical": 0, "warning": 1, "ok": 2}
+    rows.sort(key=lambda item: (severity_rank.get(item["severity"], 9), -len(item["missing_sources"]), item["usage_point_id"]))
+
+    sources = {}
+    for key, config in source_configs.items():
+        coverage = coverages[key]
+        weak_count = sum(
+            1
+            for prm_id in contract_prms & source_prms[key]
+            if coverage["prms"][prm_id]["covered_days"] < config["min_days"]
+        )
+        sources[key] = {
+            "label": config["label"],
+            "filename": config["filename"],
+            "first_date": coverage["first_date"],
+            "last_date": coverage["last_date"],
+            "row_count": coverage["row_count"],
+            "prm_count": len(source_prms[key] & contract_prms),
+            "missing_prm_count": len(contract_prms - source_prms[key]),
+            "weak_prm_count": weak_count,
+            "outside_contract_prm_count": len(source_prms[key] - contract_prms),
+            "bad_date_rows": coverage["bad_date_rows"],
+        }
+
+    return {
+        "contracts_count": len(contract_prms),
+        "sources": sources,
+        "combo_counts": combo_counts,
+        "missing_by_segment": missing_by_segment,
+        "summary": {
+            "all_sources": combo_counts.get("consumption+load_curve+max_power", 0),
+            "no_source": combo_counts.get("none", 0),
+            "partial_sources": len(contract_prms) - combo_counts.get("consumption+load_curve+max_power", 0) - combo_counts.get("none", 0),
+            "with_warnings": sum(1 for row in rows if row["severity"] == "warning"),
+            "critical": sum(1 for row in rows if row["severity"] == "critical"),
+        },
+        "correctable": correctable,
+        "rows": rows,
     }
 
 

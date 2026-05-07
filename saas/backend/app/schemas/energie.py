@@ -36,6 +36,57 @@ class EnergieOverview(BaseModel):
     prms: list[PrmListItem]
 
 
+class EnergyDataAuditSource(BaseModel):
+    label: str
+    filename: str
+    first_date: str | None
+    last_date: str | None
+    row_count: int
+    prm_count: int
+    missing_prm_count: int
+    weak_prm_count: int
+    outside_contract_prm_count: int
+    bad_date_rows: int
+
+
+class EnergyDataAuditSummary(BaseModel):
+    all_sources: int
+    partial_sources: int
+    no_source: int
+    with_warnings: int
+    critical: int
+
+
+class EnergyDataAuditRow(BaseModel):
+    usage_point_id: str
+    name: str
+    segment: str
+    contractor: str | None
+    tariff: str | None
+    subscribed_power_kva: float | None
+    service_level: str | None
+    connection_state: str | None
+    present_sources: list[str]
+    missing_sources: list[str]
+    weak_sources: list[str]
+    coverage_days: dict[str, int]
+    first_dates: dict[str, str | None]
+    last_dates: dict[str, str | None]
+    probable_reason: str
+    correctable_actions: list[str]
+    severity: str
+
+
+class EnergyDataAudit(BaseModel):
+    contracts_count: int
+    sources: dict[str, EnergyDataAuditSource]
+    combo_counts: dict[str, int]
+    missing_by_segment: dict[str, dict[str, int]]
+    summary: EnergyDataAuditSummary
+    correctable: dict[str, int]
+    rows: list[EnergyDataAuditRow]
+
+
 class PrmContract(BaseModel):
     usage_point_id: str
     contract_start: str | None

@@ -1481,6 +1481,12 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
+.compact-button {
+  align-self: flex-start;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+}
+
 .data-coverage-sources {
   display: flex;
   flex-wrap: wrap;
@@ -1529,6 +1535,62 @@ button:disabled {
   border-left: 1px solid rgba(148, 163, 184, 0.2);
   padding-left: 6px;
   margin-left: 2px;
+}
+
+.data-audit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.data-audit-summary,
+.data-audit-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.data-audit-summary div,
+.data-audit-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.data-audit-summary span,
+.data-audit-source span,
+.data-audit-source small {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.data-audit-summary strong,
+.data-audit-source strong {
+  color: #e2e8f0;
+}
+
+.data-audit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-audit-table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.data-audit-table th,
+.data-audit-table td {
+  font-size: 0.78rem;
+  vertical-align: top;
 }
 
 /* ── Billing Wizard ── */

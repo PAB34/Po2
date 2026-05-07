@@ -1056,6 +1056,62 @@ export async function fetchDataRanges(token: string): Promise<DataRanges> {
   return parseResponse<DataRanges>(response);
 }
 
+export type EnergyDataAuditSource = {
+  label: string;
+  filename: string;
+  first_date: string | null;
+  last_date: string | null;
+  row_count: number;
+  prm_count: number;
+  missing_prm_count: number;
+  weak_prm_count: number;
+  outside_contract_prm_count: number;
+  bad_date_rows: number;
+};
+
+export type EnergyDataAuditRow = {
+  usage_point_id: string;
+  name: string;
+  segment: string;
+  contractor: string | null;
+  tariff: string | null;
+  subscribed_power_kva: number | null;
+  service_level: string | null;
+  connection_state: string | null;
+  present_sources: string[];
+  missing_sources: string[];
+  weak_sources: string[];
+  coverage_days: Record<string, number>;
+  first_dates: Record<string, string | null>;
+  last_dates: Record<string, string | null>;
+  probable_reason: string;
+  correctable_actions: string[];
+  severity: string;
+};
+
+export type EnergyDataAudit = {
+  contracts_count: number;
+  sources: Record<string, EnergyDataAuditSource>;
+  combo_counts: Record<string, number>;
+  missing_by_segment: Record<string, Record<string, number>>;
+  summary: {
+    all_sources: number;
+    partial_sources: number;
+    no_source: number;
+    with_warnings: number;
+    critical: number;
+  };
+  correctable: Record<string, number>;
+  rows: EnergyDataAuditRow[];
+};
+
+export async function fetchDataAudit(token: string): Promise<EnergyDataAudit> {
+  const response = await fetch(`${apiBaseUrl}/energie/data-audit`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyDataAudit>(response);
+}
+
 // ── Billing ─────────────────────────────────────────────────────────────────
 
 export type BillingGroupItem = {

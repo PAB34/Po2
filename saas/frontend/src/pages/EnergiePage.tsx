@@ -7,8 +7,8 @@ import {
   fetchMaxPowerSyncStatus, startMaxPowerSync,
   fetchLoadCurveSyncStatus, startLoadCurveSync,
   fetchDjuSyncStatus, startDjuSync,
-  fetchDataRanges,
-  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, LoadCurveSyncStatus, DataRanges,
+  fetchDataRanges, fetchDataAudit,
+  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, LoadCurveSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -16,6 +16,24 @@ const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", 
 
 const STATUS_LABEL: Record<string, string> = { idle: "En attente", running: "En cours…", success: "Succès", error: "Erreur" };
 const STATUS_CLASS: Record<string, string> = { idle: "badge-gray", running: "badge-blue", success: "badge-green", error: "badge-red" };
+const DATA_SOURCE_LABEL: Record<string, string> = {
+  consumption: "Conso",
+  load_curve: "CDC",
+  max_power: "P max",
+};
+const AUDIT_SEVERITY_CLASS: Record<string, string> = {
+  ok: "badge-green",
+  warning: "badge-orange",
+  critical: "badge-red",
+};
+const CORRECTABLE_LABEL: Record<string, string> = {
+  derive_consumption_from_load_curve: "Conso derivable CDC",
+  derive_max_power_from_load_curve: "P max derivable CDC",
+  backfill_consumption: "Backfill conso",
+  backfill_load_curve: "Backfill CDC",
+  backfill_max_power: "Backfill P max",
+  check_meter_or_rights: "Droits/compteur",
+};
 
 function SubSyncRow({
   label,
@@ -293,10 +311,22 @@ function calibBadge(status: string | null, ratio: number | null) {
   );
 }
 
+function sourceList(values: string[]) {
+  if (values.length === 0) return "-";
+  return values.map((value) => DATA_SOURCE_LABEL[value] ?? value).join(", ");
+}
+
 function DataCoverageBar({ token }: { token: string }) {
+  const [auditExpanded, setAuditExpanded] = useState(false);
   const { data } = useQuery<DataRanges>({
     queryKey: ["energie-data-ranges"],
     queryFn: () => fetchDataRanges(token),
+    staleTime: 60_000,
+  });
+  const auditQuery = useQuery<EnergyDataAudit>({
+    queryKey: ["energie-data-audit"],
+    queryFn: () => fetchDataAudit(token),
+    enabled: auditExpanded,
     staleTime: 60_000,
   });
 
@@ -308,10 +338,15 @@ function DataCoverageBar({ token }: { token: string }) {
   ];
 
   if (!data) return null;
+  const audit = auditQuery.data;
+  const auditRows = audit?.rows.filter((row) => row.severity !== "ok").slice(0, 30) ?? [];
 
   return (
     <div className="data-coverage-bar">
       <span className="data-coverage-title">Couverture des données</span>
+      <button type="button" className="secondary-button compact-button" onClick={() => setAuditExpanded((value) => !value)}>
+        {auditExpanded ? "Masquer audit" : "Audit PRM"}
+      </button>
       <div className="data-coverage-sources">
         {sources.map(({ key, label }) => {
           const src = data[key];
@@ -335,6 +370,101 @@ function DataCoverageBar({ token }: { token: string }) {
           <span className="chip-dates">{data.contracts.count.toLocaleString("fr-FR")} PRMs</span>
         </div>
       </div>
+      {auditExpanded && (
+        <div className="data-audit-panel">
+          {auditQuery.isLoading && <p className="loading-text">Audit des PRM en cours...</p>}
+          {auditQuery.isError && <p className="error-text">{(auditQuery.error as Error).message}</p>}
+          {audit && (
+            <>
+              <div className="data-audit-summary">
+                <div>
+                  <span>Complets</span>
+                  <strong>{audit.summary.all_sources.toLocaleString("fr-FR")}</strong>
+                </div>
+                <div>
+                  <span>Partiels</span>
+                  <strong>{audit.summary.partial_sources.toLocaleString("fr-FR")}</strong>
+                </div>
+                <div>
+                  <span>Sans flux</span>
+                  <strong>{audit.summary.no_source.toLocaleString("fr-FR")}</strong>
+                </div>
+                <div>
+                  <span>Alertes</span>
+                  <strong>{audit.summary.with_warnings.toLocaleString("fr-FR")}</strong>
+                </div>
+              </div>
+
+              <div className="data-audit-source-grid">
+                {Object.entries(audit.sources).map(([key, source]) => (
+                  <div key={key} className="data-audit-source">
+                    <strong>{source.label}</strong>
+                    <span>{source.prm_count.toLocaleString("fr-FR")} / {audit.contracts_count.toLocaleString("fr-FR")} PRM</span>
+                    <small>{source.missing_prm_count.toLocaleString("fr-FR")} manquant(s), {source.weak_prm_count.toLocaleString("fr-FR")} court(s)</small>
+                  </div>
+                ))}
+              </div>
+
+              <div className="data-audit-actions">
+                {Object.entries(audit.correctable)
+                  .filter(([, count]) => count > 0)
+                  .map(([key, count]) => (
+                    <span key={key} className="badge badge-blue">
+                      {CORRECTABLE_LABEL[key] ?? key} : {count.toLocaleString("fr-FR")}
+                    </span>
+                  ))}
+              </div>
+
+              {auditRows.length > 0 && (
+                <div className="data-audit-table-wrapper">
+                  <table className="data-table data-audit-table">
+                    <thead>
+                      <tr>
+                        <th>PRM</th>
+                        <th>Site</th>
+                        <th>Segment</th>
+                        <th>Manquants</th>
+                        <th>Jours</th>
+                        <th>Diagnostic</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditRows.map((row) => (
+                        <tr key={row.usage_point_id}>
+                          <td>
+                            <span className={`badge ${AUDIT_SEVERITY_CLASS[row.severity] ?? "badge-gray"}`}>
+                              {row.usage_point_id}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="recommendation-power-cell">
+                              <strong>{row.name}</strong>
+                              <small>{row.connection_state ?? "-"} | {row.service_level ?? "-"}</small>
+                            </div>
+                          </td>
+                          <td>{row.segment}</td>
+                          <td>{sourceList(row.missing_sources)}</td>
+                          <td>
+                            <span className="cell-mono">
+                              C {row.coverage_days.consumption ?? 0} / CDC {row.coverage_days.load_curve ?? 0} / P {row.coverage_days.max_power ?? 0}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="recommendation-power-cell">
+                              <span>{row.probable_reason}</span>
+                              <small>{row.correctable_actions.join(" | ") || "-"}</small>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
