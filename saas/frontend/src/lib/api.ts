@@ -1408,6 +1408,16 @@ export async function analyzeEnergyInvoiceImport(token: string, importId: number
   return parseResponse<EnergyInvoiceImport>(response);
 }
 
+export async function deleteEnergyInvoiceImport(token: string, importId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  if (!response.ok && response.status !== 204) {
+    await parseResponse<void>(response);
+  }
+}
+
 export async function updateEnergyInvoiceDecision(
   token: string,
   importId: number,

@@ -90,6 +90,19 @@ def update_invoice_decision(
     return invoice_import
 
 
+def delete_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> bool:
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        return False
+    try:
+        Path(invoice_import.storage_path).unlink(missing_ok=True)
+    except OSError:
+        pass
+    db.delete(invoice_import)
+    db.commit()
+    return True
+
+
 async def create_invoice_import(
     db: Session,
     city_id: int,
