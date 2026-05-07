@@ -23,16 +23,53 @@ const DATA_SOURCE_LABEL: Record<string, string> = {
 };
 const AUDIT_SEVERITY_CLASS: Record<string, string> = {
   ok: "badge-green",
+  info: "badge-gray",
   warning: "badge-orange",
   critical: "badge-red",
 };
 const CORRECTABLE_LABEL: Record<string, string> = {
-  derive_consumption_from_load_curve: "Conso derivable CDC",
-  derive_max_power_from_load_curve: "P max derivable CDC",
   backfill_consumption: "Backfill conso",
   backfill_load_curve: "Backfill CDC",
   backfill_max_power: "Backfill P max",
-  check_meter_or_rights: "Droits/compteur",
+  non_communicant_structural: "Non communicant (structurel)",
+  cdc_activation_needed: "Activation CDC requise",
+  api_rights_issue: "Droits API ENEDIS",
+  non_powered_normal: "Non alimenté (normal)",
+};
+const PROFILE_LABEL: Record<string, string> = {
+  non_powered: "Non alimenté",
+  non_communicant: "Non communicant",
+  communicant_closed: "Communicant non ouvert",
+  communicant_open: "Communicant ouvert",
+  unknown: "Profil inconnu",
+};
+const OUTCOME_LABEL: Record<string, string> = {
+  ok_data: "OK",
+  ok_empty: "Vide",
+  forbidden: "403 Refusé",
+  not_found: "404 Introuvable",
+  not_eligible: "Non éligible",
+  cdc_inactive: "CDC inactive",
+  invalid_period: "Période invalide",
+  quota_exceeded: "Quota atteint",
+  error_technical: "Erreur tech.",
+};
+const OUTCOME_CLASS: Record<string, string> = {
+  ok_data: "badge-green",
+  ok_empty: "badge-gray",
+  forbidden: "badge-orange",
+  not_found: "badge-orange",
+  not_eligible: "badge-gray",
+  cdc_inactive: "badge-orange",
+  invalid_period: "badge-orange",
+  quota_exceeded: "badge-red",
+  error_technical: "badge-red",
+};
+const AUDIT_FILTER_LABEL: Record<string, string> = {
+  all: "Tous",
+  anomalies: "Anomalies",
+  structural: "Structurels",
+  normal: "Normaux",
 };
 
 function SubSyncRow({
@@ -311,13 +348,9 @@ function calibBadge(status: string | null, ratio: number | null) {
   );
 }
 
-function sourceList(values: string[]) {
-  if (values.length === 0) return "-";
-  return values.map((value) => DATA_SOURCE_LABEL[value] ?? value).join(", ");
-}
-
 function DataCoverageBar({ token }: { token: string }) {
   const [auditExpanded, setAuditExpanded] = useState(false);
+  const [auditFilter, setAuditFilter] = useState<"all" | "anomalies" | "structural" | "normal">("anomalies");
   const { data } = useQuery<DataRanges>({
     queryKey: ["energie-data-ranges"],
     queryFn: () => fetchDataRanges(token),
@@ -339,7 +372,16 @@ function DataCoverageBar({ token }: { token: string }) {
 
   if (!data) return null;
   const audit = auditQuery.data;
-  const auditRows = audit?.rows.filter((row) => row.severity !== "ok").slice(0, 30) ?? [];
+  const auditRowsFiltered = (audit?.rows ?? []).filter((row) => {
+    if (auditFilter === "all") return true;
+    if (auditFilter === "anomalies") return row.severity === "critical" || row.severity === "warning";
+    if (auditFilter === "structural") return row.severity === "info" || row.meter_profile === "non_communicant";
+    if (auditFilter === "normal") return row.severity === "ok";
+    return true;
+  });
+  const auditRows = auditRowsFiltered.slice(0, 50);
+  const profileCounts = audit?.profile_counts ?? { non_powered: 0, non_communicant: 0, communicant_closed: 0, communicant_open: 0, unknown: 0 };
+  const correctableEntries = audit ? Object.entries(audit.correctable).filter(([, count]) => count > 0) : [];
 
   return (
     <div className="data-coverage-bar">
@@ -386,12 +428,18 @@ function DataCoverageBar({ token }: { token: string }) {
                   <strong>{audit.summary.partial_sources.toLocaleString("fr-FR")}</strong>
                 </div>
                 <div>
-                  <span>Sans flux</span>
-                  <strong>{audit.summary.no_source.toLocaleString("fr-FR")}</strong>
+                  <span>Anomalies à corriger</span>
+                  <strong style={{ color: audit.summary.critical > 0 ? "#dc2626" : undefined }}>
+                    {audit.summary.critical.toLocaleString("fr-FR")}
+                  </strong>
                 </div>
                 <div>
                   <span>Alertes</span>
                   <strong>{audit.summary.with_warnings.toLocaleString("fr-FR")}</strong>
+                </div>
+                <div>
+                  <span>Vides normaux</span>
+                  <strong>{audit.summary.info.toLocaleString("fr-FR")}</strong>
                 </div>
               </div>
 
@@ -405,27 +453,57 @@ function DataCoverageBar({ token }: { token: string }) {
                 ))}
               </div>
 
-              <div className="data-audit-actions">
-                {Object.entries(audit.correctable)
-                  .filter(([, count]) => count > 0)
-                  .map(([key, count]) => (
+              <div className="data-audit-source-grid" style={{ marginTop: 12 }}>
+                {(["communicant_open", "communicant_closed", "non_communicant", "non_powered", "unknown"] as const).map((profile) => (
+                  <div key={profile} className="data-audit-source">
+                    <strong>{PROFILE_LABEL[profile]}</strong>
+                    <span>{(profileCounts[profile] ?? 0).toLocaleString("fr-FR")} PRM</span>
+                  </div>
+                ))}
+              </div>
+
+              {correctableEntries.length > 0 && (
+                <div className="data-audit-actions">
+                  {correctableEntries.map(([key, count]) => (
                     <span key={key} className="badge badge-blue">
                       {CORRECTABLE_LABEL[key] ?? key} : {count.toLocaleString("fr-FR")}
                     </span>
                   ))}
+                </div>
+              )}
+
+              <div className="data-audit-actions" style={{ marginTop: 12 }}>
+                {(["all", "anomalies", "structural", "normal"] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    className={`badge ${auditFilter === f ? "badge-blue" : "badge-gray"}`}
+                    onClick={() => setAuditFilter(f)}
+                    style={{ cursor: "pointer", border: "none" }}
+                  >
+                    {AUDIT_FILTER_LABEL[f]} ({(f === "all"
+                      ? audit.rows.length
+                      : f === "anomalies"
+                      ? audit.summary.critical + audit.summary.with_warnings
+                      : f === "structural"
+                      ? audit.summary.info + (profileCounts.non_communicant ?? 0)
+                      : audit.summary.all_sources
+                    ).toLocaleString("fr-FR")})
+                  </button>
+                ))}
               </div>
 
-              {auditRows.length > 0 && (
+              {auditRows.length > 0 ? (
                 <div className="data-audit-table-wrapper">
                   <table className="data-table data-audit-table">
                     <thead>
                       <tr>
                         <th>PRM</th>
                         <th>Site</th>
-                        <th>Segment</th>
-                        <th>Manquants</th>
+                        <th>Profil</th>
+                        <th>Origine ENEDIS</th>
                         <th>Jours</th>
-                        <th>Diagnostic</th>
+                        <th>Diagnostic & action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -442,8 +520,23 @@ function DataCoverageBar({ token }: { token: string }) {
                               <small>{row.connection_state ?? "-"} | {row.service_level ?? "-"}</small>
                             </div>
                           </td>
-                          <td>{row.segment}</td>
-                          <td>{sourceList(row.missing_sources)}</td>
+                          <td>
+                            <span className="badge badge-gray">{PROFILE_LABEL[row.meter_profile] ?? row.meter_profile}</span>
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              {(["consumption", "load_curve", "max_power"] as const).map((src) => {
+                                const outcome = row.enedis_outcomes?.[src];
+                                const cls = outcome ? OUTCOME_CLASS[outcome] ?? "badge-gray" : "badge-gray";
+                                const lbl = outcome ? OUTCOME_LABEL[outcome] ?? outcome : "—";
+                                return (
+                                  <span key={src} className={`badge ${cls}`} title={`${DATA_SOURCE_LABEL[src]} : ${outcome ?? "non testé"}`}>
+                                    {DATA_SOURCE_LABEL[src]} : {lbl}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </td>
                           <td>
                             <span className="cell-mono">
                               C {row.coverage_days.consumption ?? 0} / CDC {row.coverage_days.load_curve ?? 0} / P {row.coverage_days.max_power ?? 0}
@@ -459,7 +552,12 @@ function DataCoverageBar({ token }: { token: string }) {
                       ))}
                     </tbody>
                   </table>
+                  {auditRowsFiltered.length > auditRows.length && (
+                    <p className="loading-text">… {(auditRowsFiltered.length - auditRows.length).toLocaleString("fr-FR")} autres lignes (limite d'affichage : 50)</p>
+                  )}
                 </div>
+              ) : (
+                <p className="loading-text">Aucun PRM dans cette catégorie.</p>
               )}
             </>
           )}

@@ -1,10 +1,67 @@
 import csv
+import json
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+
+
+def _load_diagnostic(filename: str) -> dict[str, str]:
+    """Charge un fichier de diagnostic (mapping PRM → outcome). Tolérant aux absences."""
+    path = Path(settings.energie_dir) / filename
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    outcomes = data.get("outcomes", {})
+    if isinstance(outcomes, dict):
+        return {str(k): str(v) for k, v in outcomes.items()}
+    return {}
+
+
+def _load_lc_outcomes() -> dict[str, str]:
+    """Le rapport CDC stocke les outcomes dans `prms_by_outcome` (liste par outcome)."""
+    path = Path(settings.energie_dir) / "enedis_lc_report.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    by_outcome = data.get("prms_by_outcome", {})
+    if not isinstance(by_outcome, dict):
+        return {}
+    result: dict[str, str] = {}
+    for outcome, prm_list in by_outcome.items():
+        if not isinstance(prm_list, list):
+            continue
+        for prm_id in prm_list:
+            result[str(prm_id)] = str(outcome)
+    return result
+
+
+def _meter_profile(service_level: str | None, connection_state: str | None) -> str:
+    """Classe le profil compteur d'après les métadonnées contractuelles ENEDIS.
+
+    Valeurs : non_powered | non_communicant | communicant_closed | communicant_open | unknown
+    """
+    state_lower = (connection_state or "").lower()
+    if state_lower and ("non aliment" in state_lower or "coup" in state_lower):
+        return "non_powered"
+    sl = (service_level or "").lower()
+    if not sl:
+        return "unknown"
+    if "non communicant" in sl:
+        return "non_communicant"
+    if "communicant" in sl:
+        if "non ouvert" in sl or "non-ouvert" in sl:
+            return "communicant_closed"
+        return "communicant_open"
+    return "unknown"
 
 
 def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
@@ -180,16 +237,32 @@ def get_data_audit() -> dict[str, Any]:
         for key, config in source_configs.items()
     }
     source_prms = {key: set(value["prms"]) for key, value in coverages.items()}
+
+    # Diagnostics ENEDIS par PRM/source (résultat de la dernière sync)
+    diagnostics = {
+        "consumption": _load_diagnostic("enedis_data_diagnostic.json"),
+        "max_power": _load_diagnostic("enedis_mp_diagnostic.json"),
+        "load_curve": _load_lc_outcomes(),
+    }
+
     combo_counts: dict[str, int] = {}
     missing_by_segment: dict[str, dict[str, int]] = {key: {} for key in source_configs}
+    profile_counts: dict[str, int] = {
+        "non_powered": 0,
+        "non_communicant": 0,
+        "communicant_closed": 0,
+        "communicant_open": 0,
+        "unknown": 0,
+    }
     rows: list[dict[str, Any]] = []
     correctable = {
-        "derive_consumption_from_load_curve": 0,
-        "derive_max_power_from_load_curve": 0,
         "backfill_consumption": 0,
         "backfill_load_curve": 0,
         "backfill_max_power": 0,
-        "check_meter_or_rights": 0,
+        "non_communicant_structural": 0,
+        "cdc_activation_needed": 0,
+        "api_rights_issue": 0,
+        "non_powered_normal": 0,
     }
 
     for prm_id in sorted(contract_prms):
@@ -199,12 +272,16 @@ def get_data_audit() -> dict[str, Any]:
         segment = contract.get("0_segment") or summary.get("segments_0_segment") or "Inconnu"
         service_level = summary.get("services_level")
         connection_state = connection.get("connection_state")
+        meter_profile = _meter_profile(service_level, connection_state)
+        profile_counts[meter_profile] = profile_counts.get(meter_profile, 0) + 1
+
         present_sources = [key for key in source_configs if prm_id in source_prms[key]]
         missing_sources = [key for key in source_configs if prm_id not in source_prms[key]]
         weak_sources: list[str] = []
         coverage_days: dict[str, int] = {}
         first_dates: dict[str, str | None] = {}
         last_dates: dict[str, str | None] = {}
+        enedis_outcomes: dict[str, str | None] = {}
 
         for key, config in source_configs.items():
             prm_stats = coverages[key]["prms"].get(prm_id)
@@ -215,64 +292,97 @@ def get_data_audit() -> dict[str, Any]:
                 weak_sources.append(key)
             if not prm_stats:
                 missing_by_segment[key][segment] = missing_by_segment[key].get(segment, 0) + 1
+            enedis_outcomes[key] = diagnostics[key].get(prm_id)
 
         combo_key = "+".join(present_sources) if present_sources else "none"
         combo_counts[combo_key] = combo_counts.get(combo_key, 0) + 1
 
+        # Déterminer la sévérité et le diagnostic selon le profil compteur
         actions: list[str] = []
-        probable_reason = "Donnees disponibles sur les trois flux."
-        is_communicating = bool(service_level and "communicant" in service_level.lower())
-        connection_state_lower = (connection_state or "").lower()
-        is_powered = not connection_state or ("aliment" in connection_state_lower and "non aliment" not in connection_state_lower)
-
-        if not present_sources:
-            probable_reason = "Aucun flux mesure disponible sur OVH pour ce PRM."
-            actions.append("Verifier droits API, etat compteur et collecte initiale")
-            correctable["check_meter_or_rights"] += 1
-        elif missing_sources:
-            probable_reason = "Flux partiels : certains fichiers ne contiennent pas ce PRM."
-
-        if "consumption" in missing_sources and "load_curve" in present_sources:
-            actions.append("Deriver la consommation journaliere depuis la courbe de charge")
-            correctable["derive_consumption_from_load_curve"] += 1
-        elif "consumption" in missing_sources:
-            actions.append("Relancer/backfiller la consommation journaliere")
-            correctable["backfill_consumption"] += 1
-
-        if "max_power" in missing_sources and "load_curve" in present_sources:
-            actions.append("Deriver la puissance max journaliere depuis la courbe de charge")
-            correctable["derive_max_power_from_load_curve"] += 1
-        elif "max_power" in missing_sources:
-            actions.append("Relancer/backfiller la puissance max journaliere")
-            correctable["backfill_max_power"] += 1
-
-        if "load_curve" in missing_sources:
-            actions.append("Relancer/backfiller la courbe de charge ou verifier son activation")
-            correctable["backfill_load_curve"] += 1
-
-        if weak_sources:
-            probable_reason = "Historique trop court sur un ou plusieurs flux."
-            for key in weak_sources:
-                if key == "consumption":
-                    correctable["backfill_consumption"] += 1
-                elif key == "load_curve":
-                    correctable["backfill_load_curve"] += 1
-                elif key == "max_power":
-                    correctable["backfill_max_power"] += 1
-            actions.append("Completer l'historique par backfill")
-
-        if not is_communicating:
-            probable_reason = "Compteur non communicant ou niveau de service absent : absence potentiellement normale."
-            actions.append("Verifier le niveau de service ENEDIS")
-        elif not is_powered:
-            probable_reason = "PRM non alimente : absence potentiellement normale selon la periode."
+        if meter_profile == "non_powered":
+            severity = "info"
+            probable_reason = "PRM non alimente — absence de donnees normale."
             actions.append("Verifier l'etat contractuel/alimentation")
+            correctable["non_powered_normal"] += 1
+        elif meter_profile == "non_communicant":
+            # Seule la conso journalière est attendue ; CDC et P max ne sont pas disponibles structurellement
+            if "consumption" in missing_sources:
+                severity = "warning"
+                probable_reason = "Compteur non communicant : seule la conso journaliere est recuperable, et elle manque."
+                actions.append("Verifier remontee compteur ENEDIS / relancer le backfill conso")
+                correctable["backfill_consumption"] += 1
+            else:
+                severity = "ok"
+                probable_reason = "Compteur non communicant : conso disponible, CDC/P max non disponibles structurellement."
+            correctable["non_communicant_structural"] += 1
+        elif meter_profile == "communicant_closed":
+            # CDC bloquée par démarche admin, mais conso et P max attendues
+            if "consumption" in missing_sources or "max_power" in missing_sources:
+                severity = "warning"
+                probable_reason = "Communicant non ouvert aux services : CDC bloquee par defaut, mais conso/P max devraient remonter."
+                if "consumption" in missing_sources:
+                    actions.append("Relancer le backfill conso journaliere")
+                    correctable["backfill_consumption"] += 1
+                if "max_power" in missing_sources:
+                    actions.append("Relancer le backfill puissance max")
+                    correctable["backfill_max_power"] += 1
+            else:
+                severity = "warning"
+                probable_reason = "Communicant non ouvert aux services : CDC necessite une activation aupres d'ENEDIS."
+            actions.append("Demander activation CDC aupres d'ENEDIS")
+            correctable["cdc_activation_needed"] += 1
+        elif meter_profile == "communicant_open":
+            # Tous les flux sont attendus
+            if not present_sources:
+                severity = "critical"
+                probable_reason = "Communicant ouvert aux services mais aucun flux remonte — anomalie a investiguer."
+            elif missing_sources or weak_sources:
+                severity = "warning"
+                probable_reason = "Communicant ouvert : certains flux manquent ou sont incomplets."
+            else:
+                severity = "ok"
+                probable_reason = "Donnees completes sur les trois flux."
 
-        severity = "ok"
-        if missing_sources or weak_sources:
-            severity = "warning"
-        if not present_sources:
-            severity = "critical"
+            for source_key in missing_sources:
+                outcome = enedis_outcomes.get(source_key)
+                if outcome in ("forbidden", "not_found"):
+                    actions.append(f"Verifier droits API ENEDIS ({source_key})")
+                    correctable["api_rights_issue"] += 1
+                elif outcome in ("error_technical", "quota_exceeded"):
+                    actions.append(f"Relancer le backfill {source_key} (erreur technique au dernier essai)")
+                    if source_key == "consumption":
+                        correctable["backfill_consumption"] += 1
+                    elif source_key == "load_curve":
+                        correctable["backfill_load_curve"] += 1
+                    elif source_key == "max_power":
+                        correctable["backfill_max_power"] += 1
+                elif outcome == "cdc_inactive":
+                    actions.append("Demander activation CDC aupres d'ENEDIS")
+                    correctable["cdc_activation_needed"] += 1
+                elif outcome == "ok_empty":
+                    actions.append(f"ENEDIS retourne vide pour {source_key} — verifier collecte / etat compteur")
+                else:
+                    if source_key == "consumption":
+                        actions.append("Lancer le backfill conso journaliere")
+                        correctable["backfill_consumption"] += 1
+                    elif source_key == "load_curve":
+                        actions.append("Lancer le backfill courbe de charge")
+                        correctable["backfill_load_curve"] += 1
+                    elif source_key == "max_power":
+                        actions.append("Lancer le backfill puissance max")
+                        correctable["backfill_max_power"] += 1
+        else:
+            # Profil inconnu : on garde l'ancienne logique défensive
+            if not present_sources:
+                severity = "warning"
+                probable_reason = "Niveau de service compteur inconnu — flux absents."
+                actions.append("Verifier le niveau de service ENEDIS pour ce PRM")
+            elif missing_sources or weak_sources:
+                severity = "warning"
+                probable_reason = "Flux partiels et profil compteur inconnu."
+            else:
+                severity = "ok"
+                probable_reason = "Donnees disponibles sur les trois flux."
 
         rows.append(
             {
@@ -284,19 +394,21 @@ def get_data_audit() -> dict[str, Any]:
                 "subscribed_power_kva": _safe_float(contract.get("0_subscribed_power_value")),
                 "service_level": service_level,
                 "connection_state": connection_state,
+                "meter_profile": meter_profile,
                 "present_sources": present_sources,
                 "missing_sources": missing_sources,
                 "weak_sources": weak_sources,
                 "coverage_days": coverage_days,
                 "first_dates": first_dates,
                 "last_dates": last_dates,
+                "enedis_outcomes": enedis_outcomes,
                 "probable_reason": probable_reason,
                 "correctable_actions": sorted(set(actions)),
                 "severity": severity,
             }
         )
 
-    severity_rank = {"critical": 0, "warning": 1, "ok": 2}
+    severity_rank = {"critical": 0, "warning": 1, "info": 2, "ok": 3}
     rows.sort(key=lambda item: (severity_rank.get(item["severity"], 9), -len(item["missing_sources"]), item["usage_point_id"]))
 
     sources = {}
@@ -325,10 +437,12 @@ def get_data_audit() -> dict[str, Any]:
         "sources": sources,
         "combo_counts": combo_counts,
         "missing_by_segment": missing_by_segment,
+        "profile_counts": profile_counts,
         "summary": {
             "all_sources": combo_counts.get("consumption+load_curve+max_power", 0),
             "no_source": combo_counts.get("none", 0),
             "partial_sources": len(contract_prms) - combo_counts.get("consumption+load_curve+max_power", 0) - combo_counts.get("none", 0),
+            "info": sum(1 for row in rows if row["severity"] == "info"),
             "with_warnings": sum(1 for row in rows if row["severity"] == "warning"),
             "critical": sum(1 for row in rows if row["severity"] == "critical"),
         },

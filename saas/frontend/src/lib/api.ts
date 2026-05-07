@@ -1069,6 +1069,20 @@ export type EnergyDataAuditSource = {
   bad_date_rows: number;
 };
 
+export type MeterProfile = "non_powered" | "non_communicant" | "communicant_closed" | "communicant_open" | "unknown";
+
+export type EnedisOutcome =
+  | "ok_data"
+  | "ok_empty"
+  | "forbidden"
+  | "not_found"
+  | "not_eligible"
+  | "cdc_inactive"
+  | "invalid_period"
+  | "quota_exceeded"
+  | "error_technical"
+  | null;
+
 export type EnergyDataAuditRow = {
   usage_point_id: string;
   name: string;
@@ -1078,12 +1092,14 @@ export type EnergyDataAuditRow = {
   subscribed_power_kva: number | null;
   service_level: string | null;
   connection_state: string | null;
+  meter_profile: MeterProfile;
   present_sources: string[];
   missing_sources: string[];
   weak_sources: string[];
   coverage_days: Record<string, number>;
   first_dates: Record<string, string | null>;
   last_dates: Record<string, string | null>;
+  enedis_outcomes: Record<string, EnedisOutcome>;
   probable_reason: string;
   correctable_actions: string[];
   severity: string;
@@ -1094,10 +1110,12 @@ export type EnergyDataAudit = {
   sources: Record<string, EnergyDataAuditSource>;
   combo_counts: Record<string, number>;
   missing_by_segment: Record<string, Record<string, number>>;
+  profile_counts: Record<MeterProfile, number>;
   summary: {
     all_sources: number;
     partial_sources: number;
     no_source: number;
+    info: number;
     with_warnings: number;
     critical: number;
   };
