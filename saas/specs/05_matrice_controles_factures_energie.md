@@ -42,6 +42,7 @@ Une facture est invalide si l'un des controles suivants echoue :
 | `HT_TOTAL_MISMATCH` | Somme des familles HT differente du total HT | Ecart de totalisation HT. |
 | `INVOICE_VAT_TOTAL_MISMATCH` | TVA globale differente de la somme des FIC | Ecart de TVA globale. |
 | `BPU_PRICE_MISMATCH` | Prix facture different du BPU | Ecart contractuel sur fourniture, capacite, CEE ou GO. |
+| `BPU_TARIFF_POSTE_INCONSISTENCY` | Prix facture coherent avec un autre couple tarif/poste BPU | L'option tarifaire facturee semble incompatible avec les postes ou prix appliques. |
 | `PARSER_FAILED` | Analyse impossible | Le fichier ne peut pas etre controle. |
 
 Tolerance V1 :
@@ -141,6 +142,7 @@ Precision BPU :
 - les factures C5 en `BT <= 36 kVA SDT CU4 / MU4` peuvent exposer une ligne residuelle `Base` : elle est rapprochee de `CU/base` lorsque le BPU ne contient pas `CU4/base` ou `MU4/base` ;
 - les libelles facture `Pointe` en C4 sont rapproches de la ligne BPU `C4/hph`, conforme a la grille Lot 1 et Lot 2 ;
 - les libelles saisonniers incoherents avec une formule a un seul poste (`CU`, `LU`, `EP`) sont rapproches de leur poste `base` ;
+- lorsque ces libelles saisonniers portent des prix de fourniture/capacite correspondant clairement a un autre couple tarif/poste BPU, l'ecart est consolide en `BPU_TARIFF_POSTE_INCONSISTENCY` au lieu de repeter chaque ligne de prix ;
 - les libelles `hph/hpe/hch/hce` sur `MUDT` sont rapproches de `hp/hc`.
 
 ## 5. Points volontairement gardes pour V2

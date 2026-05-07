@@ -290,13 +290,14 @@ def _check_bpu(
     for site in parsed.get("sites", []):
         tariff_code = _tariff_code_for_site(site)
         scope = _site_scope(site)
+        tariff_poste_inconsistencies: dict[tuple[str, str], dict[str, Any]] = {}
         for line in site.get("invoice_lines", []):
             component_field = _bpu_component_field(line.get("normalized_component"))
             if component_field is None or line.get("unit_price_ht") is None:
                 continue
 
             poste = line.get("poste") or _first_poste_for_tariff(bpu_index, tariff_code)
-            bpu_line = _find_bpu_line_for_invoice_line(bpu_index, site, line, tariff_code, poste)
+            bpu_line, matched_by_alias = _find_bpu_line_for_invoice_line(bpu_index, site, line, tariff_code, poste)
             if bpu_line is None:
                 bpu_summary["missing_references"] += 1
                 issue(
@@ -325,6 +326,35 @@ def _check_bpu(
                 continue
             delta = abs(invoice_value_mwh - expected)
             if delta > PRICE_TOLERANCE_EUR_MWH:
+                if _is_bpu_tariff_poste_inconsistency(
+                    bpu_index,
+                    bpu_line,
+                    component_field,
+                    invoice_value_mwh,
+                    poste,
+                    matched_by_alias,
+                ):
+                    key = (bpu_line.tariff_code, bpu_line.poste)
+                    group = tariff_poste_inconsistencies.setdefault(
+                        key,
+                        {
+                            "expected": f"{bpu_line.tariff_code}/{bpu_line.poste}",
+                            "invoice_postes": set(),
+                            "matching_bpu_lines": set(),
+                        },
+                    )
+                    if poste:
+                        group["invoice_postes"].add(poste)
+                    for matching_line in _matching_bpu_price_lines(
+                        bpu_index,
+                        component_field,
+                        invoice_value_mwh,
+                        poste,
+                        exclude=(bpu_line.tariff_code, bpu_line.poste),
+                    ):
+                        group["matching_bpu_lines"].add(f"{matching_line.tariff_code}/{matching_line.poste}")
+                    continue
+
                 bpu_summary["mismatches"] += 1
                 issue(
                     "error",
@@ -335,6 +365,21 @@ def _check_bpu(
                     ),
                     scope,
                 )
+
+        for group in tariff_poste_inconsistencies.values():
+            bpu_summary["mismatches"] += 1
+            invoice_postes = _format_bpu_group_values(group["invoice_postes"])
+            matching_bpu_lines = _format_bpu_group_values(group["matching_bpu_lines"])
+            issue(
+                "error",
+                "BPU_TARIFF_POSTE_INCONSISTENCY",
+                (
+                    f"Tarif facture {group['expected']} incoherent sur {scope}: "
+                    f"la facture contient des postes {invoice_postes} dont les prix correspondent "
+                    f"au BPU {matching_bpu_lines}. Verifier l'option tarifaire facturee ou les prix appliques."
+                ),
+                scope,
+            )
 
 
 def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
@@ -750,12 +795,12 @@ def _find_bpu_line_for_invoice_line(
     line: dict[str, Any],
     tariff_code: str,
     poste: str | None,
-) -> BillingBpuLine | None:
-    for candidate in _bpu_candidate_keys(tariff_code, poste):
+) -> tuple[BillingBpuLine | None, bool]:
+    for index, candidate in enumerate(_bpu_candidate_keys(tariff_code, poste)):
         if candidate in bpu_index:
-            return bpu_index[candidate]
+            return bpu_index[candidate], index > 0
 
-    return None
+    return None, False
 
 
 def _bpu_candidate_keys(tariff_code: str, poste: str | None) -> list[tuple[str, str]]:
@@ -764,6 +809,62 @@ def _bpu_candidate_keys(tariff_code: str, poste: str | None) -> list[tuple[str, 
     candidates = [(tariff_code, poste)]
     candidates.extend(BPU_POSTE_ALIASES.get((tariff_code, poste), []))
     return candidates
+
+
+def _is_bpu_tariff_poste_inconsistency(
+    bpu_index: dict[tuple[str, str], BillingBpuLine],
+    bpu_line: BillingBpuLine,
+    component_field: str,
+    invoice_value_mwh: Decimal,
+    poste: str | None,
+    matched_by_alias: bool,
+) -> bool:
+    if component_field not in {"pu_fourniture", "pu_capacite"}:
+        return False
+    if not poste:
+        return False
+    if not matched_by_alias and poste == bpu_line.poste:
+        return False
+    return bool(
+        _matching_bpu_price_lines(
+            bpu_index,
+            component_field,
+            invoice_value_mwh,
+            poste,
+            exclude=(bpu_line.tariff_code, bpu_line.poste),
+        )
+    )
+
+
+def _matching_bpu_price_lines(
+    bpu_index: dict[tuple[str, str], BillingBpuLine],
+    component_field: str,
+    invoice_value_mwh: Decimal,
+    poste: str | None,
+    exclude: tuple[str, str] | None = None,
+) -> list[BillingBpuLine]:
+    matches: list[BillingBpuLine] = []
+    for key, candidate in bpu_index.items():
+        if exclude and key == exclude:
+            continue
+        if poste and candidate.poste != poste:
+            continue
+        candidate_value = getattr(candidate, component_field)
+        if candidate_value is None:
+            continue
+        expected = _decimal(candidate_value)
+        if expected is not None and abs(invoice_value_mwh - expected) <= PRICE_TOLERANCE_EUR_MWH:
+            matches.append(candidate)
+    return matches
+
+
+def _format_bpu_group_values(values: set[str]) -> str:
+    sorted_values = sorted(values)
+    if not sorted_values:
+        return "non identifie"
+    if len(sorted_values) <= 6:
+        return ", ".join(sorted_values)
+    return ", ".join(sorted_values[:6]) + f", +{len(sorted_values) - 6}"
 
 
 def _iter_import_sites(invoice_import: EnergyInvoiceImport) -> list[dict[str, Any]]:
