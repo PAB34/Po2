@@ -1,7 +1,11 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.models.user import User
 from app.services.dju_sync import get_dju_sync_status, is_dju_running, run_dju_sync
 from app.services.enedis_sync import (
@@ -135,3 +139,45 @@ def dju_start(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation DJU est déjà en cours.")
     background_tasks.add_task(run_dju_sync)
     return {"message": "Synchronisation DJU démarrée."}
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics — exposition brute des rapports JSON pour analyse
+# ---------------------------------------------------------------------------
+
+_DIAG_FILES = {
+    "consumption": "enedis_data_diagnostic.json",
+    "max_power": "enedis_mp_diagnostic.json",
+    "load_curve": "enedis_lc_report.json",
+}
+
+
+@router.get("/diagnostics/{source}")
+def diagnostics(
+    source: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Expose le rapport JSON brut généré par chaque sync.
+
+    source ∈ {consumption, max_power, load_curve}
+    Pour load_curve : retourne aussi un échantillon des 10 premières erreurs techniques
+    avec le détail HTTP (utile pour diagnostiquer un échec massif).
+    """
+    if source not in _DIAG_FILES:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Source inconnue : {source}")
+    path = Path(settings.energie_dir) / _DIAG_FILES[source]
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Diagnostic indisponible — la sync n'a pas encore été exécutée ({path.name}).",
+        )
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Lecture impossible : {exc}") from exc
+
+    if source == "load_curve" and isinstance(data, dict):
+        retry_list = data.get("retry_list") or []
+        sample = [item for item in retry_list if item.get("outcome") == "error_technical"][:10]
+        data = {**data, "error_technical_sample": sample}
+    return data

@@ -202,8 +202,11 @@ def _fetch_one_prm(
     start_date: str,
     end_date: str,
     ingested_at: str,
-) -> tuple[list[dict], int, int]:
-    """Returns (rows, ok_count, err_count)."""
+) -> tuple[list[dict], str]:
+    """Returns (rows, outcome).
+
+    outcome ∈ {ok_data, ok_empty, forbidden, not_found, quota_exceeded, error_technical}
+    """
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     resp = None
     for attempt in range(4):
@@ -225,11 +228,11 @@ def _fetch_one_prm(
         except Exception as exc:
             if attempt == 3:
                 LOG.warning("PRM %s réseau : %s", prm, exc)
-                return [], 0, 1
+                return [], "error_technical"
             _time.sleep(5)
 
     if resp is None:
-        return [], 0, 1
+        return [], "error_technical"
 
     if resp.status_code == 200:
         mr = resp.json().get("meter_reading", {})
@@ -252,14 +255,17 @@ def _fetch_one_prm(
                 })
             except (ValueError, TypeError):
                 continue
-        return rows, 1, 0
+        return rows, ("ok_data" if rows else "ok_empty")
 
-    if resp.status_code in (403, 404):
-        # PRM non titulaire ou hors historique — normal, on ignore silencieusement
-        return [], 1, 0
+    if resp.status_code == 403:
+        return [], "forbidden"
+    if resp.status_code == 404:
+        return [], "not_found"
+    if resp.status_code == 429:
+        return [], "quota_exceeded"
 
     LOG.warning("PRM %s → HTTP %d : %s", prm, resp.status_code, resp.text[:200])
-    return [], 0, 1
+    return [], "error_technical"
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +340,7 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
         csv_path = Path(settings.energie_dir) / "enedis_data.csv"
         total_new = 0
         chunk_start = start_d
+        prm_outcomes: dict[str, str] = {prm: "error_technical" for prm in prms}
 
         while chunk_start <= end_d:
             chunk_end = min(chunk_start + timedelta(days=_CHUNK_DAYS - 1), end_d)
@@ -352,8 +359,10 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
                     for prm in prms
                 }
                 for future in as_completed(futures):
-                    rows, _ok, _err = future.result()
+                    prm_id = futures[future]
+                    rows, outcome = future.result()
                     all_rows.extend(rows)
+                    prm_outcomes[prm_id] = _best_outcome(prm_outcomes.get(prm_id, "error_technical"), outcome)
                     done_count += 1
                     with _SYNC_LOCK:
                         _SYNC_STATE["prms_done"] = done_count
@@ -372,8 +381,18 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
                 except Exception:
                     pass  # Keep existing token
 
-        # 5. Persister l'état + invalider les caches
+        # 5. Persister l'état + diagnostic + invalider les caches
         _save_persistent_state(end_str)
+        try:
+            diag_path = Path(settings.energie_dir) / "enedis_data_diagnostic.json"
+            diag_path.write_text(
+                json.dumps({"generated_at": datetime.utcnow().isoformat() + "Z",
+                            "date_from": start_str, "date_to": end_str,
+                            "outcomes": prm_outcomes}, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            LOG.warning("Impossible d'écrire enedis_data_diagnostic.json : %s", exc)
         _invalidate_energie_caches()
 
         _log(f"Synchronisation terminée — {total_new} nouvelles lignes, date max : {end_str}")

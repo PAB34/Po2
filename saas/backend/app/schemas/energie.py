@@ -53,6 +53,7 @@ class EnergyDataAuditSummary(BaseModel):
     all_sources: int
     partial_sources: int
     no_source: int
+    info: int = 0
     with_warnings: int
     critical: int
 
@@ -66,12 +67,14 @@ class EnergyDataAuditRow(BaseModel):
     subscribed_power_kva: float | None
     service_level: str | None
     connection_state: str | None
+    meter_profile: str = "unknown"
     present_sources: list[str]
     missing_sources: list[str]
     weak_sources: list[str]
     coverage_days: dict[str, int]
     first_dates: dict[str, str | None]
     last_dates: dict[str, str | None]
+    enedis_outcomes: dict[str, str | None] = {}
     probable_reason: str
     correctable_actions: list[str]
     severity: str
@@ -82,6 +85,7 @@ class EnergyDataAudit(BaseModel):
     sources: dict[str, EnergyDataAuditSource]
     combo_counts: dict[str, int]
     missing_by_segment: dict[str, dict[str, int]]
+    profile_counts: dict[str, int] = {}
     summary: EnergyDataAuditSummary
     correctable: dict[str, int]
     rows: list[EnergyDataAuditRow]
