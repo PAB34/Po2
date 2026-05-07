@@ -241,7 +241,7 @@ def _check_arithmetic(invoice: dict[str, Any], sites: list[dict[str, Any]], issu
             )
 
     for site in sites:
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         for line in site.get("invoice_lines", []):
             quantity = _decimal(line.get("quantity"))
             unit_price = _decimal(line.get("unit_price_ht"))
@@ -289,7 +289,7 @@ def _check_bpu(
 
     for site in parsed.get("sites", []):
         tariff_code = _tariff_code_for_site(site)
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         for line in site.get("invoice_lines", []):
             component_field = _bpu_component_field(line.get("normalized_component"))
             if component_field is None or line.get("unit_price_ht") is None:
@@ -359,7 +359,7 @@ def _check_tax_and_vat(
     site_vat_count = 0
 
     for site in sites:
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         total_ht = _decimal(site.get("total_ht"))
         total_vat = _decimal(site.get("total_vat"))
         total_ttc = _decimal(site.get("total_ttc"))
@@ -428,9 +428,9 @@ def _check_period_continuity(
     issue,
     period_summary: dict[str, int],
 ) -> None:
-    current_periods: list[tuple[str, date, date]] = []
+    current_periods: list[tuple[str, date, date, str]] = []
     for site in sites:
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         prm_id = site.get("prm_id")
         start = _date_value(site.get("period_start"))
         end = _date_value(site.get("period_end"))
@@ -443,7 +443,7 @@ def _check_period_continuity(
             issue("error", "PERIOD_INVALID", f"Periode facturee incoherente sur {scope}: fin avant debut.", scope)
             continue
         period_summary["checked_sites"] += 1
-        current_periods.append((prm_id, start, end))
+        current_periods.append((prm_id, start, end, scope))
 
         for line in site.get("invoice_lines", []):
             line_start = _date_value(line.get("period_start"))
@@ -479,7 +479,7 @@ def _check_period_continuity(
             if prm_id and start and end:
                 previous_by_prm.setdefault(prm_id, []).append((start, end, label))
 
-    for prm_id, start, end in current_periods:
+    for prm_id, start, end, scope in current_periods:
         previous_periods = sorted(previous_by_prm.get(prm_id, []), key=lambda item: item[1])
         previous_before = [period for period in previous_periods if period[1] < start]
         if previous_before:
@@ -490,8 +490,8 @@ def _check_period_continuity(
                 issue(
                     "warning",
                     "PERIOD_GAP",
-                    f"Trou de facturation detecte sur {prm_id}: precedente fin {previous_end.isoformat()} ({previous_label}), nouvelle debut {start.isoformat()}.",
-                    prm_id,
+                    f"Trou de facturation detecte sur {scope}: precedente fin {previous_end.isoformat()} ({previous_label}), nouvelle debut {start.isoformat()}.",
+                    scope,
                 )
 
         for previous_start, previous_end, previous_label in previous_periods:
@@ -500,8 +500,8 @@ def _check_period_continuity(
                 issue(
                     "warning",
                     "PERIOD_OVERLAP",
-                    f"Chevauchement de periode sur {prm_id} avec {previous_label}: {previous_start.isoformat()} - {previous_end.isoformat()}.",
-                    prm_id,
+                    f"Chevauchement de periode sur {scope} avec {previous_label}: {previous_start.isoformat()} - {previous_end.isoformat()}.",
+                    scope,
                 )
                 break
 
@@ -515,7 +515,7 @@ def _check_consumption_against_enedis(
     load_curve = _load_curve_index()
 
     for site in sites:
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         prm_id = site.get("prm_id")
         start = _date_value(site.get("period_start"))
         end = _date_value(site.get("period_end"))
@@ -523,6 +523,22 @@ def _check_consumption_against_enedis(
         if not prm_id or start is None or end is None or invoice_kwh is None:
             consumption_summary["missing_references"] += 1
             issue("warning", "CONSUMPTION_REFERENCE_MISSING", f"Consommation facturee ou periode incomplete sur {scope}.", scope)
+            continue
+
+        daily_metrics = _daily_consumption_metrics(daily_consumption.get(prm_id, []), start, end)
+        if daily_metrics is not None and daily_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
+            consumption_summary["checked_sites"] += 1
+            enedis_kwh = daily_metrics["energy_kwh"]
+            tolerance = max(CONSUMPTION_TOLERANCE_KWH, invoice_kwh * CONSUMPTION_TOLERANCE_RATIO)
+            delta = abs(invoice_kwh - enedis_kwh)
+            if delta > tolerance:
+                consumption_summary["mismatches"] += 1
+                issue(
+                    "warning",
+                    "CONSUMPTION_ENEDIS_MISMATCH",
+                    f"Consommation facturee {invoice_kwh:.1f} kWh differente d'ENEDIS {enedis_kwh:.1f} kWh sur {scope} (ecart {delta:.1f} kWh).",
+                    scope,
+                )
             continue
 
         load_curve_metrics = _load_curve_metrics(load_curve.get(prm_id, []), start, end)
@@ -556,41 +572,18 @@ def _check_consumption_against_enedis(
                 scope,
             )
 
-        points = [
-            point
-            for point in daily_consumption.get(prm_id, [])
-            if start.isoformat() <= point.get("date", "") <= end.isoformat()
-        ]
-        expected_days = max(1, (end - start).days + 1)
-        covered_days = len({point["date"] for point in points})
-        if not points:
-            consumption_summary["missing_references"] += 1
-            issue("warning", "ENEDIS_CONSUMPTION_MISSING", f"Aucune consommation ENEDIS disponible sur la periode facturee pour {scope}.", scope)
-            continue
-
-        enedis_kwh = sum(Decimal(str(point["value_wh"])) for point in points) / Decimal("1000")
-        coverage_ratio = Decimal(covered_days) / Decimal(expected_days)
-        if coverage_ratio < MIN_ENEDIS_COVERAGE_RATIO:
+        if daily_metrics is not None:
             consumption_summary["partial_references"] += 1
             issue(
                 "warning",
                 "ENEDIS_CONSUMPTION_PARTIAL",
-                f"Consommation ENEDIS partielle sur {scope}: {covered_days}/{expected_days} jour(s).",
+                f"Consommation ENEDIS partielle sur {scope}: {daily_metrics['covered_days']}/{daily_metrics['expected_days']} jour(s).",
                 scope,
             )
-            continue
 
-        consumption_summary["checked_sites"] += 1
-        tolerance = max(CONSUMPTION_TOLERANCE_KWH, invoice_kwh * CONSUMPTION_TOLERANCE_RATIO)
-        delta = abs(invoice_kwh - enedis_kwh)
-        if delta > tolerance:
-            consumption_summary["mismatches"] += 1
-            issue(
-                "warning",
-                "CONSUMPTION_ENEDIS_MISMATCH",
-                f"Consommation facturee {invoice_kwh:.1f} kWh differente d'ENEDIS {enedis_kwh:.1f} kWh sur {scope} (ecart {delta:.1f} kWh).",
-                scope,
-            )
+        if daily_metrics is None:
+            consumption_summary["missing_references"] += 1
+            issue("warning", "ENEDIS_CONSUMPTION_MISSING", f"Aucune consommation ENEDIS disponible sur la periode facturee pour {scope}.", scope)
 
 
 def _check_power_controls(
@@ -603,7 +596,7 @@ def _check_power_controls(
     load_curve = _load_curve_index()
 
     for site in sites:
-        scope = site.get("prm_id") or site.get("fic_number") or "fic"
+        scope = _site_scope(site)
         prm_id = site.get("prm_id")
         start = _date_value(site.get("period_start"))
         end = _date_value(site.get("period_end"))
@@ -792,19 +785,44 @@ def _date_value(value: Any) -> date | None:
         return None
 
 
+def _site_scope(site: dict[str, Any]) -> str:
+    parts: list[str] = []
+    prm_id = site.get("prm_id")
+    fic_number = site.get("fic_number")
+    start = _date_value(site.get("period_start"))
+    end = _date_value(site.get("period_end"))
+    if prm_id:
+        parts.append(str(prm_id))
+    if fic_number:
+        parts.append(f"FIC {fic_number}")
+    if start and end:
+        parts.append(f"{start.isoformat()} - {end.isoformat()}")
+    return " / ".join(parts) if parts else "fic"
+
+
 def _invoice_site_consumption_kwh(site: dict[str, Any]) -> Decimal | None:
-    total = Decimal("0")
-    has_consumption = False
+    supply_total = Decimal("0")
+    has_supply = False
+    network_total = Decimal("0")
+    has_network = False
+
     for line in site.get("invoice_lines", []):
-        if line.get("normalized_component") not in {"supply", "network_variable"}:
-            continue
         quantity = _decimal(line.get("quantity"))
         if quantity is None:
             continue
-        has_consumption = True
-        total += quantity
-    if has_consumption:
-        return total
+
+        normalized_component = line.get("normalized_component")
+        if normalized_component == "supply":
+            has_supply = True
+            supply_total += quantity
+        elif normalized_component == "network_variable":
+            has_network = True
+            network_total += quantity
+
+    if has_supply:
+        return supply_total
+    if has_network:
+        return network_total
 
     total_from_reads = Decimal("0")
     has_reads = False
@@ -814,6 +832,26 @@ def _invoice_site_consumption_kwh(site: dict[str, Any]) -> Decimal | None:
             has_reads = True
             total_from_reads += energy
     return total_from_reads if has_reads else None
+
+
+def _daily_consumption_metrics(points: list[dict[str, Any]], start: date, end: date) -> dict[str, Any] | None:
+    selected = [
+        point
+        for point in points
+        if start.isoformat() <= str(point.get("date", ""))[:10] <= end.isoformat()
+    ]
+    if not selected:
+        return None
+
+    expected_days = max(1, (end - start).days + 1)
+    covered_days = len({str(point.get("date"))[:10] for point in selected if point.get("date")})
+    energy_kwh = sum(Decimal(str(point["value_wh"])) for point in selected) / Decimal("1000")
+    return {
+        "energy_kwh": energy_kwh,
+        "covered_days": covered_days,
+        "expected_days": expected_days,
+        "coverage_ratio": Decimal(covered_days) / Decimal(expected_days),
+    }
 
 
 def _billed_power_overrun_amount(site: dict[str, Any]) -> Decimal:

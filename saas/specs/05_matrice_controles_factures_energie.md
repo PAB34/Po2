@@ -73,10 +73,11 @@ Une facture passe en `review` si elle ne contient pas d'erreur bloquante mais qu
 | `PERIOD_GAP` | Trou de facturation entre deux factures importees | A verifier avant validation. |
 | `PERIOD_OVERLAP` | Chevauchement avec une facture deja importee | Risque de double facturation. |
 | `CONSUMPTION_REFERENCE_MISSING` | Consommation facturee ou periode absente | Controle ENEDIS incomplet. |
-| `CONSUMPTION_LOAD_CURVE_MISMATCH` | Consommation facturee differente de la courbe de charge | Ecart ENEDIS a verifier. |
+| `CONSUMPTION_ENEDIS_MISMATCH` | Consommation facturee differente de la consommation ENEDIS journaliere | Ecart ENEDIS a verifier. |
+| `CONSUMPTION_LOAD_CURVE_MISMATCH` | Consommation facturee differente de la courbe de charge | Ecart ENEDIS a verifier lorsque la consommation journaliere est absente ou partielle. |
 | `ENEDIS_CONSUMPTION_MISSING` | Donnees ENEDIS absentes sur la periode | Controle ENEDIS incomplet. |
 | `ENEDIS_CONSUMPTION_PARTIAL` | Donnees ENEDIS partielles | Controle ENEDIS incomplet. |
-| `LOAD_CURVE_CONSUMPTION_PARTIAL` | Courbe de charge partielle pour la consommation | Controle fin incomplet, repli possible sur conso journaliere. |
+| `LOAD_CURVE_CONSUMPTION_PARTIAL` | Courbe de charge partielle pour la consommation | Controle fin incomplet quand la consommation journaliere ne suffit pas. |
 | `POWER_REFERENCE_MISSING` | Donnees de puissance ou periode absentes | Controle puissance incomplet. |
 | `SUBSCRIBED_POWER_MISSING` | Puissance souscrite absente de la facture | Controle puissance incomplet. |
 | `SUBSCRIBED_POWER_CONTRACT_MISMATCH` | Puissance facture differente du contrat ENEDIS | Ecart de puissance a verifier. |
@@ -131,7 +132,7 @@ Controles actifs :
 - recalcul TURPE 7 HTA-BT pour gestion, comptage, soutirage fixe et soutirage variable lorsque la grille applicable est chargee.
 - controle HT/TVA/TTC par FIC et au global.
 - controle des periodes et detection de trous/chevauchements entre factures importees.
-- comparaison de la consommation facturee avec la courbe de charge ENEDIS lorsqu'elle couvre la periode, sinon repli sur la consommation journaliere.
+- comparaison de la consommation facturee avec `enedis_data.csv` lorsqu'il couvre la periode, sinon repli sur la courbe de charge.
 - controle puissance facture vs contrat ENEDIS, puissance atteinte vs courbe de charge, puis repli sur `enedis_max_power.csv` si la courbe de charge est absente ou partielle.
 
 Precision BPU :
