@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   analyzeEnergyInvoiceImport,
+  deleteEnergyInvoiceImport,
   fetchEnergyInvoiceImports,
   fetchTurpeVersions,
   uploadEnergyInvoiceImport,
@@ -156,6 +157,13 @@ export function EnergieInvoicesPage() {
 
   const analyzeMut = useMutation({
     mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (invoiceImport: EnergyInvoiceImport) => deleteEnergyInvoiceImport(token!, invoiceImport.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
     },
@@ -321,6 +329,18 @@ export function EnergieInvoicesPage() {
                     <Link to={`/energie/factures/${invoiceImport.id}`} className="btn-secondary btn-compact">
                       Detail
                     </Link>
+                    <button
+                      type="button"
+                      className="btn-danger btn-compact"
+                      disabled={deleteMut.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Supprimer la facture "${invoiceImport.original_filename}" ? Cette action est irréversible.`)) {
+                          deleteMut.mutate(invoiceImport);
+                        }
+                      }}
+                    >
+                      Supprimer
+                    </button>
                   </div>
                 </td>
               </tr>

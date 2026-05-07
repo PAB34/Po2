@@ -38,6 +38,7 @@ from app.services.billing import (
 from app.services.invoices import (
     analyze_existing_invoice_import,
     create_invoice_import,
+    delete_invoice_import,
     get_invoice_import,
     list_invoice_imports,
     update_invoice_decision,
@@ -252,6 +253,18 @@ async def upload_energy_invoice_import(
         "is_duplicate": is_duplicate,
         "message": "Facture deja importee." if is_duplicate else "Facture importee.",
     }
+
+
+@router.delete("/invoices/imports/{invoice_import_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_energy_invoice_import(
+    invoice_import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    found = delete_invoice_import(db, city_id, invoice_import_id)
+    if not found:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
 
 
 @router.post("/invoices/imports/{invoice_import_id}/analyze", response_model=EnergyInvoiceImportOut)
