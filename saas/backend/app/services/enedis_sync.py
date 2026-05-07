@@ -915,13 +915,20 @@ def _fetch_lc_prm(
     _RETRY_WAITS = (20, 40, 80)
     resp = None
 
+    # ENEDIS CDC : la date de fin est EXCLUSIVE et doit être strictement > start.
+    # On ajoute 1 jour à end_date pour récupérer la CDC jusqu'au end_date inclus.
+    try:
+        api_end_date = (date.fromisoformat(end_date) + timedelta(days=1)).isoformat()
+    except ValueError:
+        api_end_date = end_date
+
     for attempt in range(len(_RETRY_WAITS) + 1):
         rl.acquire()
         try:
             resp = requests.get(
                 settings.enedis_load_curve_url,
                 headers={"Authorization": f"Bearer {token_mgr.get()}", "Accept": "application/json"},
-                params={"usage_point_id": prm, "start": start_date, "end": end_date},
+                params={"usage_point_id": prm, "start": start_date, "end": api_end_date},
                 timeout=45,
             )
         except Exception as exc:
