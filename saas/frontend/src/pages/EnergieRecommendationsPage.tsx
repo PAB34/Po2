@@ -86,6 +86,26 @@ function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function netImpactBadgeClass(value: number) {
+  return value <= 0 ? "badge-green" : "badge-orange";
+}
+
+function netImpactLabel(value: number) {
+  if (value < 0) return `Gain net ${formatCurrency(Math.abs(value))} / an`;
+  if (value > 0) return `Cout net ${formatCurrency(value)} / an`;
+  return `Impact neutre ${formatCurrency(0)} / an`;
+}
+
+function netImpactCardTitle(value: number) {
+  if (value < 0) return "Gain net estime";
+  if (value > 0) return "Cout net estime";
+  return "Impact net estime";
+}
+
+function netImpactCardAmount(value: number) {
+  return formatCurrency(Math.abs(value));
+}
+
 function buildImpactSummary(recommendations: PrmPowerRecommendation[]): ImpactSummary {
   return recommendations.reduce<ImpactSummary>((summary, item) => {
     applyRecommendationToImpact(summary, item);
@@ -254,19 +274,23 @@ export function EnergieRecommendationsPage() {
             <div>
               <h3>Bilan des impacts</h3>
               <p>
-                Synthese annuelle des changements de puissance proposes, limitee aux estimations TURPE
-                chiffrables.
+                Synthese annuelle des changements de puissance proposes. Le solde correspond aux
+                surcouts moins les economies ; un gain net signifie que les economies depassent les
+                hausses.
               </p>
             </div>
-            <span className={`badge ${impactSummary.annualNetImpact <= 0 ? "badge-green" : "badge-orange"}`}>
-              Solde {formatCurrency(impactSummary.annualNetImpact)} / an
+            <span className={`badge ${netImpactBadgeClass(impactSummary.annualNetImpact)}`}>
+              {netImpactLabel(impactSummary.annualNetImpact)}
             </span>
           </div>
           <div className="impact-balance-grid">
             <div className="impact-balance-card impact-balance-card--net">
-              <span>Impact net estime</span>
-              <strong>{formatCurrency(impactSummary.annualNetImpact)}</strong>
-              <small>{impactSummary.pricedCount} PRM chiffre{impactSummary.pricedCount !== 1 ? "s" : ""}</small>
+              <span>{netImpactCardTitle(impactSummary.annualNetImpact)}</span>
+              <strong>{netImpactCardAmount(impactSummary.annualNetImpact)}</strong>
+              <small>
+                Surcouts - economies | {impactSummary.pricedCount} PRM chiffre
+                {impactSummary.pricedCount !== 1 ? "s" : ""}
+              </small>
             </div>
             <div className="impact-balance-card impact-balance-card--saving">
               <span>Economies potentielles</span>
@@ -295,8 +319,7 @@ export function EnergieRecommendationsPage() {
               <div className="impact-supplier-heading">
                 <strong>Analyse par fournisseur</strong>
                 <span>
-                  Classement par impact annuel absolu, avec la part chiffree et les PRM encore non
-                  estimables.
+                  Classement par solde annuel absolu. Gain net = economies superieures aux surcouts.
                 </span>
               </div>
               <table className="data-table impact-supplier-table">
@@ -304,7 +327,7 @@ export function EnergieRecommendationsPage() {
                   <tr>
                     <th>Fournisseur</th>
                     <th>PRM</th>
-                    <th>Impact net</th>
+                    <th>Solde annuel</th>
                     <th>Economies</th>
                     <th>Surcouts</th>
                     <th>Variation kVA</th>
@@ -319,8 +342,8 @@ export function EnergieRecommendationsPage() {
                       </td>
                       <td>{supplier.totalCount}</td>
                       <td>
-                        <span className={`badge ${supplier.annualNetImpact <= 0 ? "badge-green" : "badge-orange"}`}>
-                          {formatCurrency(supplier.annualNetImpact)}
+                        <span className={`badge ${netImpactBadgeClass(supplier.annualNetImpact)}`}>
+                          {netImpactLabel(supplier.annualNetImpact)}
                         </span>
                       </td>
                       <td>{formatCurrency(supplier.annualSavings)}</td>
