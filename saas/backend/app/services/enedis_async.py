@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import requests
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -169,6 +170,24 @@ def plan_backfill_full_period() -> dict[str, Any]:
         }
         for type_donnee, data in plan.items()
     }
+
+
+def _existing_backfill_chunk_counts(
+    db: Session,
+    type_donnee: str,
+    date_start: date,
+    date_end: date,
+) -> dict[int, int]:
+    rows = (
+        db.query(EnedisAsyncJob.prm_count, func.count(EnedisAsyncJob.id))
+        .filter(EnedisAsyncJob.type_donnee == type_donnee)
+        .filter(EnedisAsyncJob.date_start == date_start)
+        .filter(EnedisAsyncJob.date_end == date_end)
+        .filter(EnedisAsyncJob.status != JOB_STATUS_ERROR)
+        .group_by(EnedisAsyncJob.prm_count)
+        .all()
+    )
+    return {int(prm_count): int(count) for prm_count, count in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -938,7 +957,23 @@ def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -
         batch_size = plan[type_donnee]["batch_size"]
         batch_count = plan[type_donnee]["batch_count_per_window"]
         for window_start, window_end in windows:
+            existing_by_size = _existing_backfill_chunk_counts(
+                db,
+                type_donnee,
+                window_start,
+                window_end,
+            )
+            skipped_by_size: dict[int, int] = {}
             for batch_index, prm_chunk in enumerate(_chunk_prms(prms, batch_size), start=1):
+                chunk_size = len(prm_chunk)
+                already_skipped = skipped_by_size.get(chunk_size, 0)
+                existing_count = existing_by_size.get(chunk_size, 0)
+                if already_skipped < existing_count:
+                    skipped_by_size[chunk_size] = already_skipped + 1
+                    result["summary"][type_donnee]["skipped_existing_dossier_count"] = (
+                        result["summary"][type_donnee].get("skipped_existing_dossier_count", 0) + 1
+                    )
+                    continue
                 try:
                     jobs = request_publication(
                         db,
