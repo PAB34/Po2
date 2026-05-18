@@ -11,6 +11,7 @@ import {
   PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, LoadCurveSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
+import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
 
 const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899"];
 
@@ -610,6 +611,7 @@ export function EnergiePage() {
 
       <DataCoverageBar token={token!} />
       <SyncPanel token={token!} />
+      <EnergieAsyncJobsPanel token={token!} />
 
       {isLoading && <p>Chargement…</p>}
       {error && <p className="error-text">{(error as Error).message}</p>}

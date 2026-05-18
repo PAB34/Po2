@@ -1448,3 +1448,95 @@ export async function updateEnergyInvoiceDecision(
   });
   return parseResponse<EnergyInvoiceImportDetail>(response);
 }
+
+// ── ENEDIS Async (Phase B + C) ────────────────────────────────────────────
+
+export type EnedisAsyncJobType = "CDC" | "ENERGIE";
+
+export type EnedisAsyncJobStatus =
+  | "requested"
+  | "file_received"
+  | "decrypted"
+  | "parsed"
+  | "success"
+  | "error";
+
+export type EnedisAsyncJob = {
+  id: number;
+  dossier_id: number;
+  type_donnee: EnedisAsyncJobType;
+  date_start: string;
+  date_end: string;
+  prm_count: number;
+  canal_contact_id: string;
+  status: EnedisAsyncJobStatus;
+  requested_at: string | null;
+  ftp_filename: string | null;
+  received_at: string | null;
+  parsed_at: string | null;
+  finished_at: string | null;
+  rows_added: number | null;
+  error_message: string | null;
+};
+
+export type EnedisAsyncStartPayload = {
+  type_donnee: EnedisAsyncJobType;
+  date_start: string;
+  date_end: string;
+};
+
+export type EnedisAsyncStartResponse = {
+  message: string;
+  dossier_ids: number[];
+  jobs: EnedisAsyncJob[];
+};
+
+export type EnedisAsyncBackfillFullResponse = {
+  message: string;
+  dossier_ids: { CDC: number[]; ENERGIE: number[] };
+};
+
+export async function fetchEnedisAsyncJobs(
+  token: string,
+  filters: { type?: EnedisAsyncJobType; status?: EnedisAsyncJobStatus; limit?: number } = {},
+): Promise<EnedisAsyncJob[]> {
+  const params = new URLSearchParams();
+  if (filters.type) params.set("type_donnee", filters.type);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/async/jobs${qs}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnedisAsyncJob[]>(response);
+}
+
+export async function startEnedisAsyncJob(
+  token: string,
+  payload: EnedisAsyncStartPayload,
+): Promise<EnedisAsyncStartResponse> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/async/start`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<EnedisAsyncStartResponse>(response);
+}
+
+export async function startEnedisAsyncBackfillFull(
+  token: string,
+): Promise<EnedisAsyncBackfillFullResponse> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/async/backfill-full`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnedisAsyncBackfillFullResponse>(response);
+}
+
+export async function triggerEnedisAsyncPollNow(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/async/poll-now`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
