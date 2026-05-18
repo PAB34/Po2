@@ -1,0 +1,11 @@
+.claude/
+.vscode/
+.DS_Store
+
+# Local environment files must stay out of Git.
+.env
+.env*
+.env.*
+*.local
+*.local.*
+!*.env.example
