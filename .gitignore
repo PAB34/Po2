@@ -9,3 +9,10 @@
 *.local
 *.local.*
 !*.env.example
+
+# Business documents and local analysis files stay outside the app repository.
+*.xlsx
+*.xlsm
+*.pdf
+*.docx
+define_name.py
