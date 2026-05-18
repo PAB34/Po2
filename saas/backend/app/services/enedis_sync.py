@@ -497,7 +497,7 @@ def _save_mp_state(last_date: str) -> None:
 
 
 _OUTCOME_RANK: dict[str, int] = {
-    "ok_data": 0, "ok_empty": 1, "not_found": 2, "forbidden": 3, "error": 4,
+    "ok_data": 0, "ok_empty": 1, "not_found": 2, "forbidden": 3, "quota_exceeded": 4, "error": 5,
 }
 
 
@@ -506,20 +506,27 @@ def _best_outcome(a: str, b: str) -> str:
 
 
 def _fetch_one_max_power(
-    token: str,
+    token_mgr,
+    rl,
     prm: str,
     start_date: str,
     end_date: str,
     ingested_at: str,
 ) -> tuple[list[dict], str]:
-    """Retourne (rows, outcome). outcome: ok_data | ok_empty | forbidden | not_found | error."""
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    """Retourne (rows, outcome). outcome: ok_data | ok_empty | forbidden | not_found | quota_exceeded | error.
+
+    Utilise un RateLimiter pour respecter strictement les limites ENEDIS (5 req/s,
+    5 simultanés, 950 appels/h) et un TokenManager partagé pour le token OAuth.
+    """
+    _RETRY_WAITS = (20, 40, 80)
     resp = None
-    for attempt in range(4):
+
+    for attempt in range(len(_RETRY_WAITS) + 1):
+        rl.acquire()
         try:
             resp = requests.get(
                 settings.enedis_max_power_url,
-                headers=headers,
+                headers={"Authorization": f"Bearer {token_mgr.get()}", "Accept": "application/json"},
                 params={
                     "usage_point_id": prm,
                     "start": start_date,
@@ -529,19 +536,29 @@ def _fetch_one_max_power(
                 },
                 timeout=45,
             )
-            if resp.status_code == 429 and attempt < len(_RETRY_429):
-                _mp_log(f"PRM {prm} → 429 quota, attente {_RETRY_429[attempt]}s…")
-                _time.sleep(_RETRY_429[attempt])
-                continue
-            if resp.status_code >= 500:
-                _time.sleep(5 * (attempt + 1))
-                continue
-            break
         except Exception as exc:
-            if attempt == 3:
-                LOG.warning("PRM %s [max_power] réseau : %s", prm, exc)
-                return [], "error"
-            _time.sleep(5)
+            rl.release()
+            if attempt < len(_RETRY_WAITS):
+                wait = _RETRY_WAITS[attempt]
+                _mp_log(f"PRM {prm} [max_power] réseau tentative {attempt+1} — pause {wait}s")
+                _time.sleep(wait)
+                continue
+            LOG.warning("PRM %s [max_power] réseau échec définitif : %s", prm, exc)
+            return [], "error"
+        else:
+            rl.release()
+
+        # Retry sur 429 et 5xx
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt < len(_RETRY_WAITS):
+                wait = _RETRY_WAITS[attempt]
+                _mp_log(f"PRM {prm} [max_power] HTTP {resp.status_code} tentative {attempt+1} — pause {wait}s")
+                _time.sleep(wait)
+                continue
+            outcome = "quota_exceeded" if resp.status_code == 429 else "error"
+            LOG.warning("PRM %s [max_power] HTTP %d échec définitif", prm, resp.status_code)
+            return [], outcome
+        break
 
     if resp is None:
         return [], "error"
@@ -625,7 +642,23 @@ def run_max_power_sync(history_days: int | None = None) -> None:
             _MP_STATE.update({"date_from": start_str, "date_to": end_str})
         _mp_log(f"Fenêtre : {start_str} → {end_str}")
 
-        token = _get_token()
+        # Instances partagées : 1 RateLimiter + 1 TokenManager pour toute la sync
+        from app.services.enedis_common import RateLimiter, TokenManager  # noqa: PLC0415
+        rl = RateLimiter(
+            rps=5.0,
+            max_concurrent=5,
+            max_hourly=950,
+            on_quota_wait=lambda wait_s, max_h: _mp_log(
+                f"Quota horaire ({max_h}/h) atteint — pause {wait_s:.0f}s"
+            ),
+        )
+        token_mgr = TokenManager(
+            margin_seconds=300,
+            on_refresh=lambda exp: _mp_log(f"Token ENEDIS renouvelé (expire dans {exp}s)"),
+        )
+        # Pré-charge pour valider les credentials avant de paralléliser
+        token_mgr.get()
+
         ingested_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
         csv_path = Path(settings.energie_dir) / "enedis_max_power.csv"
         total_new = 0
@@ -642,7 +675,7 @@ def run_max_power_sync(history_days: int | None = None) -> None:
 
             with ThreadPoolExecutor(max_workers=_WORKERS) as executor:
                 futures = {
-                    executor.submit(_fetch_one_max_power, token, prm, cs, ce, ingested_at): prm
+                    executor.submit(_fetch_one_max_power, token_mgr, rl, prm, cs, ce, ingested_at): prm
                     for prm in prms
                 }
                 for future in as_completed(futures):
@@ -660,12 +693,6 @@ def run_max_power_sync(history_days: int | None = None) -> None:
             total_new += new_rows
             _mp_log(f"  Chunk OK — {new_rows} nouvelles lignes ({total_new} total)")
             chunk_start = chunk_end + timedelta(days=1)
-
-            if chunk_start <= end_d:
-                try:
-                    token = _get_token()
-                except Exception:
-                    pass
 
         _save_mp_state(end_str)
         try:
