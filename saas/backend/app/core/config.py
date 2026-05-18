@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     enedis_async_energie_max_days: int = 1095  # ENEDIS : ENERGIE profondeur max 3 ans
     enedis_async_poll_interval_minutes: int = 5
 
+    # ENGIE API (Entreprises & Collectivités) — Azure APIM
+    engie_base_url: str = "https://api.entreprises-collectivites.engie.fr/ec/v1"
+    engie_subscription_key: str = ""  # Ocp-Apim-Subscription-Key
+
     # FTP — serveur de réception des publications ENEDIS (canal de contact)
     ftp_host: str = ""
     ftp_port: int = 21
