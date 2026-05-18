@@ -6,6 +6,7 @@ import { BuildingCreateEditPage } from "./pages/BuildingCreateEditPage";
 import { BuildingDetailPage } from "./pages/BuildingDetailPage";
 import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
+import { BuildingTechniquePage } from "./pages/BuildingTechniquePage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
@@ -38,6 +39,7 @@ export default function App() {
         <nav>
           <Link to="/">Accueil</Link>
           <Link to="/buildings">Bâtiments</Link>
+          <Link to="/buildings/technique">Gestion Technique</Link>
           <Link to="/energie">Énergie</Link>
           <Link to="/energie/preconisations">Preconisations</Link>
           <Link to="/energie/factures">Factures</Link>
@@ -53,6 +55,7 @@ export default function App() {
           <Route path="/buildings" element={<BuildingsLandingPage />} />
           <Route path="/buildings/list" element={<BuildingsListPage />} />
           <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
+          <Route path="/buildings/technique" element={<BuildingTechniquePage />} />
           <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
           <Route path="/energie" element={<EnergiePage />} />
           <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />

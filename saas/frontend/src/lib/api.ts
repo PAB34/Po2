@@ -1594,3 +1594,149 @@ export async function triggerEnedisAsyncPollNow(token: string): Promise<{ messag
   });
   return parseResponse<{ message: string }>(response);
 }
+
+// --- Gestion Technique (Equipment) ---
+
+export type EquipmentReference = {
+  id: number;
+  id_ligne: number;
+  code_niveau_1: string;
+  libelle_niveau_1: string;
+  code_niveau_2: string;
+  libelle_niveau_2: string;
+  niveau_3: string | null;
+  niveau_4: string | null;
+  niveau_5: string | null;
+  equipement: string;
+  sypemi_mini_annees: number | null;
+  sypemi_reference_annees: number | null;
+  sypemi_maxi_annees: number | null;
+  fiche_cee: string | null;
+};
+
+export type BuildingEquipment = {
+  id: number;
+  building_id: number;
+  equipment_ref_id: number;
+  etat: string;
+  quantite: string;
+  commentaire: string | null;
+  duree_vie_restante: number;
+  created_at: string;
+  updated_at: string;
+  equipment_ref: EquipmentReference | null;
+};
+
+export type EquipmentStateCounts = {
+  obsolete: number;
+  degrade: number;
+  moyen: number;
+  neuf: number;
+  total: number;
+  score_sante: number | null;
+};
+
+export type BuildingEquipmentSummary = {
+  building_id: number;
+  counts: EquipmentStateCounts;
+};
+
+export type CreateBuildingEquipmentPayload = {
+  equipment_ref_id: number;
+  etat: string;
+  quantite: string;
+  commentaire?: string;
+};
+
+export type UpdateBuildingEquipmentPayload = {
+  etat?: string;
+  quantite?: string;
+  commentaire?: string;
+};
+
+export type BulkCreateEquipmentPayload = {
+  items: CreateBuildingEquipmentPayload[];
+};
+
+export async function fetchEquipmentReferences(token: string): Promise<EquipmentReference[]> {
+  const response = await fetch(`${apiBaseUrl}/equipment/references`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EquipmentReference[]>(response);
+}
+
+export async function fetchEquipmentSummaries(token: string): Promise<BuildingEquipmentSummary[]> {
+  const response = await fetch(`${apiBaseUrl}/equipment/summaries`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BuildingEquipmentSummary[]>(response);
+}
+
+export async function fetchBuildingEquipments(token: string, buildingId: number): Promise<BuildingEquipment[]> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BuildingEquipment[]>(response);
+}
+
+export async function createBuildingEquipmentRequest(
+  token: string,
+  buildingId: number,
+  payload: CreateBuildingEquipmentPayload,
+): Promise<BuildingEquipment> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BuildingEquipment>(response);
+}
+
+export async function bulkCreateBuildingEquipments(
+  token: string,
+  buildingId: number,
+  payload: BulkCreateEquipmentPayload,
+): Promise<BuildingEquipment[]> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}/bulk`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BuildingEquipment[]>(response);
+}
+
+export async function updateBuildingEquipmentRequest(
+  token: string,
+  buildingId: number,
+  equipmentId: number,
+  payload: UpdateBuildingEquipmentPayload,
+): Promise<BuildingEquipment> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}/${equipmentId}`, {
+    method: "PUT",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BuildingEquipment>(response);
+}
+
+export async function deleteBuildingEquipmentRequest(
+  token: string,
+  buildingId: number,
+  equipmentId: number,
+): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}/${equipmentId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function fetchBuildingEquipmentSummary(
+  token: string,
+  buildingId: number,
+): Promise<EquipmentStateCounts> {
+  const response = await fetch(`${apiBaseUrl}/equipment/buildings/${buildingId}/summary`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EquipmentStateCounts>(response);
+}

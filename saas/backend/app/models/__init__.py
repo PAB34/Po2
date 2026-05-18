@@ -4,4 +4,5 @@ from app.models.billing import BillingBpuLine, BillingConfig, BillingHphcSlot, B
 from app.models.city import City
 from app.models.enedis_async import EnedisAsyncJob
 from app.models.invoice import EnergyInvoiceImport
+from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
