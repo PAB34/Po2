@@ -1494,6 +1494,14 @@ export type EnedisAsyncStartResponse = {
 export type EnedisAsyncBackfillFullResponse = {
   message: string;
   dossier_ids: { CDC: number[]; ENERGIE: number[] };
+  errors?: Array<{
+    type_donnee: EnedisAsyncJobType;
+    date_start: string;
+    date_end: string;
+    prm_count: number;
+    message: string;
+  }>;
+  summary?: Record<string, { prm_count: number; window_count: number }>;
 };
 
 export async function fetchEnedisAsyncJobs(

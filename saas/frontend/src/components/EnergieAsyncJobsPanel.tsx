@@ -103,9 +103,12 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   const backfillFullMut = useMutation({
     mutationFn: () => startEnedisAsyncBackfillFull(token),
     onSuccess: (resp) => {
+      const errorSuffix = resp.errors?.length
+        ? `; ${resp.errors.length} fenêtre(s)/lot(s) rejeté(s)`
+        : "";
       setFeedback({
-        kind: "success",
-        message: `${resp.message} (${resp.dossier_ids.ENERGIE.length} ENERGIE + ${resp.dossier_ids.CDC.length} CDC dossiers)`,
+        kind: resp.errors?.length ? "error" : "success",
+        message: `${resp.message} (${resp.dossier_ids.ENERGIE.length} ENERGIE + ${resp.dossier_ids.CDC.length} CDC dossiers${errorSuffix})`,
       });
       qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
     },
@@ -149,7 +152,7 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
               disabled={backfillFullMut.isPending}
               onClick={() => backfillFullMut.mutate()}
             >
-              {backfillFullMut.isPending ? "Lancement…" : "Backfill complet (CDC 2 ans + Conso 3 ans)"}
+              {backfillFullMut.isPending ? "Lancement…" : "Backfill complet (CDC 2 ans fractionnés + Conso 3 ans)"}
             </button>
             <button
               type="button"

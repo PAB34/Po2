@@ -1,0 +1,208 @@
+{
+  "source": {
+    "document": "saas/energie/(API) Kit de portage detaille pour les clients (2).pdf",
+    "title": "Pilote API Nouveau Portail Clients Collectivites - Kit de portage",
+    "document_date": "2023-03-22",
+    "pages": 38,
+    "swagger_reference": "saas/energie/SWAGGER ENEDIS/mesure_asynchrone v1 (3).json",
+    "analysis_date": "2026-05-18"
+  },
+  "objective_for_po2": {
+    "why_async": "Use ENEDIS asynchronous publications for reliable historical backfills without overloading synchronous APIs.",
+    "recommended_scope": [
+      "Historical backfill: async publications.",
+      "Daily incremental updates: sync remains acceptable for short daily refreshes, async can be added later if operationally useful.",
+      "Canonical data store: both sync and async must feed the same CSV files used by the platform."
+    ],
+    "canonical_files": {
+      "daily_consumption": "enedis_data.csv",
+      "load_curve": "enedis_load_curve.csv",
+      "daily_max_power": "enedis_max_power.csv"
+    }
+  },
+  "api_catalog_from_pdf": {
+    "measure_sync": {
+      "status_in_pdf": "production",
+      "usage": "Consult metering data for one meter or download data for up to 1000 PRM depending on resource.",
+      "available_data_j_plus_1": [
+        "daily energy consumption or injection",
+        "daily maximum power for Linky meters",
+        "load curve for consumption or injection"
+      ],
+      "page_refs": [4, 36]
+    },
+    "measure_async": {
+      "status_in_pdf": "recette",
+      "usage": "Download metering data for a list of meters. ENEDIS processes the request and publishes an encrypted JSON file to a contact channel, FTP only in the kit.",
+      "available_data_j_plus_1": [
+        "daily energy consumption or production",
+        "daily maximum power for Linky meters",
+        "load curve consumption or production"
+      ],
+      "page_refs": [4, 34, 37]
+    },
+    "technico_contractual": {
+      "usage": "Retrieve address, connection and contract information, synchronously or asynchronously depending on API.",
+      "page_refs": [5, 6]
+    },
+    "perimeter": {
+      "usage": "Retrieve usage point identifiers for meters whose supply contract is held by the customer.",
+      "page_refs": [7]
+    }
+  },
+  "async_measure_rules": {
+    "endpoint": {
+      "method": "POST",
+      "path": "/publication_mesures/v1/commanderPublicationPonctuelle",
+      "url_from_pdf": "https://ext.prod.api.enedis.fr/publication_mesures/v1/commanderPublicationPonctuelle",
+      "url_from_swagger": "https://gw.ext.prod.api.enedis.fr:443/publication_mesures/v1",
+      "implementation_note": "The gateway URL without explicit :443 is acceptable and even recommended by the swagger header note."
+    },
+    "auth": {
+      "token_url": "https://ext.prod.api.enedis.fr/oauth2/v3/token",
+      "grant_type": "client_credentials",
+      "token_validity": "1 hour according to the kit",
+      "header": "Authorization: Bearer <token>",
+      "page_refs": [30, 33, 34]
+    },
+    "request_schema": {
+      "root_fields": ["donneesGenerales", "listePoints"],
+      "donneesGenerales": {
+        "canauxContact": "FTP contact channel id",
+        "dateDebut": "yyyy-MM-DD",
+        "dateFin": "yyyy-MM-DD",
+        "typeDonnee": ["ENERGIE", "PMAX", "IDX", "CDC"]
+      },
+      "listePoints": {
+        "soutirage": true,
+        "injection": false,
+        "rule": "Exactly one of soutirage/injection must be true.",
+        "points": "Array of pointId values, max 1000 PRM per request."
+      },
+      "swagger_ref": "CommanderPublicationPonctuelleDemande"
+    },
+    "data_limits": {
+      "max_prm_per_request": 1000,
+      "by_type": {
+        "CDC": {
+          "max_query_window_days": 7,
+          "history_depth": "24 months + 15 days",
+          "source": "PDF page 4",
+          "po2_implication": "A 2-year CDC backfill must be split into 7-day windows."
+        },
+        "ENERGIE": {
+          "max_query_window": "36 months",
+          "history_depth": "36 months + 15 days",
+          "source": "PDF page 4",
+          "po2_implication": "A 3-year daily consumption backfill can be requested in one date window, then split only by PRM batch.",
+          "po2_reliability_option": "Splitting ENERGIE into smaller windows is an operational hardening choice, not a documentation requirement."
+        },
+        "PMAX": {
+          "max_query_window": "36 months",
+          "history_depth": "36 months + 15 days",
+          "eligibility": "Swagger states PMAX requests are only allowed for C5 PRM.",
+          "source": "PDF page 4 and async swagger"
+        },
+        "IDX": {
+          "max_query_window": "36 months",
+          "history_depth": "36 months + 15 days",
+          "source": "async swagger"
+        }
+      }
+    },
+    "platform_limits": {
+      "calls_per_second_per_client_app": 5,
+      "calls_per_hour_per_api": 1000,
+      "simultaneous_calls_per_api_all_clients": "10, marked as to be confirmed in the kit",
+      "async_delivery_sla": "file publication on client server within 24h maximum",
+      "page_refs": [35, 37]
+    },
+    "prerequisites": {
+      "portal_account": "Account on Portail Clients Collectivites",
+      "authorization": "Habilitation Administrateur des services de donnees",
+      "application": "Application created and subscribed to the required API",
+      "measure_services": "Measure services must be activated on communicant meters before querying data.",
+      "activation_delay": "Activation can take up to 24h.",
+      "contact_channel": "A contact channel must be configured; the kit describes FTP only.",
+      "ip_allowlist_from_pdf": {
+        "production": ["192.196.114.95", "163.116.11.145"],
+        "pre_production": ["163.116.11.146", "192.196.114.94"]
+      },
+      "page_refs": [9, 18, 19, 20, 21, 23, 24, 25, 27]
+    }
+  },
+  "current_po2_implementation_review": {
+    "files_reviewed": [
+      "saas/backend/app/services/enedis_async.py",
+      "saas/backend/app/models/enedis_async.py",
+      "saas/backend/app/api/routes/enedis_async.py",
+      "saas/backend/app/core/config.py"
+    ],
+    "aligned": [
+      "Uses OAuth bearer token.",
+      "Uses commanderPublicationPonctuelle endpoint.",
+      "Payload shape matches the async swagger: donneesGenerales + listePoints.",
+      "Uses FTP configuration for publication retrieval.",
+      "Uses canonical CSV files for platform data after parsing."
+    ],
+    "gaps": [
+      {
+        "severity": "blocking",
+        "code": "CDC_WINDOW_TOO_LARGE",
+        "description": "The full backfill sends one CDC request over roughly 730 days. The kit says CDC query window is 7 days, with 24 months + 15 days of historical depth.",
+        "expected_fix": "Split CDC backfill into <=7-day windows."
+      },
+      {
+        "severity": "high",
+        "code": "UNFILTERED_PRM_BATCH",
+        "description": "The full backfill sends all 529 contract PRM from enedis_contracts.csv. The kit says measure services must be activated on communicant meters. Current code does not filter by services_level from enedis_contract_summary.csv.",
+        "expected_fix": "Build PRM candidates per data type from contract summary/service level, or at least prefer 'Communicant (ouvert aux services)' for CDC."
+      },
+      {
+        "severity": "high",
+        "code": "ALL_OR_NOTHING_PUBLICATION",
+        "description": "If ENEDIS rejects one batch, the whole API endpoint returns HTTP 500 and no structured failed job is kept.",
+        "expected_fix": "Return a structured partial result, record rejected publication attempts, and continue with other windows/batches where possible."
+      },
+      {
+        "severity": "medium",
+        "code": "NO_PMAX_ASYNC",
+        "description": "The kit and swagger support PMAX, but Po2 async currently supports only ENERGIE and CDC. This leaves enedis_max_power.csv dependent on the synchronous path.",
+        "expected_fix": "Add PMAX async support later, filtered to C5 PRM only."
+      },
+      {
+        "severity": "medium",
+        "code": "FRONTEND_LABEL_MISLEADING",
+        "description": "The route comment says backfill full in one call. For CDC this must become many date windows.",
+        "expected_fix": "Update API and UI wording to explain that a full CDC backfill creates multiple ENEDIS dossiers."
+      }
+    ],
+    "most_likely_500_causes": [
+      "CDC requested over 730 days instead of 7-day windows.",
+      "Large mixed PRM batch includes non communicant, non-open-service, non-powered or otherwise non-eligible meters.",
+      "ENEDIS may answer HTTP 500 for a malformed/invalid publication batch even when the semantic cause is a business validation issue."
+    ]
+  },
+  "recommended_correction_strategy": {
+    "phase_1_immediate_fix": [
+      "Split CDC historical backfill into 7-day windows.",
+      "Respect ENEDIS platform limits when creating many publication dossiers.",
+      "Optionally split ENERGIE into smaller windows to reduce blast radius, while documenting that the kit allows 36 months in one request.",
+      "Use smaller configurable PRM batches for async backfill, even below the 1000 maximum, to reduce blast radius.",
+      "Filter CDC candidates to communicant meters open to services where enedis_contract_summary.csv provides services_level.",
+      "Return partial results instead of failing the complete endpoint on the first rejected publication."
+    ],
+    "phase_2_hardening": [
+      "Add a dry-run/preflight endpoint showing number of PRM, date windows and expected ENEDIS dossiers before launching.",
+      "Record failed publication attempts in the database with type, period, PRM count and sanitized ENEDIS error.",
+      "Add retry/backoff for transient 5xx or 429 during publication creation.",
+      "Add PMAX async support for C5 PRM only and write to enedis_max_power.csv."
+    ],
+    "phase_3_operations": [
+      "Keep the FTP polling scheduler for file arrival and parsing.",
+      "Monitor deliveries for 24h after publication.",
+      "Expose per-dossier status in the UI: requested, file_received, decrypted, parsed, success, error.",
+      "Keep synchronous daily refresh only for short incremental updates until async PMAX/ENERGIE/CDC is proven stable."
+    ]
+  }
+}

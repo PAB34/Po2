@@ -2,7 +2,7 @@
 Endpoints HTTP pour la pipeline async ENEDIS (Phase B-3).
 
 - POST /energie/sync/async/start          → lance un job pour 1 type sur 1 période
-- POST /energie/sync/async/backfill-full  → lance ENERGIE 3 ans + CDC 2 ans
+- POST /energie/sync/async/backfill-full  → lance ENERGIE 3 ans + CDC 2 ans découpés
 - GET  /energie/sync/async/jobs           → liste filtrable des dossiers
 - POST /energie/sync/async/poll-now       → déclenche un poll FTP immédiat
 """
@@ -122,7 +122,7 @@ def backfill_full(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Lance le backfill complet : ENERGIE 3 ans + CDC 2 ans en un seul appel."""
+    """Lance le backfill complet : ENERGIE 3 ans + CDC 2 ans en fenêtres."""
     try:
         dossiers = backfill_full_period(db, requested_by_user_id=current_user.id)
     except ValueError as exc:
@@ -130,8 +130,13 @@ def backfill_full(
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     return {
-        "message": "Backfill complet ENEDIS lancé (ENERGIE 3 ans + CDC 2 ans).",
-        "dossier_ids": dossiers,
+        "message": "Backfill complet ENEDIS lancé (ENERGIE 3 ans + CDC 2 ans fractionnés par fenêtres).",
+        "dossier_ids": {
+            "ENERGIE": dossiers.get("ENERGIE", []),
+            "CDC": dossiers.get("CDC", []),
+        },
+        "errors": dossiers.get("errors", []),
+        "summary": dossiers.get("summary", {}),
     }
 
 

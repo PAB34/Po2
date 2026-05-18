@@ -49,18 +49,30 @@ from app.models.enedis_async import (
     TYPE_DONNEES_SUPPORTED,
     EnedisAsyncJob,
 )
-from app.services.enedis_common import TokenManager
+from app.services.enedis_common import RateLimiter, TokenManager
 
 LOG = logging.getLogger(__name__)
+
+_PUBLICATION_RATE_LIMITER = RateLimiter(rps=2.0, max_concurrent=1, max_hourly=900)
 
 
 # ---------------------------------------------------------------------------
 # Limites métier
 # ---------------------------------------------------------------------------
 
-_MAX_DAYS_BY_TYPE: dict[str, int] = {
-    TYPE_DONNEE_CDC: 730,  # CDC : 2 ans max
-    TYPE_DONNEE_ENERGIE: 1095,  # ENERGIE : 3 ans max
+_MAX_HISTORY_DAYS_BY_TYPE: dict[str, int] = {
+    TYPE_DONNEE_CDC: 730,  # CDC : profondeur historique 24 mois
+    TYPE_DONNEE_ENERGIE: 1095,  # ENERGIE : profondeur historique 36 mois
+}
+
+_MAX_QUERY_WINDOW_DAYS_BY_TYPE: dict[str, int] = {
+    TYPE_DONNEE_CDC: 7,  # Kit ENEDIS : plage de consultation CDC = 7 jours
+    TYPE_DONNEE_ENERGIE: 1095,  # Kit ENEDIS : Energie = 36 mois
+}
+
+_BACKFILL_WINDOW_DAYS_BY_TYPE: dict[str, int] = {
+    TYPE_DONNEE_CDC: 7,
+    TYPE_DONNEE_ENERGIE: 365,
 }
 
 
@@ -74,11 +86,11 @@ def _validate_request(
     if date_start >= date_end:
         raise ValueError("date_start doit être strictement antérieure à date_end")
     delta_days = (date_end - date_start).days
-    max_days = _MAX_DAYS_BY_TYPE[type_donnee]
-    if delta_days > max_days:
+    max_window_days = _MAX_QUERY_WINDOW_DAYS_BY_TYPE[type_donnee]
+    if delta_days > max_window_days:
         raise ValueError(
-            f"Profondeur demandée ({delta_days} jours) dépasse la limite ENEDIS "
-            f"pour {type_donnee} ({max_days} jours)."
+            f"Plage demandée ({delta_days} jours) dépasse la limite ENEDIS "
+            f"pour {type_donnee} ({max_window_days} jours par appel)."
         )
     if not prm_list:
         raise ValueError("prm_list ne peut pas être vide")
@@ -87,6 +99,19 @@ def _validate_request(
 def _chunk_prms(prm_list: list[str], chunk_size: int) -> Iterable[list[str]]:
     for i in range(0, len(prm_list), chunk_size):
         yield prm_list[i : i + chunk_size]
+
+
+def _iter_date_windows(
+    date_start: date, date_end: date, max_window_days: int
+) -> Iterable[tuple[date, date]]:
+    """Découpe une période en fenêtres compatibles ENEDIS."""
+    if max_window_days <= 0:
+        raise ValueError("max_window_days doit être > 0")
+    current = date_start
+    while current < date_end:
+        window_end = min(date_end, current + timedelta(days=max_window_days))
+        yield current, window_end
+        current = window_end
 
 
 # ---------------------------------------------------------------------------
@@ -153,16 +178,26 @@ def request_publication(
             "POST commanderPublicationPonctuelle type=%s start=%s end=%s prms=%d",
             type_donnee, date_start, date_end, len(chunk),
         )
-        resp = requests.post(
-            settings.enedis_async_url,
-            headers={
-                "Authorization": f"Bearer {token_mgr.get()}",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
+        _PUBLICATION_RATE_LIMITER.acquire()
+        try:
+            try:
+                resp = requests.post(
+                    settings.enedis_async_url,
+                    headers={
+                        "Authorization": f"Bearer {token_mgr.get()}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=60,
+                )
+            except requests.RequestException as exc:
+                raise RuntimeError(
+                    "POST commanderPublicationPonctuelle impossible : "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+        finally:
+            _PUBLICATION_RATE_LIMITER.release()
         if resp.status_code in (200, 201):
             data = resp.json()
             dossier_id = data.get("dossierId")
@@ -646,7 +681,7 @@ def kickoff_backfill(
     Wrapper haut niveau : prend la liste des PRM depuis enedis_contracts.csv si non fournie.
     """
     if prm_list is None:
-        prm_list = _load_prms_from_contracts()
+        prm_list = _load_prms_for_type(type_donnee)
     return request_publication(
         db,
         type_donnee=type_donnee,
@@ -671,31 +706,155 @@ def _load_prms_from_contracts() -> list[str]:
     return sorted(set(prms))
 
 
-def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -> dict[str, list[int]]:
+def _load_contract_summary_by_prm() -> dict[str, dict[str, str]]:
+    """Charge enedis_contract_summary.csv si disponible."""
+    csv_path = Path(settings.energie_dir) / "enedis_contract_summary.csv"
+    if not csv_path.exists():
+        return {}
+    rows: dict[str, dict[str, str]] = {}
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            uid = (row.get("usage_point_id") or "").strip()
+            if uid and uid.isdigit() and len(uid) == 14:
+                rows[uid] = row
+    return rows
+
+
+def _is_communicant_open(service_level: str | None) -> bool:
+    normalized = (service_level or "").strip().lower()
+    return (
+        "communicant" in normalized
+        and "ouvert aux services" in normalized
+        and "non ouvert" not in normalized
+    )
+
+
+def _load_prms_for_type(type_donnee: str) -> list[str]:
+    """
+    Charge les PRM candidats selon le type de mesure.
+
+    Le kit ENEDIS précise que les mesures nécessitent des services activés sur
+    compteurs communicants. Quand le référentiel contract summary est présent,
+    on filtre donc les lots async aux compteurs "Communicant (ouvert aux
+    services)" pour éviter qu'un PRM non éligible fasse rejeter tout le batch.
+    """
+    prms = _load_prms_from_contracts()
+    summaries = _load_contract_summary_by_prm()
+    if not summaries or type_donnee not in {TYPE_DONNEE_CDC, TYPE_DONNEE_ENERGIE}:
+        return prms
+
+    filtered = [
+        prm
+        for prm in prms
+        if _is_communicant_open((summaries.get(prm) or {}).get("services_level"))
+    ]
+    if not filtered:
+        LOG.warning(
+            "Aucun PRM communicant ouvert aux services trouvé pour %s, fallback sur %d PRM",
+            type_donnee,
+            len(prms),
+        )
+        return prms
+    LOG.info(
+        "PRM candidats %s filtrés par services ENEDIS : %d/%d",
+        type_donnee,
+        len(filtered),
+        len(prms),
+    )
+    return sorted(set(filtered))
+
+
+def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -> dict[str, Any]:
     """
     Lance les 2 backfills à profondeur maximale :
-    - ENERGIE : 3 ans (1095 jours)
-    - CDC : 2 ans (730 jours)
+    - ENERGIE : 3 ans (1095 jours), découpés en fenêtres annuelles par prudence
+    - CDC : 2 ans (730 jours), découpés en fenêtres de 7 jours
     Le pivot est aujourd'hui-1 (ENEDIS retourne J-1).
 
-    Retourne {"ENERGIE": [dossier_ids], "CDC": [dossier_ids]}.
+    Retourne les dossier_ids créés et les erreurs partielles éventuelles.
     """
     today = date.today() - timedelta(days=1)
-    prms = _load_prms_from_contracts()
-    result: dict[str, list[int]] = {}
+    result: dict[str, Any] = {
+        "ENERGIE": [],
+        "CDC": [],
+        "errors": [],
+        "summary": {
+            "ENERGIE": {"prm_count": 0, "window_count": 0},
+            "CDC": {"prm_count": 0, "window_count": 0},
+        },
+    }
 
-    energie_start = today - timedelta(days=settings.enedis_async_energie_max_days)
-    energie_jobs = request_publication(
-        db, TYPE_DONNEE_ENERGIE, energie_start, today, prms,
-        requested_by_user_id=requested_by_user_id,
+    energie_prms = _load_prms_for_type(TYPE_DONNEE_ENERGIE)
+    result["summary"]["ENERGIE"]["prm_count"] = len(energie_prms)
+    energie_start = today - timedelta(
+        days=min(settings.enedis_async_energie_max_days, _MAX_HISTORY_DAYS_BY_TYPE[TYPE_DONNEE_ENERGIE])
     )
-    result["ENERGIE"] = [j.dossier_id for j in energie_jobs]
+    energie_windows = list(
+        _iter_date_windows(
+            energie_start,
+            today,
+            min(
+                _BACKFILL_WINDOW_DAYS_BY_TYPE[TYPE_DONNEE_ENERGIE],
+                _MAX_QUERY_WINDOW_DAYS_BY_TYPE[TYPE_DONNEE_ENERGIE],
+            ),
+        )
+    )
+    result["summary"]["ENERGIE"]["window_count"] = len(energie_windows)
+    for window_start, window_end in energie_windows:
+        try:
+            energie_jobs = request_publication(
+                db, TYPE_DONNEE_ENERGIE, window_start, window_end, energie_prms,
+                requested_by_user_id=requested_by_user_id,
+            )
+            result["ENERGIE"].extend(j.dossier_id for j in energie_jobs)
+        except RuntimeError as exc:
+            db.rollback()
+            result["errors"].append({
+                "type_donnee": TYPE_DONNEE_ENERGIE,
+                "date_start": window_start.isoformat(),
+                "date_end": window_end.isoformat(),
+                "prm_count": len(energie_prms),
+                "message": str(exc)[:500],
+            })
 
-    cdc_start = today - timedelta(days=settings.enedis_async_cdc_max_days)
-    cdc_jobs = request_publication(
-        db, TYPE_DONNEE_CDC, cdc_start, today, prms,
-        requested_by_user_id=requested_by_user_id,
+    cdc_prms = _load_prms_for_type(TYPE_DONNEE_CDC)
+    result["summary"]["CDC"]["prm_count"] = len(cdc_prms)
+    cdc_start = today - timedelta(
+        days=min(settings.enedis_async_cdc_max_days, _MAX_HISTORY_DAYS_BY_TYPE[TYPE_DONNEE_CDC])
     )
-    result["CDC"] = [j.dossier_id for j in cdc_jobs]
+    cdc_windows = list(
+        _iter_date_windows(
+            cdc_start,
+            today,
+            min(
+                _BACKFILL_WINDOW_DAYS_BY_TYPE[TYPE_DONNEE_CDC],
+                _MAX_QUERY_WINDOW_DAYS_BY_TYPE[TYPE_DONNEE_CDC],
+            ),
+        )
+    )
+    result["summary"]["CDC"]["window_count"] = len(cdc_windows)
+    for window_start, window_end in cdc_windows:
+        try:
+            cdc_jobs = request_publication(
+                db, TYPE_DONNEE_CDC, window_start, window_end, cdc_prms,
+                requested_by_user_id=requested_by_user_id,
+            )
+            result["CDC"].extend(j.dossier_id for j in cdc_jobs)
+        except RuntimeError as exc:
+            db.rollback()
+            result["errors"].append({
+                "type_donnee": TYPE_DONNEE_CDC,
+                "date_start": window_start.isoformat(),
+                "date_end": window_end.isoformat(),
+                "prm_count": len(cdc_prms),
+                "message": str(exc)[:500],
+            })
+
+    if not result["ENERGIE"] and not result["CDC"] and result["errors"]:
+        first_error = result["errors"][0]["message"]
+        raise RuntimeError(
+            "Aucun dossier ENEDIS créé pour le backfill complet. "
+            f"Premier rejet : {first_error}"
+        )
 
     return result
