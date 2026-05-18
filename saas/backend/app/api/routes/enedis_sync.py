@@ -8,6 +8,11 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.models.user import User
 from app.services.dju_sync import get_dju_sync_status, is_dju_running, run_dju_sync
+from app.services.enedis_customer_sync import (
+    get_customer_sync_status,
+    is_customer_sync_running,
+    run_customer_sync,
+)
 from app.services.enedis_sync import (
     get_load_curve_status,
     get_max_power_status,
@@ -41,6 +46,22 @@ class DjuSyncStatus(BaseModel):
     status: str
     last_sync_date: str | None = None
     rows_added: int = 0
+    error: str | None = None
+    log: list[str] = []
+
+
+class CustomerSyncStatus(BaseModel):
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    last_sync_at: str | None = None
+    sources_total: int = 0
+    sources_done: int = 0
+    current_source: str | None = None
+    prms_total: int = 0
+    prms_done: int = 0
+    rows_upserted: int = 0
+    changes_detected: int = 0
     error: str | None = None
     log: list[str] = []
 
@@ -145,6 +166,26 @@ def dju_start(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation DJU est déjà en cours.")
     background_tasks.add_task(run_dju_sync)
     return {"message": "Synchronisation DJU démarrée."}
+
+
+# ---------------------------------------------------------------------------
+# Référentiel contractuel ENEDIS
+# ---------------------------------------------------------------------------
+
+@router.get("/customer/status", response_model=CustomerSyncStatus)
+def customer_status(current_user: User = Depends(get_current_user)) -> CustomerSyncStatus:
+    return CustomerSyncStatus.model_validate(get_customer_sync_status())
+
+
+@router.post("/customer/start", status_code=status.HTTP_202_ACCEPTED)
+def customer_start(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    if is_customer_sync_running():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation contractuelle ENEDIS est déjà en cours.")
+    background_tasks.add_task(run_customer_sync)
+    return {"message": "Synchronisation du référentiel contractuel ENEDIS démarrée."}
 
 
 # ---------------------------------------------------------------------------

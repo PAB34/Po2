@@ -54,6 +54,26 @@ def _enedis_async_poll_job() -> None:
         LOG.exception("ENEDIS async poll job failed")
 
 
+def _enedis_customer_sync_job() -> None:
+    """Job périodique : rafraîchit le référentiel contractuel ENEDIS."""
+    if not settings.enedis_customer_sync_enabled:
+        return
+    if not settings.enedis_client_id or not settings.enedis_client_secret:
+        return
+    try:
+        from app.services.enedis_customer_sync import (  # noqa: PLC0415
+            is_customer_sync_running,
+            run_customer_sync,
+        )
+
+        if is_customer_sync_running():
+            LOG.info("ENEDIS customer sync déjà en cours, job périodique ignoré.")
+            return
+        run_customer_sync()
+    except Exception:
+        LOG.exception("ENEDIS customer sync job failed")
+
+
 def start_scheduler() -> None:
     """À appeler une fois au startup de l'application FastAPI."""
     global _SCHEDULER
@@ -71,6 +91,17 @@ def start_scheduler() -> None:
         coalesce=True,
         replace_existing=True,
     )
+    if settings.enedis_customer_sync_enabled:
+        customer_interval = max(int(settings.enedis_customer_sync_interval_hours), 1)
+        _SCHEDULER.add_job(
+            _enedis_customer_sync_job,
+            trigger="interval",
+            hours=customer_interval,
+            id="enedis_customer_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
     _SCHEDULER.start()
     LOG.info("APScheduler démarré (poll ENEDIS async toutes les %d min)", interval)
 

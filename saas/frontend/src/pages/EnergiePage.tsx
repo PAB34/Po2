@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
-  fetchEnergieOverview, fetchSyncStatus, startSync,
-  fetchMaxPowerSyncStatus, startMaxPowerSync,
-  fetchLoadCurveSyncStatus, startLoadCurveSync,
+  fetchEnergieOverview,
   fetchDjuSyncStatus, startDjuSync,
+  fetchCustomerSyncStatus, startCustomerSync,
   fetchDataRanges, fetchDataAudit,
-  PrmListItem, SupplierDistributionItem, SyncStatus, DjuSyncStatus, LoadCurveSyncStatus, DataRanges, EnergyDataAudit,
+  PrmListItem, SupplierDistributionItem, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
@@ -83,6 +82,8 @@ function SubSyncRow({
   isRunning,
   isPending,
   progress,
+  actionLabel = "Sync incrémentale",
+  resultLabel = "nouvelles lignes intégrées",
   onIncremental,
   onBackfill,
 }: {
@@ -95,6 +96,8 @@ function SubSyncRow({
   isRunning: boolean;
   isPending: boolean;
   progress?: number | null;
+  actionLabel?: string;
+  resultLabel?: string;
   onIncremental: () => void;
   onBackfill?: () => void;
 }) {
@@ -118,12 +121,12 @@ function SubSyncRow({
         </div>
       )}
       {status === "success" && rowsAdded != null && rowsAdded > 0 && (
-        <p className="sync-result-ok">{rowsAdded.toLocaleString("fr-FR")} nouvelles lignes intégrées</p>
+        <p className="sync-result-ok">{rowsAdded.toLocaleString("fr-FR")} {resultLabel}</p>
       )}
       {error && <p className="sync-error">{error}</p>}
       <div className="sync-actions">
         <button type="button" className="btn-primary" disabled={isRunning || isPending} onClick={onIncremental}>
-          {isRunning ? "En cours…" : "Sync incrémentale"}
+          {isRunning ? "En cours…" : actionLabel}
         </button>
         {onBackfill && (
           <button
@@ -148,26 +151,7 @@ function SubSyncRow({
 }
 
 function SyncPanel({ token }: { token: string }) {
-  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
-
-  const { data: syncStatus, refetch: refetchConso } = useQuery({
-    queryKey: ["sync-status"],
-    queryFn: () => fetchSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 2000 : false,
-  });
-
-  const { data: mpStatus, refetch: refetchMp } = useQuery({
-    queryKey: ["sync-max-power-status"],
-    queryFn: () => fetchMaxPowerSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 2000 : false,
-  });
-
-  const { data: lcStatus, refetch: refetchLc } = useQuery({
-    queryKey: ["sync-lc-status"],
-    queryFn: () => fetchLoadCurveSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as LoadCurveSyncStatus | undefined)?.status === "running" ? 3000 : false,
-  });
 
   const { data: djuStatus, refetch: refetchDju } = useQuery({
     queryKey: ["sync-dju-status"],
@@ -175,19 +159,10 @@ function SyncPanel({ token }: { token: string }) {
     refetchInterval: (query) => (query.state.data as DjuSyncStatus | undefined)?.status === "running" ? 2000 : false,
   });
 
-  const consoMutation = useMutation({
-    mutationFn: (historyDays?: number) => startSync(token, historyDays),
-    onSuccess: () => { setTimeout(() => refetchConso(), 500); queryClient.invalidateQueries({ queryKey: ["energie-overview"] }); },
-  });
-
-  const mpMutation = useMutation({
-    mutationFn: (historyDays?: number) => startMaxPowerSync(token, historyDays),
-    onSuccess: () => { setTimeout(() => refetchMp(), 500); },
-  });
-
-  const lcMutation = useMutation({
-    mutationFn: () => startLoadCurveSync(token),
-    onSuccess: () => { setTimeout(() => refetchLc(), 500); },
+  const { data: customerStatus, refetch: refetchCustomer } = useQuery({
+    queryKey: ["sync-customer-status"],
+    queryFn: () => fetchCustomerSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as CustomerSyncStatus | undefined)?.status === "running" ? 5000 : false,
   });
 
   const djuMutation = useMutation({
@@ -195,20 +170,21 @@ function SyncPanel({ token }: { token: string }) {
     onSuccess: () => { setTimeout(() => refetchDju(), 500); },
   });
 
-  const consoProgress = syncStatus && syncStatus.prms_total > 0
-    ? Math.round((syncStatus.prms_done / syncStatus.prms_total) * 100) : null;
-  const mpProgress = mpStatus && mpStatus.prms_total > 0
-    ? Math.round((mpStatus.prms_done / mpStatus.prms_total) * 100) : null;
-  const lcProgress = lcStatus && lcStatus.chunks_total > 0
-    ? Math.round((lcStatus.chunks_done / lcStatus.chunks_total) * 100) : null;
+  const customerMutation = useMutation({
+    mutationFn: () => startCustomerSync(token),
+    onSuccess: () => { setTimeout(() => refetchCustomer(), 500); },
+  });
 
-  const anyRunning = syncStatus?.status === "running" || mpStatus?.status === "running"
-    || lcStatus?.status === "running" || djuStatus?.status === "running";
+  const customerProgress = customerStatus && customerStatus.sources_total > 0
+    ? Math.round((customerStatus.sources_done / customerStatus.sources_total) * 100)
+    : null;
+
+  const anyRunning = djuStatus?.status === "running" || customerStatus?.status === "running";
 
   return (
     <div className="sync-panel">
       <div className="sync-panel-header" onClick={() => setExpanded((v) => !v)}>
-        <span className="sync-panel-title">Synchronisation ENEDIS / DJU</span>
+        <span className="sync-panel-title">Synchronisations de référence</span>
         <div className="sync-panel-meta">
           {anyRunning && <span className="badge badge-blue">En cours…</span>}
           <span className="sync-toggle">{expanded ? "▲" : "▼"}</span>
@@ -218,44 +194,18 @@ function SyncPanel({ token }: { token: string }) {
       {expanded && (
         <div className="sync-panel-body">
           <SubSyncRow
-            label="Consommation journalière (kWh)"
-            status={syncStatus?.status}
-            lastDate={syncStatus?.last_sync_date}
-            rowsAdded={syncStatus?.rows_added}
-            error={syncStatus?.error}
-            log={syncStatus?.log}
-            isRunning={syncStatus?.status === "running"}
-            isPending={consoMutation.isPending}
-            progress={consoProgress}
-            onIncremental={() => consoMutation.mutate(undefined)}
-            onBackfill={() => consoMutation.mutate(1095)}
-          />
-
-          <SubSyncRow
-            label="Puissance max journalière (VA)"
-            status={mpStatus?.status}
-            lastDate={mpStatus?.last_sync_date}
-            rowsAdded={mpStatus?.rows_added}
-            error={mpStatus?.error}
-            log={mpStatus?.log}
-            isRunning={mpStatus?.status === "running"}
-            isPending={mpMutation.isPending}
-            progress={mpProgress}
-            onIncremental={() => mpMutation.mutate(undefined)}
-            onBackfill={() => mpMutation.mutate(1095)}
-          />
-
-          <SubSyncRow
-            label="Courbe de charge 30 min (depuis 01/01/2026)"
-            status={lcStatus?.status}
-            lastDate={lcStatus?.last_sync_date}
-            rowsAdded={lcStatus?.rows_added}
-            error={lcStatus?.error}
-            log={lcStatus?.log}
-            isRunning={lcStatus?.status === "running"}
-            isPending={lcMutation.isPending}
-            progress={lcProgress}
-            onIncremental={() => lcMutation.mutate()}
+            label="Référentiel contractuel ENEDIS"
+            status={customerStatus?.status}
+            lastDate={customerStatus?.last_sync_at}
+            rowsAdded={customerStatus?.changes_detected}
+            error={customerStatus?.error}
+            log={customerStatus?.log}
+            isRunning={customerStatus?.status === "running"}
+            isPending={customerMutation.isPending}
+            progress={customerProgress}
+            actionLabel="Mettre à jour"
+            resultLabel="changement(s) détecté(s)"
+            onIncremental={() => customerMutation.mutate()}
           />
 
           <SubSyncRow
@@ -267,6 +217,7 @@ function SyncPanel({ token }: { token: string }) {
             log={djuStatus?.log}
             isRunning={djuStatus?.status === "running"}
             isPending={djuMutation.isPending}
+            actionLabel="Synchroniser"
             onIncremental={() => djuMutation.mutate()}
           />
         </div>

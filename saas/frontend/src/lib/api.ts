@@ -991,11 +991,34 @@ export type DjuSyncStatus = {
   log: string[];
 };
 
+export type CustomerSyncStatus = {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  last_sync_at: string | null;
+  sources_total: number;
+  sources_done: number;
+  current_source: string | null;
+  prms_total: number;
+  prms_done: number;
+  rows_upserted: number;
+  changes_detected: number;
+  error: string | null;
+  log: string[];
+};
+
 export async function fetchDjuSyncStatus(token: string): Promise<DjuSyncStatus> {
   const response = await fetch(`${apiBaseUrl}/energie/sync/dju/status`, {
     headers: buildHeaders(token),
   });
   return parseResponse<DjuSyncStatus>(response);
+}
+
+export async function fetchCustomerSyncStatus(token: string): Promise<CustomerSyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/customer/status`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CustomerSyncStatus>(response);
 }
 
 export type LoadCurveSyncStatus = {
@@ -1029,6 +1052,14 @@ export async function startLoadCurveSync(token: string): Promise<{ message: stri
 
 export async function startDjuSync(token: string): Promise<{ message: string }> {
   const response = await fetch(`${apiBaseUrl}/energie/sync/dju/start`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
+
+export async function startCustomerSync(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/customer/start`, {
     method: "POST",
     headers: buildHeaders(token),
   });
