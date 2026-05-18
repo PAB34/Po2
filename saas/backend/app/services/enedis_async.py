@@ -133,7 +133,10 @@ def _build_full_backfill_plan(today: date | None = None) -> dict[str, dict[str, 
             getattr(settings, f"enedis_async_{type_donnee.lower()}_max_days"),
             _MAX_HISTORY_DAYS_BY_TYPE[type_donnee],
         )
-        date_start = pivot - timedelta(days=history_days)
+        date_start = max(
+            pivot - timedelta(days=history_days),
+            date.today() - timedelta(days=history_days),
+        )
         window_days = min(
             _BACKFILL_WINDOW_DAYS_BY_TYPE[type_donnee],
             _MAX_QUERY_WINDOW_DAYS_BY_TYPE[type_donnee],
