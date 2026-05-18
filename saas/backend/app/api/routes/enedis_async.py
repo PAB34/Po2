@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from threading import Lock
+from threading import Lock, Thread
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -157,10 +157,9 @@ def _run_backfill_full_locked(requested_by_user_id: int) -> None:
 
 @router.post("/backfill-full", status_code=status.HTTP_202_ACCEPTED)
 def backfill_full(
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """Planifie le backfill complet en arriere-plan."""
+    """Planifie le backfill complet dans un thread serveur detache."""
     plan = plan_backfill_full_period()
     if not _BACKFILL_FULL_LOCK.acquire(blocking=False):
         return {
@@ -172,7 +171,12 @@ def backfill_full(
             "summary": plan,
         }
 
-    background_tasks.add_task(_run_backfill_full_locked, current_user.id)
+    Thread(
+        target=_run_backfill_full_locked,
+        args=(current_user.id,),
+        daemon=True,
+        name="enedis-backfill-full",
+    ).start()
     return {
         "message": "Backfill complet ENEDIS lance en arriere-plan. Les dossiers vont apparaitre progressivement dans le tableau.",
         "background": True,
