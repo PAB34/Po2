@@ -8,7 +8,9 @@ Endpoints HTTP pour la pipeline async ENEDIS (Phase B-3).
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
+from threading import Lock
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -16,7 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.core.db import get_db
+from app.core.db import SessionLocal, get_db
 from app.core.scheduler import trigger_poll_now
 from app.models.enedis_async import (
     JOB_STATUSES,
@@ -29,9 +31,12 @@ from app.models.user import User
 from app.services.enedis_async import (
     backfill_full_period,
     kickoff_backfill,
+    plan_backfill_full_period,
 )
 
 router = APIRouter(prefix="/energie/sync/async", tags=["energie-async"])
+LOG = logging.getLogger(__name__)
+_BACKFILL_FULL_LOCK = Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +122,7 @@ def start_async_job(
     }
 
 
-@router.post("/backfill-full", status_code=status.HTTP_201_CREATED)
-def backfill_full(
+def _backfill_full_legacy(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
@@ -137,6 +141,45 @@ def backfill_full(
         },
         "errors": dossiers.get("errors", []),
         "summary": dossiers.get("summary", {}),
+    }
+
+
+def _run_backfill_full_locked(requested_by_user_id: int) -> None:
+    db = SessionLocal()
+    try:
+        backfill_full_period(db, requested_by_user_id=requested_by_user_id)
+    except Exception:
+        LOG.exception("Backfill complet ENEDIS async echoue")
+    finally:
+        db.close()
+        _BACKFILL_FULL_LOCK.release()
+
+
+@router.post("/backfill-full", status_code=status.HTTP_202_ACCEPTED)
+def backfill_full(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Planifie le backfill complet en arriere-plan."""
+    plan = plan_backfill_full_period()
+    if not _BACKFILL_FULL_LOCK.acquire(blocking=False):
+        return {
+            "message": "Backfill complet ENEDIS deja en cours. Le tableau des dossiers se met a jour progressivement.",
+            "background": True,
+            "already_running": True,
+            "dossier_ids": {"ENERGIE": [], "CDC": []},
+            "errors": [],
+            "summary": plan,
+        }
+
+    background_tasks.add_task(_run_backfill_full_locked, current_user.id)
+    return {
+        "message": "Backfill complet ENEDIS lance en arriere-plan. Les dossiers vont apparaitre progressivement dans le tableau.",
+        "background": True,
+        "already_running": False,
+        "dossier_ids": {"ENERGIE": [], "CDC": []},
+        "errors": [],
+        "summary": plan,
     }
 
 

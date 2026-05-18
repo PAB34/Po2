@@ -1524,15 +1524,30 @@ export type EnedisAsyncStartResponse = {
 
 export type EnedisAsyncBackfillFullResponse = {
   message: string;
+  background?: boolean;
+  already_running?: boolean;
   dossier_ids: { CDC: number[]; ENERGIE: number[] };
   errors?: Array<{
     type_donnee: EnedisAsyncJobType;
     date_start: string;
     date_end: string;
     prm_count: number;
+    batch_index?: number;
+    batch_count?: number;
+    first_prm?: string | null;
+    last_prm?: string | null;
     message: string;
   }>;
-  summary?: Record<string, { prm_count: number; window_count: number }>;
+  summary?: Record<string, {
+    prm_count: number;
+    window_count: number;
+    batch_size?: number;
+    batch_count_per_window?: number;
+    expected_dossier_count?: number;
+    created_dossier_count?: number;
+    date_start?: string;
+    date_end?: string;
+  }>;
 };
 
 export async function fetchEnedisAsyncJobs(

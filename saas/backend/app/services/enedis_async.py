@@ -75,6 +75,11 @@ _BACKFILL_WINDOW_DAYS_BY_TYPE: dict[str, int] = {
     TYPE_DONNEE_ENERGIE: 365,
 }
 
+# ENEDIS documente 1000 PRM par demande, mais l'API rejette en pratique les
+# très gros lots de mesures par un simple HTTP 500. Les backfills historiques
+# utilisent donc un lot conservateur, sans changer la limite des appels unitaires.
+_BACKFILL_PRM_BATCH_SIZE = 50
+
 
 def _validate_request(
     type_donnee: str, date_start: date, date_end: date, prm_list: list[str]
@@ -112,6 +117,58 @@ def _iter_date_windows(
         window_end = min(date_end, current + timedelta(days=max_window_days))
         yield current, window_end
         current = window_end
+
+
+def _backfill_batch_size() -> int:
+    return max(1, min(_BACKFILL_PRM_BATCH_SIZE, settings.enedis_async_max_prms_per_request))
+
+
+def _build_full_backfill_plan(today: date | None = None) -> dict[str, dict[str, Any]]:
+    pivot = today or (date.today() - timedelta(days=1))
+    plan: dict[str, dict[str, Any]] = {}
+    for type_donnee in (TYPE_DONNEE_ENERGIE, TYPE_DONNEE_CDC):
+        prms = _load_prms_for_type(type_donnee)
+        history_days = min(
+            getattr(settings, f"enedis_async_{type_donnee.lower()}_max_days"),
+            _MAX_HISTORY_DAYS_BY_TYPE[type_donnee],
+        )
+        date_start = pivot - timedelta(days=history_days)
+        window_days = min(
+            _BACKFILL_WINDOW_DAYS_BY_TYPE[type_donnee],
+            _MAX_QUERY_WINDOW_DAYS_BY_TYPE[type_donnee],
+        )
+        windows = list(_iter_date_windows(date_start, pivot, window_days))
+        batch_size = _backfill_batch_size()
+        batch_count = (len(prms) + batch_size - 1) // batch_size if prms else 0
+        plan[type_donnee] = {
+            "prms": prms,
+            "windows": windows,
+            "date_start": date_start,
+            "date_end": pivot,
+            "prm_count": len(prms),
+            "window_count": len(windows),
+            "batch_size": batch_size,
+            "batch_count_per_window": batch_count,
+            "expected_dossier_count": batch_count * len(windows),
+        }
+    return plan
+
+
+def plan_backfill_full_period() -> dict[str, Any]:
+    """Retourne un plan sérialisable du backfill complet sans appeler ENEDIS."""
+    plan = _build_full_backfill_plan()
+    return {
+        type_donnee: {
+            "date_start": data["date_start"].isoformat(),
+            "date_end": data["date_end"].isoformat(),
+            "prm_count": data["prm_count"],
+            "window_count": data["window_count"],
+            "batch_size": data["batch_size"],
+            "batch_count_per_window": data["batch_count_per_window"],
+            "expected_dossier_count": data["expected_dossier_count"],
+        }
+        for type_donnee, data in plan.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -764,7 +821,7 @@ def _load_prms_for_type(type_donnee: str) -> list[str]:
     return sorted(set(filtered))
 
 
-def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -> dict[str, Any]:
+def _backfill_full_period_legacy(db: Session, requested_by_user_id: int | None = None) -> dict[str, Any]:
     """
     Lance les 2 backfills à profondeur maximale :
     - ENERGIE : 3 ans (1095 jours), découpés en fenêtres annuelles par prudence
@@ -856,5 +913,67 @@ def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -
             "Aucun dossier ENEDIS créé pour le backfill complet. "
             f"Premier rejet : {first_error}"
         )
+
+    return result
+
+
+def backfill_full_period(db: Session, requested_by_user_id: int | None = None) -> dict[str, Any]:
+    """
+    Lance le backfill complet par lots conservateurs.
+
+    Les tests réels ENEDIS montrent qu'un lot de 385 PRM peut être rejeté en
+    HTTP 500, alors que les mêmes PRM passent lorsqu'ils sont découpés par 50.
+    """
+    plan = _build_full_backfill_plan()
+    result: dict[str, Any] = {
+        "ENERGIE": [],
+        "CDC": [],
+        "errors": [],
+        "summary": plan_backfill_full_period(),
+    }
+
+    for type_donnee in (TYPE_DONNEE_ENERGIE, TYPE_DONNEE_CDC):
+        prms = plan[type_donnee]["prms"]
+        windows = plan[type_donnee]["windows"]
+        batch_size = plan[type_donnee]["batch_size"]
+        batch_count = plan[type_donnee]["batch_count_per_window"]
+        for window_start, window_end in windows:
+            for batch_index, prm_chunk in enumerate(_chunk_prms(prms, batch_size), start=1):
+                try:
+                    jobs = request_publication(
+                        db,
+                        type_donnee,
+                        window_start,
+                        window_end,
+                        prm_chunk,
+                        requested_by_user_id=requested_by_user_id,
+                    )
+                    result[type_donnee].extend(j.dossier_id for j in jobs)
+                except RuntimeError as exc:
+                    db.rollback()
+                    result["errors"].append({
+                        "type_donnee": type_donnee,
+                        "date_start": window_start.isoformat(),
+                        "date_end": window_end.isoformat(),
+                        "prm_count": len(prm_chunk),
+                        "batch_index": batch_index,
+                        "batch_count": batch_count,
+                        "first_prm": prm_chunk[0] if prm_chunk else None,
+                        "last_prm": prm_chunk[-1] if prm_chunk else None,
+                        "message": str(exc)[:500],
+                    })
+
+    if not result["ENERGIE"] and not result["CDC"] and result["errors"]:
+        first = result["errors"][0]
+        raise RuntimeError(
+            "Aucun dossier ENEDIS créé pour le backfill complet. "
+            f"Premier rejet : {first['type_donnee']} {first['date_start']} - "
+            f"{first['date_end']} lot {first.get('batch_index')}/"
+            f"{first.get('batch_count')} ({first['prm_count']} PRM) : "
+            f"{first['message']}"
+        )
+
+    for type_donnee in (TYPE_DONNEE_ENERGIE, TYPE_DONNEE_CDC):
+        result["summary"][type_donnee]["created_dossier_count"] = len(result[type_donnee])
 
     return result

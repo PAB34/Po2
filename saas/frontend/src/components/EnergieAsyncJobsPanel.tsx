@@ -103,6 +103,19 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   const backfillFullMut = useMutation({
     mutationFn: () => startEnedisAsyncBackfillFull(token),
     onSuccess: (resp) => {
+      const expectedDossiers = resp.summary
+        ? Object.values(resp.summary).reduce((sum, item) => sum + (item.expected_dossier_count ?? 0), 0)
+        : 0;
+      if (resp.background) {
+        setFeedback({
+          kind: "success",
+          message: expectedDossiers
+            ? `${resp.message} (${expectedDossiers} dossiers prevus par lots de 50 PRM maximum)`
+            : resp.message,
+        });
+        qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
+        return;
+      }
       const errorSuffix = resp.errors?.length
         ? `; ${resp.errors.length} fenêtre(s)/lot(s) rejeté(s)`
         : "";
