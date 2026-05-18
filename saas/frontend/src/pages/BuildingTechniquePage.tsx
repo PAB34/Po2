@@ -24,19 +24,35 @@ const ETAT_LABELS: Record<string, string> = {
   neuf: "Neuf",
 };
 
+// Couleurs adaptatives mode clair/sombre :
+// - text en teinte 400 (suffisamment claire pour fond sombre, suffisamment foncée pour fond clair)
+// - background en rgba translucide qui s'adapte au fond du panneau
 const ETAT_COLORS: Record<string, string> = {
-  obsolete: "#dc2626",
-  degrade: "#f59e0b",
-  moyen: "#3b82f6",
-  neuf: "#22c55e",
+  obsolete: "#f87171", // red-400
+  degrade: "#fbbf24",  // amber-400
+  moyen: "#60a5fa",    // blue-400
+  neuf: "#4ade80",     // green-400
 };
 
 const ETAT_BG: Record<string, string> = {
-  obsolete: "#fef2f2",
-  degrade: "#fffbeb",
-  moyen: "#eff6ff",
-  neuf: "#f0fdf4",
+  obsolete: "rgba(220, 38, 38, 0.18)",
+  degrade: "rgba(245, 158, 11, 0.18)",
+  moyen: "rgba(59, 130, 246, 0.18)",
+  neuf: "rgba(34, 197, 94, 0.18)",
 };
+
+const ETAT_BORDER: Record<string, string> = {
+  obsolete: "rgba(220, 38, 38, 0.4)",
+  degrade: "rgba(245, 158, 11, 0.4)",
+  moyen: "rgba(59, 130, 246, 0.4)",
+  neuf: "rgba(34, 197, 94, 0.4)",
+};
+
+// Tons neutres adaptatifs pour bordures et fonds de section
+const NEUTRAL_BORDER = "rgba(148, 163, 184, 0.25)";
+const NEUTRAL_BG_LIGHT = "rgba(51, 65, 85, 0.4)";   // headers niveau 1
+const NEUTRAL_BG_DARKER = "rgba(51, 65, 85, 0.3)";  // headers niveau 2 / déjà assigné
+const SUBTLE_TEXT = "#94a3b8"; // slate-400, lisible sur clair et sombre
 
 const QUANTITE_LABELS: Record<string, string> = {
   faible: "Faible",
@@ -307,7 +323,7 @@ export function BuildingTechniquePage() {
                     <div className="resource-card-header">
                       <div>
                         <h3>{b.nom_batiment || `Bâtiment #${b.id}`}</h3>
-                        <p style={{ fontSize: "0.85rem", color: "#64748b" }}>{buildAddressLine(b)}</p>
+                        <p style={{ fontSize: "0.85rem", color: SUBTLE_TEXT }}>{buildAddressLine(b)}</p>
                       </div>
                       {counts && counts.total > 0 && (
                         <span
@@ -376,16 +392,17 @@ export function BuildingTechniquePage() {
                       <div
                         key={eq.id}
                         style={{
-                          border: "1px solid #e2e8f0",
+                          border: `1px solid ${NEUTRAL_BORDER}`,
                           borderRadius: 8,
                           padding: 12,
-                          borderLeft: `4px solid ${ETAT_COLORS[eq.etat] || "#94a3b8"}`,
+                          borderLeft: `4px solid ${ETAT_COLORS[eq.etat] || SUBTLE_TEXT}`,
+                          background: "rgba(15, 23, 42, 0.3)",
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                           <div>
                             <strong>{ref?.equipement ?? `Ref #${eq.equipment_ref_id}`}</strong>
-                            <p style={{ fontSize: "0.8rem", color: "#64748b", margin: "2px 0" }}>
+                            <p style={{ fontSize: "0.8rem", color: SUBTLE_TEXT, margin: "2px 0" }}>
                               {ref?.libelle_niveau_2} {ref?.niveau_3 ? `› ${ref.niveau_3}` : ""}
                             </p>
                           </div>
@@ -395,8 +412,9 @@ export function BuildingTechniquePage() {
                               borderRadius: 12,
                               fontSize: "0.8rem",
                               fontWeight: 600,
-                              background: ETAT_BG[eq.etat] || "#f1f5f9",
-                              color: ETAT_COLORS[eq.etat] || "#64748b",
+                              background: ETAT_BG[eq.etat] || NEUTRAL_BG_DARKER,
+                              color: ETAT_COLORS[eq.etat] || SUBTLE_TEXT,
+                              border: `1px solid ${ETAT_BORDER[eq.etat] || NEUTRAL_BORDER}`,
                             }}
                           >
                             {ETAT_LABELS[eq.etat] || eq.etat}
@@ -404,10 +422,10 @@ export function BuildingTechniquePage() {
                         </div>
 
                         {!isEditing && (
-                          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: "0.85rem", color: "#475569", flexWrap: "wrap", alignItems: "center" }}>
+                          <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: "0.85rem", color: "#cbd5e1", flexWrap: "wrap", alignItems: "center" }}>
                             <span>Quantité : <strong>{QUANTITE_LABELS[eq.quantite] || eq.quantite}</strong></span>
                             <span>Durée restante : <strong>{eq.duree_vie_restante} ans</strong></span>
-                            {ref?.sypemi_reference_annees && <span style={{ color: "#94a3b8" }}>Réf : {ref.sypemi_reference_annees} ans</span>}
+                            {ref?.sypemi_reference_annees && <span style={{ color: SUBTLE_TEXT }}>Réf : {ref.sypemi_reference_annees} ans</span>}
                             {eq.commentaire && <span style={{ fontStyle: "italic" }}>{eq.commentaire}</span>}
                             <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                               <button type="button" className="secondary-button" style={{ padding: "2px 8px", fontSize: "0.8rem" }} onClick={() => startEdit(eq)}>Modifier</button>
@@ -492,7 +510,7 @@ export function BuildingTechniquePage() {
 
               {/* Selected items summary */}
               {selection.size > 0 && (
-                <div style={{ marginBottom: 16, padding: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                <div style={{ marginBottom: 16, padding: 12, background: "rgba(34, 197, 94, 0.12)", border: "1px solid rgba(34, 197, 94, 0.4)", borderRadius: 8 }}>
                   <strong style={{ fontSize: "0.9rem" }}>{selection.size} équipement(s) sélectionné(s)</strong>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
                     {Array.from(selection.values()).map((s) => (
@@ -516,7 +534,7 @@ export function BuildingTechniquePage() {
                           onChange={(e) => updateSelectionItem(s.ref.id, "commentaire", e.target.value)}
                           style={{ flex: 1, minWidth: 120, padding: "2px 6px" }}
                         />
-                        <button type="button" style={{ padding: "2px 6px", cursor: "pointer", border: "1px solid #fca5a5", borderRadius: 4, background: "#fef2f2", color: "#dc2626", fontSize: "0.8rem" }} onClick={() => toggleRefSelection(s.ref)}>
+                        <button type="button" style={{ padding: "2px 6px", cursor: "pointer", border: "1px solid rgba(220, 38, 38, 0.4)", borderRadius: 4, background: "rgba(220, 38, 38, 0.18)", color: "#fca5a5", fontSize: "0.8rem" }} onClick={() => toggleRefSelection(s.ref)}>
                           Retirer
                         </button>
                       </div>
@@ -544,7 +562,7 @@ export function BuildingTechniquePage() {
                     <div key={g1.code_niveau_1}>
                       <div
                         onClick={() => toggleL1(g1.code_niveau_1)}
-                        style={{ cursor: "pointer", padding: "8px 12px", background: "#f8fafc", borderRadius: 6, fontWeight: 700, display: "flex", justifyContent: "space-between" }}
+                        style={{ cursor: "pointer", padding: "8px 12px", background: NEUTRAL_BG_LIGHT, border: `1px solid ${NEUTRAL_BORDER}`, borderRadius: 6, fontWeight: 700, display: "flex", justifyContent: "space-between" }}
                       >
                         <span>{g1.code_niveau_1} — {g1.libelle_niveau_1}</span>
                         <span>{isOpen1 ? "▼" : "▶"}</span>
@@ -565,10 +583,10 @@ export function BuildingTechniquePage() {
                               <div key={n2.code_niveau_2} style={{ marginTop: 4 }}>
                                 <div
                                   onClick={() => toggleL2(n2.code_niveau_2)}
-                                  style={{ cursor: "pointer", padding: "6px 10px", background: "#f1f5f9", borderRadius: 4, fontWeight: 600, fontSize: "0.9rem", display: "flex", justifyContent: "space-between" }}
+                                  style={{ cursor: "pointer", padding: "6px 10px", background: NEUTRAL_BG_DARKER, borderRadius: 4, fontWeight: 600, fontSize: "0.9rem", display: "flex", justifyContent: "space-between" }}
                                 >
                                   <span>{n2.code_niveau_2} — {n2.libelle_niveau_2}</span>
-                                  <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>{filteredItems.length} éléments {isOpen2 ? "▼" : "▶"}</span>
+                                  <span style={{ fontSize: "0.8rem", color: SUBTLE_TEXT }}>{filteredItems.length} éléments {isOpen2 ? "▼" : "▶"}</span>
                                 </div>
                                 {isOpen2 && (
                                   <div style={{ paddingLeft: 12, marginTop: 4 }}>
@@ -585,7 +603,11 @@ export function BuildingTechniquePage() {
                                             padding: "4px 8px",
                                             borderRadius: 4,
                                             cursor: alreadyAssigned ? "default" : "pointer",
-                                            background: isSelected ? "#eff6ff" : alreadyAssigned ? "#f1f5f9" : "transparent",
+                                            background: isSelected
+                                              ? "rgba(59, 130, 246, 0.18)"
+                                              : alreadyAssigned
+                                                ? NEUTRAL_BG_DARKER
+                                                : "transparent",
                                             opacity: alreadyAssigned ? 0.5 : 1,
                                             fontSize: "0.88rem",
                                           }}
@@ -598,12 +620,12 @@ export function BuildingTechniquePage() {
                                           />
                                           <span style={{ flex: 1 }}>
                                             {r.equipement}
-                                            {r.niveau_3 && <span style={{ color: "#94a3b8", fontSize: "0.8rem" }}> ({r.niveau_3})</span>}
+                                            {r.niveau_3 && <span style={{ color: SUBTLE_TEXT, fontSize: "0.8rem" }}> ({r.niveau_3})</span>}
                                           </span>
-                                          <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                          <span style={{ fontSize: "0.75rem", color: SUBTLE_TEXT }}>
                                             {r.sypemi_reference_annees ? `${r.sypemi_reference_annees} ans` : "—"}
                                           </span>
-                                          {alreadyAssigned && <span style={{ fontSize: "0.7rem", color: "#94a3b8" }}>déjà assigné</span>}
+                                          {alreadyAssigned && <span style={{ fontSize: "0.7rem", color: SUBTLE_TEXT }}>déjà assigné</span>}
                                         </label>
                                       );
                                     })}
