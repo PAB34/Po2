@@ -133,15 +133,22 @@ def _build_full_backfill_plan(today: date | None = None) -> dict[str, dict[str, 
             getattr(settings, f"enedis_async_{type_donnee.lower()}_max_days"),
             _MAX_HISTORY_DAYS_BY_TYPE[type_donnee],
         )
-        date_start = max(
-            pivot - timedelta(days=history_days),
-            date.today() - timedelta(days=history_days),
-        )
+        date_start = pivot - timedelta(days=history_days)
         window_days = min(
             _BACKFILL_WINDOW_DAYS_BY_TYPE[type_donnee],
             _MAX_QUERY_WINDOW_DAYS_BY_TYPE[type_donnee],
         )
         windows = list(_iter_date_windows(date_start, pivot, window_days))
+        if type_donnee == TYPE_DONNEE_CDC and windows:
+            history_floor = date.today() - timedelta(days=history_days)
+            first_start, first_end = windows[0]
+            if first_start < history_floor:
+                if history_floor < first_end:
+                    windows[0] = (history_floor, first_end)
+                    date_start = history_floor
+                else:
+                    windows = windows[1:]
+                    date_start = windows[0][0] if windows else pivot
         batch_size = _backfill_batch_size()
         batch_count = (len(prms) + batch_size - 1) // batch_size if prms else 0
         plan[type_donnee] = {
