@@ -373,11 +373,7 @@ def _check_bpu(
             issue(
                 "error",
                 "BPU_TARIFF_POSTE_INCONSISTENCY",
-                (
-                    f"Tarif facture {group['expected']} incoherent sur {scope}: "
-                    f"la facture contient des postes {invoice_postes} dont les prix correspondent "
-                    f"au BPU {matching_bpu_lines}. Verifier l'option tarifaire facturee ou les prix appliques."
-                ),
+                _bpu_tariff_poste_inconsistency_message(scope, group["expected"], invoice_postes, matching_bpu_lines),
                 scope,
             )
 
@@ -825,6 +821,8 @@ def _is_bpu_tariff_poste_inconsistency(
         return False
     if not matched_by_alias and poste == bpu_line.poste:
         return False
+    if matched_by_alias and poste != bpu_line.poste:
+        return True
     return bool(
         _matching_bpu_price_lines(
             bpu_index,
@@ -865,6 +863,24 @@ def _format_bpu_group_values(values: set[str]) -> str:
     if len(sorted_values) <= 6:
         return ", ".join(sorted_values)
     return ", ".join(sorted_values[:6]) + f", +{len(sorted_values) - 6}"
+
+
+def _bpu_tariff_poste_inconsistency_message(
+    scope: str,
+    expected: str,
+    invoice_postes: str,
+    matching_bpu_lines: str,
+) -> str:
+    base = (
+        f"Tarif facture {expected} incoherent sur {scope}: "
+        f"la facture contient des postes {invoice_postes} alors que le BPU attendu est {expected}."
+    )
+    if matching_bpu_lines == "non identifie":
+        return f"{base} Verifier l'option tarifaire facturee ou les prix appliques."
+    return (
+        f"{base} Les prix facture semblent correspondre au BPU {matching_bpu_lines}. "
+        "Verifier l'option tarifaire facturee ou les prix appliques."
+    )
 
 
 def _iter_import_sites(invoice_import: EnergyInvoiceImport) -> list[dict[str, Any]]:

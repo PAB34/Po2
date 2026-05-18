@@ -32,6 +32,47 @@ const ISSUE_SEVERITY_LABEL: Record<string, string> = {
   warning: "Alerte",
 };
 
+type ControlIssue = EnergyInvoiceImport["control_issues"][number];
+type SummaryTone = "ok" | "warning" | "error";
+type IssueFamily = "bpu" | "turpe" | "taxes" | "periods" | "consumption" | "power" | "document" | "other";
+
+type HumanSummaryIssueDetail = {
+  severity: string;
+  message: string;
+  scope: string | null;
+  count: number;
+};
+
+type HumanSummaryItem = {
+  title: string;
+  detail: string;
+  tone: SummaryTone;
+  issueDetails?: HumanSummaryIssueDetail[];
+  hiddenIssueCount?: number;
+};
+
+const FAMILY_LABEL: Record<IssueFamily, string> = {
+  bpu: "Prix contractuels",
+  turpe: "Acheminement TURPE",
+  taxes: "Taxes et TVA",
+  periods: "Periodes",
+  consumption: "Consommation",
+  power: "Puissance",
+  document: "Identite facture",
+  other: "Autres controles",
+};
+
+const FAMILY_DETAIL: Record<IssueFamily, string> = {
+  bpu: "Prix, poste ou option tarifaire incoherent avec le BPU.",
+  turpe: "Calcul TURPE incomplet ou non verifiable pour certaines lignes.",
+  taxes: "Total HT, TVA ou TTC a rapprocher avec les lignes facturees.",
+  periods: "Periode absente, trou ou chevauchement potentiel.",
+  consumption: "Ecart ou manque de donnees ENEDIS sur la periode facturee.",
+  power: "Puissance a verifier : depassement, ecart ou donnee manquante.",
+  document: "Reference, perimetre ou donnees d'identification a verifier.",
+  other: "Point technique a examiner dans le detail des controles.",
+};
+
 function formatShortDate(value: string | null | undefined) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(value));
@@ -96,6 +137,236 @@ function recordNumber(record: Record<string, unknown> | undefined, key: string) 
   return typeof value === "number" ? value : null;
 }
 
+function issueFamily(issue: ControlIssue): IssueFamily {
+  const code = issue.code ?? "";
+  if (code.startsWith("BPU_")) return "bpu";
+  if (code.startsWith("TURPE_")) return "turpe";
+  if (code.includes("CONSUMPTION") || code.startsWith("ENEDIS_CONSUMPTION") || code.startsWith("LOAD_CURVE_CONSUMPTION")) {
+    return "consumption";
+  }
+  if (code.includes("POWER") || code.startsWith("SUBSCRIBED_POWER")) return "power";
+  if (code.includes("VAT") || code.includes("TAX") || code === "HT_TOTAL_MISMATCH" || code === "INVOICE_VAT_TOTAL_MISMATCH") {
+    return "taxes";
+  }
+  if (code.includes("PERIOD")) return "periods";
+  if (
+    code.includes("PRM") ||
+    code.includes("SUPPLIER") ||
+    code.includes("MARKET") ||
+    code.includes("REGROUPEMENT") ||
+    code.includes("INVOICE") ||
+    code.includes("CHORUS") ||
+    code.includes("DOCUMENT")
+  ) {
+    return "document";
+  }
+  return "other";
+}
+
+function hasFamilyIssue(issues: ControlIssue[], family: IssueFamily) {
+  return issues.some((issue) => issueFamily(issue) === family);
+}
+
+function issueCountLabel(count: number, label: string) {
+  return `${count} ${label}${count !== 1 ? "s" : ""}`;
+}
+
+function severityRank(severity: string) {
+  return severity === "error" ? 0 : 1;
+}
+
+function buildIssueDetails(issues: ControlIssue[], maxDetails = 6) {
+  const grouped = new Map<string, HumanSummaryIssueDetail>();
+
+  for (const issue of issues) {
+    const key = `${issue.severity}|${issue.message}|${issue.scope ?? ""}`;
+    const current =
+      grouped.get(key) ??
+      {
+        severity: issue.severity,
+        message: issue.message,
+        scope: issue.scope,
+        count: 0,
+      };
+    current.count += 1;
+    grouped.set(key, current);
+  }
+
+  const details = Array.from(grouped.values()).sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity) || b.count - a.count || a.message.localeCompare(b.message, "fr"),
+  );
+  const visibleDetails = details.slice(0, maxDetails);
+  const hiddenIssueCount = details.slice(maxDetails).reduce((total, detail) => total + detail.count, 0);
+
+  return { visibleDetails, hiddenIssueCount };
+}
+
+function buildAttentionItems(issues: ControlIssue[]): HumanSummaryItem[] {
+  const counts = new Map<IssueFamily, { errors: number; warnings: number }>();
+  const groupedIssues = new Map<IssueFamily, ControlIssue[]>();
+  for (const issue of issues) {
+    const family = issueFamily(issue);
+    const current = counts.get(family) ?? { errors: 0, warnings: 0 };
+    if (issue.severity === "error") {
+      current.errors += 1;
+    } else {
+      current.warnings += 1;
+    }
+    counts.set(family, current);
+    const familyIssues = groupedIssues.get(family) ?? [];
+    familyIssues.push(issue);
+    groupedIssues.set(family, familyIssues);
+  }
+
+  return Array.from(counts.entries())
+    .sort(([, a], [, b]) => b.errors - a.errors || b.warnings - a.warnings)
+    .map(([family, count]) => {
+      const parts = [
+        count.errors > 0 ? issueCountLabel(count.errors, "erreur") : null,
+        count.warnings > 0 ? issueCountLabel(count.warnings, "alerte") : null,
+      ].filter(Boolean);
+      const { visibleDetails, hiddenIssueCount } = buildIssueDetails(groupedIssues.get(family) ?? []);
+      return {
+        title: FAMILY_LABEL[family],
+        detail: `${parts.join(", ")}. ${FAMILY_DETAIL[family]}`,
+        tone: count.errors > 0 ? "error" : "warning",
+        issueDetails: visibleDetails,
+        hiddenIssueCount,
+      };
+    });
+}
+
+function buildOkItems(
+  invoiceImport: EnergyInvoiceImport,
+  issues: ControlIssue[],
+  summaries: {
+    bpu?: Record<string, unknown>;
+    turpe?: Record<string, unknown>;
+    taxes?: Record<string, unknown>;
+    periods?: Record<string, unknown>;
+    consumption?: Record<string, unknown>;
+    power?: Record<string, unknown>;
+  },
+): HumanSummaryItem[] {
+  const okItems: HumanSummaryItem[] = [];
+
+  if (invoiceImport.invoice_number && invoiceImport.invoice_date && invoiceImport.total_ttc !== null && !hasFamilyIssue(issues, "document")) {
+    okItems.push({
+      title: "Facture identifiee",
+      detail: "Numero, date, fournisseur et montant global ont ete lus.",
+      tone: "ok",
+    });
+  }
+
+  const bpuLines = recordNumber(summaries.bpu, "checked_lines");
+  if (bpuLines && bpuLines > 0 && !hasFamilyIssue(issues, "bpu")) {
+    okItems.push({
+      title: "Prix BPU controles",
+      detail: `${formatNumber(bpuLines)} ligne(s) rapprochee(s) sans ecart bloquant.`,
+      tone: "ok",
+    });
+  }
+
+  const turpeLines = recordNumber(summaries.turpe, "checked_lines");
+  if (turpeLines && turpeLines > 0 && !hasFamilyIssue(issues, "turpe")) {
+    okItems.push({
+      title: "TURPE controle",
+      detail: `${formatNumber(turpeLines)} composante(s) verifiee(s).`,
+      tone: "ok",
+    });
+  }
+
+  const taxSites = recordNumber(summaries.taxes, "checked_sites");
+  if (taxSites && taxSites > 0 && !hasFamilyIssue(issues, "taxes")) {
+    okItems.push({
+      title: "Taxes coherentes",
+      detail: `${formatNumber(taxSites)} FIC avec totaux HT, TVA et TTC coherents.`,
+      tone: "ok",
+    });
+  }
+
+  const periodSites = recordNumber(summaries.periods, "checked_sites");
+  if (periodSites && periodSites > 0 && !hasFamilyIssue(issues, "periods")) {
+    okItems.push({
+      title: "Periodes coherentes",
+      detail: `${formatNumber(periodSites)} FIC controlees sans trou ni chevauchement detecte.`,
+      tone: "ok",
+    });
+  }
+
+  const consumptionSites = recordNumber(summaries.consumption, "checked_sites");
+  if (consumptionSites && consumptionSites > 0 && !hasFamilyIssue(issues, "consumption")) {
+    okItems.push({
+      title: "Consommation rapprochee",
+      detail: `${formatNumber(consumptionSites)} PRM rapproches avec les donnees ENEDIS disponibles.`,
+      tone: "ok",
+    });
+  }
+
+  const powerSites = recordNumber(summaries.power, "checked_sites");
+  if (powerSites && powerSites > 0 && !hasFamilyIssue(issues, "power")) {
+    okItems.push({
+      title: "Puissance rapprochee",
+      detail: `${formatNumber(powerSites)} PRM controles sur puissance facturee, contrat ou donnees ENEDIS.`,
+      tone: "ok",
+    });
+  }
+
+  if (okItems.length === 0) {
+    okItems.push({
+      title: "Extraction disponible",
+      detail: "Les donnees principales sont visibles dans les tableaux de detail.",
+      tone: "ok",
+    });
+  }
+
+  return okItems.slice(0, 6);
+}
+
+function buildHumanSummary(
+  invoiceImport: EnergyInvoiceImport,
+  issues: ControlIssue[],
+  summaries: {
+    bpu?: Record<string, unknown>;
+    turpe?: Record<string, unknown>;
+    taxes?: Record<string, unknown>;
+    periods?: Record<string, unknown>;
+    consumption?: Record<string, unknown>;
+    power?: Record<string, unknown>;
+  },
+) {
+  const errorCount = issues.filter((issue) => issue.severity === "error").length;
+  const warningCount = issues.filter((issue) => issue.severity === "warning").length;
+  const tone: SummaryTone = errorCount > 0 ? "error" : warningCount > 0 ? "warning" : "ok";
+  const title =
+    tone === "error"
+      ? "Facture a corriger avant validation"
+      : tone === "warning"
+        ? "Facture lisible, mais a verifier"
+        : "Facture prete a validation";
+  const description =
+    tone === "error"
+      ? `${issueCountLabel(errorCount, "erreur bloquante")} et ${issueCountLabel(warningCount, "alerte")} detectees.`
+      : tone === "warning"
+        ? `Aucune erreur bloquante, mais ${issueCountLabel(warningCount, "alerte")} a examiner.`
+        : "Aucune anomalie detectee sur les controles disponibles.";
+  const nextAction =
+    tone === "error"
+      ? "Action conseillee : ne pas valider la facture tant que les erreurs bloquantes ne sont pas arbitrees."
+      : tone === "warning"
+        ? "Action conseillee : relire les alertes, puis valider seulement si elles sont justifiees."
+        : "Action conseillee : la facture peut etre validee si le contexte metier confirme le perimetre.";
+
+  return {
+    tone,
+    title,
+    description,
+    nextAction,
+    okItems: buildOkItems(invoiceImport, issues, summaries),
+    attentionItems: buildAttentionItems(issues),
+  };
+}
+
 export function EnergieInvoiceDetailPage() {
   const { token } = useAuth();
   const params = useParams();
@@ -120,6 +391,16 @@ export function EnergieInvoiceDetailPage() {
   const periodsSummary = invoiceImport?.control_report?.periods;
   const consumptionSummary = invoiceImport?.control_report?.consumption;
   const powerSummary = invoiceImport?.control_report?.power;
+  const humanSummary = invoiceImport
+    ? buildHumanSummary(invoiceImport, issues, {
+        bpu: bpuSummary,
+        turpe: turpeSummary,
+        taxes: taxesSummary,
+        periods: periodsSummary,
+        consumption: consumptionSummary,
+        power: powerSummary,
+      })
+    : null;
 
   const invoiceLines = useMemo(
     () =>
@@ -266,6 +547,77 @@ export function EnergieInvoiceDetailPage() {
           {decisionMut.isError && <p className="error-text">{(decisionMut.error as Error).message}</p>}
         </section>
       </div>
+
+      {humanSummary && (
+        <section className={`invoice-detail-section invoice-human-summary invoice-human-summary--${humanSummary.tone}`}>
+          <div className="invoice-human-summary-header">
+            <div>
+              <h3>Resume simple</h3>
+              <p>{humanSummary.title}</p>
+              <span>{humanSummary.description}</span>
+            </div>
+            <span
+              className={`badge ${
+                humanSummary.tone === "error" ? "badge-red" : humanSummary.tone === "warning" ? "badge-orange" : "badge-green"
+              }`}
+            >
+              {humanSummary.tone === "error" ? "A corriger" : humanSummary.tone === "warning" ? "A verifier" : "OK"}
+            </span>
+          </div>
+          <div className="invoice-human-summary-grid">
+            <div className="invoice-human-summary-block">
+              <h4>Ce qui va</h4>
+              <ul className="invoice-human-summary-list invoice-human-summary-list--ok">
+                {humanSummary.okItems.map((item) => (
+                  <li key={`${item.title}-${item.detail}`}>
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="invoice-human-summary-block">
+              <h4>Ce qui ne va pas ou reste a verifier</h4>
+              {humanSummary.attentionItems.length > 0 ? (
+                <ul className="invoice-human-summary-list invoice-human-summary-list--attention">
+                  {humanSummary.attentionItems.map((item) => (
+                    <li key={`${item.title}-${item.detail}`} className={`invoice-human-summary-item--${item.tone}`}>
+                      <strong>{item.title}</strong>
+                      <span>{item.detail}</span>
+                      {item.issueDetails && item.issueDetails.length > 0 && (
+                        <div className="invoice-human-summary-detail-list">
+                          {item.issueDetails.map((detail, index) => (
+                            <div
+                              key={`${item.title}-${detail.message}-${detail.scope ?? "document"}-${index}`}
+                              className="invoice-human-summary-detail-row"
+                            >
+                              <b className={`invoice-human-summary-detail-severity invoice-human-summary-detail-severity--${detail.severity}`}>
+                                {ISSUE_SEVERITY_LABEL[detail.severity] ?? detail.severity}
+                                {detail.count > 1 ? ` x${detail.count}` : ""}
+                              </b>
+                              <p>{detail.message}</p>
+                              {detail.scope && <small>{detail.scope}</small>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {item.hiddenIssueCount && item.hiddenIssueCount > 0 ? (
+                        <p className="invoice-human-summary-more">
+                          {item.hiddenIssueCount} autre{item.hiddenIssueCount !== 1 ? "s" : ""} point
+                          {item.hiddenIssueCount !== 1 ? "s" : ""} dans le detail des controles.
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="cell-empty">Aucun point a traiter dans les controles disponibles.</p>
+              )}
+            </div>
+          </div>
+          <p className="invoice-human-summary-next">{humanSummary.nextAction}</p>
+        </section>
+      )}
 
       <section className="invoice-detail-section">
         <div className="section-title-row">

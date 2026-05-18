@@ -46,6 +46,23 @@ const SORT_LABELS: Record<string, string> = {
   annual_asc: "Conso annuelle croissante",
 };
 
+type ImpactSummary = {
+  pricedCount: number;
+  unavailableCount: number;
+  annualNetImpact: number;
+  annualSavings: number;
+  annualExtraCost: number;
+  increaseKva: number;
+  decreaseKva: number;
+  increaseCount: number;
+  decreaseCount: number;
+};
+
+type SupplierImpactSummary = ImpactSummary & {
+  supplier: string;
+  totalCount: number;
+};
+
 function formatKva(value: number | null | undefined) {
   if (value === null || value === undefined) return "-";
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} kVA`;
@@ -67,6 +84,91 @@ function formatPercent(value: number | null | undefined) {
 function formatCurrency(value: number | null | undefined) {
   if (value === null || value === undefined) return "-";
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+}
+
+function netImpactBadgeClass(value: number) {
+  return value <= 0 ? "badge-green" : "badge-orange";
+}
+
+function netImpactLabel(value: number) {
+  if (value < 0) return `Gain net ${formatCurrency(Math.abs(value))} / an`;
+  if (value > 0) return `Cout net ${formatCurrency(value)} / an`;
+  return `Impact neutre ${formatCurrency(0)} / an`;
+}
+
+function netImpactCardTitle(value: number) {
+  if (value < 0) return "Gain net estime";
+  if (value > 0) return "Cout net estime";
+  return "Impact net estime";
+}
+
+function netImpactCardAmount(value: number) {
+  return formatCurrency(Math.abs(value));
+}
+
+function buildImpactSummary(recommendations: PrmPowerRecommendation[]): ImpactSummary {
+  return recommendations.reduce<ImpactSummary>((summary, item) => {
+    applyRecommendationToImpact(summary, item);
+    return summary;
+  }, emptyImpactSummary());
+}
+
+function applyRecommendationToImpact(summary: ImpactSummary, item: PrmPowerRecommendation) {
+  const estimate = item.economic_estimate;
+  if (estimate.available && estimate.annual_amount_eur !== null) {
+    summary.pricedCount += 1;
+    summary.annualNetImpact += estimate.annual_amount_eur;
+    if (estimate.annual_amount_eur < 0) {
+      summary.annualSavings += Math.abs(estimate.annual_amount_eur);
+    } else if (estimate.annual_amount_eur > 0) {
+      summary.annualExtraCost += estimate.annual_amount_eur;
+    }
+  } else {
+    summary.unavailableCount += 1;
+  }
+
+  if (item.subscribed_power_kva !== null && item.recommended_power_kva !== null) {
+    const delta = item.recommended_power_kva - item.subscribed_power_kva;
+    if (delta > 0) {
+      summary.increaseKva += delta;
+      summary.increaseCount += 1;
+    } else if (delta < 0) {
+      summary.decreaseKva += Math.abs(delta);
+      summary.decreaseCount += 1;
+    }
+  }
+}
+
+function emptyImpactSummary(): ImpactSummary {
+  return {
+    pricedCount: 0,
+    unavailableCount: 0,
+    annualNetImpact: 0,
+    annualSavings: 0,
+    annualExtraCost: 0,
+    increaseKva: 0,
+    decreaseKva: 0,
+    increaseCount: 0,
+    decreaseCount: 0,
+  };
+}
+
+function buildSupplierImpactSummaries(recommendations: PrmPowerRecommendation[]): SupplierImpactSummary[] {
+  const bySupplier = new Map<string, SupplierImpactSummary>();
+  for (const item of recommendations) {
+    const supplier = item.contractor || "Fournisseur inconnu";
+    const summary = bySupplier.get(supplier) ?? {
+      ...emptyImpactSummary(),
+      supplier,
+      totalCount: 0,
+    };
+    summary.totalCount += 1;
+    applyRecommendationToImpact(summary, item);
+    bySupplier.set(supplier, summary);
+  }
+  return Array.from(bySupplier.values()).sort(
+    (a, b) => Math.abs(b.annualNetImpact) - Math.abs(a.annualNetImpact) || b.totalCount - a.totalCount,
+  );
 }
 
 function actionBadge(item: PrmPowerRecommendation) {
@@ -116,6 +218,8 @@ export function EnergieRecommendationsPage() {
   });
 
   const recommendations = recommendationsQuery.data?.recommendations ?? [];
+  const impactSummary = useMemo(() => buildImpactSummary(recommendations), [recommendations]);
+  const supplierImpactSummaries = useMemo(() => buildSupplierImpactSummaries(recommendations), [recommendations]);
   const suppliers = useMemo(() => {
     return Array.from(new Set(recommendations.map((item) => item.contractor).filter(Boolean) as string[])).sort((a, b) =>
       a.localeCompare(b, "fr"),
@@ -163,6 +267,106 @@ export function EnergieRecommendationsPage() {
 
       {recommendationsQuery.isLoading && <p className="loading-text">Chargement des preconisations...</p>}
       {recommendationsQuery.isError && <p className="error-text">{(recommendationsQuery.error as Error).message}</p>}
+
+      {!recommendationsQuery.isLoading && recommendations.length > 0 && (
+        <section className="impact-balance-panel">
+          <div className="impact-balance-header">
+            <div>
+              <h3>Bilan des impacts</h3>
+              <p>
+                Synthese annuelle des changements de puissance proposes. Le solde correspond aux
+                surcouts moins les economies ; un gain net signifie que les economies depassent les
+                hausses.
+              </p>
+            </div>
+            <span className={`badge ${netImpactBadgeClass(impactSummary.annualNetImpact)}`}>
+              {netImpactLabel(impactSummary.annualNetImpact)}
+            </span>
+          </div>
+          <div className="impact-balance-grid">
+            <div className="impact-balance-card impact-balance-card--net">
+              <span>{netImpactCardTitle(impactSummary.annualNetImpact)}</span>
+              <strong>{netImpactCardAmount(impactSummary.annualNetImpact)}</strong>
+              <small>
+                Surcouts - economies | {impactSummary.pricedCount} PRM chiffre
+                {impactSummary.pricedCount !== 1 ? "s" : ""}
+              </small>
+            </div>
+            <div className="impact-balance-card impact-balance-card--saving">
+              <span>Economies potentielles</span>
+              <strong>{formatCurrency(impactSummary.annualSavings)}</strong>
+              <small>
+                {impactSummary.decreaseCount} baisse{impactSummary.decreaseCount !== 1 ? "s" : ""} | -
+                {formatKva(impactSummary.decreaseKva)}
+              </small>
+            </div>
+            <div className="impact-balance-card impact-balance-card--cost">
+              <span>Surcouts a prevoir</span>
+              <strong>{formatCurrency(impactSummary.annualExtraCost)}</strong>
+              <small>
+                {impactSummary.increaseCount} hausse{impactSummary.increaseCount !== 1 ? "s" : ""} | +
+                {formatKva(impactSummary.increaseKva)}
+              </small>
+            </div>
+            <div className="impact-balance-card">
+              <span>Non chiffres</span>
+              <strong>{impactSummary.unavailableCount}</strong>
+              <small>Tarif, donnees ou formule non exploitables pour l'estimation.</small>
+            </div>
+          </div>
+          {supplierImpactSummaries.length > 0 && (
+            <div className="impact-supplier-table-wrapper">
+              <div className="impact-supplier-heading">
+                <strong>Analyse par fournisseur</strong>
+                <span>
+                  Classement par solde annuel absolu. Gain net = economies superieures aux surcouts.
+                </span>
+              </div>
+              <table className="data-table impact-supplier-table">
+                <thead>
+                  <tr>
+                    <th>Fournisseur</th>
+                    <th>PRM</th>
+                    <th>Solde annuel</th>
+                    <th>Economies</th>
+                    <th>Surcouts</th>
+                    <th>Variation kVA</th>
+                    <th>Non chiffres</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplierImpactSummaries.map((supplier) => (
+                    <tr key={supplier.supplier}>
+                      <td>
+                        <strong>{supplier.supplier}</strong>
+                      </td>
+                      <td>{supplier.totalCount}</td>
+                      <td>
+                        <span className={`badge ${netImpactBadgeClass(supplier.annualNetImpact)}`}>
+                          {netImpactLabel(supplier.annualNetImpact)}
+                        </span>
+                      </td>
+                      <td>{formatCurrency(supplier.annualSavings)}</td>
+                      <td>{formatCurrency(supplier.annualExtraCost)}</td>
+                      <td>
+                        <div className="recommendation-power-cell">
+                          <span>+{formatKva(supplier.increaseKva)} / -{formatKva(supplier.decreaseKva)}</span>
+                          <small>
+                            {supplier.increaseCount} hausse{supplier.increaseCount !== 1 ? "s" : ""},{" "}
+                            {supplier.decreaseCount} baisse
+                            {supplier.decreaseCount !== 1 ? "s" : ""}
+                          </small>
+                        </div>
+                      </td>
+                      <td>{supplier.unavailableCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       {kpis && (
         <div className="kpi-row">

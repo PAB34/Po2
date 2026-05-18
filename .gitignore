@@ -1,0 +1,18 @@
+.claude/
+.vscode/
+.DS_Store
+
+# Local environment files must stay out of Git.
+.env
+.env*
+.env.*
+*.local
+*.local.*
+!*.env.example
+
+# Business documents and local analysis files stay outside the app repository.
+*.xlsx
+*.xlsm
+*.pdf
+*.docx
+define_name.py
