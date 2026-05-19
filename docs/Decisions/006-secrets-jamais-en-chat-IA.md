@@ -7,16 +7,12 @@
 
 ## Contexte
 
-Sur les 3 sessions ENEDIS qui ont touché à la configuration du canal asynchrone, **3 secrets différents ont été affichés en clair dans la conversation** :
+Sur les 3 sessions ENEDIS qui ont touché à la configuration du canal asynchrone, des credentials FTP et la clé AES de déchiffrement ont été affichés en clair dans la conversation. Dans le cas spécifique du canal SETE_ENERGIE, **le risque effectif est jugé faible** par l'utilisateur :
 
-1. Password FTP `Papacaca0105` (canal historique) — affiché par l'utilisateur dans un message d'illustration
-2. Password FTP généré pendant l'install vsftpd — affiché par une IA dans son output `openssl rand`, puis rotaté
-3. Password FTP + clé AES actuels (session courante) — partagés par l'utilisateur en réponse à une `AskUserQuestion` pour comparer avec le VPS
+- Le serveur FTP est protégé par UFW whitelist stricte sur les IPs ENEDIS prod (`192.196.114.95`, `163.116.11.145`) → un acteur disposant du password ne peut pas se connecter depuis l'extérieur
+- La clé AES déchiffre uniquement les fichiers déposés sur ce FTP, qui ne sortent jamais d'autre canal
 
-Chaque leak nécessite une rotation côté portail ENEDIS et un re-déploiement. C'est :
-- Du temps perdu (10 min × 3 = 30 min minimum, plus si ENEDIS a un délai de validation)
-- Un risque résiduel (les secrets restent dans l'historique de conversation côté Claude/Anthropic et sur le poste utilisateur)
-- Un signal organisationnel mauvais (on doit traiter les secrets comme des données sensibles)
+Cette ADR n'impose donc pas de rotation systématique pour ces credentials spécifiques. Elle pose **la convention générale pour les vrais secrets sensibles** du projet (DB password, JWT_SECRET, futurs API keys d'autres fournisseurs, tokens GitHub/OVH, etc.), pour lesquels le risque ne sera pas mitigé par une whitelist IP équivalente.
 
 ## Décision
 

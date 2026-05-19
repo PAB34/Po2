@@ -95,16 +95,11 @@ L'utilisateur a partagé via `AskUserQuestion` les credentials du canal SETE_ENE
 - **Passif** : surveiller périodiquement les logs `docker logs --since 1h infra-backend-1 | grep "found files"` — si ENEDIS publie spontanément, le déchiffrement marchera désormais (clé alignée).
 - **Actif** : contacter le support ENEDIS pour qu'ils purgent les 1753 demandes "fantômes" du canal 506350699 (cf. message d'erreur HTTP 400). Sans ça, aucun nouveau backfill ne peut être lancé.
 
-### Priorité 2 — Rotation des secrets leakés (`PO2-SEC-001`)
+### Note sur les credentials du canal SETE_ENERGIE
 
-Les 2 secrets ENEDIS sont leakés dans cette conversation pour la 3e fois. Procédure de rotation, à faire dès qu'un fichier est correctement déchiffré (validation du pipeline) :
+Confirmé avec l'utilisateur : **pas de rotation nécessaire** pour le password FTP et la clé AES partagés en chat. Le FTP est protégé par UFW whitelist stricte sur les IPs ENEDIS prod (`192.196.114.95`, `163.116.11.145`), donc même un acteur disposant du password ne peut pas se connecter depuis l'extérieur. La clé AES déchiffre uniquement des fichiers qui ne sortent jamais de ce FTP. L'exposition résiduelle est jugée acceptable.
 
-1. Côté portail ENEDIS (https://mon-compte-collectivite.enedis.fr) → régénérer le password FTP **ET** la clé AES du canal SETE_ENERGIE
-2. Côté VPS : `sudo nano /root/.ftp_password_enedis` (nouveau password) + `chmod 600`
-3. Côté VPS : `sudo nano /home/ubuntu/Po2/.env` → mettre à jour `FTP_PASSWORD=` et `ENEDIS_DECRYPTION_KEY=`
-4. `docker compose ... restart backend`
-5. Vérifier `docker exec infra-backend-1 sh -c 'echo ${#FTP_PASSWORD} ${#ENEDIS_DECRYPTION_KEY}'`
-6. ⚠️ **Ne plus jamais transmettre ces secrets en chat** — utiliser un canal sécurisé (1Password Send, mail GPG, SMS, etc.)
+La convention générale [[Decisions/006-secrets-jamais-en-chat-IA]] reste pertinente pour les vrais secrets sensibles du projet (DB password, JWT, futurs API keys d'autres fournisseurs).
 
 ## 📝 Notes & décisions
 
