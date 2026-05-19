@@ -8,9 +8,9 @@
 L'IA qui ouvre une nouvelle conversation doit :
 
 1. **Lire dans cet ordre** :
-   - [[00 Index]]
-   - [[04 État actuel du dev]] (snapshot du présent)
-   - [[03 Roadmap fonctionnalités]] (ce qui reste à faire)
+   - [[00-Index]]
+   - [[04-Etat-actuel-du-dev]] (snapshot du présent)
+   - [[03-Roadmap-fonctionnalites]] (ce qui reste à faire)
    - Le ou les fichiers `Modules/...md` pertinents pour la tâche
 2. **Lire la dernière note `Sessions/AAAA-MM-JJ ...md`** — c'est le passing-the-baton de l'IA précédente
 3. **Récupérer l'environnement** :
@@ -27,12 +27,12 @@ L'IA qui ouvre une nouvelle conversation doit :
 ### Règles tooling
 - **Lire avant d'écrire** : utiliser Read sur les fichiers à modifier
 - **Petits commits cohérents** : 1 commit = 1 idée (pas de mégacommit "feat: tout fait")
-- **Suivre le format** : voir [[02 Architecture]] section "Conventions de code"
+- **Suivre le format** : voir [[02-Architecture]] section "Conventions de code"
 - **Commit + push systématique** : ne jamais finir une étape sans committer/pousser
 - **PR + squash-merge** : pour les changements significatifs, créer une PR via `gh pr create`, attendre CI verte, puis `gh pr merge --squash --delete-branch`
 
 ### Règles vault
-- **Au moindre changement structurel** (nouvelle table, nouveau module, nouvelle route majeure) → mettre à jour [[03 Roadmap fonctionnalités]] et le `Modules/`. Ce n'est pas une option.
+- **Au moindre changement structurel** (nouvelle table, nouveau module, nouvelle route majeure) → mettre à jour [[03-Roadmap-fonctionnalites]] et le `Modules/`. Ce n'est pas une option.
 - **Pas de duplication** : la roadmap fait référence aux modules, les modules font référence à l'architecture. Pas de copier-coller.
 - **Liens [[]]** : utiliser les liens Obsidian, pas des chemins relatifs (Obsidian les résout)
 
@@ -40,40 +40,24 @@ L'IA qui ouvre une nouvelle conversation doit :
 
 L'IA qui finit doit **OBLIGATOIREMENT** :
 
-### A. Mettre à jour [[04 État actuel du dev]]
+### A. Mettre à jour [[04-Etat-actuel-du-dev]]
 - Cocher ce qui est fait dans la roadmap
 - Ajouter les nouveaux chantiers ouverts si pertinent
 - Mettre à jour la liste des derniers commits
 
-### B. Créer un fichier `Sessions/AAAA-MM-JJ Titre.md`
-Format obligatoire :
+### B. Créer un fichier `Sessions/AAAA-MM-JJ — Titre.md`
 
-```markdown
-# AAAA-MM-JJ — Titre court
+**Copier le template** [[Sessions/_template]] et le renommer `AAAA-MM-JJ — Titre court.md`. Le template contient les sections obligatoires : objectif, ce qui a été fait, handoff, notes & décisions, modèle de message pour la prochaine IA.
 
-> IA : [Claude Sonnet 4.5 / GPT-4o / Gemini / autre]
-> Durée approximative : Xh
+### C. Si une décision durable a été prise → créer une ADR
 
-## 🎯 Objectif de la session
-Quelle tâche de la roadmap a été prise.
+Une **décision durable** = un choix de schéma SQL, de pattern, d'outillage ou de convention qui contraindra le futur. Cf. [[Decisions/000-format-ADR]] pour la définition précise.
 
-## ✅ Ce qui a été fait
-- Commit `abc1234` : description
-- PR #N : description, mergée
-- ...
+- Copier [[Decisions/_template]] → renommer `NNN-titre-court.md` (incrémenter le numéro)
+- Remplir les 6 sections : statut, contexte, décision, conséquences, alternatives écartées, liens
+- Référencer l'ADR depuis la note de session (champ "Notes & décisions")
 
-## 🚧 Ce qui reste à faire / handoff
-- TODO précis pour l'IA suivante, avec :
-  - Fichiers à toucher
-  - Numéros de ligne si pertinent
-  - Pièges connus
-  - Commandes à lancer pour reprendre
-
-## 📝 Notes & décisions
-Toute décision d'architecture ou de produit qui mérite d'être retracée.
-```
-
-### C. Commit + push de la mise à jour du vault
+### D. Commit + push de la mise à jour du vault
 ```bash
 git add docs/
 git commit -m "docs: session AAAA-MM-JJ — résumé"

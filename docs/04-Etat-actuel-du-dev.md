@@ -81,7 +81,7 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - **Mitigation déjà en place** : `raw_text` stocké sur chaque `BpuDocument` → re-parsing sans re-OCR possible
 - **Solution proposée** : passer à `pdfplumber` qui détecte les colonnes des tableaux (à ajouter à `requirements.txt`)
 - **Localisation** : `saas/backend/app/services/bpu.py` lignes ≈ 350-500
-- **Voir** : [[Modules/Énergie - BPU]]
+- **Voir** : [[Modules/Energie-BPU]]
 
 ### 2. Module Baux locataires (1.2 de la roadmap)
 - Aucun code n'existe encore — c'est le prochain gros chantier "rapidement faisable"
@@ -95,7 +95,7 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - Une fois le canal validé : lancer backfill complet (CDC 2 ans + Conso 3 ans) via `POST /api/energie/sync/async/backfill-full`
 
 ### 4. Dette technique ENEDIS async
-Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Modules/Énergie - Consommation]]) :
+Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Modules/Energie-Consommation]]) :
 - `UNFILTERED_PRM_BATCH` (medium) — filtrer les PRM non-communicants avant publication
 - `ALL_OR_NOTHING_PUBLICATION` (medium) — découper en sous-batchs pour qu'un PRM invalide ne tue pas tout
 - `CDC_WINDOW_TOO_LARGE` — probablement traité par les fixes `d784882` + `38ab484`, à confirmer
@@ -103,7 +103,7 @@ Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Module
 ### 5. Refresh TURPE annuel
 - Prochain refresh CRE : **2026-08-01**
 - À ce moment, mettre à jour `saas/specs/07_referentiel_turpe_7.md` avec la nouvelle version + adapter les prix dans `services/turpe.py`
-- Voir [[Modules/Énergie - TURPE]]
+- Voir [[Modules/Energie-TURPE]]
 
 ### 4. Codespaces — devcontainer "à vide"
 - Le `.devcontainer/devcontainer.json` minimal a été créé uniquement pour faire passer le prebuild GitHub

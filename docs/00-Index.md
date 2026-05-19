@@ -7,28 +7,37 @@
 ## 🗺️ Navigation
 
 ### 📌 Démarrer ici (5 min de lecture)
-- [[01 Vision & Utilisateur]] — Le but, qui est l'utilisateur, le contexte métier
-- [[02 Architecture]] — Stack technique, où vit quoi, conventions de code
-- [[05 Conventions IA]] — **Comment passer la main à une autre IA** ⚠️ Lire avant toute modif
+- [[01-Vision-Utilisateur]] — Le but, qui est l'utilisateur, le contexte métier
+- [[02-Architecture]] — Stack technique, où vit quoi, conventions de code
+- [[05-Conventions-IA]] — **Comment passer la main à une autre IA** ⚠️ Lire avant toute modif
 
 ### 📊 État du produit
-- [[03 Roadmap fonctionnalités]] — Les 13 fonctionnalités cibles (issues du fichier `Fonctionnalités.xlsx`) avec statut fait/en cours/todo
-- [[04 État actuel du dev]] — Snapshot précis : ce qui tourne en prod, les dernières PRs, les chantiers ouverts
+- [[03-Roadmap-fonctionnalites]] — Les 13 fonctionnalités cibles (issues du fichier `Fonctionnalités.xlsx`) avec statut fait/en cours/todo
+- [[04-Etat-actuel-du-dev]] — Snapshot précis : ce qui tourne en prod, les dernières PRs, les chantiers ouverts
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
 - [[Modules/Patrimoine]] — Inventaire bâtiments, locaux, propriétaire / locataire
-- [[Modules/Gestion technique]] — Équipements CVC, enveloppe, occupation, température
-- [[Modules/Énergie - Consommation]] — ENEDIS (élec), GRDF (gaz), SUEZ (eau)
-- [[Modules/Énergie - Facturation]] — Vérification ENGIE, DALKIA, TOTAL, SUEZ
-- [[Modules/Énergie - BPU]] — Suivi temporel des prix unitaires d'achat
-- [[Modules/Énergie - Préconisations]] — Calibrage contrat + recommandations puissance
-- [[Modules/Énergie - TURPE]] — Référentiel TURPE 7 (CRE)
+- [[Modules/Gestion-technique]] — Équipements CVC, enveloppe, occupation, température
+- [[Modules/Energie-Consommation]] — ENEDIS (élec), GRDF (gaz), SUEZ (eau)
+- [[Modules/Energie-Facturation]] — Vérification ENGIE, DALKIA, TOTAL, SUEZ
+- [[Modules/Energie-BPU]] — Suivi temporel des prix unitaires d'achat
+- [[Modules/Energie-Preconisations]] — Calibrage contrat + recommandations puissance
+- [[Modules/Energie-TURPE]] — Référentiel TURPE 7 (CRE)
 
 ### 📚 Specs historiques
 - [[Specs]] — Catalogue des 9 specs `saas/specs/` avec verdict (à jour / partiel / archive)
 
+### 🧠 Décisions durables (ADR)
+- [[Decisions/000-format-ADR]] — Pourquoi ce format
+- [[Decisions/001-vault-obsidian-versionne-dans-git]]
+- [[Decisions/002-bpu-schema-normalise-5-tables]]
+- [[Decisions/003-enedis-async-ftp-meme-vps-que-po2]]
+- [[Decisions/004-specs-restent-dans-saas-specs]]
+- Template : [[Decisions/_template]]
+
 ### 📅 Journal des sessions
 - [[Sessions/]] — Un fichier par session de travail IA. Le plus récent en haut.
+- Template : [[Sessions/_template]]
 
 ## 🔁 Workflow IA-à-IA — version courte
 
@@ -40,7 +49,7 @@
 5. Si limite de tokens approche : "Handoff suivant" = TODO précis pour l'IA suivante avec contextes
 ```
 
-Détail complet : [[05 Conventions IA]].
+Détail complet : [[05-Conventions-IA]].
 
 ## 🔗 Liens externes utiles
 - Repo GitHub : https://github.com/PAB34/Po2

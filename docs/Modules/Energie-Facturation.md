@@ -17,10 +17,10 @@
 
 Hérault Énergies est la **centrale d'achat groupé** d'électricité pour les collectivités de l'Hérault. Le CCTP impose des règles que le moteur de facturation **DOIT** respecter :
 
-- **Lots 1-6** : segmentation par tension et profil d'usage (cf. [[Modules/Énergie - BPU]])
+- **Lots 1-6** : segmentation par tension et profil d'usage (cf. [[Modules/Energie-BPU]])
 - **Optimisation puissance** : pas de **0,1 kVA** pour EP (Éclairage Public), pas de **1 kVA** pour les autres tarifs
-- **Refacturation acheminement à l'euro** (sauf C1) : le fournisseur EDF/ENGIE refacture **strictement** ce qu'a coûté l'acheminement, sans marge → c'est pour ça que le contrôle TURPE est si important ([[Modules/Énergie - TURPE]])
-- **Chiffrage annuel obligatoire** : toute préconisation de modification de puissance doit être chiffrée en € sur 12 mois ([[Modules/Énergie - Préconisations]])
+- **Refacturation acheminement à l'euro** (sauf C1) : le fournisseur EDF/ENGIE refacture **strictement** ce qu'a coûté l'acheminement, sans marge → c'est pour ça que le contrôle TURPE est si important ([[Modules/Energie-TURPE]])
+- **Chiffrage annuel obligatoire** : toute préconisation de modification de puissance doit être chiffrée en € sur 12 mois ([[Modules/Energie-Preconisations]])
 
 Cette spec est la **légitimité métier** du produit côté audit factures.
 
@@ -92,7 +92,7 @@ Croise les factures importées avec :
 ## SUEZ Eau — 🔴 Todo
 
 ### Notes
-- Probablement le même parser que pour la conso (cf. [[Énergie - Consommation]] section SUEZ)
+- Probablement le même parser que pour la conso (cf. [[Modules/Energie-Consommation]] section SUEZ)
 - Une facture eau contient consommation + tarif + total → les 3 ingrédients pour l'audit
 
 ## Workflow audit de facture (générique)
@@ -112,5 +112,5 @@ Croise les factures importées avec :
 
 ## Voir aussi
 
-- [[Énergie - BPU]] — Source des prix attendus
-- [[Énergie - Préconisations]] — Calcul prix unitaires
+- [[Modules/Energie-BPU]] — Source des prix attendus
+- [[Modules/Energie-Preconisations]] — Calcul prix unitaires

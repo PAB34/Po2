@@ -154,7 +154,7 @@ Quand un BPU est en `ocr_review`, l'utilisateur devrait pouvoir saisir manuellem
 Quand le parser fonctionnera mieux, brancher l'audit factures :
 - Pour chaque ligne de `EnergyInvoiceAnalysis`, chercher le `BpuPriceComponent` applicable
 - Calculer l'écart prix facturé vs BPU
-- Voir [[Énergie - Facturation]]
+- Voir [[Modules/Energie-Facturation]]
 
 ### D. Seed prix 2026 depuis `bpu_templates.py`
 Le fichier `services/bpu_templates.py` contient des prix 2026 saisis en dur (lot 1 et lot 2). Au lieu d'attendre que le parser sorte ces prix du PDF, on peut ingérer directement la donnée structurée. À envisager comme amorçage rapide.

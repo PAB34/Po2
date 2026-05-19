@@ -91,7 +91,7 @@ Le vault est alimenté à partir de :
 - **Problème** : 16/17 BPU en `ocr_review` (parser conservateur)
 - **Solution** : passer à `pdfplumber` pour la détection des tableaux
 - **Fichier** : `saas/backend/app/services/bpu.py`, fonction `_extract_segments` ≈ ligne 350
-- **Voir** : [[Modules/Énergie - BPU]] section "Chantiers ouverts" A.
+- **Voir** : [[Modules/Energie-BPU]] section "Chantiers ouverts" A.
 
 ### Priorité 2 — Module Baux locataires (roadmap 1.2)
 - **Pas de code existant**
@@ -99,7 +99,7 @@ Le vault est alimenté à partir de :
 - À démarrer après validation utilisateur sur le schéma (Option A: étendre `Local` vs Option B: table `Lease` dédiée)
 
 ### Priorité 3 — Connecteur GRDF (roadmap 3.2)
-- **Voir** : [[Modules/Énergie - Consommation]] section "GRDF — Todo"
+- **Voir** : [[Modules/Energie-Consommation]] section "GRDF — Todo"
 - Réutiliser massivement `services/enedis_common.py`
 
 ### Côté utilisateur — Pending validations externes

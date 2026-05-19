@@ -38,12 +38,12 @@ Pour chaque code tarif × poste, le référentiel TURPE 7 fournit le prix unitai
 
 ## Garde-fous appliqués
 
-- **Tolérance** : ± 0,05 EUR/MWh sur la composante variable, ± 0,05 EUR sur les forfaits (cohérent avec [[Modules/Énergie - Facturation]])
+- **Tolérance** : ± 0,05 EUR/MWh sur la composante variable, ± 0,05 EUR sur les forfaits (cohérent avec [[Modules/Energie-Facturation]])
 - **Version inconnue** : si la période facturée ne couvre pas une version TURPE référencée → flag `TURPE_VERSION_MISSING` → décision `review`
 - **Préconisation prudente** : la projection annuelle d'une économie/surcoût utilise les coefficients fixes TURPE (pas les prix BPU variables) pour éviter de sur-promettre
 
 ## Liens
 
-- Cadre Hérault Énergies (refacturation acheminement à l'euro hors C1) : [[Modules/Énergie - Facturation]]
-- Préconisations puissance (marges 20/12/5 %) : [[Modules/Énergie - Préconisations]]
+- Cadre Hérault Énergies (refacturation acheminement à l'euro hors C1) : [[Modules/Energie-Facturation]]
+- Préconisations puissance (marges 20/12/5 %) : [[Modules/Energie-Preconisations]]
 - Spec source : `saas/specs/07_referentiel_turpe_7.md`

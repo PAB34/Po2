@@ -17,27 +17,27 @@ Verdict produit par fichier (cf. [[Specs]] pour le catalogue complet) :
 |---|---|
 | 01 fonctionnalités v0.2 | 🟡 Partiel — workflow consolidation DGFiP intégré à [[Modules/Patrimoine]] |
 | 02 architecture v0.1 | 📦 Obsolète — déplacée dans `saas/specs/_archives/` |
-| 03 plan facturation | 🟡 Partiel — cadre Hérault Énergies intégré à [[Modules/Énergie - Facturation]] |
+| 03 plan facturation | 🟡 Partiel — cadre Hérault Énergies intégré à [[Modules/Energie-Facturation]] |
 | 04 mapping ENGIE | ✅ Canonique — référencée |
 | 05 matrice contrôles | ✅ Canonique — référencée |
-| 06 préconisations V1 | ✅ Canonique — marges 20/12/5 % intégrées à [[Modules/Énergie - Préconisations]] |
-| 07a plan exécution | 🟡 Partiel — phases ouvertes versées dans [[03 Roadmap fonctionnalités]] |
-| 07b TURPE 7 | ✅ Canonique — nouveau module [[Modules/Énergie - TURPE]] créé |
-| 08 kit ENEDIS async | ✅ Canonique — gaps techniques intégrés à [[Modules/Énergie - Consommation]] |
+| 06 préconisations V1 | ✅ Canonique — marges 20/12/5 % intégrées à [[Modules/Energie-Preconisations]] |
+| 07a plan exécution | 🟡 Partiel — phases ouvertes versées dans [[03-Roadmap-fonctionnalites]] |
+| 07b TURPE 7 | ✅ Canonique — nouveau module [[Modules/Energie-TURPE]] créé |
+| 08 kit ENEDIS async | ✅ Canonique — gaps techniques intégrés à [[Modules/Energie-Consommation]] |
 
 ### 2. Nouveaux fichiers Obsidian
 - [[Specs]] — catalogue complet avec verdicts et pépites
-- [[Modules/Énergie - TURPE]] — nouveau module dédié au référentiel TURPE 7
+- [[Modules/Energie-TURPE]] — nouveau module dédié au référentiel TURPE 7
 
 ### 3. Modules enrichis (sections ajoutées)
 - [[Modules/Patrimoine]] → "Workflow de consolidation DGFiP → bâtiment métier"
-- [[Modules/Énergie - Facturation]] → "Cadre contractuel Hérault Énergies" + "Documents de référence" (liens vers specs 04 et 05)
-- [[Modules/Énergie - Préconisations]] → "Seuils V1 (canoniques)" avec table marges 20/12/5 %
-- [[Modules/Énergie - Consommation]] → "Dette technique ENEDIS Async" avec table gaps + limites plateforme
+- [[Modules/Energie-Facturation]] → "Cadre contractuel Hérault Énergies" + "Documents de référence" (liens vers specs 04 et 05)
+- [[Modules/Energie-Preconisations]] → "Seuils V1 (canoniques)" avec table marges 20/12/5 %
+- [[Modules/Energie-Consommation]] → "Dette technique ENEDIS Async" avec table gaps + limites plateforme
 
 ### 4. Mise à jour des fichiers racine
-- [[00 Index]] → ajout liens vers [[Modules/Énergie - TURPE]] et [[Specs]]
-- [[04 État actuel du dev]] → section "Specs historiques" + 2 chantiers ouverts (dette ENEDIS async + refresh TURPE 2026-08-01)
+- [[00-Index]] → ajout liens vers [[Modules/Energie-TURPE]] et [[Specs]]
+- [[04-Etat-actuel-du-dev]] → section "Specs historiques" + 2 chantiers ouverts (dette ENEDIS async + refresh TURPE 2026-08-01)
 
 ### 5. Archivage
 - `saas/specs/02_architecture_technique.md` → `saas/specs/_archives/02_architecture_technique_v01_obsolete.md` via `git mv`
@@ -55,7 +55,7 @@ Donc le pattern est : **les modules Obsidian référencent les specs** (lien `sa
 
 Rien de bloquant — toute la session est dans le commit + push.
 
-Les chantiers prioritaires restent les mêmes (cf. [[04 État actuel du dev]] section "Chantiers ouverts") :
+Les chantiers prioritaires restent les mêmes (cf. [[04-Etat-actuel-du-dev]] section "Chantiers ouverts") :
 1. Parser BPU (passer à pdfplumber)
 2. Module Baux locataires
 3. Connecteur GRDF

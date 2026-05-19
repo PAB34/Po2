@@ -37,7 +37,7 @@ Pour chaque PRM :
 - ≥ **10 mois** de données P max consécutifs disponibles
 - ≥ **240 jours** réellement utilisés dans le calcul (filtre des trous et jours non-significatifs)
 
-**Garde-fou TURPE** : la projection annuelle utilise les coefficients fixes du référentiel ([[Modules/Énergie - TURPE]]) pour éviter de sur-promettre une économie.
+**Garde-fou TURPE** : la projection annuelle utilise les coefficients fixes du référentiel ([[Modules/Energie-TURPE]]) pour éviter de sur-promettre une économie.
 
 ### Sortie
 `get_power_recommendations()` retourne :
@@ -76,7 +76,7 @@ L'UI `/energie/facturation` permet :
 - Affichage tableau + filtres par action / par confiance
 - Drill-down sur un PRM → `EnergieDetailPage` avec graphiques P max × période contractuelle
 
-## Couplage avec [[Énergie - BPU]]
+## Couplage avec [[Modules/Energie-BPU]]
 
 Les prix unitaires utilisés pour estimer le coût d'une modification de contrat viennent de `BillingBpuLine` (saisis via `/energie/facturation`).
 
@@ -85,7 +85,7 @@ Les prix unitaires utilisés pour estimer le coût d'une modification de contrat
 - `BillingConfig.tariff_code` → résolution `BpuSegment`
 - Pour chaque poste → moyenne pondérée des composantes
 
-Voir [[Énergie - BPU]] section "Croisement avec factures" pour le pattern.
+Voir [[Modules/Energie-BPU]] section "Croisement avec factures" pour le pattern.
 
 ## Fichiers clés
 

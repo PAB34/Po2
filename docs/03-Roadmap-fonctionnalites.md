@@ -49,7 +49,7 @@
 - **Notes pour l'IA suivante** :
   - Le CSV référence comporte les niveaux 1 à 5 (hiérarchie SYPEMI) — `code_niveau_1` permet de filtrer "CVC" vs "Enveloppe"
   - Couplages avec PPT à imaginer (probablement séparer en 2 vues : équipements CVC, matériaux enveloppe)
-- **Voir aussi** : [[Modules/Gestion technique]]
+- **Voir aussi** : [[Modules/Gestion-technique]]
 
 ### 2.2 Enveloppe / inventaire technicien
 - **Source** : Excel (même référentiel SYPEMI)
@@ -88,7 +88,7 @@
   - **Models** : `EnedisAsyncJob`
   - **Routes** : `/api/energie/sync/*` et `/api/energie/sync/async/*`
   - **Frontend** : `EnergiePage`, `EnergieDetailPage`, `EnergieAsyncJobsPanel`
-- **Voir aussi** : [[Modules/Énergie - Consommation]]
+- **Voir aussi** : [[Modules/Energie-Consommation]]
 
 ### 3.2 Gaz / GRDF (API)
 - **Source** : GRDF API
@@ -146,13 +146,13 @@
 - **Pipeline** : pdftotext + OCR tesseract pour 17 PDFs, parser regex tolérant
 - **UI** : page `/energie/bpu` avec graphique Recharts par composante (Fourniture / Capacité / CEE / GO)
 - **Limite actuelle** : 15 BPU stockés, 16 en `ocr_review` (parser trop conservateur sur les tableaux complexes)
-- **Voir** : [[Modules/Énergie - BPU]]
+- **Voir** : [[Modules/Energie-BPU]]
 
 ### B.2 Préconisations puissance
 - **Statut** : ✅ **Fait** (page `/energie/preconisations`)
 - **Quoi** : Recommandations augmenter/baisser/maintenir la puissance souscrite par PRM
 - **Implémentation** : `services/power_recommendations.py`, page `EnergieRecommendationsPage`
-- **Voir** : [[Modules/Énergie - Préconisations]]
+- **Voir** : [[Modules/Energie-Preconisations]]
 
 ### B.3 Facturation TURPE
 - **Statut** : ✅ **Fait** (page `/energie/facturation`)
@@ -176,4 +176,4 @@
 2. **Module Baux locataires** (1.2) → grosse valeur métier, faisable rapide avec le pattern d'upload PDF existant
 3. **Connecteur GRDF** (3.2) → réutilise massivement l'architecture ENEDIS
 
-Voir aussi : [[04 État actuel du dev]] pour le détail des derniers commits / PRs.
+Voir aussi : [[04-Etat-actuel-du-dev]] pour le détail des derniers commits / PRs.
