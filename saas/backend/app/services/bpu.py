@@ -1042,12 +1042,28 @@ def import_pdf(
     try:
         metadata = parse_filename_metadata(filename)
 
-        # 1. Tentative pdftotext
+        # 1. Tentative pdftotext (sert au parser texte de secours et au fallback métadonnées)
         text = extract_text_pdftotext(pdf_path)
         method = "pdftotext"
 
-        # 2. Fallback OCR si texte trop pauvre
-        if not _looks_textual(text):
+        # 2. Tentative pdfplumber direct sur le PDF natif AVANT toute décision OCR.
+        #    Certains BPU (EDF 2025 avenants) ont des tables natives parfaitement
+        #    structurées mais pdftotext rend si mal la mise en page que
+        #    `_looks_textual` les juge non-textuels. Sans cette pré-tentative,
+        #    la pipeline les basculerait en OCR et perdrait les cellules.
+        default_unit_early = _detect_default_unit(text)
+        early_table_segments = extract_segments_pdfplumber(
+            pdf_path, default_unit=default_unit_early,
+        )
+        has_usable_tables = any(
+            seg.periods and any(period.components for period in seg.periods)
+            for seg in early_table_segments
+        )
+
+        # 3. Fallback OCR uniquement si :
+        #    - le texte pdftotext n'est pas exploitable
+        #    - ET pdfplumber n'a pas réussi à extraire de prix depuis les tables natives
+        if not _looks_textual(text) and not has_usable_tables:
             if not enable_ocr:
                 return FileImportResult(
                     filename=filename,
@@ -1057,15 +1073,15 @@ def import_pdf(
             text = extract_text_ocr(pdf_path)
             method = "tesseract"
 
-        if not text.strip():
+        if not text.strip() and not has_usable_tables:
             return FileImportResult(
                 filename=filename,
                 status="error",
-                error="Aucun texte extrait (ni pdftotext ni OCR)",
+                error="Aucun texte extrait (ni pdftotext ni OCR ni pdfplumber)",
                 extraction_method=method,
             )
 
-        # 3. Fallback de métadonnées : si supplier manque dans le nom, regarder
+        # 4. Fallback de métadonnées : si supplier manque dans le nom, regarder
         #    dans le texte extrait. Idem pour year (rare en pratique).
         if not metadata.get("supplier"):
             up = text.upper()
@@ -1082,14 +1098,13 @@ def import_pdf(
                 extraction_method=method,
             )
 
-        # 3. Parsing
+        # 5. Parsing texte (regex tolérant) + merge avec les tables natives pdfplumber.
+        #    On réutilise `early_table_segments` calculé en étape 2, pas besoin de
+        #    re-ouvrir le PDF (et le résultat est identique : pdfplumber lit le PDF,
+        #    pas le texte OCR).
         parsed = parse_bpu_text(text, metadata, extraction_method=method)
-        table_segments = extract_segments_pdfplumber(
-            pdf_path,
-            default_unit=_detect_default_unit(text),
-        )
-        if table_segments:
-            parsed.segments = _merge_segments(parsed.segments, table_segments)
+        if early_table_segments:
+            parsed.segments = _merge_segments(parsed.segments, early_table_segments)
             parsed.extraction_confidence = _estimate_extraction_confidence(parsed.segments)
             parsed.extraction_method = f"{method}+pdfplumber"
 
