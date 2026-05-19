@@ -1550,6 +1550,29 @@ export type EnedisAsyncBackfillFullResponse = {
   }>;
 };
 
+export type EnedisAsyncJobsSummary = {
+  total: number;
+  by_status: Record<EnedisAsyncJobStatus, number>;
+  by_type: Record<EnedisAsyncJobType, Record<EnedisAsyncJobStatus, number>>;
+  inflight_count: number;
+  terminal_count: number;
+  error_count: number;
+  stale_requested_count: number;
+  oldest_inflight_at: string | null;
+  latest_requested_at: string | null;
+  latest_finished_at: string | null;
+  backfill_creation_running: boolean;
+  plan: Record<string, {
+    prm_count: number;
+    window_count: number;
+    batch_size?: number;
+    batch_count_per_window?: number;
+    expected_dossier_count?: number;
+    date_start?: string;
+    date_end?: string;
+  }>;
+};
+
 export async function fetchEnedisAsyncJobs(
   token: string,
   filters: { type?: EnedisAsyncJobType; status?: EnedisAsyncJobStatus; limit?: number } = {},
@@ -1563,6 +1586,13 @@ export async function fetchEnedisAsyncJobs(
     headers: buildHeaders(token),
   });
   return parseResponse<EnedisAsyncJob[]>(response);
+}
+
+export async function fetchEnedisAsyncJobsSummary(token: string): Promise<EnedisAsyncJobsSummary> {
+  const response = await fetch(`${apiBaseUrl}/energie/sync/async/jobs/summary`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnedisAsyncJobsSummary>(response);
 }
 
 export async function startEnedisAsyncJob(

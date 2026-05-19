@@ -9,12 +9,13 @@ Endpoints HTTP pour la pipeline async ENEDIS (Phase B-3).
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from threading import Lock, Thread
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -71,6 +72,21 @@ class AsyncJobOut(BaseModel):
         from_attributes = True
 
 
+class AsyncJobsSummaryOut(BaseModel):
+    total: int
+    by_status: dict[str, int]
+    by_type: dict[str, dict[str, int]]
+    inflight_count: int
+    terminal_count: int
+    error_count: int
+    stale_requested_count: int
+    oldest_inflight_at: str | None
+    latest_requested_at: str | None
+    latest_finished_at: str | None
+    backfill_creation_running: bool
+    plan: dict[str, dict]
+
+
 def _serialize_job(job: EnedisAsyncJob) -> AsyncJobOut:
     return AsyncJobOut(
         id=job.id,
@@ -89,6 +105,10 @@ def _serialize_job(job: EnedisAsyncJob) -> AsyncJobOut:
         rows_added=job.rows_added,
         error_message=job.error_message,
     )
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +231,72 @@ def list_async_jobs(
     if status_filter:
         q = q.filter(EnedisAsyncJob.status == status_filter)
     return [_serialize_job(j) for j in q.limit(limit).all()]
+
+
+@router.get("/jobs/summary", response_model=AsyncJobsSummaryOut)
+def summarize_async_jobs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AsyncJobsSummaryOut:
+    """Retourne les compteurs globaux de suivi, sans limite de pagination."""
+    rows = (
+        db.query(
+            EnedisAsyncJob.type_donnee,
+            EnedisAsyncJob.status,
+            func.count(EnedisAsyncJob.id),
+        )
+        .group_by(EnedisAsyncJob.type_donnee, EnedisAsyncJob.status)
+        .all()
+    )
+
+    by_status = {status_name: 0 for status_name in sorted(JOB_STATUSES)}
+    by_type: dict[str, dict[str, int]] = {
+        type_name: {status_name: 0 for status_name in sorted(JOB_STATUSES)}
+        for type_name in sorted(TYPE_DONNEES_SUPPORTED)
+    }
+    total = 0
+    for type_donnee, status_name, count in rows:
+        count_int = int(count)
+        total += count_int
+        by_status[status_name] = by_status.get(status_name, 0) + count_int
+        by_type.setdefault(type_donnee, {s: 0 for s in sorted(JOB_STATUSES)})
+        by_type[type_donnee][status_name] = by_type[type_donnee].get(status_name, 0) + count_int
+
+    terminal_count = by_status.get("success", 0) + by_status.get("error", 0)
+    error_count = by_status.get("error", 0)
+    inflight_statuses = ["requested", "file_received", "decrypted", "parsed"]
+    inflight_count = sum(by_status.get(status_name, 0) for status_name in inflight_statuses)
+
+    stale_before = datetime.now(timezone.utc) - timedelta(hours=24)
+    stale_requested_count = int(
+        db.query(func.count(EnedisAsyncJob.id))
+        .filter(EnedisAsyncJob.status == "requested")
+        .filter(EnedisAsyncJob.requested_at < stale_before)
+        .scalar()
+        or 0
+    )
+    oldest_inflight_at = (
+        db.query(func.min(EnedisAsyncJob.requested_at))
+        .filter(EnedisAsyncJob.status.in_(inflight_statuses))
+        .scalar()
+    )
+    latest_requested_at = db.query(func.max(EnedisAsyncJob.requested_at)).scalar()
+    latest_finished_at = db.query(func.max(EnedisAsyncJob.finished_at)).scalar()
+
+    return AsyncJobsSummaryOut(
+        total=total,
+        by_status=by_status,
+        by_type=by_type,
+        inflight_count=inflight_count,
+        terminal_count=terminal_count,
+        error_count=error_count,
+        stale_requested_count=stale_requested_count,
+        oldest_inflight_at=_iso(oldest_inflight_at),
+        latest_requested_at=_iso(latest_requested_at),
+        latest_finished_at=_iso(latest_finished_at),
+        backfill_creation_running=_BACKFILL_FULL_LOCK.locked(),
+        plan=plan_backfill_full_period(),
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=AsyncJobOut)

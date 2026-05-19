@@ -1604,6 +1604,35 @@ button:disabled {
   letter-spacing: 0.06em;
 }
 
+.async-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.async-summary-grid > div {
+  display: flex;
+  min-height: 76px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.async-summary-grid strong {
+  color: #e2e8f0;
+  font-size: 1rem;
+}
+
+.async-summary-grid small,
+.summary-label {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
 .compact-button {
   align-self: flex-start;
   padding: 6px 12px;

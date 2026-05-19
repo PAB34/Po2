@@ -12,9 +12,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EnedisAsyncJob,
+  EnedisAsyncJobsSummary,
   EnedisAsyncJobStatus,
   EnedisAsyncJobType,
   fetchEnedisAsyncJobs,
+  fetchEnedisAsyncJobsSummary,
   startEnedisAsyncJob,
   startEnedisAsyncBackfillFull,
   triggerEnedisAsyncPollNow,
@@ -62,6 +64,11 @@ function todayMinus(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function sumExpectedDossiers(summary: EnedisAsyncJobsSummary | undefined): number {
+  if (!summary?.plan) return 0;
+  return Object.values(summary.plan).reduce((sum, item) => sum + (item.expected_dossier_count ?? 0), 0);
+}
+
 export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(true);
@@ -73,17 +80,29 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   const [formDateEnd, setFormDateEnd] = useState(todayMinus(1));
   const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
+  const summaryQuery = useQuery<EnedisAsyncJobsSummary>({
+    queryKey: ["enedis-async-jobs-summary"],
+    queryFn: () => fetchEnedisAsyncJobsSummary(token),
+    enabled: true,
+    refetchInterval: expanded ? 15_000 : 60_000,
+  });
+
   const jobsQuery = useQuery<EnedisAsyncJob[]>({
     queryKey: ["enedis-async-jobs", typeFilter, statusFilter],
     queryFn: () =>
       fetchEnedisAsyncJobs(token, {
         type: typeFilter || undefined,
         status: statusFilter || undefined,
-        limit: 100,
+        limit: 250,
       }),
     enabled: true,
-    refetchInterval: expanded ? 30_000 : 60_000,
+    refetchInterval: expanded ? 15_000 : 60_000,
   });
+
+  const refreshAsyncJobs = () => {
+    qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
+    qc.invalidateQueries({ queryKey: ["enedis-async-jobs-summary"] });
+  };
 
   const startMut = useMutation({
     mutationFn: () =>
@@ -95,7 +114,7 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
     onSuccess: (resp) => {
       setFeedback({ kind: "success", message: resp.message });
       setShowStartForm(false);
-      qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
+      refreshAsyncJobs();
     },
     onError: (err: Error) => setFeedback({ kind: "error", message: err.message }),
   });
@@ -113,7 +132,7 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
             ? `${resp.message} (${expectedDossiers} dossiers prevus par lots de 50 PRM maximum)`
             : resp.message,
         });
-        qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
+        refreshAsyncJobs();
         return;
       }
       const errorSuffix = resp.errors?.length
@@ -123,33 +142,47 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
         kind: resp.errors?.length ? "error" : "success",
         message: `${resp.message} (${resp.dossier_ids.ENERGIE.length} ENERGIE + ${resp.dossier_ids.CDC.length} CDC dossiers${errorSuffix})`,
       });
-      qc.invalidateQueries({ queryKey: ["enedis-async-jobs"] });
+      refreshAsyncJobs();
     },
     onError: (err: Error) => setFeedback({ kind: "error", message: err.message }),
   });
 
   const pollNowMut = useMutation({
     mutationFn: () => triggerEnedisAsyncPollNow(token),
-    onSuccess: (resp) => setFeedback({ kind: "success", message: resp.message }),
+    onSuccess: (resp) => {
+      setFeedback({ kind: "success", message: resp.message });
+      refreshAsyncJobs();
+    },
     onError: (err: Error) => setFeedback({ kind: "error", message: err.message }),
   });
 
   const jobs = jobsQuery.data ?? [];
+  const summary = summaryQuery.data;
   const counters = {
-    total: jobs.length,
-    success: jobs.filter((j) => j.status === "success").length,
-    inflight: jobs.filter((j) => j.status === "requested" || j.status === "file_received").length,
-    error: jobs.filter((j) => j.status === "error").length,
+    total: summary?.total ?? jobs.length,
+    success: summary?.by_status.success ?? jobs.filter((j) => j.status === "success").length,
+    inflight:
+      summary?.inflight_count ??
+      jobs.filter((j) =>
+        j.status === "requested" || j.status === "file_received" || j.status === "decrypted" || j.status === "parsed"
+      ).length,
+    error: summary?.error_count ?? jobs.filter((j) => j.status === "error").length,
+    stale: summary?.stale_requested_count ?? 0,
   };
+  const expectedDossiers = sumExpectedDossiers(summary);
+  const processingProgress =
+    counters.total > 0 ? Math.round(((counters.success + counters.error) / counters.total) * 100) : null;
 
   return (
     <div className="data-coverage-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <strong>Backfill async ENEDIS / FTP</strong>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="badge badge-gray">Total : {counters.total}</span>
           <span className="badge badge-gray">Succès : {counters.success}</span>
           <span className="badge badge-blue">En cours : {counters.inflight}</span>
           {counters.error > 0 && <span className="badge badge-red">Erreurs : {counters.error}</span>}
+          {counters.stale > 0 && <span className="badge badge-red">En retard &gt; 24h : {counters.stale}</span>}
           <button type="button" className="secondary-button compact-button" onClick={() => setExpanded((v) => !v)}>
             {expanded ? "Masquer" : "Afficher"}
           </button>
@@ -182,7 +215,56 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
             >
               Poll FTP maintenant
             </button>
+            <button
+              type="button"
+              className="secondary-button compact-button"
+              disabled={jobsQuery.isFetching || summaryQuery.isFetching}
+              onClick={refreshAsyncJobs}
+            >
+              Actualiser
+            </button>
           </div>
+
+          {summary && (
+            <div className="async-summary-grid">
+              <div>
+                <span className="summary-label">Plan actuel</span>
+                <strong>{expectedDossiers || "-"}</strong>
+                <small>dossiers attendus par ENEDIS</small>
+              </div>
+              <div>
+                <span className="summary-label">Traitement FTP</span>
+                <strong>{summary.terminal_count}/{counters.total}</strong>
+                {processingProgress !== null && <small>{processingProgress}% termines</small>}
+              </div>
+              <div>
+                <span className="summary-label">Derniere demande</span>
+                <strong>{formatDate(summary.latest_requested_at)}</strong>
+                {summary.backfill_creation_running && <small>creation en cours cote serveur</small>}
+              </div>
+              <div>
+                <span className="summary-label">Derniere fin</span>
+                <strong>{formatDate(summary.latest_finished_at)}</strong>
+                {summary.oldest_inflight_at && <small>plus ancien en cours : {formatDate(summary.oldest_inflight_at)}</small>}
+              </div>
+              {(["ENERGIE", "CDC"] as EnedisAsyncJobType[]).map((type) => (
+                <div key={type}>
+                  <span className="summary-label">{type}</span>
+                  <strong>
+                    {summary.by_type[type]?.success ?? 0} OK / {summary.by_type[type]?.error ?? 0} erreur
+                  </strong>
+                  <small>{summary.by_type[type]?.requested ?? 0} demandes FTP en attente</small>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {summaryQuery.isError && <p className="error-text">{(summaryQuery.error as Error).message}</p>}
+          {summary && counters.stale > 0 && (
+            <p className="error-text">
+              {counters.stale} dossier{counters.stale !== 1 ? "s" : ""} reste{counters.stale !== 1 ? "nt" : ""} au statut demande depuis plus de 24h.
+            </p>
+          )}
 
           {showStartForm && (
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", padding: 12, background: "rgba(15, 23, 42, 0.5)", borderRadius: 12 }}>
@@ -255,7 +337,10 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
               <option value="success">Succès</option>
               <option value="error">Erreur</option>
             </select>
-            <span className="result-count">{jobs.length} dossier{jobs.length !== 1 ? "s" : ""}</span>
+            <span className="result-count">
+              {jobs.length} dossier{jobs.length !== 1 ? "s" : ""} affiche{jobs.length !== 1 ? "s" : ""}
+              {!typeFilter && !statusFilter && counters.total > jobs.length ? ` sur ${counters.total}` : ""}
+            </span>
           </div>
 
           {jobsQuery.isLoading && <p>Chargement…</p>}
