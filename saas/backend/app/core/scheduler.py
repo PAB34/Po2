@@ -46,9 +46,11 @@ def _enedis_async_poll_job() -> None:
             counters = poll_and_process(db)
             if counters["found"] > 0 or counters["processed"] > 0:
                 LOG.info(
-                    "ENEDIS async poll : found=%d processed=%d errors=%d skipped=%d",
+                    "ENEDIS async poll : found=%d processed=%d errors=%d skipped=%d pending_requested=%s older_than_24h=%s",
                     counters["found"], counters["processed"],
                     counters["errors"], counters["skipped"],
+                    counters.get("pending_requested"),
+                    counters.get("pending_older_than_24h"),
                 )
     except Exception:
         LOG.exception("ENEDIS async poll job failed")

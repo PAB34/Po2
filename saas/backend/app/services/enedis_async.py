@@ -667,6 +667,15 @@ def process_one_file(db: Session, filename: str, decrypt_mode: str = "cbc_iv_pre
 
     try:
         local_path = download_file(filename)
+        LOG.info(
+            "ENEDIS async FTP file matched: filename=%s dossier_id=%s job_id=%s type=%s period=%s..%s",
+            filename,
+            job.dossier_id,
+            job.id,
+            job.type_donnee,
+            job.date_start,
+            job.date_end,
+        )
         job.ftp_filename = filename
         job.received_at = datetime.now(timezone.utc)
         job.status = JOB_STATUS_FILE_RECEIVED
@@ -692,11 +701,17 @@ def process_one_file(db: Session, filename: str, decrypt_mode: str = "cbc_iv_pre
         job.status = JOB_STATUS_SUCCESS
         db.commit()
         _invalidate_energie_caches()
-        LOG.info("Job #%s success — %d lignes upsertées", job.id, n_rows)
+        LOG.info(
+            "ENEDIS async job success: job_id=%s dossier_id=%s filename=%s rows_added=%d",
+            job.id,
+            job.dossier_id,
+            filename,
+            n_rows,
+        )
         return job
 
     except Exception as exc:
-        LOG.exception("Erreur traitement %s", filename)
+        LOG.exception("ENEDIS async file processing failed: filename=%s job_id=%s", filename, job.id)
         job.status = JOB_STATUS_ERROR
         job.error_message = str(exc)[:2000]
         job.finished_at = datetime.now(timezone.utc)
@@ -704,7 +719,56 @@ def process_one_file(db: Session, filename: str, decrypt_mode: str = "cbc_iv_pre
         return job
 
 
-def poll_and_process(db: Session, decrypt_mode: str = "cbc_iv_prefix") -> dict[str, int]:
+def _requested_publication_stats(db: Session) -> dict[str, Any]:
+    stale_before = datetime.now(timezone.utc) - timedelta(hours=24)
+    requested_q = db.query(EnedisAsyncJob).filter(EnedisAsyncJob.status == JOB_STATUS_REQUESTED)
+    by_type_rows = (
+        db.query(EnedisAsyncJob.type_donnee, func.count(EnedisAsyncJob.id))
+        .filter(EnedisAsyncJob.status == JOB_STATUS_REQUESTED)
+        .group_by(EnedisAsyncJob.type_donnee)
+        .all()
+    )
+    return {
+        "pending_requested": int(requested_q.count() or 0),
+        "pending_requested_by_type": {type_donnee: int(count) for type_donnee, count in by_type_rows},
+        "pending_older_than_24h": int(
+            requested_q.filter(EnedisAsyncJob.requested_at < stale_before).count() or 0
+        ),
+        "oldest_requested_at": requested_q.with_entities(func.min(EnedisAsyncJob.requested_at)).scalar(),
+        "latest_requested_at": requested_q.with_entities(func.max(EnedisAsyncJob.requested_at)).scalar(),
+    }
+
+
+def _log_empty_ftp_poll(db: Session) -> dict[str, Any]:
+    stats = _requested_publication_stats(db)
+    if stats["pending_requested"]:
+        LOG.warning(
+            "ENEDIS async FTP poll found no files: host=%s port=%s remote_dir=%s user=%s "
+            "canal_contact_id=%s pending_requested=%s pending_by_type=%s oldest_requested_at=%s "
+            "latest_requested_at=%s pending_older_than_24h=%s. Diagnostic: ENEDIS may not have "
+            "published yet, or the ENEDIS contact channel may target another FTP server/path/user.",
+            settings.ftp_host,
+            settings.ftp_port,
+            settings.ftp_remote_dir,
+            settings.ftp_user,
+            settings.enedis_canal_contact_id,
+            stats["pending_requested"],
+            stats["pending_requested_by_type"],
+            stats["oldest_requested_at"],
+            stats["latest_requested_at"],
+            stats["pending_older_than_24h"],
+        )
+    else:
+        LOG.info(
+            "ENEDIS async FTP poll found no files and no pending publication jobs: host=%s remote_dir=%s user=%s",
+            settings.ftp_host,
+            settings.ftp_remote_dir,
+            settings.ftp_user,
+        )
+    return stats
+
+
+def poll_and_process(db: Session, decrypt_mode: str = "cbc_iv_prefix") -> dict[str, Any]:
     """
     Liste les fichiers FTP, télécharge et traite ceux pas encore ingérés.
     Retourne un compteur {found, processed, errors, skipped}.
@@ -712,10 +776,36 @@ def poll_and_process(db: Session, decrypt_mode: str = "cbc_iv_prefix") -> dict[s
     try:
         remote_files = list_remote_files()
     except Exception as exc:
-        LOG.error("FTP listing failed: %s", exc)
-        return {"found": 0, "processed": 0, "errors": 0, "skipped": 0}
+        stats = _requested_publication_stats(db)
+        LOG.exception(
+            "ENEDIS async FTP listing failed: host=%s port=%s remote_dir=%s user=%s passive=%s "
+            "canal_contact_id=%s pending_requested=%s oldest_requested_at=%s error=%s",
+            settings.ftp_host,
+            settings.ftp_port,
+            settings.ftp_remote_dir,
+            settings.ftp_user,
+            settings.ftp_passive_mode,
+            settings.enedis_canal_contact_id,
+            stats["pending_requested"],
+            stats["oldest_requested_at"],
+            exc,
+        )
+        return {"found": 0, "processed": 0, "errors": 1, "skipped": 0, **stats}
 
-    counters = {"found": len(remote_files), "processed": 0, "errors": 0, "skipped": 0}
+    if not remote_files:
+        stats = _log_empty_ftp_poll(db)
+    else:
+        stats = _requested_publication_stats(db)
+        LOG.info(
+            "ENEDIS async FTP poll found files: host=%s remote_dir=%s found=%d sample=%s pending_requested=%s",
+            settings.ftp_host,
+            settings.ftp_remote_dir,
+            len(remote_files),
+            remote_files[:5],
+            stats["pending_requested"],
+        )
+
+    counters: dict[str, Any] = {"found": len(remote_files), "processed": 0, "errors": 0, "skipped": 0, **stats}
     for name in remote_files:
         try:
             job = process_one_file(db, name, decrypt_mode=decrypt_mode)
