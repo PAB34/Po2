@@ -19,7 +19,7 @@ Consequences :
 | ID | Chantier | Statut | Priorite | Depend de | Debloque | Prochaine action |
 |---|---|---|---|---|---|---|
 | PO2-BPU-001 | Parser BPU fiable | En cours | P0 | BPU schema existant | Audit factures, preconisations chiffrees | Phase 2 `pdfplumber` implementee cote backend ; valider l'import en CI/conteneur/VPS et mesurer les composants extraits |
-| PO2-ENEDIS-001 | ENEDIS async prod operationnel | En cours | P0 | Validation canal ENEDIS cote utilisateur | Backfill profond, controles conso, preconisations robustes | Confirmer canal FTP puis lancer backfill complet |
+| PO2-ENEDIS-001 | ENEDIS async prod operationnel | En cours | P0 | Validation canal ENEDIS cote utilisateur | Backfill profond, controles conso, preconisations robustes | Logs diagnostic FTP/ENEDIS livres (commit `6027e9f`). Apres redeploiement, lire `docker logs infra-backend-1` pour confirmer si FTP joignable et si dossiers ENEDIS deposes |
 | PO2-FACT-001 | Audit facture ENGIE complet | Todo | P1 | PO2-BPU-001, TURPE, ENEDIS | Decision facture fiable | Aligner controles avec `saas/specs/05_matrice_controles_factures_energie.md` |
 | PO2-DOC-001 | Corriger docs routes factures | Fait | P1 | Aucun | Handoff IA fiable | Routes API facture clarifiees : `/api/billing/invoices/imports/*`; routes frontend conservees : `/energie/factures/*` |
 | PO2-GT-001 | Scinder CVC / Enveloppe | Todo | P1 | Referentiel SYPEMI existant | Gestion technique plus lisible | Ajouter filtre ou onglets dans `BuildingTechniquePage` |
