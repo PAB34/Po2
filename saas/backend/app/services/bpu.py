@@ -704,6 +704,133 @@ def _extract_components_from_table_cells(cells: list[str], component_order: list
     return _extract_components_from_table_line(" ".join(cells), component_order)
 
 
+def _detect_edf_component_in_row_label(label: str) -> str | None:
+    """Détecte la composante de prix encodée dans le libellé d'une ligne EDF.
+
+    Sur les BPU EDF (2021 → 2025 avenants), la colonne 0 des tables de prix
+    contient le label de la composante et les colonnes 1..N contiennent
+    les prix par poste horosaisonnier. Exemples observés :
+
+        "Electricité"                                    → fourniture
+        "CEE (Obligations d'économies d'énergie)"        → cee
+        "Obligations d'économies d'énergie (CEE)"        → cee
+        "Mécanisme de capacité"                          → capacite
+        "Option Energie renouvelable"                    → go
+    """
+    if not label:
+        return None
+    lower = label.lower()
+    # Capacité d'abord (mot-clé court qui peut être contenu dans d'autres libellés)
+    if "capacit" in lower:
+        return COMPONENT_CAPACITE
+    if "cee" in lower or "obligations" in lower or "économies" in lower or "economies" in lower:
+        return COMPONENT_CEE
+    if "renouvelable" in lower or "garantie" in lower:
+        return COMPONENT_GO
+    # Fourniture (générique) : "Electricité", "Prix fourniture", "Fourniture"
+    if (
+        "fourniture" in lower
+        or "électricité" in lower
+        or "electricite" in lower
+        or "energie" in lower
+        or "énergie" in lower
+    ):
+        return COMPONENT_FOURNITURE
+    return None
+
+
+def _parse_edf_pivoted_table(table: list[list], default_unit: str) -> ParsedSegment | None:
+    """Parse une table BPU au layout EDF "pivoté" : postes en colonnes, composantes en lignes.
+
+    Exemple typique (EDF 2025 avenants 5/6) :
+
+        R0: ['Prix Fourniture hors TURPE...', None, ...]                  ← titre
+        R1: ['Sites C1', 'Pointe', 'HPH', 'HPE', 'HCH', 'HCE']            ← header postes
+        R2: [None, 'c€/KWh HTT', 'c€/KWh HTT', ...]                       ← unités
+        R3: ['Electricité', '5,481', '5,481', '5,481', '5,481', '5,481']  ← fourniture
+        R4: ['CEE (...)', '0,628', None, ...]                              ← cee (parfois 1 seule val)
+        R5: ['Mécanisme de capacité', '-0,033', '-0,033', ...]             ← capacite
+        R6: ['Option Energie renouvelable', '0,231', None, ...]            ← go
+
+    Retourne le `ParsedSegment` ou `None` si le pattern n'est pas reconnu
+    (la table n'est alors pas EDF-pivoted et l'appelant peut tenter un autre layout).
+    """
+    if not table or len(table) < 3:
+        return None
+
+    # 1. Localiser la ligne header (col0 contient "Sites Cx" / "HTA" / ... et les
+    #    autres colonnes contiennent au moins un code poste).
+    header_idx: int | None = None
+    segment_code: str | None = None
+    period_codes: list[str | None] = []
+
+    for idx, row in enumerate(table):
+        cleaned = [_clean_table_cell(c) for c in row]
+        if not cleaned or not cleaned[0]:
+            continue
+        sc = _detect_segment_code(cleaned[0])
+        if not sc:
+            continue
+        # Doit y avoir au moins un code poste sur la même ligne
+        cols_periods = [_detect_period(c) for c in cleaned[1:]]
+        if not any(cols_periods):
+            continue
+        header_idx = idx
+        segment_code = sc
+        period_codes = cols_periods
+        break
+
+    if header_idx is None or segment_code is None:
+        return None
+
+    segment_label = " ".join(_clean_table_cell(c) for c in table[header_idx] if c)[:200]
+    seg = ParsedSegment(
+        segment_type=SEGMENT_TYPE_SITE if segment_code.startswith("C") else SEGMENT_TYPE_TENSION,
+        segment_code=segment_code,
+        segment_label=segment_label,
+        tension_category="HTA" if segment_code in ("C1", "C2", "C3", "HTA") else "BT",
+        turpe_tariff=segment_code if segment_code.startswith("C") else None,
+    )
+
+    # 2. Pour chaque ligne après le header, mapper col0 → composante et lire les
+    #    valeurs des colonnes 1..N (avec le poste correspondant dans period_codes).
+    for row in table[header_idx + 1:]:
+        cleaned = [_clean_table_cell(c) for c in row]
+        if not cleaned or not cleaned[0]:
+            continue
+        component_type = _detect_edf_component_in_row_label(cleaned[0])
+        if not component_type:
+            continue
+        for col_idx in range(1, min(len(cleaned), len(period_codes) + 1)):
+            period_code = period_codes[col_idx - 1]
+            if not period_code:
+                continue
+            raw_value = cleaned[col_idx]
+            if not raw_value:
+                continue
+            value = _to_float(raw_value)
+            if value is None:
+                continue
+            period = next((p for p in seg.periods if p.period_code == period_code), None)
+            if period is None:
+                period = ParsedPeriod(period_code=period_code)
+                seg.periods.append(period)
+            if any(c.component_type == component_type for c in period.components):
+                continue
+            period.components.append(
+                ParsedComponent(
+                    component_type=component_type,
+                    price_value=value,
+                    price_unit=default_unit,
+                    price_value_eur_per_mwh=_normalize_unit_to_eur_per_mwh(value, default_unit),
+                )
+            )
+
+    if not seg.periods:
+        return None
+    return seg
+
+
 def extract_segments_pdfplumber(pdf_path: Path, *, default_unit: str) -> list[ParsedSegment]:
     """Extract BPU price tables with pdfplumber when available.
 
@@ -724,6 +851,24 @@ def extract_segments_pdfplumber(pdf_path: Path, *, default_unit: str) -> list[Pa
         with pdfplumber.open(str(pdf_path)) as pdf:
             for page in pdf.pages:
                 for table in page.extract_tables() or []:
+                    # 1) Tentative layout EDF "pivoté" (header = postes en colonnes,
+                    #    lignes = composantes). Concerne EDF 2021 → 2025 avenants.
+                    edf_seg = _parse_edf_pivoted_table(table, default_unit)
+                    if edf_seg is not None:
+                        existing = next(
+                            (s for s in segments if s.segment_code == edf_seg.segment_code),
+                            None,
+                        )
+                        if existing is None:
+                            segments.append(edf_seg)
+                        else:
+                            segments[:] = _merge_segments(segments, [edf_seg])
+                        current_segment = None
+                        current_table_components = []
+                        continue
+
+                    # 2) Layout ENGIE (header = composantes, lignes = postes) :
+                    #    parcours ligne par ligne avec état persistant entre les tables.
                     for raw_cells in table:
                         cells = [_clean_table_cell(cell) for cell in raw_cells]
                         cells = [cell for cell in cells if cell]
