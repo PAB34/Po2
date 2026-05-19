@@ -2,8 +2,7 @@
   "name": "PatrimoineOp dev",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
   },
   "forwardPorts": [8000, 5173, 5432],
   "postCreateCommand": "echo 'Optional: run pip install -r saas/backend/requirements.txt and npm --prefix saas/frontend install when needed.'",
