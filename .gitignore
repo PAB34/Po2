@@ -1,6 +1,7 @@
 .claude/
 .vscode/
 .DS_Store
+.obsidian/
 
 # Local environment files must stay out of Git.
 .env
