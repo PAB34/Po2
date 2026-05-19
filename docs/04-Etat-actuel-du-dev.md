@@ -75,15 +75,16 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 
 ## 🔥 Chantiers ouverts (en cours / à reprendre)
 
-### 1. Parser BPU — taux d'extraction faible
-- **Symptôme** : 16/17 PDFs en `extraction_status='ocr_review'`, seuls 4 prix unitaires extraits (au lieu de ~300 attendus)
-- **Cause** : parser regex actuel (`_extract_segments`, `_extract_components_from_line` dans `services/bpu.py`) trop conservateur sur les tableaux multi-colonnes
-- **Mitigation déjà en place** : `raw_text` stocké sur chaque `BpuDocument` → re-parsing sans re-OCR possible
-- **Avancement 2026-05-19** : phase 1 + phase 2 démarrées dans [[Chantiers/PO2-BPU-001-Parser-BPU-fiable]] ; le parser mémorise désormais les en-têtes de tableau (`Fourniture / Capacite / CEE / GO`), mappe les lignes suivantes vers les composantes, et tente une extraction cellule par cellule avec `pdfplumber`
-- **Validation locale** : `python -m compileall saas/backend/app/services/bpu.py saas/backend/tests/test_bpu_parser.py` OK ; `pytest` non disponible sur le poste entreprise
-- **Solution proposée** : valider en CI/conteneur/VPS l'augmentation du nombre de composantes extraites, puis ajuster les heuristiques sur les vrais BPU restants
-- **Localisation** : `saas/backend/app/services/bpu.py` lignes ≈ 350-500
-- **Voir** : [[Modules/Energie-BPU]]
+### 1. Parser BPU — Phase 2 pdfplumber livrée, 2 BPU complets sur 15
+- **État au 2026-05-19** : 65 prix unitaires extraits (×16 vs baseline de 4), **2 BPU OK** : ENGIE 2025 LOT1 (36 prix) + **EDF 2025 LOT1 avenant 6 (26 prix)** + 1 BPU partiel (EDF 2025 LOT3 av5 : 3 prix)
+- **Commits clés** : `af69e93` (intro pdfplumber), `2c7d6ef` (pdfplumber direct avant OCR), `ca6f92b` (parser EDF pivoté)
+- **Restant** :
+  - 1 PDF EDF 2025 atypique : `EDF_MS1_LOT_2_AVENANT_5_BPU_2025.pdf` (structure 31×6, parser ne reconnaît pas)
+  - 12 scans EDF historiques 2021-2024 : OCR ressort du bruit, pdfplumber n'a rien à lire
+- **Données extraites validées numériquement** : sample CU/BASE/fourniture = 75.29 €/MWh correspond exactement au `bpu_templates.py:20`
+- **Mitigation** : `raw_text` stocké sur chaque `BpuDocument` → re-parsing possible sans relancer l'OCR
+- **Options suite** : UI saisie manuelle assistée (~3-4h dev), OCR avancé (~2-3h, incertain), ou accepter la limite
+- **Voir** : [[Sessions/2026-05-19 — Phase 2 BPU finalisee (parser EDF pivote)]] et [[Modules/Energie-BPU]]
 
 ### 2. Module Baux locataires (1.2 de la roadmap)
 - Aucun code n'existe encore — c'est le prochain gros chantier "rapidement faisable"

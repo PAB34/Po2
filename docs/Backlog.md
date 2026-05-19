@@ -18,7 +18,7 @@ Consequences :
 
 | ID | Chantier | Statut | Priorite | Depend de | Debloque | Prochaine action |
 |---|---|---|---|---|---|---|
-| PO2-BPU-001 | Parser BPU fiable | En cours | P0 | BPU schema existant | Audit factures, preconisations chiffrees | Phase 2 `pdfplumber` implementee cote backend ; valider l'import en CI/conteneur/VPS et mesurer les composants extraits |
+| PO2-BPU-001 | Parser BPU fiable | En cours | P0 | BPU schema existant | Audit factures, preconisations chiffrees | Phase 2 validee en prod : 65 prix extraits sur 2 BPU OK (ENGIE 2025 LOT1 + EDF 2025 LOT1 av6) + 1 partiel (EDF 2025 LOT3 av5). Reste : (a) parser EDF 2025 LOT2 av5 layout 31x6 different, (b) 12 scans EDF historiques 2021-2024 illisibles via OCR. Option suite : UI saisie manuelle assistee pour les scans, ou OCR avance. |
 | PO2-ENEDIS-001 | ENEDIS async prod operationnel | Bloque | P0 | 1753 demandes "fantomes" cote ENEDIS (HTTP 400 anti-doublon) + attente publication FTP | Backfill profond, controles conso, preconisations robustes | Cle AES alignee sur le portail (session 2026-05-19). FTP password cote VPS = portail. Reste : attendre que ENEDIS publie OU contacter support pour purger les 1753 dossiers `requested` (oldest = 2026-05-18 11:50). Aucun nouveau backfill possible tant que les fantomes existent. |
 | PO2-FACT-001 | Audit facture ENGIE complet | Todo | P1 | PO2-BPU-001, TURPE, ENEDIS | Decision facture fiable | Aligner controles avec `saas/specs/05_matrice_controles_factures_energie.md` |
 | PO2-DOC-001 | Corriger docs routes factures | Fait | P1 | Aucun | Handoff IA fiable | Routes API facture clarifiees : `/api/billing/invoices/imports/*`; routes frontend conservees : `/energie/factures/*` |
