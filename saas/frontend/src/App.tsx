@@ -8,6 +8,7 @@ import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { BuildingTechniquePage } from "./pages/BuildingTechniquePage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
+import EnergieBpuPage from "./pages/EnergieBpuPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
 import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
@@ -44,6 +45,7 @@ export default function App() {
           <Link to="/energie/preconisations">Preconisations</Link>
           <Link to="/energie/factures">Factures</Link>
           <Link to="/energie/facturation">Facturation</Link>
+          <Link to="/energie/bpu">Historique BPU</Link>
           <Link to="/login">Connexion</Link>
           <Link to="/register">Inscription</Link>
           <Link to="/account">Compte</Link>
@@ -62,6 +64,7 @@ export default function App() {
           <Route path="/energie/factures" element={<EnergieInvoicesPage />} />
           <Route path="/energie/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
           <Route path="/energie/facturation" element={<EnergieBillingPage />} />
+          <Route path="/energie/bpu" element={<EnergieBpuPage />} />
           <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

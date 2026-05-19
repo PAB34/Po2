@@ -1740,3 +1740,229 @@ export async function fetchBuildingEquipmentSummary(
   });
   return parseResponse<EquipmentStateCounts>(response);
 }
+
+// ===========================================================================
+// BPU — Bordereaux de Prix Unitaires (suivi temporel des prix d'énergie)
+// ===========================================================================
+
+export type BpuFormulaComponent = {
+  code: string; // "fourniture" | "capacite" | "cee" | "go"
+  label: string;
+  description: string;
+};
+
+export type BpuFormulaSegment = { code: string; label: string };
+export type BpuFormulaPeriod = { code: string; label: string };
+
+export type BpuFormula = {
+  expression: string;
+  unit_target: string; // "€HTT/MWh"
+  components: BpuFormulaComponent[];
+  segments: BpuFormulaSegment[];
+  periods: BpuFormulaPeriod[];
+};
+
+export type BpuDocumentSummary = {
+  id: number;
+  supplier: string;
+  valid_year: number;
+  valid_from: string | null;
+  valid_to: string | null;
+  market_subsequent: number | null;
+  lot_number: number;
+  amendment_number: number | null;
+  amendment_label: string | null;
+  pdf_filename: string;
+  pdf_relative_path: string | null;
+  signature_date: string | null;
+  extraction_status: string;
+  extraction_method: string | null;
+  extraction_confidence: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BpuPriceComponent = {
+  id: number;
+  period_id: number;
+  component_type: string;
+  component_label: string | null;
+  price_value: number;
+  price_unit: string;
+  price_value_eur_per_mwh: number | null;
+  is_negative: boolean;
+  extraction_confidence: number | null;
+  notes: string | null;
+};
+
+export type BpuTimePeriod = {
+  id: number;
+  segment_id: number;
+  period_code: string;
+  period_label: string | null;
+  components: BpuPriceComponent[];
+};
+
+export type BpuSegment = {
+  id: number;
+  document_id: number;
+  segment_type: string;
+  segment_code: string;
+  segment_label: string | null;
+  tension_category: string | null;
+  turpe_tariff: string | null;
+  usage_label: string | null;
+  notes: string | null;
+  periods: BpuTimePeriod[];
+};
+
+export type BpuFixedCharge = {
+  id: number;
+  document_id: number;
+  segment_id: number | null;
+  charge_type: string;
+  charge_label: string | null;
+  charge_value: number;
+  charge_unit: string;
+  charge_value_eur_per_month: number | null;
+  applicable_from: string | null;
+  applicable_to: string | null;
+  notes: string | null;
+};
+
+export type BpuDocumentDetail = BpuDocumentSummary & {
+  segments: BpuSegment[];
+  fixed_charges: BpuFixedCharge[];
+  extraction_notes: string | null;
+  signatory_name: string | null;
+  signatory_role: string | null;
+  docusign_envelope_id: string | null;
+};
+
+export type BpuTimelinePoint = {
+  document_id: number;
+  supplier: string;
+  valid_year: number;
+  valid_from: string | null;
+  market_subsequent: number | null;
+  lot_number: number;
+  amendment_number: number | null;
+  segment_code: string;
+  period_code: string;
+  component_type: string;
+  price_value_eur_per_mwh: number | null;
+  price_value: number;
+  price_unit: string;
+};
+
+export type BpuDocumentFilters = {
+  supplier?: string;
+  valid_year?: number;
+  lot_number?: number;
+  market_subsequent?: number;
+  extraction_status?: string;
+};
+
+export type BpuTimelineFilters = {
+  component_type?: string;
+  period_code?: string;
+  segment_code?: string;
+  supplier?: string;
+  lot_number?: number;
+};
+
+export type BpuImportRequest = {
+  source_dir?: string;
+  only_filename?: string;
+  force?: boolean;
+  enable_ocr?: boolean;
+};
+
+export type BpuImportResult = {
+  filename: string;
+  status: string;
+  document_id: number | null;
+  segments_count: number;
+  components_count: number;
+  fixed_charges_count: number;
+  extraction_method: string | null;
+  extraction_confidence: number | null;
+  error: string | null;
+};
+
+export type BpuImportResponse = {
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  results: BpuImportResult[];
+};
+
+function buildQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function fetchBpuFormula(token: string): Promise<BpuFormula> {
+  const response = await fetch(`${apiBaseUrl}/bpu/formula`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuFormula>(response);
+}
+
+export async function fetchBpuDocuments(
+  token: string,
+  filters: BpuDocumentFilters = {},
+): Promise<BpuDocumentSummary[]> {
+  const qs = buildQuery(filters);
+  const response = await fetch(`${apiBaseUrl}/bpu/documents${qs}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuDocumentSummary[]>(response);
+}
+
+export async function fetchBpuDocument(
+  token: string,
+  documentId: number,
+): Promise<BpuDocumentDetail> {
+  const response = await fetch(`${apiBaseUrl}/bpu/documents/${documentId}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuDocumentDetail>(response);
+}
+
+export async function deleteBpuDocument(token: string, documentId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/bpu/documents/${documentId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function fetchBpuTimeline(
+  token: string,
+  filters: BpuTimelineFilters = {},
+): Promise<BpuTimelinePoint[]> {
+  const qs = buildQuery(filters);
+  const response = await fetch(`${apiBaseUrl}/bpu/timeline${qs}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuTimelinePoint[]>(response);
+}
+
+export async function triggerBpuImport(
+  token: string,
+  payload: BpuImportRequest = {},
+): Promise<BpuImportResponse> {
+  const response = await fetch(`${apiBaseUrl}/bpu/import`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BpuImportResponse>(response);
+}
