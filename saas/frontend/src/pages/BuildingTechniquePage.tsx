@@ -60,6 +60,36 @@ const QUANTITE_LABELS: Record<string, string> = {
   elevee: "Élevée",
 };
 
+type TechniqueScope = "all" | "cvc" | "enveloppe";
+
+const TECHNIQUE_SCOPE_CONFIG: Record<TechniqueScope, { label: string; shortLabel: string; title: string; emptyLabel: string }> = {
+  all: {
+    label: "Tous les lots",
+    shortLabel: "Tous",
+    title: "Inventaire technique",
+    emptyLabel: "élément assigné",
+  },
+  cvc: {
+    label: "CVC",
+    shortLabel: "CVC",
+    title: "Inventaire CVC",
+    emptyLabel: "équipement CVC assigné",
+  },
+  enveloppe: {
+    label: "Enveloppe",
+    shortLabel: "Enveloppe",
+    title: "Inventaire enveloppe",
+    emptyLabel: "élément d'enveloppe assigné",
+  },
+};
+
+function matchesTechniqueScope(ref: EquipmentReference | null | undefined, scope: TechniqueScope): boolean {
+  if (scope === "all") return true;
+  if (!ref) return false;
+  if (scope === "cvc") return ref.code_niveau_2 === "A.2.3";
+  return ref.code_niveau_1 === "A.1";
+}
+
 function scoreColor(score: number | null): string {
   if (score === null) return "#94a3b8";
   if (score <= 25) return "#dc2626";
@@ -128,6 +158,7 @@ export function BuildingTechniquePage() {
   const [editQuantite, setEditQuantite] = useState("");
   const [editCommentaire, setEditCommentaire] = useState("");
   const [refSearch, setRefSearch] = useState("");
+  const [techniqueScope, setTechniqueScope] = useState<TechniqueScope>("all");
 
   const buildingsQuery = useQuery({
     queryKey: ["buildings", token],
@@ -170,7 +201,24 @@ export function BuildingTechniquePage() {
     );
   }, [buildingsQuery.data, search]);
 
-  const grouped = useMemo(() => groupReferences(refsQuery.data ?? []), [refsQuery.data]);
+  const referenceCounts = useMemo(() => {
+    const refs = refsQuery.data ?? [];
+    return {
+      all: refs.length,
+      cvc: refs.filter((ref) => matchesTechniqueScope(ref, "cvc")).length,
+      enveloppe: refs.filter((ref) => matchesTechniqueScope(ref, "enveloppe")).length,
+    };
+  }, [refsQuery.data]);
+
+  const grouped = useMemo(() => {
+    const refs = refsQuery.data ?? [];
+    return groupReferences(refs.filter((ref) => matchesTechniqueScope(ref, techniqueScope)));
+  }, [refsQuery.data, techniqueScope]);
+
+  const visibleEquipments = useMemo(() => {
+    const equipments = equipmentsQuery.data ?? [];
+    return equipments.filter((eq) => matchesTechniqueScope(eq.equipment_ref, techniqueScope));
+  }, [equipmentsQuery.data, techniqueScope]);
 
   const existingRefIds = useMemo(() => {
     const set = new Set<number>();
@@ -259,6 +307,14 @@ export function BuildingTechniquePage() {
     bulkMutation.mutate(items);
   }
 
+  function switchTechniqueScope(scope: TechniqueScope) {
+    setTechniqueScope(scope);
+    setShowSelector(false);
+    setSelection(new Map());
+    setEditingId(null);
+    setRefSearch("");
+  }
+
   function startEdit(eq: BuildingEquipmentType) {
     setEditingId(eq.id);
     setEditEtat(eq.etat);
@@ -275,6 +331,7 @@ export function BuildingTechniquePage() {
   }
 
   const selectedBuilding = filteredBuildings.find((b) => b.id === selectedBuildingId) ?? null;
+  const scopeConfig = TECHNIQUE_SCOPE_CONFIG[techniqueScope];
 
   if (!token) {
     return (
@@ -296,6 +353,27 @@ export function BuildingTechniquePage() {
         <div className="buildings-header-actions">
           <Link className="secondary-link" to="/buildings">Retour aux bâtiments</Link>
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {(["all", "cvc", "enveloppe"] as TechniqueScope[]).map((scope) => {
+          const isActive = techniqueScope === scope;
+          return (
+            <button
+              key={scope}
+              type="button"
+              className={isActive ? "primary-button" : "secondary-button"}
+              style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+              onClick={() => switchTechniqueScope(scope)}
+            >
+              {TECHNIQUE_SCOPE_CONFIG[scope].label}
+              <span style={{ marginLeft: 6, opacity: 0.75 }}>({referenceCounts[scope]})</span>
+            </button>
+          );
+        })}
+        <span style={{ color: SUBTLE_TEXT, fontSize: "0.82rem" }}>
+          Source SYPEMI : CVC = A.2.3 ; Enveloppe = A.1
+        </span>
       </div>
 
       <div className="buildings-list-layout">
@@ -363,14 +441,16 @@ export function BuildingTechniquePage() {
               <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <h3>{selectedBuilding.nom_batiment || `Bâtiment #${selectedBuilding.id}`}</h3>
-                  <p>Équipements et matériaux assignés</p>
+                  <p>
+                    {scopeConfig.title} — {visibleEquipments.length} {scopeConfig.emptyLabel}{visibleEquipments.length > 1 ? "s" : ""}
+                  </p>
                 </div>
                 <button
                   type="button"
                   className="primary-button"
                   onClick={() => { setShowSelector(true); setSelection(new Map()); }}
                 >
-                  + Ajouter des équipements
+                  + Ajouter {techniqueScope === "all" ? "des éléments" : `des éléments ${scopeConfig.shortLabel}`}
                 </button>
               </div>
 
@@ -383,9 +463,16 @@ export function BuildingTechniquePage() {
                 </div>
               )}
 
-              {(equipmentsQuery.data?.length ?? 0) > 0 && (
+              {!equipmentsQuery.isLoading && (equipmentsQuery.data?.length ?? 0) > 0 && visibleEquipments.length === 0 && (
+                <div className="empty-state">
+                  <strong>Aucun {scopeConfig.emptyLabel}</strong>
+                  <span>Les éléments déjà saisis sont dans un autre lot du référentiel.</span>
+                </div>
+              )}
+
+              {visibleEquipments.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {equipmentsQuery.data!.map((eq) => {
+                  {visibleEquipments.map((eq) => {
                     const ref = eq.equipment_ref;
                     const isEditing = editingId === eq.id;
                     return (
@@ -485,8 +572,10 @@ export function BuildingTechniquePage() {
             <div className="section-block">
               <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <h3>Sélection des équipements</h3>
-                  <p>Coche les équipements concernés, définis leur état et quantité, puis valide.</p>
+                  <h3>Sélection {techniqueScope === "all" ? "des éléments" : scopeConfig.shortLabel}</h3>
+                  <p>
+                    {referenceCounts[techniqueScope]} références disponibles dans ce lot.
+                  </p>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button type="button" className="secondary-button" onClick={() => setShowSelector(false)}>
@@ -504,8 +593,13 @@ export function BuildingTechniquePage() {
               </div>
 
               <label className="field" style={{ marginBottom: 12 }}>
-                <span>Rechercher un équipement</span>
-                <input type="text" value={refSearch} onChange={(e: ChangeEvent<HTMLInputElement>) => setRefSearch(e.target.value)} placeholder="Ex: chaudière, toiture, ascenseur..." />
+                <span>Rechercher</span>
+                <input
+                  type="text"
+                  value={refSearch}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setRefSearch(e.target.value)}
+                  placeholder={techniqueScope === "cvc" ? "Ex: chaudière, ventilation, climatisation..." : techniqueScope === "enveloppe" ? "Ex: toiture, façade, menuiserie..." : "Ex: chaudière, toiture, ascenseur..."}
+                />
               </label>
 
               {/* Selected items summary */}
@@ -545,6 +639,12 @@ export function BuildingTechniquePage() {
 
               {/* Hierarchical tree */}
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {grouped.length === 0 && (
+                  <div className="empty-state">
+                    <strong>Aucune référence</strong>
+                    <span>Le lot sélectionné ne contient aucune ligne dans le référentiel chargé.</span>
+                  </div>
+                )}
                 {grouped.map((g1) => {
                   const q = refSearch.trim().toLowerCase();
                   const matchedN2 = g1.niveau2.filter((n2) => {
