@@ -64,7 +64,7 @@ function todayMinus(days: number): string {
 
 export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [typeFilter, setTypeFilter] = useState<EnedisAsyncJobType | "">("");
   const [statusFilter, setStatusFilter] = useState<EnedisAsyncJobStatus | "">("");
   const [showStartForm, setShowStartForm] = useState(false);
@@ -81,8 +81,8 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
         status: statusFilter || undefined,
         limit: 100,
       }),
-    enabled: expanded,
-    refetchInterval: expanded ? 30_000 : false,
+    enabled: true,
+    refetchInterval: expanded ? 30_000 : 60_000,
   });
 
   const startMut = useMutation({
@@ -145,7 +145,7 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   return (
     <div className="data-coverage-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <strong>Backfill async ENEDIS</strong>
+        <strong>Backfill async ENEDIS / FTP</strong>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <span className="badge badge-gray">Succès : {counters.success}</span>
           <span className="badge badge-blue">En cours : {counters.inflight}</span>
