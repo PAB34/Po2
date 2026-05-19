@@ -2,7 +2,7 @@
 
 > IA : [Claude Sonnet X / GPT-4o / Gemini / autre]
 > Durée approximative : Xh
-> Précédente session : [[Sessions/AAAA-MM-JJ — précédente]]
+> Précédente session : `[[Sessions/AAAA-MM-JJ — precedente]]`
 
 ## 🎯 Objectif de la session
 
@@ -43,16 +43,18 @@ Quelle(s) tâche(s) de [[03-Roadmap-fonctionnalites]] ou [[04-Etat-actuel-du-dev
 ## 📝 Notes & décisions
 
 - Toute décision d'architecture / produit qui mérite d'être tracée
-- Si une décision est **durable** (vaut au-delà de cette session), créer aussi un fichier [[Décisions/NNN-titre]] (cf. [[Décisions/000-format-ADR]])
+- Si une décision est **durable** (vaut au-delà de cette session), créer aussi un fichier `docs/Decisions/NNN-titre.md` (cf. [[Decisions/000-format-ADR]])
 
 ## 🔁 Pour la prochaine IA — entrée en matière
 
 ```
 J'ai lu :
 - docs/00-Index.md
+- docs/07-Environnement-poste-entreprise.md
 - docs/04-Etat-actuel-du-dev.md
 - docs/Sessions/<cette session>
 
+Je sais que le poste utilisateur est verrouille entreprise : je ne demanderai aucune installation locale.
 Je comprends que la priorité 1 est : <description>.
 Je propose de commencer par : <étape 1>.
 

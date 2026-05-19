@@ -35,7 +35,7 @@ Convention : tirets entre les mots, pas d'accents dans les noms de fichiers (com
 
 Sessions/ conservent le format `AAAA-MM-JJ — Titre.md` (le tiret cadratin `—` reste, c'est lisible et la date suffit pour le tri).
 
-### 2. Liens `[[...]]` mis à jour
+### 2. Liens Obsidian mis à jour
 Script Python qui parcourt tout `docs/` et applique 16 substitutions de regex. **11 fichiers modifiés** automatiquement, aucun lien orphelin.
 
 ### 3. Sessions/_template.md

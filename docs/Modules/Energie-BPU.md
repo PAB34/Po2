@@ -127,7 +127,9 @@ Heuristique sur le nombre de composantes extraites :
 ### A. Améliorer le parser (priorité)
 **Problème** : le parser regex matche mal les tableaux multi-colonnes des BPU (chaque ligne contient 4-5 composantes alignées en colonnes que pdftotext rend en concatenation difficile à parser).
 
-**Solution recommandée** : utiliser `pdfplumber` qui détecte les tableaux et retourne directement les cellules.
+**Phase 1 + 2 en cours** : voir [[Chantiers/PO2-BPU-001-Parser-BPU-fiable]]. Le parser sait maintenant memoriser un en-tete de tableau (`Fourniture / Capacite / CEE / GO`), mapper les montants des lignes suivantes vers les bonnes composantes, puis tenter une extraction cellule par cellule avec `pdfplumber` cote backend.
+
+**Solution en cours de validation** : utiliser `pdfplumber` qui détecte les tableaux et retourne directement les cellules.
 
 ```python
 # Pseudo-code
@@ -143,6 +145,27 @@ with pdfplumber.open(pdf_path) as pdf:
 **Localisation** : `saas/backend/app/services/bpu.py` `_extract_segments` ≈ ligne 350.
 
 **Important** : garder le pipeline pdftotext+OCR comme fallback, et `raw_text` toujours stocké pour re-parsing futur.
+
+### A.1 Mesurer la qualite d'import apres reparse
+
+Un script de diagnostic DB a ete ajoute :
+
+```bash
+python -m app.scripts.report_bpu_import_quality --min-components 20
+```
+
+Il affiche :
+- total documents / segments / postes / prix unitaires ;
+- repartition par statut d'extraction ;
+- nombre de prix par BPU ;
+- liste des documents sous le seuil attendu.
+
+Commande cible apres rebuild backend :
+
+```bash
+python -m app.scripts.import_bpu_documents --source-dir "/workspace/saas/energie/HERAULT ENERGIE/HISTORIQUE BPU" --force --no-ocr
+python -m app.scripts.report_bpu_import_quality --min-components 20
+```
 
 ### B. UI de saisie corrective pour `ocr_review`
 Quand un BPU est en `ocr_review`, l'utilisateur devrait pouvoir saisir manuellement les prix via l'UI :

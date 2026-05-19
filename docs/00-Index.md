@@ -12,8 +12,11 @@
 - [[05-Conventions-IA]] — **Comment passer la main à une autre IA** ⚠️ Lire avant toute modif
 
 ### 📊 État du produit
+- [[Backlog]] — Priorites operationnelles, dependances, prochaines actions
 - [[03-Roadmap-fonctionnalites]] — Les 13 fonctionnalités cibles (issues du fichier `Fonctionnalités.xlsx`) avec statut fait/en cours/todo
 - [[04-Etat-actuel-du-dev]] — Snapshot précis : ce qui tourne en prod, les dernières PRs, les chantiers ouverts
+- [[06-Rapport-audit-projet-obsidian-2026-05-19]] — Audit code + Obsidian, dépendances entre tâches, recommandations
+- [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
 - [[Modules/Patrimoine]] — Inventaire bâtiments, locaux, propriétaire / locataire
@@ -33,6 +36,7 @@
 - [[Decisions/002-bpu-schema-normalise-5-tables]]
 - [[Decisions/003-enedis-async-ftp-meme-vps-que-po2]]
 - [[Decisions/004-specs-restent-dans-saas-specs]]
+- [[Decisions/005-poste-entreprise-zero-install-local]]
 - Template : [[Decisions/_template]]
 
 ### 📅 Journal des sessions
@@ -43,10 +47,11 @@
 
 ```
 1. Toute nouvelle IA lit :  00 Index → 04 État actuel → 05 Conventions IA
-2. Identifie sa tâche dans :  03 Roadmap (statut "todo" ou "en cours")
-3. Met à jour le statut "en cours" dans la roadmap + crée fichier Sessions/AAAA-MM-JJ Titre.md
-4. À la fin : checkbox "fait" dans la roadmap, dernière section du fichier Session = "Handoff suivant"
-5. Si limite de tokens approche : "Handoff suivant" = TODO précis pour l'IA suivante avec contextes
+2. Verifie la contrainte poste entreprise : 07 Environnement poste entreprise
+3. Identifie sa tâche dans :  Backlog puis 03 Roadmap (statut "todo" ou "en cours")
+4. Met à jour le statut "en cours" dans le backlog + crée fichier Sessions/AAAA-MM-JJ Titre.md
+5. À la fin : statut "fait" dans le backlog, dernière section du fichier Session = "Handoff suivant"
+6. Si limite de tokens approche : "Handoff suivant" = TODO précis pour l'IA suivante avec contextes
 ```
 
 Détail complet : [[05-Conventions-IA]].

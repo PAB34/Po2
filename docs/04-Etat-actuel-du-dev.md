@@ -79,7 +79,9 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - **Symptôme** : 16/17 PDFs en `extraction_status='ocr_review'`, seuls 4 prix unitaires extraits (au lieu de ~300 attendus)
 - **Cause** : parser regex actuel (`_extract_segments`, `_extract_components_from_line` dans `services/bpu.py`) trop conservateur sur les tableaux multi-colonnes
 - **Mitigation déjà en place** : `raw_text` stocké sur chaque `BpuDocument` → re-parsing sans re-OCR possible
-- **Solution proposée** : passer à `pdfplumber` qui détecte les colonnes des tableaux (à ajouter à `requirements.txt`)
+- **Avancement 2026-05-19** : phase 1 + phase 2 démarrées dans [[Chantiers/PO2-BPU-001-Parser-BPU-fiable]] ; le parser mémorise désormais les en-têtes de tableau (`Fourniture / Capacite / CEE / GO`), mappe les lignes suivantes vers les composantes, et tente une extraction cellule par cellule avec `pdfplumber`
+- **Validation locale** : `python -m compileall saas/backend/app/services/bpu.py saas/backend/tests/test_bpu_parser.py` OK ; `pytest` non disponible sur le poste entreprise
+- **Solution proposée** : valider en CI/conteneur/VPS l'augmentation du nombre de composantes extraites, puis ajuster les heuristiques sur les vrais BPU restants
 - **Localisation** : `saas/backend/app/services/bpu.py` lignes ≈ 350-500
 - **Voir** : [[Modules/Energie-BPU]]
 

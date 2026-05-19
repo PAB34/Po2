@@ -43,11 +43,17 @@ Croise les factures importées avec :
 2. Les consos ENEDIS (pour vérifier les quantités facturées)
 3. Calcule l'écart prix facturé vs prix BPU attendu
 
-### Routes : `/api/energie/factures/*`
-- `GET /api/energie/factures` : liste paginée
-- `GET /api/energie/factures/{import_id}` : détail
-- `POST /api/energie/factures/upload` : upload + analyse
-- `DELETE /api/energie/factures/{import_id}` : suppression (ajouté par session précédente)
+### Routes API reelles : `/api/billing/invoices/imports/*`
+- `GET /api/billing/invoices/imports` : liste des imports factures
+- `GET /api/billing/invoices/imports/{invoice_import_id}` : detail
+- `POST /api/billing/invoices/imports` : upload + analyse
+- `POST /api/billing/invoices/imports/{invoice_import_id}/analyze` : relancer l'analyse
+- `PATCH /api/billing/invoices/imports/{invoice_import_id}/decision` : decision utilisateur
+- `DELETE /api/billing/invoices/imports/{invoice_import_id}` : suppression
+
+### Routes frontend utilisateur
+- `/energie/factures` : liste des factures importees
+- `/energie/factures/:invoiceImportId` : detail, controles et decision
 
 ### UI : `EnergieInvoicesPage` + `EnergieInvoiceDetailPage`
 
@@ -99,7 +105,7 @@ Croise les factures importées avec :
 
 ```
 1. Utilisateur upload PDF/Excel facture sur /energie/factures
-2. POST /api/energie/factures/upload → EnergyInvoiceImport.status = "analyzing"
+2. POST /api/billing/invoices/imports → EnergyInvoiceImport.status = "analyzing"
 3. Tâche async : invoice_parsers.{supplier} extrait les champs
 4. Pour chaque ligne extraite :
    a. Cherche le BPU applicable (supplier × year × lot)

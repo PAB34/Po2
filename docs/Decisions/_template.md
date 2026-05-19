@@ -1,9 +1,9 @@
 # NNN — Titre de la décision
 
-> **Statut** : Proposé · Accepté · Déprécié · Remplacé par [[Decisions/NNN-...]]
+> **Statut** : Proposé · Accepté · Déprécié · Remplacé par `[[Decisions/NNN-...]]`
 > **Date** : AAAA-MM-JJ
 > **Décideur(s)** : PAB34 [+ IA proposante si pertinent]
-> **Session liée** : [[Sessions/AAAA-MM-JJ ...]]
+> **Session liée** : `[[Sessions/AAAA-MM-JJ ...]]`
 
 ## Contexte
 
@@ -30,5 +30,5 @@ Ce qu'on a choisi de faire, en une phrase claire.
 ## Liens
 
 - Spec source : `saas/specs/...md` (si applicable)
-- Module concerné : [[Modules/...]]
+- Module concerné : `[[Modules/...]]`
 - Commits / PRs liés : `abc1234`, PR #N

@@ -341,7 +341,7 @@ _COMPONENT_KEYWORDS: dict[str, str] = {
 
 # Repérage de blocs segment (TURPE / site / usage)
 _RX_TURPE = re.compile(
-    r"\b(C[1-5]|BT\s*≤?\s*36\s*kVA|BT\s*>\s*36\s*kVA|HTA)\b",
+    r"\b(CU4|MU4|MUDT|MUDTD|CUD|CU|LU|C[1-5]|EP|BT\s*≤?\s*36\s*kVA|BT\s*>\s*36\s*kVA|HTA)\b",
     re.IGNORECASE,
 )
 _RX_USAGE = re.compile(
@@ -351,6 +351,17 @@ _RX_USAGE = re.compile(
 
 # Détection prix : nombre avec , ou . décimal — tolère les espaces dans les milliers
 _RX_PRICE = re.compile(r"[-+]?\d{1,4}(?:[  ]\d{3})*(?:[.,]\d{1,4})?")
+
+_COMPONENT_HEADER_ALIASES: tuple[tuple[str, str], ...] = (
+    ("fourniture", COMPONENT_FOURNITURE),
+    ("energie", COMPONENT_FOURNITURE),
+    ("capac", COMPONENT_CAPACITE),
+    ("cee", COMPONENT_CEE),
+    ("garantie", COMPONENT_GO),
+    ("origine", COMPONENT_GO),
+    ("go", COMPONENT_GO),
+    ("renouvelable", COMPONENT_RENOUVELABLE),
+)
 
 
 def _to_float(token: str) -> float | None:
@@ -380,6 +391,29 @@ def _normalize_unit_to_eur_per_mwh(value: float, unit: str) -> float | None:
     if "€/mwh" in u or "€htt/mwh" in u or "eur/mwh" in u or "ehtt/mwh" in u:
         return value
     return None
+
+
+def _detect_default_unit(text: str) -> str:
+    text_lower = text.lower()
+    if "câ‚¬/kwh" in text_lower or "centime" in text_lower:
+        return "câ‚¬/kWh HTT"
+    if "â‚¬htt/mwh" in text_lower or "â‚¬/mwh" in text_lower:
+        return "â‚¬HTT/MWh"
+    return "â‚¬/MWh"
+
+
+def _estimate_extraction_confidence(segments: list[ParsedSegment]) -> float:
+    n_components = sum(len(p.components) for s in segments for p in s.periods)
+    n_segments = len(segments)
+    if n_segments == 0:
+        return 0.0
+    if n_components < 5:
+        return 0.25
+    if n_components < 20:
+        return 0.55
+    if n_components < 50:
+        return 0.75
+    return 0.9
 
 
 def parse_bpu_text(text: str, metadata: dict, *, extraction_method: str) -> ParsedBpu:
@@ -491,6 +525,21 @@ def _extract_fixed_charges(text: str) -> list[ParsedFixedCharge]:
     return charges
 
 
+def _detect_segment_code(line: str) -> str | None:
+    """Detect the most useful BPU segment code on a line."""
+    up = line.upper()
+    for code in ("MUDTD", "MUDT", "CU4", "MU4", "CUD", "CU", "LU", "C1", "C2", "C3", "C4", "C5", "EP"):
+        if re.search(rf"\b{code}\b", up):
+            return code
+    if re.search(r"\bBT\s*(?:<=|≤)?\s*36\s*KVA\b", up):
+        return "BT <= 36 KVA"
+    if re.search(r"\bBT\s*>\s*36\s*KVA\b", up):
+        return "BT > 36 KVA"
+    if re.search(r"\bHTA\b", up):
+        return "HTA"
+    return None
+
+
 def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
     """Découpe le texte en blocs par segment tarifaire et en tire les postes.
 
@@ -504,6 +553,7 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
     segments: list[ParsedSegment] = []
     current_segment: ParsedSegment | None = None
     current_period: ParsedPeriod | None = None
+    current_table_components: list[str] = []
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
@@ -511,11 +561,11 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
             continue
 
         # En-tête de segment
-        m_turpe = _RX_TURPE.search(line)
-        m_usage = _RX_USAGE.search(line) if not m_turpe else None
+        segment_code = _detect_segment_code(line)
+        m_usage = _RX_USAGE.search(line) if not segment_code else None
 
-        if m_turpe:
-            code = m_turpe.group(1).upper().strip()
+        if segment_code:
+            code = segment_code
             # Si on a déjà un segment avec ce code, ne pas dupliquer
             existing = next((s for s in segments if s.segment_code == code), None)
             if existing is not None:
@@ -530,6 +580,9 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
                 )
                 segments.append(current_segment)
             current_period = None
+            header_components = _detect_component_header(line)
+            if header_components:
+                current_table_components = header_components
             continue
 
         if m_usage:
@@ -551,11 +604,18 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
                 )
                 segments.append(current_segment)
             current_period = None
+            header_components = _detect_component_header(line)
+            if header_components:
+                current_table_components = header_components
             continue
 
         # Pas dans un segment encore → ignorer
         if current_segment is None:
             continue
+
+        header_components = _detect_component_header(line)
+        if header_components:
+            current_table_components = header_components
 
         # Détection d'un code de poste sur la ligne (avec ou sans prix)
         period_match = _detect_period(line)
@@ -570,7 +630,10 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
 
         # Extraction des prix sur la ligne (peu importe le poste : on les rattache au courant)
         if current_period is not None:
-            for component_type, value in _extract_components_from_line(line):
+            components = list(_extract_components_from_line(line))
+            if not components and current_table_components:
+                components = _extract_components_from_table_line(line, current_table_components)
+            for component_type, value in components:
                 # Évite de pousser plusieurs fois la même composante
                 if any(c.component_type == component_type for c in current_period.components):
                     continue
@@ -584,6 +647,155 @@ def _extract_segments(text: str, *, default_unit: str) -> list[ParsedSegment]:
                 )
 
     return segments
+
+
+def _detect_component_header(line: str) -> list[str]:
+    """Detect a table header containing ordered price components."""
+    lower = line.lower()
+    hits: list[tuple[int, str]] = []
+    for alias, component in _COMPONENT_HEADER_ALIASES:
+        idx = lower.find(alias)
+        if idx >= 0:
+            hits.append((idx, component))
+    if len(hits) < 2:
+        return []
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for _, component in sorted(hits, key=lambda item: item[0]):
+        if component not in seen:
+            ordered.append(component)
+            seen.add(component)
+    return ordered
+
+
+def _extract_components_from_table_line(line: str, component_order: list[str]) -> list[tuple[str, float]]:
+    """Map numeric cells in a table row to a previously detected component order."""
+    period_code = _detect_period(line)
+    if period_code:
+        m = re.search(rf"\b{period_code}\b", line, flags=re.IGNORECASE)
+        if m:
+            line = line[m.end():]
+
+    values: list[float] = []
+    for m in _RX_PRICE.finditer(line):
+        value = _to_float(m.group(0))
+        if value is None:
+            continue
+        # Avoid mapping years or page numbers to prices.
+        if abs(value) >= 2000:
+            continue
+        values.append(value)
+
+    if not values:
+        return []
+
+    if len(values) > len(component_order):
+        values = values[:len(component_order)]
+
+    return list(zip(component_order[: len(values)], values, strict=False))
+
+
+def _clean_table_cell(value: object) -> str:
+    return str(value or "").replace("\n", " ").strip()
+
+
+def _extract_components_from_table_cells(cells: list[str], component_order: list[str]) -> list[tuple[str, float]]:
+    return _extract_components_from_table_line(" ".join(cells), component_order)
+
+
+def extract_segments_pdfplumber(pdf_path: Path, *, default_unit: str) -> list[ParsedSegment]:
+    """Extract BPU price tables with pdfplumber when available.
+
+    This is intentionally optional: the backend image installs pdfplumber, but
+    the parser can still run through pdftotext/OCR in environments where the
+    dependency is absent.
+    """
+    try:
+        import pdfplumber  # type: ignore
+    except ImportError:
+        return []
+
+    segments: list[ParsedSegment] = []
+    current_segment: ParsedSegment | None = None
+    current_table_components: list[str] = []
+
+    try:
+        with pdfplumber.open(str(pdf_path)) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables() or []:
+                    for raw_cells in table:
+                        cells = [_clean_table_cell(cell) for cell in raw_cells]
+                        cells = [cell for cell in cells if cell]
+                        if not cells:
+                            continue
+                        line = " ".join(cells)
+
+                        segment_code = _detect_segment_code(line)
+                        if segment_code:
+                            existing = next((s for s in segments if s.segment_code == segment_code), None)
+                            if existing is None:
+                                existing = ParsedSegment(
+                                    segment_type=SEGMENT_TYPE_SITE if segment_code.startswith("C") else SEGMENT_TYPE_TENSION,
+                                    segment_code=segment_code,
+                                    segment_label=line[:200],
+                                    tension_category="HTA" if segment_code in ("C1", "C2", "C3", "HTA") else "BT",
+                                    turpe_tariff=segment_code if segment_code.startswith("C") else None,
+                                )
+                                segments.append(existing)
+                            current_segment = existing
+
+                        header_components = _detect_component_header(line)
+                        if header_components:
+                            current_table_components = header_components
+                            continue
+
+                        if current_segment is None or not current_table_components:
+                            continue
+
+                        period_code = _detect_period(line)
+                        if period_code is None:
+                            continue
+
+                        period = next((p for p in current_segment.periods if p.period_code == period_code), None)
+                        if period is None:
+                            period = ParsedPeriod(period_code=period_code, period_label=line[:80])
+                            current_segment.periods.append(period)
+
+                        for component_type, value in _extract_components_from_table_cells(cells, current_table_components):
+                            if any(c.component_type == component_type for c in period.components):
+                                continue
+                            period.components.append(
+                                ParsedComponent(
+                                    component_type=component_type,
+                                    price_value=value,
+                                    price_unit=default_unit,
+                                    price_value_eur_per_mwh=_normalize_unit_to_eur_per_mwh(value, default_unit),
+                                )
+                            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Extraction pdfplumber échouée pour %s : %s", pdf_path, exc)
+        return []
+
+    return segments
+
+
+def _merge_segments(base: list[ParsedSegment], extra: list[ParsedSegment]) -> list[ParsedSegment]:
+    for extra_segment in extra:
+        segment = next((s for s in base if s.segment_code == extra_segment.segment_code), None)
+        if segment is None:
+            base.append(extra_segment)
+            continue
+        for extra_period in extra_segment.periods:
+            period = next((p for p in segment.periods if p.period_code == extra_period.period_code), None)
+            if period is None:
+                segment.periods.append(extra_period)
+                continue
+            for extra_component in extra_period.components:
+                if any(c.component_type == extra_component.component_type for c in period.components):
+                    continue
+                period.components.append(extra_component)
+    return base
 
 
 def _detect_period(line: str) -> str | None:
@@ -872,6 +1084,14 @@ def import_pdf(
 
         # 3. Parsing
         parsed = parse_bpu_text(text, metadata, extraction_method=method)
+        table_segments = extract_segments_pdfplumber(
+            pdf_path,
+            default_unit=_detect_default_unit(text),
+        )
+        if table_segments:
+            parsed.segments = _merge_segments(parsed.segments, table_segments)
+            parsed.extraction_confidence = _estimate_extraction_confidence(parsed.segments)
+            parsed.extraction_method = f"{method}+pdfplumber"
 
         # 4. Statut final
         conf = parsed.extraction_confidence or 0.0

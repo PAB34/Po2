@@ -117,7 +117,8 @@
 - **Implémentation existante** :
   - `services/engie_client.py`, `services/invoice_parsers/engie_pdf.py`
   - Modèles : `EnergyInvoiceImport`, `EnergyInvoiceAnalysis` (migrations 0010-0012)
-  - Routes : `/api/engie/*`, `/api/energie/factures/*`
+  - Routes : `/api/engie/*`, `/api/billing/invoices/imports/*`
+  - Frontend : `/energie/factures`, `/energie/factures/:invoiceImportId`
   - Frontend : `EnergieInvoicesPage`, `EnergieInvoiceDetailPage`
 - **Notes pour l'IA suivante** :
   - Le parser PDF ENGIE existe ; il faudrait étendre à l'Excel ENGIE si format différent
