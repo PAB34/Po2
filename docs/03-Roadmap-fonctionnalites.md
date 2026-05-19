@@ -51,7 +51,7 @@
   - Couplages avec PPT à imaginer (probablement séparer en 2 vues : équipements CVC, matériaux enveloppe)
 - **Voir aussi** : [[Modules/Gestion-technique]]
 
-### 2.2 Enveloppe / inventaire technicien
+### 2.2 Enveloppe / inventaire technique
 - **Source** : Excel (même référentiel SYPEMI)
 - **Objectif** : Liste des matériaux d'enveloppe + état + PPT
 - **Statut** : 🟡 **Partiel** — partage la même UI que CVC, à scinder

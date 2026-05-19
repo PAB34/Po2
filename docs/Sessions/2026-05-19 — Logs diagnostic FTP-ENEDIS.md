@@ -46,26 +46,65 @@ Constat de l'IA précédente : "compileall OK, `git diff --check` OK, mais commi
 
 Aucun outil nouveau utilisé. Strictement conforme à [[Decisions/005-poste-entreprise-zero-install-local]] : seuls `git`, `python -m compileall` (lib standard) et `gh` (user-scope) ont été utilisés.
 
-## 🚧 Ce qui reste à faire / handoff
+## 🔎 Suite : monitoring + diagnostic + alignement clé AES
 
-### Priorité 1 — Lire les logs après redéploiement (côté utilisateur ou IA suivante)
+### Backfill lancé par l'utilisateur, observation en direct
+Avec un `Monitor` sur les logs du conteneur backend (timeout 30 min, filtre `ENEDIS|FTP|publication|backfill|...`), l'utilisateur a relancé un `POST /api/energie/sync/async/backfill-full`. Résultat :
 
-Une fois le déploiement OVH terminé (≈ 3 min après le push), l'utilisateur ou la prochaine IA doit :
+- `POST /api/energie/sync/async/backfill-full` → **202 Accepted**
+- Background task : **RuntimeError** `Aucun dossier ENEDIS créé pour le backfill complet. Premier rejet : CDC 2025-09-27 - 2025-10-04 lot 7/8 (50 PRM) : POST commanderPublicationPonctuelle HTTP 400`
+- Corps de la réponse ENEDIS récupéré : `"La demande ne peut pas aboutir, vous avez une demande strictement identique en cours"`
 
-```bash
-ssh -i ~/.ssh/po2_vps2 ubuntu@135.125.152.112 \
-  "docker logs --since 10m infra-backend-1 2>&1 | grep -E 'ENEDIS async (FTP|job|file)'"
+Snapshot FTP simultané (via les nouveaux logs structurés) :
+```
+pending_requested = 1753 (1687 CDC + 66 ENERGIE)
+oldest_requested_at = 2026-05-18 11:50  (~22h, frôle le seuil 24h)
+latest_requested_at = 2026-05-19 08:35
+pending_older_than_24h = 0
 ```
 
-Cas à diagnostiquer :
+### Comparaison secrets portail ENEDIS vs VPS
 
-- ✅ Voir `ENEDIS async FTP poll found files` → FTP OK, ENEDIS dépose bien
-- ⚠️ Voir `ENEDIS async FTP poll found no files: pending_requested=N` → FTP joignable mais vide → ENEDIS n'a pas encore publié OU canal mal configuré côté portail ENEDIS (user / chemin / IP) → action utilisateur sur https://mon-compte-collectivite.enedis.fr
-- ❌ Voir `ENEDIS async FTP listing failed` → FTP injoignable → vérifier UFW VPS, `pasv_address`, vsftpd actif
+L'utilisateur a partagé via `AskUserQuestion` les credentials du canal SETE_ENERGIE (506350699). ⚠️ Secrets désormais leakés dans la conversation (3e leak ENEDIS) — chantier de rotation `PO2-SEC-001` ouvert.
 
-### Côté utilisateur — Pending validations externes
+| Comparaison | Résultat |
+|---|---|
+| FTP password : portail vs `/root/.ftp_password_enedis` vs `.env` | ✅ MATCH (les 3 alignés, 28 caractères) |
+| Clé AES : portail vs `.env` ENEDIS_DECRYPTION_KEY | ❌ **MISMATCH** (longueurs identiques 64 mais valeurs différentes) |
 
-- Validation du canal SETE_ENERGIE (506350699) côté portail ENEDIS reste l'action bloquante : tant que ENEDIS ne publie pas, les logs montreront "no files / pending_requested>0".
+### Alignement clé AES (action prise)
+
+1. Backup `.env` → `/home/ubuntu/Po2/.env.bak.20260519-114338`
+2. `sudo sed -i -E "s|^ENEDIS_DECRYPTION_KEY=.*|ENEDIS_DECRYPTION_KEY=<cle_portail>|" .env`
+3. Vérification post-sed : `MATCH` côté script
+4. `docker compose ... restart backend` → conteneur restarted
+5. `docker exec infra-backend-1 sh -c 'echo ${#ENEDIS_DECRYPTION_KEY}'` → 64 (chargée OK)
+6. Premier poll après restart → "no files" (cohérent, ENEDIS n'a pas encore publié)
+
+### Interprétation finale
+
+- **Le canal FTP fonctionne techniquement** (password match → ENEDIS pourrait déposer)
+- **Le déchiffrement aurait planté** sur tout fichier reçu avant aujourd'hui à cause du mismatch AES
+- **1753 dossiers "fantômes"** côté ENEDIS bloquent tout nouveau backfill (HTTP 400 anti-doublon)
+- Soit ENEDIS finit par publier ces 1753 dossiers (et maintenant on saura les déchiffrer), soit il faut **contacter le support ENEDIS** pour purger
+
+## 🚧 Ce qui reste à faire / handoff
+
+### Priorité 1 — Attendre / forcer la publication des 1753 dossiers ENEDIS
+
+- **Passif** : surveiller périodiquement les logs `docker logs --since 1h infra-backend-1 | grep "found files"` — si ENEDIS publie spontanément, le déchiffrement marchera désormais (clé alignée).
+- **Actif** : contacter le support ENEDIS pour qu'ils purgent les 1753 demandes "fantômes" du canal 506350699 (cf. message d'erreur HTTP 400). Sans ça, aucun nouveau backfill ne peut être lancé.
+
+### Priorité 2 — Rotation des secrets leakés (`PO2-SEC-001`)
+
+Les 2 secrets ENEDIS sont leakés dans cette conversation pour la 3e fois. Procédure de rotation, à faire dès qu'un fichier est correctement déchiffré (validation du pipeline) :
+
+1. Côté portail ENEDIS (https://mon-compte-collectivite.enedis.fr) → régénérer le password FTP **ET** la clé AES du canal SETE_ENERGIE
+2. Côté VPS : `sudo nano /root/.ftp_password_enedis` (nouveau password) + `chmod 600`
+3. Côté VPS : `sudo nano /home/ubuntu/Po2/.env` → mettre à jour `FTP_PASSWORD=` et `ENEDIS_DECRYPTION_KEY=`
+4. `docker compose ... restart backend`
+5. Vérifier `docker exec infra-backend-1 sh -c 'echo ${#FTP_PASSWORD} ${#ENEDIS_DECRYPTION_KEY}'`
+6. ⚠️ **Ne plus jamais transmettre ces secrets en chat** — utiliser un canal sécurisé (1Password Send, mail GPG, SMS, etc.)
 
 ## 📝 Notes & décisions
 

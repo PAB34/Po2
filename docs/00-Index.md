@@ -37,6 +37,7 @@
 - [[Decisions/003-enedis-async-ftp-meme-vps-que-po2]]
 - [[Decisions/004-specs-restent-dans-saas-specs]]
 - [[Decisions/005-poste-entreprise-zero-install-local]]
+- [[Decisions/006-secrets-jamais-en-chat-IA]]
 - Template : [[Decisions/_template]]
 
 ### 📅 Journal des sessions
