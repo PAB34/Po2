@@ -70,6 +70,23 @@ class Lease(Base):
 - Champs à extraire : nom bailleur, dates, loyer mensuel, surface, adresse
 - Stocker `raw_text` pour re-parsing futur (pattern du BPU)
 
+## Workflow de consolidation DGFiP → bâtiment métier
+
+> Source : `saas/specs/01_Po2_fonctionnalites.md` (spécifications fonctionnelles v0.2)
+
+Le pattern conceptuel derrière `services/building_naming.py` :
+
+1. **Staging DGFiP** : import brut de `source_dgfip_local` (lignes MAJIC non transformées, traçabilité 100 %)
+2. **Candidat** : chaque ligne staging devient un `batiment_candidat` avec scoring de confiance (adresse normalisée + proximité IGN + recoupement OSM)
+3. **Validation utilisateur** : 4 statuts métier
+   - `à traiter` — candidat brut
+   - `en cours` — utilisateur a commencé l'arbitrage
+   - `validé` — bâtiment officiel pour la collectivité
+   - `exclu` — explicitement écarté (avec motif)
+4. **Bâtiment métier** : `Building` final, lié aux candidats sources via une table `batiment_source_link` (jamais d'écrasement de la donnée source)
+
+L'implémentation actuelle simplifie ce schéma (les statuts intermédiaires ne sont pas tous matérialisés en BDD) mais le principe reste : **la source ne doit jamais être perdue**.
+
 ## Routes API
 
 | Méthode | Route | Service |

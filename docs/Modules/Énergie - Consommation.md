@@ -44,6 +44,28 @@
 - Endpoint : `fetchDataAudit` retourne diagnostic par PRM (consumption / load_curve / max_power)
 - Codes : `ok`, `non_communicant_structural`, `cdc_activation_needed`, etc.
 
+## Dette technique ENEDIS Async — à traiter
+
+> Source : `saas/specs/08_enedis_async_kit_analysis.json` (analyse kit portage ENEDIS vs implémentation Po2)
+
+Gaps identifiés entre le kit officiel et notre code :
+
+| Code gap | Sévérité | Description | État |
+|---|---|---|---|
+| `CDC_WINDOW_TOO_LARGE` | High | Fenêtre CDC > 7 jours rejetée par l'API | Probablement traité par `d784882` + `38ab484` — à confirmer |
+| `UNFILTERED_PRM_BATCH` | Medium | On envoie tous les PRM même ceux non-communicants | Ouvert |
+| `ALL_OR_NOTHING_PUBLICATION` | Medium | Une publication async échoue si **un seul** PRM est invalide → perd tout le batch | Ouvert |
+| `NO_PMAX_ASYNC` | Low | Pas d'implémentation async pour P max (reste en sync) | Choix produit assumé (cf. plan ENEDIS dans `.claude/plans/`) |
+
+**Limites plateforme ENEDIS** (à respecter pour tout nouveau call) :
+- 5 req/s par application cliente
+- 1000 appels/h par API (par application)
+- 10 appels simultanés (tous clients confondus)
+- CDC : fenêtre max 7 jours par appel, profondeur max **2 ans**
+- ENERGIE / PMAX / IDX : profondeur max **3 ans**
+
+**IP allowlist prod ENEDIS** (à whitelister côté UFW VPS) : `192.196.114.95`, `163.116.11.145`.
+
 ## GRDF — 🔴 Todo
 
 ### Notes pour l'IA suivante

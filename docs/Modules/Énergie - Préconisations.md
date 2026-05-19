@@ -23,6 +23,22 @@ Pour chaque PRM :
 5. Score de confiance : `high`/`medium`/`low`
 6. Score de priorité (utilisé pour le tri) basé sur l'économie potentielle
 
+### Seuils V1 (canoniques)
+
+> Source : `saas/specs/06_preconisation_abonnement_v1.md`
+
+| Marge | Action | Sens |
+|---|---|---|
+| **20 %** | `increase` | Sécurité : recommande +X kVA dès que P max p99 dépasse `subscribed × 0.80` (= 80 % de la souscription) |
+| **12 %** | `decrease` | Prudent : ne recommande de baisser que si P max p99 < `subscribed × 0.88` |
+| **5 %** | `maintain` | Tolérance : entre 0.88 × subscribed et le `decrease` |
+
+**Conditions pour confidence = `high`** :
+- ≥ **10 mois** de données P max consécutifs disponibles
+- ≥ **240 jours** réellement utilisés dans le calcul (filtre des trous et jours non-significatifs)
+
+**Garde-fou TURPE** : la projection annuelle utilise les coefficients fixes du référentiel ([[Modules/Énergie - TURPE]]) pour éviter de sur-promettre une économie.
+
 ### Sortie
 `get_power_recommendations()` retourne :
 - KPI agrégés (`total`, `increase`, `decrease`, `maintain`, `insufficient_data`, `high_confidence`, etc.)

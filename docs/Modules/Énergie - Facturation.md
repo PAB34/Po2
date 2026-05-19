@@ -11,6 +11,19 @@
 | 4.3 Gaz TOTAL ENERGIE | 🔴 Todo |
 | 4.4 Eau SUEZ | 🔴 Todo |
 
+## Cadre contractuel Hérault Énergies
+
+> Source : `saas/specs/03_plan_facturation_optimisation_energie.md`
+
+Hérault Énergies est la **centrale d'achat groupé** d'électricité pour les collectivités de l'Hérault. Le CCTP impose des règles que le moteur de facturation **DOIT** respecter :
+
+- **Lots 1-6** : segmentation par tension et profil d'usage (cf. [[Modules/Énergie - BPU]])
+- **Optimisation puissance** : pas de **0,1 kVA** pour EP (Éclairage Public), pas de **1 kVA** pour les autres tarifs
+- **Refacturation acheminement à l'euro** (sauf C1) : le fournisseur EDF/ENGIE refacture **strictement** ce qu'a coûté l'acheminement, sans marge → c'est pour ça que le contrôle TURPE est si important ([[Modules/Énergie - TURPE]])
+- **Chiffrage annuel obligatoire** : toute préconisation de modification de puissance doit être chiffrée en € sur 12 mois ([[Modules/Énergie - Préconisations]])
+
+Cette spec est la **légitimité métier** du produit côté audit factures.
+
 ## Architecture transversale
 
 ### Modèle commun : `EnergyInvoiceImport`
@@ -43,6 +56,14 @@ Croise les factures importées avec :
 ### Parser : `services/invoice_parsers/engie_pdf.py`
 - Extrait : période de facturation, PRM concernés, consommations par poste (HPH/HCH/...), prix unitaires, totaux HT/TTC
 - Limitations connues : variations de mise en page entre les modèles de facture ENGIE
+
+### Documents de référence — à consulter avant toute évolution du parser
+
+> **Mapping facture ENGIE** : `saas/specs/04_mapping_facture_engie.md` (553 lignes)
+> Tableau complet des colonnes page 3, codes index HPSH/HCSH/HPSB/HCSB/Base/Pointe, conversion EUR/kWh ↔ EUR/MWh. Contient un modèle de tables (`energy_invoices` / `energy_invoice_sites` / `energy_invoice_periods`) plus fin que l'`EnergyInvoiceAnalysis` actuel — utile quand on étendra à DALKIA / TOTAL.
+
+> **Matrice de contrôles** : `saas/specs/05_matrice_controles_factures_energie.md` (157 lignes)
+> 40+ codes d'erreur normalisés (`BPU_PRICE_MISMATCH`, `TURPE_VERSION_MISSING`, `POWER_LOAD_CURVE_OVERRUN`, etc.), statuts de décision (`valid` / `review` / `invalid`), tolérances chiffrées (0,05 EUR sur les totaux, 0,05 EUR/MWh sur les prix unitaires), règles exactes de rapprochement BPU (ex: `BT <= 36 kVA SDT CU4/MU4` → `CU/base`). Doc canonique du moteur de décision.
 
 ### Endpoints proxy ENGIE
 - `services/engie_client.py` : client OAuth ENGIE Entreprise

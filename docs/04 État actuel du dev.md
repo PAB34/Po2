@@ -60,6 +60,19 @@ d784882  fix(enedis): ne recaler que la première fenêtre CDC
 e1d6d26  feat(energie): UI panneau async ENEDIS (Phase C) (#9)
 ```
 
+## 📚 Specs historiques
+
+L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
+
+- **4 specs canoniques** à consulter avant tout dev sur le sujet :
+  - `04_mapping_facture_engie.md` — mapping PDF facture
+  - `05_matrice_controles_factures_energie.md` — codes erreur + tolérances
+  - `06_preconisation_abonnement_v1.md` — marges 20/12/5 %
+  - `07_referentiel_turpe_7.md` — référentiel CRE
+  - `08_enedis_async_kit_analysis.json` — gaps kit ENEDIS async
+- **1 spec archivée** : `_archives/02_architecture_technique_v01_obsolete.md` (état v0.1 obsolète)
+- **3 specs partielles** dont les pépites ont été synthétisées dans les modules
+
 ## 🔥 Chantiers ouverts (en cours / à reprendre)
 
 ### 1. Parser BPU — taux d'extraction faible
@@ -80,6 +93,17 @@ e1d6d26  feat(energie): UI panneau async ENEDIS (Phase C) (#9)
 - **Pending côté utilisateur** : mettre à jour le canal SETE_ENERGIE (506350699) côté portail ENEDIS pour utiliser le nouveau user FTP `enedis_ftp` + nouveau password (récupérable via `ssh ... "sudo cat /root/.ftp_password_enedis"`)
 - Tant que ce n'est pas fait, le scheduler async tourne à vide
 - Une fois le canal validé : lancer backfill complet (CDC 2 ans + Conso 3 ans) via `POST /api/energie/sync/async/backfill-full`
+
+### 4. Dette technique ENEDIS async
+Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Modules/Énergie - Consommation]]) :
+- `UNFILTERED_PRM_BATCH` (medium) — filtrer les PRM non-communicants avant publication
+- `ALL_OR_NOTHING_PUBLICATION` (medium) — découper en sous-batchs pour qu'un PRM invalide ne tue pas tout
+- `CDC_WINDOW_TOO_LARGE` — probablement traité par les fixes `d784882` + `38ab484`, à confirmer
+
+### 5. Refresh TURPE annuel
+- Prochain refresh CRE : **2026-08-01**
+- À ce moment, mettre à jour `saas/specs/07_referentiel_turpe_7.md` avec la nouvelle version + adapter les prix dans `services/turpe.py`
+- Voir [[Modules/Énergie - TURPE]]
 
 ### 4. Codespaces — devcontainer "à vide"
 - Le `.devcontainer/devcontainer.json` minimal a été créé uniquement pour faire passer le prebuild GitHub

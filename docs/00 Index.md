@@ -22,6 +22,10 @@
 - [[Modules/Énergie - Facturation]] — Vérification ENGIE, DALKIA, TOTAL, SUEZ
 - [[Modules/Énergie - BPU]] — Suivi temporel des prix unitaires d'achat
 - [[Modules/Énergie - Préconisations]] — Calibrage contrat + recommandations puissance
+- [[Modules/Énergie - TURPE]] — Référentiel TURPE 7 (CRE)
+
+### 📚 Specs historiques
+- [[Specs]] — Catalogue des 9 specs `saas/specs/` avec verdict (à jour / partiel / archive)
 
 ### 📅 Journal des sessions
 - [[Sessions/]] — Un fichier par session de travail IA. Le plus récent en haut.
