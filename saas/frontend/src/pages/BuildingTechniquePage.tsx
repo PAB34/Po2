@@ -245,6 +245,7 @@ export function BuildingTechniquePage() {
       all: refs.length,
       cvc: refs.filter((ref) => matchesTechniqueScope(ref, "cvc")).length,
       enveloppe: refs.filter((ref) => matchesTechniqueScope(ref, "enveloppe")).length,
+      terrain: null as number | null,
     };
   }, [refsQuery.data]);
 
@@ -405,7 +406,9 @@ export function BuildingTechniquePage() {
               onClick={() => switchTechniqueScope(scope)}
             >
               {TECHNIQUE_SCOPE_CONFIG[scope].label}
-              <span style={{ marginLeft: 6, opacity: 0.75 }}>({referenceCounts[scope]})</span>
+              {referenceCounts[scope] !== null && (
+                <span style={{ marginLeft: 6, opacity: 0.75 }}>({referenceCounts[scope]})</span>
+              )}
             </button>
           );
         })}
