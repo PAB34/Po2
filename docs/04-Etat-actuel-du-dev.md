@@ -19,6 +19,7 @@
 | Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE) |
 | Facturation TURPE | `/energie/facturation` | Stable |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — 17 BPU, 523 composantes, graphes par segment/type |
+| **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Nouveau (2026-05-20) — historique CRE TURPE 6/7, indice base 100, sources officielles |
 | **BPU — Édition tableau** | `/energie/bpu` (onglet Édition tableau) | **Nouveau (2026-05-20)** — tableau Excel cliquable, batch save, 14 endpoints CRUD |
 
 ## 📦 Migrations alembic appliquées en prod
@@ -104,6 +105,7 @@ Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Module
 ### 5. Refresh TURPE annuel
 - Prochain refresh CRE : **2026-08-01**
 - À ce moment, mettre à jour `saas/specs/07_referentiel_turpe_7.md` avec la nouvelle version + adapter les prix dans `services/turpe.py`
+- La page `/energie/bpu` expose aussi l'historique moyen TURPE HTA-BT via `list_turpe_evolution_events()` : ajouter le point 2026 dans cette serie si la CRE publie l'indexation attendue.
 - Voir [[Modules/Energie-TURPE]]
 
 ### 4. Codespaces — devcontainer "à vide"

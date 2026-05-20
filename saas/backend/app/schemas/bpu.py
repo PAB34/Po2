@@ -152,6 +152,19 @@ class BpuTimelinePoint(BaseModel):
     price_unit: str
 
 
+class BpuTurpeEvolutionPoint(BaseModel):
+    """Un point d'evolution moyenne du niveau TURPE HTA-BT."""
+
+    effective_date: date
+    family: str
+    event_label: str
+    evolution_percent: Decimal
+    cumulative_index: Decimal
+    source_label: str
+    source_url: str
+    notes: str | None = None
+
+
 class BpuTimelineQuery(BaseModel):
     component_type: str | None = None
     period_code: str | None = None

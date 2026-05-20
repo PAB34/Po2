@@ -60,6 +60,7 @@ from app.schemas.bpu import (
     BpuSegmentCreate,
     BpuSegmentRead,
     BpuSegmentUpdate,
+    BpuTurpeEvolutionPoint,
     BpuTimelinePoint,
     BpuTimePeriodCreate,
     BpuTimePeriodRead,
@@ -69,6 +70,7 @@ from app.services.bpu import (
     DEFAULT_BPU_SOURCE_DIR,
     import_directory,
 )
+from app.services.turpe import list_turpe_evolution_events
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +324,19 @@ def get_timeline(
         )
         for d, s, p, c in rows
     ]
+
+
+@router.get("/turpe-evolution", response_model=list[BpuTurpeEvolutionPoint])
+def get_turpe_evolution(
+    current_user: User = Depends(get_current_user),
+) -> list[BpuTurpeEvolutionPoint]:
+    """Evolution moyenne du niveau TURPE HTA-BT issue des decisions CRE.
+
+    Cette serie ne remplace pas le bareme detaille utilise pour controler les
+    factures. Elle sert a visualiser le contexte reglementaire qui influence la
+    part acheminement des prix d'electricite.
+    """
+    return [BpuTurpeEvolutionPoint(**event) for event in list_turpe_evolution_events()]
 
 
 # ---------------------------------------------------------------------------

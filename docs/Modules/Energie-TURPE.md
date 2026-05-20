@@ -35,6 +35,7 @@ Pour chaque code tarif × poste, le référentiel TURPE 7 fournit le prix unitai
 | `services/turpe.py` | Lookup composantes TURPE pour un (tariff_code, poste, year) |
 | `services/invoice_analysis.py` | Contrôle des composantes TURPE facturées vs référentiel — codes d'erreur `TURPE_VERSION_MISSING`, `TURPE_AMOUNT_MISMATCH` |
 | `services/power_recommendations.py` | Chiffrage prudent d'une modification de puissance : `delta_eur = delta_kVA × coef_TURPE_kVA_an` |
+| `/api/bpu/turpe-evolution` + `/energie/bpu` | Historique moyen CRE TURPE 6/7, indice base 100, pour contextualiser l'évolution de la part acheminement dans le suivi BPU |
 
 ## Garde-fous appliqués
 

@@ -20,6 +20,84 @@ CRE_TURPE_7_SOURCE_URL = (
 CRE_TURPE_7_2026_MODIFICATION_URL = (
     "https://www.cre.fr/documents/deliberations/modification-des-tarifs-dutilisation-des-reseaux-publics-de-distribution-et-transport-delectricite-turpe-7-hta-bt-et-turpe-7-htb.html"
 )
+CRE_TURPE_6_SOURCE_URL = (
+    "https://www.cre.fr/documents/deliberations/tarif-d-utilisation-des-reseaux-publics-de-distribution-d-electricite-turpe-6-hta-bt.html"
+)
+CRE_TURPE_6_2022_URL = (
+    "https://www.cre.fr/Documents/Deliberations/Decision/evolution-turpe-6-hta-bt-et-evolution-du-parametre-rf-au-1er-aout-2022"
+)
+CRE_TURPE_6_2023_URL = (
+    "https://www.cre.fr/content/download/27337/file/230531_2023-137_Evolution_TURPE_6_HTA-BT_1er_aout_2023.pdf"
+)
+CRE_TURPE_6_2024_URL = (
+    "https://www.cre.fr/documents/deliberations/evolution-turpe-6-hta-bt-et-evolution-du-parametre-rf-au-1er-aout-2024.html"
+)
+CRE_TURPE_6_2025_EXCEPTIONAL_URL = (
+    "https://www.cre.fr/documents/deliberations/evolution-exceptionnelle-du-turpe-6-hta-bt-au-1er-fevrier-2025.html"
+)
+
+TURPE_EVOLUTION_EVENTS: list[dict[str, Any]] = [
+    {
+        "effective_date": date(2021, 8, 1),
+        "family": "TURPE 6 HTA-BT",
+        "event_label": "Entree en vigueur du TURPE 6",
+        "evolution_percent": Decimal("0.91"),
+        "cumulative_index": Decimal("100.00"),
+        "source_label": "CRE 2021-13, TURPE 6 HTA-BT",
+        "source_url": CRE_TURPE_6_SOURCE_URL,
+        "notes": "Hausse moyenne par rapport aux grilles TURPE 5 HTA-BT.",
+    },
+    {
+        "effective_date": date(2022, 8, 1),
+        "family": "TURPE 6 HTA-BT",
+        "event_label": "Evolution annuelle 2022",
+        "evolution_percent": Decimal("2.26"),
+        "cumulative_index": Decimal("102.26"),
+        "source_label": "CRE 2022-158, evolution au 1er aout 2022",
+        "source_url": CRE_TURPE_6_2022_URL,
+        "notes": "Inflation 1,50%, coefficient annuel 0,31%, CRCP 0,45%.",
+    },
+    {
+        "effective_date": date(2023, 8, 1),
+        "family": "TURPE 6 HTA-BT",
+        "event_label": "Evolution annuelle 2023",
+        "evolution_percent": Decimal("6.51"),
+        "cumulative_index": Decimal("108.92"),
+        "source_label": "CRE 2023-137, evolution au 1er aout 2023",
+        "source_url": CRE_TURPE_6_2023_URL,
+        "notes": "Inflation 4,20%, coefficient annuel 0,31%, CRCP 2,00%.",
+    },
+    {
+        "effective_date": date(2024, 11, 1),
+        "family": "TURPE 6 HTA-BT",
+        "event_label": "Evolution annuelle 2024 decalee",
+        "evolution_percent": Decimal("4.81"),
+        "cumulative_index": Decimal("114.16"),
+        "source_label": "CRE 2024-122 / 2024-158, entree en vigueur au 1er novembre 2024",
+        "source_url": CRE_TURPE_6_2024_URL,
+        "notes": "Evolution initialement calculee au 1er aout 2024, entree en vigueur au 1er novembre 2024.",
+    },
+    {
+        "effective_date": date(2025, 2, 1),
+        "family": "TURPE 6 HTA-BT",
+        "event_label": "Evolution exceptionnelle 2025",
+        "evolution_percent": Decimal("7.70"),
+        "cumulative_index": Decimal("122.95"),
+        "source_label": "CRE 2025-08, evolution exceptionnelle au 1er fevrier 2025",
+        "source_url": CRE_TURPE_6_2025_EXCEPTIONAL_URL,
+        "notes": "Apurement anticipe du CRCP avant le passage au TURPE 7.",
+    },
+    {
+        "effective_date": date(2025, 8, 1),
+        "family": "TURPE 7 HTA-BT",
+        "event_label": "Entree en vigueur du TURPE 7",
+        "evolution_percent": Decimal("-1.92"),
+        "cumulative_index": Decimal("120.59"),
+        "source_label": "CRE 2025-78, TURPE 7 HTA-BT",
+        "source_url": CRE_TURPE_7_SOURCE_URL,
+        "notes": "Baisse mecanique liee au transfert du FACE hors TURPE ; la structure tarifaire reste proche du TURPE 6.",
+    },
+]
 
 POSTE_ORDER = {
     "HTA": ["pointe", "hph", "hch", "hpe", "hce"],
@@ -263,6 +341,11 @@ def list_turpe_versions() -> list[dict[str, Any]]:
             }
         )
     return versions
+
+
+def list_turpe_evolution_events() -> list[dict[str, Any]]:
+    """Historical mean HTA-BT level changes used for the BPU evolution view."""
+    return [dict(event) for event in TURPE_EVOLUTION_EVENTS]
 
 
 def find_turpe_table(on_date: date) -> dict[str, Any] | None:

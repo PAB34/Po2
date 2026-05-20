@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import BpuEditableTable from "../components/BpuEditableTable";
 import BpuTimelineChart from "../components/BpuTimelineChart";
@@ -9,10 +19,12 @@ import {
   fetchBpuDocuments,
   fetchBpuFormula,
   fetchBpuTimeline,
+  fetchBpuTurpeEvolution,
   triggerBpuImport,
   BpuDocumentSummary,
   BpuFormula,
   BpuImportResponse,
+  BpuTurpeEvolutionPoint,
   BpuTimelineFilters,
   BpuTimelinePoint,
 } from "../lib/api";
@@ -44,7 +56,7 @@ function uniq<T extends string | number>(values: (T | null | undefined)[]): T[] 
   return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-type TabKey = "timeline" | "edition";
+type TabKey = "timeline" | "turpe" | "edition";
 
 export default function EnergieBpuPage() {
   const { token } = useAuth();
@@ -84,6 +96,12 @@ export default function EnergieBpuPage() {
   const timelineQuery = useQuery<BpuTimelinePoint[]>({
     queryKey: ["bpu", "timeline", chartFilters],
     queryFn: () => fetchBpuTimeline(token ?? "", chartFilters),
+    enabled: !!token,
+  });
+
+  const turpeEvolutionQuery = useQuery<BpuTurpeEvolutionPoint[]>({
+    queryKey: ["bpu", "turpe-evolution"],
+    queryFn: () => fetchBpuTurpeEvolution(token ?? ""),
     enabled: !!token,
   });
 
@@ -154,6 +172,7 @@ export default function EnergieBpuPage() {
         <nav className="-mb-px flex gap-4">
           {([
             { key: "timeline" as const, label: "Timeline" },
+            { key: "turpe" as const, label: "TURPE" },
             { key: "edition" as const, label: "Édition tableau" },
           ]).map((tab) => (
             <button
@@ -185,6 +204,12 @@ export default function EnergieBpuPage() {
           </div>
           <BpuEditableTable />
         </section>
+      ) : activeTab === "turpe" ? (
+        <TurpeEvolutionSection
+          points={turpeEvolutionQuery.data ?? []}
+          isLoading={turpeEvolutionQuery.isLoading}
+          error={turpeEvolutionQuery.error as Error | null}
+        />
       ) : (
         <>
 
@@ -505,6 +530,168 @@ export default function EnergieBpuPage() {
 // ---------------------------------------------------------------------------
 // Sous-composants UI locaux
 // ---------------------------------------------------------------------------
+
+function TurpeEvolutionSection({
+  points,
+  isLoading,
+  error,
+}: {
+  points: BpuTurpeEvolutionPoint[];
+  isLoading: boolean;
+  error: Error | null;
+}) {
+  const chartData = useMemo(
+    () =>
+      points.map((point) => ({
+        ...point,
+        dateLabel: point.effective_date.slice(0, 7),
+        cumulative_index: Number(point.cumulative_index),
+        evolution_percent: Number(point.evolution_percent),
+      })),
+    [points],
+  );
+  const latest = points[points.length - 1];
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+              Evolution du TURPE HTA-BT
+            </h2>
+            <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400">
+              Le TURPE est la part acheminement reseau de la facture. Il ne remplace pas les
+              prix de fourniture BPU, mais il explique une part reglementee du prix complet de
+              l'electricite et sert deja aux controles facture et aux preconisations puissance.
+            </p>
+          </div>
+          {latest && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800/50">
+              <div className="text-xs text-slate-500 dark:text-slate-400">Dernier point</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {latest.family}
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {formatDateFr(latest.effective_date)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="py-12 text-center text-sm text-slate-500">Chargement...</div>
+        ) : error ? (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            Erreur : {error.message}
+          </div>
+        ) : points.length === 0 ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+            Aucun historique TURPE disponible.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={340}>
+            <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+              <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} domain={["dataMin - 2", "dataMax + 2"]} />
+              <Tooltip
+                formatter={(value: number | string, name: string) => {
+                  if (typeof value === "number" && name === "Indice TURPE") {
+                    return [`${value.toFixed(2)} (base 100 en 2021)`, name];
+                  }
+                  return [value, name];
+                }}
+                labelFormatter={(_, payload) => {
+                  const row = payload?.[0]?.payload as BpuTurpeEvolutionPoint | undefined;
+                  return row ? `${row.event_label} - ${formatDateFr(row.effective_date)}` : "";
+                }}
+                contentStyle={{
+                  backgroundColor: "rgba(15,23,42,0.95)",
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  color: "#f1f5f9",
+                  fontSize: "12px",
+                }}
+              />
+              <ReferenceLine y={100} stroke="rgba(100,116,139,0.45)" strokeDasharray="4 4" />
+              <Line
+                type="monotone"
+                dataKey="cumulative_index"
+                name="Indice TURPE"
+                stroke="#0891b2"
+                strokeWidth={3}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="mb-3 text-lg font-medium text-slate-900 dark:text-slate-100">
+          Points CRE retenus
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
+              <tr>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Version</th>
+                <th className="px-3 py-2">Evolution</th>
+                <th className="px-3 py-2">Indice</th>
+                <th className="px-3 py-2">Source</th>
+                <th className="px-3 py-2">Note</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              {points.map((point) => (
+                <tr key={`${point.family}-${point.effective_date}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <td className="px-3 py-2">{formatDateFr(point.effective_date)}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
+                    {point.family}
+                    <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                      {point.event_label}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={Number(point.evolution_percent) >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                      {Number(point.evolution_percent) >= 0 ? "+" : ""}
+                      {Number(point.evolution_percent).toFixed(2)} %
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">{Number(point.cumulative_index).toFixed(2)}</td>
+                  <td className="px-3 py-2">
+                    <a
+                      href={point.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-300"
+                    >
+                      {point.source_label}
+                    </a>
+                  </td>
+                  <td className="max-w-[360px] px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                    {point.notes ?? "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function formatDateFr(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
 
 function StatCard({
   label,

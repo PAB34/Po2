@@ -1885,6 +1885,17 @@ export type BpuTimelinePoint = {
   price_unit: string;
 };
 
+export type BpuTurpeEvolutionPoint = {
+  effective_date: string;
+  family: string;
+  event_label: string;
+  evolution_percent: number | string;
+  cumulative_index: number | string;
+  source_label: string;
+  source_url: string;
+  notes: string | null;
+};
+
 export type BpuDocumentFilters = {
   supplier?: string;
   valid_year?: number;
@@ -1983,6 +1994,13 @@ export async function fetchBpuTimeline(
     headers: buildHeaders(token),
   });
   return parseResponse<BpuTimelinePoint[]>(response);
+}
+
+export async function fetchBpuTurpeEvolution(token: string): Promise<BpuTurpeEvolutionPoint[]> {
+  const response = await fetch(`${apiBaseUrl}/bpu/turpe-evolution`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuTurpeEvolutionPoint[]>(response);
 }
 
 export async function triggerBpuImport(
