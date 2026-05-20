@@ -220,18 +220,35 @@ export default function EnergieBpuPage() {
           {/* Définitions des composantes */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
             {[
-              { code: "fourniture", label: "Fourniture",          desc: "Prix du marché de gros de l'électricité, fixé à la signature du marché.", color: "#2563eb" },
-              { code: "capacite",   label: "Capacité",            desc: "Mécanisme de capacité réglementé par RTE pour garantir l'équilibre offre/demande en hiver.", color: "#f59e0b" },
-              { code: "cee",        label: "CEE",                 desc: "Obligation légale de financement des Certificats d'Économies d'Énergie.", color: "#10b981" },
-              { code: "go",         label: "Garanties d'Origine", desc: "Option contractuelle pour attester l'origine renouvelable de l'électricité fournie.", color: "#a855f7" },
-            ].map(({ code, label, desc, color }) => (
-              <div key={code} style={{ borderLeft: `3px solid ${color}`, padding: "10px 14px", background: "rgba(15,23,42,0.4)", border: `1px solid rgba(148,163,184,0.12)`, borderLeftColor: color, borderLeftWidth: 3, borderLeftStyle: "solid", borderRadius: 8 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+              {
+                code: "fourniture", label: "Fourniture", color: "#2563eb",
+                desc: "Prix du marché de gros de l'électricité, fixé à la signature du marché.",
+                example: "Ex. : ENGIE 2023, Lot 1 — 142 €/MWh en HPH (le poste le plus lourd de la facture).",
+              },
+              {
+                code: "capacite", label: "Capacité", color: "#f59e0b",
+                desc: "Mécanisme de capacité réglementé par RTE pour garantir l'équilibre offre/demande en hiver.",
+                example: "Ex. : ~4–8 €/MWh selon les années ; indexé sur le prix des certificats de capacité RTE, très volatile en hiver froid.",
+              },
+              {
+                code: "cee", label: "CEE", color: "#10b981",
+                desc: "Obligation légale de financement des Certificats d'Économies d'Énergie.",
+                example: "Ex. : ~1–3 €/MWh ; répercuté par le fournisseur sur tous les postes tarifaires.",
+              },
+              {
+                code: "go", label: "Garanties d'Origine", color: "#a855f7",
+                desc: "Option contractuelle pour attester l'origine renouvelable de l'électricité fournie.",
+                example: "Ex. : 0,5–1,5 €/MWh en option « électricité verte » ; absent si le marché ne prévoit pas cette clause.",
+              },
+            ].map(({ code, label, desc, example, color }) => (
+              <div key={code} style={{ padding: "12px 14px", background: "rgba(15,23,42,0.4)", border: `1px solid rgba(148,163,184,0.12)`, borderLeftColor: color, borderLeftWidth: 3, borderLeftStyle: "solid", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                   <code style={{ fontSize: "0.85rem", fontWeight: 700, color: "#e2e8f0" }}>{code}</code>
                   <span style={{ fontSize: "0.75rem", color: "#475569" }}>=</span>
                   <span style={{ fontSize: "0.85rem", fontWeight: 600, color: color }}>{label}</span>
                 </div>
-                <p style={{ fontSize: "0.75rem", color: "#64748b", margin: 0, lineHeight: 1.5 }}>{desc}</p>
+                <p style={{ fontSize: "0.75rem", color: "#94a3b8", margin: "0 0 6px", lineHeight: 1.5 }}>{desc}</p>
+                <p style={{ fontSize: "0.73rem", color: "#475569", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{example}</p>
               </div>
             ))}
           </div>
