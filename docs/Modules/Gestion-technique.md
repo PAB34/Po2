@@ -6,8 +6,8 @@
 
 | Fonctionnalité roadmap | Statut |
 |---|---|
-| 2.1 CVC inventaire maintenance | 🟡 Partiel (référentiel + UI génériques, pas filtré CVC) |
-| 2.2 Enveloppe inventaire technicien | 🟡 Partiel (même UI partagée avec 2.1) |
+| 2.1 CVC inventaire maintenance | 🟢 Terrain importé via PO2-CVC-001 + SYPEMI générique |
+| 2.2 Enveloppe inventaire technicien | 🟡 Partiel (même UI partagée avec 2.1, pas filtré) |
 | 2.3 Occupation périodes des locaux | 🔴 Todo |
 | 2.4 CVC température + programmation | 🔴 Todo |
 | 2.5 GTB / décret BACS / NF EN ISO 52120 | Futur |
@@ -31,16 +31,34 @@
 ### Score santé bâtiment
 Implémenté dans `services/equipment.py::compute_building_equipment_summary`. Retourne `EquipmentStateCounts` (counts par état + total + `score_sante` 0-1).
 
-### Inventaire CVC terrain — source utilisateur
-- Fichier source : `saas/CVC/listing materiels V2.xlsx` (1301 lignes)
-- Colonnes observées : `SITE`, `BATIMENT`, `NIVEAU`, `LOCAL`, `DESIGNATION`, `STATUT`, `ETAT SANTE`, `QTE QTE RELEVEE`, `FAMILLE`, `MARQUE`, `MODELE`, `DATE MES`
-- Usage cible : enrichir `BuildingEquipment` ou créer une table d'inventaire terrain plus fine avant rapprochement avec le référentiel SYPEMI.
-- Attention : le rattachement `SITE` / `BATIMENT` doit être rapproché du `Building` métier avec score de confiance, pas importé aveuglément.
+### Inventaire CVC terrain — `CvcInventoryItem` (PO2-CVC-001 — livré 2026-05-20)
+
+- Fichier source : `saas/CVC/listing materiels V2.xlsx` (1133 lignes, 71 sites, 44 familles)
+- Table : `cvc_inventory_items` (migration 0016)
+- Colonnes stockées : `building_id` (FK), `equipment_ref_id` (FK nullable SYPEMI), `site_raw`, `batiment`, `niveau`, `local_name`, `designation`, `statut`, `etat_sante`, `quantite_relevee`, `famille`, `marque`, `modele`, `date_mis_en_service`, `duree_vie_restante`, `import_batch`
+- Import via wizard UI `/buildings/cvc-import` (3 étapes : upload → mapping bâtiments → confirmation)
+- Fuzzy matching :
+  - sites Excel ↔ `Building.nom_batiment` via `difflib.SequenceMatcher`, seuil auto 65 %
+  - famille ↔ `EquipmentReference.equipement`, seuil auto 50 %
+- Vétusté calculée à l'import : `criticite_pct = age / sypemi_reference_annees × 100`
+- Affichage dans `/buildings/technique` onglet "Inventaire terrain" (badges vert/orange/rouge)
+
+**Routes API** :
+
+| Méthode | Route | Description |
+|---|---|---|
+| POST | `/api/cvc/preview` | Upload Excel → colonnes + sites uniques |
+| POST | `/api/cvc/match-buildings` | Liste sites → suggestions bâtiments |
+| POST | `/api/cvc/import` | Upload + mapping → import bulk |
+| GET | `/api/cvc/buildings/{id}` | Équipements terrain d'un bâtiment |
+| DELETE | `/api/cvc/buildings/{id}/items` | Effacer l'inventaire terrain d'un bâtiment |
+| DELETE | `/api/cvc/items/{id}` | Supprimer un équipement terrain |
 
 ## UI actuelle
 
-- **Page** : `/buildings/technique` (`BuildingTechniquePage.tsx`, 627 lignes)
-- **Composants** : tableau modal de sélection des équipements + édition inline état/quantité
+- **Page SYPEMI** : `/buildings/technique` (`BuildingTechniquePage.tsx`) — onglets "Tous / CVC / Enveloppe / Inventaire terrain", sélection bâtiment sidebar
+- **Onglet Inventaire terrain** : liste `CvcInventoryItem` par bâtiment, badge criticité coloré, durée restante, marque/modèle/local/date MES
+- **Page import** : `/buildings/cvc-import` (`CvcImportPage.tsx`) — wizard 3 étapes
 - **Dark mode** : fixé en PR #10 (badges rgba translucides, fonds neutres)
 
 ## Pistes pour scinder CVC / Enveloppe (2.1 vs 2.2)
@@ -194,15 +212,19 @@ class MaintenanceContract(Base):
 3. vue des contrats arrivant à échéance / préavis ;
 4. affichage dans la fiche bâtiment.
 
-## Routes API
+## Routes API SYPEMI (`/api/equipment/`)
 
 | Méthode | Route | Description |
 |---|---|---|
 | GET | `/api/equipment/references` | Liste référentiel (310) |
 | GET | `/api/equipment/summaries` | Score santé pour tous les bâtiments du tenant |
-| GET | `/api/equipment/buildings/{id}` | Équipements d'un bâtiment |
-| POST | `/api/equipment/buildings/{id}` | Ajouter un équipement |
+| GET | `/api/equipment/buildings/{id}` | Équipements SYPEMI d'un bâtiment |
+| POST | `/api/equipment/buildings/{id}` | Ajouter un équipement SYPEMI |
 | POST | `/api/equipment/buildings/{id}/bulk` | Ajout en masse |
 | PUT | `/api/equipment/buildings/{id}/{equipment_id}` | Modifier |
 | DELETE | `/api/equipment/buildings/{id}/{equipment_id}` | Supprimer |
 | GET | `/api/equipment/buildings/{id}/summary` | Score santé d'un bâtiment |
+
+## Routes API terrain CVC (`/api/cvc/`)
+
+Voir section [[#Inventaire CVC terrain — `CvcInventoryItem` (PO2-CVC-001 — livré 2026-05-20)]] ci-dessus.
