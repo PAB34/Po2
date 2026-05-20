@@ -428,6 +428,90 @@ function TurpeSection({ points, isLoading, error }: { points: BpuTurpeEvolutionP
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Bloc définition TURPE + lien avec composantes Timeline */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 4px" }}>
+            Qu'est-ce que le TURPE ?
+          </h2>
+          <p style={{ fontSize: "0.83rem", color: "#94a3b8", margin: 0, lineHeight: 1.6, maxWidth: 700 }}>
+            Le <strong style={{ color: "#cbd5e1" }}>TURPE</strong> (Tarif d'Utilisation des Réseaux Publics d'Électricité) est le tarif réglementé
+            fixé par la <strong style={{ color: "#cbd5e1" }}>CRE</strong> (Commission de Régulation de l'Énergie) pour l'accès au réseau
+            de transport (RTE) et de distribution (Enedis/ELD). Il rémunère l'acheminement de l'électricité des centrales jusqu'aux bâtiments,
+            indépendamment du fournisseur choisi.
+          </p>
+        </div>
+
+        {/* Tableau impact sur composantes */}
+        <div>
+          <div style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#475569", fontWeight: 600, letterSpacing: "0.06em", marginBottom: 8 }}>
+            Impact sur les composantes de la Timeline
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              {
+                color: "#2563eb",
+                code: "fourniture",
+                label: "Fourniture",
+                impact: "Aucun impact direct",
+                detail: "Prix du marché de gros fixé contractuellement avec le fournisseur. Le TURPE n'entre pas dans ce calcul.",
+                badge: "neutre",
+                badgeColor: "#475569",
+              },
+              {
+                color: "#f59e0b",
+                code: "capacite",
+                label: "Capacité",
+                impact: "Impact indirect possible",
+                detail: "Le mécanisme de capacité (obligation RTE) est distinct du TURPE mais suit une logique réglementaire similaire — les deux sont révisés par arrêtés CRE. Une hausse TURPE signale souvent un renchérissement global de la partie réseau.",
+                badge: "indirect",
+                badgeColor: "#ca8a04",
+              },
+              {
+                color: "#10b981",
+                code: "cee",
+                label: "CEE",
+                impact: "Aucun impact direct",
+                detail: "Les Certificats d'Économies d'Énergie sont une obligation issue de la loi énergie, distincte du tarif réseau.",
+                badge: "neutre",
+                badgeColor: "#475569",
+              },
+              {
+                color: "#a855f7",
+                code: "go",
+                label: "Garanties d'Origine",
+                impact: "Aucun impact direct",
+                detail: "Option contractuelle pour attester l'origine renouvelable de l'électricité. Sans lien avec les tarifs d'acheminement.",
+                badge: "neutre",
+                badgeColor: "#475569",
+              },
+            ].map(({ color, code, label, impact, detail, badge, badgeColor }) => (
+              <div key={code} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: "rgba(30,41,59,0.5)", borderRadius: 7, border: "1px solid rgba(148,163,184,0.1)" }}>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 3 }} />
+                <div style={{ minWidth: 100 }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1" }}>{code}</span>
+                  <span style={{ fontSize: "0.75rem", color: "#475569", marginLeft: 6 }}>{label}</span>
+                </div>
+                <div style={{ flex: 1, fontSize: "0.78rem", color: "#94a3b8", lineHeight: 1.5 }}>
+                  <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 10, fontSize: "0.7rem", fontWeight: 600, background: `${badgeColor}33`, color: badgeColor, border: `1px solid ${badgeColor}66`, marginRight: 6 }}>
+                    {badge}
+                  </span>
+                  <strong style={{ color: "#cbd5e1" }}>{impact}</strong>
+                  {" — "}
+                  {detail}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p style={{ fontSize: "0.78rem", color: "#475569", margin: 0, borderTop: "1px solid rgba(148,163,184,0.1)", paddingTop: 10 }}>
+          Sur la facture finale, le TURPE s'additionne aux composantes BPU (fourniture + capacité + CEE + GO) et aux taxes (TICFE, CTA, TVA).
+          Suivre son évolution permet de vérifier que le fournisseur répercute correctement les hausses réglementaires sans marge excessive.
+        </p>
+      </div>
+
       <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <div>
