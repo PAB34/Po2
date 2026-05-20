@@ -132,16 +132,37 @@ def _extract_amendment_from_filename(filename: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-# Mapping segment_code depuis Site / typologie
+# Mapping segment_code depuis Site / typologie.
+# Important : chaque sous-typologie doit produire un segment_code DISTINCT pour
+# ne pas collapser plusieurs sites différents (Eclairage public vs Bornes vs
+# Bâtiment numéroté) en un seul segment et casser la contrainte unique
+# (period_id, component_type).
 _SEGMENT_CODE_PATTERNS = [
-    # Patterns ordonnés du plus spécifique au plus générique
-    (re.compile(r"Sites?\s*(C[1-5])\s+Bornes", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
-    (re.compile(r"Sites?\s*(C[1-5])\s+Eclairage\s+Public", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
-    (re.compile(r"Sites?\s*(C[1-5])\s+b[âa]timent", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
-    (re.compile(r"Sites?\s*(C[1-5])", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
-    (re.compile(r"\(C[1-5]\)", re.IGNORECASE), lambda m: (m.group(0).strip("()").upper(), "site")),
-    (re.compile(r"\bC([1-5])\s+B[âa]timents", re.IGNORECASE), lambda m: (f"C{m.group(1)}", "site")),
-    (re.compile(r"Bornes\s+de\s+recharge.*\((C[1-5])\)", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
+    # Sous-typologies de C4/C5 — du plus spécifique au plus générique
+    (re.compile(r"Sites?\s*C5\s+Bornes", re.IGNORECASE), lambda m: ("C5_BORNES", "site")),
+    (re.compile(r"Sites?\s*C5\s+Eclairage\s+Public", re.IGNORECASE), lambda m: ("C5_EP", "site")),
+    # Sites C5 bâtiment 1/2/4 Prix → C5_BAT_1 / C5_BAT_2 / C5_BAT_4
+    (re.compile(r"Sites?\s*C5\s+b[âa]timent\s+(\d+)", re.IGNORECASE), lambda m: (f"C5_BAT_{m.group(1)}", "site")),
+    # Sites C5 bâtiment** (Heures Base) — double étoile prioritaire sur étoile simple
+    (re.compile(r"Sites?\s*C5\s+b[âa]timent\*\*", re.IGNORECASE), lambda m: ("C5_BAT_BASE", "site")),
+    (re.compile(r"Sites?\s*C5\s+b[âa]timent\*", re.IGNORECASE), lambda m: ("C5_BAT_HCHP", "site")),
+    # C5 Bâtiments RAE BT ≤ 36 kVA - variantes (4 cadrans / Heures Base / Heures Creuses-Pleines)
+    (re.compile(r"C5\s+B[âa]timents.*RAE.*4\s*cadrans", re.IGNORECASE), lambda m: ("C5_BAT_RAE_4C", "site")),
+    (re.compile(r"C5\s+B[âa]timents.*RAE.*Heures?\s+Base", re.IGNORECASE), lambda m: ("C5_BAT_RAE_BASE", "site")),
+    (re.compile(r"C5\s+B[âa]timents.*RAE.*Heures?\s+Creuses", re.IGNORECASE), lambda m: ("C5_BAT_RAE_HCHP", "site")),
+    (re.compile(r"C5\s+B[âa]timents.*RAE", re.IGNORECASE), lambda m: ("C5_BAT_RAE", "site")),
+    # Eclairage public verbeux EDF 2021/2022 : "Eclairage public, panneaux, feux tricolores ... (C5)"
+    (re.compile(r"Eclairage\s+public.*\(C5\)", re.IGNORECASE), lambda m: ("C5_EP", "site")),
+    # Bornes de recharge véhicules électriques (C4) ou (C5)
+    (re.compile(r"Bornes\s+de\s+recharge.*\(C5\)", re.IGNORECASE), lambda m: ("C5_BORNES", "site")),
+    (re.compile(r"Bornes\s+de\s+recharge.*\(C4\)", re.IGNORECASE), lambda m: ("C4_BORNES", "site")),
+    # Sous-typologies C4
+    (re.compile(r"Sites?\s*C4\s+Bornes", re.IGNORECASE), lambda m: ("C4_BORNES", "site")),
+    # Sites Cx génériques (C1, C2, C3, C4, C5 sans qualificatif)
+    (re.compile(r"Sites?\s*(C[1-5])(?!\w)", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
+    # Cx isolé entre parenthèses
+    (re.compile(r"\((C[1-5])\)", re.IGNORECASE), lambda m: (m.group(1).upper(), "site")),
+    # Usages standalone (Bâtiment / Bornes / Eclairage Public seuls)
     (re.compile(r"\bBornes\b", re.IGNORECASE), lambda m: ("BORNES", "usage")),
     (re.compile(r"\bB[âa]timent\b", re.IGNORECASE), lambda m: ("BATIMENT", "usage")),
     (re.compile(r"Eclairage\s+Public", re.IGNORECASE), lambda m: ("ECLAIRAGE_PUBLIC", "usage")),
@@ -155,6 +176,10 @@ def _normalize_segment(site_label: str | None, turpe: str | None, tension: str |
       1. essayer les patterns sur `site_label` (le plus descriptif)
       2. sinon fallback sur `turpe` (Bâtiment / C2 / C4 / Eclairage Public)
       3. sinon fallback sur `tension` (HTA → HTA, BT → BT)
+
+    Note importante : les sous-typologies C4/C5 (Bornes, Eclairage Public,
+    Bâtiment numéroté, RAE 4 cadrans, etc.) produisent des codes DISTINCTS
+    pour éviter d'écraser plusieurs sites sous le même segment_code.
     """
     if site_label:
         for rx, fn in _SEGMENT_CODE_PATTERNS:
@@ -382,6 +407,10 @@ def import_xlsx(xlsx_path: Path, *, force: bool = False) -> dict[str, int]:
         # Cache des segments et postes par document
         segments_cache: dict[tuple[int, str], BpuSegment] = {}
         periods_cache: dict[tuple[int, str], BpuTimePeriod] = {}
+        # Set des composantes déjà créées dans cette session pour éviter les
+        # doublons (la relation period.components peut ne pas refléter les
+        # ajouts pas encore flushés)
+        seen_components: set[tuple[int, str]] = set()
 
         for _, row in prices_df.iterrows():
             pdf_filename = _s(row.get("Source fichier"))
@@ -442,9 +471,19 @@ def import_xlsx(xlsx_path: Path, *, force: bool = False) -> dict[str, int]:
                 price_value = _f(row.get(value_col))
                 if price_value is None:
                     continue
-                # Éviter doublons sur (period, component_type)
-                if any(c.component_type == comp_type for c in period.components):
+                # Éviter doublons sur (period, component_type) — via set local
+                # robuste au batching SQLAlchemy (period.components peut ne pas
+                # voir les inserts pas encore flushés)
+                dup_key = (period.id, comp_type)
+                if dup_key in seen_components:
+                    logger.warning(
+                        "Composante deja vue, ignoree : period_id=%s comp=%s "
+                        "(PDF=%s site=%s poste=%s)",
+                        period.id, comp_type, pdf_filename, site, period_raw,
+                    )
+                    counters["skipped_prices"] += 1
                     continue
+                seen_components.add(dup_key)
                 unit = _s(row.get(unit_col)) or "EUR/MWh"
                 comp = BpuPriceComponent(
                     period_id=period.id,
