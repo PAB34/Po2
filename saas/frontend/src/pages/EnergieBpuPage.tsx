@@ -207,20 +207,36 @@ export default function EnergieBpuPage() {
             )}
           </div>
 
-          {/* Formule compacte */}
-          {formulaQuery.data && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: "0.78rem", color: "#475569", marginRight: 4 }}>Formule :</span>
-              <code style={{ fontSize: "0.82rem", color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(59,130,246,0.2)" }}>
-                {formulaQuery.data.expression}
-              </code>
-              {formulaQuery.data.components.map(c => (
-                <span key={c.code} style={{ fontSize: "0.75rem", color: "#64748b", padding: "2px 8px", background: "rgba(51,65,85,0.5)", borderRadius: 4, border: "1px solid rgba(148,163,184,0.15)" }}>
-                  <strong style={{ color: "#94a3b8" }}>{c.code}</strong> = {c.label}
+          {/* Formule + légende composantes */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px", background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10 }}>
+            {formulaQuery.data && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: "0.78rem", color: "#475569" }}>Formule :</span>
+                <code style={{ fontSize: "0.82rem", color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(59,130,246,0.2)" }}>
+                  {formulaQuery.data.expression}
+                </code>
+              </div>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { code: "fourniture", label: "Fourniture",          desc: "Prix du marché de gros de l'électricité",          color: "#2563eb" },
+                { code: "capacite",   label: "Capacité",            desc: "Mécanisme de capacité réglementé RTE",              color: "#f59e0b" },
+                { code: "cee",        label: "CEE",                 desc: "Certificats d'Économies d'Énergie",                 color: "#10b981" },
+                { code: "go",         label: "Garanties d'Origine", desc: "Option énergie renouvelable (GO)",                  color: "#a855f7" },
+              ].map(({ code, label, desc, color }) => (
+                <span
+                  key={code}
+                  title={desc}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: "#94a3b8", padding: "3px 10px", background: "rgba(51,65,85,0.5)", borderRadius: 4, border: "1px solid rgba(148,163,184,0.15)", cursor: "default" }}
+                >
+                  <span style={{ display: "inline-block", width: 10, height: 3, borderRadius: 2, background: color, flexShrink: 0 }} />
+                  <strong style={{ color: "#cbd5e1" }}>{code}</strong>
+                  <span style={{ color: "#475569" }}>=</span>
+                  {label}
                 </span>
               ))}
             </div>
-          )}
+          </div>
         </div>
       )}
 
