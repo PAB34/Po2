@@ -1,8 +1,8 @@
 # État actuel du développement
 
-> **Mise à jour** : 2026-05-20 (PO2-BPU-002 + PO2-BPU-003 livrés)
-> **Mainteneur principal** : PAB34 + assistance IA (Claude Opus 4.7)
-> **Dernière commit en prod** : `0e32a1c` (feat(bpu): tableau éditable des prix)
+> **Mise à jour** : 2026-05-20 (PO2-BPU-002 + PO2-BPU-003 + PO2-CVC-001 livrés)
+> **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.6)
+> **Dernière commit en prod** : `fd192fe` (feat(cvc): import inventaire CVC terrain + rattachement SYPEMI)
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -12,7 +12,8 @@
 | Patrimoine — liste | `/buildings`, `/buildings/list` | Stable |
 | Patrimoine — détail | `/buildings/:id` | Stable |
 | Patrimoine — création / import | `/buildings/create-edit` | Stable |
-| Gestion technique | `/buildings/technique` | Stable (310 équip. importés) |
+| Gestion technique SYPEMI | `/buildings/technique` | Stable (310 équip. importés) |
+| **Inventaire terrain CVC** | `/buildings/technique` (onglet Terrain) + `/buildings/cvc-import` | **Nouveau (2026-05-20)** — wizard import Excel 3 étapes, fuzzy match sites↔bâtiments, rattachement SYPEMI, badges vétusté |
 | Énergie — vue d'ensemble | `/energie` | Stable |
 | Énergie — détail PRM | `/energie/:prmId` | Stable |
 | Préconisations puissance | `/energie/preconisations` | Stable |
@@ -38,7 +39,8 @@
 0012_add_invoice_decision_fields
 0013_add_enedis_async_jobs
 0014_add_equipment_tables
-0015_add_bpu_tables               ← HEAD
+0015_add_bpu_tables
+0016_add_cvc_inventory            ← HEAD
 ```
 
 ## 🔧 PRs récentes
