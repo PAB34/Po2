@@ -8,6 +8,8 @@ import {
   fetchEquipmentReferences,
   fetchEquipmentSummaries,
   fetchBuildingEquipments,
+  fetchCvcBuildingItems,
+  deleteCvcBuildingItems,
   bulkCreateBuildingEquipments,
   updateBuildingEquipmentRequest,
   deleteBuildingEquipmentRequest,
@@ -15,6 +17,7 @@ import {
   type EquipmentReference,
   type BuildingEquipmentSummary,
   type BuildingEquipment as BuildingEquipmentType,
+  type CvcInventoryItem,
 } from "../lib/api";
 
 const ETAT_LABELS: Record<string, string> = {
@@ -60,7 +63,7 @@ const QUANTITE_LABELS: Record<string, string> = {
   elevee: "Élevée",
 };
 
-type TechniqueScope = "all" | "cvc" | "enveloppe";
+type TechniqueScope = "all" | "cvc" | "enveloppe" | "terrain";
 
 const TECHNIQUE_SCOPE_CONFIG: Record<TechniqueScope, { label: string; shortLabel: string; title: string; emptyLabel: string }> = {
   all: {
@@ -81,7 +84,29 @@ const TECHNIQUE_SCOPE_CONFIG: Record<TechniqueScope, { label: string; shortLabel
     title: "Inventaire enveloppe",
     emptyLabel: "élément d'enveloppe assigné",
   },
+  terrain: {
+    label: "Inventaire terrain",
+    shortLabel: "Terrain",
+    title: "Inventaire CVC terrain",
+    emptyLabel: "équipement terrain importé",
+  },
 };
+
+function criticiteColor(pct: number | null): string {
+  if (pct === null) return "#94a3b8";
+  if (pct >= 100) return "#dc2626";
+  if (pct >= 80) return "#f97316";
+  if (pct >= 50) return "#fbbf24";
+  return "#4ade80";
+}
+
+function criticiteLabel(pct: number | null): string {
+  if (pct === null) return "—";
+  if (pct >= 100) return "Obsolète";
+  if (pct >= 80) return "Critique";
+  if (pct >= 50) return "Dégradé";
+  return "Bon";
+}
 
 function matchesTechniqueScope(ref: EquipmentReference | null | undefined, scope: TechniqueScope): boolean {
   if (scope === "all") return true;
@@ -182,6 +207,19 @@ export function BuildingTechniquePage() {
     queryKey: ["building-equipments", token, selectedBuildingId],
     queryFn: () => fetchBuildingEquipments(token as string, selectedBuildingId!),
     enabled: Boolean(token) && selectedBuildingId !== null,
+  });
+
+  const cvcTerrainQuery = useQuery({
+    queryKey: ["cvc-terrain", token, selectedBuildingId],
+    queryFn: () => fetchCvcBuildingItems(token as string, selectedBuildingId!),
+    enabled: Boolean(token) && selectedBuildingId !== null && techniqueScope === "terrain",
+  });
+
+  const deleteCvcMutation = useMutation({
+    mutationFn: () => deleteCvcBuildingItems(token as string, selectedBuildingId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cvc-terrain"] });
+    },
   });
 
   const summariesMap = useMemo(() => {
@@ -436,7 +474,7 @@ export function BuildingTechniquePage() {
             </div>
           )}
 
-          {selectedBuilding && !showSelector && (
+          {selectedBuilding && !showSelector && techniqueScope !== "terrain" && (
             <div className="section-block">
               <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -567,8 +605,110 @@ export function BuildingTechniquePage() {
             </div>
           )}
 
-          {/* Equipment selector (hierarchical tree) */}
-          {selectedBuilding && showSelector && (
+          {/* Inventaire terrain CVC */}
+          {selectedBuilding && techniqueScope === "terrain" && (
+            <div className="section-block">
+              <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <h3>{selectedBuilding.nom_batiment || `Bâtiment #${selectedBuilding.id}`}</h3>
+                  <p>Inventaire CVC terrain — {cvcTerrainQuery.data?.length ?? 0} équipement(s)</p>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Link to="/buildings/cvc-import" className="primary-button" style={{ textDecoration: "none", padding: "6px 12px", fontSize: "0.85rem" }}>
+                    Importer un fichier Excel
+                  </Link>
+                  {(cvcTerrainQuery.data?.length ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      style={{ padding: "6px 12px", fontSize: "0.85rem" }}
+                      onClick={() => {
+                        if (window.confirm(`Supprimer les ${cvcTerrainQuery.data?.length} équipements terrain de ce bâtiment ?`)) {
+                          deleteCvcMutation.mutate();
+                        }
+                      }}
+                      disabled={deleteCvcMutation.isPending}
+                    >
+                      Effacer l'inventaire
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {cvcTerrainQuery.isLoading && <p>Chargement...</p>}
+
+              {!cvcTerrainQuery.isLoading && (cvcTerrainQuery.data?.length ?? 0) === 0 && (
+                <div className="empty-state">
+                  <strong>Aucun équipement terrain importé</strong>
+                  <span>Utilise le bouton "Importer un fichier Excel" pour charger l'inventaire CVC de ce bâtiment.</span>
+                </div>
+              )}
+
+              {(cvcTerrainQuery.data?.length ?? 0) > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                  {(cvcTerrainQuery.data as CvcInventoryItem[]).map((item) => {
+                    const pct = item.criticite_pct;
+                    const color = criticiteColor(pct);
+                    const label = criticiteLabel(pct);
+                    const age = item.date_mis_en_service ? (new Date().getFullYear() - item.date_mis_en_service) : null;
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          border: `1px solid ${NEUTRAL_BORDER}`,
+                          borderRadius: 8,
+                          padding: "10px 14px",
+                          borderLeft: `4px solid ${color}`,
+                          background: "rgba(15,23,42,0.3)",
+                          display: "grid",
+                          gridTemplateColumns: "1fr auto",
+                          gap: 8,
+                          alignItems: "start",
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                            <strong style={{ fontSize: "0.9rem" }}>{item.designation}</strong>
+                            {item.famille && (
+                              <span style={{ fontSize: "0.75rem", padding: "1px 6px", borderRadius: 4, background: "rgba(99,102,241,0.2)", color: "#a5b4fc" }}>
+                                {item.famille}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: "0.82rem", color: SUBTLE_TEXT, flexWrap: "wrap" }}>
+                            {item.marque && <span><strong style={{ color: "#cbd5e1" }}>{item.marque}</strong>{item.modele ? ` ${item.modele}` : ""}</span>}
+                            {item.niveau && <span>{item.niveau}{item.local_name ? ` · ${item.local_name}` : ""}</span>}
+                            {item.quantite_relevee !== null && <span>Qté : {item.quantite_relevee}</span>}
+                            {item.statut && <span>{item.statut}</span>}
+                            {item.date_mis_en_service && <span>MES : {item.date_mis_en_service}{age !== null ? ` (${age} ans)` : ""}</span>}
+                            {item.sypemi_reference_annees && <span style={{ color: "#94a3b8" }}>Réf SYPEMI : {item.sypemi_reference_annees} ans</span>}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, minWidth: 90 }}>
+                          <span style={{ padding: "2px 10px", borderRadius: 12, fontSize: "0.8rem", fontWeight: 700, background: `${color}22`, color, border: `1px solid ${color}55` }}>
+                            {label}
+                          </span>
+                          {pct !== null && (
+                            <span style={{ fontSize: "0.75rem", color: SUBTLE_TEXT }}>{pct}%</span>
+                          )}
+                          {item.duree_vie_restante !== null && (
+                            <span style={{ fontSize: "0.72rem", color: item.duree_vie_restante < 0 ? "#f87171" : "#94a3b8" }}>
+                              {item.duree_vie_restante < 0
+                                ? `${Math.abs(item.duree_vie_restante)} ans dépassé`
+                                : `${item.duree_vie_restante} ans restants`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Equipment selector (hierarchical tree — SYPEMI, masqué en mode terrain) */}
+          {selectedBuilding && showSelector && techniqueScope !== "terrain" && (
             <div className="section-block">
               <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
