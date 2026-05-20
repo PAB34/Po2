@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import BpuEditableTable from "../components/BpuEditableTable";
 import BpuTimelineChart from "../components/BpuTimelineChart";
 import { useAuth } from "../providers/AuthProvider";
 import {
@@ -43,9 +44,12 @@ function uniq<T extends string | number>(values: (T | null | undefined)[]): T[] 
   return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
+type TabKey = "timeline" | "edition";
+
 export default function EnergieBpuPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabKey>("timeline");
 
   // Filtres du graphique (séparés des filtres de liste pour clarté)
   const [chartFilters, setChartFilters] = useState<BpuTimelineFilters>({
@@ -144,6 +148,45 @@ export default function EnergieBpuPage() {
           <Link to="/energie/preconisations" className="underline ml-1">préconisations</Link>.
         </p>
       </header>
+
+      {/* Onglets */}
+      <div className="border-b border-slate-200 dark:border-slate-700">
+        <nav className="-mb-px flex gap-4">
+          {([
+            { key: "timeline" as const, label: "Timeline" },
+            { key: "edition" as const, label: "Édition tableau" },
+          ]).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`border-b-2 px-3 pb-2 pt-1 text-sm font-medium transition ${
+                activeTab === tab.key
+                  ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-300"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {activeTab === "edition" ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <div className="mb-3">
+            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+              Édition des prix unitaires
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Cliquez une cellule pour modifier, puis bouton « Enregistrer » pour persister
+              en BDD. Les modifications non sauvegardées sont surlignées en orange.
+            </p>
+          </div>
+          <BpuEditableTable />
+        </section>
+      ) : (
+        <>
 
       {/* Stats import */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -453,6 +496,8 @@ export default function EnergieBpuPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

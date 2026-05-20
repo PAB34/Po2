@@ -195,6 +195,145 @@ class BpuImportResult(BaseModel):
     error: str | None = None
 
 
+# --- Update / Create schemas pour le tableau editable -----------------------
+
+class BpuPriceComponentUpdate(BaseModel):
+    """Mise à jour partielle d'un composant de prix."""
+
+    component_type: str | None = None
+    component_label: str | None = None
+    price_value: Decimal | None = None
+    price_unit: str | None = None
+    price_value_eur_per_mwh: Decimal | None = None
+    is_negative: bool | None = None
+    notes: str | None = None
+
+
+class BpuPriceComponentCreate(BaseModel):
+    period_id: int
+    component_type: str
+    component_label: str | None = None
+    price_value: Decimal
+    price_unit: str
+    price_value_eur_per_mwh: Decimal | None = None
+    is_negative: bool = False
+    notes: str | None = None
+
+
+class BpuTimePeriodUpdate(BaseModel):
+    period_code: str | None = None
+    period_label: str | None = None
+
+
+class BpuTimePeriodCreate(BaseModel):
+    segment_id: int
+    period_code: str
+    period_label: str | None = None
+
+
+class BpuSegmentUpdate(BaseModel):
+    segment_type: str | None = None
+    segment_code: str | None = None
+    segment_label: str | None = None
+    tension_category: str | None = None
+    turpe_tariff: str | None = None
+    usage_label: str | None = None
+    notes: str | None = None
+
+
+class BpuSegmentCreate(BaseModel):
+    document_id: int
+    segment_type: str
+    segment_code: str
+    segment_label: str | None = None
+    tension_category: str | None = None
+    turpe_tariff: str | None = None
+    usage_label: str | None = None
+    notes: str | None = None
+
+
+class BpuFixedChargeUpdate(BaseModel):
+    segment_id: int | None = None
+    charge_type: str | None = None
+    charge_label: str | None = None
+    charge_value: Decimal | None = None
+    charge_unit: str | None = None
+    charge_value_eur_per_month: Decimal | None = None
+    applicable_from: date | None = None
+    applicable_to: date | None = None
+    notes: str | None = None
+
+
+class BpuFixedChargeCreate(BaseModel):
+    document_id: int
+    segment_id: int | None = None
+    charge_type: str
+    charge_label: str | None = None
+    charge_value: Decimal
+    charge_unit: str
+    charge_value_eur_per_month: Decimal | None = None
+    applicable_from: date | None = None
+    applicable_to: date | None = None
+    notes: str | None = None
+
+
+class BpuDocumentUpdate(BaseModel):
+    """Mise à jour partielle des métadonnées d'un BPU."""
+
+    supplier: str | None = None
+    valid_year: int | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    market_subsequent: int | None = None
+    lot_number: int | None = None
+    amendment_number: int | None = None
+    amendment_label: str | None = None
+    signature_date: date | None = None
+    signatory_name: str | None = None
+    signatory_role: str | None = None
+    extraction_status: str | None = None
+    extraction_notes: str | None = None
+
+
+class BpuEditableRow(BaseModel):
+    """Une ligne "wide" prête pour le tableau éditable (jointure pré-calculée)."""
+
+    # Identifiants pour PATCH
+    component_id: int
+    period_id: int
+    segment_id: int
+    document_id: int
+
+    # Métadonnées document
+    supplier: str
+    valid_year: int
+    market_subsequent: int | None = None
+    lot_number: int
+    amendment_number: int | None = None
+    amendment_label: str | None = None
+    pdf_filename: str
+
+    # Segment
+    segment_type: str
+    segment_code: str
+    segment_label: str | None = None
+    tension_category: str | None = None
+    turpe_tariff: str | None = None
+
+    # Poste
+    period_code: str
+    period_label: str | None = None
+
+    # Composante
+    component_type: str
+    component_label: str | None = None
+    price_value: Decimal
+    price_unit: str
+    price_value_eur_per_mwh: Decimal | None = None
+    is_negative: bool = False
+    notes: str | None = None
+
+
 class BpuImportResponse(BaseModel):
     total: int
     succeeded: int

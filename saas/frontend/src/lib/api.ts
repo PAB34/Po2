@@ -1996,3 +1996,105 @@ export async function triggerBpuImport(
   });
   return parseResponse<BpuImportResponse>(response);
 }
+
+// === BPU édition tableau ====================================================
+
+export type BpuEditableRow = {
+  component_id: number;
+  period_id: number;
+  segment_id: number;
+  document_id: number;
+  supplier: string;
+  valid_year: number;
+  market_subsequent: number | null;
+  lot_number: number;
+  amendment_number: number | null;
+  amendment_label: string | null;
+  pdf_filename: string;
+  segment_type: string;
+  segment_code: string;
+  segment_label: string | null;
+  tension_category: string | null;
+  turpe_tariff: string | null;
+  period_code: string;
+  period_label: string | null;
+  component_type: string;
+  component_label: string | null;
+  price_value: string;            // Decimal sérialisé en string par Pydantic
+  price_unit: string;
+  price_value_eur_per_mwh: string | null;
+  is_negative: boolean;
+  notes: string | null;
+};
+
+export type BpuComponentUpdate = {
+  component_type?: string;
+  component_label?: string | null;
+  price_value?: number | string;
+  price_unit?: string;
+  price_value_eur_per_mwh?: number | string | null;
+  is_negative?: boolean;
+  notes?: string | null;
+};
+
+export type BpuDocumentUpdate = {
+  supplier?: string;
+  valid_year?: number;
+  market_subsequent?: number | null;
+  lot_number?: number;
+  amendment_number?: number | null;
+  amendment_label?: string | null;
+  signature_date?: string | null;
+  signatory_name?: string | null;
+  extraction_status?: string;
+  extraction_notes?: string | null;
+};
+
+export async function fetchBpuEditableRows(
+  token: string,
+  filters: { document_id?: number; supplier?: string; valid_year?: number } = {},
+): Promise<BpuEditableRow[]> {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && v !== "") search.set(k, String(v));
+  }
+  const qs = search.toString();
+  const response = await fetch(`${apiBaseUrl}/bpu/editable-rows${qs ? `?${qs}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<BpuEditableRow[]>(response);
+}
+
+export async function updateBpuComponent(
+  token: string,
+  componentId: number,
+  payload: BpuComponentUpdate,
+): Promise<BpuPriceComponent> {
+  const response = await fetch(`${apiBaseUrl}/bpu/components/${componentId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BpuPriceComponent>(response);
+}
+
+export async function deleteBpuComponent(token: string, componentId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/bpu/components/${componentId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function updateBpuDocument(
+  token: string,
+  documentId: number,
+  payload: BpuDocumentUpdate,
+): Promise<BpuDocumentSummary> {
+  const response = await fetch(`${apiBaseUrl}/bpu/documents/${documentId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BpuDocumentSummary>(response);
+}
