@@ -70,6 +70,20 @@ Deux chantiers en séquence :
   - Tous les 14 nouveaux endpoints visibles sur le conteneur `infra-backend-1`
   - BDD inchangée (pas de migration nécessaire — schéma en place depuis migration 0015)
 
+### Vérification CI/deploy + tests API (session suivante)
+
+**CI GitHub Actions commit `0e32a1c`** :
+  - `backend` : ✅ completed / success (`python -m compileall app`)
+  - `frontend` : ✅ completed / success (`npm run build`)
+  - `deploy` : ✅ completed / success (SSH VPS → docker compose up --build)
+
+**Tests curl endpoints** :
+  - `GET /api/bpu/editable-rows` → 523 rows, structure correcte (`component_id`, `supplier`, `valid_year`, `segment_code`, `component_type`, `price_value`, `price_unit`, `price_value_eur_per_mwh`)
+  - Filtre `valid_year=2021` → 87 rows ; `supplier=ENGIE` → 32 rows ; `supplier=EDF&valid_year=2021` → 87 rows
+  - `PATCH /api/bpu/components/993` `price_value` → valeur mise à jour + `price_value_eur_per_mwh` recalculé ✅
+  - `PATCH /api/bpu/components/993` `notes` → write + reset null ✅
+  - Toutes les restaurations faites (BDD inchangée après tests)
+
 ## 🛠️ Outils / dépendances découverts ou installés
 
 - `openpyxl` déjà présent dans `requirements.txt` — utilisé par `import_bpu_xlsx.py`
@@ -77,14 +91,7 @@ Deux chantiers en séquence :
 
 ## 🚧 Ce qui reste à faire / handoff
 
-### Priorité 1 — Validation visuelle UI en prod
-
-L'onglet "Édition tableau" est déployé mais non encore testé visuellement. À vérifier sur https://patrimoineaucarre.com/energie/bpu :
-- Onglets Timeline / Édition tableau visibles
-- Tableau s'affiche avec les 523 composantes
-- Éditer une cellule → badge orange → Enregistrer → confirmation verte
-
-### Priorité 2 — ENEDIS async (PO2-ENEDIS-001)
+### Priorité 1 — ENEDIS async (PO2-ENEDIS-001)
 
 - **Problème** : 1753 demandes "fantômes" `requested` bloquent tout nouveau backfill (ENEDIS répond HTTP 400 anti-doublon). FTP ne publie pas.
 - **Solution proposée** : contacter support ENEDIS pour purger les demandes `requested` côté portail OU attendre la publication FTP si ENEDIS répond.

@@ -1,8 +1,8 @@
 # État actuel du développement
 
-> **Mise à jour** : 2026-05-19 (fin de session BPU + Codespaces)
-> **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.5)
-> **Dernière commit en prod** : `88bdd4b` (chore codespaces fix)
+> **Mise à jour** : 2026-05-20 (PO2-BPU-002 + PO2-BPU-003 livrés)
+> **Mainteneur principal** : PAB34 + assistance IA (Claude Opus 4.7)
+> **Dernière commit en prod** : `0e32a1c` (feat(bpu): tableau éditable des prix)
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -18,7 +18,8 @@
 | Préconisations puissance | `/energie/preconisations` | Stable |
 | Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE) |
 | Facturation TURPE | `/energie/facturation` | Stable |
-| **BPU historique** | `/energie/bpu` | **Nouveau (2026-05-19)** — 15 BPU stockés, parser à améliorer |
+| **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — 17 BPU, 523 composantes, graphes par segment/type |
+| **BPU — Édition tableau** | `/energie/bpu` (onglet Édition tableau) | **Nouveau (2026-05-20)** — tableau Excel cliquable, batch save, 14 endpoints CRUD |
 
 ## 📦 Migrations alembic appliquées en prod
 ```
@@ -49,15 +50,15 @@
 
 ## 🪵 Derniers commits sur `main`
 ```
+5919d0a  docs(vault): sessions + modules 2026-05-20 (BPU, OPERAT, maintenance)
+0e32a1c  feat(bpu): tableau editable des prix dans /energie/bpu (PO2-BPU-003)
+6f28540  fix(bpu): respecter VARCHAR(10) sur turpe_tariff/tension_category
+8299fdb  fix(bpu): distinguer C4/C5 sous-typologies + garde-fou doublons composantes
+4c2415c  feat(bpu): import xlsx canonique (173 prix + 9 charges + 17 sources)
+6524bbe  docs(obsidian): session Phase 2 BPU finalisee (parser EDF pivote)
 88bdd4b  fix(codespaces): remove docker-in-docker feature
 d9b1895  chore(codespaces): minimal .devcontainer
 1fbd58c  feat(bpu): pipeline complet historique (#12)
-f2b7e4c  feat(bpu): add SQL models + alembic migration (#11)
-ffdcd3e  fix(buildings): dark mode BuildingTechniquePage (#10)
-d784882  fix(enedis): ne recaler que la première fenêtre CDC
-38ab484  fix(enedis): respecter la limite historique CDC
-5e6b40f  fix(enedis): reprendre le backfill sans doublonner
-e1d6d26  feat(energie): UI panneau async ENEDIS (Phase C) (#9)
 ```
 
 ## 📚 Specs historiques
@@ -75,16 +76,13 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 
 ## 🔥 Chantiers ouverts (en cours / à reprendre)
 
-### 1. Parser BPU — Phase 2 pdfplumber livrée, 2 BPU complets sur 15
-- **État au 2026-05-19** : 65 prix unitaires extraits (×16 vs baseline de 4), **2 BPU OK** : ENGIE 2025 LOT1 (36 prix) + **EDF 2025 LOT1 avenant 6 (26 prix)** + 1 BPU partiel (EDF 2025 LOT3 av5 : 3 prix)
-- **Commits clés** : `af69e93` (intro pdfplumber), `2c7d6ef` (pdfplumber direct avant OCR), `ca6f92b` (parser EDF pivoté)
-- **Restant** :
-  - 1 PDF EDF 2025 atypique : `EDF_MS1_LOT_2_AVENANT_5_BPU_2025.pdf` (structure 31×6, parser ne reconnaît pas)
-  - 12 scans EDF historiques 2021-2024 : OCR ressort du bruit, pdfplumber n'a rien à lire
-- **Données extraites validées numériquement** : sample CU/BASE/fourniture = 75.29 €/MWh correspond exactement au `bpu_templates.py:20`
-- **Mitigation** : `raw_text` stocké sur chaque `BpuDocument` → re-parsing possible sans relancer l'OCR
-- **Options suite** : UI saisie manuelle assistée (~3-4h dev), OCR avancé (~2-3h, incertain), ou accepter la limite
-- **Voir** : [[Sessions/2026-05-19 — Phase 2 BPU finalisee (parser EDF pivote)]] et [[Modules/Energie-BPU]]
+### 1. ✅ ~~Parser BPU → remplacé par import xlsx canonique~~ (PO2-BPU-002 + PO2-BPU-003 — Livrés 2026-05-20)
+- **Stratégie finale** : source de vérité = `extraction_tarifs_electricite_BPU.xlsx` (saisie manuelle validée par l'utilisateur), `extraction_status=manual`, `confidence=1.0`
+- **BDD prod** : 17 docs / 49 segments / 138 périodes / **523 composantes** / 36 charges
+- **UI** : tableau éditable dans `/energie/bpu` (onglet "Édition tableau"), édition cellule par cellule, batch save
+- **Script** : `app.scripts.import_bpu_xlsx` — relancer avec `--force` si re-import xlsx nécessaire
+- **Parser PDF** : en pause (PO2-BPU-001) — `raw_text` stocké sur chaque doc pour re-parsing futur éventuel
+- **Voir** : [[Sessions/2026-05-20 — Import xlsx BPU + tableau editable]] et [[Modules/Energie-BPU]]
 
 ### 2. Module Baux locataires (1.2 de la roadmap)
 - Aucun code n'existe encore — c'est le prochain gros chantier "rapidement faisable"
@@ -122,11 +120,11 @@ Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Module
 | `enedis_async_jobs` | 0 (scheduler en attente du canal validé) |
 | `equipment_references` | 310 |
 | `building_equipments` | (variable, dépend des saisies utilisateur) |
-| `bpu_documents` | **15** (importés 2026-05-19) |
-| `bpu_segments` | 18 |
-| `bpu_time_periods` | 3 |
-| `bpu_price_components` | 4 |
-| `bpu_fixed_charges` | 0 |
+| `bpu_documents` | **17** (importés 2026-05-20, xlsx canonique) |
+| `bpu_segments` | **49** |
+| `bpu_time_periods` | **138** |
+| `bpu_price_components` | **523** (extraction_status=manual) |
+| `bpu_fixed_charges` | **36** |
 
 ## 🔐 Secrets et accès
 
