@@ -428,6 +428,31 @@ def import_xlsx(xlsx_path: Path, *, force: bool = False) -> dict[str, int]:
             segment_code, segment_type = _normalize_segment(site, turpe, tension)
             period_code = _normalize_period(period_raw)
 
+            # turpe_tariff est limité à VARCHAR(10) → on n'y met que les codes
+            # courts standards. Les libellés métier longs (ex: "Assimilé
+            # Eclairage Public") vont dans `segment_label`.
+            turpe_short = None
+            if turpe:
+                m_turpe = re.match(r"^(C[1-5]|BT|HTA|EP|CU4|CU|MU4|MUDT|LU)$", turpe.strip(), re.IGNORECASE)
+                if m_turpe:
+                    turpe_short = m_turpe.group(1).upper()
+
+            # tension_category aussi en VARCHAR(10) → BT ou HTA uniquement
+            tension_short = None
+            if tension:
+                if "HTA" in tension.upper():
+                    tension_short = "HTA"
+                elif "BT" in tension.upper():
+                    tension_short = "BT"
+
+            # segment_label = libellé site complet, sinon turpe long, sinon tension
+            segment_label_parts = []
+            if site:
+                segment_label_parts.append(site)
+            if turpe and turpe_short is None:
+                segment_label_parts.append(f"TURPE: {turpe}")
+            segment_label = " | ".join(segment_label_parts)[:200] if segment_label_parts else (site or turpe or tension)
+
             # Trouver/créer segment
             seg_key = (doc.id, segment_code)
             segment = segments_cache.get(seg_key)
@@ -435,11 +460,11 @@ def import_xlsx(xlsx_path: Path, *, force: bool = False) -> dict[str, int]:
                 segment = BpuSegment(
                     document_id=doc.id,
                     segment_type=segment_type,
-                    segment_code=segment_code,
-                    segment_label=site or turpe or tension,
-                    tension_category="HTA" if (tension and "HTA" in tension.upper()) else "BT",
-                    turpe_tariff=turpe,
-                    usage_label=site if segment_type == SEGMENT_TYPE_USAGE else None,
+                    segment_code=segment_code[:50],  # safety on VARCHAR(50)
+                    segment_label=segment_label,
+                    tension_category=tension_short,
+                    turpe_tariff=turpe_short,
+                    usage_label=(site[:100] if site and segment_type == SEGMENT_TYPE_USAGE else None),
                 )
                 session.add(segment)
                 session.flush()
