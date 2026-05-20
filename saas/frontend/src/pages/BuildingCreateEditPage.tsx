@@ -7,6 +7,7 @@ import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorks
 import {
   createBuildingFromNamingSelection,
   createBuildingRequest,
+  createLocalRequest,
   fetchBuildingNamingDataset,
   fetchBuildingNamingLookup,
   fetchBuildings,
@@ -18,6 +19,7 @@ import {
   type BuildingNamingLookup,
   type BuildingNamingRow,
   type CreateBuildingPayload,
+  type CreateLocalPayload,
   type GeoJsonFeature,
   type User,
 } from "../lib/api";
@@ -30,6 +32,8 @@ type ImportedRowState = BuildingImportRow & {
   editableName: string;
   editableAddress: string;
   createdBuildingId: number | null;
+  createdLocalId: number | null;
+  parentBuildingId: number | null;
 };
 
 function buildMajicAddressLine(row: BuildingNamingRow) {
@@ -69,6 +73,8 @@ function normalizeImportedRows(rows: BuildingImportRow[]): ImportedRowState[] {
     editableName: row.source_name,
     editableAddress: row.address_display || row.source_address,
     createdBuildingId: null,
+    createdLocalId: null,
+    parentBuildingId: null,
   }));
 }
 
@@ -77,6 +83,10 @@ type ImportStats = {
   invalid: number;
   pending: number;
   created: number;
+  createdLocals: number;
+  sites: number;
+  buildings: number;
+  locals: number;
 };
 
 function deriveImportCommune(user: User | null, row: ImportedRowState) {
@@ -90,15 +100,69 @@ function deriveImportCommune(user: User | null, row: ImportedRowState) {
   return segments.length > 0 ? segments[segments.length - 1] : undefined;
 }
 
-function buildImportedBuildingPayload(row: ImportedRowState, user: User | null): CreateBuildingPayload {
+function normalizeHierarchyKey(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isImportBuildingLike(row: ImportedRowState) {
+  return row.asset_type === "site" || row.asset_type === "building";
+}
+
+function buildImportSourceRowsJson(row: ImportedRowState) {
+  return JSON.stringify({
+    row_number: row.row_number,
+    typology: row.source_typology,
+    parent: row.source_parent,
+    parcel: row.source_parcel,
+    local_id: row.source_local_id,
+    building_code: row.source_building_code,
+  });
+}
+
+function buildImportedBuildingPayload(
+  row: ImportedRowState,
+  user: User | null,
+  createDefaultLocal: boolean,
+  filename?: string | null,
+): CreateBuildingPayload {
   return {
     nom_batiment: pickString(row.editableName) ?? `Import ligne ${row.row_number}`,
     nom_commune: deriveImportCommune(user, row),
     adresse_reconstituee: pickString(row.editableAddress),
     latitude: row.lat ?? undefined,
     longitude: row.lon ?? undefined,
-    source_creation: "IMPORT",
+    dgfip_source_file: filename ?? undefined,
+    dgfip_source_rows_json: buildImportSourceRowsJson(row),
+    dgfip_reference_norm: pickString(row.source_parcel),
+    majic_building_values_json: row.source_building_code ? JSON.stringify([row.source_building_code]) : undefined,
+    majic_entry_values_json: row.source_parent ? JSON.stringify([row.source_parent]) : undefined,
+    majic_level_values_json: row.source_floor ? JSON.stringify([row.source_floor]) : undefined,
+    majic_door_values_json: row.source_door ? JSON.stringify([row.source_door]) : undefined,
+    source_creation: row.asset_type === "site" ? "IMPORT_SITE" : "IMPORT",
     statut_geocodage: row.validation_status === "valid" ? "A_VERIFIER" : "NON_FAIT",
+    create_default_local: createDefaultLocal,
+  };
+}
+
+function buildImportedLocalPayload(row: ImportedRowState): CreateLocalPayload {
+  const details = [
+    row.source_local_id ? `N local: ${row.source_local_id}` : null,
+    row.source_parcel ? `Parcelle: ${row.source_parcel}` : null,
+    row.source_parent ? `Parent source: ${row.source_parent}` : null,
+    row.source_building_code ? `Batiment: ${row.source_building_code}` : null,
+    row.source_door ? `Porte: ${row.source_door}` : null,
+  ].filter(Boolean);
+  return {
+    nom_local: pickString(row.source_short_name) ?? pickString(row.editableName) ?? `Local ligne ${row.row_number}`,
+    type_local: "IMPORT",
+    niveau: pickString(row.source_floor),
+    statut_occupation: pickString(row.source_occupancy_status),
+    commentaire: details.length > 0 ? details.join(" | ") : undefined,
   };
 }
 
@@ -192,7 +256,7 @@ export function BuildingCreateEditPage() {
       return importRows;
     }
     return importRows.filter((row: ImportedRowState) => {
-      return [row.editableName, row.editableAddress, row.validation_status, row.validation_message]
+      return [row.editableName, row.editableAddress, row.asset_type, row.source_parent, row.source_local_id, row.validation_status, row.validation_message]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
@@ -201,6 +265,16 @@ export function BuildingCreateEditPage() {
   const importStats = useMemo(() => {
     return importRows.reduce(
       (accumulator: ImportStats, row: ImportedRowState) => {
+        if (row.asset_type === "site") {
+          accumulator.sites += 1;
+        } else if (row.asset_type === "local") {
+          accumulator.locals += 1;
+        } else {
+          accumulator.buildings += 1;
+        }
+        if (row.createdLocalId) {
+          accumulator.createdLocals += 1;
+        }
         if (row.createdBuildingId) {
           accumulator.created += 1;
         } else if (row.validation_status === "valid") {
@@ -212,7 +286,7 @@ export function BuildingCreateEditPage() {
         }
         return accumulator;
       },
-      { valid: 0, invalid: 0, pending: 0, created: 0 } as ImportStats,
+      { valid: 0, invalid: 0, pending: 0, created: 0, createdLocals: 0, sites: 0, buildings: 0, locals: 0 } as ImportStats,
     );
   }, [importRows]);
 
@@ -373,9 +447,14 @@ export function BuildingCreateEditPage() {
       setImportError("Authentification requise.");
       return;
     }
-    const rowsToCreate = importRows.filter((row: ImportedRowState) => row.validation_status === "valid" && !row.createdBuildingId);
-    const alreadyCreatedCount = importRows.filter((row: ImportedRowState) => row.createdBuildingId).length;
-    if (rowsToCreate.length === 0) {
+    const rowsToCreate = importRows.filter(
+      (row: ImportedRowState) => row.validation_status === "valid" && isImportBuildingLike(row) && !row.createdBuildingId,
+    );
+    const localRowsToCreate = importRows.filter(
+      (row: ImportedRowState) => row.validation_status === "valid" && row.asset_type === "local" && !row.createdLocalId,
+    );
+    const alreadyCreatedCount = importRows.filter((row: ImportedRowState) => row.createdBuildingId || row.createdLocalId).length;
+    if (rowsToCreate.length === 0 && localRowsToCreate.length === 0) {
       if (alreadyCreatedCount > 0 || buildingsCount > 0) {
         setListValidationAcknowledged(true);
         return;
@@ -390,11 +469,42 @@ export function BuildingCreateEditPage() {
     setImportSuccess(null);
 
     let createdCount = 0;
+    let createdLocalCount = 0;
     const failures: string[] = [];
+    const parentBuildingIds = new Map<string, number>();
+    for (const building of buildingsQuery.data ?? []) {
+      for (const candidate of [building.nom_batiment, building.adresse_reconstituee]) {
+        const key = normalizeHierarchyKey(candidate);
+        if (key) parentBuildingIds.set(key, building.id);
+      }
+    }
+    for (const row of importRows) {
+      if (row.createdBuildingId && isImportBuildingLike(row)) {
+        for (const candidate of [row.editableName, row.source_name, row.source_short_name, row.source_parent]) {
+          const key = normalizeHierarchyKey(candidate);
+          if (key) parentBuildingIds.set(key, row.createdBuildingId);
+        }
+      }
+    }
+    const localParentKeys = new Set(
+      localRowsToCreate
+        .map((row) => normalizeHierarchyKey(row.source_parent || row.editableName))
+        .filter(Boolean),
+    );
     for (const row of rowsToCreate) {
       try {
-        const building = await createBuildingRequest(token, buildImportedBuildingPayload(row, user));
+        const rowKey = normalizeHierarchyKey(row.editableName || row.source_name);
+        const hasChildLocal = localParentKeys.has(rowKey);
+        const createDefaultLocal = row.asset_type === "building" && !hasChildLocal;
+        const building = await createBuildingRequest(
+          token,
+          buildImportedBuildingPayload(row, user, createDefaultLocal, importPreview?.filename),
+        );
         createdCount += 1;
+        for (const candidate of [row.editableName, row.source_name, row.source_short_name, row.source_parent]) {
+          const key = normalizeHierarchyKey(candidate);
+          if (key) parentBuildingIds.set(key, building.id);
+        }
         setImportRows((current: ImportedRowState[]) =>
           current.map((entry: ImportedRowState) =>
             entry.row_number === row.row_number ? { ...entry, createdBuildingId: building.id } : entry,
@@ -405,15 +515,35 @@ export function BuildingCreateEditPage() {
       }
     }
 
+    for (const row of localRowsToCreate) {
+      const parentKey = normalizeHierarchyKey(row.source_parent || row.editableName);
+      const parentBuildingId = parentBuildingIds.get(parentKey);
+      if (!parentBuildingId) {
+        failures.push(`Ligne ${row.row_number} : parent introuvable (${row.source_parent || "vide"}).`);
+        continue;
+      }
+      try {
+        const local = await createLocalRequest(token, parentBuildingId, buildImportedLocalPayload(row));
+        createdLocalCount += 1;
+        setImportRows((current: ImportedRowState[]) =>
+          current.map((entry: ImportedRowState) =>
+            entry.row_number === row.row_number ? { ...entry, createdLocalId: local.id, parentBuildingId } : entry,
+          ),
+        );
+      } catch (error) {
+        failures.push(`Ligne ${row.row_number} : ${error instanceof Error ? error.message : "creation local impossible"}`);
+      }
+    }
+
     await queryClient.invalidateQueries({ queryKey: ["buildings"] });
 
     const invalidCount = importRows.filter((row: ImportedRowState) => row.validation_status === "invalid").length;
-    if (createdCount > 0 || alreadyCreatedCount > 0 || buildingsCount > 0) {
+    if (createdCount > 0 || createdLocalCount > 0 || alreadyCreatedCount > 0 || buildingsCount > 0) {
       setListValidationAcknowledged(true);
     }
-    if (createdCount > 0) {
+    if (createdCount > 0 || createdLocalCount > 0) {
       setImportSuccess(
-        `${createdCount} bâtiment(s) créé(s) automatiquement. ${invalidCount > 0 ? `${invalidCount} ligne(s) en anomalie n’ont pas été intégrées.` : "Toutes les lignes compatibles ont été intégrées."}`,
+        `${createdCount} site(s)/bâtiment(s) créé(s), ${createdLocalCount} local(aux) rattaché(s). ${invalidCount > 0 ? `${invalidCount} ligne(s) en anomalie n’ont pas été intégrées.` : "Toutes les lignes compatibles ont été intégrées."}`,
       );
     } else if (invalidCount > 0) {
       setImportSuccess(`${invalidCount} ligne(s) en anomalie restent à corriger avant toute intégration supplémentaire.`);
@@ -425,10 +555,10 @@ export function BuildingCreateEditPage() {
   const buildingsCount = buildingsQuery.data?.length ?? 0;
   const currentModeLabel = mode === "import" ? "Import d’un fichier patrimoine" : "Liste vierge DGFIP / MAJIC";
   const canAdvanceToValidation = mode === "import" ? importRows.length > 0 || buildingsCount > 0 : Boolean(selectedUniqueKey) || buildingsCount > 0;
-  const canValidatePortfolioList = mode === "import" ? importStats.valid > 0 || importStats.created > 0 || buildingsCount > 0 : buildingsCount > 0;
+  const canValidatePortfolioList = mode === "import" ? importStats.valid > 0 || importStats.created > 0 || importStats.createdLocals > 0 || buildingsCount > 0 : buildingsCount > 0;
   const readyToOpenBuildingsList =
     mode === "import"
-      ? listValidationAcknowledged && (importStats.created > 0 || buildingsCount > 0)
+      ? listValidationAcknowledged && (importStats.created > 0 || importStats.createdLocals > 0 || buildingsCount > 0)
       : canValidatePortfolioList && listValidationAcknowledged;
 
   if (!token) {
@@ -709,7 +839,17 @@ export function BuildingCreateEditPage() {
                           <span>Lignes source</span>
                           <strong>{importPreview.total_rows}</strong>
                         </div>
+                        <div className="detail-card">
+                          <span>Hiérarchie</span>
+                          <strong>{importPreview.hierarchy_detected ? "Détectée" : "Non détectée"}</strong>
+                        </div>
                       </div>
+                      {importPreview.hierarchy_detected ? (
+                        <p className="info-banner">
+                          Typologie : <strong>{importPreview.typology_column}</strong>. Parent : <strong>{importPreview.parent_column ?? "-"}</strong>.{" "}
+                          Sites : {importPreview.hierarchy_counts.site ?? 0}, bâtiments : {importPreview.hierarchy_counts.building ?? 0}, locaux : {importPreview.hierarchy_counts.local ?? 0}.
+                        </p>
+                      ) : null}
                       <div className="import-sample-table">
                         <div className="import-sample-row import-sample-row-head">
                           {importPreview.columns.slice(0, 4).map((column: string) => (
@@ -847,7 +987,7 @@ export function BuildingCreateEditPage() {
                     <div className="resource-list buildings-address-list">
                       {filteredImportRows.map((row: ImportedRowState) => {
                         const isActive = selectedImportRowNumber === row.row_number;
-                        const stateClass = row.createdBuildingId
+                        const stateClass = row.createdBuildingId || row.createdLocalId
                           ? "resource-card-success"
                           : row.validation_status === "valid"
                             ? "resource-card-valid"
@@ -874,6 +1014,14 @@ export function BuildingCreateEditPage() {
                               <div>
                                 <dt>Ligne source</dt>
                                 <dd>{row.row_number}</dd>
+                              </div>
+                              <div>
+                                <dt>Typologie</dt>
+                                <dd>{row.source_typology ?? row.asset_type}</dd>
+                              </div>
+                              <div>
+                                <dt>Parent</dt>
+                                <dd>{row.source_parent ?? "-"}</dd>
                               </div>
                               <div>
                                 <dt>Latitude</dt>

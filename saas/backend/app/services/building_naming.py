@@ -788,14 +788,77 @@ def _read_uploaded_tabular_file(filename: str, raw_bytes: bytes) -> pd.DataFrame
     if suffix == ".csv":
         dataframe = pd.read_csv(buffer, sep=None, engine="python", dtype=str)
     elif suffix in {".xlsx", ".xlsm"}:
-        dataframe = pd.read_excel(buffer, dtype=str)
+        sheets = pd.read_excel(buffer, dtype=str, sheet_name=None)
+        dataframe = _select_uploaded_sheet(sheets)
     elif suffix == ".xls":
-        dataframe = pd.read_excel(buffer, dtype=str, engine="xlrd")
+        sheets = pd.read_excel(buffer, dtype=str, engine="xlrd", sheet_name=None)
+        dataframe = _select_uploaded_sheet(sheets)
     else:
         raise ValueError("Format non pris en charge. Utilise CSV, XLS, XLSX ou XLSM.")
     dataframe = dataframe.fillna("")
     dataframe.columns = [str(column).strip() for column in dataframe.columns]
     return dataframe
+
+
+_IMPORT_TYPOLOGY_COLUMNS = ("typologie", "type", "niveau patrimoine", "niveau patrimonial")
+_IMPORT_PARENT_COLUMNS = ("parent", "rattachement", "site parent", "batiment parent", "bâtiment parent")
+_IMPORT_LOCAL_ID_COLUMNS = ("n° local", "n local", "numero local", "numéro local", "local")
+_IMPORT_PARCEL_COLUMNS = ("n° parcelle", "n parcelle", "numero parcelle", "numéro parcelle", "parcelle")
+_IMPORT_SHORT_NAME_COLUMNS = ("nom court", "libelle court", "libellé court")
+_IMPORT_BUILDING_CODE_COLUMNS = ("n°bâtiment", "n° bâtiment", "n batiment", "n bâtiment", "batiment", "bâtiment")
+_IMPORT_FLOOR_COLUMNS = ("niveau", "etage", "étage")
+_IMPORT_DOOR_COLUMNS = ("porte", "local porte")
+_IMPORT_OCCUPANCY_COLUMNS = ("droit", "statut occupation", "statut d'occupation", "occupation")
+
+
+def _select_uploaded_sheet(sheets: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    if not sheets:
+        raise ValueError("Le classeur ne contient aucun onglet exploitable.")
+
+    def score(dataframe: pd.DataFrame) -> tuple[int, int]:
+        columns = [str(column).strip() for column in dataframe.columns]
+        value = 0
+        if _find_import_column(columns, ("adresse", "adresse complète", "adresse complete")):
+            value += 6
+        if _find_import_column(columns, ("désignation", "designation", "nom bâtiment", "nom batiment", "nom")):
+            value += 4
+        if _find_import_column(columns, _IMPORT_TYPOLOGY_COLUMNS):
+            value += 3
+        if _find_import_column(columns, _IMPORT_PARENT_COLUMNS):
+            value += 2
+        return value, len(dataframe)
+
+    return max(sheets.values(), key=score)
+
+
+def _find_import_column(columns: list[str], candidates: tuple[str, ...]) -> str | None:
+    normalized_candidates = {_normalize_text(candidate).lower() for candidate in candidates}
+    for column in columns:
+        if _normalize_text(column).lower() in normalized_candidates:
+            return column
+    for column in columns:
+        normalized = _normalize_text(column).lower()
+        if any(candidate in normalized for candidate in normalized_candidates):
+            return column
+    return None
+
+
+def _normalize_import_asset_type(value: str) -> str:
+    normalized = _normalize_text(value).upper()
+    if "SITE" in normalized:
+        return "site"
+    if "LOCAL" in normalized:
+        return "local"
+    if "BATIMENT" in normalized or "BÂTIMENT" in value.upper():
+        return "building"
+    return "building"
+
+
+def _optional_import_value(row: Any, column: str | None) -> str | None:
+    if not column:
+        return None
+    value = _display_text(row.get(column))
+    return value or None
 
 
 def preview_building_import_file(
@@ -808,12 +871,26 @@ def preview_building_import_file(
 ) -> dict[str, Any]:
     dataframe = _read_uploaded_tabular_file(filename, raw_bytes)
     columns = list(dataframe.columns)
+    typology_column = _find_import_column(columns, _IMPORT_TYPOLOGY_COLUMNS)
+    parent_column = _find_import_column(columns, _IMPORT_PARENT_COLUMNS)
+    local_id_column = _find_import_column(columns, _IMPORT_LOCAL_ID_COLUMNS)
+    parcel_column = _find_import_column(columns, _IMPORT_PARCEL_COLUMNS)
+    short_name_column = _find_import_column(columns, _IMPORT_SHORT_NAME_COLUMNS)
+    building_code_column = _find_import_column(columns, _IMPORT_BUILDING_CODE_COLUMNS)
+    floor_column = _find_import_column(columns, _IMPORT_FLOOR_COLUMNS)
+    door_column = _find_import_column(columns, _IMPORT_DOOR_COLUMNS)
+    occupancy_column = _find_import_column(columns, _IMPORT_OCCUPANCY_COLUMNS)
     sample_rows = [
         {column: _display_text(row.get(column)) for column in columns}
         for _, row in dataframe.head(5).iterrows()
     ]
     validation_cache: dict[str, dict[str, Any]] = {}
     rows: list[dict[str, Any]] = []
+    hierarchy_counts: dict[str, int] = {}
+    if typology_column:
+        for value in dataframe[typology_column].tolist():
+            asset_type = _normalize_import_asset_type(_display_text(value))
+            hierarchy_counts[asset_type] = hierarchy_counts.get(asset_type, 0) + 1
     if name_column is not None or address_column is not None:
         if not name_column or name_column not in columns:
             raise ValueError("La colonne 'Nom bâtiment' sélectionnée est introuvable dans le fichier.")
@@ -822,6 +899,8 @@ def preview_building_import_file(
         for row_index, (_, row) in enumerate(dataframe.iterrows(), start=2):
             source_name = _display_text(row.get(name_column))
             source_address = _display_text(row.get(address_column))
+            source_typology = _optional_import_value(row, typology_column)
+            asset_type = _normalize_import_asset_type(source_typology or "")
             address_display = re.sub(r"\s+", " ", source_address).strip()
             validation_status = "invalid"
             validation_message = "Adresse absente ou vide."
@@ -870,6 +949,16 @@ def preview_building_import_file(
                     "validation_message": validation_message,
                     "lat": lat,
                     "lon": lon,
+                    "asset_type": asset_type,
+                    "source_typology": source_typology,
+                    "source_parent": _optional_import_value(row, parent_column),
+                    "source_local_id": _optional_import_value(row, local_id_column),
+                    "source_parcel": _optional_import_value(row, parcel_column),
+                    "source_short_name": _optional_import_value(row, short_name_column),
+                    "source_building_code": _optional_import_value(row, building_code_column),
+                    "source_floor": _optional_import_value(row, floor_column),
+                    "source_door": _optional_import_value(row, door_column),
+                    "source_occupancy_status": _optional_import_value(row, occupancy_column),
                 }
             )
     return {
@@ -879,6 +968,10 @@ def preview_building_import_file(
         "sample_rows": sample_rows,
         "name_column": name_column,
         "address_column": address_column,
+        "typology_column": typology_column,
+        "parent_column": parent_column,
+        "hierarchy_detected": bool(typology_column),
+        "hierarchy_counts": hierarchy_counts,
         "rows": rows,
     }
 

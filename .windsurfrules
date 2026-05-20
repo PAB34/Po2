@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**PatrimoineOp** — a SaaS platform for municipal building/property portfolio management. It consolidates data from DGFiP (MAJIC/DGFP fiscal registers), IGN, and OSM to build a geospatial building inventory. Users are scoped to a city (multi-tenant by `city_id`).
+**Patrimoineaucarre** alias **Po2* — a SaaS platform for municipal building/property portfolio management. It consolidates data from DGFiP (MAJIC/DGFP fiscal registers), IGN, and OSM to build a geospatial building inventory. Users are scoped to a city (multi-tenant by `city_id`).
 
 ## Stack
 

@@ -74,6 +74,16 @@ class BuildingImportRow(BaseModel):
     validation_message: str | None = None
     lat: float | None = None
     lon: float | None = None
+    asset_type: str = "building"
+    source_typology: str | None = None
+    source_parent: str | None = None
+    source_local_id: str | None = None
+    source_parcel: str | None = None
+    source_short_name: str | None = None
+    source_building_code: str | None = None
+    source_floor: str | None = None
+    source_door: str | None = None
+    source_occupancy_status: str | None = None
 
 
 class BuildingImportPreview(BaseModel):
@@ -83,6 +93,10 @@ class BuildingImportPreview(BaseModel):
     sample_rows: list[dict[str, str]]
     name_column: str | None = None
     address_column: str | None = None
+    typology_column: str | None = None
+    parent_column: str | None = None
+    hierarchy_detected: bool = False
+    hierarchy_counts: dict[str, int] = {}
     rows: list[BuildingImportRow]
 
 
@@ -169,6 +183,7 @@ class BuildingCreate(BaseModel):
     majic_door_values_json: str | None = None
     source_creation: str | None = Field(default=None, max_length=20)
     statut_geocodage: str | None = Field(default=None, max_length=20)
+    create_default_local: bool = True
 
 
 class BuildingUpdate(BaseModel):

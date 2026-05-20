@@ -178,6 +178,16 @@ export type BuildingImportRow = {
   validation_message: string | null;
   lat: number | null;
   lon: number | null;
+  asset_type: "site" | "building" | "local" | string;
+  source_typology: string | null;
+  source_parent: string | null;
+  source_local_id: string | null;
+  source_parcel: string | null;
+  source_short_name: string | null;
+  source_building_code: string | null;
+  source_floor: string | null;
+  source_door: string | null;
+  source_occupancy_status: string | null;
 };
 
 export type BuildingImportPreview = {
@@ -187,6 +197,10 @@ export type BuildingImportPreview = {
   sample_rows: Array<Record<string, string>>;
   name_column: string | null;
   address_column: string | null;
+  typology_column: string | null;
+  parent_column: string | null;
+  hierarchy_detected: boolean;
+  hierarchy_counts: Record<string, number>;
   rows: BuildingImportRow[];
 };
 
@@ -265,6 +279,7 @@ export type CreateBuildingPayload = {
   majic_door_values_json?: string;
   source_creation?: string;
   statut_geocodage?: string;
+  create_default_local?: boolean;
 };
 
 export type UpdateBuildingPayload = {

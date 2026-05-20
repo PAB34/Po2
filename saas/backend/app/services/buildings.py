@@ -92,12 +92,13 @@ def create_building(db: Session, payload: BuildingCreate, current_user: User) ->
     db.add(building)
     db.flush()
 
-    default_local = Local(
-        building_id=building.id,
-        nom_local=_build_default_local_name(building),
-        type_local="PRINCIPAL",
-    )
-    db.add(default_local)
+    if payload.create_default_local:
+        default_local = Local(
+            building_id=building.id,
+            nom_local=_build_default_local_name(building),
+            type_local="PRINCIPAL",
+        )
+        db.add(default_local)
     db.commit()
     db.refresh(building)
     return building
