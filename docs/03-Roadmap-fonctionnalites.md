@@ -7,6 +7,7 @@
 > - ✅ **Fait** — fonctionnalité en prod sur https://patrimoineaucarre.com
 > - 🟡 **Partiel** — base technique en place, manque finitions ou couverture cible
 > - 🔴 **Todo** — pas commencé
+> - ⚪ **Futur** — valeur identifiée mais à ne pas démarrer avant les dépendances
 > - 🟣 **Bonus** — non listé dans la grille initiale mais implémenté en plus
 
 ## 1 · PATRIMOINE
@@ -58,21 +59,41 @@
 - **Notes** : voir 2.1 — séparer côté UI par `code_niveau_1`
 
 ### 2.3 Occupation / périodes d'occupation
-- **Source** : Excel
-- **Objectif** : Connaître l'occupation réelle des bâtiments pour conjuguer avec HC/HP des contrats d'énergie
+- **Source** : Excel `saas/CVC/PF - Annexe n°9 - Occupation des bâtiments.xlsx` (78 lignes : Code, Nom du site, Lot, Occupation, Nettoyage, Fermetures, Responsable, Tel, Mail)
+- **Objectif** : Connaître l'occupation réelle des bâtiments pour conjuguer avec HC/HP des contrats d'énergie, DJU et courbes de charge
 - **Statut** : 🔴 **Todo**
 - **Notes pour l'IA suivante** :
-  - Modèle à créer : `BuildingOccupancy` (building_id, day_of_week, start_time, end_time, period_label, season?)
+  - Modèle à créer : `BuildingOccupancy` (building_id, local_id nullable, day_of_week, start_time, end_time, period_label, season?, source, confidence, valid_from, valid_to)
   - Possible réutilisation de la structure `BillingHphcSlot` qui existe déjà (`models/billing.py`) — voir s'il y a une logique commune
   - L'analytics critique = comparer le profil d'occupation aux postes tarifaires pour identifier les surconsos hors présence
+  - Vision cible : portail usagers/responsables de site pour saisir et modifier les plannings, avec historique, statut de validation et alerte au référent final en cas de modification.
 
 ### 2.4 CVC / Température et programmation
-- **Source** : Excel
-- **Objectif** : Aperçu des températures + programmation pour conjuguer avec occupation, repérer anomalies
+- **Source** : Excel / inventaire CVC `saas/CVC/listing materiels V2.xlsx` (1301 lignes) + saisie manuelle ou export exploitant/GTB futur
+- **Objectif** : Aperçu des températures, consignes et programmations CVC pour conjuguer avec occupation, repérer anomalies et préparer le décret BACS
 - **Statut** : 🔴 **Todo**
 - **Notes** :
-  - Probable IoT / GTB à intégrer (Sauter, Trend, Schneider…) — donc API externe à choisir avec utilisateur
-  - Ou import Excel manuel comme MVP
+  - MVP : importer/mapper le listing matériels CVC terrain (site, bâtiment, niveau, local, désignation, statut, état santé, famille, marque, modèle, date MES).
+  - Puis saisir les consignes : température confort/réduit, température départ, loi d'eau, horaires chaudière/CTA/PAC, zones desservies.
+  - Probable IoT / GTB à intégrer plus tard (Sauter, Trend, Schneider…) — donc API externe à choisir avec utilisateur.
+
+### 2.5 GTB / décret BACS / NF EN ISO 52120
+- **Source** : `saas/CVC/TABLEAU 6 NORME NF EN ISO 52120.pdf`
+- **Objectif** : Transformer le tableau 6 en source de données exploitable : la typologie de régulation sélectionnée pour chaque fonction CVC contribue à déterminer une classe GTB/BAC du bâtiment (A/B/C/D) vis-à-vis du décret BACS.
+- **Statut** : ⚪ **Futur** — ne pas démarrer avant inventaire CVC + programmation + occupation
+- **Notes** :
+  - Le PDF doit devenir une table de référence, pas rester une pièce jointe.
+  - Le moteur doit gérer l'applicabilité : toutes les fonctions ne sont pas concernées par tous les bâtiments.
+  - Champs cibles : domaine (chauffage/refroidissement/ventilation/ECS/eclairage), fonction, niveau de régulation, classe minimale atteinte, applicable oui/non, preuve/source, niveau de confiance.
+
+### 2.6 Rattachement compteurs fluides aux bâtiments
+- **Source** : ENEDIS existant, futurs GRDF/SUEZ, factures, saisie manuelle
+- **Objectif** : Faire du bâtiment la fiche centrale de vérité : chaque bâtiment peut être rattaché à ses compteurs électricité, gaz et eau.
+- **Statut** : 🔴 **Todo**
+- **Notes** :
+  - Ne pas modéliser "1 bâtiment = 1 compteur" : prévoir plusieurs compteurs par bâtiment, et un compteur pouvant alimenter plusieurs bâtiments.
+  - Modèle cible : `BuildingMeterLink` avec fluide, identifiant compteur (PRM/PCE/eau), dates de validité, usage, clé de répartition, niveau de confiance, statut de validation.
+  - Débloque les analyses conso/factures par bâtiment, OPERAT, alertes hors présence et audit eau/gaz.
 
 ## 3 · FLUIDES / CONSOMMATION
 
@@ -161,6 +182,40 @@
 - **Implémentation** : `services/billing.py`, `services/bpu_templates.py`, page `EnergieBillingPage`
 - **Modèles** : `BillingConfig`, `BillingPriceEntry`, `BillingHphcSlot`, `BillingBpuLine` (avec `pu_fourniture`, `pu_capacite`, `pu_cee`, `pu_go`, `pu_total`)
 
+## Nouveaux besoins utilisateur — ajoutés le 2026-05-20
+
+### N.1 Conformité OPERAT / décret éco tertiaire
+- **Source** : API OPERAT / ADEME à cadrer, avec fallback export/import si l'API n'est pas immédiatement accessible.
+- **Objectif** : Suivre les bâtiments tertiaires assujettis, leurs EFA, surfaces, années de référence, consommations annuelles et trajectoires réglementaires.
+- **Statut** : 🔴 **Todo**
+- **Notes pour l'IA suivante** :
+  - Créer un modèle `OperatEfa` ou `TertiaryComplianceAsset` lié à `Building`.
+  - Distinguer suivi local Po2 et transmission OPERAT : le MVP peut produire le tableau de conformité et l'export annuel avant d'écrire dans OPERAT.
+  - Cadrer l'accès API avec ADEME/OPERAT : droits, environnement, authentification, endpoints disponibles, limites et responsabilité de déclaration.
+  - Voir [[Modules/Conformite-OPERAT]].
+
+### N.2 Contrats de maintenance
+- **Source** : contrats PDF / Excel / saisie manuelle.
+- **Objectif** : Centraliser les contrats de maintenance, prestataires, lots, échéances, coûts, pièces contractuelles et bâtiments/équipements concernés.
+- **Statut** : 🔴 **Todo**
+- **Notes pour l'IA suivante** :
+  - Créer un modèle `MaintenanceContract` et une table d'affectation vers plusieurs bâtiments, voire équipements.
+  - Prévoir upload PDF, dates de début/fin, reconduction, préavis, montant, prestataire, type de lot.
+  - Connecter ensuite au module gestion technique pour savoir quels équipements sont couverts par quel contrat.
+  - Voir [[Modules/Maintenance-Contrats]].
+
+## Vision cible — fiche bâtiment centrale
+
+La trajectoire produit se décale d'un simple inventaire patrimonial vers une fiche bâtiment centrale :
+
+- patrimoine : identité, propriétaire/locataire, surfaces, locaux ;
+- fluides : compteurs électricité/gaz/eau et consommations associées ;
+- usage : occupation, nettoyage, fermetures, responsables de site ;
+- technique : CVC, enveloppe, contrats de maintenance, programmations ;
+- réglementaire : OPERAT, BACS/GTB, trajectoires de performance.
+
+Ordre de construction recommandé : compteurs -> occupation -> inventaire CVC terrain -> programmation CVC -> alertes usagers -> BACS/GTB.
+
 ## Récap synthétique
 
 | Bloc | Total | ✅ Fait | 🟡 Partiel | 🔴 Todo |
@@ -175,6 +230,6 @@
 **Priorité suggérée pour la prochaine session** (à valider avec l'utilisateur) :
 1. **Améliorer le parser BPU** (passer à `pdfplumber` qui détecte les colonnes des tableaux) → débloquerait les 16 BPU en `ocr_review`
 2. **Module Baux locataires** (1.2) → grosse valeur métier, faisable rapide avec le pattern d'upload PDF existant
-3. **Connecteur GRDF** (3.2) → réutilise massivement l'architecture ENEDIS
+3. **Rattachement compteurs aux bâtiments** (2.6) → socle de la fiche bâtiment centrale et prérequis pour gaz/eau/occupation
 
 Voir aussi : [[04-Etat-actuel-du-dev]] pour le détail des derniers commits / PRs.

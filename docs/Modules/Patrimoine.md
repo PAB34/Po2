@@ -8,6 +8,7 @@
 |---|---|
 | 1.1 Inventaire bâtiment propriétaire (DGFIP open data) | ✅ Fait |
 | 1.2 Inventaire bâtiment locataire (baux PDF) | 🔴 Todo |
+| 2.6 Rattachement compteurs fluides aux bâtiments | 🔴 Todo |
 
 ## Modèle de données
 
@@ -19,6 +20,32 @@ Sous-unités d'un bâtiment (étages, locaux séparés). Lié à `Building.id`.
 
 ### `City` (`saas/backend/app/models/city.py`)
 Scope tenant — chaque `User` et `Building` a un `city_id`.
+
+## Vision cible — fiche bâtiment centrale
+
+Le bâtiment doit devenir le point de vérité métier de Po2. À terme, une fiche bâtiment doit centraliser :
+
+- l'identité patrimoniale : nom, adresse, surfaces, locaux, propriétaire/locataire ;
+- les compteurs fluides : électricité (PRM/PDL), gaz (PCE), eau ;
+- les consommations et factures associées ;
+- les plannings d'occupation, nettoyage, fermetures et contacts responsables ;
+- les équipements CVC/enveloppe, l'état santé et les contrats de maintenance ;
+- les programmations CVC et consignes ;
+- les statuts réglementaires : OPERAT, BACS/GTB.
+
+Cette vision évite que l'énergie, la technique et l'occupation restent dans des silos séparés.
+
+## Rattachement compteurs — modèle cible
+
+Ne pas modéliser "1 bâtiment = 1 compteur". Les cas réels à gérer :
+
+- un bâtiment avec plusieurs compteurs ;
+- un compteur partagé entre plusieurs bâtiments ;
+- un compteur qui alimente une chaufferie, une annexe, un logement ou de l'éclairage extérieur ;
+- un rattachement valable seulement sur une période donnée ;
+- un rattachement certain, probable ou à vérifier.
+
+Objet cible : `BuildingMeterLink`, relation entre `Building` et un compteur fluide, avec `fluid`, identifiant compteur, dates de validité, usage, clé de répartition, source et niveau de confiance.
 
 ## Workflows existants
 

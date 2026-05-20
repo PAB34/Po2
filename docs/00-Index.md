@@ -19,13 +19,15 @@
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
-- [[Modules/Patrimoine]] — Inventaire bâtiments, locaux, propriétaire / locataire
-- [[Modules/Gestion-technique]] — Équipements CVC, enveloppe, occupation, température
+- [[Modules/Patrimoine]] — Inventaire bâtiments, locaux, propriétaire / locataire, fiche bâtiment centrale, compteurs rattachés
+- [[Modules/Gestion-technique]] — Équipements CVC, enveloppe, occupation, température, BACS/GTB futur
 - [[Modules/Energie-Consommation]] — ENEDIS (élec), GRDF (gaz), SUEZ (eau)
 - [[Modules/Energie-Facturation]] — Vérification ENGIE, DALKIA, TOTAL, SUEZ
 - [[Modules/Energie-BPU]] — Suivi temporel des prix unitaires d'achat
 - [[Modules/Energie-Preconisations]] — Calibrage contrat + recommandations puissance
 - [[Modules/Energie-TURPE]] — Référentiel TURPE 7 (CRE)
+- [[Modules/Conformite-OPERAT]] — Décret éco tertiaire, EFA, déclarations OPERAT
+- [[Modules/Maintenance-Contrats]] — Contrats de maintenance, prestataires, bâtiments concernés
 
 ### 📚 Specs historiques
 - [[Specs]] — Catalogue des 9 specs `saas/specs/` avec verdict (à jour / partiel / archive)
