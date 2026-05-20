@@ -207,35 +207,33 @@ export default function EnergieBpuPage() {
             )}
           </div>
 
-          {/* Formule + légende composantes */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px", background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10 }}>
-            {formulaQuery.data && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: "0.78rem", color: "#475569" }}>Formule :</span>
-                <code style={{ fontSize: "0.82rem", color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(59,130,246,0.2)" }}>
-                  {formulaQuery.data.expression}
-                </code>
-              </div>
-            )}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {[
-                { code: "fourniture", label: "Fourniture",          desc: "Prix du marché de gros de l'électricité",          color: "#2563eb" },
-                { code: "capacite",   label: "Capacité",            desc: "Mécanisme de capacité réglementé RTE",              color: "#f59e0b" },
-                { code: "cee",        label: "CEE",                 desc: "Certificats d'Économies d'Énergie",                 color: "#10b981" },
-                { code: "go",         label: "Garanties d'Origine", desc: "Option énergie renouvelable (GO)",                  color: "#a855f7" },
-              ].map(({ code, label, desc, color }) => (
-                <span
-                  key={code}
-                  title={desc}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: "#94a3b8", padding: "3px 10px", background: "rgba(51,65,85,0.5)", borderRadius: 4, border: "1px solid rgba(148,163,184,0.15)", cursor: "default" }}
-                >
-                  <span style={{ display: "inline-block", width: 10, height: 3, borderRadius: 2, background: color, flexShrink: 0 }} />
-                  <strong style={{ color: "#cbd5e1" }}>{code}</strong>
-                  <span style={{ color: "#475569" }}>=</span>
-                  {label}
-                </span>
-              ))}
+          {/* Formule */}
+          {formulaQuery.data && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "10px 14px", background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8 }}>
+              <span style={{ fontSize: "0.78rem", color: "#475569" }}>Formule :</span>
+              <code style={{ fontSize: "0.83rem", color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 10px", borderRadius: 4, border: "1px solid rgba(59,130,246,0.2)" }}>
+                {formulaQuery.data.expression}
+              </code>
             </div>
+          )}
+
+          {/* Définitions des composantes */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+            {[
+              { code: "fourniture", label: "Fourniture",          desc: "Prix du marché de gros de l'électricité, fixé à la signature du marché.", color: "#2563eb" },
+              { code: "capacite",   label: "Capacité",            desc: "Mécanisme de capacité réglementé par RTE pour garantir l'équilibre offre/demande en hiver.", color: "#f59e0b" },
+              { code: "cee",        label: "CEE",                 desc: "Obligation légale de financement des Certificats d'Économies d'Énergie.", color: "#10b981" },
+              { code: "go",         label: "Garanties d'Origine", desc: "Option contractuelle pour attester l'origine renouvelable de l'électricité fournie.", color: "#a855f7" },
+            ].map(({ code, label, desc, color }) => (
+              <div key={code} style={{ borderLeft: `3px solid ${color}`, padding: "10px 14px", background: "rgba(15,23,42,0.4)", border: `1px solid rgba(148,163,184,0.12)`, borderLeftColor: color, borderLeftWidth: 3, borderLeftStyle: "solid", borderRadius: 8 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                  <code style={{ fontSize: "0.85rem", fontWeight: 700, color: "#e2e8f0" }}>{code}</code>
+                  <span style={{ fontSize: "0.75rem", color: "#475569" }}>=</span>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 600, color: color }}>{label}</span>
+                </div>
+                <p style={{ fontSize: "0.75rem", color: "#64748b", margin: 0, lineHeight: 1.5 }}>{desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -429,114 +427,105 @@ function TurpeSection({ points, isLoading, error }: { points: BpuTurpeEvolutionP
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Bloc définition TURPE + lien avec composantes Timeline */}
-      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 4px" }}>
-            Qu'est-ce que le TURPE ?
-          </h2>
-          <p style={{ fontSize: "0.83rem", color: "#94a3b8", margin: 0, lineHeight: 1.6, maxWidth: 700 }}>
-            Le <strong style={{ color: "#cbd5e1" }}>TURPE</strong> (Tarif d'Utilisation des Réseaux Publics d'Électricité) est le tarif réglementé
-            fixé par la <strong style={{ color: "#cbd5e1" }}>CRE</strong> (Commission de Régulation de l'Énergie) pour l'accès au réseau
-            de transport (RTE) et de distribution (Enedis/ELD). Il rémunère l'acheminement de l'électricité des centrales jusqu'aux bâtiments,
-            indépendamment du fournisseur choisi.
-          </p>
-        </div>
-
-        {/* Tableau impact sur composantes */}
-        <div>
-          <div style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#475569", fontWeight: 600, letterSpacing: "0.06em", marginBottom: 8 }}>
-            Impact sur les composantes de la Timeline
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {[
-              {
-                color: "#2563eb",
-                code: "fourniture",
-                label: "Fourniture",
-                impact: "Aucun impact direct",
-                detail: "Prix du marché de gros fixé contractuellement avec le fournisseur. Le TURPE n'entre pas dans ce calcul.",
-                badge: "neutre",
-                badgeColor: "#475569",
-              },
-              {
-                color: "#f59e0b",
-                code: "capacite",
-                label: "Capacité",
-                impact: "Impact indirect possible",
-                detail: "Le mécanisme de capacité (obligation RTE) est distinct du TURPE mais suit une logique réglementaire similaire — les deux sont révisés par arrêtés CRE. Une hausse TURPE signale souvent un renchérissement global de la partie réseau.",
-                badge: "indirect",
-                badgeColor: "#ca8a04",
-              },
-              {
-                color: "#10b981",
-                code: "cee",
-                label: "CEE",
-                impact: "Aucun impact direct",
-                detail: "Les Certificats d'Économies d'Énergie sont une obligation issue de la loi énergie, distincte du tarif réseau.",
-                badge: "neutre",
-                badgeColor: "#475569",
-              },
-              {
-                color: "#a855f7",
-                code: "go",
-                label: "Garanties d'Origine",
-                impact: "Aucun impact direct",
-                detail: "Option contractuelle pour attester l'origine renouvelable de l'électricité. Sans lien avec les tarifs d'acheminement.",
-                badge: "neutre",
-                badgeColor: "#475569",
-              },
-            ].map(({ color, code, label, impact, detail, badge, badgeColor }) => (
-              <div key={code} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 10px", background: "rgba(30,41,59,0.5)", borderRadius: 7, border: "1px solid rgba(148,163,184,0.1)" }}>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 3 }} />
-                <div style={{ minWidth: 100 }}>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1" }}>{code}</span>
-                  <span style={{ fontSize: "0.75rem", color: "#475569", marginLeft: 6 }}>{label}</span>
-                </div>
-                <div style={{ flex: 1, fontSize: "0.78rem", color: "#94a3b8", lineHeight: 1.5 }}>
-                  <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 10, fontSize: "0.7rem", fontWeight: 600, background: `${badgeColor}33`, color: badgeColor, border: `1px solid ${badgeColor}66`, marginRight: 6 }}>
-                    {badge}
-                  </span>
-                  <strong style={{ color: "#cbd5e1" }}>{impact}</strong>
-                  {" — "}
-                  {detail}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p style={{ fontSize: "0.78rem", color: "#475569", margin: 0, borderTop: "1px solid rgba(148,163,184,0.1)", paddingTop: 10 }}>
-          Sur la facture finale, le TURPE s'additionne aux composantes BPU (fourniture + capacité + CEE + GO) et aux taxes (TICFE, CTA, TVA).
-          Suivre son évolution permet de vérifier que le fournisseur répercute correctement les hausses réglementaires sans marge excessive.
+      {/* ── 1. Définition TURPE ──────────────────────────────────────── */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 24px" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 8px", color: "#e2e8f0" }}>Qu'est-ce que le TURPE ?</h2>
+        <p style={{ fontSize: "0.85rem", color: "#94a3b8", margin: 0, lineHeight: 1.7, maxWidth: 720 }}>
+          Le <strong style={{ color: "#22d3ee" }}>TURPE</strong> (Tarif d'Utilisation des Réseaux Publics d'Électricité) est le tarif
+          réglementé fixé par la <strong style={{ color: "#e2e8f0" }}>CRE</strong> (Commission de Régulation de l'Énergie) pour
+          l'accès au réseau de transport (<strong style={{ color: "#e2e8f0" }}>RTE</strong>) et de distribution
+          (<strong style={{ color: "#e2e8f0" }}>Enedis / ELD</strong>). Il couvre l'acheminement de l'électricité des sites de
+          production jusqu'aux bâtiments, et s'applique à tous les consommateurs indépendamment du fournisseur choisi.
+          Le TURPE est révisé périodiquement par délibération CRE et répercuté à l'identique par tous les fournisseurs
+          sur la facture finale.
         </p>
       </div>
 
-      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 16px" }}>
+      {/* ── 2. Impact sur la facture ─────────────────────────────────── */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 24px" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 6px", color: "#e2e8f0" }}>Poids du TURPE dans la facture électricité</h2>
+        <p style={{ fontSize: "0.83rem", color: "#64748b", margin: "0 0 18px", lineHeight: 1.6 }}>
+          Sur une facture HTA typique, le TURPE représente <strong style={{ color: "#22d3ee" }}>environ 20–25 %</strong> du montant
+          hors taxes. Il s'additionne aux composantes du BPU (fourniture, capacité, CEE, GO) et aux taxes réglementaires.
+          Les valeurs ci-dessous sont <em>indicatives</em> pour un segment C4/HTB en 2024–2025.
+        </p>
+
+        {/* Barre empilée horizontale */}
+        {(() => {
+          const segments = [
+            { label: "Fourniture",       pct: 52, color: "#2563eb" },
+            { label: "Capacité/CEE/GO",  pct:  8, color: "#f59e0b" },
+            { label: "TURPE",            pct: 23, color: "#22d3ee" },
+            { label: "Taxes (TICFE+CTA)",pct: 17, color: "#64748b" },
+          ];
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* Barre */}
+              <div style={{ display: "flex", height: 36, borderRadius: 8, overflow: "hidden", gap: 2 }}>
+                {segments.map(s => (
+                  <div
+                    key={s.label}
+                    style={{ flex: s.pct, background: s.color, display: "flex", alignItems: "center", justifyContent: "center", transition: "flex 0.3s" }}
+                    title={`${s.label} — ${s.pct} %`}
+                  >
+                    {s.pct >= 10 && (
+                      <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
+                        {s.pct} %
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Légende */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+                {segments.map(s => (
+                  <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.78rem", color: "#94a3b8" }}>
+                    <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                    <strong style={{ color: s.color }}>{s.pct} %</strong>
+                    {s.label}
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: "0.75rem", color: "#334155", margin: 0, borderTop: "1px solid rgba(148,163,184,0.1)", paddingTop: 10 }}>
+                Note : hors TVA (20 % appliquée sur le total HT). TICFE = Taxe Intérieure sur la Consommation Finale d'Électricité · CTA = Contribution Tarifaire d'Acheminement.
+                Les hausses TURPE décidées par la CRE depuis 2021 ont renchéri la part réseau de <strong style={{ color: "#22d3ee" }}>+{
+                  points.length > 0
+                    ? `${(Number(points[points.length - 1].cumulative_index) - 100).toFixed(0)} pts`
+                    : "~+30 pts"
+                }</strong> (base 100 = août 2021).
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── 3. Graphique évolution ───────────────────────────────────── */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <div>
-            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>Évolution du TURPE HTA-BT</h2>
-            <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "4px 0 0", maxWidth: 520 }}>
-              Part acheminement réseau, base 100 au 2021-08-01. Sert aux contrôles facture et aux préconisations puissance.
+            <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: 0, color: "#e2e8f0" }}>Évolution du TURPE HTA-BT</h2>
+            <p style={{ fontSize: "0.83rem", color: "#64748b", margin: "4px 0 0", maxWidth: 520 }}>
+              Indice base 100 au 1er août 2021 (entrée en vigueur TURPE 6). Chaque point correspond à une délibération CRE publiée.
             </p>
           </div>
           {latest && (
             <div style={{ padding: "8px 14px", background: "rgba(51,65,85,0.5)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, textAlign: "right", fontSize: "0.82rem" }}>
-              <div style={{ color: "#64748b", fontSize: "0.72rem" }}>Dernier point</div>
-              <div style={{ fontWeight: 600 }}>{latest.family}</div>
+              <div style={{ color: "#64748b", fontSize: "0.72rem" }}>Dernier point CRE</div>
+              <div style={{ fontWeight: 600, color: "#e2e8f0" }}>{latest.family}</div>
+              <div style={{ color: "#22d3ee", fontWeight: 700 }}>Indice {Number(latest.cumulative_index).toFixed(1)}</div>
               <div style={{ color: "#64748b", fontSize: "0.72rem" }}>{formatDateFr(latest.effective_date)}</div>
             </div>
           )}
         </div>
 
         {isLoading ? (
-          <div style={{ height: 340, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "0.85rem" }}>Chargement…</div>
+          <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "0.85rem" }}>Chargement…</div>
         ) : error ? (
           <ErrorBanner message={error.message} />
         ) : points.length === 0 ? (
           <div style={{ padding: "32px 0", textAlign: "center", color: "#64748b" }}>Aucun historique TURPE.</div>
         ) : (
-          <ResponsiveContainer width="100%" height={320}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
               <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
@@ -544,7 +533,7 @@ function TurpeSection({ points, isLoading, error }: { points: BpuTurpeEvolutionP
               <Tooltip
                 formatter={(value: number | string, name: string) =>
                   typeof value === "number" && name === "Indice TURPE"
-                    ? [`${value.toFixed(2)} (base 100 = 2021)`, name]
+                    ? [`${value.toFixed(2)} (base 100 = août 2021)`, name]
                     : [value, name]
                 }
                 labelFormatter={(_, payload) => {
@@ -553,16 +542,16 @@ function TurpeSection({ points, isLoading, error }: { points: BpuTurpeEvolutionP
                 }}
                 contentStyle={{ backgroundColor: "rgba(15,23,42,0.95)", border: "1px solid rgba(148,163,184,0.3)", color: "#f1f5f9", fontSize: "12px" }}
               />
-              <ReferenceLine y={100} stroke="rgba(100,116,139,0.4)" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="cumulative_index" name="Indice TURPE" stroke="#0891b2" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+              <ReferenceLine y={100} stroke="rgba(100,116,139,0.4)" strokeDasharray="4 4" label={{ value: "Base 2021", position: "insideTopLeft", fontSize: 10, fill: "#475569" }} />
+              <Line type="monotone" dataKey="cumulative_index" name="Indice TURPE" stroke="#22d3ee" strokeWidth={3} dot={{ r: 4, fill: "#22d3ee" }} activeDot={{ r: 6 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      {/* Tableau CRE */}
-      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
-        <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 14px" }}>Points CRE retenus</h2>
+      {/* ── 4. Tableau CRE ───────────────────────────────────────────── */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px 24px" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 14px", color: "#e2e8f0" }}>Points CRE retenus</h2>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
             <thead>
