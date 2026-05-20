@@ -21,115 +21,86 @@ import {
   fetchBpuTimeline,
   fetchBpuTurpeEvolution,
   triggerBpuImport,
-  BpuDocumentSummary,
-  BpuFormula,
-  BpuImportResponse,
-  BpuTurpeEvolutionPoint,
-  BpuTimelineFilters,
-  BpuTimelinePoint,
+  type BpuDocumentSummary,
+  type BpuFormula,
+  type BpuImportResponse,
+  type BpuTurpeEvolutionPoint,
+  type BpuTimelineFilters,
+  type BpuTimelinePoint,
 } from "../lib/api";
 
-const STATUS_BADGE_CLASS: Record<string, string> = {
-  ok: "badge-green",
-  ocr_ok: "badge-blue",
-  ocr_review: "badge-orange",
-  manual: "badge-gray",
-  pending: "badge-gray",
-  error: "badge-red",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  ok: "OK (texte)",
-  ocr_ok: "OK (OCR)",
-  ocr_review: "À revoir",
-  manual: "Saisie manuelle",
-  pending: "Non importé",
-  error: "Erreur",
+const STATUS_BADGE: Record<string, { label: string; color: string }> = {
+  ok:          { label: "OK texte",  color: "#4ade80" },
+  ocr_ok:      { label: "OK OCR",    color: "#60a5fa" },
+  ocr_review:  { label: "À revoir",  color: "#fbbf24" },
+  manual:      { label: "Manuel",    color: "#94a3b8" },
+  pending:     { label: "En attente",color: "#94a3b8" },
+  error:       { label: "Erreur",    color: "#f87171" },
 };
 
 function uniq<T extends string | number>(values: (T | null | undefined)[]): T[] {
   const set = new Set<T>();
-  for (const v of values) {
-    if (v == null) continue;
-    set.add(v);
-  }
+  for (const v of values) { if (v != null) set.add(v); }
   return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-type TabKey = "timeline" | "turpe" | "edition";
+type TabKey = "timeline" | "turpe" | "documents" | "edition";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "timeline",  label: "Timeline" },
+  { key: "turpe",     label: "TURPE" },
+  { key: "documents", label: "Documents & Import" },
+  { key: "edition",   label: "Édition tableau" },
+];
 
 export default function EnergieBpuPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("timeline");
 
-  // Filtres du graphique (séparés des filtres de liste pour clarté)
   const [chartFilters, setChartFilters] = useState<BpuTimelineFilters>({
     segment_code: "C4",
     period_code: "HPH",
   });
-
-  // Filtres de la liste documents
-  const [docSupplier, setDocSupplier] = useState<string>("");
-  const [docYear, setDocYear] = useState<string>("");
-  const [docLot, setDocLot] = useState<string>("");
-  const [docStatus, setDocStatus] = useState<string>("");
+  const [docSupplier, setDocSupplier] = useState("");
+  const [docYear,     setDocYear]     = useState("");
+  const [docLot,      setDocLot]      = useState("");
+  const [docStatus,   setDocStatus]   = useState("");
 
   const formulaQuery = useQuery<BpuFormula>({
     queryKey: ["bpu", "formula"],
     queryFn: () => fetchBpuFormula(token ?? ""),
     enabled: !!token,
   });
-
   const docsQuery = useQuery<BpuDocumentSummary[]>({
     queryKey: ["bpu", "documents", docSupplier, docYear, docLot, docStatus],
-    queryFn: () =>
-      fetchBpuDocuments(token ?? "", {
-        supplier: docSupplier || undefined,
-        valid_year: docYear ? Number(docYear) : undefined,
-        lot_number: docLot ? Number(docLot) : undefined,
-        extraction_status: docStatus || undefined,
-      }),
+    queryFn: () => fetchBpuDocuments(token ?? "", {
+      supplier: docSupplier || undefined,
+      valid_year: docYear ? Number(docYear) : undefined,
+      lot_number: docLot ? Number(docLot) : undefined,
+      extraction_status: docStatus || undefined,
+    }),
     enabled: !!token,
   });
-
   const timelineQuery = useQuery<BpuTimelinePoint[]>({
     queryKey: ["bpu", "timeline", chartFilters],
     queryFn: () => fetchBpuTimeline(token ?? "", chartFilters),
     enabled: !!token,
   });
-
-  const turpeEvolutionQuery = useQuery<BpuTurpeEvolutionPoint[]>({
+  const turpeQuery = useQuery<BpuTurpeEvolutionPoint[]>({
     queryKey: ["bpu", "turpe-evolution"],
     queryFn: () => fetchBpuTurpeEvolution(token ?? ""),
     enabled: !!token,
   });
-
   const importMutation = useMutation<BpuImportResponse, Error, { force: boolean }>({
-    mutationFn: ({ force }) =>
-      triggerBpuImport(token ?? "", { force, enable_ocr: true }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bpu"] });
-    },
+    mutationFn: ({ force }) => triggerBpuImport(token ?? "", { force, enable_ocr: true }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bpu"] }),
   });
 
-  const segmentChoices = useMemo(
-    () => formulaQuery.data?.segments ?? [],
-    [formulaQuery.data],
-  );
-  const periodChoices = useMemo(
-    () => formulaQuery.data?.periods ?? [],
-    [formulaQuery.data],
-  );
-
-  const supplierOptions = useMemo(
-    () => uniq((docsQuery.data ?? []).map((d) => d.supplier)),
-    [docsQuery.data],
-  );
-  const yearOptions = useMemo(
-    () => uniq((docsQuery.data ?? []).map((d) => d.valid_year)),
-    [docsQuery.data],
-  );
+  const segmentChoices = useMemo(() => formulaQuery.data?.segments ?? [], [formulaQuery.data]);
+  const periodChoices  = useMemo(() => formulaQuery.data?.periods ?? [],  [formulaQuery.data]);
+  const supplierOpts   = useMemo(() => uniq((docsQuery.data ?? []).map(d => d.supplier)),   [docsQuery.data]);
+  const yearOpts       = useMemo(() => uniq((docsQuery.data ?? []).map(d => d.valid_year)), [docsQuery.data]);
 
   const stats = useMemo(() => {
     const docs = docsQuery.data ?? [];
@@ -139,612 +110,426 @@ export default function EnergieBpuPage() {
   }, [docsQuery.data]);
 
   if (!token) {
-    return (
-      <div className="p-8 text-sm text-slate-500">
-        Vous devez être connecté pour consulter les BPU.
-      </div>
-    );
+    return <div style={{ padding: 32, color: "#94a3b8" }}>Connectez-vous pour accéder aux BPU.</div>;
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="space-y-1">
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <Link to="/energie" className="underline hover:text-slate-700 dark:hover:text-slate-300">
-            Énergie
-          </Link>
-          <span>›</span>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 20px" }}>
+
+      {/* ── En-tête ───────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: 6 }}>
+          <Link to="/energie" style={{ color: "#60a5fa", textDecoration: "none" }}>Énergie</Link>
+          <span style={{ margin: "0 6px", color: "#475569" }}>›</span>
           <span>Historique des BPU</span>
         </div>
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-          Bordereaux de Prix Unitaires — suivi temporel
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 600, margin: 0, lineHeight: 1.3 }}>
+          Bordereaux de Prix Unitaires
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Évolution des composantes de la formule de tarification (Fourniture, Capacité,
-          CEE, Garanties d'Origine) sur les marchés subséquents Hérault Énergies
-          de 2021 à 2026. Les valeurs alimentent le même calcul que la page
-          <Link to="/energie/preconisations" className="underline ml-1">préconisations</Link>.
+        <p style={{ fontSize: "0.83rem", color: "#64748b", marginTop: 4, maxWidth: 620 }}>
+          Évolution des composantes de la formule de tarification sur les marchés Hérault Énergies (2021–2026).
         </p>
-      </header>
-
-      {/* Onglets */}
-      <div className="border-b border-slate-200 dark:border-slate-700">
-        <nav className="-mb-px flex gap-4">
-          {([
-            { key: "timeline" as const, label: "Timeline" },
-            { key: "turpe" as const, label: "TURPE" },
-            { key: "edition" as const, label: "Édition tableau" },
-          ]).map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`border-b-2 px-3 pb-2 pt-1 text-sm font-medium transition ${
-                activeTab === tab.key
-                  ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-300"
-                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
       </div>
 
-      {activeTab === "edition" ? (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <div className="mb-3">
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Édition des prix unitaires
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Cliquez une cellule pour modifier, puis bouton « Enregistrer » pour persister
-              en BDD. Les modifications non sauvegardées sont surlignées en orange.
-            </p>
-          </div>
-          <BpuEditableTable />
-        </section>
-      ) : activeTab === "turpe" ? (
-        <TurpeEvolutionSection
-          points={turpeEvolutionQuery.data ?? []}
-          isLoading={turpeEvolutionQuery.isLoading}
-          error={turpeEvolutionQuery.error as Error | null}
-        />
-      ) : (
-        <>
+      {/* ── Onglets ───────────────────────────────────────────────────── */}
+      <div style={{ borderBottom: "1px solid rgba(148,163,184,0.25)", marginBottom: 24, display: "flex", gap: 0 }}>
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              padding: "8px 16px",
+              fontSize: "0.85rem",
+              fontWeight: activeTab === tab.key ? 600 : 400,
+              color: activeTab === tab.key ? "#60a5fa" : "#64748b",
+              background: "none",
+              border: "none",
+              borderBottom: activeTab === tab.key ? "2px solid #3b82f6" : "2px solid transparent",
+              cursor: "pointer",
+              marginBottom: -1,
+              transition: "color 0.15s",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {/* Stats import */}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="BPU stockés" value={stats.total} />
-        <StatCard
-          label="OK texte"
-          value={stats.byStatus.ok ?? 0}
-          tone="green"
-        />
-        <StatCard
-          label="OK OCR"
-          value={stats.byStatus.ocr_ok ?? 0}
-          tone="blue"
-        />
-        <StatCard
-          label="À revoir"
-          value={(stats.byStatus.ocr_review ?? 0) + (stats.byStatus.error ?? 0)}
-          tone="orange"
-        />
-      </section>
+      {/* ════════════════════════════════════════════════════════════════
+          Onglet TIMELINE
+      ════════════════════════════════════════════════════════════════ */}
+      {activeTab === "timeline" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Graphique évolution */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Évolution de la formule de prix
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Une courbe par composante × année. Filtrez par segment tarifaire et poste
-              pour comparer un même profil d'année en année.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Select
+          {/* Barre de filtres */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", padding: "12px 16px", background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10 }}>
+            <FilterSelect
               label="Segment"
               value={chartFilters.segment_code ?? ""}
-              onChange={(v) => setChartFilters((f) => ({ ...f, segment_code: v || undefined }))}
-              options={[
-                { value: "", label: "Tous" },
-                ...segmentChoices.map((s) => ({ value: s.code, label: `${s.code} — ${s.label}` })),
-              ]}
+              onChange={v => setChartFilters(f => ({ ...f, segment_code: v || undefined }))}
+              options={[{ value: "", label: "Tous" }, ...segmentChoices.map(s => ({ value: s.code, label: `${s.code} — ${s.label}` }))]}
             />
-            <Select
+            <FilterSelect
               label="Poste"
               value={chartFilters.period_code ?? ""}
-              onChange={(v) => setChartFilters((f) => ({ ...f, period_code: v || undefined }))}
-              options={[
-                { value: "", label: "Tous" },
-                ...periodChoices.map((p) => ({ value: p.code, label: `${p.code} — ${p.label}` })),
-              ]}
+              onChange={v => setChartFilters(f => ({ ...f, period_code: v || undefined }))}
+              options={[{ value: "", label: "Tous" }, ...periodChoices.map(p => ({ value: p.code, label: `${p.code} — ${p.label}` }))]}
             />
-            <Select
+            <FilterSelect
               label="Fournisseur"
               value={chartFilters.supplier ?? ""}
-              onChange={(v) => setChartFilters((f) => ({ ...f, supplier: v || undefined }))}
-              options={[
-                { value: "", label: "Tous" },
-                { value: "EDF", label: "EDF" },
-                { value: "ENGIE", label: "ENGIE" },
-              ]}
+              onChange={v => setChartFilters(f => ({ ...f, supplier: v || undefined }))}
+              options={[{ value: "", label: "Tous" }, { value: "EDF", label: "EDF" }, { value: "ENGIE", label: "ENGIE" }]}
             />
-            <Select
+            <FilterSelect
               label="Lot"
               value={chartFilters.lot_number?.toString() ?? ""}
-              onChange={(v) =>
-                setChartFilters((f) => ({ ...f, lot_number: v ? Number(v) : undefined }))
-              }
-              options={[
-                { value: "", label: "Tous" },
-                { value: "1", label: "Lot 1" },
-                { value: "2", label: "Lot 2" },
-                { value: "3", label: "Lot 3" },
-              ]}
+              onChange={v => setChartFilters(f => ({ ...f, lot_number: v ? Number(v) : undefined }))}
+              options={[{ value: "", label: "Tous" }, { value: "1", label: "Lot 1" }, { value: "2", label: "Lot 2" }, { value: "3", label: "Lot 3" }]}
             />
           </div>
-        </div>
 
-        {timelineQuery.isLoading ? (
-          <div className="py-12 text-center text-sm text-slate-500">Chargement…</div>
-        ) : timelineQuery.isError ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Erreur : {(timelineQuery.error as Error).message}
+          {/* Graphique */}
+          <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 16px" }}>
+            {timelineQuery.isLoading ? (
+              <div style={{ height: 340, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "0.85rem" }}>
+                Chargement…
+              </div>
+            ) : timelineQuery.isError ? (
+              <ErrorBanner message={(timelineQuery.error as Error).message} />
+            ) : (
+              <BpuTimelineChart
+                points={timelineQuery.data ?? []}
+                formula={formulaQuery.data}
+                includeTotal
+              />
+            )}
           </div>
-        ) : (
-          <BpuTimelineChart
-            points={timelineQuery.data ?? []}
-            formula={formulaQuery.data}
-            includeTotal
-          />
-        )}
-      </section>
 
-      {/* Légende formule */}
-      {formulaQuery.data && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="mb-3 text-lg font-medium text-slate-900 dark:text-slate-100">
-            Composantes de la formule
-          </h2>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {formulaQuery.data.components.map((c) => (
-              <div
-                key={c.code}
-                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800/50"
-              >
-                <div className="font-medium text-slate-900 dark:text-slate-100">
-                  {c.label}
-                </div>
-                <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  {c.description}
-                </div>
+          {/* Formule compacte */}
+          {formulaQuery.data && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: "0.78rem", color: "#475569", marginRight: 4 }}>Formule :</span>
+              <code style={{ fontSize: "0.82rem", color: "#93c5fd", background: "rgba(59,130,246,0.12)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(59,130,246,0.2)" }}>
+                {formulaQuery.data.expression}
+              </code>
+              {formulaQuery.data.components.map(c => (
+                <span key={c.code} style={{ fontSize: "0.75rem", color: "#64748b", padding: "2px 8px", background: "rgba(51,65,85,0.5)", borderRadius: 4, border: "1px solid rgba(148,163,184,0.15)" }}>
+                  <strong style={{ color: "#94a3b8" }}>{c.code}</strong> = {c.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          Onglet TURPE
+      ════════════════════════════════════════════════════════════════ */}
+      {activeTab === "turpe" && (
+        <TurpeSection
+          points={turpeQuery.data ?? []}
+          isLoading={turpeQuery.isLoading}
+          error={turpeQuery.error as Error | null}
+        />
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
+          Onglet DOCUMENTS & IMPORT
+      ════════════════════════════════════════════════════════════════ */}
+      {activeTab === "documents" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* Stats */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {[
+              { label: "BPU stockés",   value: stats.total,                                                    color: "#94a3b8" },
+              { label: "OK texte",      value: stats.byStatus.ok ?? 0,                                         color: "#4ade80" },
+              { label: "OK OCR",        value: stats.byStatus.ocr_ok ?? 0,                                     color: "#60a5fa" },
+              { label: "À revoir",      value: (stats.byStatus.ocr_review ?? 0) + (stats.byStatus.error ?? 0), color: "#fbbf24" },
+            ].map(s => (
+              <div key={s.label} style={{ padding: "10px 18px", background: "rgba(15,23,42,0.4)", border: `1px solid ${s.color}33`, borderRadius: 8, textAlign: "center", minWidth: 90 }}>
+                <div style={{ fontSize: "1.6rem", fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 3 }}>{s.label}</div>
               </div>
             ))}
           </div>
-        </section>
+
+          {/* Filtres + tableau */}
+          <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+              <div>
+                <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>Documents BPU importés</h2>
+                <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "3px 0 0" }}>Un BPU = un PDF source identifié par fournisseur × année × marché × lot × avenant.</p>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <FilterSelect label="Fournisseur" value={docSupplier} onChange={setDocSupplier}
+                  options={[{ value: "", label: "Tous" }, ...supplierOpts.map(s => ({ value: s, label: s }))]} />
+                <FilterSelect label="Année" value={docYear} onChange={setDocYear}
+                  options={[{ value: "", label: "Toutes" }, ...yearOpts.map(y => ({ value: String(y), label: String(y) }))]} />
+                <FilterSelect label="Lot" value={docLot} onChange={setDocLot}
+                  options={[{ value: "", label: "Tous" }, { value: "1", label: "Lot 1" }, { value: "2", label: "Lot 2" }, { value: "3", label: "Lot 3" }]} />
+                <FilterSelect label="Statut" value={docStatus} onChange={setDocStatus}
+                  options={[{ value: "", label: "Tous" }, { value: "ok", label: "OK texte" }, { value: "ocr_ok", label: "OK OCR" }, { value: "ocr_review", label: "À revoir" }, { value: "error", label: "Erreur" }]} />
+              </div>
+            </div>
+
+            {docsQuery.isLoading ? (
+              <div style={{ padding: "32px 0", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>Chargement…</div>
+            ) : docsQuery.isError ? (
+              <ErrorBanner message={(docsQuery.error as Error).message} />
+            ) : (docsQuery.data ?? []).length === 0 ? (
+              <div style={{ padding: "32px 0", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
+                Aucun BPU importé.
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.2)" }}>
+                      {["Fournisseur", "Année", "MS", "Lot", "Avenant", "Statut", "Confiance", "Fichier"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", color: "#475569", fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(docsQuery.data ?? []).map(d => {
+                      const badge = STATUS_BADGE[d.extraction_status] ?? { label: d.extraction_status, color: "#94a3b8" };
+                      return (
+                        <tr key={d.id} style={{ borderBottom: "1px solid rgba(148,163,184,0.1)" }}>
+                          <td style={{ padding: "7px 10px", fontWeight: 600 }}>{d.supplier}</td>
+                          <td style={{ padding: "7px 10px" }}>{d.valid_year}</td>
+                          <td style={{ padding: "7px 10px", color: "#64748b" }}>{d.market_subsequent ?? "—"}</td>
+                          <td style={{ padding: "7px 10px" }}>{d.lot_number}</td>
+                          <td style={{ padding: "7px 10px", color: "#64748b" }}>
+                            {d.amendment_number != null ? `Avenant ${d.amendment_number}` : d.amendment_label ?? "—"}
+                          </td>
+                          <td style={{ padding: "7px 10px" }}>
+                            <span style={{ fontSize: "0.73rem", padding: "2px 7px", borderRadius: 10, background: `${badge.color}22`, color: badge.color, border: `1px solid ${badge.color}44`, whiteSpace: "nowrap" }}>
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td style={{ padding: "7px 10px", color: "#64748b" }}>
+                            {d.extraction_confidence != null ? `${(Number(d.extraction_confidence) * 100).toFixed(0)} %` : "—"}
+                          </td>
+                          <td style={{ padding: "7px 10px", color: "#475569", fontSize: "0.75rem", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={d.pdf_filename}>
+                            {d.pdf_filename}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Import admin */}
+          <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 4px" }}>Import des PDFs côté serveur</h2>
+            <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "0 0 14px", maxWidth: 580 }}>
+              Lance l'ingestion du répertoire <code style={{ color: "#93c5fd" }}>saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/</code>.
+              PDFs textuels parsés directement, scans via OCR. Idempotent sauf si « Forcer » coché.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => importMutation.mutate({ force: false })}
+                disabled={importMutation.isPending}
+                style={{ padding: "7px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 7, fontSize: "0.85rem", fontWeight: 500, cursor: "pointer", opacity: importMutation.isPending ? 0.6 : 1 }}
+              >
+                {importMutation.isPending ? "Import en cours…" : "Importer depuis le serveur"}
+              </button>
+              <button
+                type="button"
+                onClick={() => importMutation.mutate({ force: true })}
+                disabled={importMutation.isPending}
+                style={{ padding: "7px 16px", background: "transparent", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.3)", borderRadius: 7, fontSize: "0.85rem", cursor: "pointer", opacity: importMutation.isPending ? 0.6 : 1 }}
+              >
+                Forcer le remplacement
+              </button>
+            </div>
+
+            {importMutation.isError && (
+              <ErrorBanner message={(importMutation.error as Error).message} style={{ marginTop: 12 }} />
+            )}
+            {importMutation.data && (
+              <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(51,65,85,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, fontSize: "0.82rem" }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Résultat</div>
+                <div style={{ color: "#94a3b8" }}>
+                  {importMutation.data.total} fichiers · <span style={{ color: "#4ade80" }}>{importMutation.data.succeeded} OK</span> ·{" "}
+                  <span style={{ color: "#f87171" }}>{importMutation.data.failed} erreurs</span> · {importMutation.data.skipped} skippés
+                </div>
+                <details style={{ marginTop: 8, cursor: "pointer" }}>
+                  <summary style={{ color: "#64748b", fontSize: "0.78rem" }}>Détails par fichier</summary>
+                  <ul style={{ marginTop: 6, paddingLeft: 0, listStyle: "none", fontFamily: "monospace", fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: 2 }}>
+                    {importMutation.data.results.map(r => (
+                      <li key={r.filename} style={{ color: r.status === "error" ? "#f87171" : "#64748b" }}>
+                        [{r.status}] {r.filename}
+                        {r.segments_count > 0 && ` — ${r.segments_count} seg, ${r.components_count} prix`}
+                        {r.error && <span style={{ color: "#f87171" }}> · {r.error}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Liste documents */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Documents BPU importés
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Un BPU = un PDF source identifié par fournisseur × année × marché × lot × avenant.
+      {/* ════════════════════════════════════════════════════════════════
+          Onglet ÉDITION TABLEAU
+      ════════════════════════════════════════════════════════════════ */}
+      {activeTab === "edition" && (
+        <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
+          <div style={{ marginBottom: 12 }}>
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>Édition des prix unitaires</h2>
+            <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "3px 0 0" }}>
+              Cliquez une cellule pour modifier, puis « Enregistrer » pour persister en BDD. Modifications non sauvegardées surlignées en orange.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Select
-              label="Fournisseur"
-              value={docSupplier}
-              onChange={setDocSupplier}
-              options={[
-                { value: "", label: "Tous" },
-                ...supplierOptions.map((s) => ({ value: s, label: s })),
-              ]}
-            />
-            <Select
-              label="Année"
-              value={docYear}
-              onChange={setDocYear}
-              options={[
-                { value: "", label: "Toutes" },
-                ...yearOptions.map((y) => ({ value: String(y), label: String(y) })),
-              ]}
-            />
-            <Select
-              label="Lot"
-              value={docLot}
-              onChange={setDocLot}
-              options={[
-                { value: "", label: "Tous" },
-                { value: "1", label: "Lot 1" },
-                { value: "2", label: "Lot 2" },
-                { value: "3", label: "Lot 3" },
-              ]}
-            />
-            <Select
-              label="Statut"
-              value={docStatus}
-              onChange={setDocStatus}
-              options={[
-                { value: "", label: "Tous" },
-                { value: "ok", label: "OK (texte)" },
-                { value: "ocr_ok", label: "OK (OCR)" },
-                { value: "ocr_review", label: "À revoir" },
-                { value: "error", label: "Erreur" },
-              ]}
-            />
-          </div>
+          <BpuEditableTable />
         </div>
-
-        {docsQuery.isLoading ? (
-          <div className="py-8 text-center text-sm text-slate-500">Chargement…</div>
-        ) : docsQuery.isError ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {(docsQuery.error as Error).message}
-          </div>
-        ) : (docsQuery.data ?? []).length === 0 ? (
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
-            Aucun BPU importé. Cliquez « Importer depuis le serveur » pour ingérer les PDFs.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
-                <tr>
-                  <th className="px-3 py-2">Fournisseur</th>
-                  <th className="px-3 py-2">Année</th>
-                  <th className="px-3 py-2">MS</th>
-                  <th className="px-3 py-2">Lot</th>
-                  <th className="px-3 py-2">Avenant</th>
-                  <th className="px-3 py-2">Statut</th>
-                  <th className="px-3 py-2">Confiance</th>
-                  <th className="px-3 py-2">Fichier source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                {(docsQuery.data ?? []).map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
-                      {d.supplier}
-                    </td>
-                    <td className="px-3 py-2">{d.valid_year}</td>
-                    <td className="px-3 py-2">{d.market_subsequent ?? "—"}</td>
-                    <td className="px-3 py-2">{d.lot_number}</td>
-                    <td className="px-3 py-2">
-                      {d.amendment_number != null
-                        ? `Avenant ${d.amendment_number}`
-                        : d.amendment_label ?? "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-flex rounded px-2 py-0.5 text-xs ${
-                          STATUS_BADGE_CLASS[d.extraction_status] ?? "badge-gray"
-                        }`}
-                      >
-                        {STATUS_LABEL[d.extraction_status] ?? d.extraction_status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">
-                      {d.extraction_confidence != null
-                        ? `${(Number(d.extraction_confidence) * 100).toFixed(0)} %`
-                        : "—"}
-                    </td>
-                    <td
-                      className="max-w-[280px] truncate px-3 py-2 text-xs text-slate-500 dark:text-slate-400"
-                      title={d.pdf_filename}
-                    >
-                      {d.pdf_filename}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Actions admin */}
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="mb-2 text-lg font-medium text-slate-900 dark:text-slate-100">
-          Import des PDFs côté serveur
-        </h2>
-        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          Lance l'ingestion du répertoire <code>saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/</code>.
-          Les PDFs textuels sont parsés directement, les scans passent par OCR
-          (tesseract + français). Les imports sont idempotents : un BPU déjà
-          présent est mis à jour (raw_text + statut) sans toucher aux corrections
-          manuelles éventuelles, sauf si « Forcer le remplacement » est coché.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => importMutation.mutate({ force: false })}
-            disabled={importMutation.isPending}
-            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {importMutation.isPending ? "Import en cours…" : "Importer depuis le serveur"}
-          </button>
-          <button
-            type="button"
-            onClick={() => importMutation.mutate({ force: true })}
-            disabled={importMutation.isPending}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            Forcer le remplacement
-          </button>
-        </div>
-        {importMutation.isError && (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {(importMutation.error as Error).message}
-          </div>
-        )}
-        {importMutation.data && (
-          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-700 dark:bg-slate-800/50">
-            <div className="mb-1 font-medium text-slate-700 dark:text-slate-200">
-              Résultat de l'import
-            </div>
-            <div className="text-slate-600 dark:text-slate-300">
-              {importMutation.data.total} fichiers · {importMutation.data.succeeded} OK ·{" "}
-              {importMutation.data.failed} erreurs · {importMutation.data.skipped} skippés
-            </div>
-            <details className="mt-2 cursor-pointer">
-              <summary className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-                Détails par fichier
-              </summary>
-              <ul className="mt-2 space-y-1 font-mono text-[11px]">
-                {importMutation.data.results.map((r) => (
-                  <li key={r.filename}>
-                    <span
-                      className={`mr-2 inline-block w-16 ${
-                        r.status === "error" ? "text-red-600" : "text-slate-500"
-                      }`}
-                    >
-                      [{r.status}]
-                    </span>
-                    {r.filename}
-                    {r.segments_count > 0 &&
-                      ` — ${r.segments_count} segments, ${r.components_count} prix`}
-                    {r.error && <span className="text-red-600"> · {r.error}</span>}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </div>
-        )}
-      </section>
-        </>
       )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sous-composants UI locaux
-// ---------------------------------------------------------------------------
+// ─── Sous-composant TURPE ───────────────────────────────────────────────────
 
-function TurpeEvolutionSection({
-  points,
-  isLoading,
-  error,
-}: {
-  points: BpuTurpeEvolutionPoint[];
-  isLoading: boolean;
-  error: Error | null;
-}) {
-  const chartData = useMemo(
-    () =>
-      points.map((point) => ({
-        ...point,
-        dateLabel: point.effective_date.slice(0, 7),
-        cumulative_index: Number(point.cumulative_index),
-        evolution_percent: Number(point.evolution_percent),
-      })),
-    [points],
-  );
+function TurpeSection({ points, isLoading, error }: { points: BpuTurpeEvolutionPoint[]; isLoading: boolean; error: Error | null }) {
+  const chartData = useMemo(() =>
+    points.map(p => ({
+      ...p,
+      dateLabel: p.effective_date.slice(0, 7),
+      cumulative_index: Number(p.cumulative_index),
+      evolution_percent: Number(p.evolution_percent),
+    })),
+  [points]);
   const latest = points[points.length - 1];
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "20px 16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <div>
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Evolution du TURPE HTA-BT
-            </h2>
-            <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400">
-              Le TURPE est la part acheminement reseau de la facture. Il ne remplace pas les
-              prix de fourniture BPU, mais il explique une part reglementee du prix complet de
-              l'electricite et sert deja aux controles facture et aux preconisations puissance.
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0 }}>Évolution du TURPE HTA-BT</h2>
+            <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "4px 0 0", maxWidth: 520 }}>
+              Part acheminement réseau, base 100 au 2021-08-01. Sert aux contrôles facture et aux préconisations puissance.
             </p>
           </div>
           {latest && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800/50">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Dernier point</div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {latest.family}
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                {formatDateFr(latest.effective_date)}
-              </div>
+            <div style={{ padding: "8px 14px", background: "rgba(51,65,85,0.5)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8, textAlign: "right", fontSize: "0.82rem" }}>
+              <div style={{ color: "#64748b", fontSize: "0.72rem" }}>Dernier point</div>
+              <div style={{ fontWeight: 600 }}>{latest.family}</div>
+              <div style={{ color: "#64748b", fontSize: "0.72rem" }}>{formatDateFr(latest.effective_date)}</div>
             </div>
           )}
         </div>
 
         {isLoading ? (
-          <div className="py-12 text-center text-sm text-slate-500">Chargement...</div>
+          <div style={{ height: 340, display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "0.85rem" }}>Chargement…</div>
         ) : error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Erreur : {error.message}
-          </div>
+          <ErrorBanner message={error.message} />
         ) : points.length === 0 ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
-            Aucun historique TURPE disponible.
-          </div>
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#64748b" }}>Aucun historique TURPE.</div>
         ) : (
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={320}>
             <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
               <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={70} domain={["dataMin - 2", "dataMax + 2"]} />
+              <YAxis tick={{ fontSize: 11 }} width={60} domain={["dataMin - 2", "dataMax + 2"]} />
               <Tooltip
-                formatter={(value: number | string, name: string) => {
-                  if (typeof value === "number" && name === "Indice TURPE") {
-                    return [`${value.toFixed(2)} (base 100 en 2021)`, name];
-                  }
-                  return [value, name];
-                }}
+                formatter={(value: number | string, name: string) =>
+                  typeof value === "number" && name === "Indice TURPE"
+                    ? [`${value.toFixed(2)} (base 100 = 2021)`, name]
+                    : [value, name]
+                }
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as BpuTurpeEvolutionPoint | undefined;
-                  return row ? `${row.event_label} - ${formatDateFr(row.effective_date)}` : "";
+                  return row ? `${row.event_label} — ${formatDateFr(row.effective_date)}` : "";
                 }}
-                contentStyle={{
-                  backgroundColor: "rgba(15,23,42,0.95)",
-                  border: "1px solid rgba(148,163,184,0.3)",
-                  color: "#f1f5f9",
-                  fontSize: "12px",
-                }}
+                contentStyle={{ backgroundColor: "rgba(15,23,42,0.95)", border: "1px solid rgba(148,163,184,0.3)", color: "#f1f5f9", fontSize: "12px" }}
               />
-              <ReferenceLine y={100} stroke="rgba(100,116,139,0.45)" strokeDasharray="4 4" />
-              <Line
-                type="monotone"
-                dataKey="cumulative_index"
-                name="Indice TURPE"
-                stroke="#0891b2"
-                strokeWidth={3}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
-                isAnimationActive={false}
-              />
+              <ReferenceLine y={100} stroke="rgba(100,116,139,0.4)" strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="cumulative_index" name="Indice TURPE" stroke="#0891b2" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
-      </section>
+      </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="mb-3 text-lg font-medium text-slate-900 dark:text-slate-100">
-          Points CRE retenus
-        </h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800/50 dark:text-slate-400">
-              <tr>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2">Version</th>
-                <th className="px-3 py-2">Evolution</th>
-                <th className="px-3 py-2">Indice</th>
-                <th className="px-3 py-2">Source</th>
-                <th className="px-3 py-2">Note</th>
+      {/* Tableau CRE */}
+      <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 14px" }}>Points CRE retenus</h2>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.2)" }}>
+                {["Date", "Version", "Évolution", "Indice", "Source", "Note"].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: "0.72rem", textTransform: "uppercase", color: "#475569", fontWeight: 600 }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-              {points.map((point) => (
-                <tr key={`${point.family}-${point.effective_date}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <td className="px-3 py-2">{formatDateFr(point.effective_date)}</td>
-                  <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
-                    {point.family}
-                    <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                      {point.event_label}
-                    </div>
+            <tbody>
+              {points.map(p => (
+                <tr key={`${p.family}-${p.effective_date}`} style={{ borderBottom: "1px solid rgba(148,163,184,0.08)" }}>
+                  <td style={{ padding: "7px 10px", color: "#94a3b8" }}>{formatDateFr(p.effective_date)}</td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <div style={{ fontWeight: 600 }}>{p.family}</div>
+                    <div style={{ fontSize: "0.73rem", color: "#64748b" }}>{p.event_label}</div>
                   </td>
-                  <td className="px-3 py-2">
-                    <span className={Number(point.evolution_percent) >= 0 ? "text-rose-600" : "text-emerald-600"}>
-                      {Number(point.evolution_percent) >= 0 ? "+" : ""}
-                      {Number(point.evolution_percent).toFixed(2)} %
-                    </span>
+                  <td style={{ padding: "7px 10px", fontWeight: 600, color: Number(p.evolution_percent) >= 0 ? "#f87171" : "#4ade80" }}>
+                    {Number(p.evolution_percent) >= 0 ? "+" : ""}{Number(p.evolution_percent).toFixed(2)} %
                   </td>
-                  <td className="px-3 py-2">{Number(point.cumulative_index).toFixed(2)}</td>
-                  <td className="px-3 py-2">
-                    <a
-                      href={point.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-300"
-                    >
-                      {point.source_label}
+                  <td style={{ padding: "7px 10px" }}>{Number(p.cumulative_index).toFixed(2)}</td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <a href={p.source_url} target="_blank" rel="noreferrer" style={{ color: "#60a5fa", textDecoration: "none" }}>
+                      {p.source_label}
                     </a>
                   </td>
-                  <td className="max-w-[360px] px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
-                    {point.notes ?? "-"}
-                  </td>
+                  <td style={{ padding: "7px 10px", color: "#64748b", fontSize: "0.78rem", maxWidth: 300 }}>{p.notes ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function formatDateFr(value: string) {
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function StatCard({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "green" | "blue" | "orange";
-}) {
-  const toneClasses: Record<string, string> = {
-    default: "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900",
-    green:
-      "border-emerald-200 bg-emerald-50 dark:border-emerald-700/50 dark:bg-emerald-900/20",
-    blue: "border-blue-200 bg-blue-50 dark:border-blue-700/50 dark:bg-blue-900/20",
-    orange:
-      "border-amber-200 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20",
-  };
-  return (
-    <div className={`rounded-lg border p-3 ${toneClasses[tone]}`}>
-      <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-        {value}
       </div>
-      <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
     </div>
   );
 }
 
-function Select({
-  label,
-  value,
-  onChange,
-  options,
-}: {
+// ─── Utilitaires UI ─────────────────────────────────────────────────────────
+
+function FilterSelect({ label, value, onChange, options }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
   return (
-    <label className="flex flex-col gap-0.5 text-xs text-slate-600 dark:text-slate-400">
-      <span>{label}</span>
+    <label style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: "0.75rem", color: "#64748b" }}>
+      <span style={{ fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-w-[140px] rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        onChange={e => onChange(e.target.value)}
+        style={{ padding: "5px 8px", fontSize: "0.82rem", background: "rgba(15,23,42,0.7)", border: "1px solid rgba(148,163,184,0.25)", borderRadius: 6, color: "#e2e8f0", minWidth: 130, cursor: "pointer" }}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </label>
   );
+}
+
+function ErrorBanner({ message, style: extraStyle }: { message: string; style?: React.CSSProperties }) {
+  return (
+    <div style={{ padding: "10px 14px", background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 8, color: "#fca5a5", fontSize: "0.83rem", ...extraStyle }}>
+      {message}
+    </div>
+  );
+}
+
+function formatDateFr(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
 }
