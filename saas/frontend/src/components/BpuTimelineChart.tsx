@@ -124,11 +124,20 @@ function buildSeries(points: BpuTimelinePoint[], includeTotal: boolean): {
   return { data, seriesKeys };
 }
 
+// Fourniture et total ont des ordres de grandeur ~10-30× plus élevés que capacité/CEE/GO.
+// On les sépare sur deux axes Y indépendants quand les deux groupes sont présents.
+const LARGE_SERIES = new Set(["fourniture", "total"]);
+const SMALL_SERIES = new Set(["capacite", "cee", "go", "renouvelable"]);
+
 export default function BpuTimelineChart({ points, formula, includeTotal = true }: Props) {
   const { data, seriesKeys } = useMemo(
     () => buildSeries(points, includeTotal),
     [points, includeTotal],
   );
+
+  const hasLarge = seriesKeys.some((s) => LARGE_SERIES.has(s.component));
+  const hasSmall = seriesKeys.some((s) => SMALL_SERIES.has(s.component));
+  const useDualAxis = hasLarge && hasSmall;
 
   if (points.length === 0) {
     return (
@@ -147,15 +156,54 @@ export default function BpuTimelineChart({ points, formula, includeTotal = true 
           <span className="ml-2 text-slate-400">(unité cible : {formula.unit_target})</span>
         </div>
       )}
+
+      {useDualAxis && (
+        <div style={{ fontSize: "0.78rem", color: "#94a3b8", display: "flex", gap: 16, paddingLeft: 4 }}>
+          <span>
+            <span style={{ display: "inline-block", width: 10, height: 2, background: "#2563eb", marginRight: 4, verticalAlign: "middle" }} />
+            Axe gauche : Fourniture / Total (€/MWh)
+          </span>
+          <span>
+            <span style={{ display: "inline-block", width: 10, height: 2, background: "#f59e0b", marginRight: 4, verticalAlign: "middle" }} />
+            Axe droit : Capacité · CEE · GO (€/MWh — échelle indépendante)
+          </span>
+        </div>
+      )}
+
       <ResponsiveContainer width="100%" height={340}>
-        <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 8, right: useDualAxis ? 80 : 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
           <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+
+          {/* Axe gauche — fourniture / total (ou axe unique si pas de double) */}
           <YAxis
+            yAxisId="large"
+            orientation="left"
             tick={{ fontSize: 11 }}
+            tickFormatter={(v: number) => `${v.toFixed(0)}`}
             unit=" €/MWh"
             width={90}
           />
+
+          {/* Axe droit — composantes accessoires, uniquement si double axe */}
+          {useDualAxis && (
+            <YAxis
+              yAxisId="small"
+              orientation="right"
+              tick={{ fontSize: 11, fill: "#94a3b8" }}
+              tickFormatter={(v: number) => `${v.toFixed(1)}`}
+              unit=" €/MWh"
+              width={72}
+              label={{
+                value: "accessoires →",
+                angle: 90,
+                position: "insideRight",
+                offset: 12,
+                style: { fontSize: 10, fill: "#64748b" },
+              }}
+            />
+          )}
+
           <Tooltip
             formatter={(value: number | string, name: string) => {
               if (typeof value === "number") {
@@ -171,20 +219,28 @@ export default function BpuTimelineChart({ points, formula, includeTotal = true 
             }}
           />
           <Legend wrapperStyle={{ fontSize: "12px" }} />
-          {seriesKeys.map((s) => (
-            <Line
-              key={s.key}
-              type="monotone"
-              dataKey={s.key}
-              name={s.label}
-              stroke={s.color}
-              strokeWidth={s.key === "total" ? 3 : 2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
-              connectNulls
-              isAnimationActive={false}
-            />
-          ))}
+
+          {seriesKeys.map((s) => {
+            const axisId = useDualAxis
+              ? LARGE_SERIES.has(s.component) ? "large" : "small"
+              : "large";
+            return (
+              <Line
+                key={s.key}
+                yAxisId={axisId}
+                type="monotone"
+                dataKey={s.key}
+                name={s.label}
+                stroke={s.color}
+                strokeWidth={s.key === "total" ? 3 : 2}
+                strokeDasharray={useDualAxis && SMALL_SERIES.has(s.component) ? "5 3" : undefined}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+                connectNulls
+                isAnimationActive={false}
+              />
+            );
+          })}
         </LineChart>
       </ResponsiveContainer>
     </div>
