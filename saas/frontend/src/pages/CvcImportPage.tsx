@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
 import {
+  fetchBuildings,
   postCvcPreview,
   postCvcMatchBuildings,
   postCvcImport,
+  type Building,
   type CvcPreviewResponse,
   type SiteMatchResult,
   type CvcImportResult,
@@ -41,6 +44,13 @@ export function CvcImportPage() {
   const [result, setResult] = useState<CvcImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const buildingsQuery = useQuery<Building[]>({
+    queryKey: ["buildings"],
+    queryFn: () => fetchBuildings(token ?? ""),
+    enabled: !!token,
+    staleTime: 5 * 60 * 1000,
+  });
 
   async function handlePreview() {
     if (!file || !token) return;
@@ -223,6 +233,15 @@ export function CvcImportPage() {
             {matches.map((m) => {
               const selectedId = selectedMapping[m.site_raw];
               const bestSuggestion = m.suggestions[0];
+              const suggestionIds = new Set(m.suggestions.map((s) => s.building_id));
+
+              // Tous les bâtiments du patrimoine hors suggestions, triés par nom
+              const allBuildings = (buildingsQuery.data ?? [])
+                .filter((b) => !suggestionIds.has(b.id))
+                .sort((a, b) =>
+                  (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? "", "fr", { sensitivity: "base" }),
+                );
+
               return (
                 <div
                   key={m.site_raw}
@@ -241,8 +260,8 @@ export function CvcImportPage() {
                     <strong style={{ fontSize: "0.88rem" }}>{m.site_raw}</strong>
                     {bestSuggestion && (
                       <div style={{ fontSize: "0.75rem", color: SUBTLE_TEXT, marginTop: 2 }}>
-                        Suggestion :{" "}
-                        <span style={{ color: scoreColor(bestSuggestion.score) }}>
+                        Meilleure suggestion :{" "}
+                        <span style={{ color: scoreColor(bestSuggestion.score), fontWeight: 600 }}>
                           {Math.round(bestSuggestion.score * 100)}%
                         </span>
                       </div>
@@ -259,13 +278,31 @@ export function CvcImportPage() {
                     style={{ padding: "4px 8px", fontSize: "0.85rem", width: "100%" }}
                   >
                     <option value="">— Ignorer ce site —</option>
-                    {m.suggestions.map((s) => (
-                      <option key={s.building_id} value={s.building_id}>
-                        {s.nom_batiment ?? `Bâtiment #${s.building_id}`}
-                        {s.adresse ? ` — ${s.adresse}` : ""}
-                        {` (${Math.round(s.score * 100)}%)`}
-                      </option>
-                    ))}
+
+                    {/* Suggestions fuzzy */}
+                    {m.suggestions.length > 0 && (
+                      <optgroup label="── Suggestions automatiques ──">
+                        {m.suggestions.map((s) => (
+                          <option key={s.building_id} value={s.building_id}>
+                            {s.nom_batiment ?? `Bâtiment #${s.building_id}`}
+                            {s.adresse ? ` — ${s.adresse}` : ""}
+                            {` (${Math.round(s.score * 100)}%)`}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    {/* Tous les bâtiments du patrimoine */}
+                    {allBuildings.length > 0 && (
+                      <optgroup label="── Tous les bâtiments ──">
+                        {allBuildings.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.nom_batiment ?? `Bâtiment #${b.id}`}
+                            {b.adresse_reconstituee ? ` — ${b.adresse_reconstituee}` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               );
