@@ -1358,6 +1358,7 @@ export type EnergyInvoiceImport = {
   period_start: string | null;
   period_end: string | null;
   regroupement: string | null;
+  contract_holder: string | null;
   total_ttc: number | null;
   total_consumption_kwh: number | null;
   site_count: number | null;

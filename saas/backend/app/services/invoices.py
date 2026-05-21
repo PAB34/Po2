@@ -6,7 +6,7 @@ from uuid import uuid4
 from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.models.invoice import EnergyInvoiceBatch, EnergyInvoiceBatchItem, EnergyInvoiceImport
@@ -44,6 +44,7 @@ def _guess_supplier(filename: str) -> str | None:
 def list_invoice_imports(db: Session, city_id: int) -> list[EnergyInvoiceImport]:
     return (
         db.query(EnergyInvoiceImport)
+        .options(selectinload(EnergyInvoiceImport.normalized_invoice))
         .filter_by(city_id=city_id)
         .order_by(EnergyInvoiceImport.created_at.desc(), EnergyInvoiceImport.id.desc())
         .all()

@@ -26,6 +26,7 @@ class EnergyInvoiceImportOut(BaseModel):
     period_start: date | None
     period_end: date | None
     regroupement: str | None
+    contract_holder: str | None
     total_ttc: float | None
     total_consumption_kwh: float | None
     site_count: int | None

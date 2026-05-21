@@ -11,6 +11,12 @@ import type {
   EnergyInvoiceLine,
   EnergyInvoiceSite,
 } from "../lib/api";
+import {
+  INVOICE_ISSUE_FAMILY_DETAIL as FAMILY_DETAIL,
+  INVOICE_ISSUE_FAMILY_LABEL as FAMILY_LABEL,
+  invoiceIssueFamily as issueFamily,
+} from "../lib/invoiceIssues";
+import type { InvoiceControlIssue as ControlIssue, InvoiceIssueFamily as IssueFamily } from "../lib/invoiceIssues";
 import { useAuth } from "../providers/AuthProvider";
 
 const CONTROL_STATUS_LABEL: Record<string, string> = {
@@ -32,9 +38,7 @@ const ISSUE_SEVERITY_LABEL: Record<string, string> = {
   warning: "Alerte",
 };
 
-type ControlIssue = EnergyInvoiceImport["control_issues"][number];
 type SummaryTone = "ok" | "warning" | "error";
-type IssueFamily = "bpu" | "turpe" | "taxes" | "periods" | "consumption" | "power" | "document" | "other";
 
 type HumanSummaryIssueDetail = {
   severity: string;
@@ -49,28 +53,6 @@ type HumanSummaryItem = {
   tone: SummaryTone;
   issueDetails?: HumanSummaryIssueDetail[];
   hiddenIssueCount?: number;
-};
-
-const FAMILY_LABEL: Record<IssueFamily, string> = {
-  bpu: "Prix contractuels",
-  turpe: "Acheminement TURPE",
-  taxes: "Taxes et TVA",
-  periods: "Periodes",
-  consumption: "Consommation",
-  power: "Puissance",
-  document: "Identite facture",
-  other: "Autres controles",
-};
-
-const FAMILY_DETAIL: Record<IssueFamily, string> = {
-  bpu: "Prix, poste ou option tarifaire incoherent avec le BPU.",
-  turpe: "Calcul TURPE incomplet ou non verifiable pour certaines lignes.",
-  taxes: "Total HT, TVA ou TTC a rapprocher avec les lignes facturees.",
-  periods: "Periode absente, trou ou chevauchement potentiel.",
-  consumption: "Ecart ou manque de donnees ENEDIS sur la periode facturee.",
-  power: "Puissance a verifier : depassement, ecart ou donnee manquante.",
-  document: "Reference, perimetre ou donnees d'identification a verifier.",
-  other: "Point technique a examiner dans le detail des controles.",
 };
 
 function formatShortDate(value: string | null | undefined) {
@@ -135,32 +117,6 @@ function issueBadge(severity: string) {
 function recordNumber(record: Record<string, unknown> | undefined, key: string) {
   const value = record?.[key];
   return typeof value === "number" ? value : null;
-}
-
-function issueFamily(issue: ControlIssue): IssueFamily {
-  const code = issue.code ?? "";
-  if (code.startsWith("BPU_")) return "bpu";
-  if (code.startsWith("TURPE_")) return "turpe";
-  if (code.includes("CONSUMPTION") || code.startsWith("ENEDIS_CONSUMPTION") || code.startsWith("LOAD_CURVE_CONSUMPTION")) {
-    return "consumption";
-  }
-  if (code.includes("POWER") || code.startsWith("SUBSCRIBED_POWER")) return "power";
-  if (code.includes("VAT") || code.includes("TAX") || code === "HT_TOTAL_MISMATCH" || code === "INVOICE_VAT_TOTAL_MISMATCH") {
-    return "taxes";
-  }
-  if (code.includes("PERIOD")) return "periods";
-  if (
-    code.includes("PRM") ||
-    code.includes("SUPPLIER") ||
-    code.includes("MARKET") ||
-    code.includes("REGROUPEMENT") ||
-    code.includes("INVOICE") ||
-    code.includes("CHORUS") ||
-    code.includes("DOCUMENT")
-  ) {
-    return "document";
-  }
-  return "other";
 }
 
 function hasFamilyIssue(issues: ControlIssue[], family: IssueFamily) {

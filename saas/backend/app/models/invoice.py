@@ -132,6 +132,16 @@ class EnergyInvoiceImport(Base):
             return None
         return report if isinstance(report, dict) else None
 
+    @property
+    def contract_holder(self) -> str | None:
+        if self.normalized_invoice is not None and self.normalized_invoice.contract_holder:
+            return self.normalized_invoice.contract_holder
+
+        result = self.analysis_result
+        invoice = result.get("invoice") if result else None
+        value = invoice.get("contract_holder") if isinstance(invoice, dict) else None
+        return value if isinstance(value, str) and value.strip() else None
+
 
 class EnergyInvoice(Base):
     __tablename__ = "energy_invoices"

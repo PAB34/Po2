@@ -1,7 +1,7 @@
 from io import BytesIO
 from zipfile import ZipFile
 
-from app.models.invoice import EnergyInvoiceBatch, EnergyInvoiceBatchItem
+from app.models.invoice import EnergyInvoice, EnergyInvoiceBatch, EnergyInvoiceBatchItem, EnergyInvoiceImport
 from app.services import invoices
 
 
@@ -57,3 +57,18 @@ def test_zip_batch_ignores_non_pdf_members_and_processes_pdfs(monkeypatch) -> No
     assert batch.items[0].original_filename == "readme.txt"
     assert batch.items[0].archive_filename == "lot.zip"
     assert batch.items[0].status == "ignored"
+
+
+def test_invoice_import_contract_holder_prefers_normalized_invoice() -> None:
+    invoice_import = EnergyInvoiceImport(
+        analysis_result_json='{"invoice":{"contract_holder":"VILLE DE SETE"}}',
+        normalized_invoice=EnergyInvoice(contract_holder="SETE AGGLOPOLE MEDITERRANEE"),
+    )
+
+    assert invoice_import.contract_holder == "SETE AGGLOPOLE MEDITERRANEE"
+
+
+def test_invoice_import_contract_holder_uses_parsed_invoice_fallback() -> None:
+    invoice_import = EnergyInvoiceImport(analysis_result_json='{"invoice":{"contract_holder":"VILLE DE SETE"}}')
+
+    assert invoice_import.contract_holder == "VILLE DE SETE"

@@ -11,6 +11,11 @@ import {
   uploadEnergyInvoiceBatch,
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
+import {
+  INVOICE_ISSUE_FAMILY_LABEL,
+  invoiceIssueFamily,
+} from "../lib/invoiceIssues";
+import type { InvoiceControlIssue, InvoiceIssueFamily } from "../lib/invoiceIssues";
 import { useAuth } from "../providers/AuthProvider";
 
 const IMPORT_STATUS_LABEL: Record<string, string> = {
@@ -124,6 +129,40 @@ function batchItemBadge(status: string) {
   return <span className={`badge ${statusClass}`}>{BATCH_ITEM_STATUS_LABEL[status] ?? status}</span>;
 }
 
+function invoiceIssueFamilies(issues: InvoiceControlIssue[]) {
+  return Array.from(new Set(issues.map(invoiceIssueFamily)));
+}
+
+function invoiceIssueCodes(issues: InvoiceControlIssue[]) {
+  return Array.from(new Set(issues.map((issue) => issue.code))).filter(Boolean);
+}
+
+function controlIssueTags(invoiceImport: EnergyInvoiceImport) {
+  const families = invoiceIssueFamilies(invoiceImport.control_issues);
+  const codes = invoiceIssueCodes(invoiceImport.control_issues);
+
+  if (families.length === 0) return null;
+
+  return (
+    <div className="invoice-issue-tags">
+      {families.map((family) => (
+        <span key={family} className="invoice-issue-family-tag">
+          {INVOICE_ISSUE_FAMILY_LABEL[family]}
+        </span>
+      ))}
+      {codes.slice(0, 3).map((code) => {
+        const sample = invoiceImport.control_issues.find((issue) => issue.code === code);
+        return (
+          <span key={code} className="invoice-issue-code-tag" title={sample?.message ?? code}>
+            {code}
+          </span>
+        );
+      })}
+      {codes.length > 3 && <span className="invoice-issue-code-tag">+{codes.length - 3}</span>}
+    </div>
+  );
+}
+
 export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
@@ -135,6 +174,9 @@ export function EnergieInvoicesPage() {
   const [controlFilter, setControlFilter] = useState("all");
   const [decisionFilter, setDecisionFilter] = useState("all");
   const [regroupementFilter, setRegroupementFilter] = useState("all");
+  const [contractHolderFilter, setContractHolderFilter] = useState("all");
+  const [issueFamilyFilter, setIssueFamilyFilter] = useState<InvoiceIssueFamily | "all">("all");
+  const [issueCodeFilter, setIssueCodeFilter] = useState("all");
 
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
@@ -174,23 +216,76 @@ export function EnergieInvoicesPage() {
       ).sort(),
     [imports],
   );
+  const contractHolders = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          imports
+            .map((invoiceImport) => invoiceImport.contract_holder)
+            .filter((contractHolder): contractHolder is string => Boolean(contractHolder)),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "fr")),
+    [imports],
+  );
+  const issueFamilies = useMemo(
+    () =>
+      Array.from(new Set(imports.flatMap((invoiceImport) => invoiceIssueFamilies(invoiceImport.control_issues)))).sort((a, b) =>
+        INVOICE_ISSUE_FAMILY_LABEL[a].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b], "fr"),
+      ),
+    [imports],
+  );
+  const issueCodes = useMemo(() => {
+    const options = new Map<string, { code: string; family: InvoiceIssueFamily; message: string }>();
+    for (const invoiceImport of imports) {
+      for (const issue of invoiceImport.control_issues) {
+        const family = invoiceIssueFamily(issue);
+        if (issueFamilyFilter !== "all" && family !== issueFamilyFilter) continue;
+        if (!options.has(issue.code)) {
+          options.set(issue.code, { code: issue.code, family, message: issue.message });
+        }
+      }
+    }
+    return Array.from(options.values()).sort(
+      (a, b) =>
+        INVOICE_ISSUE_FAMILY_LABEL[a.family].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b.family], "fr") ||
+        a.code.localeCompare(b.code, "fr"),
+    );
+  }, [imports, issueFamilyFilter]);
   const filteredImports = useMemo(() => {
     const search = invoiceSearch.trim().toLowerCase();
     return imports.filter((invoiceImport) => {
       if (controlFilter !== "all" && invoiceImport.control_status !== controlFilter) return false;
       if (decisionFilter !== "all" && invoiceImport.decision_status !== decisionFilter) return false;
       if (regroupementFilter !== "all" && invoiceImport.regroupement !== regroupementFilter) return false;
+      if (contractHolderFilter !== "all" && invoiceImport.contract_holder !== contractHolderFilter) return false;
+      if (
+        issueFamilyFilter !== "all" &&
+        !invoiceImport.control_issues.some((issue) => invoiceIssueFamily(issue) === issueFamilyFilter)
+      ) {
+        return false;
+      }
+      if (issueCodeFilter !== "all" && !invoiceImport.control_issues.some((issue) => issue.code === issueCodeFilter)) return false;
       if (!search) return true;
       return [
         invoiceImport.original_filename,
         invoiceImport.invoice_number,
         invoiceImport.regroupement,
+        invoiceImport.contract_holder,
         invoiceImport.supplier_guess,
       ]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(search));
     });
-  }, [controlFilter, decisionFilter, imports, invoiceSearch, regroupementFilter]);
+  }, [
+    contractHolderFilter,
+    controlFilter,
+    decisionFilter,
+    imports,
+    invoiceSearch,
+    issueCodeFilter,
+    issueFamilyFilter,
+    regroupementFilter,
+  ]);
   const stats = useMemo(() => {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;
     const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
@@ -297,13 +392,14 @@ export function EnergieInvoicesPage() {
         {uploadMut.isError && <p className="error-text">{(uploadMut.error as Error).message}</p>}
       </section>
 
-      <section className="invoice-detail-section">
-        <div className="page-header page-header-row">
+      <details className="invoice-detail-section invoice-batch-disclosure">
+        <summary className="invoice-batch-summary">
           <div>
             <h3>Lots d'import</h3>
             <p className="page-subtitle">Historique des depots manuels avant la connexion API ENGIE.</p>
           </div>
-        </div>
+          <span>{batches.length} lot{batches.length > 1 ? "s" : ""}</span>
+        </summary>
         {batchesQuery.isLoading && <p className="loading-text">Chargement des lots...</p>}
         {batchesQuery.isError && <p className="error-text">{(batchesQuery.error as Error).message}</p>}
         {batches.length > 0 && (
@@ -385,7 +481,7 @@ export function EnergieInvoicesPage() {
             </table>
           </div>
         )}
-      </section>
+      </details>
 
       <section className="invoice-detail-section">
         <h3>Filtrer les factures</h3>
@@ -427,6 +523,9 @@ export function EnergieInvoicesPage() {
               setControlFilter("all");
               setDecisionFilter("all");
               setRegroupementFilter("all");
+              setContractHolderFilter("all");
+              setIssueFamilyFilter("all");
+              setIssueCodeFilter("all");
               setInvoiceSearch("");
             }}
           >
@@ -441,7 +540,7 @@ export function EnergieInvoicesPage() {
               className="form-input"
               value={invoiceSearch}
               onChange={(e) => setInvoiceSearch(e.target.value)}
-              placeholder="Facture, fichier, regroupement"
+              placeholder="Facture, fichier, regroupement, titulaire"
             />
           </label>
           <label>
@@ -471,6 +570,46 @@ export function EnergieInvoicesPage() {
               {regroupements.map((regroupement) => (
                 <option key={regroupement} value={regroupement}>
                   {regroupement}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Titulaire</span>
+            <select className="form-input" value={contractHolderFilter} onChange={(e) => setContractHolderFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {contractHolders.map((contractHolder) => (
+                <option key={contractHolder} value={contractHolder}>
+                  {contractHolder}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Categorie de probleme</span>
+            <select
+              className="form-input"
+              value={issueFamilyFilter}
+              onChange={(e) => {
+                setIssueFamilyFilter(e.target.value as InvoiceIssueFamily | "all");
+                setIssueCodeFilter("all");
+              }}
+            >
+              <option value="all">Toutes</option>
+              {issueFamilies.map((family) => (
+                <option key={family} value={family}>
+                  {INVOICE_ISSUE_FAMILY_LABEL[family]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Type de probleme</span>
+            <select className="form-input" value={issueCodeFilter} onChange={(e) => setIssueCodeFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {issueCodes.map((issue) => (
+                <option key={issue.code} value={issue.code} title={issue.message}>
+                  {INVOICE_ISSUE_FAMILY_LABEL[issue.family]} : {issue.code}
                 </option>
               ))}
             </select>
@@ -507,6 +646,7 @@ export function EnergieInvoicesPage() {
               <th>Fichier</th>
               <th>Facture</th>
               <th>Regroupement</th>
+              <th>Titulaire</th>
               <th>Montant</th>
               <th>Controle</th>
               <th>Decision</th>
@@ -530,6 +670,7 @@ export function EnergieInvoicesPage() {
                   </div>
                 </td>
                 <td>{invoiceImport.regroupement ?? "-"}</td>
+                <td>{invoiceImport.contract_holder ?? "-"}</td>
                 <td>
                   <div className="invoice-file-cell">
                     <strong>{formatCurrency(invoiceImport.total_ttc)}</strong>
@@ -547,6 +688,7 @@ export function EnergieInvoicesPage() {
                     <span>
                       {invoiceImport.control_errors_count} erreur(s), {invoiceImport.control_warnings_count} alerte(s)
                     </span>
+                    {controlIssueTags(invoiceImport)}
                     {invoiceImport.control_issues[0] && <small>{invoiceImport.control_issues[0].message}</small>}
                   </div>
                 </td>
@@ -592,7 +734,7 @@ export function EnergieInvoicesPage() {
             ))}
             {!importsQuery.isLoading && filteredImports.length === 0 && (
               <tr>
-                <td colSpan={8} className="cell-empty">Aucune facture ne correspond aux filtres.</td>
+                <td colSpan={9} className="cell-empty">Aucune facture ne correspond aux filtres.</td>
               </tr>
             )}
           </tbody>
