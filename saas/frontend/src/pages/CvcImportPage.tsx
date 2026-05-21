@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
@@ -24,13 +24,222 @@ function scoreColor(score: number): string {
   return "#f87171";
 }
 
-function criticiteColor(pct: number | null): string {
-  if (pct === null) return SUBTLE_TEXT;
-  if (pct >= 100) return "#dc2626";
-  if (pct >= 80) return "#f97316";
-  if (pct >= 50) return "#fbbf24";
-  return "#4ade80";
+// ─── Composant SearchableSelect ──────────────────────────────────────────────
+
+type SelectOption = {
+  id: number;
+  label: string;
+  score?: number;
+};
+
+type SearchableSelectProps = {
+  value: number | "";
+  onChange: (value: number | "") => void;
+  suggestions: SelectOption[];
+  allBuildings: SelectOption[];
+};
+
+function SearchableSelect({ value, onChange, suggestions, allBuildings }: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fermer si clic en dehors
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  // Focus sur l'input à l'ouverture
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const allOptions = [...suggestions, ...allBuildings];
+  const selectedOption = value !== "" ? allOptions.find((o) => o.id === value) : null;
+  const displayLabel = selectedOption ? selectedOption.label : "— Ignorer ce site —";
+
+  const query = search.toLowerCase().trim();
+  const filteredSuggestions = query
+    ? suggestions.filter((o) => o.label.toLowerCase().includes(query))
+    : suggestions;
+  const filteredAll = query
+    ? allBuildings.filter((o) => o.label.toLowerCase().includes(query))
+    : allBuildings;
+  const hasResults = filteredSuggestions.length > 0 || filteredAll.length > 0;
+
+  function select(id: number | "") {
+    onChange(id);
+    setOpen(false);
+    setSearch("");
+  }
+
+  const itemStyle = (isSelected: boolean): React.CSSProperties => ({
+    padding: "7px 12px",
+    fontSize: "0.82rem",
+    color: isSelected ? "#93c5fd" : "#cbd5e1",
+    cursor: "pointer",
+    background: isSelected ? "rgba(59,130,246,0.12)" : "transparent",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  });
+
+  const groupHeaderStyle: React.CSSProperties = {
+    padding: "5px 12px",
+    fontSize: "0.68rem",
+    color: "#475569",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    background: "rgba(15,23,42,0.6)",
+    borderTop: "1px solid rgba(148,163,184,0.1)",
+    borderBottom: "1px solid rgba(148,163,184,0.08)",
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
+      {/* Déclencheur */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%",
+          padding: "6px 10px",
+          textAlign: "left",
+          background: "rgba(15,23,42,0.7)",
+          border: `1px solid ${value !== "" ? "rgba(34,197,94,0.4)" : "rgba(148,163,184,0.25)"}`,
+          borderRadius: 6,
+          color: value !== "" ? "#e2e8f0" : "#64748b",
+          fontSize: "0.84rem",
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+          {displayLabel}
+        </span>
+        <span style={{ color: "#475569", fontSize: "0.65rem", flexShrink: 0 }}>▾</span>
+      </button>
+
+      {/* Panneau dropdown */}
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            background: "rgba(13,20,35,0.98)",
+            border: "1px solid rgba(148,163,184,0.25)",
+            borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Champ de recherche */}
+          <div style={{ padding: "8px 8px 6px", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Rechercher un bâtiment…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "5px 9px",
+                background: "rgba(30,41,59,0.9)",
+                border: "1px solid rgba(148,163,184,0.2)",
+                borderRadius: 5,
+                color: "#e2e8f0",
+                fontSize: "0.82rem",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Liste */}
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            {/* Option "Ignorer" */}
+            <div
+              style={{ ...itemStyle(value === ""), borderBottom: "1px solid rgba(148,163,184,0.1)", color: value === "" ? "#93c5fd" : "#475569" }}
+              onMouseEnter={(e) => { if (value !== "") e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
+              onMouseLeave={(e) => { if (value !== "") e.currentTarget.style.background = "transparent"; }}
+              onClick={() => select("")}
+            >
+              — Ignorer ce site —
+            </div>
+
+            {/* Suggestions automatiques */}
+            {filteredSuggestions.length > 0 && (
+              <>
+                <div style={groupHeaderStyle}>Suggestions automatiques</div>
+                {filteredSuggestions.map((o) => (
+                  <div
+                    key={o.id}
+                    style={itemStyle(value === o.id)}
+                    onMouseEnter={(e) => { if (value !== o.id) e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
+                    onMouseLeave={(e) => { if (value !== o.id) e.currentTarget.style.background = value === o.id ? "rgba(59,130,246,0.12)" : "transparent"; }}
+                    onClick={() => select(o.id)}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
+                    {o.score !== undefined && (
+                      <span style={{ fontSize: "0.7rem", color: scoreColor(o.score), fontWeight: 700, flexShrink: 0 }}>
+                        {Math.round(o.score * 100)} %
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Tous les bâtiments */}
+            {filteredAll.length > 0 && (
+              <>
+                <div style={groupHeaderStyle}>
+                  Tous les bâtiments {query ? `— ${filteredAll.length} résultat${filteredAll.length > 1 ? "s" : ""}` : ""}
+                </div>
+                {filteredAll.map((o) => (
+                  <div
+                    key={o.id}
+                    style={{ ...itemStyle(value === o.id), color: value === o.id ? "#93c5fd" : "#94a3b8" }}
+                    onMouseEnter={(e) => { if (value !== o.id) e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
+                    onMouseLeave={(e) => { if (value !== o.id) e.currentTarget.style.background = value === o.id ? "rgba(59,130,246,0.12)" : "transparent"; }}
+                    onClick={() => select(o.id)}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Aucun résultat */}
+            {!hasResults && (
+              <div style={{ padding: "18px 12px", textAlign: "center", fontSize: "0.82rem", color: "#475569" }}>
+                Aucun résultat pour « {search} »
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
+
+// ─── Page principale ─────────────────────────────────────────────────────────
 
 export function CvcImportPage() {
   const { token } = useAuth();
@@ -138,7 +347,7 @@ export function CvcImportPage() {
         {(["upload", "mapping", "result"] as Step[]).map((s, i) => {
           const labels = ["1. Upload", "2. Mapping bâtiments", "3. Résultat"];
           const isActive = step === s;
-          const isDone = (step === "mapping" && s === "upload") || (step === "result");
+          const isDone = (step === "mapping" && s === "upload") || step === "result";
           return (
             <span key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span
@@ -235,12 +444,27 @@ export function CvcImportPage() {
               const bestSuggestion = m.suggestions[0];
               const suggestionIds = new Set(m.suggestions.map((s) => s.building_id));
 
-              // Tous les bâtiments du patrimoine hors suggestions, triés par nom
-              const allBuildings = (buildingsQuery.data ?? [])
+              // Convertir suggestions en SelectOption
+              const suggestionOptions: SelectOption[] = m.suggestions.map((s) => ({
+                id: s.building_id,
+                label: [s.nom_batiment ?? `Bâtiment #${s.building_id}`, s.adresse]
+                  .filter(Boolean)
+                  .join(" — "),
+                score: s.score,
+              }));
+
+              // Tous les bâtiments hors suggestions, triés par nom
+              const allBuildingOptions: SelectOption[] = (buildingsQuery.data ?? [])
                 .filter((b) => !suggestionIds.has(b.id))
                 .sort((a, b) =>
                   (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? "", "fr", { sensitivity: "base" }),
-                );
+                )
+                .map((b) => ({
+                  id: b.id,
+                  label: [b.nom_batiment ?? `Bâtiment #${b.id}`, b.adresse_reconstituee]
+                    .filter(Boolean)
+                    .join(" — "),
+                }));
 
               return (
                 <div
@@ -262,48 +486,19 @@ export function CvcImportPage() {
                       <div style={{ fontSize: "0.75rem", color: SUBTLE_TEXT, marginTop: 2 }}>
                         Meilleure suggestion :{" "}
                         <span style={{ color: scoreColor(bestSuggestion.score), fontWeight: 600 }}>
-                          {Math.round(bestSuggestion.score * 100)}%
+                          {Math.round(bestSuggestion.score * 100)} %
                         </span>
                       </div>
                     )}
                   </div>
-                  <select
+                  <SearchableSelect
                     value={selectedId ?? ""}
-                    onChange={(e) =>
-                      setSelectedMapping((prev) => ({
-                        ...prev,
-                        [m.site_raw]: e.target.value === "" ? "" : Number(e.target.value),
-                      }))
+                    onChange={(val) =>
+                      setSelectedMapping((prev) => ({ ...prev, [m.site_raw]: val }))
                     }
-                    style={{ padding: "4px 8px", fontSize: "0.85rem", width: "100%" }}
-                  >
-                    <option value="">— Ignorer ce site —</option>
-
-                    {/* Suggestions fuzzy */}
-                    {m.suggestions.length > 0 && (
-                      <optgroup label="── Suggestions automatiques ──">
-                        {m.suggestions.map((s) => (
-                          <option key={s.building_id} value={s.building_id}>
-                            {s.nom_batiment ?? `Bâtiment #${s.building_id}`}
-                            {s.adresse ? ` — ${s.adresse}` : ""}
-                            {` (${Math.round(s.score * 100)}%)`}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-
-                    {/* Tous les bâtiments du patrimoine */}
-                    {allBuildings.length > 0 && (
-                      <optgroup label="── Tous les bâtiments ──">
-                        {allBuildings.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.nom_batiment ?? `Bâtiment #${b.id}`}
-                            {b.adresse_reconstituee ? ` — ${b.adresse_reconstituee}` : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                    suggestions={suggestionOptions}
+                    allBuildings={allBuildingOptions}
+                  />
                 </div>
               );
             })}
