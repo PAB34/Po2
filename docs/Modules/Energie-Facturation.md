@@ -61,8 +61,8 @@ Croise les factures importées avec :
 ### UI : `EnergieInvoicesPage` + `EnergieInvoiceDetailPage`
 - `/energie/factures` contient déjà l'import manuel multi-fichiers, les KPI de revue, la liste facture, les statuts de contrôle et les décisions.
 - La liste principale expose le titulaire du contrat lu dans les PDF ENGIE afin de distinguer les factures Ville / Agglomération lors de la revue.
-- Les filtres de revue couvrent le titulaire, le statut de contrôle, la décision, le regroupement et les catégories/types de problèmes issus du rapport de contrôle.
-- Un rapport fournisseur éditable est construit depuis les factures filtrées avec synthèse des points à clarifier, périmètre retenu et sortie imprimable en PDF.
+- Les filtres de revue couvrent le titulaire, le statut de contrôle, la décision, le regroupement et les catégories/types de problèmes issus du rapport de contrôle ; ils acceptent plusieurs valeurs à la fois pour constituer un périmètre dynamique.
+- Un rapport fournisseur éditable est construit depuis les factures filtrées avec synthèse des points à clarifier, périmètre retenu et sortie imprimable en PDF ; les sélections multiples actives y sont reprises.
 - Le bloc `Lots d'import` est replié par défaut pour garder la revue des factures prioritaire lorsque le lot historique contient plusieurs dizaines de PDF.
 - `/energie/factures/:invoiceImportId` contient déjà l'identité facture, le résumé simple, les familles de contrôle, les PRM/FIC, les lignes extraites et le commentaire de décision.
 - Le chantier d'historique ENGIE doit prolonger cette expérience, pas créer un deuxième module facture.

@@ -1987,6 +1987,94 @@ button:disabled {
   line-height: 1.35;
 }
 
+.invoice-multi-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.invoice-multi-filter details {
+  position: relative;
+}
+
+.invoice-multi-filter summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 45px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.invoice-multi-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.invoice-multi-filter summary::after {
+  content: "v";
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.invoice-multi-filter[open] summary::after,
+.invoice-multi-filter details[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.invoice-multi-filter summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invoice-multi-filter-menu {
+  position: absolute;
+  inset: calc(100% + 6px) 0 auto;
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow: 0 18px 44px rgba(2, 6, 23, 0.42);
+}
+
+.invoice-multi-filter-menu label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px;
+  border-radius: 6px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.invoice-multi-filter-menu label:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.invoice-multi-filter-menu input {
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: #38bdf8;
+}
+
+.invoice-multi-filter-menu span {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
 .btn-compact {
   padding: 5px 10px;
   font-size: 0.78rem;

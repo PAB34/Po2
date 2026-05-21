@@ -44,3 +44,9 @@ Qualifier les 83 PDF en production, verifier les valeurs reelles de titulaire pu
 - Les filtres categorie/type de probleme pilotent aussi les points inclus dans le rapport.
 - Le texte destinataire, emetteur, objet, contexte et demande reste editable avant impression.
 - La sortie fournisseur synthétise les points a clarifier, les filtres retenus, le TTC selectionne et les factures concernees ; elle reste prudente sur la conclusion et demande une explication ou une correction.
+
+## Extension multi-selection
+
+- Les menus de filtres utilisent des cases a cocher pour choisir plusieurs statuts, titulaires, regroupements, categories ou types de probleme.
+- Les raccourcis `A controler`, `En erreur` et `Decisions a rendre` remplissent maintenant ces selections dynamiques.
+- Le rapport fournisseur reprend les selections multiples dans le perimetre affiche.

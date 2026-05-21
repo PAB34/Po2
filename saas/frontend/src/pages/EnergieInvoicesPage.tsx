@@ -53,6 +53,26 @@ const BATCH_ITEM_STATUS_LABEL: Record<string, string> = {
   error: "Erreur",
 };
 
+const CONTROL_FILTER_OPTIONS = [
+  { value: "valid", label: "Valides" },
+  { value: "review", label: "A controler" },
+  { value: "invalid", label: "Invalides" },
+  { value: "not_checked", label: "Non controlees" },
+];
+
+const DECISION_FILTER_OPTIONS = [
+  { value: "to_review", label: "A verifier" },
+  { value: "approved", label: "Validees" },
+  { value: "rejected", label: "Refusees" },
+  { value: "dispute_sent", label: "Contestation envoyee" },
+];
+
+type MultiFilterOption<T extends string> = {
+  value: T;
+  label: string;
+  title?: string;
+};
+
 function formatDate(value: string | null) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -164,6 +184,59 @@ function controlIssueTags(invoiceImport: EnergyInvoiceImport) {
   );
 }
 
+function toggleSelection<T extends string>(values: T[], value: T) {
+  return values.includes(value) ? values.filter((current) => current !== value) : [...values, value];
+}
+
+function InvoiceMultiFilter<T extends string>({
+  label,
+  allLabel,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  options: MultiFilterOption<T>[];
+  values: T[];
+  onChange: (values: T[]) => void;
+}) {
+  const selectedLabels = options.filter((option) => values.includes(option.value)).map((option) => option.label);
+  const summary =
+    values.length === 0
+      ? allLabel
+      : selectedLabels.length === 1
+        ? selectedLabels[0]
+        : `${selectedLabels.length} selections`;
+
+  return (
+    <div className="invoice-multi-filter">
+      <span className="field-label">{label}</span>
+      <details>
+        <summary className="form-input">
+          <span>{summary}</span>
+        </summary>
+        <div className="invoice-multi-filter-menu">
+          <button type="button" className="btn-secondary btn-compact" onClick={() => onChange([])}>
+            {allLabel}
+          </button>
+          {options.length === 0 && <span className="cell-empty">Aucune option</span>}
+          {options.map((option) => (
+            <label key={option.value} title={option.title}>
+              <input
+                type="checkbox"
+                checked={values.includes(option.value)}
+                onChange={() => onChange(toggleSelection(values, option.value))}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
@@ -172,12 +245,12 @@ export function EnergieInvoicesPage() {
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [invoiceSearch, setInvoiceSearch] = useState("");
-  const [controlFilter, setControlFilter] = useState("all");
-  const [decisionFilter, setDecisionFilter] = useState("all");
-  const [regroupementFilter, setRegroupementFilter] = useState("all");
-  const [contractHolderFilter, setContractHolderFilter] = useState("all");
-  const [issueFamilyFilter, setIssueFamilyFilter] = useState<InvoiceIssueFamily | "all">("all");
-  const [issueCodeFilter, setIssueCodeFilter] = useState("all");
+  const [controlFilters, setControlFilters] = useState<string[]>([]);
+  const [decisionFilters, setDecisionFilters] = useState<string[]>([]);
+  const [regroupementFilters, setRegroupementFilters] = useState<string[]>([]);
+  const [contractHolderFilters, setContractHolderFilters] = useState<string[]>([]);
+  const [issueFamilyFilters, setIssueFamilyFilters] = useState<InvoiceIssueFamily[]>([]);
+  const [issueCodeFilters, setIssueCodeFilters] = useState<string[]>([]);
   const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
 
   const importsQuery = useQuery({
@@ -241,7 +314,7 @@ export function EnergieInvoicesPage() {
     for (const invoiceImport of imports) {
       for (const issue of invoiceImport.control_issues) {
         const family = invoiceIssueFamily(issue);
-        if (issueFamilyFilter !== "all" && family !== issueFamilyFilter) continue;
+        if (issueFamilyFilters.length > 0 && !issueFamilyFilters.includes(family)) continue;
         if (!options.has(issue.code)) {
           options.set(issue.code, { code: issue.code, family, message: issue.message });
         }
@@ -252,21 +325,26 @@ export function EnergieInvoicesPage() {
         INVOICE_ISSUE_FAMILY_LABEL[a.family].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b.family], "fr") ||
         a.code.localeCompare(b.code, "fr"),
     );
-  }, [imports, issueFamilyFilter]);
+  }, [imports, issueFamilyFilters]);
   const filteredImports = useMemo(() => {
     const search = invoiceSearch.trim().toLowerCase();
     return imports.filter((invoiceImport) => {
-      if (controlFilter !== "all" && invoiceImport.control_status !== controlFilter) return false;
-      if (decisionFilter !== "all" && invoiceImport.decision_status !== decisionFilter) return false;
-      if (regroupementFilter !== "all" && invoiceImport.regroupement !== regroupementFilter) return false;
-      if (contractHolderFilter !== "all" && invoiceImport.contract_holder !== contractHolderFilter) return false;
+      if (controlFilters.length > 0 && !controlFilters.includes(invoiceImport.control_status)) return false;
+      if (decisionFilters.length > 0 && !decisionFilters.includes(invoiceImport.decision_status)) return false;
+      if (regroupementFilters.length > 0 && (!invoiceImport.regroupement || !regroupementFilters.includes(invoiceImport.regroupement))) return false;
       if (
-        issueFamilyFilter !== "all" &&
-        !invoiceImport.control_issues.some((issue) => invoiceIssueFamily(issue) === issueFamilyFilter)
+        contractHolderFilters.length > 0 &&
+        (!invoiceImport.contract_holder || !contractHolderFilters.includes(invoiceImport.contract_holder))
       ) {
         return false;
       }
-      if (issueCodeFilter !== "all" && !invoiceImport.control_issues.some((issue) => issue.code === issueCodeFilter)) return false;
+      if (
+        issueFamilyFilters.length > 0 &&
+        !invoiceImport.control_issues.some((issue) => issueFamilyFilters.includes(invoiceIssueFamily(issue)))
+      ) {
+        return false;
+      }
+      if (issueCodeFilters.length > 0 && !invoiceImport.control_issues.some((issue) => issueCodeFilters.includes(issue.code))) return false;
       if (!search) return true;
       return [
         invoiceImport.original_filename,
@@ -279,14 +357,14 @@ export function EnergieInvoicesPage() {
         .some((value) => value?.toLowerCase().includes(search));
     });
   }, [
-    contractHolderFilter,
-    controlFilter,
-    decisionFilter,
+    contractHolderFilters,
+    controlFilters,
+    decisionFilters,
     imports,
     invoiceSearch,
-    issueCodeFilter,
-    issueFamilyFilter,
-    regroupementFilter,
+    issueCodeFilters,
+    issueFamilyFilters,
+    regroupementFilters,
   ]);
   const supplierReportImports = useMemo(
     () => filteredImports.filter((invoiceImport) => invoiceImport.control_issues.length > 0),
@@ -496,8 +574,8 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-secondary btn-compact"
             onClick={() => {
-              setControlFilter("review");
-              setDecisionFilter("all");
+              setControlFilters(["review"]);
+              setDecisionFilters([]);
             }}
           >
             A controler
@@ -506,8 +584,8 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-secondary btn-compact"
             onClick={() => {
-              setControlFilter("invalid");
-              setDecisionFilter("all");
+              setControlFilters(["invalid"]);
+              setDecisionFilters([]);
             }}
           >
             En erreur
@@ -516,8 +594,8 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-secondary btn-compact"
             onClick={() => {
-              setControlFilter("all");
-              setDecisionFilter("to_review");
+              setControlFilters([]);
+              setDecisionFilters(["to_review"]);
             }}
           >
             Decisions a rendre
@@ -526,12 +604,12 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-secondary btn-compact"
             onClick={() => {
-              setControlFilter("all");
-              setDecisionFilter("all");
-              setRegroupementFilter("all");
-              setContractHolderFilter("all");
-              setIssueFamilyFilter("all");
-              setIssueCodeFilter("all");
+              setControlFilters([]);
+              setDecisionFilters([]);
+              setRegroupementFilters([]);
+              setContractHolderFilters([]);
+              setIssueFamilyFilters([]);
+              setIssueCodeFilters([]);
               setInvoiceSearch("");
             }}
           >
@@ -557,77 +635,55 @@ export function EnergieInvoicesPage() {
               placeholder="Facture, fichier, regroupement, titulaire"
             />
           </label>
-          <label>
-            <span className="field-label">Controle</span>
-            <select className="form-input" value={controlFilter} onChange={(e) => setControlFilter(e.target.value)}>
-              <option value="all">Tous</option>
-              <option value="valid">Valides</option>
-              <option value="review">A controler</option>
-              <option value="invalid">Invalides</option>
-              <option value="not_checked">Non controlees</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Decision</span>
-            <select className="form-input" value={decisionFilter} onChange={(e) => setDecisionFilter(e.target.value)}>
-              <option value="all">Toutes</option>
-              <option value="to_review">A verifier</option>
-              <option value="approved">Validees</option>
-              <option value="rejected">Refusees</option>
-              <option value="dispute_sent">Contestation envoyee</option>
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Regroupement</span>
-            <select className="form-input" value={regroupementFilter} onChange={(e) => setRegroupementFilter(e.target.value)}>
-              <option value="all">Tous</option>
-              {regroupements.map((regroupement) => (
-                <option key={regroupement} value={regroupement}>
-                  {regroupement}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Titulaire</span>
-            <select className="form-input" value={contractHolderFilter} onChange={(e) => setContractHolderFilter(e.target.value)}>
-              <option value="all">Tous</option>
-              {contractHolders.map((contractHolder) => (
-                <option key={contractHolder} value={contractHolder}>
-                  {contractHolder}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Categorie de probleme</span>
-            <select
-              className="form-input"
-              value={issueFamilyFilter}
-              onChange={(e) => {
-                setIssueFamilyFilter(e.target.value as InvoiceIssueFamily | "all");
-                setIssueCodeFilter("all");
-              }}
-            >
-              <option value="all">Toutes</option>
-              {issueFamilies.map((family) => (
-                <option key={family} value={family}>
-                  {INVOICE_ISSUE_FAMILY_LABEL[family]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Type de probleme</span>
-            <select className="form-input" value={issueCodeFilter} onChange={(e) => setIssueCodeFilter(e.target.value)}>
-              <option value="all">Tous</option>
-              {issueCodes.map((issue) => (
-                <option key={issue.code} value={issue.code} title={issue.message}>
-                  {INVOICE_ISSUE_FAMILY_LABEL[issue.family]} : {issue.code}
-                </option>
-              ))}
-            </select>
-          </label>
+          <InvoiceMultiFilter
+            label="Controle"
+            allLabel="Tous"
+            options={CONTROL_FILTER_OPTIONS}
+            values={controlFilters}
+            onChange={setControlFilters}
+          />
+          <InvoiceMultiFilter
+            label="Decision"
+            allLabel="Toutes"
+            options={DECISION_FILTER_OPTIONS}
+            values={decisionFilters}
+            onChange={setDecisionFilters}
+          />
+          <InvoiceMultiFilter
+            label="Regroupement"
+            allLabel="Tous"
+            options={regroupements.map((regroupement) => ({ value: regroupement, label: regroupement }))}
+            values={regroupementFilters}
+            onChange={setRegroupementFilters}
+          />
+          <InvoiceMultiFilter
+            label="Titulaire"
+            allLabel="Tous"
+            options={contractHolders.map((contractHolder) => ({ value: contractHolder, label: contractHolder }))}
+            values={contractHolderFilters}
+            onChange={setContractHolderFilters}
+          />
+          <InvoiceMultiFilter
+            label="Categorie de probleme"
+            allLabel="Toutes"
+            options={issueFamilies.map((family) => ({ value: family, label: INVOICE_ISSUE_FAMILY_LABEL[family] }))}
+            values={issueFamilyFilters}
+            onChange={(families) => {
+              setIssueFamilyFilters(families);
+              setIssueCodeFilters([]);
+            }}
+          />
+          <InvoiceMultiFilter
+            label="Type de probleme"
+            allLabel="Tous"
+            options={issueCodes.map((issue) => ({
+              value: issue.code,
+              label: `${INVOICE_ISSUE_FAMILY_LABEL[issue.family]} : ${issue.code}`,
+              title: issue.message,
+            }))}
+            values={issueCodeFilters}
+            onChange={setIssueCodeFilters}
+          />
         </div>
       </section>
 
@@ -760,12 +816,12 @@ export function EnergieInvoicesPage() {
           invoiceImports={supplierReportImports}
           filters={{
             search: invoiceSearch,
-            control: controlFilter,
-            decision: decisionFilter,
-            regroupement: regroupementFilter,
-            contractHolder: contractHolderFilter,
-            issueFamily: issueFamilyFilter,
-            issueCode: issueCodeFilter,
+            controls: controlFilters,
+            decisions: decisionFilters,
+            regroupements: regroupementFilters,
+            contractHolders: contractHolderFilters,
+            issueFamilies: issueFamilyFilters,
+            issueCodes: issueCodeFilters,
           }}
           onClose={() => setIsSupplierReportOpen(false)}
         />

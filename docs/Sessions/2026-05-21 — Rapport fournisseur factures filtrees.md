@@ -25,3 +25,10 @@ Transformer les filtres de `/energie/factures` en rapport de demande d'explicati
 ## Suite
 
 Verifier en production le niveau de synthese sur un filtre reel, puis ajuster les formulations fournisseur avec les retours des premiers envois.
+
+## Extension multi-selection
+
+- Les filtres controle, decision, regroupement, titulaire, categorie et type de probleme acceptent maintenant plusieurs valeurs.
+- Une selection vide reste equivalente a `Tous` / `Toutes`.
+- La liste facture reste reactive a chaque case cochee.
+- Le rapport fournisseur reprend le perimetre multi-selectionne et limite les points affiches aux categories/types choisis.

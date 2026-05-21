@@ -24,12 +24,12 @@ const DECISION_FILTER_LABEL: Record<string, string> = {
 
 type InvoiceSupplierReportFilters = {
   search: string;
-  control: string;
-  decision: string;
-  regroupement: string;
-  contractHolder: string;
-  issueFamily: InvoiceIssueFamily | "all";
-  issueCode: string;
+  controls: string[];
+  decisions: string[];
+  regroupements: string[];
+  contractHolders: string[];
+  issueFamilies: InvoiceIssueFamily[];
+  issueCodes: string[];
 };
 
 type IssueGroup = {
@@ -72,8 +72,8 @@ function invoiceReference(invoiceImport: EnergyInvoiceImport) {
 function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
   return invoiceImport.control_issues.filter((issue) => {
     const family = invoiceIssueFamily(issue);
-    if (filters.issueFamily !== "all" && family !== filters.issueFamily) return false;
-    if (filters.issueCode !== "all" && issue.code !== filters.issueCode) return false;
+    if (filters.issueFamilies.length > 0 && !filters.issueFamilies.includes(family)) return false;
+    if (filters.issueCodes.length > 0 && !filters.issueCodes.includes(issue.code)) return false;
     return true;
   });
 }
@@ -87,12 +87,18 @@ function activeFilters(filters: InvoiceSupplierReportFilters) {
   const values: string[] = [];
   const search = filters.search.trim();
   if (search) values.push(`Recherche : ${search}`);
-  if (filters.control !== "all") values.push(`Controle : ${CONTROL_FILTER_LABEL[filters.control] ?? filters.control}`);
-  if (filters.decision !== "all") values.push(`Decision : ${DECISION_FILTER_LABEL[filters.decision] ?? filters.decision}`);
-  if (filters.regroupement !== "all") values.push(`Regroupement : ${filters.regroupement}`);
-  if (filters.contractHolder !== "all") values.push(`Titulaire : ${filters.contractHolder}`);
-  if (filters.issueFamily !== "all") values.push(`Categorie : ${INVOICE_ISSUE_FAMILY_LABEL[filters.issueFamily]}`);
-  if (filters.issueCode !== "all") values.push(`Type : ${filters.issueCode}`);
+  if (filters.controls.length > 0) {
+    values.push(`Controle : ${filters.controls.map((value) => CONTROL_FILTER_LABEL[value] ?? value).join(", ")}`);
+  }
+  if (filters.decisions.length > 0) {
+    values.push(`Decision : ${filters.decisions.map((value) => DECISION_FILTER_LABEL[value] ?? value).join(", ")}`);
+  }
+  if (filters.regroupements.length > 0) values.push(`Regroupement : ${filters.regroupements.join(", ")}`);
+  if (filters.contractHolders.length > 0) values.push(`Titulaire : ${filters.contractHolders.join(", ")}`);
+  if (filters.issueFamilies.length > 0) {
+    values.push(`Categorie : ${filters.issueFamilies.map((family) => INVOICE_ISSUE_FAMILY_LABEL[family]).join(", ")}`);
+  }
+  if (filters.issueCodes.length > 0) values.push(`Type : ${filters.issueCodes.join(", ")}`);
   return values;
 }
 
