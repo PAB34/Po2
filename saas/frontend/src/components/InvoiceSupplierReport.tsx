@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { EnergyInvoiceImport } from "../lib/api";
 import {
+  INVOICE_ISSUE_FAMILY_DETAIL,
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
 } from "../lib/invoiceIssues";
@@ -35,10 +36,9 @@ type InvoiceSupplierReportFilters = {
 type IssueGroup = {
   code: string;
   family: InvoiceIssueFamily;
-  severity: string;
   message: string;
   invoiceIds: Set<number>;
-  invoiceNumbers: Set<string>;
+  scopes: Set<string>;
   count: number;
 };
 
@@ -59,10 +59,6 @@ function formatCurrency(value: number) {
 
 function formatGeneratedAt() {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date());
-}
-
-function issueSeverityLabel(severity: string) {
-  return severity === "error" ? "Erreur" : severity === "warning" ? "Alerte" : severity;
 }
 
 function invoiceReference(invoiceImport: EnergyInvoiceImport) {
@@ -112,18 +108,14 @@ function groupIssues(invoiceImports: EnergyInvoiceImport[], filters: InvoiceSupp
       const group = groups.get(key) ?? {
         code: issue.code,
         family,
-        severity: issue.severity,
         message: issue.message,
         invoiceIds: new Set<number>(),
-        invoiceNumbers: new Set<string>(),
+        scopes: new Set<string>(),
         count: 0,
       };
       group.count += 1;
       group.invoiceIds.add(invoiceImport.id);
-      group.invoiceNumbers.add(invoiceReference(invoiceImport));
-      if (group.severity !== "error" && issue.severity === "error") {
-        group.severity = issue.severity;
-      }
+      if (issue.scope) group.scopes.add(issue.scope);
       groups.set(key, group);
     }
   }
@@ -261,11 +253,15 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
 
             <section>
               <h2>Points soumis a clarification</h2>
-              <table>
+              <table className="invoice-report-issues-table">
+                <colgroup>
+                  <col className="invoice-report-point-col" />
+                  <col className="invoice-report-count-col" />
+                  <col className="invoice-report-count-col" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Point</th>
-                    <th>Niveau</th>
                     <th>Factures</th>
                     <th>Signalements</th>
                   </tr>
@@ -276,13 +272,16 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                       <td>
                         <strong>{INVOICE_ISSUE_FAMILY_LABEL[issue.family]}</strong>
                         <span>{issue.message}</span>
-                        <small>{issue.code}</small>
+                        <p className="invoice-report-point-detail">{INVOICE_ISSUE_FAMILY_DETAIL[issue.family]}</p>
+                        {issue.scopes.size > 0 && (
+                          <small>
+                            Perimetre detecte : {Array.from(issue.scopes).slice(0, 4).join(", ")}
+                            {issue.scopes.size > 4 ? "..." : ""}
+                          </small>
+                        )}
+                        <small>Code de controle : {issue.code}</small>
                       </td>
-                      <td>{issueSeverityLabel(issue.severity)}</td>
-                      <td>
-                        <strong>{issue.invoiceIds.size}</strong>
-                        <small>{Array.from(issue.invoiceNumbers).slice(0, 4).join(", ")}{issue.invoiceNumbers.size > 4 ? "..." : ""}</small>
-                      </td>
+                      <td>{issue.invoiceIds.size}</td>
                       <td>{issue.count}</td>
                     </tr>
                   ))}

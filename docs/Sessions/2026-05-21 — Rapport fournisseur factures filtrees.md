@@ -32,3 +32,10 @@ Verifier en production le niveau de synthese sur un filtre reel, puis ajuster le
 - Une selection vide reste equivalente a `Tous` / `Toutes`.
 - La liste facture reste reactive a chaque case cochee.
 - Le rapport fournisseur reprend le perimetre multi-selectionne et limite les points affiches aux categories/types choisis.
+
+## Raffinement tableau fournisseur
+
+- La section `Points soumis a clarification` concentre maintenant l'information utile dans la colonne `Point`.
+- La colonne `Niveau` est retiree pour eviter une lecture accusatoire ou redondante dans le rapport fournisseur.
+- La colonne `Factures` ne donne plus que le volume concerne ; le detail des factures reste dans la section dediee.
+- Le point affiche le message de controle, le contexte de sa famille, le perimetre detecte quand il existe et le code de controle.
