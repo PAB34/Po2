@@ -22,6 +22,7 @@
 - [[Modules/Patrimoine]] — Inventaire bâtiments, locaux, propriétaire / locataire, fiche bâtiment centrale, compteurs rattachés
 - [[Modules/Gestion-technique]] — Équipements CVC, enveloppe, occupation, température, BACS/GTB futur
 - [[Modules/Energie-Consommation]] — ENEDIS (élec), GRDF (gaz), SUEZ (eau)
+- [[Modules/GRDF-API]] — Référentiel complet API GRDF ADICT v1.9 : auth, GDA, conso, contractuel, technique, codes erreur, plan d'intégration
 - [[Modules/Energie-Facturation]] — Vérification ENGIE, DALKIA, TOTAL, SUEZ
 - [[Modules/Energie-BPU]] — Suivi temporel des prix unitaires d'achat
 - [[Modules/Energie-Preconisations]] — Calibrage contrat + recommandations puissance
