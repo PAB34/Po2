@@ -1,8 +1,8 @@
 # État actuel du développement
 
-> **Mise à jour** : 2026-05-20 (PO2-BPU-002 + PO2-BPU-003 + PO2-CVC-001 livrés)
+> **Mise à jour** : 2026-05-21 (Refonte UI BPU · CVC import fix · PO2-PAT-002 En cours)
 > **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.6)
-> **Dernière commit en prod** : `fd192fe` (feat(cvc): import inventaire CVC terrain + rattachement SYPEMI)
+> **Dernière commit en prod** : `00af844` (fix(cvc-import): dropdown mapping complet avec tous les bâtiments)
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -12,6 +12,7 @@
 | Patrimoine — liste | `/buildings`, `/buildings/list` | Stable |
 | Patrimoine — détail | `/buildings/:id` | Stable |
 | Patrimoine — création / import | `/buildings/create-edit` | Stable |
+| Patrimoine — import hiérarchique | `/buildings/create-edit` | `SITE` -> `Site`, `BATIMENT` -> `Building.site_id`, `LOCAL` -> `Local.building_id` |
 | Gestion technique SYPEMI | `/buildings/technique` | Stable (310 équip. importés) |
 | **Inventaire terrain CVC** | `/buildings/technique` (onglet Terrain) + `/buildings/cvc-import` | **Nouveau (2026-05-20)** — wizard import Excel 3 étapes, fuzzy match sites↔bâtiments, rattachement SYPEMI, badges vétusté |
 | Énergie — vue d'ensemble | `/energie` | Stable |
@@ -19,9 +20,11 @@
 | Préconisations puissance | `/energie/preconisations` | Stable |
 | Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE) |
 | Facturation TURPE | `/energie/facturation` | Stable |
-| **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — 17 BPU, 523 composantes, graphes par segment/type |
-| **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Nouveau (2026-05-20) — historique CRE TURPE 6/7, indice base 100, sources officielles |
-| **BPU — Édition tableau** | `/energie/bpu` (onglet Édition tableau) | **Nouveau (2026-05-20)** — tableau Excel cliquable, batch save, 14 endpoints CRUD |
+| **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
+| **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
+| **BPU — Documents & Import** | `/energie/bpu` (onglet Documents) | Nouveau 2026-05-21 — stats + table BPU filtrée + import admin (séparé de Timeline) |
+| **BPU — Édition tableau** | `/energie/bpu` (onglet Édition) | Stable (2026-05-20) — tableau Excel cliquable, batch save, 14 endpoints CRUD |
+| **CVC import — mapping** | `/buildings/cvc-import` (étape 2) | Fix 2026-05-21 — dropdown complet (suggestions fuzzy + tous les bâtiments du patrimoine) |
 
 ## 📦 Migrations alembic appliquées en prod
 ```
@@ -40,7 +43,8 @@
 0013_add_enedis_async_jobs
 0014_add_equipment_tables
 0015_add_bpu_tables
-0016_add_cvc_inventory            ← HEAD
+0016_add_cvc_inventory
+0017_add_sites_hierarchy          ← HEAD
 ```
 
 ## 🔧 PRs récentes
@@ -53,15 +57,15 @@
 
 ## 🪵 Derniers commits sur `main`
 ```
-5919d0a  docs(vault): sessions + modules 2026-05-20 (BPU, OPERAT, maintenance)
-0e32a1c  feat(bpu): tableau editable des prix dans /energie/bpu (PO2-BPU-003)
-6f28540  fix(bpu): respecter VARCHAR(10) sur turpe_tariff/tension_category
-8299fdb  fix(bpu): distinguer C4/C5 sous-typologies + garde-fou doublons composantes
-4c2415c  feat(bpu): import xlsx canonique (173 prix + 9 charges + 17 sources)
-6524bbe  docs(obsidian): session Phase 2 BPU finalisee (parser EDF pivote)
-88bdd4b  fix(codespaces): remove docker-in-docker feature
-d9b1895  chore(codespaces): minimal .devcontainer
-1fbd58c  feat(bpu): pipeline complet historique (#12)
+00af844  fix(cvc-import): dropdown mapping complet avec tous les bâtiments du patrimoine
+9674d50  feat(bpu): ajout exemples chiffrés sur chaque composante Timeline
+f29db99  refactor(bpu): Timeline définitions lisibles + TURPE 3 blocs restructurés
+cc34a8f  refactor(bpu): refonte UI page /energie/bpu — 4 onglets, Timeline épurée
+2f3229f  feat(pat): import patrimoine hiérarchique site/bâtiment/local (PO2-PAT-002)
+324d053  feat(bpu): double axe Y dans Timeline (fourniture vs accessoires)
+ea53a9f  docs(vault): session PO2-CVC-001 + MAJ module Gestion-technique
+fff24e1  fix(cvc): corriger TS7053 referenceCounts manque clé terrain
+fd192fe  feat(cvc): import inventaire CVC terrain + rattachement SYPEMI
 ```
 
 ## 📚 Specs historiques
@@ -92,6 +96,12 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - Pattern à réutiliser : upload PDF côté Frontend + `services/invoice_parsers/` côté Backend
 - Modèle à créer : étendre `Local` avec champs bail, OU créer une nouvelle table `Lease`
 - À discuter avec l'utilisateur sur le schéma (1-N entre Building et Lease ?)
+
+### 2b. Import patrimoine hiérarchique Site -> Bâtiment -> Local
+- **Livre et documente** : migration `0017_add_sites_hierarchy`, modele `Site`, `buildings.site_id`, endpoints `/api/buildings/sites`
+- Objectif : importer les fichiers patrimoine avec colonne `Typologie` sans aplatir sites / batiments / locaux
+- Flux vise : lignes `SITE` -> table `sites`, lignes `BATIMENT` -> `buildings.site_id`, lignes `LOCAL` -> table `locals` rattachee au batiment parent
+- Voir [[Sessions/2026-05-20 — Import patrimoine hierarchique]]
 
 ### 3. Backfill prod ENEDIS async
 - **Pending côté utilisateur** : mettre à jour le canal SETE_ENERGIE (506350699) côté portail ENEDIS pour utiliser le nouveau user FTP `enedis_ftp` + nouveau password (récupérable via `ssh ... "sudo cat /root/.ftp_password_enedis"`)
