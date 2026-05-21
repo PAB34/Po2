@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.models.building import Building
 from app.models.city import City
 from app.models.local import Local
+from app.models.site import Site
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate
+from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, SiteCreate, SiteUpdate
 from app.services.building_naming import _dedupe_candidate_dicts, build_building_payload
 from app.services.cities import get_city_by_id
 
@@ -17,6 +18,68 @@ def list_buildings(db: Session, current_user: User) -> list[Building]:
     if current_user.city_id is not None:
         statement = statement.where(Building.city_id == current_user.city_id)
     return list(db.scalars(statement))
+
+
+def _normalize_lookup(value: str | None) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def list_sites(db: Session, current_user: User) -> list[Site]:
+    statement = select(Site).order_by(Site.nom_site.asc())
+    if current_user.city_id is not None:
+        statement = statement.where(Site.city_id == current_user.city_id)
+    return list(db.scalars(statement))
+
+
+def get_site_or_404(db: Session, site_id: int, current_user: User) -> Site:
+    statement = select(Site).where(Site.id == site_id)
+    site = db.scalar(statement)
+    if site is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site introuvable.")
+    if current_user.city_id is not None and site.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces au site refuse.")
+    return site
+
+
+def create_site(db: Session, payload: SiteCreate, current_user: User) -> Site:
+    city_id = current_user.city_id if current_user.city_id is not None else payload.city_id
+    if city_id is not None and get_city_by_id(db, city_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ville inconnue.")
+    nom_site = payload.nom_site.strip()
+    for site in list_sites(db, current_user):
+        if site.city_id == city_id and _normalize_lookup(site.nom_site) == _normalize_lookup(nom_site):
+            if payload.adresse and not site.adresse:
+                site.adresse = payload.adresse.strip()
+            if payload.source_file and not site.source_file:
+                site.source_file = payload.source_file.strip()
+            if payload.source_rows_json and not site.source_rows_json:
+                site.source_rows_json = payload.source_rows_json.strip()
+            db.add(site)
+            db.commit()
+            db.refresh(site)
+            return site
+    site = Site(
+        city_id=city_id,
+        nom_site=nom_site,
+        adresse=payload.adresse.strip() if payload.adresse else None,
+        source_file=payload.source_file.strip() if payload.source_file else None,
+        source_rows_json=payload.source_rows_json.strip() if payload.source_rows_json else None,
+    )
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+    return site
+
+
+def update_site(db: Session, site: Site, payload: SiteUpdate) -> Site:
+    if payload.nom_site is not None:
+        site.nom_site = payload.nom_site.strip()
+    if payload.adresse is not None:
+        site.adresse = payload.adresse.strip() if payload.adresse else None
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+    return site
 
 
 def get_building_or_404(db: Session, building_id: int, current_user: User) -> Building:
@@ -44,6 +107,7 @@ def _build_default_local_name(building: Building) -> str:
 
 
 def _apply_building_payload(building: Building, payload: BuildingCreate, nom_commune: str) -> Building:
+    building.site_id = payload.site_id
     building.dgfip_unique_key = payload.dgfip_unique_key.strip() if payload.dgfip_unique_key else None
     building.dgfip_source_file = payload.dgfip_source_file.strip() if payload.dgfip_source_file else None
     building.dgfip_source_rows_json = payload.dgfip_source_rows_json.strip() if payload.dgfip_source_rows_json else None
@@ -87,6 +151,10 @@ def create_building(db: Session, payload: BuildingCreate, current_user: User) ->
     nom_commune = city.nom_commune if city else (payload.nom_commune.strip() if payload.nom_commune else None)
     if nom_commune is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La commune est obligatoire.")
+    if payload.site_id is not None:
+        site = get_site_or_404(db, payload.site_id, current_user)
+        if city is not None and site.city_id is not None and site.city_id != city.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le site n'appartient pas a la ville du batiment.")
 
     building = _apply_building_payload(Building(city_id=city.id if city else None), payload, nom_commune)
     db.add(building)

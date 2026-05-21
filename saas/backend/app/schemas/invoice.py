@@ -61,3 +61,41 @@ class EnergyInvoiceUploadResponse(BaseModel):
     invoice_import: EnergyInvoiceImportOut
     is_duplicate: bool
     message: str
+
+
+class EnergyInvoiceBatchItemOut(BaseModel):
+    id: int
+    invoice_import_id: int | None
+    original_filename: str
+    archive_filename: str | None
+    content_type: str | None
+    file_size_bytes: int | None
+    sha256: str | None
+    status: str
+    message: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EnergyInvoiceBatchOut(BaseModel):
+    id: int
+    city_id: int
+    uploaded_by_user_id: int
+    source: str
+    status: str
+    file_count: int
+    imported_count: int
+    duplicate_count: int
+    ignored_count: int
+    error_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class EnergyInvoiceBatchDetailOut(EnergyInvoiceBatchOut):
+    items: list[EnergyInvoiceBatchItemOut]

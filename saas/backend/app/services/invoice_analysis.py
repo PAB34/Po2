@@ -14,6 +14,7 @@ from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.energie import _contracts, _daily_consumption_index, _load_curve_index, _max_power_index, _safe_float
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
+from app.services.invoice_normalization import replace_normalized_invoice
 from app.services.turpe import evaluate_invoice_turpe
 
 
@@ -62,6 +63,9 @@ def analyze_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> 
         parsed = _parse_invoice_file(invoice_import)
         control_report = _build_control_report(db, invoice_import, parsed)
     except Exception as exc:
+        if invoice_import.normalized_invoice is not None:
+            db.delete(invoice_import.normalized_invoice)
+            db.flush()
         invoice_import.analysis_status = "failed"
         invoice_import.control_status = "invalid"
         invoice_import.control_errors_count = 1
@@ -99,6 +103,7 @@ def analyze_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> 
     invoice_import.analysis_status = "partial" if parsed.get("parser_warnings") else "parsed"
     invoice_import.analysis_result_json = json.dumps(_json_ready(parsed), ensure_ascii=False)
     invoice_import.control_report_json = json.dumps(_json_ready(control_report), ensure_ascii=False)
+    replace_normalized_invoice(db, invoice_import, parsed, control_report)
     return invoice_import
 
 

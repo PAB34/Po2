@@ -100,6 +100,32 @@ class BuildingImportPreview(BaseModel):
     rows: list[BuildingImportRow]
 
 
+class SiteCreate(BaseModel):
+    city_id: int | None = None
+    nom_site: str = Field(min_length=1, max_length=255)
+    adresse: str | None = Field(default=None, max_length=255)
+    source_file: str | None = Field(default=None, max_length=255)
+    source_rows_json: str | None = None
+
+
+class SiteUpdate(BaseModel):
+    nom_site: str | None = Field(default=None, min_length=1, max_length=255)
+    adresse: str | None = Field(default=None, max_length=255)
+
+
+class SiteRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    city_id: int | None
+    nom_site: str
+    adresse: str | None
+    source_file: str | None
+    source_rows_json: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class FreeAddressLookupPayload(BaseModel):
     address: str = Field(min_length=3, max_length=255)
 
@@ -149,6 +175,7 @@ class NearbyDgfipRow(BaseModel):
 
 class BuildingCreate(BaseModel):
     city_id: int | None = None
+    site_id: int | None = None
     dgfip_unique_key: str | None = Field(default=None, max_length=40)
     dgfip_source_file: str | None = Field(default=None, max_length=255)
     dgfip_source_rows_json: str | None = None
@@ -207,6 +234,7 @@ class BuildingRead(BaseModel):
 
     id: int
     city_id: int | None
+    site_id: int | None
     dgfip_unique_key: str | None
     dgfip_source_file: str | None
     dgfip_source_rows_json: str | None

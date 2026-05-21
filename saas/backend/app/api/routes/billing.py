@@ -16,6 +16,8 @@ from app.schemas.billing import (
     TurpeVersionOut,
 )
 from app.schemas.invoice import (
+    EnergyInvoiceBatchDetailOut,
+    EnergyInvoiceBatchOut,
     EnergyInvoiceDecisionIn,
     EnergyInvoiceImportDetailOut,
     EnergyInvoiceImportOut,
@@ -37,9 +39,12 @@ from app.services.billing import (
 )
 from app.services.invoices import (
     analyze_existing_invoice_import,
+    create_invoice_batch,
     create_invoice_import,
     delete_invoice_import,
+    get_invoice_batch,
     get_invoice_import,
+    list_invoice_batches,
     list_invoice_imports,
     update_invoice_decision,
 )
@@ -204,6 +209,38 @@ def list_energy_invoice_imports(
 ):
     city_id = _require_city(current_user)
     return list_invoice_imports(db, city_id)
+
+
+@router.get("/invoices/batches", response_model=list[EnergyInvoiceBatchOut])
+def list_energy_invoice_batches(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return list_invoice_batches(db, city_id)
+
+
+@router.get("/invoices/batches/{batch_id}", response_model=EnergyInvoiceBatchDetailOut)
+def get_energy_invoice_batch(
+    batch_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    batch = get_invoice_batch(db, city_id, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot factures introuvable")
+    return batch
+
+
+@router.post("/invoices/batches", response_model=EnergyInvoiceBatchDetailOut, status_code=status.HTTP_201_CREATED)
+async def upload_energy_invoice_batch(
+    files: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return await create_invoice_batch(db, city_id, current_user.id, files)
 
 
 @router.get("/invoices/imports/{invoice_import_id}", response_model=EnergyInvoiceImportDetailOut)

@@ -20,7 +20,7 @@ Po2/
 ├── docs/                                 # ← CE VAULT OBSIDIAN
 ├── saas/
 │   ├── backend/
-│   │   ├── alembic/versions/             # 15 migrations (0001 → 0015)
+│   │   ├── alembic/versions/             # migrations versionnees (0017 ajoute la hierarchie Site -> Building)
 │   │   ├── app/
 │   │   │   ├── api/
 │   │   │   │   ├── deps.py                # get_db, get_current_user
@@ -28,7 +28,7 @@ Po2/
 │   │   │   │   └── routes/                # 12 fichiers : auth, billing, bpu, buildings, cities,
 │   │   │   │                              # enedis_async, enedis_sync, energie, engie, equipment, health
 │   │   │   ├── core/                      # config (Pydantic Settings), db, scheduler (APScheduler), security
-│   │   │   ├── models/                    # SQLAlchemy : user, city, building, local, billing(×4),
+│   │   │   ├── models/                    # SQLAlchemy : user, city, site, building, local, billing(×4),
 │   │   │   │                              # bpu(×5), enedis_async, equipment(×2), invoice
 │   │   │   ├── schemas/                   # Pydantic : auth, billing, building, city, energie,
 │   │   │   │                              # engie, equipment, invoice, user, bpu

@@ -28,14 +28,17 @@ Cette spec est la **légitimité métier** du produit côté audit factures.
 
 ### Modèle commun : `EnergyInvoiceImport`
 Migration 0010, table `energy_invoice_imports` :
-- Upload PDF/Excel → analyse async → résultat structuré
-- Statut : `pending`, `analyzing`, `success`, `error`
-- Champs : `pdf_filename`, `supplier`, `period_start`, `period_end`, `total_amount`, `raw_text`
+- Upload PDF/Excel → analyse immédiate → résultat structuré
+- Statuts séparés : import, analyse technique, contrôle métier, décision utilisateur
+- Champs utiles aujourd'hui : fichier source, hash, fournisseur, numéro/date facture, période, regroupement, TTC, kWh, compteurs de contrôle
 
-### Modèle d'analyse : `EnergyInvoiceAnalysis`
-Migration 0011-0012, table `energy_invoice_analyses` :
-- Une ligne d'analyse par PRM × période détectée
-- Champs : `prm_id`, `consumption_kwh`, `amount_eur`, `unit_price_billed`, `unit_price_expected` (depuis BPU), `decision` (accepté/contesté/à revoir), `notes`
+### Analyse actuellement persistée
+Les migrations 0011-0012 enrichissent `energy_invoice_imports` :
+- `analysis_result_json` conserve l'extraction ENGIE détaillée ;
+- `control_report_json` conserve les contrôles BPU, TURPE, taxes, périodes, ENEDIS et puissance ;
+- le détail PRM/FIC/lignes est déjà affiché sur `/energie/factures/:invoiceImportId`.
+
+La trajectoire suivante est de projeter ces données dans les tables normalisées déjà décrites par `saas/specs/04_mapping_facture_engie.md` pour permettre les requêtes d'historique dépenses/tarifs et la future alimentation par API ENGIE.
 
 ### Service : `invoice_analysis.py`
 Croise les factures importées avec :
@@ -56,6 +59,21 @@ Croise les factures importées avec :
 - `/energie/factures/:invoiceImportId` : detail, controles et decision
 
 ### UI : `EnergieInvoicesPage` + `EnergieInvoiceDetailPage`
+- `/energie/factures` contient déjà l'import manuel multi-fichiers, les KPI de revue, la liste facture, les statuts de contrôle et les décisions.
+- `/energie/factures/:invoiceImportId` contient déjà l'identité facture, le résumé simple, les familles de contrôle, les PRM/FIC, les lignes extraites et le commentaire de décision.
+- Le chantier d'historique ENGIE doit prolonger cette expérience, pas créer un deuxième module facture.
+
+## Historique ENGIE PDF avant API
+
+Un premier lot réel de **83 PDF ENGIE** est disponible dans `saas/energie/ENGIE/FACTURES`.
+
+Stratégie retenue :
+- PDF manuel maintenant pour constituer l'historique et qualifier le moteur ;
+- import par lot persistant depuis `/energie/factures` afin de suivre doublons, erreurs et factures à revoir ;
+- modèle facture normalisé indépendant de la source ;
+- API ENGIE ensuite vers le même pipeline de normalisation, contrôle et décision.
+
+La V1 reste centrée sur ENGIE électricité. Le lien fin facture → PRM → compteur → bâtiment viendra avec le chantier de rattachement compteurs ; il ne doit pas bloquer l'intégration de l'historique financier et tarifaire.
 
 ## ENGIE — état actuel
 

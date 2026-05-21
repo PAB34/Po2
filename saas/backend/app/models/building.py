@@ -11,6 +11,7 @@ class Building(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True)
     dgfip_source_row_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     dgfip_unique_key: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     dgfip_source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -18,7 +18,7 @@
 | Énergie — vue d'ensemble | `/energie` | Stable |
 | Énergie — détail PRM | `/energie/:prmId` | Stable |
 | Préconisations puissance | `/energie/preconisations` | Stable |
-| Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE) |
+| Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE, contrôle/décision déjà en place) |
 | Facturation TURPE | `/energie/facturation` | Stable |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
 | **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
@@ -102,6 +102,12 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - Objectif : importer les fichiers patrimoine avec colonne `Typologie` sans aplatir sites / batiments / locaux
 - Flux vise : lignes `SITE` -> table `sites`, lignes `BATIMENT` -> `buildings.site_id`, lignes `LOCAL` -> table `locals` rattachee au batiment parent
 - Voir [[Sessions/2026-05-20 — Import patrimoine hierarchique]]
+
+### 2c. Historique factures ENGIE dans `/energie/factures`
+- **En cours** : intégrer le lot réel de 83 PDF ENGIE depuis `saas/energie/ENGIE/FACTURES`
+- Point de départ : l'UI facture existe déjà avec import multi-fichiers, résumé simple, PRM/FIC, lignes extraites, contrôles BPU/TURPE/ENEDIS et décision utilisateur
+- Flux visé : import par lot persistant, projection des extractions vers des tables factures normalisées, puis même pipeline pour la future API ENGIE
+- Voir [[Sessions/2026-05-21 — Historique factures ENGIE]]
 
 ### 3. Backfill prod ENEDIS async
 - **Pending côté utilisateur** : mettre à jour le canal SETE_ENERGIE (506350699) côté portail ENEDIS pour utiliser le nouveau user FTP `enedis_ftp` + nouveau password (récupérable via `ssh ... "sudo cat /root/.ftp_password_enedis"`)

@@ -19,6 +19,9 @@ from app.schemas.building import (
     LocalRead,
     LocalUpdate,
     NearbyDgfipRow,
+    SiteCreate,
+    SiteRead,
+    SiteUpdate,
 )
 from app.services.building_naming import (
     find_nearby_dgfip_rows,
@@ -33,12 +36,16 @@ from app.services.buildings import (
     create_building,
     create_building_from_naming_selection,
     create_local,
+    create_site,
     delete_all_buildings,
     delete_local,
     get_building_or_404,
     get_local_or_404,
+    get_site_or_404,
     list_building_locals,
     list_buildings,
+    list_sites,
+    update_site,
     update_building,
     update_local,
 )
@@ -149,6 +156,36 @@ def get_buildings(
     current_user: User = Depends(get_current_user),
 ) -> list[BuildingRead]:
     return [BuildingRead.model_validate(building) for building in list_buildings(db, current_user)]
+
+
+@router.get("/sites", response_model=list[SiteRead])
+def get_sites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[SiteRead]:
+    return [SiteRead.model_validate(site) for site in list_sites(db, current_user)]
+
+
+@router.post("/sites", response_model=SiteRead, status_code=status.HTTP_201_CREATED)
+def post_site(
+    payload: SiteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SiteRead:
+    site = create_site(db, payload, current_user)
+    return SiteRead.model_validate(site)
+
+
+@router.put("/sites/{site_id}", response_model=SiteRead)
+def put_site(
+    site_id: int,
+    payload: SiteUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SiteRead:
+    site = get_site_or_404(db, site_id, current_user)
+    updated = update_site(db, site, payload)
+    return SiteRead.model_validate(updated)
 
 
 @router.post("", response_model=BuildingRead, status_code=status.HTTP_201_CREATED)

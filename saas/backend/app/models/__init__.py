@@ -10,7 +10,18 @@ from app.models.bpu import (
 )
 from app.models.city import City
 from app.models.enedis_async import EnedisAsyncJob
-from app.models.invoice import EnergyInvoiceImport
+from app.models.invoice import (
+    EnergyInvoice,
+    EnergyInvoiceBatch,
+    EnergyInvoiceBatchItem,
+    EnergyInvoiceCheck,
+    EnergyInvoiceImport,
+    EnergyInvoiceLine,
+    EnergyInvoiceMeterRead,
+    EnergyInvoicePeriod,
+    EnergyInvoiceSite,
+)
 from app.models.cvc import CvcInventoryItem
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
+from app.models.site import Site

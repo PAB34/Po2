@@ -18,11 +18,11 @@
 - **Statut** : ✅ **Fait**
 - **Implémentation** :
   - Backend : `services/buildings.py`, `services/building_naming.py`, `services/cities.py`
-  - Modèles : `Building`, `Local`, `City` (avec PostGIS)
+  - Modèles : `Site`, `Building`, `Local`, `City` (avec PostGIS)
   - Routes : `/api/buildings`, `/api/cities`
   - Frontend : `BuildingsLandingPage`, `BuildingsListPage`, `BuildingCreateEditPage`, `BuildingDetailPage`
   - Carte interactive : `BuildingPortfolioMap`, `BuildingNamingMap`, `BuildingSelectionWorkspace`
-- **Détails** : Le workflow `building_naming.py` réconcilie les imports MAJIC/DGFiP avec les géodonnées IGN/OSM (matching par adresse + proximité géographique)
+- **Détails** : Le workflow `building_naming.py` réconcilie les imports MAJIC/DGFiP avec les géodonnées IGN/OSM (matching par adresse + proximité géographique). Les listings patrimoine hiérarchiques conservent maintenant le niveau `Site` avant `Building` puis `Local`.
 - **Voir aussi** : [[Modules/Patrimoine]]
 
 ### 1.2 Inventaire bâtiment / Locataire / Baux

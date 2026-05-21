@@ -12,8 +12,30 @@
 
 ## Modèle de données
 
+### Hiérarchie patrimoine durable
+
+Le référentiel patrimoine conserve maintenant trois niveaux métier :
+
+```mermaid
+flowchart LR
+  SITE["Site"] --> BUILDING["Building"]
+  BUILDING --> LOCAL["Local"]
+```
+
+- `Site` regroupe un ensemble patrimonial identifié dans les listings importés (`site`, domaine, groupe scolaire, ensemble immobilier, etc.).
+- `Building` reste l'entité bâtie centrale de Po2. Il porte `site_id` quand un rattachement durable au site est connu.
+- `Local` reste une sous-unité rattachée à un bâtiment par `building_id`.
+- Une ligne importée `SITE` ne doit plus être aplatie en bâtiment seulement pour préserver son nom dans le référentiel.
+- Une ligne importée `BATIMENT` doit être rattachée au `Site` parent quand la colonne source `Parent` le permet.
+- Une ligne importée `LOCAL` doit être créée sous son bâtiment parent ; le site est retrouvé indirectement par le bâtiment.
+
+La relation est volontairement simple : `Site -> Building -> Local`. Les vues de consultation peuvent encore afficher le bâtiment comme point d'entrée principal, mais le schéma doit conserver le niveau `Site` pour les imports patrimoine, les filtres futurs et les croisements techniques.
+
+### `Site` (`saas/backend/app/models/site.py`)
+Niveau parent du référentiel patrimoine. Champs principaux : `id`, `city_id`, `nom_site`, `adresse`, `source_file`, `source_rows_json`, timestamps.
+
 ### `Building` (`saas/backend/app/models/building.py`)
-Champs principaux : `id`, `city_id`, `dgfip_*` (source MAJIC), `ign_*` (source IGN), `osm_*` (source OSM), géométrie PostGIS, `nom`, `adresse`, `code_postal`, etc.
+Champs principaux : `id`, `city_id`, `site_id`, `dgfip_*` (source MAJIC), `ign_*` (source IGN), `osm_*` (source OSM), géométrie PostGIS, `nom`, `adresse`, `code_postal`, etc.
 
 ### `Local` (`saas/backend/app/models/local.py`)
 Sous-unités d'un bâtiment (étages, locaux séparés). Lié à `Building.id`.
@@ -56,6 +78,15 @@ Objet cible : `BuildingMeterLink`, relation entre `Building` et un compteur flui
    - Une recherche OSM par bbox géographique
    - Une confirmation utilisateur visuelle via `BuildingNamingMap`
 3. **Persistance** : création du `Building` avec tous les `*_source_id` (traçabilité)
+
+### Import patrimoine hiérarchique
+1. Le preview détecte l'onglet Excel utile et les colonnes de hiérarchie comme `Typologie` et `Parent`.
+2. Les lignes `SITE` créent ou réutilisent un `Site`.
+3. Les lignes `BATIMENT` créent un `Building` et renseignent `site_id` si le parent source correspond.
+4. Les lignes `LOCAL` créent un `Local` sous le bâtiment parent détecté.
+5. Si des locaux réels sont importés sous un bâtiment, l'import évite de créer en plus un local principal automatique.
+
+Source de cadrage analysée : `V4_Inventaire_proprietes_SETE_DGFP_251106.xlsm`, onglet métier `Feuille_fusionnee`.
 
 ### Liste cartographique
 - `BuildingsLandingPage` : vue globale carte + filtres
@@ -124,6 +155,9 @@ L'implémentation actuelle simplifie ce schéma (les statuts intermédiaires ne 
 | PATCH | `/api/buildings/{id}` | `update_building` |
 | POST | `/api/buildings/import/preview` | `preview_building_import_file` |
 | POST | `/api/buildings/import/execute` | `execute_building_import_file` |
+| GET | `/api/buildings/sites` | `list_sites` |
+| POST | `/api/buildings/sites` | `create_site` |
+| PUT | `/api/buildings/sites/{id}` | `update_site` |
 | GET | `/api/buildings/{id}/locals` | `list_building_locals` |
 | POST | `/api/buildings/{id}/locals` | `create_local` |
 | GET | `/api/cities` | `list_cities` |

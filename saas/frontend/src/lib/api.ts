@@ -64,6 +64,7 @@ export type City = {
 export type Building = {
   id: number;
   city_id: number | null;
+  site_id: number | null;
   dgfip_unique_key: string | null;
   dgfip_source_file: string | null;
   dgfip_source_rows_json: string | null;
@@ -190,6 +191,17 @@ export type BuildingImportRow = {
   source_occupancy_status: string | null;
 };
 
+export type Site = {
+  id: number;
+  city_id: number | null;
+  nom_site: string;
+  adresse: string | null;
+  source_file: string | null;
+  source_rows_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BuildingImportPreview = {
   filename: string;
   columns: string[];
@@ -246,6 +258,7 @@ export type CreateBuildingFromNamingPayload = {
 
 export type CreateBuildingPayload = {
   city_id?: number;
+  site_id?: number;
   dgfip_unique_key?: string;
   dgfip_source_file?: string;
   dgfip_source_rows_json?: string;
@@ -280,6 +293,14 @@ export type CreateBuildingPayload = {
   source_creation?: string;
   statut_geocodage?: string;
   create_default_local?: boolean;
+};
+
+export type CreateSitePayload = {
+  city_id?: number;
+  nom_site: string;
+  adresse?: string | null;
+  source_file?: string | null;
+  source_rows_json?: string | null;
 };
 
 export type UpdateBuildingPayload = {
@@ -435,6 +456,14 @@ export async function fetchBuildings(token: string): Promise<Building[]> {
   return parseResponse<Building[]>(response);
 }
 
+export async function fetchSites(token: string): Promise<Site[]> {
+  const response = await fetch(`${apiBaseUrl}/buildings/sites`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<Site[]>(response);
+}
+
 export async function fetchBuildingNamingDataset(token: string): Promise<BuildingNamingDataset> {
   const response = await fetch(`${apiBaseUrl}/buildings/naming/dataset`, {
     headers: buildHeaders(token),
@@ -566,6 +595,16 @@ export async function createBuildingRequest(token: string, payload: CreateBuildi
   });
 
   return parseResponse<Building>(response);
+}
+
+export async function createSiteRequest(token: string, payload: CreateSitePayload): Promise<Site> {
+  const response = await fetch(`${apiBaseUrl}/buildings/sites`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Site>(response);
 }
 
 export async function updateBuildingRequest(token: string, buildingId: number, payload: UpdateBuildingPayload): Promise<Building> {
@@ -1432,6 +1471,38 @@ export type EnergyInvoiceUploadResponse = {
   message: string;
 };
 
+export type EnergyInvoiceBatchItem = {
+  id: number;
+  invoice_import_id: number | null;
+  original_filename: string;
+  archive_filename: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  sha256: string | null;
+  status: string;
+  message: string | null;
+  created_at: string;
+};
+
+export type EnergyInvoiceBatch = {
+  id: number;
+  city_id: number;
+  uploaded_by_user_id: number;
+  source: string;
+  status: string;
+  file_count: number;
+  imported_count: number;
+  duplicate_count: number;
+  ignored_count: number;
+  error_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EnergyInvoiceBatchDetail = EnergyInvoiceBatch & {
+  items: EnergyInvoiceBatchItem[];
+};
+
 export async function fetchTurpeVersions(token: string): Promise<TurpeVersion[]> {
   const response = await fetch(`${apiBaseUrl}/billing/turpe/versions`, {
     headers: buildHeaders(token),
@@ -1444,6 +1515,20 @@ export async function fetchEnergyInvoiceImports(token: string): Promise<EnergyIn
     headers: buildHeaders(token),
   });
   return parseResponse<EnergyInvoiceImport[]>(response);
+}
+
+export async function fetchEnergyInvoiceBatches(token: string): Promise<EnergyInvoiceBatch[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/batches`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceBatch[]>(response);
+}
+
+export async function fetchEnergyInvoiceBatch(token: string, batchId: number): Promise<EnergyInvoiceBatchDetail> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/batches/${batchId}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceBatchDetail>(response);
 }
 
 export async function fetchEnergyInvoiceImport(token: string, importId: number): Promise<EnergyInvoiceImportDetail> {
@@ -1462,6 +1547,19 @@ export async function uploadEnergyInvoiceImport(token: string, file: File): Prom
     body: formData,
   });
   return parseResponse<EnergyInvoiceUploadResponse>(response);
+}
+
+export async function uploadEnergyInvoiceBatch(token: string, files: File[]): Promise<EnergyInvoiceBatchDetail> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/batches`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+  return parseResponse<EnergyInvoiceBatchDetail>(response);
 }
 
 export async function analyzeEnergyInvoiceImport(token: string, importId: number): Promise<EnergyInvoiceImport> {

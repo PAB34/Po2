@@ -1,12 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
   analyzeEnergyInvoiceImport,
   deleteEnergyInvoiceImport,
+  fetchEnergyInvoiceBatch,
+  fetchEnergyInvoiceBatches,
   fetchEnergyInvoiceImports,
   fetchTurpeVersions,
-  uploadEnergyInvoiceImport,
+  uploadEnergyInvoiceBatch,
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -36,6 +38,13 @@ const DECISION_STATUS_LABEL: Record<string, string> = {
   approved: "Validee",
   rejected: "Refusee",
   dispute_sent: "Contestation envoyee",
+};
+
+const BATCH_ITEM_STATUS_LABEL: Record<string, string> = {
+  imported: "Importee",
+  duplicate: "Doublon",
+  ignored: "Ignore",
+  error: "Erreur",
 };
 
 function formatDate(value: string | null) {
@@ -109,12 +118,23 @@ function decisionBadge(invoiceImport: EnergyInvoiceImport) {
   );
 }
 
+function batchItemBadge(status: string) {
+  const statusClass =
+    status === "error" ? "badge-red" : status === "duplicate" ? "badge-orange" : status === "imported" ? "badge-green" : "badge-gray";
+  return <span className={`badge ${statusClass}`}>{BATCH_ITEM_STATUS_LABEL[status] ?? status}</span>;
+}
+
 export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [controlFilter, setControlFilter] = useState("all");
+  const [decisionFilter, setDecisionFilter] = useState("all");
+  const [regroupementFilter, setRegroupementFilter] = useState("all");
 
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
@@ -128,8 +148,49 @@ export function EnergieInvoicesPage() {
     enabled: !!token,
   });
 
+  const batchesQuery = useQuery({
+    queryKey: ["energy-invoice-batches"],
+    queryFn: () => fetchEnergyInvoiceBatches(token!),
+    enabled: !!token,
+  });
+
+  const batchDetailQuery = useQuery({
+    queryKey: ["energy-invoice-batch", selectedBatchId],
+    queryFn: () => fetchEnergyInvoiceBatch(token!, selectedBatchId as number),
+    enabled: !!token && selectedBatchId !== null,
+  });
+
   const imports = importsQuery.data ?? [];
+  const batches = batchesQuery.data ?? [];
   const activeTurpeVersion = turpeVersionsQuery.data?.[0];
+  const regroupements = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          imports
+            .map((invoiceImport) => invoiceImport.regroupement)
+            .filter((regroupement): regroupement is string => Boolean(regroupement)),
+        ),
+      ).sort(),
+    [imports],
+  );
+  const filteredImports = useMemo(() => {
+    const search = invoiceSearch.trim().toLowerCase();
+    return imports.filter((invoiceImport) => {
+      if (controlFilter !== "all" && invoiceImport.control_status !== controlFilter) return false;
+      if (decisionFilter !== "all" && invoiceImport.decision_status !== decisionFilter) return false;
+      if (regroupementFilter !== "all" && invoiceImport.regroupement !== regroupementFilter) return false;
+      if (!search) return true;
+      return [
+        invoiceImport.original_filename,
+        invoiceImport.invoice_number,
+        invoiceImport.regroupement,
+        invoiceImport.supplier_guess,
+      ]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(search));
+    });
+  }, [controlFilter, decisionFilter, imports, invoiceSearch, regroupementFilter]);
   const stats = useMemo(() => {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;
     const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
@@ -137,21 +198,24 @@ export function EnergieInvoicesPage() {
     return { total: imports.length, invalid, review, valid };
   }, [imports]);
 
+  useEffect(() => {
+    if (selectedBatchId === null && batches[0]) {
+      setSelectedBatchId(batches[0].id);
+    }
+  }, [batches, selectedBatchId]);
+
   const uploadMut = useMutation({
-    mutationFn: async (files: File[]) => {
-      const results = [];
-      for (const file of files) {
-        results.push(await uploadEnergyInvoiceImport(token!, file));
-      }
-      return results;
-    },
-    onSuccess: (results) => {
-      const duplicates = results.filter((r) => r.is_duplicate).length;
-      const created = results.length - duplicates;
-      setUploadSummary(`${created} facture(s) importee(s), ${duplicates} doublon(s).`);
+    mutationFn: (files: File[]) => uploadEnergyInvoiceBatch(token!, files),
+    onSuccess: (batch) => {
+      setUploadSummary(
+        `${batch.imported_count} facture(s) importee(s), ${batch.duplicate_count} doublon(s), ${batch.error_count} erreur(s), ${batch.ignored_count} fichier(s) ignore(s).`,
+      );
+      setSelectedBatchId(batch.id);
       setSelectedFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+      qc.setQueryData(["energy-invoice-batch", batch.id], batch);
     },
   });
 
@@ -201,8 +265,8 @@ export function EnergieInvoicesPage() {
         <div>
           <p className="field-label">Depot manuel</p>
           <p className="invoice-upload-copy">
-            Depose ici les factures telechargees depuis les espaces clients. Cette premiere version stocke les fichiers
-            et lance le controle automatique ENGIE lorsqu'un PDF est reconnu.
+            Depose les PDF ENGIE telecharges depuis les espaces clients ou une archive ZIP de PDF. Le lot reste trace
+            avec ses factures importees, ses doublons et ses erreurs.
           </p>
         </div>
         <div className="invoice-upload-actions">
@@ -210,7 +274,7 @@ export function EnergieInvoicesPage() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".pdf,.xml,.csv,.txt,.xlsx,.xls,.zip"
+            accept=".pdf,.zip"
             onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
             className="form-input"
           />
@@ -231,6 +295,187 @@ export function EnergieInvoicesPage() {
         )}
         {uploadSummary && <p className="sync-result-ok">{uploadSummary}</p>}
         {uploadMut.isError && <p className="error-text">{(uploadMut.error as Error).message}</p>}
+      </section>
+
+      <section className="invoice-detail-section">
+        <div className="page-header page-header-row">
+          <div>
+            <h3>Lots d'import</h3>
+            <p className="page-subtitle">Historique des depots manuels avant la connexion API ENGIE.</p>
+          </div>
+        </div>
+        {batchesQuery.isLoading && <p className="loading-text">Chargement des lots...</p>}
+        {batchesQuery.isError && <p className="error-text">{(batchesQuery.error as Error).message}</p>}
+        {batches.length > 0 && (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Lot</th>
+                  <th>Fichiers</th>
+                  <th>Importees</th>
+                  <th>Doublons</th>
+                  <th>Erreurs / ignores</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batches.slice(0, 8).map((batch) => (
+                  <tr key={batch.id}>
+                    <td>
+                      <div className="invoice-file-cell">
+                        <strong>Lot #{batch.id}</strong>
+                        <span>{formatDate(batch.created_at)}</span>
+                      </div>
+                    </td>
+                    <td>{batch.file_count}</td>
+                    <td>{batch.imported_count}</td>
+                    <td>{batch.duplicate_count}</td>
+                    <td>{batch.error_count} erreur(s), {batch.ignored_count} ignore(s)</td>
+                    <td>
+                      <button type="button" className="btn-secondary btn-compact" onClick={() => setSelectedBatchId(batch.id)}>
+                        Voir le lot
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {!batchesQuery.isLoading && batches.length === 0 && <p className="cell-empty">Aucun lot facture importe.</p>}
+
+        {batchDetailQuery.isLoading && <p className="loading-text">Chargement du lot selectionne...</p>}
+        {batchDetailQuery.data && (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Fichier</th>
+                  <th>Archive</th>
+                  <th>Resultat</th>
+                  <th>Message</th>
+                  <th>Facture</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batchDetailQuery.data.items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="invoice-file-cell">
+                        <strong>{item.original_filename}</strong>
+                        <span>{item.file_size_bytes !== null ? formatSize(item.file_size_bytes) : "-"}</span>
+                      </div>
+                    </td>
+                    <td>{item.archive_filename ?? "-"}</td>
+                    <td>{batchItemBadge(item.status)}</td>
+                    <td>{item.message ?? "-"}</td>
+                    <td>
+                      {item.invoice_import_id ? (
+                        <Link to={`/energie/factures/${item.invoice_import_id}`} className="btn-secondary btn-compact">
+                          Detail
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="invoice-detail-section">
+        <h3>Filtrer les factures</h3>
+        <div className="invoice-action-cell">
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => {
+              setControlFilter("review");
+              setDecisionFilter("all");
+            }}
+          >
+            A controler
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => {
+              setControlFilter("invalid");
+              setDecisionFilter("all");
+            }}
+          >
+            En erreur
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => {
+              setControlFilter("all");
+              setDecisionFilter("to_review");
+            }}
+          >
+            Decisions a rendre
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => {
+              setControlFilter("all");
+              setDecisionFilter("all");
+              setRegroupementFilter("all");
+              setInvoiceSearch("");
+            }}
+          >
+            Reinitialiser
+          </button>
+        </div>
+        <div className="form-grid">
+          <label>
+            <span className="field-label">Recherche</span>
+            <input
+              type="search"
+              className="form-input"
+              value={invoiceSearch}
+              onChange={(e) => setInvoiceSearch(e.target.value)}
+              placeholder="Facture, fichier, regroupement"
+            />
+          </label>
+          <label>
+            <span className="field-label">Controle</span>
+            <select className="form-input" value={controlFilter} onChange={(e) => setControlFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              <option value="valid">Valides</option>
+              <option value="review">A controler</option>
+              <option value="invalid">Invalides</option>
+              <option value="not_checked">Non controlees</option>
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Decision</span>
+            <select className="form-input" value={decisionFilter} onChange={(e) => setDecisionFilter(e.target.value)}>
+              <option value="all">Toutes</option>
+              <option value="to_review">A verifier</option>
+              <option value="approved">Validees</option>
+              <option value="rejected">Refusees</option>
+              <option value="dispute_sent">Contestation envoyee</option>
+            </select>
+          </label>
+          <label>
+            <span className="field-label">Regroupement</span>
+            <select className="form-input" value={regroupementFilter} onChange={(e) => setRegroupementFilter(e.target.value)}>
+              <option value="all">Tous</option>
+              {regroupements.map((regroupement) => (
+                <option key={regroupement} value={regroupement}>
+                  {regroupement}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </section>
 
       {activeTurpeVersion && (
@@ -270,7 +515,7 @@ export function EnergieInvoicesPage() {
             </tr>
           </thead>
           <tbody>
-            {imports.map((invoiceImport) => (
+            {filteredImports.map((invoiceImport) => (
               <tr key={invoiceImport.id}>
                 <td>
                   <div className="invoice-file-cell">
@@ -345,9 +590,9 @@ export function EnergieInvoicesPage() {
                 </td>
               </tr>
             ))}
-            {!importsQuery.isLoading && imports.length === 0 && (
+            {!importsQuery.isLoading && filteredImports.length === 0 && (
               <tr>
-                <td colSpan={8} className="cell-empty">Aucune facture importee</td>
+                <td colSpan={8} className="cell-empty">Aucune facture ne correspond aux filtres.</td>
               </tr>
             )}
           </tbody>
