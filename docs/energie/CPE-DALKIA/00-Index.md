@@ -20,6 +20,7 @@
 | [[07-GTC-et-données]] | API GTB, GMAO, espace client, formats de données |
 | [[08-Gouvernance]] | Réunions, reporting, mémoire annuel, protocole IPMVP |
 | [[09-Mise-au-point]] | Modifications OUV11 signées (écarts CCAP/CCTPM) |
+| [[10-Roadmap-Po2]] | Fonctionnalités à développer dans Po2 — phases, priorités, données externes |
 
 ---
 
