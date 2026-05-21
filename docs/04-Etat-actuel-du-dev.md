@@ -1,6 +1,6 @@
 # État actuel du développement
 
-> **Mise à jour** : 2026-05-21 (Refonte UI BPU · CVC import fix · PO2-PAT-002 En cours)
+> **Mise à jour** : 2026-05-21 (Refonte UI BPU · revue factures titulaire/problemes · CVC import fix · PO2-PAT-002 En cours)
 > **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.6)
 > **Dernière commit en prod** : `00af844` (fix(cvc-import): dropdown mapping complet avec tous les bâtiments)
 
@@ -18,7 +18,7 @@
 | Énergie — vue d'ensemble | `/energie` | Stable |
 | Énergie — détail PRM | `/energie/:prmId` | Stable |
 | Préconisations puissance | `/energie/preconisations` | Stable |
-| Factures | `/energie/factures`, `/energie/factures/:id` | Stable (parser ENGIE, contrôle/décision déjà en place) |
+| Factures | `/energie/factures`, `/energie/factures/:id` | Stable en prod pour parser ENGIE, contrôle/décision et import lot ; extension filtre titulaire Ville/Agglo + filtres catégorie/type de problème poussée sur `main` (`fe84fca`), à vérifier après déploiement |
 | Facturation TURPE | `/energie/facturation` | Stable |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
 | **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
@@ -57,6 +57,7 @@
 
 ## 🪵 Derniers commits sur `main`
 ```
+fe84fca  feat(billing): add invoice holder and issue filters
 00af844  fix(cvc-import): dropdown mapping complet avec tous les bâtiments du patrimoine
 9674d50  feat(bpu): ajout exemples chiffrés sur chaque composante Timeline
 f29db99  refactor(bpu): Timeline définitions lisibles + TURPE 3 blocs restructurés
@@ -105,8 +106,9 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 
 ### 2c. Historique factures ENGIE dans `/energie/factures`
 - **En cours** : intégrer le lot réel de 83 PDF ENGIE depuis `saas/energie/ENGIE/FACTURES`
-- Point de départ : l'UI facture existe déjà avec import multi-fichiers, résumé simple, PRM/FIC, lignes extraites, contrôles BPU/TURPE/ENEDIS et décision utilisateur
-- Flux visé : import par lot persistant, projection des extractions vers des tables factures normalisées, puis même pipeline pour la future API ENGIE
+- Point atteint : l'UI facture couvre l'import multi-fichiers, les lots persistants, le résumé simple, PRM/FIC, lignes extraites, contrôles BPU/TURPE/ENEDIS et décision utilisateur
+- Revue améliorée : le titulaire du contrat est exposé dans la liste et filtrable ; les catégories/types de problèmes remontent du détail facture vers la page principale
+- Flux visé ensuite : qualifier le lot complet, corriger les anomalies réelles, puis alimenter le même pipeline par la future API ENGIE
 - Voir [[Sessions/2026-05-21 — Historique factures ENGIE]]
 
 ### 3. Backfill prod ENEDIS async

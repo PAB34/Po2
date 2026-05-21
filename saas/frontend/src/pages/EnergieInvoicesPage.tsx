@@ -11,6 +11,7 @@ import {
   uploadEnergyInvoiceBatch,
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
+import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
 import {
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
@@ -177,6 +178,7 @@ export function EnergieInvoicesPage() {
   const [contractHolderFilter, setContractHolderFilter] = useState("all");
   const [issueFamilyFilter, setIssueFamilyFilter] = useState<InvoiceIssueFamily | "all">("all");
   const [issueCodeFilter, setIssueCodeFilter] = useState("all");
+  const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
 
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
@@ -286,6 +288,10 @@ export function EnergieInvoicesPage() {
     issueFamilyFilter,
     regroupementFilter,
   ]);
+  const supplierReportImports = useMemo(
+    () => filteredImports.filter((invoiceImport) => invoiceImport.control_issues.length > 0),
+    [filteredImports],
+  );
   const stats = useMemo(() => {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;
     const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
@@ -531,6 +537,14 @@ export function EnergieInvoicesPage() {
           >
             Reinitialiser
           </button>
+          <button
+            type="button"
+            className="btn-primary btn-compact"
+            disabled={supplierReportImports.length === 0}
+            onClick={() => setIsSupplierReportOpen(true)}
+          >
+            Editer rapport
+          </button>
         </div>
         <div className="form-grid">
           <label>
@@ -740,6 +754,22 @@ export function EnergieInvoicesPage() {
           </tbody>
         </table>
       </div>
+
+      {isSupplierReportOpen && (
+        <InvoiceSupplierReport
+          invoiceImports={supplierReportImports}
+          filters={{
+            search: invoiceSearch,
+            control: controlFilter,
+            decision: decisionFilter,
+            regroupement: regroupementFilter,
+            contractHolder: contractHolderFilter,
+            issueFamily: issueFamilyFilter,
+            issueCode: issueCodeFilter,
+          }}
+          onClose={() => setIsSupplierReportOpen(false)}
+        />
+      )}
     </div>
   );
 }

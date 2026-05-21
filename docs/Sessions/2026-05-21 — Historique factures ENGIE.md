@@ -57,6 +57,14 @@ Conclusion : la V1 doit surtout industrialiser l'import et la persistance analyt
 - `/energie/factures` accepte maintenant un lot PDF ou ZIP, expose l'historique et le detail des lots, puis propose recherche, filtres et acces rapides pour la revue.
 - Le depot unitaire historique reste disponible cote API par `/api/billing/invoices/imports`.
 
+## Extension de revue livree
+
+- Le parser ENGIE lisait deja `Titulaire du contrat` ; la liste des imports expose maintenant cette valeur pour filtrer les factures Ville / Agglomeration depuis `/energie/factures`.
+- La page principale remonte les familles et codes de problemes jusque-la visibles surtout dans le detail facture, puis permet de filtrer par categorie et type de probleme.
+- Le volet `Lots d'import` est replie par defaut afin que les 83 PDF du lot historique ne prennent pas la place de la liste a traiter.
+- Commit pousse sur `main` : `fe84fca` (`feat(billing): add invoice holder and issue filters`).
+- Prochaine verification metier : importer/relire le lot reel en production et confirmer les libelles titulaire attendus avant de decider si une normalisation `ville` / `agglomeration` doit etre ajoutee.
+
 ## Validation de la session
 
 - `python -m compileall` passe sur les modeles, services, schemas, routes, migration et tests ajoutes.

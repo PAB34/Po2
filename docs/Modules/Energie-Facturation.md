@@ -30,7 +30,7 @@ Cette spec est la **légitimité métier** du produit côté audit factures.
 Migration 0010, table `energy_invoice_imports` :
 - Upload PDF/Excel → analyse immédiate → résultat structuré
 - Statuts séparés : import, analyse technique, contrôle métier, décision utilisateur
-- Champs utiles aujourd'hui : fichier source, hash, fournisseur, numéro/date facture, période, regroupement, TTC, kWh, compteurs de contrôle
+- Champs utiles aujourd'hui : fichier source, hash, fournisseur, numéro/date facture, période, regroupement, titulaire du contrat, TTC, kWh, compteurs de contrôle
 
 ### Analyse actuellement persistée
 Les migrations 0011-0012 enrichissent `energy_invoice_imports` :
@@ -60,6 +60,10 @@ Croise les factures importées avec :
 
 ### UI : `EnergieInvoicesPage` + `EnergieInvoiceDetailPage`
 - `/energie/factures` contient déjà l'import manuel multi-fichiers, les KPI de revue, la liste facture, les statuts de contrôle et les décisions.
+- La liste principale expose le titulaire du contrat lu dans les PDF ENGIE afin de distinguer les factures Ville / Agglomération lors de la revue.
+- Les filtres de revue couvrent le titulaire, le statut de contrôle, la décision, le regroupement et les catégories/types de problèmes issus du rapport de contrôle.
+- Un rapport fournisseur éditable est construit depuis les factures filtrées avec synthèse des points à clarifier, périmètre retenu et sortie imprimable en PDF.
+- Le bloc `Lots d'import` est replié par défaut pour garder la revue des factures prioritaire lorsque le lot historique contient plusieurs dizaines de PDF.
 - `/energie/factures/:invoiceImportId` contient déjà l'identité facture, le résumé simple, les familles de contrôle, les PRM/FIC, les lignes extraites et le commentaire de décision.
 - Le chantier d'historique ENGIE doit prolonger cette expérience, pas créer un deuxième module facture.
 
@@ -74,6 +78,8 @@ Stratégie retenue :
 - API ENGIE ensuite vers le même pipeline de normalisation, contrôle et décision.
 
 La V1 reste centrée sur ENGIE électricité. Le lien fin facture → PRM → compteur → bâtiment viendra avec le chantier de rattachement compteurs ; il ne doit pas bloquer l'intégration de l'historique financier et tarifaire.
+
+Point de revue ajouté le 2026-05-21 : le libellé brut `Titulaire du contrat` est conservé et filtrable. Si la valeur doit devenir un axe analytique stable au-delà des libellés ENGIE, prévoir ensuite une normalisation explicite du type de porteur (`ville`, `agglomeration`, `autre`) sans perdre la valeur source.
 
 ## ENGIE — état actuel
 
