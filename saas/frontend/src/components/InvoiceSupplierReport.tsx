@@ -4,6 +4,8 @@ import {
   INVOICE_ISSUE_FAMILY_DETAIL,
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
+  isInternalControlLimit,
+  isSupplierReportIssue,
 } from "../lib/invoiceIssues";
 import type { InvoiceIssueFamily } from "../lib/invoiceIssues";
 
@@ -65,13 +67,21 @@ function invoiceReference(invoiceImport: EnergyInvoiceImport) {
   return invoiceImport.invoice_number ?? invoiceImport.original_filename;
 }
 
-function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
+function filteredIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
   return invoiceImport.control_issues.filter((issue) => {
     const family = invoiceIssueFamily(issue);
     if (filters.issueFamilies.length > 0 && !filters.issueFamilies.includes(family)) return false;
     if (filters.issueCodes.length > 0 && !filters.issueCodes.includes(issue.code)) return false;
     return true;
   });
+}
+
+function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
+  return filteredIssues(invoiceImport, filters).filter(isSupplierReportIssue);
+}
+
+function excludedInternalIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
+  return filteredIssues(invoiceImport, filters).filter(isInternalControlLimit);
 }
 
 function issueSummary(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
@@ -98,11 +108,15 @@ function activeFilters(filters: InvoiceSupplierReportFilters) {
   return values;
 }
 
-function groupIssues(invoiceImports: EnergyInvoiceImport[], filters: InvoiceSupplierReportFilters) {
+function groupIssues(
+  invoiceImports: EnergyInvoiceImport[],
+  filters: InvoiceSupplierReportFilters,
+  selectIssues: typeof selectedIssues = selectedIssues,
+) {
   const groups = new Map<string, IssueGroup>();
 
   for (const invoiceImport of invoiceImports) {
-    for (const issue of selectedIssues(invoiceImport, filters)) {
+    for (const issue of selectIssues(invoiceImport, filters)) {
       const family = invoiceIssueFamily(issue);
       const key = `${family}:${issue.code}`;
       const group = groups.get(key) ?? {
@@ -141,17 +155,26 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
     [invoiceImports],
   );
   const issueGroups = useMemo(() => groupIssues(invoiceImports, filters), [filters, invoiceImports]);
+  const excludedInternalGroups = useMemo(
+    () => groupIssues(invoiceImports, filters, excludedInternalIssues),
+    [filters, invoiceImports],
+  );
+  const reportInvoiceImports = useMemo(
+    () => invoiceImports.filter((invoiceImport) => selectedIssues(invoiceImport, filters).length > 0),
+    [filters, invoiceImports],
+  );
   const filtersSummary = useMemo(() => activeFilters(filters), [filters]);
-  const totalTtc = invoiceImports.reduce((total, invoiceImport) => total + (invoiceImport.total_ttc ?? 0), 0);
-  const errorCount = invoiceImports.reduce(
+  const totalTtc = reportInvoiceImports.reduce((total, invoiceImport) => total + (invoiceImport.total_ttc ?? 0), 0);
+  const errorCount = reportInvoiceImports.reduce(
     (total, invoiceImport) => total + selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "error").length,
     0,
   );
-  const warningCount = invoiceImports.reduce(
+  const warningCount = reportInvoiceImports.reduce(
     (total, invoiceImport) => total + selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "warning").length,
     0,
   );
   const defaultRecipient = suppliers.length === 1 ? suppliers[0] : "Fournisseur d'energie";
+  const excludedInternalIssueCount = excludedInternalGroups.reduce((total, group) => total + group.count, 0);
   const [senderName, setSenderName] = useState("Collectivite");
   const [recipientName, setRecipientName] = useState(defaultRecipient);
   const [subject, setSubject] = useState("Demande d'explications sur des points de controle de factures energie");
@@ -168,7 +191,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
         <header className="invoice-report-toolbar invoice-report-no-print">
           <div>
             <p className="field-label">Rapport fournisseur</p>
-            <strong>{invoiceImports.length} facture{invoiceImports.length > 1 ? "s" : ""} avec points a clarifier</strong>
+            <strong>{reportInvoiceImports.length} facture{reportInvoiceImports.length > 1 ? "s" : ""} avec points a clarifier</strong>
           </div>
           <div className="invoice-action-cell">
             <button type="button" className="btn-secondary btn-compact" onClick={() => window.print()}>
@@ -202,6 +225,19 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
               <span className="field-label">Demande</span>
               <textarea className="form-input" rows={3} value={request} onChange={(event) => setRequest(event.target.value)} />
             </label>
+            {excludedInternalGroups.length > 0 && (
+              <aside className="invoice-report-internal-note">
+                <strong>
+                  {excludedInternalIssueCount} limite{excludedInternalIssueCount > 1 ? "s" : ""} de controle exclue
+                  {excludedInternalIssueCount > 1 ? "s" : ""}
+                </strong>
+                <p>
+                  Ces points restent internes : reference BPU ou ENEDIS absente, controle partiel ou perimetre local
+                  incomplet, sans ecart fournisseur demontre.
+                </p>
+                <span>{excludedInternalGroups.map((group) => group.code).join(", ")}</span>
+              </aside>
+            )}
           </div>
 
           <article className="invoice-supplier-report">
@@ -224,7 +260,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
               <h2>Perimetre retenu</h2>
               <div className="invoice-report-kpis">
                 <div>
-                  <strong>{invoiceImports.length}</strong>
+                  <strong>{reportInvoiceImports.length}</strong>
                   <span>Factures concernees</span>
                 </div>
                 <div>
@@ -285,6 +321,11 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                       <td>{issue.count}</td>
                     </tr>
                   ))}
+                  {issueGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={3}>Aucun ecart fournisseur retenu avec les filtres appliques.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </section>
@@ -302,7 +343,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                   </tr>
                 </thead>
                 <tbody>
-                  {invoiceImports.map((invoiceImport) => (
+                  {reportInvoiceImports.map((invoiceImport) => (
                     <tr key={invoiceImport.id}>
                       <td>
                         <strong>{invoiceReference(invoiceImport)}</strong>

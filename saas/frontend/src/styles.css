@@ -2496,6 +2496,32 @@ button:disabled {
   resize: vertical;
 }
 
+.invoice-report-internal-note {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  border-radius: 8px;
+  padding: 11px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.invoice-report-internal-note strong {
+  color: #fef3c7;
+}
+
+.invoice-report-internal-note p {
+  margin: 0;
+}
+
+.invoice-report-internal-note span {
+  color: #fdba74;
+  overflow-wrap: anywhere;
+}
+
 .invoice-supplier-report {
   display: flex;
   flex-direction: column;
@@ -2654,6 +2680,15 @@ button:disabled {
   padding-left: 8px;
   color: #475569 !important;
   font-size: 0.77rem;
+}
+
+.invoice-turpe-title {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.invoice-turpe-title div:first-child {
+  min-width: 0;
 }
 
 .invoice-supplier-report footer {

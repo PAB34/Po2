@@ -18,7 +18,7 @@
 | Énergie — vue d'ensemble | `/energie` | Stable |
 | Énergie — détail PRM | `/energie/:prmId` | Stable |
 | Préconisations puissance | `/energie/preconisations` | Stable |
-| Factures | `/energie/factures`, `/energie/factures/:id` | Stable en prod pour parser ENGIE, contrôle/décision et import lot ; extension filtre titulaire Ville/Agglo + filtres catégorie/type de problème poussée sur `main` (`fe84fca`), à vérifier après déploiement |
+| Factures | `/energie/factures`, `/energie/factures/:id` | Stable en prod pour parser ENGIE, controle/decision et import lot ; le rapport fournisseur filtre les limites internes TURPE/BPU/ENEDIS et le detail facture expose les lignes d'acheminement utilisees par le controle |
 | Facturation TURPE | `/energie/facturation` | Stable |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
 | **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
@@ -108,6 +108,7 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - **En cours** : intégrer le lot réel de 83 PDF ENGIE depuis `saas/energie/ENGIE/FACTURES`
 - Point atteint : l'UI facture couvre l'import multi-fichiers, les lots persistants, le résumé simple, PRM/FIC, lignes extraites, contrôles BPU/TURPE/ENEDIS et décision utilisateur
 - Revue améliorée : le titulaire du contrat est exposé dans la liste et filtrable ; les catégories/types de problèmes remontent du détail facture vers la page principale
+- Clarification controles : le rapport fournisseur ne reprend plus les limites internes TURPE/BPU/ENEDIS ; les corrections PDF locales couvrent les lignes negatives, les FIC creditrices et les faux ecarts `quantite x PU` sur depassement de puissance
 - Flux visé ensuite : qualifier le lot complet, corriger les anomalies réelles, puis alimenter le même pipeline par la future API ENGIE
 - Voir [[Sessions/2026-05-21 — Historique factures ENGIE]]
 

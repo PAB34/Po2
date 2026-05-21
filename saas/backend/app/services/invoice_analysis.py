@@ -248,6 +248,8 @@ def _check_arithmetic(invoice: dict[str, Any], sites: list[dict[str, Any]], issu
     for site in sites:
         scope = _site_scope(site)
         for line in site.get("invoice_lines", []):
+            if line.get("normalized_component") == "other":
+                continue
             quantity = _decimal(line.get("quantity"))
             unit_price = _decimal(line.get("unit_price_ht"))
             amount = _decimal(line.get("amount_ht"))

@@ -190,9 +190,9 @@ def _parse_fic_group(fic_number: str, group: dict[str, Any]) -> dict[str, Any]:
     site["meter_type"] = _compact_value_match(compact, r"Type de compteur\s*:\s*(.+?)(?:\s+Numéro de compteur|\s+Suivez vos consommations)")
     site["meter_number"] = _compact_value_match(compact, r"Numéro de compteur\s*:\s*([0-9A-Z -]+?)\s+Suivez vos consommations")
 
-    total_ht = _money_value_match(compact, r"Total HTVA\s+([0-9 ]+,[0-9]{2})\s*€")
-    total_vat = _money_value_match(compact, r"Total TVA\s+[0-9.]+\s*%\s+([0-9 ]+,[0-9]{2})\s*€")
-    total_ttc = _money_value_match(compact, r"Total TTC\s+([0-9 ]+,[0-9]{2})\s*€")
+    total_ht = _money_value_match(compact, r"Total HTVA\s+(-?[0-9 ]+,[0-9]{2})\s*€")
+    total_vat = _money_value_match(compact, r"Total TVA\s+[0-9.]+\s*%\s+(-?[0-9 ]+,[0-9]{2})\s*€")
+    total_ttc = _money_value_match(compact, r"Total TTC\s+(-?[0-9 ]+,[0-9]{2})\s*€")
     if total_ht is not None:
         site["total_ht"] = total_ht
     if total_vat is not None:
@@ -258,7 +258,7 @@ def _parse_detail_lines(text: str) -> tuple[dict[str, float], list[dict[str, Any
 
 def _match_family_total(line: str) -> dict[str, Any] | None:
     for label, family in FAMILY_LABELS.items():
-        pattern = rf"^{re.escape(label)}\s+([0-9 ]+,[0-9]{{2}})$"
+        pattern = rf"^{re.escape(label)}\s+(-?[0-9 ]+,[0-9]{{2}})$"
         match = re.match(pattern, line)
         if match:
             return {"family": family, "amount": _decimal_to_float(_parse_decimal_fr(match.group(1)))}
@@ -267,11 +267,11 @@ def _match_family_total(line: str) -> dict[str, Any] | None:
 
 def _parse_invoice_line(line: str, family: str | None) -> dict[str, Any] | None:
     qty_match = re.match(
-        r"^(?P<label>.+?)\s+(?P<qty>[0-9 ]+)\s+(?P<unit>[0-9]+,[0-9]{5})\s+(?P<amount>[0-9 ]+,[0-9]{2})\s+(?P<vat>[0-9]{1,2}\.0%)$",
+        r"^(?P<label>.+?)\s+(?P<qty>-?[0-9 ]+)\s+(?P<unit>[0-9]+,[0-9]{5})\s+(?P<amount>-?[0-9 ]+,[0-9]{2})\s+(?P<vat>[0-9]{1,2}\.0%)$",
         line,
     )
     amount_match = re.match(
-        r"^(?P<label>.+?)\s+(?P<amount>[0-9 ]+,[0-9]{2})\s+(?P<vat>[0-9]{1,2}\.0%)$",
+        r"^(?P<label>.+?)\s+(?P<amount>-?[0-9 ]+,[0-9]{2})\s+(?P<vat>[0-9]{1,2}\.0%)$",
         line,
     )
     match = qty_match or amount_match
@@ -403,13 +403,13 @@ def _normalized_poste(label: str) -> str | None:
     normalized = _strip_accents(label).lower()
     if "pointe" in normalized:
         return "pointe"
-    if "hp saison haute" in normalized:
+    if "hp saison haute" in normalized or "heures pleines haute saison" in normalized:
         return "hph"
-    if "hc saison haute" in normalized:
+    if "hc saison haute" in normalized or "heures creuses haute saison" in normalized:
         return "hch"
-    if "hp saison basse" in normalized:
+    if "hp saison basse" in normalized or "heures pleines basse saison" in normalized:
         return "hpe"
-    if "hc saison basse" in normalized:
+    if "hc saison basse" in normalized or "heures creuses basse saison" in normalized:
         return "hce"
     if "base" in normalized:
         return "base"
@@ -504,4 +504,3 @@ def _strip_accents(value: str) -> str:
     return "".join(
         char for char in unicodedata.normalize("NFD", value) if unicodedata.category(char) != "Mn"
     )
-

@@ -15,6 +15,8 @@ import {
   INVOICE_ISSUE_FAMILY_DETAIL as FAMILY_DETAIL,
   INVOICE_ISSUE_FAMILY_LABEL as FAMILY_LABEL,
   invoiceIssueFamily as issueFamily,
+  isInternalControlLimit,
+  isSupplierReportIssue,
 } from "../lib/invoiceIssues";
 import type { InvoiceControlIssue as ControlIssue, InvoiceIssueFamily as IssueFamily } from "../lib/invoiceIssues";
 import { useAuth } from "../providers/AuthProvider";
@@ -125,6 +127,16 @@ function hasFamilyIssue(issues: ControlIssue[], family: IssueFamily) {
 
 function issueCountLabel(count: number, label: string) {
   return `${count} ${label}${count !== 1 ? "s" : ""}`;
+}
+
+function networkComponentLabel(component: string | null | undefined) {
+  const labels: Record<string, string> = {
+    network_counting: "Comptage",
+    network_management: "Gestion",
+    network_withdrawal: "Soutirage fixe",
+    network_variable: "Soutirage variable",
+  };
+  return labels[component ?? ""] ?? "Autre composante";
 }
 
 function severityRank(severity: string) {
@@ -369,6 +381,10 @@ export function EnergieInvoiceDetailPage() {
       ),
     [sites],
   );
+  const networkLines = useMemo(() => invoiceLines.filter((line) => line.family === "network"), [invoiceLines]);
+  const turpeIssues = useMemo(() => issues.filter((issue) => issueFamily(issue) === "turpe"), [issues]);
+  const supplierTurpeIssues = useMemo(() => turpeIssues.filter(isSupplierReportIssue), [turpeIssues]);
+  const internalTurpeIssues = useMemo(() => turpeIssues.filter(isInternalControlLimit), [turpeIssues]);
 
   useEffect(() => {
     if (!invoiceImport) return;
@@ -670,6 +686,56 @@ export function EnergieInvoiceDetailPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="invoice-detail-section">
+        <div className="section-title-row invoice-turpe-title">
+          <div>
+            <h3>Acheminement utilise pour le controle TURPE</h3>
+            <p className="page-subtitle">
+              Les factures ENGIE portent ces montants en acheminement, avec des composantes de comptage, gestion et
+              soutirage.
+            </p>
+          </div>
+          <div className="invoice-issue-tags">
+            <span className="invoice-issue-family-tag">{supplierTurpeIssues.length} ecart(s) calcule(s)</span>
+            <span className="invoice-issue-code-tag">{internalTurpeIssues.length} limite(s) interne(s)</span>
+          </div>
+        </div>
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>PRM</th>
+                <th>Composante</th>
+                <th>Poste</th>
+                <th>Libelle fournisseur</th>
+                <th>Quantite</th>
+                <th>PU HT</th>
+                <th>Montant HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {networkLines.slice(0, 120).map((line: EnergyInvoiceLine & { prm_id?: string | null; fic_number?: string | null }, index) => (
+                <tr key={`${line.prm_id ?? line.fic_number ?? "network"}-${index}`}>
+                  <td className="cell-mono">{line.prm_id ?? line.fic_number ?? "-"}</td>
+                  <td>{networkComponentLabel(line.normalized_component)}</td>
+                  <td>{line.poste ?? "-"}</td>
+                  <td>{line.label ?? line.raw_line ?? "-"}</td>
+                  <td>{formatNumber(line.quantity, line.quantity_unit ? ` ${line.quantity_unit}` : "")}</td>
+                  <td>{line.unit_price_ht !== undefined && line.unit_price_ht !== null ? `${line.unit_price_ht} ${line.unit_price_unit ?? ""}` : "-"}</td>
+                  <td>{formatCurrency(line.amount_ht)}</td>
+                </tr>
+              ))}
+              {networkLines.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="cell-empty">Aucune ligne d'acheminement extraite</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {networkLines.length > 120 && <p className="invoice-lines-note">{networkLines.length - 120} ligne(s) d'acheminement supplementaire(s) non affichee(s).</p>}
       </section>
 
       <section className="invoice-detail-section">

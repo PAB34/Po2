@@ -367,8 +367,16 @@ export function EnergieInvoicesPage() {
     regroupementFilters,
   ]);
   const supplierReportImports = useMemo(
-    () => filteredImports.filter((invoiceImport) => invoiceImport.control_issues.length > 0),
-    [filteredImports],
+    () =>
+      filteredImports.filter((invoiceImport) =>
+        invoiceImport.control_issues.some((issue) => {
+          const family = invoiceIssueFamily(issue);
+          if (issueFamilyFilters.length > 0 && !issueFamilyFilters.includes(family)) return false;
+          if (issueCodeFilters.length > 0 && !issueCodeFilters.includes(issue.code)) return false;
+          return true;
+        }),
+      ),
+    [filteredImports, issueCodeFilters, issueFamilyFilters],
   );
   const stats = useMemo(() => {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;

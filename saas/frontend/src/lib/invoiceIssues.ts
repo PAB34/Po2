@@ -14,7 +14,7 @@ export type InvoiceIssueFamily =
 
 export const INVOICE_ISSUE_FAMILY_LABEL: Record<InvoiceIssueFamily, string> = {
   bpu: "Prix contractuels",
-  turpe: "Acheminement TURPE",
+  turpe: "Acheminement / TURPE",
   taxes: "Taxes et TVA",
   periods: "Periodes",
   consumption: "Consommation",
@@ -25,7 +25,7 @@ export const INVOICE_ISSUE_FAMILY_LABEL: Record<InvoiceIssueFamily, string> = {
 
 export const INVOICE_ISSUE_FAMILY_DETAIL: Record<InvoiceIssueFamily, string> = {
   bpu: "Prix, poste ou option tarifaire incoherent avec le BPU.",
-  turpe: "Calcul TURPE incomplet ou non verifiable pour certaines lignes.",
+  turpe: "Controle des composantes d'acheminement : ecart TURPE calcule ou limite de verification.",
   taxes: "Total HT, TVA ou TTC a rapprocher avec les lignes facturees.",
   periods: "Periode absente, trou ou chevauchement potentiel.",
   consumption: "Ecart ou manque de donnees ENEDIS sur la periode facturee.",
@@ -58,4 +58,40 @@ export function invoiceIssueFamily(issue: InvoiceControlIssue): InvoiceIssueFami
     return "document";
   }
   return "other";
+}
+
+const TURPE_SUPPLIER_ISSUE_CODES = new Set([
+  "TURPE_AMOUNT_MISMATCH",
+  "TURPE_UNIT_PRICE_MISMATCH",
+  "TURPE_TOTAL_MISMATCH",
+]);
+
+const INTERNAL_CONTROL_LIMIT_CODES = new Set([
+  "BPU_CONFIG_MISSING",
+  "BPU_LINES_MISSING",
+  "BPU_REFERENCE_MISSING",
+  "BPU_PRICE_MISSING",
+  "CONSUMPTION_REFERENCE_MISSING",
+  "DUPLICATE_INVOICE_NUMBER",
+  "ENEDIS_CONSUMPTION_MISSING",
+  "ENEDIS_CONSUMPTION_PARTIAL",
+  "ENEDIS_POWER_MISSING",
+  "LOAD_CURVE_CONSUMPTION_PARTIAL",
+  "LOAD_CURVE_POWER_PARTIAL",
+  "NO_SITE_FOUND",
+  "PARSER_FAILED",
+  "PERIOD_MISSING",
+  "POWER_REFERENCE_MISSING",
+  "SUBSCRIBED_POWER_MISSING",
+  "TAX_TOTALS_MISSING",
+  "UNKNOWN_PRM",
+]);
+
+export function isSupplierReportIssue(issue: InvoiceControlIssue) {
+  return !isInternalControlLimit(issue);
+}
+
+export function isInternalControlLimit(issue: InvoiceControlIssue) {
+  if (invoiceIssueFamily(issue) === "turpe") return !TURPE_SUPPLIER_ISSUE_CODES.has(issue.code);
+  return INTERNAL_CONTROL_LIMIT_CODES.has(issue.code);
 }
