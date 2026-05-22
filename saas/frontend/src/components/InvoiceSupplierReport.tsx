@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
-import type { EnergyInvoiceImport } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import type {
+  EnergyInvoiceImport,
+  EnergyInvoiceImportDetail,
+  EnergyInvoiceLine,
+  EnergyInvoiceSite,
+} from "../lib/api";
+import { fetchEnergyInvoiceImport } from "../lib/api";
 import {
   INVOICE_ISSUE_FAMILY_DETAIL,
   INVOICE_ISSUE_FAMILY_LABEL,
@@ -36,9 +42,8 @@ type InvoiceSupplierReportFilters = {
 };
 
 type IssueGroup = {
-  code: string;
   family: InvoiceIssueFamily;
-  message: string;
+  codes: Set<string>;
   invoiceIds: Set<number>;
   scopes: Set<string>;
   count: number;
@@ -48,9 +53,10 @@ type Props = {
   invoiceImports: EnergyInvoiceImport[];
   filters: InvoiceSupplierReportFilters;
   onClose: () => void;
+  token: string | null;
 };
 
-function formatShortDate(value: string | null) {
+function formatShortDate(value: string | null | undefined) {
   if (!value) return "-";
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(value));
 }
@@ -65,6 +71,17 @@ function formatGeneratedAt() {
 
 function invoiceReference(invoiceImport: EnergyInvoiceImport) {
   return invoiceImport.invoice_number ?? invoiceImport.original_filename;
+}
+
+// Extrait le PRM (1re partie avant " / ") d'un scope d'issue.
+// Ex : "24309117128642 / FIC 630000534222 / 2026-03-05 - 2026-04-04" → "24309117128642"
+function extractPrm(scope: string | null | undefined): string | null {
+  if (!scope) return null;
+  const first = scope.split(" / ")[0]?.trim();
+  if (!first) return null;
+  // On garde uniquement si ça ressemble à un PRM (14 chiffres pour ENEDIS)
+  if (/^\d{10,18}$/.test(first)) return first;
+  return null;
 }
 
 function filteredIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
@@ -82,11 +99,6 @@ function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupp
 
 function excludedInternalIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
   return filteredIssues(invoiceImport, filters).filter(isInternalControlLimit);
-}
-
-function issueSummary(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
-  const families = Array.from(new Set(selectedIssues(invoiceImport, filters).map((issue) => invoiceIssueFamily(issue))));
-  return families.map((family) => INVOICE_ISSUE_FAMILY_LABEL[family]).join(", ");
 }
 
 function activeFilters(filters: InvoiceSupplierReportFilters) {
@@ -108,41 +120,186 @@ function activeFilters(filters: InvoiceSupplierReportFilters) {
   return values;
 }
 
-function groupIssues(
+// Agrège les issues PAR FAMILLE (pas par code) pour éviter le bruit.
+// Un seul bloc "Prix contractuels" listant tous les codes (BPU_PRICE_MISMATCH, BPU_TARIFF_POSTE_INCONSISTENCY...)
+function groupIssuesByFamily(
   invoiceImports: EnergyInvoiceImport[],
   filters: InvoiceSupplierReportFilters,
   selectIssues: typeof selectedIssues = selectedIssues,
 ) {
-  const groups = new Map<string, IssueGroup>();
+  const groups = new Map<InvoiceIssueFamily, IssueGroup>();
 
   for (const invoiceImport of invoiceImports) {
     for (const issue of selectIssues(invoiceImport, filters)) {
       const family = invoiceIssueFamily(issue);
-      const key = `${family}:${issue.code}`;
-      const group = groups.get(key) ?? {
-        code: issue.code,
+      const group = groups.get(family) ?? {
         family,
-        message: issue.message,
+        codes: new Set<string>(),
         invoiceIds: new Set<number>(),
         scopes: new Set<string>(),
         count: 0,
       };
       group.count += 1;
+      group.codes.add(issue.code);
       group.invoiceIds.add(invoiceImport.id);
       if (issue.scope) group.scopes.add(issue.scope);
-      groups.set(key, group);
+      groups.set(family, group);
     }
   }
 
   return Array.from(groups.values()).sort(
     (a, b) =>
-      INVOICE_ISSUE_FAMILY_LABEL[a.family].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b.family], "fr") ||
-      b.invoiceIds.size - a.invoiceIds.size ||
-      a.code.localeCompare(b.code, "fr"),
+      INVOICE_ISSUE_FAMILY_LABEL[a.family].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b.family], "fr"),
   );
 }
 
-export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Props) {
+// ── Recalcul BPU ─────────────────────────────────────────────────────────────
+// Pour chaque message BPU_PRICE_MISMATCH, parse prix facturé et prix BPU (€/MWh),
+// puis multiplie par la quantité de la ligne facture correspondante.
+
+type BpuDeltaLine = {
+  invoiceId: number;
+  invoiceRef: string;
+  scope: string | null;
+  prm: string | null;
+  invoicePriceEurMwh: number;
+  bpuPriceEurMwh: number;
+  deltaEurMwh: number;
+  quantityMwh: number | null;
+  deltaTotalEur: number | null;
+  postLabel: string;
+  matchedLineLabel: string | null;
+};
+
+const BPU_PRICE_REGEX =
+  /Prix facture\s+([\d.,]+)\s*EUR\/MWh\s+different du BPU\s+(?:historique\s+)?([\d.,]+)\s*EUR\/MWh(?:[^.]*?pour\s+([^.\s][^.]*?))?[.\s(]/i;
+
+function parseNumber(value: string): number {
+  return Number(value.replace(",", "."));
+}
+
+function quantityToMwh(line: EnergyInvoiceLine): number | null {
+  if (line.quantity == null) return null;
+  const unit = (line.quantity_unit || "").toLowerCase();
+  if (unit.includes("mwh")) return line.quantity;
+  if (unit.includes("kwh")) return line.quantity / 1000;
+  // Si pas d'unité explicite mais prix en €/MWh et amount existe, on peut déduire
+  return null;
+}
+
+function findMatchingInvoiceLine(
+  site: EnergyInvoiceSite,
+  invoicePriceEurMwh: number,
+): EnergyInvoiceLine | null {
+  const lines = site.invoice_lines || [];
+  // Priorité aux lignes énergie (composant normalisé contenant "ENERGIE" ou "MOLECULE")
+  const energyLines = lines.filter((line) => {
+    const comp = (line.normalized_component || "").toUpperCase();
+    return comp.includes("ENERGIE") || comp.includes("MOLECULE") || comp.includes("ABONNEMENT") === false;
+  });
+  // Cherche celle dont unit_price_ht * 1000 ≈ invoicePriceEurMwh (tolérance 0.5)
+  for (const line of energyLines) {
+    if (line.unit_price_ht == null) continue;
+    const linePriceMwh = line.unit_price_ht * 1000;
+    if (Math.abs(linePriceMwh - invoicePriceEurMwh) < 0.5) return line;
+  }
+  // Fallback : 1re ligne énergie
+  return energyLines[0] ?? null;
+}
+
+function siteMatchesScope(site: EnergyInvoiceSite, scope: string | null): boolean {
+  if (!scope) return false;
+  const prm = extractPrm(scope);
+  if (prm && site.prm_id === prm) return true;
+  // Fallback : FIC dans le scope
+  const ficMatch = scope.match(/FIC\s+(\d+)/i);
+  if (ficMatch && site.fic_number === ficMatch[1]) return true;
+  return false;
+}
+
+function computeBpuDeltas(
+  invoiceImport: EnergyInvoiceImport,
+  detail: EnergyInvoiceImportDetail | undefined,
+): BpuDeltaLine[] {
+  const results: BpuDeltaLine[] = [];
+  const sites = detail?.analysis_result?.sites || [];
+  const bpuIssues = invoiceImport.control_issues.filter(
+    (issue) => issue.code === "BPU_PRICE_MISMATCH",
+  );
+  for (const issue of bpuIssues) {
+    const match = issue.message.match(BPU_PRICE_REGEX);
+    if (!match) continue;
+    const invoicePrice = parseNumber(match[1]);
+    const bpuPrice = parseNumber(match[2]);
+    const postLabel = (match[3] || "").trim().replace(/\.$/, "") || "(non précisé)";
+    const deltaEurMwh = invoicePrice - bpuPrice;
+
+    let quantityMwh: number | null = null;
+    let matchedLineLabel: string | null = null;
+    if (detail) {
+      const site = sites.find((s) => siteMatchesScope(s, issue.scope));
+      if (site) {
+        const line = findMatchingInvoiceLine(site, invoicePrice);
+        if (line) {
+          quantityMwh = quantityToMwh(line);
+          matchedLineLabel = line.label || line.normalized_component || null;
+        }
+      }
+    }
+    const deltaTotalEur = quantityMwh != null ? deltaEurMwh * quantityMwh : null;
+    results.push({
+      invoiceId: invoiceImport.id,
+      invoiceRef: invoiceReference(invoiceImport),
+      scope: issue.scope,
+      prm: extractPrm(issue.scope),
+      invoicePriceEurMwh: invoicePrice,
+      bpuPriceEurMwh: bpuPrice,
+      deltaEurMwh,
+      quantityMwh,
+      deltaTotalEur,
+      postLabel,
+      matchedLineLabel,
+    });
+  }
+  return results;
+}
+
+// ── Extraction PRM par facture pour la colonne "Factures concernées" ──────────
+
+function prmListForInvoice(
+  invoiceImport: EnergyInvoiceImport,
+  filters: InvoiceSupplierReportFilters,
+): string[] {
+  const set = new Set<string>();
+  for (const issue of selectedIssues(invoiceImport, filters)) {
+    const prm = extractPrm(issue.scope);
+    if (prm) set.add(prm);
+  }
+  return Array.from(set).sort();
+}
+
+function familiesForInvoice(
+  invoiceImport: EnergyInvoiceImport,
+  filters: InvoiceSupplierReportFilters,
+): InvoiceIssueFamily[] {
+  return Array.from(new Set(selectedIssues(invoiceImport, filters).map((issue) => invoiceIssueFamily(issue))));
+}
+
+function uniqueIssueScopesForFamily(
+  invoiceImports: EnergyInvoiceImport[],
+  family: InvoiceIssueFamily,
+  filters: InvoiceSupplierReportFilters,
+): string[] {
+  const set = new Set<string>();
+  for (const invoiceImport of invoiceImports) {
+    for (const issue of selectedIssues(invoiceImport, filters)) {
+      if (invoiceIssueFamily(issue) === family && issue.scope) set.add(issue.scope);
+    }
+  }
+  return Array.from(set).sort();
+}
+
+export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token }: Props) {
   const suppliers = useMemo(
     () =>
       Array.from(
@@ -154,9 +311,9 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
       ),
     [invoiceImports],
   );
-  const issueGroups = useMemo(() => groupIssues(invoiceImports, filters), [filters, invoiceImports]);
+  const issueGroups = useMemo(() => groupIssuesByFamily(invoiceImports, filters), [filters, invoiceImports]);
   const excludedInternalGroups = useMemo(
-    () => groupIssues(invoiceImports, filters, excludedInternalIssues),
+    () => groupIssuesByFamily(invoiceImports, filters, excludedInternalIssues),
     [filters, invoiceImports],
   );
   const reportInvoiceImports = useMemo(
@@ -166,15 +323,20 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
   const filtersSummary = useMemo(() => activeFilters(filters), [filters]);
   const totalTtc = reportInvoiceImports.reduce((total, invoiceImport) => total + (invoiceImport.total_ttc ?? 0), 0);
   const errorCount = reportInvoiceImports.reduce(
-    (total, invoiceImport) => total + selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "error").length,
+    (total, invoiceImport) =>
+      total +
+      selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "error").length,
     0,
   );
   const warningCount = reportInvoiceImports.reduce(
-    (total, invoiceImport) => total + selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "warning").length,
+    (total, invoiceImport) =>
+      total +
+      selectedIssues(invoiceImport, filters).filter((issue) => issue.severity === "warning").length,
     0,
   );
   const defaultRecipient = suppliers.length === 1 ? suppliers[0] : "Fournisseur d'energie";
   const excludedInternalIssueCount = excludedInternalGroups.reduce((total, group) => total + group.count, 0);
+
   const [senderName, setSenderName] = useState("Collectivite");
   const [recipientName, setRecipientName] = useState(defaultRecipient);
   const [subject, setSubject] = useState("Demande d'explications sur des points de controle de factures energie");
@@ -184,6 +346,67 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
   const [request, setRequest] = useState(
     "Merci de nous confirmer, pour chaque point liste ci-dessous, la regle de facturation appliquee, les donnees contractuelles ou reglementaires qui la justifient et, le cas echeant, la correction ou la piece explicative a prendre en compte.",
   );
+
+  // ── Fetch détails des factures concernées par BPU pour le recalcul ─────────
+  const bpuInvoiceImports = useMemo(
+    () =>
+      reportInvoiceImports.filter((invoiceImport) =>
+        selectedIssues(invoiceImport, filters).some(
+          (issue) => issue.code === "BPU_PRICE_MISMATCH",
+        ),
+      ),
+    [filters, reportInvoiceImports],
+  );
+  const [detailsByImportId, setDetailsByImportId] = useState<Record<number, EnergyInvoiceImportDetail>>({});
+  const [bpuLoading, setBpuLoading] = useState(false);
+  const [bpuError, setBpuError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token || bpuInvoiceImports.length === 0) return;
+    const toFetch = bpuInvoiceImports.filter((imp) => !(imp.id in detailsByImportId));
+    if (toFetch.length === 0) return;
+    let cancelled = false;
+    setBpuLoading(true);
+    setBpuError(null);
+    Promise.all(toFetch.map((imp) => fetchEnergyInvoiceImport(token, imp.id)))
+      .then((details) => {
+        if (cancelled) return;
+        setDetailsByImportId((prev) => {
+          const next = { ...prev };
+          details.forEach((d) => {
+            next[d.id] = d;
+          });
+          return next;
+        });
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setBpuError(`Recalcul BPU partiel : impossible de charger ${toFetch.length} facture(s). ${err.message}`);
+      })
+      .finally(() => {
+        if (!cancelled) setBpuLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bpuInvoiceImports, detailsByImportId, token]);
+
+  // Calcule les écarts BPU consolidés
+  const bpuDeltas = useMemo(() => {
+    const all: BpuDeltaLine[] = [];
+    for (const invoiceImport of bpuInvoiceImports) {
+      const detail = detailsByImportId[invoiceImport.id];
+      all.push(...computeBpuDeltas(invoiceImport, detail));
+    }
+    return all;
+  }, [bpuInvoiceImports, detailsByImportId]);
+
+  const bpuTotalEstimatedEur = useMemo(
+    () => bpuDeltas.reduce((sum, d) => sum + (d.deltaTotalEur ?? 0), 0),
+    [bpuDeltas],
+  );
+  const bpuLinesWithoutQuantity = bpuDeltas.filter((d) => d.quantityMwh == null).length;
+  const hasBpuSection = bpuDeltas.length > 0;
 
   return (
     <div className="invoice-report-backdrop" role="dialog" aria-modal="true" aria-label="Rapport fournisseur factures">
@@ -235,7 +458,9 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                   Ces points restent internes : reference BPU ou ENEDIS absente, controle partiel ou perimetre local
                   incomplet, sans ecart fournisseur demontre.
                 </p>
-                <span>{excludedInternalGroups.map((group) => group.code).join(", ")}</span>
+                <span>
+                  {Array.from(new Set(excludedInternalGroups.flatMap((group) => Array.from(group.codes)))).join(", ")}
+                </span>
               </aside>
             )}
           </div>
@@ -265,7 +490,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                 </div>
                 <div>
                   <strong>{issueGroups.length}</strong>
-                  <span>Types de points</span>
+                  <span>Categories de points</span>
                 </div>
                 <div>
                   <strong>{errorCount}</strong>
@@ -289,46 +514,109 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
 
             <section>
               <h2>Points soumis a clarification</h2>
-              <table className="invoice-report-issues-table">
-                <colgroup>
-                  <col className="invoice-report-point-col" />
-                  <col className="invoice-report-count-col" />
-                  <col className="invoice-report-count-col" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>Point</th>
-                    <th>Factures</th>
-                    <th>Signalements</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {issueGroups.map((issue) => (
-                    <tr key={`${issue.family}:${issue.code}`}>
-                      <td>
-                        <strong>{INVOICE_ISSUE_FAMILY_LABEL[issue.family]}</strong>
-                        <span>{issue.message}</span>
-                        <p className="invoice-report-point-detail">{INVOICE_ISSUE_FAMILY_DETAIL[issue.family]}</p>
-                        {issue.scopes.size > 0 && (
-                          <small>
-                            Perimetre detecte : {Array.from(issue.scopes).slice(0, 4).join(", ")}
-                            {issue.scopes.size > 4 ? "..." : ""}
-                          </small>
+              {issueGroups.length === 0 ? (
+                <p>Aucun ecart fournisseur retenu avec les filtres appliques.</p>
+              ) : (
+                <div className="invoice-report-issue-cards">
+                  {issueGroups.map((group) => {
+                    const scopes = uniqueIssueScopesForFamily(invoiceImports, group.family, filters);
+                    const prmCount = new Set(scopes.map(extractPrm).filter(Boolean) as string[]).size;
+                    return (
+                      <div key={group.family} className="invoice-report-issue-card">
+                        <div className="invoice-report-issue-head">
+                          <strong>{INVOICE_ISSUE_FAMILY_LABEL[group.family]}</strong>
+                          <div className="invoice-report-issue-counts">
+                            <span>
+                              <em>{group.invoiceIds.size}</em> facture{group.invoiceIds.size > 1 ? "s" : ""}
+                            </span>
+                            <span>
+                              <em>{prmCount}</em> compteur{prmCount > 1 ? "s" : ""}
+                            </span>
+                            <span>
+                              <em>{group.count}</em> signalement{group.count > 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="invoice-report-point-detail">{INVOICE_ISSUE_FAMILY_DETAIL[group.family]}</p>
+                        <p className="invoice-report-issue-codes">
+                          <span className="field-label">Codes de controle :</span>{" "}
+                          {Array.from(group.codes).sort().join(", ")}
+                        </p>
+                        {scopes.length > 0 && (
+                          <details className="invoice-report-scopes" open>
+                            <summary>Perimetre detaille ({scopes.length} occurrence{scopes.length > 1 ? "s" : ""})</summary>
+                            <ul className="invoice-report-scopes-list">
+                              {scopes.map((scope) => (
+                                <li key={scope}>{scope}</li>
+                              ))}
+                            </ul>
+                          </details>
                         )}
-                        <small>Code de controle : {issue.code}</small>
-                      </td>
-                      <td>{issue.invoiceIds.size}</td>
-                      <td>{issue.count}</td>
-                    </tr>
-                  ))}
-                  {issueGroups.length === 0 && (
-                    <tr>
-                      <td colSpan={3}>Aucun ecart fournisseur retenu avec les filtres appliques.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
+
+            {hasBpuSection && (
+              <section>
+                <h2>Estimation impact des ecarts BPU</h2>
+                <p className="invoice-report-point-detail">
+                  Calcul indicatif base sur le delta (prix facture &minus; prix BPU contractuel) multiplie
+                  par la quantite energie de la ligne facture correspondante. A consolider avec le fournisseur.
+                </p>
+                {bpuLoading && <p>Chargement des details factures...</p>}
+                {bpuError && <p className="invoice-report-warning">{bpuError}</p>}
+                <table className="invoice-report-bpu-table">
+                  <thead>
+                    <tr>
+                      <th>Facture / PRM</th>
+                      <th>Poste</th>
+                      <th>Prix facture</th>
+                      <th>Prix BPU</th>
+                      <th>Delta</th>
+                      <th>Quantite</th>
+                      <th>Ecart estime HT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bpuDeltas.map((delta, idx) => (
+                      <tr key={`${delta.invoiceId}-${idx}`}>
+                        <td>
+                          <strong>{delta.invoiceRef}</strong>
+                          <span>{delta.prm ?? delta.scope ?? "-"}</span>
+                        </td>
+                        <td>{delta.postLabel}</td>
+                        <td>{delta.invoicePriceEurMwh.toFixed(2)} EUR/MWh</td>
+                        <td>{delta.bpuPriceEurMwh.toFixed(2)} EUR/MWh</td>
+                        <td className={delta.deltaEurMwh > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
+                          {delta.deltaEurMwh > 0 ? "+" : ""}
+                          {delta.deltaEurMwh.toFixed(2)} EUR/MWh
+                        </td>
+                        <td>{delta.quantityMwh != null ? `${delta.quantityMwh.toFixed(3)} MWh` : "non rattachee"}</td>
+                        <td className={delta.deltaTotalEur != null && delta.deltaTotalEur > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
+                          {delta.deltaTotalEur != null ? formatCurrency(delta.deltaTotalEur) : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={6}>
+                        <strong>Total ecart estime HT</strong>
+                        {bpuLinesWithoutQuantity > 0 && (
+                          <span> ({bpuLinesWithoutQuantity} ligne{bpuLinesWithoutQuantity > 1 ? "s" : ""} sans quantite rattachee)</span>
+                        )}
+                      </td>
+                      <td className={bpuTotalEstimatedEur > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
+                        <strong>{formatCurrency(bpuTotalEstimatedEur)}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </section>
+            )}
 
             <section>
               <h2>Factures concernees</h2>
@@ -337,26 +625,45 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
                   <tr>
                     <th>Facture</th>
                     <th>Periode</th>
-                    <th>Titulaire</th>
-                    <th>Regroupement</th>
-                    <th>Points a clarifier</th>
+                    <th>Titulaire / Regroupement</th>
+                    <th>PRM impactes</th>
+                    <th>Categories</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reportInvoiceImports.map((invoiceImport) => (
-                    <tr key={invoiceImport.id}>
-                      <td>
-                        <strong>{invoiceReference(invoiceImport)}</strong>
-                        <span>{formatShortDate(invoiceImport.invoice_date)}</span>
-                      </td>
-                      <td>
-                        {formatShortDate(invoiceImport.period_start)} au {formatShortDate(invoiceImport.period_end)}
-                      </td>
-                      <td>{invoiceImport.contract_holder ?? "-"}</td>
-                      <td>{invoiceImport.regroupement ?? "-"}</td>
-                      <td>{issueSummary(invoiceImport, filters)}</td>
-                    </tr>
-                  ))}
+                  {reportInvoiceImports.map((invoiceImport) => {
+                    const prms = prmListForInvoice(invoiceImport, filters);
+                    const families = familiesForInvoice(invoiceImport, filters);
+                    return (
+                      <tr key={invoiceImport.id}>
+                        <td>
+                          <strong>{invoiceReference(invoiceImport)}</strong>
+                          <span>{formatShortDate(invoiceImport.invoice_date)}</span>
+                        </td>
+                        <td>
+                          {formatShortDate(invoiceImport.period_start)} au {formatShortDate(invoiceImport.period_end)}
+                        </td>
+                        <td>
+                          <strong>{invoiceImport.contract_holder ?? "-"}</strong>
+                          <span>{invoiceImport.regroupement ?? "-"}</span>
+                        </td>
+                        <td>
+                          {prms.length === 0 ? (
+                            <span>-</span>
+                          ) : (
+                            <ul className="invoice-report-prm-list">
+                              {prms.map((prm) => (
+                                <li key={prm}>{prm}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                        <td>
+                          {families.map((family) => INVOICE_ISSUE_FAMILY_LABEL[family]).join(", ")}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </section>
@@ -364,6 +671,13 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose }: Prop
             <footer>
               Ce rapport rassemble des points de controle a expliquer. Il ne vaut pas, a lui seul, constat definitif
               d'erreur de facturation sans retour fournisseur et verification des pieces contractuelles associees.
+              {hasBpuSection && (
+                <>
+                  {" "}
+                  Les ecarts BPU chiffres sont indicatifs et doivent etre rapproches des pieces contractuelles
+                  applicables a la periode (lots BPU, options tarifaires, dates d'effet).
+                </>
+              )}
             </footer>
           </article>
         </div>

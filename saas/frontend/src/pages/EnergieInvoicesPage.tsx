@@ -832,6 +832,7 @@ export function EnergieInvoicesPage() {
             issueCodes: issueCodeFilters,
           }}
           onClose={() => setIsSupplierReportOpen(false)}
+          token={token}
         />
       )}
     </div>

@@ -2682,6 +2682,149 @@ button:disabled {
   font-size: 0.77rem;
 }
 
+.invoice-report-issue-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.invoice-report-issue-card {
+  border: 1px solid #cbd5e1;
+  border-left: 4px solid #2563eb;
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.invoice-report-issue-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.invoice-report-issue-head strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.invoice-report-issue-counts {
+  display: flex;
+  gap: 14px;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.invoice-report-issue-counts em {
+  font-style: normal;
+  font-weight: 700;
+  color: #0f172a;
+  margin-right: 4px;
+}
+
+.invoice-report-issue-codes {
+  margin: 8px 0 0 0 !important;
+  font-size: 0.82rem;
+  color: #475569 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.invoice-report-scopes {
+  margin-top: 10px;
+  font-size: 0.82rem;
+}
+
+.invoice-report-scopes summary {
+  cursor: pointer;
+  color: #1d4ed8;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.invoice-report-scopes-list {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 4px 14px;
+}
+
+.invoice-report-scopes-list li {
+  padding: 4px 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  color: #1e293b;
+}
+
+.invoice-report-prm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invoice-report-prm-list li {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  color: #0f172a;
+}
+
+.invoice-report-bpu-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+
+.invoice-report-bpu-table th,
+.invoice-report-bpu-table td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.85rem;
+}
+
+.invoice-report-bpu-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.invoice-report-bpu-table td span {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.invoice-report-bpu-table tfoot td {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.invoice-report-delta-over {
+  color: #b91c1c;
+}
+
+.invoice-report-delta-under {
+  color: #047857;
+}
+
+.invoice-report-warning {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  padding: 6px 10px;
+  color: #92400e;
+  font-size: 0.85rem;
+  border-radius: 4px;
+}
+
 .invoice-turpe-title {
   align-items: flex-start;
   gap: 14px;
