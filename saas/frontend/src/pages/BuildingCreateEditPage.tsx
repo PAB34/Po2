@@ -205,6 +205,9 @@ export function BuildingCreateEditPage() {
   const [selectedImportRowNumber, setSelectedImportRowNumber] = useState<number | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [importPreviewPending, setImportPreviewPending] = useState(false);
+  const [importRowsPending, setImportRowsPending] = useState(false);
+  const [importBulkValidationPending, setImportBulkValidationPending] = useState(false);
   const [validatingRowNumber, setValidatingRowNumber] = useState<number | null>(null);
   const [portfolioValidationPending, setPortfolioValidationPending] = useState(false);
 
@@ -344,6 +347,7 @@ export function BuildingCreateEditPage() {
       setImportError("Choisis un fichier patrimoine avant de lancer l’analyse.");
       return;
     }
+    setImportPreviewPending(true);
     try {
       const preview = await previewBuildingImportFile(token, importFile);
       setImportPreview(preview);
@@ -356,6 +360,8 @@ export function BuildingCreateEditPage() {
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Analyse du fichier impossible.");
       setImportSuccess(null);
+    } finally {
+      setImportPreviewPending(false);
     }
   }
 
@@ -372,16 +378,56 @@ export function BuildingCreateEditPage() {
       setImportError("Sélectionne les colonnes 'Nom bâtiment' et 'Adresse'.");
       return;
     }
+    setImportRowsPending(true);
     try {
-      const preview = await previewBuildingImportFile(token, importFile, importNameColumn, importAddressColumn);
+      const preview = await previewBuildingImportFile(token, importFile, importNameColumn, importAddressColumn, false);
       setImportPreview(preview);
       setImportRows(normalizeImportedRows(preview.rows));
       setSelectedImportRowNumber(preview.rows.length > 0 ? preview.rows[0].row_number : null);
       setImportError(null);
-      setImportSuccess(`${preview.rows.length} ligne(s) chargée(s). Les adresses incompatibles sont à corriger.`);
+      setImportSuccess(`${preview.rows.length} ligne(s) chargée(s). Lance maintenant le contrôle IGN des adresses.`);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Chargement des lignes importées impossible.");
       setImportSuccess(null);
+    } finally {
+      setImportRowsPending(false);
+    }
+  }
+
+  async function handleValidateLoadedImportRows() {
+    if (!token) {
+      setImportError("Authentification requise.");
+      return;
+    }
+    if (!importFile) {
+      setImportError("Choisis un fichier patrimoine avant de contrôler les adresses.");
+      return;
+    }
+    if (!importNameColumn || !importAddressColumn) {
+      setImportError("Sélectionne les colonnes 'Nom bâtiment' et 'Adresse'.");
+      return;
+    }
+    setImportBulkValidationPending(true);
+    setImportError(null);
+    setImportSuccess("Contrôle IGN en cours. Le traitement peut prendre plusieurs minutes sur un patrimoine volumineux.");
+    try {
+      const preview = await previewBuildingImportFile(token, importFile, importNameColumn, importAddressColumn, true);
+      setImportPreview(preview);
+      setImportRows(normalizeImportedRows(preview.rows));
+      setSelectedImportRowNumber((current) =>
+        preview.rows.some((row: BuildingImportRow) => row.row_number === current)
+          ? current
+          : preview.rows.length > 0
+            ? preview.rows[0].row_number
+            : null,
+      );
+      setImportError(null);
+      setImportSuccess(`Contrôle IGN terminé pour ${preview.rows.length} ligne(s). Corrige les lignes rouges avant validation.`);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Contrôle des adresses importées impossible.");
+      setImportSuccess(null);
+    } finally {
+      setImportBulkValidationPending(false);
     }
   }
 
@@ -395,6 +441,9 @@ export function BuildingCreateEditPage() {
     setImportAddressColumn("");
     setImportError(null);
     setImportSuccess(null);
+    setImportPreviewPending(false);
+    setImportRowsPending(false);
+    setImportBulkValidationPending(false);
   }
 
   function updateImportRow(rowNumber: number, updater: (row: ImportedRowState) => ImportedRowState) {
@@ -885,8 +934,8 @@ export function BuildingCreateEditPage() {
                     <input type="file" accept=".csv,.xls,.xlsx,.xlsm" onChange={handleImportFileChange} />
                   </label>
                   <div className="form-actions">
-                    <button type="button" className="secondary-button" onClick={() => void handlePreviewImportFile()} disabled={!importFile}>
-                      Analyser le fichier
+                    <button type="button" className="secondary-button" onClick={() => void handlePreviewImportFile()} disabled={!importFile || importPreviewPending}>
+                      {importPreviewPending ? "Analyse..." : "Analyser le fichier"}
                     </button>
                   </div>
                   {importPreview ? (
@@ -956,8 +1005,8 @@ export function BuildingCreateEditPage() {
                         </select>
                       </label>
                       <div className="form-actions">
-                        <button type="button" onClick={() => void handleLoadImportRows()}>
-                          Charger les lignes importées
+                        <button type="button" onClick={() => void handleLoadImportRows()} disabled={importRowsPending || importBulkValidationPending}>
+                          {importRowsPending ? "Chargement..." : "Charger les lignes importées"}
                         </button>
                       </div>
                     </>
@@ -970,7 +1019,7 @@ export function BuildingCreateEditPage() {
                   <div className="section-block buildings-addresses-section">
                     <div className="section-heading">
                       <h3>Lignes patrimoine à traiter</h3>
-                      <p>Les lignes en rouge doivent être corrigées manuellement avant l’analyse IGN.</p>
+                      <p>Charge d'abord les lignes, puis lance le contrôle IGN global ou vérifie une adresse à la fois.</p>
                     </div>
                     <div className="detail-grid">
                       <div className="detail-card">
@@ -990,6 +1039,15 @@ export function BuildingCreateEditPage() {
                       <span>Recherche dans les lignes importées</span>
                       <input type="text" value={importSearch} onChange={(event: ChangeEvent<HTMLInputElement>) => setImportSearch(event.target.value)} />
                     </label>
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        onClick={() => void handleValidateLoadedImportRows()}
+                        disabled={importBulkValidationPending || importRowsPending}
+                      >
+                        {importBulkValidationPending ? "Contrôle IGN en cours..." : "Contrôler toutes les adresses IGN"}
+                      </button>
+                    </div>
                     {selectedImportRow ? (
                       <div className="resource-card import-edit-card">
                         <div className="resource-card-header">

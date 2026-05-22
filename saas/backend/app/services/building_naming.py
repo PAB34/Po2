@@ -867,6 +867,7 @@ def preview_building_import_file(
     raw_bytes: bytes,
     name_column: str | None = None,
     address_column: str | None = None,
+    validate_addresses: bool = True,
     city_name: str | None = None,
 ) -> dict[str, Any]:
     dataframe = _read_uploaded_tabular_file(filename, raw_bytes)
@@ -907,38 +908,42 @@ def preview_building_import_file(
             lat = None
             lon = None
             if address_display:
-                cached_validation = validation_cache.get(address_display)
-                if cached_validation is None:
-                    try:
-                        lookup = lookup_free_address_candidates(address_display, city_name=city_name)
-                        geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
-                        display_name = str(geocoder.get("display_name") or address_display)
-                        city_appended = bool(geocoder.get("city_appended"))
-                        feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
-                        feature_count = len(feature_collection.get("features") or [])
-                        city_note = f" (ville ‘{city_name}’ ajoutée automatiquement)" if city_appended else ""
-                        cached_validation = {
-                            "validation_status": "valid" if feature_count > 0 else "invalid",
-                            "validation_message": (
-                                f"Adresse géolocalisée : {display_name}{city_note}. {feature_count} bâtiment(s) IGN détecté(s)."
-                                if feature_count > 0
-                                else f"Adresse géolocalisée : {display_name}{city_note}. Aucun bâtiment IGN n’a été détecté à proximité."
-                            ),
-                            "lat": lookup.get("lat"),
-                            "lon": lookup.get("lon"),
-                        }
-                    except Exception as error:
-                        cached_validation = {
-                            "validation_status": "invalid",
-                            "validation_message": str(error),
-                            "lat": None,
-                            "lon": None,
-                        }
-                    validation_cache[address_display] = cached_validation
-                validation_status = str(cached_validation["validation_status"])
-                validation_message = str(cached_validation["validation_message"])
-                lat = _safe_float(cached_validation.get("lat"))
-                lon = _safe_float(cached_validation.get("lon"))
+                if not validate_addresses:
+                    validation_status = "pending"
+                    validation_message = "Adresse chargée. Lance le contrôle IGN pour la valider."
+                else:
+                    cached_validation = validation_cache.get(address_display)
+                    if cached_validation is None:
+                        try:
+                            lookup = lookup_free_address_candidates(address_display, city_name=city_name)
+                            geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
+                            display_name = str(geocoder.get("display_name") or address_display)
+                            city_appended = bool(geocoder.get("city_appended"))
+                            feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
+                            feature_count = len(feature_collection.get("features") or [])
+                            city_note = f" (ville ‘{city_name}’ ajoutée automatiquement)" if city_appended else ""
+                            cached_validation = {
+                                "validation_status": "valid" if feature_count > 0 else "invalid",
+                                "validation_message": (
+                                    f"Adresse géolocalisée : {display_name}{city_note}. {feature_count} bâtiment(s) IGN détecté(s)."
+                                    if feature_count > 0
+                                    else f"Adresse géolocalisée : {display_name}{city_note}. Aucun bâtiment IGN n’a été détecté à proximité."
+                                ),
+                                "lat": lookup.get("lat"),
+                                "lon": lookup.get("lon"),
+                            }
+                        except Exception as error:
+                            cached_validation = {
+                                "validation_status": "invalid",
+                                "validation_message": str(error),
+                                "lat": None,
+                                "lon": None,
+                            }
+                        validation_cache[address_display] = cached_validation
+                    validation_status = str(cached_validation["validation_status"])
+                    validation_message = str(cached_validation["validation_message"])
+                    lat = _safe_float(cached_validation.get("lat"))
+                    lon = _safe_float(cached_validation.get("lon"))
             rows.append(
                 {
                     "row_number": row_index,

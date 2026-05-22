@@ -114,6 +114,7 @@ async def post_building_import_preview(
     file: UploadFile = File(...),
     name_column: str | None = Form(default=None),
     address_column: str | None = Form(default=None),
+    validate_addresses: bool = Form(default=True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> BuildingImportPreview:
@@ -127,6 +128,7 @@ async def post_building_import_preview(
                 raw_bytes=raw_bytes,
                 name_column=name_column,
                 address_column=address_column,
+                validate_addresses=validate_addresses,
                 city_name=city_name,
             )
         )

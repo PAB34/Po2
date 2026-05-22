@@ -531,6 +531,7 @@ export async function previewBuildingImportFile(
   file: File,
   nameColumn?: string,
   addressColumn?: string,
+  validateAddresses?: boolean,
 ): Promise<BuildingImportPreview> {
   const formData = new FormData();
   formData.append("file", file);
@@ -539,6 +540,9 @@ export async function previewBuildingImportFile(
   }
   if (addressColumn) {
     formData.append("address_column", addressColumn);
+  }
+  if (validateAddresses !== undefined) {
+    formData.append("validate_addresses", String(validateAddresses));
   }
   const response = await fetch(`${apiBaseUrl}/buildings/import/preview`, {
     method: "POST",
