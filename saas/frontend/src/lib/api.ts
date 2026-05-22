@@ -2357,3 +2357,181 @@ export async function deleteCvcItem(token: string, itemId: number): Promise<void
   });
   return parseResponse<void>(response);
 }
+
+// ── CPE DALKIA ───────────────────────────────────────────────────────────────
+
+export type CpeSite = {
+  id: number;
+  city_id: number | null;
+  code_site: string;
+  nom_site: string;
+  categorie: string;
+  nb_mwh_pci: number;
+  ecs_ref_m3_an: number;
+  q_ecs_mwh_pci_per_m3: number | null;
+  dju_reference: number;
+  cible_elec_mwh: number | null;
+  actif: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CpeGazReleve = {
+  id: number;
+  cpe_site_id: number;
+  annee: number;
+  mois: number;
+  qt_mwh_pci: number | null;
+  volume_ecs_m3: number | null;
+  etat_chauffe: boolean | null;
+  source: string;
+  date_import: string;
+  notes: string | null;
+};
+
+export type CpePrixGaz = {
+  id: number;
+  annee: number;
+  pu_eur_mwh_pci: number;
+  source: string;
+  notes: string | null;
+  updated_at: string;
+};
+
+export type CpeResultatAnnuel = {
+  id: number;
+  cpe_site_id: number;
+  annee: number;
+  dju_reels: number | null;
+  dju_reference: number;
+  nb: number;
+  n_prime_b: number | null;
+  qt_total: number | null;
+  m_ecs_total: number | null;
+  nc: number | null;
+  pu_mwh: number | null;
+  ecart: number | null;
+  type_resultat: "interessement" | "penalite" | "equilibre" | "insuffisant" | null;
+  montant_ht: number | null;
+  p2_4_taux: number;
+  ecart_pct: number | null;
+  alerte_revision_nb: boolean;
+  statut: "partiel" | "calcule" | "valide" | "conteste";
+  nb_mois_renseignes: number;
+  computed_at: string;
+};
+
+export type CpeSiteBilanItem = {
+  site: CpeSite;
+  resultat: CpeResultatAnnuel | null;
+  nb_mois_releves: number;
+  qt_cumul: number | null;
+  nc_cumul: number | null;
+  n_prime_b: number | null;
+  ecart: number | null;
+  type_resultat: string | null;
+  montant_ht: number | null;
+  statut: string;
+};
+
+export type CpeBilanAnnuel = {
+  annee: number;
+  dju_reels: number | null;
+  dju_reference: number;
+  pu_mwh: number | null;
+  nb_sites_actifs: number;
+  nb_sites_complets: number;
+  total_interessement_ht: number;
+  total_penalite_ht: number;
+  solde_ht: number;
+  sites: CpeSiteBilanItem[];
+};
+
+export type CpeDjuAnnuel = {
+  annee: number;
+  dju_total: number;
+  nb_jours: number;
+  source: string;
+};
+
+export type CpeImportResult = {
+  nb_lignes: number;
+  nb_inseres: number;
+  nb_mis_a_jour: number;
+  nb_erreurs: number;
+  erreurs: string[];
+  sites_inconnus: string[];
+};
+
+export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/sites`, { headers: buildHeaders(token) });
+  return parseResponse<CpeSite[]>(response);
+}
+
+export async function fetchCpeBilan(token: string, annee: number): Promise<CpeBilanAnnuel> {
+  const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}`, { headers: buildHeaders(token) });
+  return parseResponse<CpeBilanAnnuel>(response);
+}
+
+export async function calculerCpeBilan(token: string, annee: number): Promise<CpeResultatAnnuel[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}/calculer`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeResultatAnnuel[]>(response);
+}
+
+export async function fetchCpeDju(token: string, annee: number): Promise<CpeDjuAnnuel> {
+  const response = await fetch(`${apiBaseUrl}/cpe/dju/${annee}`, { headers: buildHeaders(token) });
+  return parseResponse<CpeDjuAnnuel>(response);
+}
+
+export async function fetchCpePrixGaz(token: string, annee: number): Promise<CpePrixGaz> {
+  const response = await fetch(`${apiBaseUrl}/cpe/prix-gaz/${annee}`, { headers: buildHeaders(token) });
+  return parseResponse<CpePrixGaz>(response);
+}
+
+export async function upsertCpePrixGaz(
+  token: string,
+  payload: { annee: number; pu_eur_mwh_pci: number; notes?: string },
+): Promise<CpePrixGaz> {
+  const response = await fetch(`${apiBaseUrl}/cpe/prix-gaz`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpePrixGaz>(response);
+}
+
+export async function fetchCpeReleves(token: string, siteId: number, annee?: number): Promise<CpeGazReleve[]> {
+  const url = annee
+    ? `${apiBaseUrl}/cpe/sites/${siteId}/releves?annee=${annee}`
+    : `${apiBaseUrl}/cpe/sites/${siteId}/releves`;
+  const response = await fetch(url, { headers: buildHeaders(token) });
+  return parseResponse<CpeGazReleve[]>(response);
+}
+
+export async function upsertCpeReleve(
+  token: string,
+  siteId: number,
+  payload: { annee: number; mois: number; qt_mwh_pci?: number; volume_ecs_m3?: number },
+): Promise<CpeGazReleve> {
+  const response = await fetch(`${apiBaseUrl}/cpe/sites/${siteId}/releves`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeGazReleve>(response);
+}
+
+export async function importCpeCsv(token: string, file: File): Promise<CpeImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/import/csv`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeImportResult>(response);
+}
