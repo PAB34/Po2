@@ -9,9 +9,6 @@ from app.models.user import User
 from app.schemas.cpe import (
     CpeBilanAnnuel,
     CpeDjuAnnuel,
-    CpeFinanceImportBatchDetail,
-    CpeFinanceImportBatchOut,
-    CpeFinanceLineOut,
     CpeFinancePreview,
     CpeGazReleve,
     CpeGazReleveCreate,
@@ -25,23 +22,10 @@ from app.schemas.cpe import (
     CpeSiteUpdate,
 )
 from app.services import cpe as svc
-from app.services.cpe_finance_imports import (
-    create_finance_batch_from_bytes,
-    finance_batch_detail,
-    get_finance_batch,
-    list_finance_batches,
-    list_finance_lines,
-)
 from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
 
 router = APIRouter(prefix="/cpe", tags=["cpe"])
-
-
-def _require_city(current_user: User) -> int:
-    if current_user.city_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilisateur sans ville rattachee")
-    return current_user.city_id
 
 
 # ── Sites ─────────────────────────────────────────────────────────────────────
@@ -150,68 +134,6 @@ async def preview_finances_export(
         return preview_finance_export(await file.read(), filename=file.filename)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-
-@router.get("/finances/imports", response_model=list[CpeFinanceImportBatchOut])
-def list_finances_imports(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> list[CpeFinanceImportBatchOut]:
-    return list_finance_batches(db, _require_city(current_user))
-
-
-@router.get("/finances/imports/{batch_id}", response_model=CpeFinanceImportBatchDetail)
-def get_finances_import(
-    batch_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> CpeFinanceImportBatchDetail:
-    batch = get_finance_batch(db, _require_city(current_user), batch_id)
-    if batch is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot finances DALKIA introuvable")
-    return finance_batch_detail(batch)
-
-
-@router.get("/finances/imports/{batch_id}/lines", response_model=list[CpeFinanceLineOut])
-def list_finances_import_lines(
-    batch_id: int,
-    site_validation_status: str | None = Query(default=None),
-    market: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> list[CpeFinanceLineOut]:
-    city_id = _require_city(current_user)
-    if get_finance_batch(db, city_id, batch_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lot finances DALKIA introuvable")
-    return list_finance_lines(
-        db,
-        city_id,
-        batch_id,
-        site_validation_status=site_validation_status,
-        market=market,
-        limit=limit,
-    )
-
-
-@router.post("/finances/imports", response_model=CpeFinanceImportBatchDetail, status_code=status.HTTP_201_CREATED)
-async def import_finances_export(
-    file: UploadFile = File(..., description="Export finances CSV DALKIA du contrat CPE"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> CpeFinanceImportBatchDetail:
-    try:
-        batch = create_finance_batch_from_bytes(
-            db,
-            _require_city(current_user),
-            current_user.id,
-            filename=file.filename,
-            content_type=file.content_type,
-            data=await file.read(),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return finance_batch_detail(batch)
 
 
 # ── Prix gaz ──────────────────────────────────────────────────────────────────

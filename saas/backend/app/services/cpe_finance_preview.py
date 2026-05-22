@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 
 from app.schemas.cpe import CpeFinanceContractSummary, CpeFinanceGroupSummary, CpeFinancePreview
 
-CPE_FINANCE_MARKETS = {"P1", "P2", "P3"}
+_CPE_MARKETS = {"P1", "P2", "P3"}
 _CPE_SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
 
 
@@ -101,109 +101,6 @@ class _Contract(_Group):
     reading_rows: int = 0
 
 
-@dataclass(frozen=True)
-class DalkiaFinanceRow:
-    source_row_number: int
-    contract_code: str
-    contract_label: str
-    affair: str
-    market_type: str
-    invoice_due_date: str
-    invoice_type: str
-    period_start: str
-    period_end: str
-    company: str
-    invoice_number: str
-    issued_at: str
-    original_invoice_number: str
-    customer_code: str
-    customer_name: str
-    market: str
-    sold_service: str
-    customer_reference: str
-    billed_item: str
-    vat_rate: Decimal
-    amount_ht: Decimal
-    consumption: Decimal | None
-    consumption_unit: str
-    prestation_detail: str
-    recipient_code: str
-    recipient_reference: str
-    base_price: Decimal | None
-    reading_index_start: Decimal | None
-    reading_index_end: Decimal | None
-    reading_date_start: str
-    reading_date_end: str
-    revised_price: Decimal | None
-    reading_type: str
-    detected_site_code: str | None
-    raw: dict[str, str]
-
-    @property
-    def has_consumption(self) -> bool:
-        return self.consumption is not None
-
-    @property
-    def has_reading(self) -> bool:
-        return self.reading_index_start is not None or self.reading_index_end is not None
-
-
-def _optional_decimal(value: str | None) -> Decimal | None:
-    return _decimal(value) if _clean(value) else None
-
-
-def parse_finance_rows(content: str | bytes) -> list[DalkiaFinanceRow]:
-    """Parse les lignes brutes d'un export finances DALKIA."""
-    text = _decode(content)
-    reader = csv.DictReader(io.StringIO(text), delimiter=_detect_delimiter(text[:4000]))
-    header_map = _required_columns(reader)
-    rows: list[DalkiaFinanceRow] = []
-
-    for source_row_number, raw_row in enumerate(reader, start=2):
-        raw = {_normalize_header(key): _clean(value) for key, value in raw_row.items() if key}
-        prestation_detail = _row_value(raw_row, header_map, "lieu_ou_detail_de_la_prestation")
-        rows.append(
-            DalkiaFinanceRow(
-                source_row_number=source_row_number,
-                contract_code=_row_value(raw_row, header_map, "code_contrat") or "Non renseigne",
-                contract_label=_row_value(raw_row, header_map, "libelle_contrat"),
-                affair=_row_value(raw_row, header_map, "affaire"),
-                market_type=_row_value(raw_row, header_map, "type_de_marche"),
-                invoice_due_date=_row_value(raw_row, header_map, "date_d_echeance_de_la_facture"),
-                invoice_type=_row_value(raw_row, header_map, "type_de_facture") or "Non renseigne",
-                period_start=_row_value(raw_row, header_map, "debut_periode_de_facturation"),
-                period_end=_row_value(raw_row, header_map, "fin_periode_de_facturation"),
-                company=_row_value(raw_row, header_map, "societe"),
-                invoice_number=_row_value(raw_row, header_map, "numero_de_facture"),
-                issued_at=_row_value(raw_row, header_map, "date_d_edition"),
-                original_invoice_number=_row_value(raw_row, header_map, "numero_de_facture_d_origine"),
-                customer_code=_row_value(raw_row, header_map, "code_du_client"),
-                customer_name=_row_value(raw_row, header_map, "nom_du_client"),
-                market=_row_value(raw_row, header_map, "marche") or "Non renseigne",
-                sold_service=_row_value(raw_row, header_map, "service_vendu"),
-                customer_reference=_row_value(raw_row, header_map, "reference_interne_client"),
-                billed_item=_row_value(raw_row, header_map, "poste_facture"),
-                vat_rate=_decimal(_row_value(raw_row, header_map, "taux_de_tva")),
-                amount_ht=_decimal(_row_value(raw_row, header_map, "montant_ht")),
-                consumption=_optional_decimal(_row_value(raw_row, header_map, "consommation")),
-                consumption_unit=_row_value(raw_row, header_map, "unite"),
-                prestation_detail=prestation_detail,
-                recipient_code=_row_value(raw_row, header_map, "destinataire_1"),
-                recipient_reference=_row_value(raw_row, header_map, "ref_destinataire_1"),
-                base_price=_optional_decimal(_row_value(raw_row, header_map, "prix_de_base")),
-                reading_index_start=_optional_decimal(_row_value(raw_row, header_map, "index_debut_de_releve")),
-                reading_index_end=_optional_decimal(_row_value(raw_row, header_map, "index_fin_de_releve")),
-                reading_date_start=_row_value(raw_row, header_map, "date_debut_de_releve"),
-                reading_date_end=_row_value(raw_row, header_map, "date_fin_de_releve"),
-                revised_price=_optional_decimal(_row_value(raw_row, header_map, "prix_ou_forfait_revise")),
-                reading_type=_row_value(raw_row, header_map, "type_de_releve"),
-                detected_site_code=_site_code(prestation_detail),
-                raw=raw,
-            )
-        )
-    return rows
-
-
 def _summary(code: str, group: _Group) -> CpeFinanceGroupSummary:
     return CpeFinanceGroupSummary(
         code=code or "Non renseigne",
@@ -215,6 +112,10 @@ def _summary(code: str, group: _Group) -> CpeFinanceGroupSummary:
 
 def preview_finance_export(content: str | bytes, filename: str | None = None) -> CpeFinancePreview:
     """Summarize an export finances CSV without persisting its invoice lines."""
+    text = _decode(content)
+    reader = csv.DictReader(io.StringIO(text), delimiter=_detect_delimiter(text[:4000]))
+    header_map = _required_columns(reader)
+
     total_amount = Decimal("0")
     invoices: set[str] = set()
     contracts: dict[str, _Contract] = defaultdict(_Contract)
@@ -223,26 +124,29 @@ def preview_finance_export(content: str | bytes, filename: str | None = None) ->
     site_codes: set[str] = set()
     total_rows = cpe_market_rows = site_code_rows = consumption_rows = reading_rows = 0
 
-    for row in parse_finance_rows(content):
+    for row in reader:
         total_rows += 1
-        contract_code = row.contract_code
-        contract_label = row.contract_label
-        invoice_number = row.invoice_number
-        market = row.market
-        market_type = row.market_type
-        invoice_type = row.invoice_type
-        period_start = row.period_start
-        period_end = row.period_end
-        amount = row.amount_ht
-        detected_site_code = row.detected_site_code
+        contract_code = _row_value(row, header_map, "code_contrat") or "Non renseigne"
+        contract_label = _row_value(row, header_map, "libelle_contrat")
+        invoice_number = _row_value(row, header_map, "numero_de_facture")
+        market = _row_value(row, header_map, "marche") or "Non renseigne"
+        market_type = _row_value(row, header_map, "type_de_marche")
+        invoice_type = _row_value(row, header_map, "type_de_facture") or "Non renseigne"
+        period_start = _row_value(row, header_map, "debut_periode_de_facturation")
+        period_end = _row_value(row, header_map, "fin_periode_de_facturation")
+        amount = _decimal(_row_value(row, header_map, "montant_ht"))
+        detected_site_code = _site_code(_row_value(row, header_map, "lieu_ou_detail_de_la_prestation"))
 
         total_amount += amount
         if invoice_number:
             invoices.add(invoice_number)
-        if market in CPE_FINANCE_MARKETS:
+        if market in _CPE_MARKETS:
             cpe_market_rows += 1
-        has_consumption = row.has_consumption
-        has_reading = row.has_reading
+        has_consumption = bool(_row_value(row, header_map, "consommation"))
+        has_reading = bool(
+            _row_value(row, header_map, "index_debut_de_releve")
+            or _row_value(row, header_map, "index_fin_de_releve")
+        )
         if has_consumption:
             consumption_rows += 1
         if has_reading:
@@ -293,7 +197,7 @@ def preview_finance_export(content: str | bytes, filename: str | None = None) ->
     contract_summaries.sort(key=lambda item: item.nb_lignes, reverse=True)
 
     alerts = []
-    if any(code not in CPE_FINANCE_MARKETS for code in markets):
+    if any(code not in _CPE_MARKETS for code in markets):
         alerts.append("L'export contient des marches hors P1/P2/P3 : filtrer avant ingestion CPE definitive.")
     if site_code_rows < total_rows:
         alerts.append("Certaines lignes ne portent pas de code site CPE VDS/CCAS dans le detail de prestation.")

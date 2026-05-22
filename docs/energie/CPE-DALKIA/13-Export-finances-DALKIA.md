@@ -119,32 +119,15 @@ Il peut alimenter :
 
 ## Decisions d'integration Po2
 
-### Tranche livree
+### Tranche lancee
 
-Po2 expose maintenant :
-- un **preview d'export finances DALKIA** depuis le cockpit `/cpe` ;
-- un **import persiste** filtre sur le contrat CPE recent `C00190116O` et les marches `P1/P2/P3`.
-
-Le preview permet :
+Po2 expose maintenant un **preview d'export finances DALKIA** depuis le cockpit `/cpe` :
 - analyse du CSV sans persistance ;
 - synthese des marches, contrats, factures et montants ;
 - detection des codes sites CPE dans le detail de prestation ;
 - signalement des lignes hors `P1/P2/P3` et des limites de donnees.
 
 Endpoint : `POST /api/cpe/finances/preview`.
-
-L'import persiste cree :
-- un lot d'import deduplique par hash ;
-- une facture DALKIA reconstituee depuis les lignes d'export ;
-- les lignes DALKIA de detail conservees avec montant, poste, prix exposes, consommation/index si presents ;
-- un statut de rapprochement initial vers le site CPE : `auto_matched`, `site_unknown` ou `site_code_missing`.
-
-Endpoints :
-- `GET/POST /api/cpe/finances/imports` ;
-- `GET /api/cpe/finances/imports/{id}` ;
-- `GET /api/cpe/finances/imports/{id}/lines`.
-
-Dans `/cpe`, le lot selectionne ouvre deja le premier controle P1 : types de factures, acomptes `AC`, decomptes `DE`, postes accessoires P1 et niveau de preparation au rapprochement GRDF via les sites ayant un PCE.
 
 ### Modele cible recommande
 
@@ -161,9 +144,11 @@ Ne pas remplacer les factures PDF par cet export : le CSV sert de table de contr
 
 ## Prochain ordre de developpement
 
-1. Qualifier manuellement les codes inconnus et les lignes sans code site dans la file de reconciliation.
-2. Construire le controle `P1` contradictoire :
-   - rapprocher les volumes avec GRDF ;
-   - verifier les prix gaz et les accessoires ;
-   - qualifier les acomptes et le decompte definitif.
-3. Ajouter ensuite les controles `P2` et `P3` avec calendrier contractuel, indices et preuves.
+1. Persister les lots d'import et lignes `P1/P2/P3` du contrat CPE cible.
+2. Mettre un ecran de rapprochement des lignes DALKIA vers les sites CPE et signaler les codes non rattaches.
+3. Construire le controle `P1` :
+   - acomptes recus ;
+   - decompte definitif ;
+   - prix et accessoires P1 ;
+   - rapprochement GRDF des volumes.
+4. Ajouter ensuite les controles `P2` et `P3` avec calendrier contractuel, indices et preuves.

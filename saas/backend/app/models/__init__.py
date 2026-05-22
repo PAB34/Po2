@@ -26,12 +26,4 @@ from app.models.cvc import CvcInventoryItem
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
 from app.models.site import Site
-from app.models.cpe import (
-    CpeFinanceImportBatch,
-    CpeFinanceInvoice,
-    CpeFinanceLine,
-    CpeGazReleve,
-    CpePrixGaz,
-    CpeResultatAnnuel,
-    CpeSite,
-)
+from app.models.cpe import CpeSite, CpeGazReleve, CpePrixGaz, CpeResultatAnnuel
