@@ -46,6 +46,20 @@ Croise les factures importées avec :
 2. Les consos ENEDIS (pour vérifier les quantités facturées)
 3. Calcule l'écart prix facturé vs prix BPU attendu
 
+### Reference BPU historique
+
+Depuis le 2026-05-22, le controle BPU tente d'abord un raccordement historique
+dans les tables `bpu_*` via `services/invoice_bpu.py` :
+
+- fournisseur normalise `EDF` ou `ENGIE` ;
+- annee de la periode facturee ;
+- segment facture exact quand il est defendable (`C1` a `C4`, ou `C5_EP`) ;
+- poste horosaisonnier et composante (`fourniture`, `capacite`, `cee`, `go`).
+
+Si cette cle historique est absente ou ambigue, le moteur se replie sur les
+grilles courantes `BillingConfig` / `BillingBpuLine`. Cette prudence evite
+d'utiliser un mauvais BPU avant le futur modele de contexte marche explicite.
+
 ### Routes API reelles : `/api/billing/invoices/imports/*`
 - `GET /api/billing/invoices/imports` : liste des imports factures
 - `GET /api/billing/invoices/imports/{invoice_import_id}` : detail
@@ -82,6 +96,12 @@ La V1 reste centrée sur ENGIE électricité. Le lien fin facture → PRM → co
 Point de revue ajouté le 2026-05-21 : le libellé brut `Titulaire du contrat` est conservé et filtrable. Si la valeur doit devenir un axe analytique stable au-delà des libellés ENGIE, prévoir ensuite une normalisation explicite du type de porteur (`ville`, `agglomeration`, `autre`) sans perdre la valeur source.
 
 ## ENGIE — état actuel
+
+Point de revue ajoute le 2026-05-22 : l'historique BPU est maintenant une
+source possible du controle facture, mais seulement en rapprochement exact.
+Avant de lancer l'audit EDF massif, il reste a modeliser le contexte
+contractuel qui decide entre anciens lots EDF, nouveau lot ENGIE batiments et
+lot EDF eclairage public.
 
 ### Parser : `services/invoice_parsers/engie_pdf.py`
 - Extrait : période de facturation, PRM concernés, consommations par poste (HPH/HCH/...), prix unitaires, totaux HT/TTC

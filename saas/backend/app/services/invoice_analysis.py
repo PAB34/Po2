@@ -13,6 +13,7 @@ from app.models.billing import BillingBpuLine, BillingConfig
 from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.energie import _contracts, _daily_consumption_index, _load_curve_index, _max_power_index, _safe_float
+from app.services.invoice_bpu import load_historical_bpu_prices, resolve_historical_bpu_price
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
 from app.services.invoice_normalization import replace_normalized_invoice
 from app.services.turpe import evaluate_invoice_turpe
@@ -120,7 +121,14 @@ def _build_control_report(
     parsed: dict[str, Any],
 ) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
-    bpu_summary = {"checked_lines": 0, "mismatches": 0, "missing_references": 0}
+    bpu_summary = {
+        "checked_lines": 0,
+        "historical_checked_lines": 0,
+        "configured_checked_lines": 0,
+        "mismatches": 0,
+        "missing_references": 0,
+        "historical_documents": [],
+    }
     turpe_summary: dict[str, Any] = {}
     taxes_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0}
     period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "missing_references": 0}
@@ -270,11 +278,13 @@ def _check_bpu(
     city_id: int,
     parsed: dict[str, Any],
     issue,
-    bpu_summary: dict[str, int],
+    bpu_summary: dict[str, Any],
 ) -> None:
+    historical_prices = load_historical_bpu_prices(db, parsed.get("supplier"))
+    historical_documents: set[tuple[int, str, int, int]] = set()
     configs = db.query(BillingConfig).filter(BillingConfig.city_id == city_id).all()
     engie_configs = [cfg for cfg in configs if "ENGIE" in (cfg.supplier or "").upper()]
-    if not engie_configs:
+    if not engie_configs and not historical_prices:
         issue("warning", "BPU_CONFIG_MISSING", "Aucune configuration BPU ENGIE trouvee pour controler les prix.")
         return
 
@@ -290,7 +300,7 @@ def _check_bpu(
         .all()
     )
     bpu_index = {(line.tariff_code, line.poste): line for line in bpu_lines}
-    if not bpu_index:
+    if not bpu_index and not historical_prices:
         issue("warning", "BPU_LINES_MISSING", "Configuration ENGIE presente mais aucune ligne BPU disponible.")
         return
 
@@ -301,6 +311,35 @@ def _check_bpu(
         for line in site.get("invoice_lines", []):
             component_field = _bpu_component_field(line.get("normalized_component"))
             if component_field is None or line.get("unit_price_ht") is None:
+                continue
+
+            invoice_value_mwh = _decimal(line["unit_price_ht"]) * Decimal("1000")
+            historical_price = resolve_historical_bpu_price(historical_prices, site, line)
+            if historical_price is not None:
+                historical_documents.add(
+                    (
+                        historical_price.document_id,
+                        historical_price.pdf_filename,
+                        historical_price.valid_year,
+                        historical_price.lot_number,
+                    )
+                )
+                bpu_summary["checked_lines"] += 1
+                bpu_summary["historical_checked_lines"] += 1
+                delta = abs(invoice_value_mwh - historical_price.price_eur_per_mwh)
+                if delta > PRICE_TOLERANCE_EUR_MWH:
+                    bpu_summary["mismatches"] += 1
+                    issue(
+                        "error",
+                        "BPU_PRICE_MISMATCH",
+                        (
+                            f"Prix facture {invoice_value_mwh:.2f} EUR/MWh different du BPU historique "
+                            f"{historical_price.price_eur_per_mwh:.2f} EUR/MWh "
+                            f"({historical_price.supplier} {historical_price.valid_year} lot {historical_price.lot_number}, "
+                            f"{historical_price.segment_code}/{historical_price.period_code})."
+                        ),
+                        scope,
+                    )
                 continue
 
             poste = line.get("poste") or _first_poste_for_tariff(bpu_index, tariff_code)
@@ -327,7 +366,7 @@ def _check_bpu(
                 continue
 
             bpu_summary["checked_lines"] += 1
-            invoice_value_mwh = _decimal(line["unit_price_ht"]) * Decimal("1000")
+            bpu_summary["configured_checked_lines"] += 1
             expected = _decimal(expected_value)
             if expected is None:
                 continue
@@ -383,6 +422,16 @@ def _check_bpu(
                 _bpu_tariff_poste_inconsistency_message(scope, group["expected"], invoice_postes, matching_bpu_lines),
                 scope,
             )
+
+    bpu_summary["historical_documents"] = [
+        {
+            "document_id": document_id,
+            "filename": filename,
+            "valid_year": valid_year,
+            "lot_number": lot_number,
+        }
+        for document_id, filename, valid_year, lot_number in sorted(historical_documents)
+    ]
 
 
 def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
