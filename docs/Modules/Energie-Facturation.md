@@ -82,6 +82,15 @@ d'utiliser un mauvais BPU avant le futur modele de contexte marche explicite.
 - `/energie/factures/:invoiceImportId` contient déjà l'identité facture, le résumé simple, les familles de contrôle, les PRM/FIC, les lignes extraites et le commentaire de décision.
 - Le chantier d'historique ENGIE doit prolonger cette expérience, pas créer un deuxième module facture.
 
+## Import XLSX ENGIE — voie alternative (depuis 2026-05-22)
+
+L'export ENGIE Entreprise « Mes Factures » (XLSX 1 an glissant, ~150 bordereaux par fichier) est désormais importable via `POST /api/billing/invoices/imports/xlsx`. Le pipeline interne :
+- parser `services/invoice_parsers/engie_xlsx.py` → liste de bordereaux structurés (un par n° FMC/FUM)
+- orchestrateur `services/engie_xlsx_import.py` → dédup par invoice_number + création d'un `EnergyInvoiceImport` par bordereau
+- finalisation factorisée `apply_parsed_to_invoice_import()` → mêmes contrôles BPU/TURPE/taxes/périodes que les PDF
+
+L'avantage : prix unitaires et quantités par poste exacts (pas d'OCR), 1 fichier = 1 an d'historique multi-segments (C2/C3/C4/C5). Voir [[Sessions/2026-05-22 — Import XLSX ENGIE]].
+
 ## Historique ENGIE PDF avant API
 
 Un premier lot réel de **83 PDF ENGIE** est disponible dans `saas/energie/ENGIE/FACTURES`.

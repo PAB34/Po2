@@ -59,34 +59,30 @@ BPU_POSTE_ALIASES: dict[tuple[str, str], list[tuple[str, str]]] = {
 
 def analyze_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> EnergyInvoiceImport:
     invoice_import.error_message = None
-
     try:
         parsed = _parse_invoice_file(invoice_import)
+    except Exception as exc:
+        return _apply_parser_failure(db, invoice_import, exc)
+    return apply_parsed_to_invoice_import(db, invoice_import, parsed)
+
+
+def apply_parsed_to_invoice_import(
+    db: Session,
+    invoice_import: EnergyInvoiceImport,
+    parsed: dict[str, Any],
+) -> EnergyInvoiceImport:
+    """Pipeline d'analyse pour un `parsed` déjà calculé (PDF parsé OU XLSX bordereau).
+
+    Sépare la production du `parsed` (parsing fichier) de son traitement
+    (contrôles + persistance) pour qu'on puisse réutiliser la finalisation
+    depuis l'orchestrateur d'import XLSX qui produit plusieurs `parsed`
+    à partir d'un seul fichier.
+    """
+    invoice_import.error_message = None
+    try:
         control_report = _build_control_report(db, invoice_import, parsed)
     except Exception as exc:
-        if invoice_import.normalized_invoice is not None:
-            db.delete(invoice_import.normalized_invoice)
-            db.flush()
-        invoice_import.analysis_status = "failed"
-        invoice_import.control_status = "invalid"
-        invoice_import.control_errors_count = 1
-        invoice_import.control_warnings_count = 0
-        invoice_import.error_message = str(exc)
-        invoice_import.control_report_json = json.dumps(
-            {
-                "status": "invalid",
-                "issues": [
-                    {
-                        "severity": "error",
-                        "code": "PARSER_FAILED",
-                        "message": f"Analyse impossible : {exc}",
-                        "scope": "document",
-                    }
-                ],
-            },
-            ensure_ascii=False,
-        )
-        return invoice_import
+        return _apply_parser_failure(db, invoice_import, exc)
 
     invoice = parsed.get("invoice", {})
     invoice_import.supplier_guess = parsed.get("supplier") or invoice_import.supplier_guess
@@ -105,6 +101,36 @@ def analyze_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> 
     invoice_import.analysis_result_json = json.dumps(_json_ready(parsed), ensure_ascii=False)
     invoice_import.control_report_json = json.dumps(_json_ready(control_report), ensure_ascii=False)
     replace_normalized_invoice(db, invoice_import, parsed, control_report)
+    return invoice_import
+
+
+def _apply_parser_failure(
+    db: Session,
+    invoice_import: EnergyInvoiceImport,
+    exc: Exception,
+) -> EnergyInvoiceImport:
+    if invoice_import.normalized_invoice is not None:
+        db.delete(invoice_import.normalized_invoice)
+        db.flush()
+    invoice_import.analysis_status = "failed"
+    invoice_import.control_status = "invalid"
+    invoice_import.control_errors_count = 1
+    invoice_import.control_warnings_count = 0
+    invoice_import.error_message = str(exc)
+    invoice_import.control_report_json = json.dumps(
+        {
+            "status": "invalid",
+            "issues": [
+                {
+                    "severity": "error",
+                    "code": "PARSER_FAILED",
+                    "message": f"Analyse impossible : {exc}",
+                    "scope": "document",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
     return invoice_import
 
 

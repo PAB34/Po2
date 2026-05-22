@@ -292,6 +292,50 @@ async def upload_energy_invoice_import(
     }
 
 
+@router.post("/invoices/imports/xlsx")
+async def upload_engie_xlsx_export(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload de l'export XLSX ENGIE 'Mes Factures' : un fichier = N bordereaux.
+
+    Chaque bordereau du XLSX devient un EnergyInvoiceImport indépendant
+    (analysé via le même pipeline que les PDF). Les bordereaux déjà présents
+    en base (même invoice_number) sont skip et tracés dans le résumé.
+    """
+    from app.services.engie_xlsx_import import import_engie_xlsx
+
+    city_id = _require_city(current_user)
+    filename = file.filename or ""
+    if not filename.lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Format attendu : fichier .xlsx ENGIE (export 'Mes Factures').",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Fichier vide.",
+        )
+    try:
+        summary = import_engie_xlsx(
+            db,
+            city_id=city_id,
+            user_id=current_user.id,
+            file_bytes=content,
+            original_filename=filename,
+            content_type=file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return summary
+
+
 @router.delete("/invoices/imports/{invoice_import_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_energy_invoice_import(
     invoice_import_id: int,

@@ -9,6 +9,7 @@ import {
   fetchEnergyInvoiceImports,
   fetchTurpeVersions,
   uploadEnergyInvoiceBatch,
+  uploadEngieXlsxExport,
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
@@ -243,8 +244,11 @@ export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const xlsxInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
+  const [xlsxFile, setXlsxFile] = useState<File | null>(null);
+  const [xlsxSummary, setXlsxSummary] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [controlFilters, setControlFilters] = useState<string[]>([]);
@@ -442,6 +446,23 @@ export function EnergieInvoicesPage() {
     },
   });
 
+  const xlsxUploadMut = useMutation({
+    mutationFn: (file: File) => uploadEngieXlsxExport(token!, file),
+    onSuccess: (summary) => {
+      const parts = [
+        `${summary.created} facture(s) creee(s)`,
+        `${summary.duplicates} doublon(s)`,
+        `${summary.errors} erreur(s)`,
+      ];
+      setXlsxSummary(
+        `Export XLSX traite : ${summary.total_bordereaux} bordereau(x) lu(s) — ${parts.join(", ")}.`,
+      );
+      setXlsxFile(null);
+      if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+    },
+  });
+
   const analyzeMut = useMutation({
     mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
     onSuccess: () => {
@@ -518,6 +539,39 @@ export function EnergieInvoicesPage() {
         )}
         {uploadSummary && <p className="sync-result-ok">{uploadSummary}</p>}
         {uploadMut.isError && <p className="error-text">{(uploadMut.error as Error).message}</p>}
+      </section>
+
+      <section className="invoice-upload-panel">
+        <div>
+          <p className="field-label">Import export ENGIE (XLSX)</p>
+          <p className="invoice-upload-copy">
+            Depose le fichier <strong>MesFactures_*.xlsx</strong> exporte depuis l'espace ENGIE Entreprise.
+            Chaque bordereau du fichier devient une facture importee separement, avec analyse BPU/TURPE/periodes
+            comme pour un PDF. Les bordereaux deja en base sont automatiquement ignores.
+          </p>
+        </div>
+        <div className="invoice-upload-actions">
+          <input
+            ref={xlsxInputRef}
+            type="file"
+            accept=".xlsx,.xlsm"
+            onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
+            className="form-input"
+          />
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={xlsxFile === null || xlsxUploadMut.isPending}
+            onClick={() => xlsxFile && xlsxUploadMut.mutate(xlsxFile)}
+          >
+            {xlsxUploadMut.isPending ? "Analyse en cours..." : "Importer le XLSX"}
+          </button>
+        </div>
+        {xlsxFile && (
+          <p className="invoice-upload-selection">Fichier selectionne : {xlsxFile.name}</p>
+        )}
+        {xlsxSummary && <p className="sync-result-ok">{xlsxSummary}</p>}
+        {xlsxUploadMut.isError && <p className="error-text">{(xlsxUploadMut.error as Error).message}</p>}
       </section>
 
       <details className="invoice-detail-section invoice-batch-disclosure">

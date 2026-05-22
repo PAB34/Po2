@@ -1621,6 +1621,43 @@ export async function uploadEnergyInvoiceImport(token: string, file: File): Prom
   return parseResponse<EnergyInvoiceUploadResponse>(response);
 }
 
+// Réponse de /billing/invoices/imports/xlsx — résumé d'import multi-factures depuis l'export ENGIE
+export type EnergyInvoiceXlsxImportSummary = {
+  source: "engie_xlsx_export";
+  filename: string;
+  total_bordereaux: number;
+  created: number;
+  duplicates: number;
+  errors: number;
+  imports: Array<{
+    id: number;
+    invoice_number: string | null;
+    control_status: string;
+    site_count: number | null;
+    total_ttc: number | null;
+  }>;
+  duplicates_detail: Array<{
+    invoice_number: string;
+    existing_import_id: number;
+    existing_source: string;
+  }>;
+  errors_detail: Array<{ invoice_number: string | null; message: string }>;
+};
+
+export async function uploadEngieXlsxExport(
+  token: string,
+  file: File,
+): Promise<EnergyInvoiceXlsxImportSummary> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/xlsx`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+  return parseResponse<EnergyInvoiceXlsxImportSummary>(response);
+}
+
 export async function uploadEnergyInvoiceBatch(token: string, files: File[]): Promise<EnergyInvoiceBatchDetail> {
   const formData = new FormData();
   for (const file of files) {
