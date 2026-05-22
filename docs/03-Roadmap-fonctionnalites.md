@@ -89,10 +89,11 @@
 ### 2.6 Rattachement compteurs fluides aux bâtiments
 - **Source** : ENEDIS existant, futurs GRDF/SUEZ, factures, saisie manuelle
 - **Objectif** : Faire du bâtiment la fiche centrale de vérité : chaque bâtiment peut être rattaché à ses compteurs électricité, gaz et eau.
-- **Statut** : 🔴 **Todo**
+- **Statut** : 🟡 **En cours** - socle manuel `BuildingMeterLink` pose le 2026-05-22
 - **Notes** :
   - Ne pas modéliser "1 bâtiment = 1 compteur" : prévoir plusieurs compteurs par bâtiment, et un compteur pouvant alimenter plusieurs bâtiments.
   - Modèle cible : `BuildingMeterLink` avec fluide, identifiant compteur (PRM/PCE/eau), dates de validité, usage, clé de répartition, niveau de confiance, statut de validation.
+  - La V1 permet la saisie manuelle par fiche batiment et garde le contexte fournisseur/contrat pour distinguer un PCE Ville TotalEnergies d'un PCE P1 DALKIA.
   - Débloque les analyses conso/factures par bâtiment, OPERAT, alertes hors présence et audit eau/gaz.
 
 ## 3 · FLUIDES / CONSOMMATION
@@ -119,6 +120,7 @@
   - L'API GRDF (GRDF Adict / GRDF DataConso) suit un modèle proche d'ENEDIS — OAuth2 + endpoints REST
   - Réutiliser `services/enedis_common.py` (RateLimiter, TokenManager) pour la partie commune
   - Dossier `saas/energie/GRDF/` existe (vide) — y déposer les documents API GRDF
+  - Frontiere produit : GRDF porte la donnee compteur/PCE et les consommations ; TotalEnergies et DALKIA portent des references contractuelles distinctes. Voir [[Modules/Energie-Gaz]].
 
 ### 3.3 Eau / SUEZ (PDF)
 - **Source** : PDF à uploader sur la plateforme
@@ -153,7 +155,7 @@
 
 ### 4.3 Gaz / TOTAL ENERGIE
 - **Statut** : 🔴 **Todo**
-- **Notes** : créer `services/invoice_parsers/total_energie.py`
+- **Notes** : créer `services/invoice_parsers/total_energie.py`. Le BPU HERAULT ENERGIE lot 7 est maintenant une reference prix importable pour les PCE Ville ; il ne remplace pas la cotation P1 DALKIA.
 
 ### 4.4 Eau / SUEZ
 - **Statut** : 🔴 **Todo**

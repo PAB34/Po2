@@ -130,6 +130,10 @@ PRICING_FORMULA = {
         {"code": "MUDT", "label": "Moyenne Utilisation Double Tarif (HP/HC)"},
         {"code": "C4", "label": "BT > 36 kVA 4 plages"},
         {"code": "C2", "label": "HTA 5 plages (Pointe + 4 plages)"},
+        {"code": "T1", "label": "Gaz T1 - moins de 6 000 kWh/an"},
+        {"code": "T2", "label": "Gaz T2 - 6 000 a 300 000 kWh/an"},
+        {"code": "T3", "label": "Gaz T3 - 300 000 a 5 000 000 kWh/an"},
+        {"code": "T4", "label": "Gaz T4 - plus de 5 000 000 kWh/an"},
         {"code": "EP", "label": "Éclairage Public"},
     ],
     "periods": [

@@ -28,6 +28,8 @@ const COMPONENT_COLORS: Record<string, string> = {
   fourniture: "#2563eb",   // bleu — la plus grosse part, marché de gros
   capacite: "#f59e0b",     // orange — réglementaire RTE
   cee: "#10b981",          // vert — obligation CEE
+  cee_precarite: "#0d9488",
+  cpb: "#dc2626",
   go: "#a855f7",           // violet — option renouvelable
   renouvelable: "#a855f7", // alias
   total: "#0f172a",        // noir slate — somme
@@ -37,6 +39,8 @@ const COMPONENT_LABELS: Record<string, string> = {
   fourniture: "Fourniture",
   capacite: "Capacité",
   cee: "CEE",
+  cee_precarite: "CEE precarite",
+  cpb: "CPB",
   go: "Garanties d'Origine",
   renouvelable: "GO / Renouvelable",
   total: "PU Total",
@@ -103,7 +107,7 @@ function buildSeries(points: BpuTimelinePoint[], includeTotal: boolean): {
   });
 
   // 3. Build series metadata (ordre canonique de la formule)
-  const canonicalOrder = ["fourniture", "capacite", "cee", "go", "renouvelable"];
+  const canonicalOrder = ["fourniture", "capacite", "cee", "cee_precarite", "cpb", "go", "renouvelable"];
   const seriesKeys = canonicalOrder
     .filter((c) => componentsSeen.has(c))
     .map((c) => ({
@@ -127,7 +131,7 @@ function buildSeries(points: BpuTimelinePoint[], includeTotal: boolean): {
 // Fourniture et total ont des ordres de grandeur ~10-30× plus élevés que capacité/CEE/GO.
 // On les sépare sur deux axes Y indépendants quand les deux groupes sont présents.
 const LARGE_SERIES = new Set(["fourniture", "total"]);
-const SMALL_SERIES = new Set(["capacite", "cee", "go", "renouvelable"]);
+const SMALL_SERIES = new Set(["capacite", "cee", "cee_precarite", "cpb", "go", "renouvelable"]);
 
 export default function BpuTimelineChart({ points, formula, includeTotal = true }: Props) {
   const { data, seriesKeys } = useMemo(

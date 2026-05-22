@@ -1,6 +1,6 @@
 # Module — Énergie / BPU (Bordereaux de Prix Unitaires)
 
-> Suivi temporel des prix d'achat de l'électricité via marchés subséquents Hérault Énergies (2021 → 2026).
+> Suivi temporel des prix d'achat via marchés Hérault Énergies : électricité historique et référence gaz TotalEnergies lot 7.
 
 ## Statut
 
@@ -23,6 +23,8 @@ Par tranche tarifaire TURPE × poste horosaisonnier.
 | `fourniture` | Fourniture | Prix de l'énergie pure facturée par EDF/ENGIE. Volatile, suit le marché de gros. |
 | `capacite` | Capacité | Mécanisme de capacité — droit à soutirer en pointe. Fixé par RTE annuellement. |
 | `cee` | CEE | Certificats d'Économies d'Énergie — obligation réglementaire du fournisseur. |
+| `cee_precarite` | CEE précarité | Composante gaz distincte quand le BPU la sépare du CEE classique. |
+| `cpb` | CPB | Composante gaz exposée par le BPU lot 7. |
 | `go` | Garanties d'Origine | Option Renouvelable — surcoût pour énergie verte certifiée. |
 
 ### Segments TURPE
@@ -36,6 +38,7 @@ Par tranche tarifaire TURPE × poste horosaisonnier.
 | C4 | BT > 36 kVA 4 plages |
 | C2 | HTA 5 plages (Pointe + 4 plages) |
 | EP | Éclairage Public |
+| T1/T2/T3/T4 | Profils gaz lot 7 selon le niveau annuel de consommation |
 
 ### Postes horosaisonniers
 BASE, POINTE, HPH (heures pleines hiver), HCH, HPE (été), HCE, HP, HC
@@ -67,6 +70,18 @@ bpu_documents (1) ─┬── (N) bpu_segments       (tension/site/usage)
 ## Pipeline d'ingestion
 
 `saas/backend/app/services/bpu.py` (~700 lignes)
+
+### Référence gaz lot 7
+
+Le fichier `saas/energie/HERAULT ENERGIE/BPU_2026_Lots_1_2_et_7.xlsx` contient la feuille `Lot 7 - Gaz`.
+
+- import ciblé : `python -m app.scripts.import_bpu_gas_lot7 --xlsx "<chemin du xlsx>"` ;
+- fournisseur stocké : `TOTALENERGIES`, lot `7`, année `2026` ;
+- segments : profils `T1`, `T2`, `T3`, `T4` ;
+- composantes : fourniture ferme, CEE classique, CEE précarité, CPB, GO ;
+- observation source conservée : les CEE de janvier-février 2026 sont provisoires puis révisables/régularisables.
+
+Cette référence sert au futur audit factures gaz TotalEnergies des PCE Ville. Elle ne doit pas être confondue avec la cotation gaz OS3 du P1 DALKIA documentée dans `docs/energie/CPE-DALKIA/12-OS3-Prix-gaz.md`.
 
 ```
 1. parse_filename_metadata(filename)

@@ -353,6 +353,42 @@ export type UpdateLocalPayload = {
   commentaire?: string;
 };
 
+export type BuildingMeterLink = {
+  id: number;
+  building_id: number;
+  fluid: string;
+  meter_identifier: string;
+  meter_label: string | null;
+  usage_label: string | null;
+  share_ratio: number;
+  valid_from: string | null;
+  valid_to: string | null;
+  confidence: string;
+  validation_status: string;
+  source: string;
+  contract_context: string | null;
+  supplier_name: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateBuildingMeterLinkPayload = {
+  fluid: string;
+  meter_identifier: string;
+  meter_label?: string;
+  usage_label?: string;
+  share_ratio?: number;
+  valid_from?: string;
+  valid_to?: string;
+  confidence?: string;
+  validation_status?: string;
+  source?: string;
+  contract_context?: string;
+  supplier_name?: string;
+  notes?: string;
+};
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message = "Une erreur est survenue.";
@@ -587,6 +623,14 @@ export async function fetchBuildingLocals(token: string, buildingId: number): Pr
   return parseResponse<Local[]>(response);
 }
 
+export async function fetchBuildingMeterLinks(token: string, buildingId: number): Promise<BuildingMeterLink[]> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/meters`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<BuildingMeterLink[]>(response);
+}
+
 export async function createBuildingRequest(token: string, payload: CreateBuildingPayload): Promise<Building> {
   const response = await fetch(`${apiBaseUrl}/buildings`, {
     method: "POST",
@@ -627,6 +671,20 @@ export async function createLocalRequest(token: string, buildingId: number, payl
   return parseResponse<Local>(response);
 }
 
+export async function createBuildingMeterLinkRequest(
+  token: string,
+  buildingId: number,
+  payload: CreateBuildingMeterLinkPayload,
+): Promise<BuildingMeterLink> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/meters`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<BuildingMeterLink>(response);
+}
+
 export async function updateLocalRequest(token: string, buildingId: number, localId: number, payload: UpdateLocalPayload): Promise<Local> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/locals/${localId}`, {
     method: "PUT",
@@ -648,6 +706,15 @@ export async function deleteAllBuildingsRequest(token: string): Promise<{ delete
 
 export async function deleteLocalRequest(token: string, buildingId: number, localId: number): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/locals/${localId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<void>(response);
+}
+
+export async function deleteBuildingMeterLinkRequest(token: string, buildingId: number, meterLinkId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/meters/${meterLinkId}`, {
     method: "DELETE",
     headers: buildHeaders(token),
   });

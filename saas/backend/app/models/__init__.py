@@ -1,5 +1,6 @@
 from app.models.user import User
 from app.models.building import Building
+from app.models.building_meter import BuildingMeterLink
 from app.models.billing import BillingBpuLine, BillingConfig, BillingHphcSlot, BillingPriceEntry
 from app.models.bpu import (
     BpuDocument,

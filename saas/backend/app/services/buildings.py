@@ -4,11 +4,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
+from app.models.building_meter import BuildingMeterLink
 from app.models.city import City
 from app.models.local import Local
 from app.models.site import Site
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, SiteCreate, SiteUpdate
+from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingMeterLinkCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, SiteCreate, SiteUpdate
 from app.services.building_naming import _dedupe_candidate_dicts, build_building_payload
 from app.services.cities import get_city_by_id
 
@@ -429,4 +430,83 @@ def delete_all_buildings(db: Session, current_user: User) -> int:
 
 def delete_local(db: Session, local: Local) -> None:
     db.delete(local)
+    db.commit()
+
+
+def list_building_meter_links(db: Session, building: Building) -> list[BuildingMeterLink]:
+    statement = (
+        select(BuildingMeterLink)
+        .where(BuildingMeterLink.building_id == building.id)
+        .order_by(BuildingMeterLink.fluid.asc(), BuildingMeterLink.meter_identifier.asc())
+    )
+    return list(db.scalars(statement))
+
+
+def get_building_meter_link_or_404(db: Session, building: Building, meter_link_id: int) -> BuildingMeterLink:
+    statement = select(BuildingMeterLink).where(
+        BuildingMeterLink.id == meter_link_id,
+        BuildingMeterLink.building_id == building.id,
+    )
+    meter_link = db.scalar(statement)
+    if meter_link is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rattachement compteur introuvable.")
+    return meter_link
+
+
+def _clean_meter_link_text(value: str | None) -> str | None:
+    return value.strip() if value and value.strip() else None
+
+
+def create_building_meter_link(
+    db: Session,
+    building: Building,
+    payload: BuildingMeterLinkCreate,
+) -> BuildingMeterLink:
+    valid_from = payload.valid_from
+    valid_to = payload.valid_to
+    if valid_from and valid_to and valid_to < valid_from:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fin de validite du rattachement doit suivre son debut.",
+        )
+
+    fluid = payload.fluid.strip().upper()
+    meter_identifier = payload.meter_identifier.strip()
+    duplicate = db.scalar(
+        select(BuildingMeterLink).where(
+            BuildingMeterLink.building_id == building.id,
+            BuildingMeterLink.fluid == fluid,
+            BuildingMeterLink.meter_identifier == meter_identifier,
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce compteur est deja rattache a ce batiment pour ce fluide.",
+        )
+
+    meter_link = BuildingMeterLink(
+        building_id=building.id,
+        fluid=fluid,
+        meter_identifier=meter_identifier,
+        meter_label=_clean_meter_link_text(payload.meter_label),
+        usage_label=_clean_meter_link_text(payload.usage_label),
+        share_ratio=payload.share_ratio,
+        valid_from=valid_from,
+        valid_to=valid_to,
+        confidence=payload.confidence.strip().upper(),
+        validation_status=payload.validation_status.strip().upper(),
+        source=payload.source.strip(),
+        contract_context=_clean_meter_link_text(payload.contract_context),
+        supplier_name=_clean_meter_link_text(payload.supplier_name),
+        notes=_clean_meter_link_text(payload.notes),
+    )
+    db.add(meter_link)
+    db.commit()
+    db.refresh(meter_link)
+    return meter_link
+
+
+def delete_building_meter_link(db: Session, meter_link: BuildingMeterLink) -> None:
+    db.delete(meter_link)
     db.commit()

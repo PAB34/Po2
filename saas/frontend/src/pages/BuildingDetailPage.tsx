@@ -7,17 +7,22 @@ import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorks
 import {
   attachBuildingGeoRequest,
   attachBuildingIgnRequest,
+  createBuildingMeterLinkRequest,
   createLocalRequest,
+  deleteBuildingMeterLinkRequest,
   deleteLocalRequest,
   fetchBuilding,
   fetchBuildingLocals,
+  fetchBuildingMeterLinks,
   fetchBuildingNamingLookup,
   fetchFreeAddressLookup,
   fetchNearbyDgfip,
   type Building,
   type BuildingIgnAttachmentPayload,
+  type BuildingMeterLink,
   type BuildingNamingLookup,
   type CreateLocalPayload,
+  type CreateBuildingMeterLinkPayload,
   type FreeAddressLookup,
   type GeoJsonFeature,
   type Local,
@@ -103,6 +108,15 @@ export function BuildingDetailPage() {
   const [statutOccupation, setStatutOccupation] = useState("");
   const [commentaire, setCommentaire] = useState("");
 
+  const [meterFluid, setMeterFluid] = useState("GAZ");
+  const [meterIdentifier, setMeterIdentifier] = useState("");
+  const [meterLabel, setMeterLabel] = useState("");
+  const [meterUsage, setMeterUsage] = useState("");
+  const [meterSupplier, setMeterSupplier] = useState("");
+  const [meterContractContext, setMeterContractContext] = useState("");
+  const [meterSource, setMeterSource] = useState("MANUEL");
+  const [meterNotes, setMeterNotes] = useState("");
+
   const [editingLocalId, setEditingLocalId] = useState<number | null>(null);
   const [editingLocalForm, setEditingLocalForm] = useState({
     nom_local: "",
@@ -118,6 +132,8 @@ export function BuildingDetailPage() {
   const [buildingSuccess, setBuildingSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [meterError, setMeterError] = useState<string | null>(null);
+  const [meterSuccess, setMeterSuccess] = useState<string | null>(null);
 
   const [showGeoAttachment, setShowGeoAttachment] = useState(false);
   const [selectedDgfipKey, setSelectedDgfipKey] = useState<string | null>(null);
@@ -133,6 +149,12 @@ export function BuildingDetailPage() {
   const localsQuery = useQuery({
     queryKey: ["building-locals", parsedBuildingId, token],
     queryFn: () => fetchBuildingLocals(token as string, parsedBuildingId),
+    enabled: Boolean(token) && Number.isInteger(parsedBuildingId),
+  });
+
+  const meterLinksQuery = useQuery({
+    queryKey: ["building-meters", parsedBuildingId, token],
+    queryFn: () => fetchBuildingMeterLinks(token as string, parsedBuildingId),
     enabled: Boolean(token) && Number.isInteger(parsedBuildingId),
   });
 
@@ -274,6 +296,40 @@ export function BuildingDetailPage() {
     },
   });
 
+  const createMeterLinkMutation = useMutation({
+    mutationFn: (payload: CreateBuildingMeterLinkPayload) =>
+      createBuildingMeterLinkRequest(token as string, parsedBuildingId, payload),
+    onSuccess: async () => {
+      setMeterSuccess("Rattachement compteur ajoute.");
+      setMeterError(null);
+      setMeterIdentifier("");
+      setMeterLabel("");
+      setMeterUsage("");
+      setMeterSupplier("");
+      setMeterContractContext("");
+      setMeterSource("MANUEL");
+      setMeterNotes("");
+      await queryClient.invalidateQueries({ queryKey: ["building-meters", parsedBuildingId] });
+    },
+    onError: (mutationError: unknown) => {
+      setMeterSuccess(null);
+      setMeterError(mutationError instanceof Error ? mutationError.message : "Rattachement compteur impossible.");
+    },
+  });
+
+  const deleteMeterLinkMutation = useMutation({
+    mutationFn: (meterLinkId: number) => deleteBuildingMeterLinkRequest(token as string, parsedBuildingId, meterLinkId),
+    onSuccess: async () => {
+      setMeterSuccess("Rattachement compteur supprime.");
+      setMeterError(null);
+      await queryClient.invalidateQueries({ queryKey: ["building-meters", parsedBuildingId] });
+    },
+    onError: (mutationError: unknown) => {
+      setMeterSuccess(null);
+      setMeterError(mutationError instanceof Error ? mutationError.message : "Suppression du rattachement impossible.");
+    },
+  });
+
   function startEditingLocal(local: Local) {
     setEditingLocalId(local.id);
     setEditingLocalForm({
@@ -391,6 +447,39 @@ export function BuildingDetailPage() {
     setError(null);
     setSuccess(null);
     await deleteLocalMutation.mutateAsync(localId);
+  }
+
+  async function handleCreateMeterLinkSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!token || !Number.isInteger(parsedBuildingId)) {
+      setMeterError("Contexte de batiment invalide.");
+      return;
+    }
+
+    setMeterError(null);
+    setMeterSuccess(null);
+    await createMeterLinkMutation.mutateAsync({
+      fluid: meterFluid,
+      meter_identifier: meterIdentifier,
+      meter_label: meterLabel || undefined,
+      usage_label: meterUsage || undefined,
+      supplier_name: meterSupplier || undefined,
+      contract_context: meterContractContext || undefined,
+      source: meterSource || "MANUEL",
+      notes: meterNotes || undefined,
+    });
+  }
+
+  async function handleDeleteMeterLink(meterLink: BuildingMeterLink) {
+    if (!token || !Number.isInteger(parsedBuildingId)) {
+      setMeterError("Contexte de batiment invalide.");
+      return;
+    }
+
+    setMeterError(null);
+    setMeterSuccess(null);
+    await deleteMeterLinkMutation.mutateAsync(meterLink.id);
   }
 
   if (!token) {
@@ -756,6 +845,128 @@ export function BuildingDetailPage() {
           </div>
         </>
       )}
+
+      <div className="section-block">
+        <div className="section-heading">
+          <h3>Compteurs rattaches</h3>
+          <p>Rattache ici les identifiants de comptage du patrimoine : PRM electricite, PCE gaz ou compteur eau.</p>
+        </div>
+        <form className="form" onSubmit={handleCreateMeterLinkSubmit}>
+          <div className="form-grid">
+            <label className="field">
+              <span>Fluide</span>
+              <select value={meterFluid} onChange={(event) => setMeterFluid(event.target.value)}>
+                <option value="ELECTRICITE">Electricite</option>
+                <option value="GAZ">Gaz</option>
+                <option value="EAU">Eau</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Identifiant compteur</span>
+              <input
+                type="text"
+                value={meterIdentifier}
+                onChange={(event) => setMeterIdentifier(event.target.value)}
+                placeholder="PRM, PCE ou identifiant eau"
+                required
+              />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              <span>Libelle compteur</span>
+              <input type="text" value={meterLabel} onChange={(event) => setMeterLabel(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>Usage</span>
+              <input type="text" value={meterUsage} onChange={(event) => setMeterUsage(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              <span>Fournisseur</span>
+              <input
+                type="text"
+                value={meterSupplier}
+                onChange={(event) => setMeterSupplier(event.target.value)}
+                placeholder="ENGIE, TotalEnergies, DALKIA..."
+              />
+            </label>
+            <label className="field">
+              <span>Contexte contractuel</span>
+              <input
+                type="text"
+                value={meterContractContext}
+                onChange={(event) => setMeterContractContext(event.target.value)}
+                placeholder="Ville, P1 DALKIA, HERAULT ENERGIE..."
+              />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label className="field">
+              <span>Source du rattachement</span>
+              <input type="text" value={meterSource} onChange={(event) => setMeterSource(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>Note</span>
+              <input type="text" value={meterNotes} onChange={(event) => setMeterNotes(event.target.value)} />
+            </label>
+          </div>
+          {meterError && <p className="error-text">{meterError}</p>}
+          {meterSuccess && <p className="success-text">{meterSuccess}</p>}
+          <div className="form-actions">
+            <button type="submit" disabled={createMeterLinkMutation.isPending}>
+              {createMeterLinkMutation.isPending ? "Ajout..." : "Ajouter le compteur"}
+            </button>
+          </div>
+        </form>
+
+        {meterLinksQuery.isLoading && <p>Chargement des compteurs rattaches...</p>}
+        {meterLinksQuery.error instanceof Error && <p className="error-text">{meterLinksQuery.error.message}</p>}
+        {!meterLinksQuery.isLoading && !meterLinksQuery.error && (meterLinksQuery.data?.length ?? 0) === 0 && (
+          <div className="empty-state">
+            <strong>Aucun compteur rattache.</strong>
+            <span>Le premier rattachement PCE, PRM ou eau peut etre saisi ici.</span>
+          </div>
+        )}
+        <div className="resource-list">
+          {meterLinksQuery.data?.map((meterLink) => (
+            <article key={meterLink.id} className="resource-card">
+              <div className="resource-card-header">
+                <div>
+                  <h3>{meterLink.meter_label || meterLink.meter_identifier}</h3>
+                  <p>{meterLink.meter_identifier}</p>
+                </div>
+                <span className="resource-badge">{meterLink.fluid}</span>
+              </div>
+              <dl className="resource-metadata">
+                <div>
+                  <dt>Usage</dt>
+                  <dd>{meterLink.usage_label || "Non renseigne"}</dd>
+                </div>
+                <div>
+                  <dt>Fournisseur</dt>
+                  <dd>{meterLink.supplier_name || "Non renseigne"}</dd>
+                </div>
+                <div>
+                  <dt>Contexte</dt>
+                  <dd>{meterLink.contract_context || "A qualifier"}</dd>
+                </div>
+                <div>
+                  <dt>Statut</dt>
+                  <dd>{meterLink.validation_status}</dd>
+                </div>
+              </dl>
+              {meterLink.notes && <p>{meterLink.notes}</p>}
+              <div className="resource-card-actions">
+                <button type="button" className="danger-button" onClick={() => void handleDeleteMeterLink(meterLink)}>
+                  Supprimer
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
 
       <div className="section-block">
         <div className="section-heading">

@@ -1,6 +1,6 @@
 # État actuel du développement
 
-> **Mise à jour** : 2026-05-21 (Refonte UI BPU · revue factures titulaire/problemes · CVC import fix · PO2-PAT-002 En cours)
+> **Mise à jour** : 2026-05-22 (socle rattachement compteurs fluides + BPU gaz TotalEnergies lot 7)
 > **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.6)
 > **Dernière commit en prod** : `00af844` (fix(cvc-import): dropdown mapping complet avec tous les bâtiments)
 
@@ -11,6 +11,7 @@
 | Auth | `/login`, `/register`, `/account` | Stable |
 | Patrimoine — liste | `/buildings`, `/buildings/list` | Stable |
 | Patrimoine — détail | `/buildings/:id` | Stable |
+| Patrimoine — compteurs | `/buildings/:id` | Nouveau : rattachement manuel PRM/PCE/eau avec contexte fournisseur/contrat |
 | Patrimoine — création / import | `/buildings/create-edit` | Stable |
 | Patrimoine — import hiérarchique | `/buildings/create-edit` | `SITE` -> `Site`, `BATIMENT` -> `Building.site_id`, `LOCAL` -> `Local.building_id` |
 | Gestion technique SYPEMI | `/buildings/technique` | Stable (310 équip. importés) |
@@ -44,7 +45,11 @@
 0014_add_equipment_tables
 0015_add_bpu_tables
 0016_add_cvc_inventory
-0017_add_sites_hierarchy          ← HEAD
+0017_add_sites_hierarchy
+0018_add_invoice_batches_and_normalized_history
+0019_add_cpe_tables
+0020_add_cpe_tarif_pce
+0021_add_building_meter_links      ← HEAD code
 ```
 
 ## 🔧 PRs récentes
@@ -148,6 +153,13 @@ Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Module
 | `bpu_time_periods` | **138** |
 | `bpu_price_components` | **523** (extraction_status=manual) |
 | `bpu_fixed_charges` | **36** |
+
+## Cadre gaz posé le 2026-05-22
+
+- `BuildingMeterLink` devient le premier point central du lien bâtiment -> compteur multi-fluides.
+- Le futur flux GRDF doit alimenter les PCE et consommations gaz, quel que soit le fournisseur.
+- Le BPU gaz HERAULT ENERGIE lot 7 est importable comme référence `TOTALENERGIES` pour les compteurs Ville.
+- La cotation OS3 gaz du P1 DALKIA reste dans le module CPE ; ne pas la fusionner avec la référence BPU TotalEnergies.
 
 ## 🔐 Secrets et accès
 

@@ -19,7 +19,7 @@ EXTRACTION_STATUSES = (
 )
 SEGMENT_TYPES = ("tension", "site", "usage")
 COMPONENT_TYPES = (
-    "fourniture", "capacite", "cee", "go", "renouvelable", "autre",
+    "fourniture", "capacite", "cee", "cee_precarite", "cpb", "go", "renouvelable", "autre",
 )
 PERIOD_CODES = (
     "BASE", "POINTE",

@@ -68,6 +68,8 @@ Gaps identifiés entre le kit officiel et notre code :
 
 ## GRDF — 🔴 Todo
 
+Le connecteur GRDF doit rester le socle compteur gaz : un PCE, ses données techniques et ses consommations. Le contexte de fourniture est rattaché autour de ce PCE mais ne change pas sa provenance distributeur : `HERAULT ENERGIE / TotalEnergies` pour les compteurs Ville, `P1 DALKIA` pour les compteurs fournis dans le CPE. Le premier lien manuel passe par `BuildingMeterLink` dans la fiche bâtiment. Voir [[Modules/Energie-Gaz]].
+
 ### Notes pour l'IA suivante
 - L'API GRDF s'appelle **GRDF Adict** ou **GRDF DataConso** selon l'environnement
 - Architecture similaire à ENEDIS : OAuth2 client_credentials, endpoints REST

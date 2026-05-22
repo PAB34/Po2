@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -305,5 +305,43 @@ class LocalRead(BaseModel):
     usage: str | None
     statut_occupation: str | None
     commentaire: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BuildingMeterLinkCreate(BaseModel):
+    fluid: str = Field(min_length=1, max_length=20)
+    meter_identifier: str = Field(min_length=1, max_length=80)
+    meter_label: str | None = Field(default=None, max_length=255)
+    usage_label: str | None = Field(default=None, max_length=120)
+    share_ratio: float = Field(default=1.0, ge=0, le=1)
+    valid_from: date | None = None
+    valid_to: date | None = None
+    confidence: str = Field(default="A_VALIDER", min_length=1, max_length=20)
+    validation_status: str = Field(default="A_VALIDER", min_length=1, max_length=20)
+    source: str = Field(default="MANUEL", min_length=1, max_length=120)
+    contract_context: str | None = Field(default=None, max_length=120)
+    supplier_name: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class BuildingMeterLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    building_id: int
+    fluid: str
+    meter_identifier: str
+    meter_label: str | None
+    usage_label: str | None
+    share_ratio: float
+    valid_from: date | None
+    valid_to: date | None
+    confidence: str
+    validation_status: str
+    source: str
+    contract_context: str | None
+    supplier_name: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime

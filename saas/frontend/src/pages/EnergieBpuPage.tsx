@@ -180,13 +180,13 @@ export default function EnergieBpuPage() {
               label="Fournisseur"
               value={chartFilters.supplier ?? ""}
               onChange={v => setChartFilters(f => ({ ...f, supplier: v || undefined }))}
-              options={[{ value: "", label: "Tous" }, { value: "EDF", label: "EDF" }, { value: "ENGIE", label: "ENGIE" }]}
+              options={[{ value: "", label: "Tous" }, { value: "EDF", label: "EDF" }, { value: "ENGIE", label: "ENGIE" }, { value: "TOTALENERGIES", label: "TotalEnergies" }]}
             />
             <FilterSelect
               label="Lot"
               value={chartFilters.lot_number?.toString() ?? ""}
               onChange={v => setChartFilters(f => ({ ...f, lot_number: v ? Number(v) : undefined }))}
-              options={[{ value: "", label: "Tous" }, { value: "1", label: "Lot 1" }, { value: "2", label: "Lot 2" }, { value: "3", label: "Lot 3" }]}
+              options={[{ value: "", label: "Tous" }, { value: "1", label: "Lot 1" }, { value: "2", label: "Lot 2" }, { value: "3", label: "Lot 3" }, { value: "7", label: "Lot 7 gaz" }]}
             />
           </div>
 

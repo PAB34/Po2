@@ -118,6 +118,7 @@ Point de revue ajouté le 2026-05-21 : le libellé brut `Titulaire du contrat` e
 - TOTAL fournit gaz et élec — focus ici sur gaz
 - Pas de format standard, mais format PDF probablement assez stable
 - Pattern : `services/invoice_parsers/total_energie_pdf.py` calqué sur `engie_pdf.py`
+- Le BPU HERAULT ENERGIE lot 7 gaz est importable dans les tables `bpu_*` via `app.scripts.import_bpu_gas_lot7`. Il constitue la référence de prix du marché Ville/TotalEnergies, pas le prix P1 DALKIA.
 
 ## SUEZ Eau — 🔴 Todo
 

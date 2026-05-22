@@ -8,6 +8,8 @@ from app.schemas.building import (
     BuildingCreate,
     BuildingIgnAttachmentPayload,
     BuildingImportPreview,
+    BuildingMeterLinkCreate,
+    BuildingMeterLinkRead,
     BuildingNamingDataset,
     BuildingNamingLookupRead,
     BuildingNamingSelectionPayload,
@@ -36,13 +38,17 @@ from app.services.buildings import (
     create_building,
     create_building_from_naming_selection,
     create_local,
+    create_building_meter_link,
     create_site,
     delete_all_buildings,
     delete_local,
+    delete_building_meter_link,
     get_building_or_404,
     get_local_or_404,
+    get_building_meter_link_or_404,
     get_site_or_404,
     list_building_locals,
+    list_building_meter_links,
     list_buildings,
     list_sites,
     update_site,
@@ -319,4 +325,39 @@ def remove_local(
     building = get_building_or_404(db, building_id, current_user)
     local = get_local_or_404(db, building, local_id)
     delete_local(db, local)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{building_id}/meters", response_model=list[BuildingMeterLinkRead])
+def get_meter_links(
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[BuildingMeterLinkRead]:
+    building = get_building_or_404(db, building_id, current_user)
+    return [BuildingMeterLinkRead.model_validate(link) for link in list_building_meter_links(db, building)]
+
+
+@router.post("/{building_id}/meters", response_model=BuildingMeterLinkRead, status_code=status.HTTP_201_CREATED)
+def post_meter_link(
+    building_id: int,
+    payload: BuildingMeterLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingMeterLinkRead:
+    building = get_building_or_404(db, building_id, current_user)
+    meter_link = create_building_meter_link(db, building, payload)
+    return BuildingMeterLinkRead.model_validate(meter_link)
+
+
+@router.delete("/{building_id}/meters/{meter_link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_meter_link(
+    building_id: int,
+    meter_link_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    building = get_building_or_404(db, building_id, current_user)
+    meter_link = get_building_meter_link_or_404(db, building, meter_link_id)
+    delete_building_meter_link(db, meter_link)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
