@@ -2831,6 +2831,99 @@ button:disabled {
   margin-left: 6px;
 }
 
+.invoice-timeline-wrapper {
+  margin: 12px 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.invoice-timeline-svg {
+  display: block;
+  min-width: 700px;
+}
+
+.invoice-timeline-empty {
+  padding: 12px;
+  color: #64748b;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.invoice-timeline-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 6px 4px;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.invoice-timeline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invoice-timeline-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.invoice-timeline-swatch-gap {
+  background-image: repeating-linear-gradient(
+    45deg,
+    #fef2f2,
+    #fef2f2 3px,
+    #fca5a5 3px,
+    #fca5a5 5px
+  );
+}
+
+.invoice-timeline-section {
+  margin-top: 14px;
+}
+
+.invoice-timeline-section h3 {
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.invoice-timeline-panel {
+  margin: 12px 0 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.invoice-timeline-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 6px 6px 0 0;
+  gap: 12px;
+}
+
+.invoice-timeline-panel-header strong {
+  display: block;
+  color: #0f172a;
+}
+
+.invoice-timeline-panel-header span {
+  display: block;
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 2px;
+}
+
 .invoice-report-delta-over {
   color: #b91c1c;
 }

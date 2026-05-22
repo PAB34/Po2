@@ -12,6 +12,8 @@ import {
 } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
+import { InvoicePeriodTimeline } from "../components/InvoicePeriodTimeline";
+import type { TimelineGroup, TimelineItem } from "../components/InvoicePeriodTimeline";
 import {
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
@@ -252,6 +254,7 @@ export function EnergieInvoicesPage() {
   const [issueFamilyFilters, setIssueFamilyFilters] = useState<InvoiceIssueFamily[]>([]);
   const [issueCodeFilters, setIssueCodeFilters] = useState<string[]>([]);
   const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
+  const [isTimelineOpen, setIsTimelineOpen] = useState(false);
 
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
@@ -366,6 +369,39 @@ export function EnergieInvoicesPage() {
     issueFamilyFilters,
     regroupementFilters,
   ]);
+  // Construction des groupes timeline depuis les factures filtrées : 1 barre par facture,
+  // groupée par regroupement (fallback titulaire/"Non regroupe"). Les factures avec
+  // anomalies Periode sont marquées isIssue=true pour mise en évidence visuelle.
+  const periodTimelineGroups = useMemo<TimelineGroup[]>(() => {
+    const groupsMap = new Map<string, { subLabel: string | null; items: TimelineItem[] }>();
+    for (const invoiceImport of filteredImports) {
+      if (!invoiceImport.period_start || !invoiceImport.period_end) continue;
+      const groupName =
+        invoiceImport.regroupement?.trim() ||
+        invoiceImport.contract_holder?.trim() ||
+        "Non regroupe";
+      const subLabel = invoiceImport.contract_holder?.trim() ?? null;
+      const entry = groupsMap.get(groupName) ?? { subLabel, items: [] };
+      const hasPeriodIssue = invoiceImport.control_issues.some(
+        (issue) => invoiceIssueFamily(issue) === "periods",
+      );
+      const ref = invoiceImport.invoice_number ?? invoiceImport.original_filename;
+      entry.items.push({
+        rowKey: ref,
+        rowLabel: ref,
+        rowSubLabel: invoiceImport.regroupement?.trim() ?? null,
+        startISO: invoiceImport.period_start,
+        endISO: invoiceImport.period_end,
+        isIssue: hasPeriodIssue,
+        tooltip: `${ref} - ${invoiceImport.period_start} → ${invoiceImport.period_end}${hasPeriodIssue ? " (anomalie periode)" : ""}`,
+      });
+      groupsMap.set(groupName, entry);
+    }
+    return Array.from(groupsMap.entries())
+      .map(([name, { subLabel, items }]) => ({ name, subLabel, items }))
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }, [filteredImports]);
+
   const supplierReportImports = useMemo(
     () =>
       filteredImports.filter((invoiceImport) =>
@@ -716,6 +752,28 @@ export function EnergieInvoicesPage() {
 
       {importsQuery.isLoading && <p className="loading-text">Chargement des imports...</p>}
       {importsQuery.isError && <p className="error-text">{(importsQuery.error as Error).message}</p>}
+
+      <section className="invoice-timeline-panel">
+        <header className="invoice-timeline-panel-header">
+          <div>
+            <strong>Frise des periodes facturees</strong>
+            <span>
+              {periodTimelineGroups.length} regroupement{periodTimelineGroups.length > 1 ? "s" : ""} ·
+              {" "}{periodTimelineGroups.reduce((sum, g) => sum + g.items.length, 0)} facture{periodTimelineGroups.reduce((sum, g) => sum + g.items.length, 0) > 1 ? "s" : ""} sur la fenetre filtree
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => setIsTimelineOpen((value) => !value)}
+          >
+            {isTimelineOpen ? "Masquer" : "Afficher"}
+          </button>
+        </header>
+        {isTimelineOpen && (
+          <InvoicePeriodTimeline groups={periodTimelineGroups} />
+        )}
+      </section>
 
       <div className="table-wrapper">
         <table className="data-table">

@@ -115,13 +115,91 @@ Les factures déjà analysées avant ce changement n'ont pas `mismatches_detail`
 dans la zone éditeur (note jaune) et dans la section BPU elle-même. La relance se fait depuis
 la page détail facture via le bouton « Re-analyser » existant.
 
+## 3e itération (même date) — chiffrage incohérences tarif/poste + timeline visuelle
+
+Retour utilisateur après nouvel audit ENGIE : « j'ai un doute sur Estimation impact des écarts
+BPU sur le nombre de PRM traités et le montant ». Doute légitime — 8 signalements remontent
+dans la catégorie « Prix contractuels » mais une seule ligne chiffrée à 0,23 € sur 5 kWh.
+
+### Diagnostic
+
+- **Pas de bug parser** : 5 kWh × 0,12174 €/kWh = 0,61 €, arithmétique correcte. La facture
+  ENGIE annote bien `quantity_unit = "kWh"`. La ligne « Base » est juste résiduelle (5 kWh)
+  sur un compteur où la consommation principale est ventilée sur HCH/HPH/HCB/HPB.
+- **Cause réelle** : les 7 autres signalements sont des `BPU_TARIFF_POSTE_INCONSISTENCY` qui
+  ne remontaient pas dans le total. C'est là que se cache l'écart financier réel.
+
+### Backend — chiffrage des incohérences tarif/poste
+
+Nouveau helper `_record_bpu_tariff_poste_inconsistency()` qui calcule par groupe :
+
+```
+delta = Σ(montant_HT_facturé)  −  Σ(quantité_MWh) × prix_BPU_attendu
+```
+
+Chaque entrée stockée dans `mismatches_detail` porte désormais un champ `type` :
+- `"price_mismatch"` — écart de prix unitaire par ligne (déjà existant)
+- `"tariff_poste_inconsistency"` — incohérence tarif/poste agrégée par groupe (nouveau)
+
+L'entrée `tariff_poste_inconsistency` porte aussi le détail de chaque ligne facture impliquée
+(`lines: []`) pour traçabilité totale.
+
+### Frontend — deux sous-tableaux + total cumulé
+
+Type union `BpuMismatchDetail = BpuPriceMismatch | BpuTariffPosteInconsistency` côté TS.
+La section « Estimation impact des écarts BPU » présente désormais :
+- Sous-tableau 1 : **Écarts de prix unitaire** (par ligne, comme avant)
+- Sous-tableau 2 : **Incohérences tarif / poste** (par groupe agrégé)
+  - Colonnes : BPU attendu, postes facturés, quantité totale, total facture HT,
+    total si BPU attendu, écart estimé HT
+- **Total écart estimé HT cumulé** en pied de section.
+
+## 4e itération (même date) — frise visuelle des périodes facturées
+
+Demande utilisateur : « sur le chevauchement ou le vide de période de facturation ce serait
+intéressant d'avoir un visuel genre un graphique en barre sur l'année glissante en cours,
+un pour chaque regroupement de facture ».
+
+### Composant `InvoicePeriodTimeline` (SVG natif, zéro dépendance)
+
+Path : `saas/frontend/src/components/InvoicePeriodTimeline.tsx`.
+
+- Axe X : année glissante (12 mois en arrière depuis aujourd'hui) — graduations mensuelles.
+- Groupage : `regroupement` (fallback `contract_holder`, puis `"Non regroupe"`).
+- 1 ligne par `rowKey` (PRM dans le rapport, n° facture dans la page liste).
+- Multiples périodes sur la même ligne → détection automatique des **chevauchements** (barre
+  rouge) et des **trous internes** (hachuré rouge sur fond rose).
+- Légende intégrée (Période facturée bleu / Période signalée orange / Chevauchement rouge /
+  Trou de facturation hachuré).
+- SVG responsive, imprimable, tooltips `<title>` natifs.
+
+### Intégrations
+
+**Dans le rapport fournisseur** (`InvoiceSupplierReport.tsx`) :
+- Sous la liste des scopes de la famille `periods`.
+- Parse les scopes au format `"PRM / FIC nnnn / YYYY-MM-DD - YYYY-MM-DD"` via
+  `parseScopeWithPeriod()` pour extraire PRM/FIC/start/end.
+- Groupé par regroupement de la facture portant l'issue.
+- Affiche uniquement les périodes signalées (vue ciblée pour le fournisseur).
+
+**Dans `/energie/factures`** (page liste) :
+- Panneau collapsible « Frise des périodes facturées » au-dessus du tableau.
+- 1 barre par facture filtrée (la période globale facture, pas par PRM — accessible sans
+  fetch supplémentaire).
+- Les factures portant une anomalie `periods` sont surlignées orange.
+- Donne une vue d'ensemble du parc et permet de repérer visuellement les regroupements
+  problématiques.
+
 ## Limitations restantes
 
-- Le **calcul ignore** les `BPU_TARIFF_POSTE_INCONSISTENCY` (où le prix est correct mais sur
-  le mauvais poste). Chiffrer ce cas nécessite d'accéder aux prix BPU des deux postes en
-  conflit — réalisable côté backend dans `tariff_poste_inconsistencies` mais reporté tant que
-  l'utilisateur n'a pas exprimé le besoin.
-- Pas de prise en compte du **lot BPU applicable à la période** dans une seconde lecture : on
+- La frise dans le rapport ne montre que les périodes **signalées** (issues de
+  `PERIOD_GAP` / `PERIOD_OVERLAP`). Pour montrer aussi les périodes saines en référence
+  visuelle, il faudrait fetcher les `analysis_result.sites[]` de toutes les factures du
+  parc. Reporté tant que le visuel actuel reste lisible.
+- La frise de la page liste affiche **1 barre par facture** (période globale), pas par PRM.
+  Pour la vue par PRM dans la page liste il faudrait soit un endpoint backend qui agrège
+  les périodes par PRM, soit un Promise.all sur les détails — non bloquant pour l'usage actuel.
+- Pas de prise en compte du **lot BPU applicable à la période** dans le recalcul BPU : on
   se base sur le BPU que le moteur backend a retenu lors de l'analyse de la facture. C'est
   cohérent par construction (le delta a été calculé avec ce BPU).
 

@@ -12,6 +12,8 @@ import {
   isSupplierReportIssue,
 } from "../lib/invoiceIssues";
 import type { InvoiceIssueFamily } from "../lib/invoiceIssues";
+import { InvoicePeriodTimeline } from "./InvoicePeriodTimeline";
+import type { TimelineGroup, TimelineItem } from "./InvoicePeriodTimeline";
 
 const CONTROL_FILTER_LABEL: Record<string, string> = {
   all: "Tous",
@@ -249,6 +251,86 @@ function uniqueIssueScopesForFamily(
   return Array.from(set).sort();
 }
 
+// Parse un scope d'issue Periode au format "PRM / FIC nnnn / YYYY-MM-DD - YYYY-MM-DD"
+// → {prm, fic, period_start, period_end}. Retourne null si le format ne match pas.
+function parseScopeWithPeriod(scope: string): {
+  prm: string | null;
+  fic: string | null;
+  startISO: string;
+  endISO: string;
+} | null {
+  // Match : ... / YYYY-MM-DD - YYYY-MM-DD à la fin
+  const dateMatch = scope.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})\s*$/);
+  if (!dateMatch) return null;
+  const startISO = dateMatch[1];
+  const endISO = dateMatch[2];
+  const prefix = scope.slice(0, dateMatch.index).trim().replace(/\/\s*$/, "").trim();
+  // Prefix peut être "PRM / FIC nnnn" ou seulement "PRM" ou seulement "FIC nnnn"
+  const parts = prefix.split(/\s*\/\s*/);
+  let prm: string | null = null;
+  let fic: string | null = null;
+  for (const part of parts) {
+    if (/^\d{10,18}$/.test(part)) prm = part;
+    else {
+      const ficMatch = part.match(/FIC\s+(\d+)/i);
+      if (ficMatch) fic = ficMatch[1];
+    }
+  }
+  return { prm, fic, startISO, endISO };
+}
+
+// Construit les groupes timeline à partir des issues Périodes d'une liste de factures.
+// Groupé par regroupement de la facture (fallback : titulaire / "Non regroupe").
+function buildPeriodTimelineGroups(
+  invoiceImports: EnergyInvoiceImport[],
+  filters: InvoiceSupplierReportFilters,
+): TimelineGroup[] {
+  const groupsMap = new Map<string, { subLabel: string | null; items: TimelineItem[] }>();
+
+  for (const invoiceImport of invoiceImports) {
+    const issues = selectedIssues(invoiceImport, filters).filter(
+      (issue) => invoiceIssueFamily(issue) === "periods",
+    );
+    if (issues.length === 0) continue;
+    const groupName =
+      invoiceImport.regroupement?.trim() ||
+      invoiceImport.contract_holder?.trim() ||
+      "Non regroupe";
+    const subLabel = invoiceImport.contract_holder?.trim() ?? null;
+    const groupEntry = groupsMap.get(groupName) ?? { subLabel, items: [] };
+    for (const issue of issues) {
+      if (!issue.scope) continue;
+      const parsed = parseScopeWithPeriod(issue.scope);
+      if (!parsed) continue;
+      const rowKey = parsed.prm ?? parsed.fic ?? issue.scope;
+      const rowLabel = parsed.prm
+        ? `PRM ${parsed.prm}`
+        : parsed.fic
+          ? `FIC ${parsed.fic}`
+          : issue.scope;
+      const rowSubLabel = parsed.prm && parsed.fic ? `FIC ${parsed.fic}` : null;
+      const issueKind = issue.code === "PERIOD_OVERLAP" ? "overlap" : issue.code === "PERIOD_GAP" ? "gap" : "other";
+      groupEntry.items.push({
+        rowKey,
+        rowLabel,
+        rowSubLabel,
+        startISO: parsed.startISO,
+        endISO: parsed.endISO,
+        isIssue: true,
+        issueKind,
+        tooltip: `${invoiceReference(invoiceImport)} - ${issue.code} - ${parsed.startISO} → ${parsed.endISO}`,
+      });
+    }
+    if (groupEntry.items.length > 0) {
+      groupsMap.set(groupName, groupEntry);
+    }
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([name, { subLabel, items }]) => ({ name, subLabel, items }))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
 export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token }: Props) {
   const suppliers = useMemo(
     () =>
@@ -271,6 +353,10 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
     [filters, invoiceImports],
   );
   const filtersSummary = useMemo(() => activeFilters(filters), [filters]);
+  const periodTimelineGroups = useMemo(
+    () => buildPeriodTimelineGroups(invoiceImports, filters),
+    [invoiceImports, filters],
+  );
   const totalTtc = reportInvoiceImports.reduce((total, invoiceImport) => total + (invoiceImport.total_ttc ?? 0), 0);
   const errorCount = reportInvoiceImports.reduce(
     (total, invoiceImport) =>
@@ -538,6 +624,12 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
                               ))}
                             </ul>
                           </details>
+                        )}
+                        {group.family === "periods" && periodTimelineGroups.length > 0 && (
+                          <div className="invoice-timeline-section">
+                            <h3>Visualisation des periodes facturees (anomalies sur 12 mois glissants)</h3>
+                            <InvoicePeriodTimeline groups={periodTimelineGroups} />
+                          </div>
                         )}
                       </div>
                     );
