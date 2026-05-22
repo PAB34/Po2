@@ -56,6 +56,7 @@ export default function CpeDalkiaPage() {
   const [annee, setAnnee] = useState(CURRENT_YEAR);
   const [filterCat, setFilterCat] = useState<string>("tous");
   const [showPuForm, setShowPuForm] = useState(false);
+  const [showCsvHelp, setShowCsvHelp] = useState(false);
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -222,37 +223,74 @@ export default function CpeDalkiaPage() {
           {calculerM.isPending ? "Calcul en cours…" : "Recalculer le bilan"}
         </button>
 
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => fileRef.current?.click()}
+            disabled={importM.isPending}
+            title="Format attendu : fichier CSV DALKIA mensuel (avant le 5e jour ouvrable). Colonnes : code_site ; date_releve ; qt_mwh_pci ; volume_ecs_m3 ; etat_chauffe"
+          >
+            {importM.isPending ? "Import en cours…" : "Importer CSV DALKIA"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.txt,.xls,.xlsx"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                setImportMsg(null);
+                importM.mutate(f);
+              }
+              e.target.value = "";
+            }}
+          />
+        </div>
+
         <button
           type="button"
           className="secondary-button"
-          onClick={() => fileRef.current?.click()}
-          disabled={importM.isPending}
+          onClick={() => setShowCsvHelp((v) => !v)}
+          title="Voir le format attendu du fichier CSV"
         >
-          {importM.isPending ? "Import en cours…" : "Importer CSV DALKIA"}
+          ? Format CSV
         </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".csv,.txt"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              setImportMsg(null);
-              importM.mutate(f);
-            }
-            e.target.value = "";
-          }}
-        />
-
-        <Link to="/cpe/releves" className="secondary-button" style={{ textDecoration: "none" }}>
-          Saisie manuelle
-        </Link>
 
         {importMsg && (
           <span style={{ fontSize: 13, color: importM.isError ? "#ef4444" : "#16a34a" }}>{importMsg}</span>
         )}
       </div>
+
+      {/* ── Aide format CSV ── */}
+      {showCsvHelp && (
+        <div className="card" style={{ marginBottom: 16, padding: 16, background: "#fffbeb", fontSize: 13 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <strong>Format du fichier CSV DALKIA</strong>
+            <button type="button" className="secondary-button" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setShowCsvHelp(false)}>✕</button>
+          </div>
+          <p style={{ margin: "8px 0 4px", color: "#6b7280" }}>
+            DALKIA envoie ce fichier avant le <strong>5e jour ouvrable de chaque mois</strong>. Colonnes séparées par <code>;</code> (ou virgule/tabulation — détecté automatiquement) :
+          </p>
+          <pre style={{ background: "#f9fafb", padding: 10, borderRadius: 6, fontSize: 12, overflow: "auto", margin: "8px 0" }}>
+{`code_site;date_releve;qt_mwh_pci;volume_ecs_m3;etat_chauffe
+VDS-ENS 02;2026-01-31;11.3;3.2;O
+VDS-SPORT 03;2026-01-31;9.8;;O
+VDS-BAM 02;2026-01-31;6.1;;N`}
+          </pre>
+          <ul style={{ margin: "4px 0", paddingLeft: 18, color: "#374151", lineHeight: 1.7 }}>
+            <li><code>code_site</code> — obligatoire, ex : <code>VDS-ENS 02</code>, <code>VDS-SPORT 03</code>, <code>CCAS 04</code></li>
+            <li><code>qt_mwh_pci</code> — consommation gaz mensuelle en MWhPCI (ou colonnes <code>consommation_gaz</code> / <code>qt</code>)</li>
+            <li><code>volume_ecs_m3</code> — volume ECS mensuel en m³ (optionnel)</li>
+            <li><code>etat_chauffe</code> — O/N ou 1/0 (optionnel)</li>
+            <li><code>date_releve</code> — formats acceptés : <code>2026-01-31</code>, <code>01/2026</code>, <code>2026-01</code> — ou colonnes séparées <code>annee</code> + <code>mois</code></li>
+          </ul>
+          <p style={{ margin: "8px 0 0", color: "#9ca3af", fontSize: 12 }}>
+            Si vous n'avez pas encore reçu de fichier DALKIA, utilisez la saisie manuelle en cliquant sur le nom d'un site dans le tableau ci-dessous.
+          </p>
+        </div>
+      )}
 
       {/* ── Filtre catégorie ── */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
