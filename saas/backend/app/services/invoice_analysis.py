@@ -121,13 +121,17 @@ def _build_control_report(
     parsed: dict[str, Any],
 ) -> dict[str, Any]:
     issues: list[dict[str, Any]] = []
-    bpu_summary = {
+    bpu_summary: dict[str, Any] = {
         "checked_lines": 0,
         "historical_checked_lines": 0,
         "configured_checked_lines": 0,
         "mismatches": 0,
         "missing_references": 0,
         "historical_documents": [],
+        # Détail structuré de chaque mismatch BPU_PRICE_MISMATCH : prix facture, prix BPU,
+        # delta, quantité MWh rattachée, écart total HT estimé. Permet au frontend de
+        # produire le récapitulatif chiffré sans parser le message texte.
+        "mismatches_detail": [],
     }
     turpe_summary: dict[str, Any] = {}
     taxes_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0}
@@ -273,6 +277,64 @@ def _check_arithmetic(invoice: dict[str, Any], sites: list[dict[str, Any]], issu
                 )
 
 
+def _quantity_to_mwh(line: dict[str, Any]) -> Decimal | None:
+    """Convertit la quantité d'une ligne facture en MWh (ou None si indéterminé)."""
+    quantity = _decimal(line.get("quantity"))
+    if quantity is None:
+        return None
+    unit = (line.get("quantity_unit") or "").lower()
+    if "mwh" in unit:
+        return quantity
+    if "kwh" in unit:
+        return quantity / Decimal("1000")
+    return None
+
+
+def _record_bpu_mismatch(
+    bpu_summary: dict[str, Any],
+    *,
+    scope: str,
+    site: dict[str, Any],
+    line_index: int,
+    line: dict[str, Any],
+    invoice_price_eur_mwh: Decimal,
+    bpu_price_eur_mwh: Decimal,
+    bpu_reference: str,
+    source: str,
+) -> None:
+    """Pousse un mismatch structuré dans bpu_summary['mismatches_detail'].
+
+    source : 'historical' (raccordement BPU historique) ou 'configured' (BillingBpuLine).
+    bpu_reference : libellé court (ex : 'C2/hph', 'LU/base', 'ENGIE 2025 lot 7 C2/hph').
+    Le delta total HT n'est renseigné que si la quantité est convertible en MWh.
+    """
+    delta_eur_mwh = invoice_price_eur_mwh - bpu_price_eur_mwh
+    quantity_mwh = _quantity_to_mwh(line)
+    delta_total: Decimal | None = None
+    if quantity_mwh is not None:
+        delta_total = delta_eur_mwh * quantity_mwh
+    bpu_summary["mismatches_detail"].append(
+        {
+            "scope": scope,
+            "site_prm_id": site.get("prm_id"),
+            "site_fic_number": site.get("fic_number"),
+            "line_index": line_index,
+            "line_label": line.get("label"),
+            "line_normalized_component": line.get("normalized_component"),
+            "line_poste": line.get("poste"),
+            "invoice_price_eur_mwh": float(invoice_price_eur_mwh),
+            "bpu_price_eur_mwh": float(bpu_price_eur_mwh),
+            "delta_eur_mwh": float(delta_eur_mwh),
+            "quantity": float(_decimal(line.get("quantity"))) if line.get("quantity") is not None else None,
+            "quantity_unit": line.get("quantity_unit"),
+            "quantity_mwh": float(quantity_mwh) if quantity_mwh is not None else None,
+            "delta_total_eur_ht": float(delta_total) if delta_total is not None else None,
+            "bpu_reference": bpu_reference,
+            "source": source,
+        }
+    )
+
+
 def _check_bpu(
     db: Session,
     city_id: int,
@@ -308,7 +370,7 @@ def _check_bpu(
         tariff_code = _tariff_code_for_site(site)
         scope = _site_scope(site)
         tariff_poste_inconsistencies: dict[tuple[str, str], dict[str, Any]] = {}
-        for line in site.get("invoice_lines", []):
+        for line_index, line in enumerate(site.get("invoice_lines", [])):
             component_field = _bpu_component_field(line.get("normalized_component"))
             if component_field is None or line.get("unit_price_ht") is None:
                 continue
@@ -329,14 +391,29 @@ def _check_bpu(
                 delta = abs(invoice_value_mwh - historical_price.price_eur_per_mwh)
                 if delta > PRICE_TOLERANCE_EUR_MWH:
                     bpu_summary["mismatches"] += 1
+                    bpu_ref = (
+                        f"{historical_price.supplier} {historical_price.valid_year} "
+                        f"lot {historical_price.lot_number} "
+                        f"{historical_price.segment_code}/{historical_price.period_code}"
+                    )
+                    _record_bpu_mismatch(
+                        bpu_summary,
+                        scope=scope,
+                        site=site,
+                        line_index=line_index,
+                        line=line,
+                        invoice_price_eur_mwh=invoice_value_mwh,
+                        bpu_price_eur_mwh=historical_price.price_eur_per_mwh,
+                        bpu_reference=bpu_ref,
+                        source="historical",
+                    )
                     issue(
                         "error",
                         "BPU_PRICE_MISMATCH",
                         (
                             f"Prix facture {invoice_value_mwh:.2f} EUR/MWh different du BPU historique "
                             f"{historical_price.price_eur_per_mwh:.2f} EUR/MWh "
-                            f"({historical_price.supplier} {historical_price.valid_year} lot {historical_price.lot_number}, "
-                            f"{historical_price.segment_code}/{historical_price.period_code})."
+                            f"({bpu_ref})."
                         ),
                         scope,
                     )
@@ -402,12 +479,24 @@ def _check_bpu(
                     continue
 
                 bpu_summary["mismatches"] += 1
+                bpu_ref = f"{bpu_line.tariff_code}/{bpu_line.poste}"
+                _record_bpu_mismatch(
+                    bpu_summary,
+                    scope=scope,
+                    site=site,
+                    line_index=line_index,
+                    line=line,
+                    invoice_price_eur_mwh=invoice_value_mwh,
+                    bpu_price_eur_mwh=expected,
+                    bpu_reference=bpu_ref,
+                    source="configured",
+                )
                 issue(
                     "error",
                     "BPU_PRICE_MISMATCH",
                     (
                         f"Prix facture {invoice_value_mwh:.2f} EUR/MWh different du BPU "
-                        f"{expected:.2f} EUR/MWh pour {bpu_line.tariff_code}/{bpu_line.poste}."
+                        f"{expected:.2f} EUR/MWh pour {bpu_ref}."
                     ),
                     scope,
                 )

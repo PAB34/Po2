@@ -63,11 +63,67 @@ Affichage : tableau avec **Prix facture / Prix BPU / Delta €/MWh / Quantité M
 
 ---
 
-## Limitations connues et trajectoire
+## Fiabilisation du matching (2e itération, même date)
 
-- **Heuristique de matching ligne / issue BPU** imparfaite sur factures multi-postes (HP/HC, saison). Si retour utilisateur signale des écarts incohérents, basculer vers un endpoint backend dédié `/api/billing/invoices/bpu-deltas` qui persisterait le delta au moment de l'analyse (delta €/MWh + quantité + montant écart) — option C écartée à la livraison pour rester rapide.
-- Le **calcul ignore** les `BPU_TARIFF_POSTE_INCONSISTENCY` (où le prix est correct mais sur le mauvais poste) : ces écarts ne peuvent pas être chiffrés simplement sans accès aux prix BPU des deux postes en conflit. À traiter via l'endpoint backend si besoin.
-- Pas de prise en compte du **lot BPU applicable à la période** dans le recalcul — on se base sur le BPU que le moteur backend a retenu lors de l'analyse de la facture. Suffisant tant que le contexte marché reste stable.
+Suite au retour utilisateur sur l'imprécision potentielle de l'heuristique de matching ligne/BPU
+côté frontend, le calcul a été déplacé **dans le moteur d'analyse backend** qui connaît déjà
+exactement la ligne facture qui a généré le mismatch et le BPU retenu.
+
+### Backend — `_check_bpu` enrichi
+
+- Nouveau helper `_record_bpu_mismatch()` dans `saas/backend/app/services/invoice_analysis.py`.
+- À chaque détection d'un `BPU_PRICE_MISMATCH` (cas BPU historique ET cas BPU configuré),
+  on persiste un dict structuré dans `bpu_summary["mismatches_detail"]` qui est ensuite
+  sérialisé dans `control_report_json` :
+
+  ```python
+  {
+    "scope": "24309117128642 / FIC 630000534222 / 2026-03-05 - 2026-04-04",
+    "site_prm_id": "24309117128642",
+    "site_fic_number": "630000534222",
+    "line_index": 4,                          # position exacte dans site.invoice_lines[]
+    "line_label": "Energie facturee HCH",
+    "line_normalized_component": "energie_hch",
+    "line_poste": "HCH",
+    "invoice_price_eur_mwh": 121.74,
+    "bpu_price_eur_mwh": 75.29,
+    "delta_eur_mwh": 46.45,
+    "quantity": 5000.0,
+    "quantity_unit": "kWh",
+    "quantity_mwh": 5.0,
+    "delta_total_eur_ht": 232.25,
+    "bpu_reference": "C2/hph",                # ou "ENGIE 2025 lot 7 C2/hph" si historique
+    "source": "configured"                    # "historical" | "configured"
+  }
+  ```
+
+### Frontend — lecture directe sans parsing
+
+- Suppression de la regex `BPU_PRICE_REGEX`, de `findMatchingInvoiceLine`, de `siteMatchesScope`
+  et de `computeBpuDeltas`. Plus de matching par tolérance de prix.
+- Le composant lit `detail.control_report.bpu.mismatches_detail` via `extractMismatchesDetail()`
+  et affiche les valeurs exactes calculées par le backend.
+- Une **colonne « Ligne facturée »** a été ajoutée au tableau (label + poste + composante
+  normalisée) pour traçabilité totale facture ↔ écart.
+- Une **colonne « Référence BPU »** indique précisément à quel lot/segment/poste le moteur a
+  rattaché le prix (avec source historique vs configuré en sous-libellé).
+
+### Compatibilité analyses antérieures
+
+Les factures déjà analysées avant ce changement n'ont pas `mismatches_detail` dans leur
+`control_report`. Le frontend détecte ce cas et affiche une **invite à relancer l'analyse**
+dans la zone éditeur (note jaune) et dans la section BPU elle-même. La relance se fait depuis
+la page détail facture via le bouton « Re-analyser » existant.
+
+## Limitations restantes
+
+- Le **calcul ignore** les `BPU_TARIFF_POSTE_INCONSISTENCY` (où le prix est correct mais sur
+  le mauvais poste). Chiffrer ce cas nécessite d'accéder aux prix BPU des deux postes en
+  conflit — réalisable côté backend dans `tariff_poste_inconsistencies` mais reporté tant que
+  l'utilisateur n'a pas exprimé le besoin.
+- Pas de prise en compte du **lot BPU applicable à la période** dans une seconde lecture : on
+  se base sur le BPU que le moteur backend a retenu lors de l'analyse de la facture. C'est
+  cohérent par construction (le delta a été calculé avec ce BPU).
 
 ---
 

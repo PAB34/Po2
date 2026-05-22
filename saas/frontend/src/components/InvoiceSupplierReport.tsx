@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   EnergyInvoiceImport,
   EnergyInvoiceImportDetail,
-  EnergyInvoiceLine,
-  EnergyInvoiceSite,
 } from "../lib/api";
 import { fetchEnergyInvoiceImport } from "../lib/api";
 import {
@@ -49,6 +47,28 @@ type IssueGroup = {
   count: number;
 };
 
+// Structure persistée par le backend dans control_report.bpu.mismatches_detail
+// (cf. _record_bpu_mismatch dans saas/backend/app/services/invoice_analysis.py).
+// Le frontend lit ces données telles quelles — aucun parsing de message ni heuristique.
+type BpuMismatchDetail = {
+  scope: string | null;
+  site_prm_id: string | null;
+  site_fic_number: string | null;
+  line_index: number;
+  line_label: string | null;
+  line_normalized_component: string | null;
+  line_poste: string | null;
+  invoice_price_eur_mwh: number;
+  bpu_price_eur_mwh: number;
+  delta_eur_mwh: number;
+  quantity: number | null;
+  quantity_unit: string | null;
+  quantity_mwh: number | null;
+  delta_total_eur_ht: number | null;
+  bpu_reference: string;
+  source: "historical" | "configured";
+};
+
 type Props = {
   invoiceImports: EnergyInvoiceImport[];
   filters: InvoiceSupplierReportFilters;
@@ -79,7 +99,6 @@ function extractPrm(scope: string | null | undefined): string | null {
   if (!scope) return null;
   const first = scope.split(" / ")[0]?.trim();
   if (!first) return null;
-  // On garde uniquement si ça ressemble à un PRM (14 chiffres pour ENEDIS)
   if (/^\d{10,18}$/.test(first)) return first;
   return null;
 }
@@ -120,8 +139,7 @@ function activeFilters(filters: InvoiceSupplierReportFilters) {
   return values;
 }
 
-// Agrège les issues PAR FAMILLE (pas par code) pour éviter le bruit.
-// Un seul bloc "Prix contractuels" listant tous les codes (BPU_PRICE_MISMATCH, BPU_TARIFF_POSTE_INCONSISTENCY...)
+// Agrège les issues PAR FAMILLE — un seul bloc par catégorie listant tous les codes/scopes.
 function groupIssuesByFamily(
   invoiceImports: EnergyInvoiceImport[],
   filters: InvoiceSupplierReportFilters,
@@ -153,118 +171,16 @@ function groupIssuesByFamily(
   );
 }
 
-// ── Recalcul BPU ─────────────────────────────────────────────────────────────
-// Pour chaque message BPU_PRICE_MISMATCH, parse prix facturé et prix BPU (€/MWh),
-// puis multiplie par la quantité de la ligne facture correspondante.
-
-type BpuDeltaLine = {
-  invoiceId: number;
-  invoiceRef: string;
-  scope: string | null;
-  prm: string | null;
-  invoicePriceEurMwh: number;
-  bpuPriceEurMwh: number;
-  deltaEurMwh: number;
-  quantityMwh: number | null;
-  deltaTotalEur: number | null;
-  postLabel: string;
-  matchedLineLabel: string | null;
-};
-
-const BPU_PRICE_REGEX =
-  /Prix facture\s+([\d.,]+)\s*EUR\/MWh\s+different du BPU\s+(?:historique\s+)?([\d.,]+)\s*EUR\/MWh(?:[^.]*?pour\s+([^.\s][^.]*?))?[.\s(]/i;
-
-function parseNumber(value: string): number {
-  return Number(value.replace(",", "."));
+// Lit les mismatches détaillés persistés par le backend.
+// Si l'analyse est antérieure à l'enrichissement → retourne null (le frontend affichera une note).
+function extractMismatchesDetail(detail: EnergyInvoiceImportDetail | undefined): BpuMismatchDetail[] | null {
+  if (!detail?.control_report) return null;
+  const bpu = detail.control_report.bpu;
+  if (!bpu || typeof bpu !== "object") return null;
+  const list = (bpu as Record<string, unknown>).mismatches_detail;
+  if (!Array.isArray(list)) return null;
+  return list as BpuMismatchDetail[];
 }
-
-function quantityToMwh(line: EnergyInvoiceLine): number | null {
-  if (line.quantity == null) return null;
-  const unit = (line.quantity_unit || "").toLowerCase();
-  if (unit.includes("mwh")) return line.quantity;
-  if (unit.includes("kwh")) return line.quantity / 1000;
-  // Si pas d'unité explicite mais prix en €/MWh et amount existe, on peut déduire
-  return null;
-}
-
-function findMatchingInvoiceLine(
-  site: EnergyInvoiceSite,
-  invoicePriceEurMwh: number,
-): EnergyInvoiceLine | null {
-  const lines = site.invoice_lines || [];
-  // Priorité aux lignes énergie (composant normalisé contenant "ENERGIE" ou "MOLECULE")
-  const energyLines = lines.filter((line) => {
-    const comp = (line.normalized_component || "").toUpperCase();
-    return comp.includes("ENERGIE") || comp.includes("MOLECULE") || comp.includes("ABONNEMENT") === false;
-  });
-  // Cherche celle dont unit_price_ht * 1000 ≈ invoicePriceEurMwh (tolérance 0.5)
-  for (const line of energyLines) {
-    if (line.unit_price_ht == null) continue;
-    const linePriceMwh = line.unit_price_ht * 1000;
-    if (Math.abs(linePriceMwh - invoicePriceEurMwh) < 0.5) return line;
-  }
-  // Fallback : 1re ligne énergie
-  return energyLines[0] ?? null;
-}
-
-function siteMatchesScope(site: EnergyInvoiceSite, scope: string | null): boolean {
-  if (!scope) return false;
-  const prm = extractPrm(scope);
-  if (prm && site.prm_id === prm) return true;
-  // Fallback : FIC dans le scope
-  const ficMatch = scope.match(/FIC\s+(\d+)/i);
-  if (ficMatch && site.fic_number === ficMatch[1]) return true;
-  return false;
-}
-
-function computeBpuDeltas(
-  invoiceImport: EnergyInvoiceImport,
-  detail: EnergyInvoiceImportDetail | undefined,
-): BpuDeltaLine[] {
-  const results: BpuDeltaLine[] = [];
-  const sites = detail?.analysis_result?.sites || [];
-  const bpuIssues = invoiceImport.control_issues.filter(
-    (issue) => issue.code === "BPU_PRICE_MISMATCH",
-  );
-  for (const issue of bpuIssues) {
-    const match = issue.message.match(BPU_PRICE_REGEX);
-    if (!match) continue;
-    const invoicePrice = parseNumber(match[1]);
-    const bpuPrice = parseNumber(match[2]);
-    const postLabel = (match[3] || "").trim().replace(/\.$/, "") || "(non précisé)";
-    const deltaEurMwh = invoicePrice - bpuPrice;
-
-    let quantityMwh: number | null = null;
-    let matchedLineLabel: string | null = null;
-    if (detail) {
-      const site = sites.find((s) => siteMatchesScope(s, issue.scope));
-      if (site) {
-        const line = findMatchingInvoiceLine(site, invoicePrice);
-        if (line) {
-          quantityMwh = quantityToMwh(line);
-          matchedLineLabel = line.label || line.normalized_component || null;
-        }
-      }
-    }
-    const deltaTotalEur = quantityMwh != null ? deltaEurMwh * quantityMwh : null;
-    results.push({
-      invoiceId: invoiceImport.id,
-      invoiceRef: invoiceReference(invoiceImport),
-      scope: issue.scope,
-      prm: extractPrm(issue.scope),
-      invoicePriceEurMwh: invoicePrice,
-      bpuPriceEurMwh: bpuPrice,
-      deltaEurMwh,
-      quantityMwh,
-      deltaTotalEur,
-      postLabel,
-      matchedLineLabel,
-    });
-  }
-  return results;
-}
-
-// ── Extraction PRM par facture pour la colonne "Factures concernées" ──────────
 
 function prmListForInvoice(
   invoiceImport: EnergyInvoiceImport,
@@ -347,7 +263,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
     "Merci de nous confirmer, pour chaque point liste ci-dessous, la regle de facturation appliquee, les donnees contractuelles ou reglementaires qui la justifient et, le cas echeant, la correction ou la piece explicative a prendre en compte.",
   );
 
-  // ── Fetch détails des factures concernées par BPU pour le recalcul ─────────
+  // ── Fetch détails des factures concernées par BPU pour récupérer mismatches_detail ──
   const bpuInvoiceImports = useMemo(
     () =>
       reportInvoiceImports.filter((invoiceImport) =>
@@ -391,22 +307,37 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
     };
   }, [bpuInvoiceImports, detailsByImportId, token]);
 
-  // Calcule les écarts BPU consolidés
-  const bpuDeltas = useMemo(() => {
-    const all: BpuDeltaLine[] = [];
+  // Construit la liste consolidée des mismatches BPU + factures sans détail enrichi
+  const bpuView = useMemo(() => {
+    const enriched: Array<BpuMismatchDetail & { invoiceId: number; invoiceRef: string }> = [];
+    const staleInvoices: Array<{ id: number; ref: string }> = [];
     for (const invoiceImport of bpuInvoiceImports) {
       const detail = detailsByImportId[invoiceImport.id];
-      all.push(...computeBpuDeltas(invoiceImport, detail));
+      // Détails non encore chargés → on attend, ne pas signaler comme obsolète
+      if (detail === undefined) continue;
+      const mismatches = extractMismatchesDetail(detail);
+      if (mismatches === null) {
+        // Analyse antérieure à l'enrichissement backend → invitation à relancer
+        staleInvoices.push({ id: invoiceImport.id, ref: invoiceReference(invoiceImport) });
+        continue;
+      }
+      for (const m of mismatches) {
+        enriched.push({
+          ...m,
+          invoiceId: invoiceImport.id,
+          invoiceRef: invoiceReference(invoiceImport),
+        });
+      }
     }
-    return all;
+    return { enriched, staleInvoices };
   }, [bpuInvoiceImports, detailsByImportId]);
 
   const bpuTotalEstimatedEur = useMemo(
-    () => bpuDeltas.reduce((sum, d) => sum + (d.deltaTotalEur ?? 0), 0),
-    [bpuDeltas],
+    () => bpuView.enriched.reduce((sum, d) => sum + (d.delta_total_eur_ht ?? 0), 0),
+    [bpuView.enriched],
   );
-  const bpuLinesWithoutQuantity = bpuDeltas.filter((d) => d.quantityMwh == null).length;
-  const hasBpuSection = bpuDeltas.length > 0;
+  const bpuLinesWithoutQuantity = bpuView.enriched.filter((d) => d.quantity_mwh == null).length;
+  const hasBpuSection = bpuInvoiceImports.length > 0;
 
   return (
     <div className="invoice-report-backdrop" role="dialog" aria-modal="true" aria-label="Rapport fournisseur factures">
@@ -461,6 +392,18 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
                 <span>
                   {Array.from(new Set(excludedInternalGroups.flatMap((group) => Array.from(group.codes)))).join(", ")}
                 </span>
+              </aside>
+            )}
+            {hasBpuSection && bpuView.staleInvoices.length > 0 && (
+              <aside className="invoice-report-internal-note invoice-report-warning">
+                <strong>
+                  {bpuView.staleInvoices.length} facture{bpuView.staleInvoices.length > 1 ? "s" : ""} sans chiffrage BPU enrichi
+                </strong>
+                <p>
+                  Ces factures ont ete analysees avant l'ajout du detail mismatch BPU dans le moteur. Relance
+                  l'analyse depuis la page detail facture pour obtenir l'estimation chiffree.
+                </p>
+                <span>{bpuView.staleInvoices.map((s) => s.ref).join(", ")}</span>
               </aside>
             )}
           </div>
@@ -563,58 +506,99 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
               <section>
                 <h2>Estimation impact des ecarts BPU</h2>
                 <p className="invoice-report-point-detail">
-                  Calcul indicatif base sur le delta (prix facture &minus; prix BPU contractuel) multiplie
-                  par la quantite energie de la ligne facture correspondante. A consolider avec le fournisseur.
+                  Calcul base sur le delta (prix facture &minus; prix BPU contractuel) multiplie par la quantite
+                  energie de la ligne facture correspondante. Le rattachement ligne/BPU et le calcul du delta sont
+                  effectues par le moteur d'analyse (mismatch persiste avec line_index, prix et quantite exacts).
                 </p>
                 {bpuLoading && <p>Chargement des details factures...</p>}
                 {bpuError && <p className="invoice-report-warning">{bpuError}</p>}
-                <table className="invoice-report-bpu-table">
-                  <thead>
-                    <tr>
-                      <th>Facture / PRM</th>
-                      <th>Poste</th>
-                      <th>Prix facture</th>
-                      <th>Prix BPU</th>
-                      <th>Delta</th>
-                      <th>Quantite</th>
-                      <th>Ecart estime HT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bpuDeltas.map((delta, idx) => (
-                      <tr key={`${delta.invoiceId}-${idx}`}>
-                        <td>
-                          <strong>{delta.invoiceRef}</strong>
-                          <span>{delta.prm ?? delta.scope ?? "-"}</span>
+                {!bpuLoading && bpuView.enriched.length === 0 && bpuView.staleInvoices.length === 0 && (
+                  <p>Aucun ecart BPU chiffrable sur les factures retenues.</p>
+                )}
+                {bpuView.staleInvoices.length > 0 && (
+                  <p className="invoice-report-warning">
+                    {bpuView.staleInvoices.length} facture{bpuView.staleInvoices.length > 1 ? "s" : ""} sans
+                    chiffrage disponible : analyse anterieure a l'enrichissement (relancer l'analyse pour obtenir
+                    le detail).
+                  </p>
+                )}
+                {bpuView.enriched.length > 0 && (
+                  <table className="invoice-report-bpu-table">
+                    <thead>
+                      <tr>
+                        <th>Facture / PRM</th>
+                        <th>Ligne facturee</th>
+                        <th>Reference BPU</th>
+                        <th>Prix facture</th>
+                        <th>Prix BPU</th>
+                        <th>Delta</th>
+                        <th>Quantite</th>
+                        <th>Ecart estime HT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bpuView.enriched.map((d, idx) => (
+                        <tr key={`${d.invoiceId}-${d.line_index}-${idx}`}>
+                          <td>
+                            <strong>{d.invoiceRef}</strong>
+                            <span>{d.site_prm_id ?? d.scope ?? "-"}</span>
+                          </td>
+                          <td>
+                            <strong>{d.line_label || d.line_normalized_component || `Ligne #${d.line_index}`}</strong>
+                            <span>
+                              {d.line_poste ? `Poste ${d.line_poste}` : null}
+                              {d.line_normalized_component && d.line_poste ? " — " : null}
+                              {d.line_normalized_component ?? null}
+                            </span>
+                          </td>
+                          <td>
+                            <strong>{d.bpu_reference}</strong>
+                            <span>{d.source === "historical" ? "BPU historique" : "BPU configure"}</span>
+                          </td>
+                          <td>{d.invoice_price_eur_mwh.toFixed(2)} EUR/MWh</td>
+                          <td>{d.bpu_price_eur_mwh.toFixed(2)} EUR/MWh</td>
+                          <td className={d.delta_eur_mwh > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
+                            {d.delta_eur_mwh > 0 ? "+" : ""}
+                            {d.delta_eur_mwh.toFixed(2)} EUR/MWh
+                          </td>
+                          <td>
+                            {d.quantity_mwh != null
+                              ? `${d.quantity_mwh.toFixed(3)} MWh`
+                              : d.quantity != null && d.quantity_unit
+                                ? `${d.quantity} ${d.quantity_unit} (non convertie)`
+                                : "non renseignee"}
+                          </td>
+                          <td
+                            className={
+                              d.delta_total_eur_ht != null && d.delta_total_eur_ht > 0
+                                ? "invoice-report-delta-over"
+                                : "invoice-report-delta-under"
+                            }
+                          >
+                            {d.delta_total_eur_ht != null ? formatCurrency(d.delta_total_eur_ht) : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={7}>
+                          <strong>Total ecart estime HT</strong>
+                          {bpuLinesWithoutQuantity > 0 && (
+                            <span> ({bpuLinesWithoutQuantity} ligne{bpuLinesWithoutQuantity > 1 ? "s" : ""} sans quantite convertible)</span>
+                          )}
                         </td>
-                        <td>{delta.postLabel}</td>
-                        <td>{delta.invoicePriceEurMwh.toFixed(2)} EUR/MWh</td>
-                        <td>{delta.bpuPriceEurMwh.toFixed(2)} EUR/MWh</td>
-                        <td className={delta.deltaEurMwh > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
-                          {delta.deltaEurMwh > 0 ? "+" : ""}
-                          {delta.deltaEurMwh.toFixed(2)} EUR/MWh
-                        </td>
-                        <td>{delta.quantityMwh != null ? `${delta.quantityMwh.toFixed(3)} MWh` : "non rattachee"}</td>
-                        <td className={delta.deltaTotalEur != null && delta.deltaTotalEur > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
-                          {delta.deltaTotalEur != null ? formatCurrency(delta.deltaTotalEur) : "-"}
+                        <td
+                          className={
+                            bpuTotalEstimatedEur > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"
+                          }
+                        >
+                          <strong>{formatCurrency(bpuTotalEstimatedEur)}</strong>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={6}>
-                        <strong>Total ecart estime HT</strong>
-                        {bpuLinesWithoutQuantity > 0 && (
-                          <span> ({bpuLinesWithoutQuantity} ligne{bpuLinesWithoutQuantity > 1 ? "s" : ""} sans quantite rattachee)</span>
-                        )}
-                      </td>
-                      <td className={bpuTotalEstimatedEur > 0 ? "invoice-report-delta-over" : "invoice-report-delta-under"}>
-                        <strong>{formatCurrency(bpuTotalEstimatedEur)}</strong>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tfoot>
+                  </table>
+                )}
               </section>
             )}
 
@@ -674,8 +658,9 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
               {hasBpuSection && (
                 <>
                   {" "}
-                  Les ecarts BPU chiffres sont indicatifs et doivent etre rapproches des pieces contractuelles
-                  applicables a la periode (lots BPU, options tarifaires, dates d'effet).
+                  Les ecarts BPU chiffres sont produits par le moteur d'analyse (rattachement ligne/BPU exact) et
+                  doivent etre rapproches des pieces contractuelles applicables a la periode (lots BPU, options
+                  tarifaires, dates d'effet).
                 </>
               )}
             </footer>
