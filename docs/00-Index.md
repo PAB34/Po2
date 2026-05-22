@@ -43,6 +43,7 @@
 - [[Decisions/005-poste-entreprise-zero-install-local]]
 - [[Decisions/006-secrets-jamais-en-chat-IA]]
 - [[Decisions/007-bpu-schema-on-read-vs-parser]]
+- [[Decisions/008-referentiel-patrimoine-et-rapprochements]]
 - Template : [[Decisions/_template]]
 
 ### 📅 Journal des sessions

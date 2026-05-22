@@ -107,6 +107,8 @@ L'inventaire complet des specs `saas/specs/` est dans [[Specs]]. Résumé :
 - **Livre et documente** : migration `0017_add_sites_hierarchy`, modele `Site`, `buildings.site_id`, endpoints `/api/buildings/sites`
 - Objectif : importer les fichiers patrimoine avec colonne `Typologie` sans aplatir sites / batiments / locaux
 - Flux vise : lignes `SITE` -> table `sites`, lignes `BATIMENT` -> `buildings.site_id`, lignes `LOCAL` -> table `locals` rattachee au batiment parent
+- Point de cadrage 2026-05-22 : cette liste doit devenir le referentiel maitre auquel se rattachent PRM ENEDIS, PCE/GRDF, sites CPE DALKIA et contrats de maintenance.
+- Prochaine brique structurante : une boite de rapprochement qui conserve les objets introuvables/ambigus au lieu de les perdre ou de creer de faux batiments.
 - Voir [[Sessions/2026-05-20 — Import patrimoine hierarchique]]
 
 ### 2c. Historique factures ENGIE dans `/energie/factures`

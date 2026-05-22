@@ -48,7 +48,7 @@ Les documents canoniques restent sous `docs/energie/CPE-DALKIA/`.
 
 ## Prochain chemin conseille
 
-1. Rattacher quelques PCE de test aux batiments avec `BuildingMeterLink` en qualifiant `Ville TotalEnergies` ou `P1 DALKIA`.
+1. Faire passer les PCE de test par le rapprochement patrimoine defini dans [[Decisions/008-referentiel-patrimoine-et-rapprochements]] en qualifiant `Ville TotalEnergies` ou `P1 DALKIA`.
 2. Importer un echantillon GRDF CSV/XLSX sur ces PCE dans le futur pipeline gaz.
 3. Ajouter le parser factures gaz TotalEnergies en s'appuyant sur le BPU lot 7.
 4. Relier proprement les PCE CPE DALKIA au referentiel compteurs central sans casser le calcul CPE existant.

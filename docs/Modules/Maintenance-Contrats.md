@@ -8,7 +8,7 @@
 |---|---|
 | Référentiel contrats | 🔴 Todo |
 | Upload PDF / pièces contractuelles | 🔴 Todo |
-| Affectation multi-bâtiments | 🔴 Todo |
+| Affectation multi-référents patrimoine | 🔴 Todo |
 | Affectation optionnelle aux équipements | 🔴 Todo |
 | Alertes échéance / préavis | 🔴 Todo |
 | Vue bâtiment : contrats applicables | 🔴 Todo |
@@ -36,6 +36,15 @@ class MaintenanceContract(Base):
 ```
 
 ### Affectations
+
+Le contrat ne doit pas fabriquer sa propre liste de sites. Il doit viser le référentiel patrimoine maître défini dans [[Decisions/008-referentiel-patrimoine-et-rapprochements]].
+
+La V1 peut commencer par les bâtiments si le premier lot de données le justifie, mais le cadrage métier attendu est :
+
+- contrat applicable à un `Site` complet ;
+- contrat applicable à un `Building` précis ;
+- contrat applicable à un `Local` si le périmètre est fin ;
+- équipement couvert en complément quand le module technique l'exige.
 
 ```python
 class MaintenanceContractBuilding(Base):
@@ -79,12 +88,13 @@ Ces lots doivent rester configurables : ne pas figer trop tôt une nomenclature 
 ### Fiche bâtiment
 
 - bloc "Contrats de maintenance" listant les contrats applicables ;
+- héritage visible si un contrat est affecté au `Site` parent ;
 - lien vers les pièces PDF ;
 - visibilité sur les lots couverts et non couverts.
 
 ## MVP conseillé
 
-1. ADR de schéma : contrat + N-N bâtiments.
+1. S'appuyer sur l'ADR référentiel patrimoine puis trancher le premier lien technique : `Site`, `Building`, `Local` ou table de scope polymorphe.
 2. Migration `maintenance_contracts` + table de liaison.
 3. Routes CRUD backend.
 4. Page frontend `/maintenance` ou onglet dans gestion technique.
