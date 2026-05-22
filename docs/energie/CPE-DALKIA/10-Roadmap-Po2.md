@@ -8,81 +8,55 @@ tags: #roadmap #développement #Po2 #CPE #intéressement #facturation #alertes
 
 ## Vue d'ensemble des phases
 
-```
-Phase 1 — Q3 2026 : Moteur de cibles + calcul intéressement
-Phase 2 — Q4 2026 : Vérificateur de factures + calendrier d'alertes
-Phase 3 — 2027    : Simulation, benchmark, suivi APE
-```
+| Phase | Période | Statut |
+|-------|---------|--------|
+| Phase 1 — Moteur de cibles + calcul intéressement | Q2-Q3 2026 | ✅ **LIVRÉ** — commit `043fd40` |
+| Phase 2 — Vérificateur de factures + calendrier d'alertes | Q4 2026 | 🔲 À faire |
+| Phase 3 — Simulation, benchmark, suivi APE | 2027 | 🔲 À faire |
 
-> **Urgence Phase 1** : la première période d'intéressement court du 01/01/2026 au 31/12/2026. La facture/avoir DALKIA doit arriver avant le 31/01/2027. Le moteur de calcul doit être opérationnel avant fin 2026.
+> **Urgence Phase 1** : la première période d'intéressement court du 01/01/2026 au 31/12/2026. La facture/avoir DALKIA doit arriver avant le 31/01/2027. ✅ Moteur opérationnel.
+
+Voir [[11-Implémentation-Po2]] pour le détail technique de ce qui a été construit.
 
 ---
 
-## Phase 1 — Moteur de cibles énergétiques
+## ✅ Phase 1 — Moteur de cibles énergétiques (LIVRÉ)
 
-### 1.1 Import GRDF ADICT → QT par site
+### 1.1 Import QT par site ✅
 
-- Intégrer l'API GRDF ADICT (accès en attente de formation/droits)
-- Stocker les index gaz mensuels par compteur et par site (code site conforme [[04-Cibles-par-site]])
-- Format attendu de DALKIA en parallèle : EXCEL + CSV, avant le 5e jour ouvrable du mois
+- Import CSV des fichiers mensuels DALKIA (avant le 5e jour ouvrable) — **opérationnel**
+- Endpoint POST `/api/cpe/import/csv` — détecte délimiteur, parse dates, upsert par site/mois
+- Saisie manuelle mois par mois sur `/cpe/sites/:id` — **opérationnel**
+- ⏳ Import API GRDF ADICT — en attente droits d'accès ; viendra compléter automatiquement
 
-**Modèle de données :**
-```
-GazIndex(site_id, compteur_id, date, index_kwh_pci, date_releve)
-```
-
-### 1.2 Calcul NC (consommation chauffage nette)
+### 1.2 Calcul NC ✅
 
 ```python
 NC = QT - (m × qECS)
 ```
+Implémenté dans `services/cpe.py::calcul_nc()`. Si qECS non renseigné → NC = QT.
 
-- `QT` : consommation gaz totale site (MWhPCI, cumul annuel)
-- `m` : volume ECS annuel produit par chaudière gaz (m³)
-- `qECS` : coefficient de conversion ECS spécifique au site (MWhPCI/m³)
-- Voir [[03-Cibles-et-intéressement]] pour les valeurs par site
+### 1.3 DJU automatisés ✅
 
-### 1.3 Source DJU automatisée
+Lecture depuis `DJU/dju_sete.csv` (Open-Meteo → méthode COSTIC, synchro quotidienne existante).
+Endpoint GET `/api/cpe/dju/{annee}` — cumul annuel base 18°C, station Sète/Montpellier.
 
-- Intégrer un flux DJU base 18°C, station Montpellier (COSTIC ou Météo-France)
-- Stocker les DJU mensuels → cumul annuel de chauffage
-- DJU de référence contractuelle : **1 426 DJU** (1981-2010)
-- Si publication COSTIC tardive : calculer DJU provisoires depuis relevés Météo-France
-
-**Formule N'B :**
-```python
-N_prime_B = NB × (DJU_réels / 1426)
-```
-
-### 1.4 Calcul intéressement / pénalité
+### 1.4 Calcul intéressement / pénalité ✅
 
 Voir [[03-Cibles-et-intéressement]] pour les formules complètes.
-
-```python
-ecart = N_prime_B - NC
-
-if ecart > 0:   # DALKIA a économisé → intéressement
-    I = 0.5 × min(ecart, N_prime_B × 0.15) × Pu
-    type = "facture"
-else:           # DALKIA a dépassé la cible → pénalité
-    P = abs(ecart) × Pu
-    type = "avoir"
-```
-
-- `Pu` : prix unitaire gaz de l'exercice (€/MWhPCI, issu de la facture P1)
+Implémenté dans `services/cpe.py::calcul_interessement()`.
 - Intéressement plafonné à **½ × N'B × 15%**
 - Pénalité : **sans plafond**
-- P2.4 réduite à **50%** si pénalité → voir [[06-Facturation-et-indices]]
+- P2.4 réduite à **50%** si pénalité
 
-### 1.5 Alerte révision NB
+### 1.5 Alerte révision NB ✅
 
-Déclencher une alerte si les conditions de renégociation sont atteintes :
-- Écart NC/NB > **8%** sur **2 saisons consécutives**
-- Écart NC/NB > **12%** sur **1 saison**
+Champ `alerte_revision_nb` dans `CpeResultatAnnuel` — déclenché si `|NC-NB|/NB ≥ 12%`.
+Seuil sur 2 saisons (8%) : à implémenter en Phase 2 (nécessite historique N-1).
 
 ---
 
-## Phase 2 — Vérification contradictoire des factures
+## 🔲 Phase 2 — Vérification contradictoire des factures
 
 ### 2.1 Vérificateur de révision P1 (gaz)
 
@@ -101,9 +75,8 @@ Pugaz = Pugaz0 × (a + b×PEG/PEG0 + c×TVD/TVD0 + d×CEE/CEE0 + e×TICGN/TICGN0
 P2 = P20 × (0,15 + 0,70 × ICHT-IME/ICHT-IME0 + 0,15 × FSD2/FSD20)
 ```
 
-- Révision au 1er janvier de chaque année civile
 - Valeurs de base (01/01/2025) : ICHT-IME = 141,4 — FSD2 = 169,8
-- Vérifier les 4 acomptes trimestriels et l'absence de régularisation
+- Vérifier les 4 acomptes trimestriels
 
 ### 2.3 Vérificateur de révision P3 (garantie totale)
 
@@ -115,8 +88,6 @@ P3 = P30 × (0,15 + 0,30 × ICHT-IME/ICHT-IME0 + 0,55 × BT40/BT400)
 - Révision au 1er octobre de chaque saison
 
 ### 2.4 Répertoire des indices de révision
-
-Stocker chaque mois les valeurs publiées :
 
 | Indice | Source | Fréquence |
 |--------|--------|-----------|
@@ -148,7 +119,7 @@ Voir [[08-Gouvernance]] pour le calendrier complet.
 
 ---
 
-## Phase 3 — Pilotage avancé
+## 🔲 Phase 3 — Pilotage avancé
 
 ### 3.1 Simulation de fin d'exercice
 
@@ -159,51 +130,48 @@ Voir [[08-Gouvernance]] pour le calendrier complet.
 
 ### 3.2 Détection d'anomalies de consommation
 
-Comparer pour chaque site :
 - **M vs M-1** : variation anormale sur le mois
 - **M vs M-1 de N-1** corrigé DJU : dérive annuelle
-
-Un pic anormal = problème équipement ou fuite → à remonter en réunion hebdomadaire avec DALKIA.
+- Un pic anormal = problème équipement ou fuite → à remonter en réunion hebdo
 
 ### 3.3 Benchmark inter-sites (kWh/m²)
 
-- Calculer les ratios de consommation par m² pour chaque site
-- Comparer les bâtiments de même nature (écoles entre elles, gymnases entre eux)
-- Identifier les outliers **avant DALKIA** → force de négociation lors des réunions trimestrielles
+- Ratios de consommation par m² par bâtiment
+- Comparer bâtiments de même nature (écoles entre elles, gymnases entre eux)
+- Identifier les outliers **avant DALKIA** → force de négociation
 
 ### 3.4 Suivi des APE (Actions de Performance Énergétique)
 
 Chaque APE doit être réalisée avant le **31/12/2029** :
-- Inventaire des APE par bâtiment avec statut (planifié / en cours / réalisé)
+- Inventaire avec statut (planifié / en cours / réalisé)
 - Impact énergétique prévu vs mesuré (IPMVP Option B)
 - Alerte si le planning global glisse vers 2029
 
-Voir [[01-Structure-du-marché]] pour la liste des APE et [[08-Gouvernance]] pour les obligations IPMVP.
-
 ### 3.5 Rapport IPMVP automatisé
 
-Générer automatiquement les éléments du rapport annuel IPMVP :
 - Option A : économies gaz (NB/N'B/NC + calcul intéressement)
 - Option B : impact des APE sur consommations électriques
 
 ---
 
-## Données externes à intégrer
+## Données externes — état d'intégration
 
 | Source | Donnée | Statut |
 |--------|--------|--------|
-| GRDF ADICT API | QT gaz mensuel par site | En attente droits d'accès |
-| ENEDIS API | Consommation électricité par site | Déjà intégré |
-| Météo-France / COSTIC | DJU mensuels base 18°C Montpellier | À intégrer |
-| INSEE BDM | ICHT-IME, FSD2 | À intégrer |
-| BSCC | BT40 | À intégrer |
-| Marché PEG | Prix gaz (EIKON / ICIS) | À évaluer |
-| GTC API DALKIA | Températures, statuts équipements | Sous réserve mise en place |
+| GRDF ADICT API | QT gaz mensuel par site | ⏳ En attente droits d'accès |
+| CSV DALKIA mensuel | QT gaz (fichier 5e jour ouvrable) | ✅ Import opérationnel |
+| ENEDIS API | Consommation électricité par site | ✅ Déjà intégré |
+| Open-Meteo / COSTIC | DJU mensuels base 18°C | ✅ Intégré (dju_sete.csv) |
+| INSEE BDM | ICHT-IME, FSD2 | 🔲 Phase 2 |
+| BSCC | BT40 | 🔲 Phase 2 |
+| Marché PEG | Prix gaz (EIKON / ICIS) | 🔲 Phase 2 |
+| GTC API DALKIA | Températures, statuts équipements | 🔲 Sous réserve mise en place |
 
 ---
 
 ## Liens
 
+- [[11-Implémentation-Po2]] — détail technique de l'implémentation Phase 1
 - [[03-Cibles-et-intéressement]] — formules NB/N'B/NC et pseudo-code
 - [[04-Cibles-par-site]] — valeurs NB contractuelles par site
 - [[06-Facturation-et-indices]] — formules de révision P1/P2/P3 et indices

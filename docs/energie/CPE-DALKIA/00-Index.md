@@ -21,6 +21,7 @@
 | [[08-Gouvernance]] | Réunions, reporting, mémoire annuel, protocole IPMVP |
 | [[09-Mise-au-point]] | Modifications OUV11 signées (écarts CCAP/CCTPM) |
 | [[10-Roadmap-Po2]] | Fonctionnalités à développer dans Po2 — phases, priorités, données externes |
+| [[11-Implémentation-Po2]] | Détail technique Phase 1 — modèles DB, calculs, API, frontend, mise en service |
 
 ---
 
