@@ -1,7 +1,7 @@
 """Schemas Pydantic pour le module CPE DALKIA."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -208,6 +208,95 @@ class CpeFinancePreview(BaseModel):
     contrats: list[CpeFinanceContractSummary]
     sites_cpe_detectes: list[str]
     alertes: list[str]
+
+
+class CpeFinanceImportBatchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    city_id: int
+    uploaded_by_user_id: int
+    source: str
+    original_filename: str
+    content_type: str | None
+    file_size_bytes: int
+    sha256: str
+    target_contract_code: str
+    status: str
+    source_row_count: int
+    imported_line_count: int
+    ignored_line_count: int
+    invoice_count: int
+    matched_site_line_count: int
+    unknown_site_line_count: int
+    missing_site_code_line_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class CpeFinanceInvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    invoice_number: str
+    contract_code: str
+    contract_label: str | None
+    market_type: str | None
+    invoice_type: str | None
+    due_date: date | None
+    issued_at: date | None
+    period_start: date | None
+    period_end: date | None
+    original_invoice_number: str | None
+    customer_code: str | None
+    customer_name: str | None
+    total_ht: float
+    line_count: int
+
+
+class CpeFinanceSiteMatchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code_site: str
+    nom_site: str
+    pce: str | None
+
+
+class CpeFinanceLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_row_number: int
+    market: str
+    sold_service: str | None
+    billed_item: str | None
+    amount_ht: float
+    prestation_detail: str | None
+    detected_site_code: str | None
+    site_validation_status: str
+    consumption: float | None
+    consumption_unit: str | None
+    invoice: CpeFinanceInvoiceOut
+    cpe_site: CpeFinanceSiteMatchOut | None
+
+
+class CpeFinanceP1Summary(BaseModel):
+    nb_lignes: int
+    nb_factures: int
+    montant_ht: float
+    types_facture: list[CpeFinanceGroupSummary]
+    postes_factures: list[CpeFinanceGroupSummary]
+    nb_lignes_consommation: int
+    nb_lignes_index_releve: int
+    nb_sites_cpe_rapproches: int
+    nb_sites_cpe_avec_pce: int
+    nb_lignes_site_a_reconcilier: int
+
+
+class CpeFinanceImportBatchDetail(CpeFinanceImportBatchOut):
+    invoices: list[CpeFinanceInvoiceOut]
+    p1: CpeFinanceP1Summary
 
 
 # ── DJU ──────────────────────────────────────────────────────────────────────

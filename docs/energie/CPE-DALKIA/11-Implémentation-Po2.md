@@ -43,6 +43,39 @@ Ce preview est volontairement separe de l'import de releves gaz `POST /api/cpe/i
 
 Voir [[13-Export-finances-DALKIA]] pour l'analyse de l'export du 22/05/2026.
 
+## Import finances CPE DALKIA persiste
+
+La tranche suivante persiste maintenant un registre exploitable pour le contrat CPE cible :
+
+| Element | Implementation |
+|---------|----------------|
+| Filtre d'entree | Contrat DALKIA `C00190116O`, marches `P1`, `P2`, `P3` |
+| Tables | `cpe_finance_import_batches`, `cpe_finance_invoices`, `cpe_finance_lines` |
+| Endpoints | `GET/POST /api/cpe/finances/imports`, `GET /api/cpe/finances/imports/{id}`, `GET /api/cpe/finances/imports/{id}/lines` |
+| Service | `services/cpe_finance_imports.py` |
+| UI | cockpit `/cpe` : import du lot, resume P1 et table de rapprochement lignes/sites |
+
+Le lot conserve le hash du fichier et evite de dupliquer un meme export reimporte. Les lignes retenues gardent la granularite DALKIA : facture, poste `P1/P2/P3`, service vendu, poste facture, montant, prix exposes, consommation/index s'ils existent et detail de prestation.
+
+### Rapprochement site CPE
+
+Chaque ligne porte maintenant :
+- le code site detecte dans le detail DALKIA ;
+- le site CPE trouve automatiquement quand le code est connu ;
+- un statut de validation initial : `auto_matched`, `site_unknown` ou `site_code_missing`.
+
+Cette table devient la file de reconciliation avant le controle contradictoire : un code inconnu n'est pas corrige silencieusement et une ligne sans code reste visible.
+
+### Premiere vue P1
+
+Le cockpit ouvre le controle P1 a partir des lignes persistees :
+- total P1, types de factures `AC` / `DE` / autres et postes factures P1 ;
+- lecture des accessoires exposes par DALKIA via les postes factures ;
+- nombre de sites P1 rapproches et nombre de ces sites ayant deja un PCE ;
+- nombre de lignes avec consommation ou index pour preparer le futur rapprochement GRDF.
+
+Cette tranche ne valide pas encore un decompte P1. Elle rend visibles les acomptes, les decomptes, les accessoires et les trous de rapprochement necessaires avant le controle de prix et de volume.
+
 ---
 
 ## Architecture générale

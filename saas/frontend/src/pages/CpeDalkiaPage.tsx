@@ -1,14 +1,21 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CpeBilanAnnuel,
+  CpeFinanceImportBatch,
+  CpeFinanceImportBatchDetail,
+  CpeFinanceLine,
   CpeFinancePreview,
   CpeSiteBilanItem,
   calculerCpeBilan,
   fetchCpeBilan,
   fetchCpeDju,
+  fetchCpeFinanceImport,
+  fetchCpeFinanceImports,
+  fetchCpeFinanceLines,
   importCpeCsv,
+  importCpeFinanceExport,
   previewCpeFinanceExport,
   upsertCpePrixGaz,
 } from "../lib/api";
@@ -99,9 +106,14 @@ export default function CpeDalkiaPage() {
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [financePreview, setFinancePreview] = useState<CpeFinancePreview | null>(null);
+  const [selectedFinanceBatchId, setSelectedFinanceBatchId] = useState<number | null>(null);
+  const [financeLineStatus, setFinanceLineStatus] = useState<string>("all");
+  const [financeLineMarket, setFinanceLineMarket] = useState<string>("all");
+  const [financeImportMsg, setFinanceImportMsg] = useState<string | null>(null);
   const [view, setView] = useState<CpeView>("cockpit");
   const fileRef = useRef<HTMLInputElement>(null);
   const financeFileRef = useRef<HTMLInputElement>(null);
+  const financeImportFileRef = useRef<HTMLInputElement>(null);
 
   const bilanQ = useQuery({
     queryKey: ["cpe-bilan", annee],
@@ -113,6 +125,29 @@ export default function CpeDalkiaPage() {
     queryKey: ["cpe-dju", annee],
     queryFn: () => fetchCpeDju(token!, annee),
     enabled: !!token,
+  });
+
+  const financeImportsQ = useQuery({
+    queryKey: ["cpe-finance-imports"],
+    queryFn: () => fetchCpeFinanceImports(token!),
+    enabled: !!token,
+  });
+
+  const financeBatchQ = useQuery({
+    queryKey: ["cpe-finance-import", selectedFinanceBatchId],
+    queryFn: () => fetchCpeFinanceImport(token!, selectedFinanceBatchId as number),
+    enabled: !!token && selectedFinanceBatchId !== null,
+  });
+
+  const financeLinesQ = useQuery({
+    queryKey: ["cpe-finance-lines", selectedFinanceBatchId, financeLineStatus, financeLineMarket],
+    queryFn: () =>
+      fetchCpeFinanceLines(token!, selectedFinanceBatchId as number, {
+        siteValidationStatus: financeLineStatus === "all" ? undefined : financeLineStatus,
+        market: financeLineMarket === "all" ? undefined : financeLineMarket,
+        limit: 100,
+      }),
+    enabled: !!token && selectedFinanceBatchId !== null,
   });
 
   const calculerM = useMutation({
@@ -146,6 +181,19 @@ export default function CpeDalkiaPage() {
     onSuccess: setFinancePreview,
   });
 
+  const financeImportM = useMutation({
+    mutationFn: (file: File) => importCpeFinanceExport(token!, file),
+    onSuccess: (batch) => {
+      setSelectedFinanceBatchId(batch.id);
+      setFinanceImportMsg(
+        `Lot ${batch.id} importe : ${batch.imported_line_count} ligne(s) CPE, ${batch.invoice_count} facture(s).`
+      );
+      qc.invalidateQueries({ queryKey: ["cpe-finance-imports"] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-import", batch.id] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-lines", batch.id] });
+    },
+  });
+
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
   const dju = djuQ.data;
 
@@ -157,6 +205,12 @@ export default function CpeDalkiaPage() {
     bilan?.sites.filter((s) => filterCat === "tous" || s.site.categorie === filterCat) ?? [];
 
   const categories = ["tous", "ENS", "SPORT", "BAM", "CULT", "CCAS"];
+
+  useEffect(() => {
+    if (selectedFinanceBatchId === null && financeImportsQ.data?.[0]) {
+      setSelectedFinanceBatchId(financeImportsQ.data[0].id);
+    }
+  }, [financeImportsQ.data, selectedFinanceBatchId]);
 
   return (
     <div style={{ maxWidth: 1200 }}>
@@ -202,7 +256,27 @@ export default function CpeDalkiaPage() {
           financePreviewPending={financePreviewM.isPending}
           financePreviewError={financePreviewM.error instanceof Error ? financePreviewM.error.message : null}
           financeFileRef={financeFileRef}
+          financeImportFileRef={financeImportFileRef}
+          financeImports={financeImportsQ.data ?? []}
+          financeImportsPending={financeImportsQ.isLoading}
+          selectedFinanceBatchId={selectedFinanceBatchId}
+          financeBatch={financeBatchQ.data}
+          financeBatchPending={financeBatchQ.isLoading}
+          financeLines={financeLinesQ.data ?? []}
+          financeLinesPending={financeLinesQ.isLoading}
+          financeLineStatus={financeLineStatus}
+          financeLineMarket={financeLineMarket}
+          financeImportPending={financeImportM.isPending}
+          financeImportError={financeImportM.error instanceof Error ? financeImportM.error.message : null}
+          financeImportMsg={financeImportMsg}
           onFinanceFile={(file) => financePreviewM.mutate(file)}
+          onFinanceImport={(file) => {
+            setFinanceImportMsg(null);
+            financeImportM.mutate(file);
+          }}
+          onFinanceBatchChange={setSelectedFinanceBatchId}
+          onFinanceLineStatusChange={setFinanceLineStatus}
+          onFinanceLineMarketChange={setFinanceLineMarket}
           onOpenPerformance={() => setView("performance")}
         />
       )}
@@ -537,7 +611,24 @@ function CpeCockpit({
   financePreviewPending,
   financePreviewError,
   financeFileRef,
+  financeImportFileRef,
+  financeImports,
+  financeImportsPending,
+  selectedFinanceBatchId,
+  financeBatch,
+  financeBatchPending,
+  financeLines,
+  financeLinesPending,
+  financeLineStatus,
+  financeLineMarket,
+  financeImportPending,
+  financeImportError,
+  financeImportMsg,
   onFinanceFile,
+  onFinanceImport,
+  onFinanceBatchChange,
+  onFinanceLineStatusChange,
+  onFinanceLineMarketChange,
   onOpenPerformance,
 }: {
   annee: number;
@@ -548,7 +639,24 @@ function CpeCockpit({
   financePreviewPending: boolean;
   financePreviewError: string | null;
   financeFileRef: React.RefObject<HTMLInputElement>;
+  financeImportFileRef: React.RefObject<HTMLInputElement>;
+  financeImports: CpeFinanceImportBatch[];
+  financeImportsPending: boolean;
+  selectedFinanceBatchId: number | null;
+  financeBatch: CpeFinanceImportBatchDetail | undefined;
+  financeBatchPending: boolean;
+  financeLines: CpeFinanceLine[];
+  financeLinesPending: boolean;
+  financeLineStatus: string;
+  financeLineMarket: string;
+  financeImportPending: boolean;
+  financeImportError: string | null;
+  financeImportMsg: string | null;
   onFinanceFile: (file: File) => void;
+  onFinanceImport: (file: File) => void;
+  onFinanceBatchChange: (batchId: number | null) => void;
+  onFinanceLineStatusChange: (value: string) => void;
+  onFinanceLineMarketChange: (value: string) => void;
   onOpenPerformance: () => void;
 }) {
   return (
@@ -697,6 +805,134 @@ function CpeCockpit({
         )}
       </section>
 
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Lots finances CPE importes</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Le registre conserve uniquement les lignes P1/P2/P3 du contrat DALKIA cible C00190116O.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {financeImports.length > 0 && (
+              <select
+                value={selectedFinanceBatchId ?? ""}
+                onChange={(event) => onFinanceBatchChange(event.target.value ? Number(event.target.value) : null)}
+                aria-label="Lot finances DALKIA"
+                style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 210 }}
+              >
+                {financeImports.map((batch) => (
+                  <option key={batch.id} value={batch.id}>
+                    Lot {batch.id} - {batch.imported_line_count} lignes - {batch.original_filename}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => financeImportFileRef.current?.click()}
+              disabled={financeImportPending}
+            >
+              {financeImportPending ? "Import..." : "Importer le lot CPE"}
+            </button>
+            <input
+              ref={financeImportFileRef}
+              type="file"
+              accept=".csv,.txt"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onFinanceImport(file);
+                event.target.value = "";
+              }}
+            />
+          </div>
+        </div>
+
+        {financeImportsPending && <p style={{ color: "#6b7280" }}>Chargement des lots finances...</p>}
+        {financeImportError && <p style={{ color: "#dc2626", margin: "0 0 12px" }}>{financeImportError}</p>}
+        {financeImportMsg && <p style={{ color: "#166534", margin: "0 0 12px" }}>{financeImportMsg}</p>}
+        {!financeImportsPending && financeImports.length === 0 && (
+          <div className="card" style={{ padding: 16, color: "#4b5563", fontSize: 14 }}>
+            Aucun lot importe. Analysez l'export si besoin, puis importez-le pour ouvrir le controle P1.
+          </div>
+        )}
+
+        {financeBatchPending && <p style={{ color: "#6b7280" }}>Lecture du lot selectionne...</p>}
+        {financeBatch && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+              <KpiCard
+                label="Lignes retenues"
+                value={financeBatch.imported_line_count.toLocaleString("fr-FR")}
+                sub={`${financeBatch.ignored_line_count.toLocaleString("fr-FR")} ligne(s) hors contrat ou marche`}
+                color="#111827"
+              />
+              <KpiCard
+                label="Factures DALKIA"
+                value={financeBatch.invoice_count.toLocaleString("fr-FR")}
+                sub={`Contrat ${financeBatch.target_contract_code}`}
+                color="#2563eb"
+              />
+              <KpiCard
+                label="Rapprochement auto"
+                value={financeBatch.matched_site_line_count.toLocaleString("fr-FR")}
+                sub="Lignes rattachees a un site CPE connu"
+                color="#0f766e"
+              />
+              <KpiCard
+                label="A identifier"
+                value={(financeBatch.unknown_site_line_count + financeBatch.missing_site_code_line_count).toLocaleString("fr-FR")}
+                sub={`${financeBatch.unknown_site_line_count} code(s) inconnu(s), ${financeBatch.missing_site_code_line_count} sans code`}
+                color="#c2410c"
+              />
+            </div>
+
+            <FinanceP1Summary summary={financeBatch.p1} />
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-end", margin: "18px 0 10px" }}>
+              <div>
+                <h4 style={{ margin: "0 0 4px", fontSize: 15 }}>Rapprochement lignes DALKIA / sites CPE</h4>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+                  Affichage limite aux 100 premieres lignes du filtre courant.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={financeLineMarket}
+                  onChange={(event) => onFinanceLineMarketChange(event.target.value)}
+                  aria-label="Filtre marche finances CPE"
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db" }}
+                >
+                  <option value="all">Tous postes</option>
+                  <option value="P1">P1</option>
+                  <option value="P2">P2</option>
+                  <option value="P3">P3</option>
+                </select>
+                <select
+                  value={financeLineStatus}
+                  onChange={(event) => onFinanceLineStatusChange(event.target.value)}
+                  aria-label="Filtre rapprochement sites CPE"
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db" }}
+                >
+                  <option value="all">Tous statuts</option>
+                  <option value="auto_matched">Rattaches</option>
+                  <option value="site_unknown">Code inconnu</option>
+                  <option value="site_code_missing">Sans code site</option>
+                </select>
+              </div>
+            </div>
+
+            {financeLinesPending ? (
+              <p style={{ color: "#6b7280" }}>Chargement des lignes...</p>
+            ) : (
+              <FinanceLineTable rows={financeLines} />
+            )}
+          </>
+        )}
+      </section>
+
       <section style={{ marginBottom: 16 }}>
         <h3 style={{ margin: "0 0 12px" }}>Prochain socle fonctionnel</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
@@ -783,6 +1019,128 @@ function FinanceContractTable({ rows }: { rows: CpeFinancePreview["contrats"] })
       </table>
     </div>
   );
+}
+
+function FinanceP1Summary({ summary }: { summary: CpeFinanceImportBatchDetail["p1"] }) {
+  const acomptes = summary.types_facture.find((row) => row.code === "AC");
+  const decomptes = summary.types_facture.find((row) => row.code === "DE");
+
+  return (
+    <div>
+      <div style={{ marginBottom: 10 }}>
+        <h4 style={{ margin: "0 0 4px", fontSize: 15 }}>Premiere ouverture du controle P1</h4>
+        <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+          Acomptes, decomptes, accessoires P1 et preparation du rapprochement GRDF sont lus depuis les lignes persistees.
+        </p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 14 }}>
+        <KpiCard
+          label="P1 HT"
+          value={fmtEur(summary.montant_ht)}
+          sub={`${summary.nb_lignes} ligne(s), ${summary.nb_factures} facture(s)`}
+          color="#111827"
+        />
+        <KpiCard
+          label="Acomptes AC"
+          value={fmtEur(acomptes?.montant_ht)}
+          sub={`${acomptes?.nb_factures ?? 0} facture(s) detectee(s)`}
+          color="#2563eb"
+        />
+        <KpiCard
+          label="Decomptes DE"
+          value={fmtEur(decomptes?.montant_ht)}
+          sub={`${decomptes?.nb_factures ?? 0} facture(s) detectee(s)`}
+          color="#0f766e"
+        />
+        <KpiCard
+          label="Rapprochement GRDF"
+          value={`${summary.nb_sites_cpe_avec_pce}/${summary.nb_sites_cpe_rapproches}`}
+          sub={`${summary.nb_lignes_consommation} ligne(s) conso, ${summary.nb_lignes_index_releve} ligne(s) index`}
+          color="#9333ea"
+        />
+      </div>
+      <div style={{ marginBottom: 12, padding: 12, background: "#f9fafb", borderRadius: 6, color: "#4b5563", fontSize: 13 }}>
+        Prix gaz : les tarifs OS N3 du CPE restent le referentiel de controle. Les postes accessoires P1 apparaissent ci-dessous
+        et {summary.nb_lignes_site_a_reconcilier} ligne(s) P1 demandent encore un rattachement site avant le controle GRDF.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 16 }}>
+        <FinanceMarketTable title="Types de facture P1" rows={summary.types_facture} />
+        <FinanceMarketTable title="Postes factures P1" rows={summary.postes_factures} />
+      </div>
+    </div>
+  );
+}
+
+function FinanceLineTable({ rows }: { rows: CpeFinanceLine[] }) {
+  if (rows.length === 0) {
+    return <div className="card" style={{ padding: 16, color: "#6b7280" }}>Aucune ligne pour ce filtre.</div>;
+  }
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+            <th style={thStyle}>Facture</th>
+            <th style={thStyle}>Poste</th>
+            <th style={thStyle}>Ligne DALKIA</th>
+            <th style={thStyle}>Code detecte</th>
+            <th style={thStyle}>Site CPE</th>
+            <th style={thStyle}>Validation</th>
+            <th style={thStyle}>HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <td style={{ ...tdStyle, minWidth: 132 }}>
+                <strong>{row.invoice.invoice_number}</strong>
+                <div style={{ color: "#6b7280" }}>{row.invoice.invoice_type ?? "-"}</div>
+              </td>
+              <td style={tdStyle}>
+                <strong>{row.market}</strong>
+                <div style={{ color: "#6b7280" }}>{row.billed_item ?? "-"}</div>
+              </td>
+              <td style={{ ...tdStyle, minWidth: 260 }}>
+                <div>{row.sold_service ?? "-"}</div>
+                <div style={{ color: "#6b7280", marginTop: 2 }}>{row.prestation_detail ?? "-"}</div>
+              </td>
+              <td style={tdStyle}>{row.detected_site_code ?? "-"}</td>
+              <td style={{ ...tdStyle, minWidth: 170 }}>
+                {row.cpe_site ? (
+                  <>
+                    <strong>{row.cpe_site.code_site}</strong>
+                    <div style={{ color: "#6b7280" }}>{row.cpe_site.nom_site}</div>
+                  </>
+                ) : (
+                  "-"
+                )}
+              </td>
+              <td style={tdStyle}>
+                <span className={`badge ${financeLineStatusClass(row.site_validation_status)}`}>
+                  {financeLineStatusLabel(row.site_validation_status)}
+                </span>
+              </td>
+              <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>{fmtEur(row.amount_ht)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function financeLineStatusLabel(status: string): string {
+  if (status === "auto_matched") return "Rattache auto";
+  if (status === "site_unknown") return "Code inconnu";
+  if (status === "site_code_missing") return "Sans code";
+  return status;
+}
+
+function financeLineStatusClass(status: string): string {
+  if (status === "auto_matched") return "badge-green";
+  if (status === "site_unknown") return "badge-orange";
+  return "badge-red";
 }
 
 function ControlBlock({ title, detail }: { title: string; detail: string }) {

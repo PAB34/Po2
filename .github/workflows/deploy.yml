@@ -68,6 +68,8 @@ jobs:
             # Caddy redémarre TOUJOURS (sinon 502 si le conteneur backend a une nouvelle IP)
             $COMPOSE restart caddy
 
-            # Migrations Alembic — on attend que le backend soit prêt (5 s) puis on migre
-            sleep 5
-            $COMPOSE exec -T backend alembic upgrade head
+            # Migrations Alembic : plus rien à faire ici, le entrypoint.py du backend
+            # exécute déjà `alembic upgrade head` au boot (avec gestion tolérante des
+            # échecs). Relancer la migration depuis le workflow créait un faux échec
+            # CI/CD (timing avec le démarrage container, race avec le entrypoint, etc.)
+            # alors que le déploiement était réussi côté site.

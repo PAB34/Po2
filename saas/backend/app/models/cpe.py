@@ -1,10 +1,10 @@
 """Modèles CPE DALKIA — Contrat de Performance Énergétique Ville de Sète."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 
@@ -54,6 +54,122 @@ class CpeSite(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class CpeFinanceImportBatch(Base):
+    """Lot persiste d'un export finances DALKIA filtre sur le contrat CPE cible."""
+
+    __tablename__ = "cpe_finance_import_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id"), nullable=False, index=True)
+    uploaded_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="dalkia_finance_csv")
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    target_contract_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="completed")
+    source_row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    imported_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ignored_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    invoice_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    matched_site_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    unknown_site_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    missing_site_code_line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    invoices: Mapped[list["CpeFinanceInvoice"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="CpeFinanceInvoice.id",
+    )
+    lines: Mapped[list["CpeFinanceLine"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="CpeFinanceLine.source_row_number",
+    )
+
+
+class CpeFinanceInvoice(Base):
+    """Facture DALKIA reconstruite depuis ses lignes dans un export finances."""
+
+    __tablename__ = "cpe_finance_invoices"
+    __table_args__ = (UniqueConstraint("batch_id", "invoice_number", name="uq_cpe_finance_invoice_batch_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_finance_import_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_number: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    contract_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    contract_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    market_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    invoice_type: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    issued_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    original_invoice_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    customer_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    total_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    batch: Mapped[CpeFinanceImportBatch] = relationship(back_populates="invoices")
+    lines: Mapped[list["CpeFinanceLine"]] = relationship(
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+        order_by="CpeFinanceLine.source_row_number",
+    )
+
+
+class CpeFinanceLine(Base):
+    """Ligne DALKIA a rapprocher d'un site CPE puis a controler par poste P1/P2/P3."""
+
+    __tablename__ = "cpe_finance_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_finance_import_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_finance_invoices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    cpe_site_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cpe_sites.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    market: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    sold_service: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    billed_item: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    amount_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    vat_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    consumption: Mapped[float | None] = mapped_column(Float, nullable=True)
+    consumption_unit: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    prestation_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_reference: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    recipient_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    base_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revised_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reading_index_start: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reading_index_end: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reading_date_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reading_date_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reading_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    detected_site_code: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    site_validation_status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    raw_payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    batch: Mapped[CpeFinanceImportBatch] = relationship(back_populates="lines")
+    invoice: Mapped[CpeFinanceInvoice] = relationship(back_populates="lines")
+    cpe_site: Mapped[CpeSite | None] = relationship()
 
 
 class CpeGazReleve(Base):

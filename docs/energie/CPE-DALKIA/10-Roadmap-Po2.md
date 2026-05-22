@@ -48,6 +48,8 @@ L'entrée `/cpe` ne doit pas laisser croire que ce moteur constitue à lui seul 
 > Premières tranches lancées le 22/05/2026 :
 > - `/cpe` est recadré en cockpit CPE avec une vue séparée pour le suivi énergétique existant ;
 > - l'export finances DALKIA est analysable en preview avant ingestion définitive des lignes P1/P2/P3.
+> - les lots finances CPE du contrat `C00190116O` sont persistés avec factures, lignes et file de rapprochement vers les sites CPE ;
+> - le cockpit ouvre une première vue P1 sur les acomptes, décomptes, accessoires et préparation GRDF.
 
 ---
 
