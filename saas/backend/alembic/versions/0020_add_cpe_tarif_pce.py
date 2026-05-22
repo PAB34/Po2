@@ -20,27 +20,48 @@ depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+
     # -- cpe_sites : tarif (T1/T2/T3) et PCE (identifiant compteur GRDF) ------
-    op.add_column("cpe_sites", sa.Column("tarif", sa.String(5), nullable=True))
-    op.add_column("cpe_sites", sa.Column("pce", sa.String(50), nullable=True))
+    # ADD COLUMN IF NOT EXISTS — idempotent si migration déjà partiellement appliquée
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_sites ADD COLUMN IF NOT EXISTS tarif VARCHAR(5)"
+    ))
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_sites ADD COLUMN IF NOT EXISTS pce VARCHAR(50)"
+    ))
 
     # -- cpe_prix_gaz : ajout tarif + mise à jour de la contrainte unique ------
-    op.add_column("cpe_prix_gaz", sa.Column("tarif", sa.String(5), nullable=True))
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_prix_gaz ADD COLUMN IF NOT EXISTS tarif VARCHAR(5)"
+    ))
 
-    # Supprime l'ancienne contrainte unique (annee seul)
-    op.drop_constraint("uq_cpe_prix_gaz_annee", "cpe_prix_gaz", type_="unique")
+    # Supprime l'ancienne contrainte unique (annee seul) — IF EXISTS pour robustesse
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_prix_gaz DROP CONSTRAINT IF EXISTS uq_cpe_prix_gaz_annee"
+    ))
 
-    # Nouvelle contrainte unique (annee, tarif) — un prix par type de tarif et par exercice
-    op.create_unique_constraint(
-        "uq_cpe_prix_gaz_annee_tarif",
-        "cpe_prix_gaz",
-        ["annee", "tarif"],
-    )
+    # Nouvelle contrainte unique (annee, tarif) — CREATE IF NOT EXISTS via index unique
+    conn.execute(sa.text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_cpe_prix_gaz_annee_tarif "
+        "ON cpe_prix_gaz (annee, tarif)"
+    ))
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_cpe_prix_gaz_annee_tarif", "cpe_prix_gaz", type_="unique")
-    op.create_unique_constraint("uq_cpe_prix_gaz_annee", "cpe_prix_gaz", ["annee"])
-    op.drop_column("cpe_prix_gaz", "tarif")
-    op.drop_column("cpe_sites", "pce")
-    op.drop_column("cpe_sites", "tarif")
+    conn = op.get_bind()
+    # Supprime index/contrainte (créé comme index unique dans upgrade)
+    conn.execute(sa.text("DROP INDEX IF EXISTS uq_cpe_prix_gaz_annee_tarif"))
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_prix_gaz DROP CONSTRAINT IF EXISTS uq_cpe_prix_gaz_annee_tarif"
+    ))
+    # Restaure contrainte originale
+    conn.execute(sa.text(
+        "ALTER TABLE cpe_prix_gaz DROP CONSTRAINT IF EXISTS uq_cpe_prix_gaz_annee"
+    ))
+    conn.execute(sa.text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_cpe_prix_gaz_annee ON cpe_prix_gaz (annee)"
+    ))
+    conn.execute(sa.text("ALTER TABLE cpe_prix_gaz DROP COLUMN IF EXISTS tarif"))
+    conn.execute(sa.text("ALTER TABLE cpe_sites DROP COLUMN IF EXISTS pce"))
+    conn.execute(sa.text("ALTER TABLE cpe_sites DROP COLUMN IF EXISTS tarif"))
