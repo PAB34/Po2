@@ -7,7 +7,6 @@ import {
   calculerCpeBilan,
   fetchCpeBilan,
   fetchCpeDju,
-  fetchCpePrixGaz,
   importCpeCsv,
   upsertCpePrixGaz,
 } from "../lib/api";
@@ -39,6 +38,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
   SPORT: "Sport",
   BAM: "Administratif",
   CULT: "Culture",
+  CCAS: "CCAS",
 };
 
 function fmt(val: number | null | undefined, decimals = 1): string {
@@ -72,13 +72,6 @@ export default function CpeDalkiaPage() {
     enabled: !!token,
   });
 
-  const puQ = useQuery({
-    queryKey: ["cpe-prix-gaz", annee],
-    queryFn: () => fetchCpePrixGaz(token!, annee),
-    enabled: !!token,
-    retry: false,
-  });
-
   const calculerM = useMutation({
     mutationFn: () => calculerCpeBilan(token!, annee),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] }),
@@ -87,7 +80,6 @@ export default function CpeDalkiaPage() {
   const puM = useMutation({
     mutationFn: (pu: number) => upsertCpePrixGaz(token!, { annee, pu_eur_mwh_pci: pu }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["cpe-prix-gaz", annee] });
       qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] });
       setShowPuForm(false);
       setPuInput("");
@@ -108,12 +100,15 @@ export default function CpeDalkiaPage() {
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
   const dju = djuQ.data;
-  const pu = puQ.data;
+
+  // prix_tarifs depuis le bilan (T1/T2/T3 pré-chargés par OS N°3)
+  const prixTarifs = bilan?.prix_tarifs ?? {};
+  const prixT2 = prixTarifs["T2"] ?? null;
 
   const filteredSites: CpeSiteBilanItem[] =
     bilan?.sites.filter((s) => filterCat === "tous" || s.site.categorie === filterCat) ?? [];
 
-  const categories = ["tous", "ENS", "SPORT", "BAM", "CULT"];
+  const categories = ["tous", "ENS", "SPORT", "BAM", "CULT", "CCAS"];
 
   return (
     <div style={{ maxWidth: 1200 }}>
@@ -145,10 +140,14 @@ export default function CpeDalkiaPage() {
           color={dju && dju.dju_total < 1426 ? "#f97316" : "#16a34a"}
         />
         <KpiCard
-          label="Prix gaz (Pu)"
-          value={pu ? `${fmt(pu.pu_eur_mwh_pci, 2)} €/MWhPCI` : "Non renseigné"}
-          sub={pu ? `Source : ${pu.source}` : "Requis pour le calcul"}
-          color={pu ? "#2563eb" : "#9ca3af"}
+          label="Prix gaz (OS N°3)"
+          value={prixT2 ? `T2 : ${fmt(prixT2, 2)} €/MWhPCI` : "Non renseigné"}
+          sub={
+            Object.keys(prixTarifs).length > 0
+              ? `T1 : ${fmt(prixTarifs["T1"], 2)} • T3 : ${fmt(prixTarifs["T3"], 2)} €/MWhPCI`
+              : "Lancer seed_cpe_prix_gaz.py"
+          }
+          color={prixT2 ? "#2563eb" : "#9ca3af"}
           action={
             <button
               type="button"
@@ -156,7 +155,7 @@ export default function CpeDalkiaPage() {
               style={{ fontSize: 12, padding: "2px 8px" }}
               onClick={() => setShowPuForm(true)}
             >
-              {pu ? "Modifier" : "Saisir"}
+              Saisie manuelle
             </button>
           }
         />
@@ -180,21 +179,22 @@ export default function CpeDalkiaPage() {
         />
       </div>
 
-      {/* ── Formulaire Prix gaz ── */}
+      {/* ── Formulaire Prix gaz (saisie manuelle post-2030 ou correction) ── */}
       {showPuForm && (
         <div className="card" style={{ marginBottom: 16, padding: 16, background: "#f0f9ff" }}>
-          <strong>Prix unitaire gaz {annee} (Pu)</strong>
+          <strong>Saisie manuelle du prix gaz {annee}</strong>
           <p style={{ fontSize: 13, color: "#6b7280", margin: "4px 0 12px" }}>
-            Issu du décompte définitif P1 DALKIA (facture au 15/02/N+1). En €/MWhPCI.
+            Pour 2026-2030 : prix fixe OS N°3 — utiliser <code>seed_cpe_prix_gaz.py</code> plutôt que ce formulaire.
+            Pour 2031+ : issu du décompte définitif P1 DALKIA (15/02/N+1). Valeur en €/MWhPCI.
           </p>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
               type="number"
               step="0.01"
-              placeholder="ex : 52.30"
+              placeholder="Pu €/MWhPCI"
               value={puInput}
               onChange={(e) => setPuInput(e.target.value)}
-              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", width: 150 }}
+              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #d1d5db", width: 160 }}
             />
             <button
               type="button"
@@ -202,7 +202,7 @@ export default function CpeDalkiaPage() {
               disabled={!puInput || puM.isPending}
               onClick={() => puM.mutate(parseFloat(puInput.replace(",", ".")))}
             >
-              Enregistrer
+              Enregistrer (global)
             </button>
             <button type="button" className="secondary-button" onClick={() => setShowPuForm(false)}>
               Annuler
@@ -289,6 +289,7 @@ export default function CpeDalkiaPage() {
               <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
                 <th style={thStyle}>Code</th>
                 <th style={thStyle}>Site</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Tarif</th>
                 <th style={thStyle}>NB (MWhPCI)</th>
                 <th style={thStyle}>N'B corrigé</th>
                 <th style={thStyle}>NC réel</th>
@@ -302,7 +303,7 @@ export default function CpeDalkiaPage() {
             <tbody>
               {filteredSites.length === 0 ? (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
+                  <td colSpan={11} style={{ textAlign: "center", padding: 32, color: "#9ca3af" }}>
                     Aucun site. Lancez le seed des sites CPE (scripts/seed_cpe_sites.py).
                   </td>
                 </tr>
@@ -388,10 +389,28 @@ function SiteRow({ item }: { item: CpeSiteBilanItem }) {
       <td style={tdStyle}>
         <code style={{ fontSize: 11, color: "#6b7280" }}>{item.site.code_site}</code>
       </td>
-      <td style={{ ...tdStyle, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         <Link to={`/cpe/sites/${item.site.id}`} style={{ color: "#2563eb", textDecoration: "none" }}>
           {item.site.nom_site}
         </Link>
+      </td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>
+        {item.site.tarif ? (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: item.site.tarif === "T1" ? "#fef3c7" : item.site.tarif === "T3" ? "#f0fdf4" : "#eff6ff",
+              color: item.site.tarif === "T1" ? "#92400e" : item.site.tarif === "T3" ? "#166534" : "#1d4ed8",
+            }}
+          >
+            {item.site.tarif}
+          </span>
+        ) : (
+          <span style={{ color: "#9ca3af", fontSize: 11 }}>—</span>
+        )}
       </td>
       <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.site.nb_mwh_pci)}</td>
       <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.n_prime_b)}</td>

@@ -43,6 +43,12 @@ DJU_REFERENCE = 1426.0
 SEUIL_REVISION_1 = 0.08   # > 8% → déclenchement sur 2 saisons
 SEUIL_REVISION_2 = 0.12   # > 12% → déclenchement immédiat (1 saison)
 
+# Conversion PCS → PCI (OS N°3 donne des prix en €/MWhPCS, formule CPE en MWhPCI)
+# Pu_PCI = Pu_PCS × ratio_PCS_PCI
+# ratio ≈ 1.1068 pour le gaz naturel distribué à Sète (zone GRDF Languedoc-Roussillon)
+# Source : GRDF données de qualité du gaz — affinement possible via API GRDF ADICT
+PCS_PCI_RATIO = 1.1068
+
 
 # ── Moteur de calcul (fonctions pures) ───────────────────────────────────────
 
@@ -244,12 +250,34 @@ def upsert_releve(
 
 # ── CRUD CpePrixGaz ───────────────────────────────────────────────────────────
 
-def get_prix_gaz(db: Session, annee: int) -> CpePrixGaz | None:
-    return db.scalars(select(CpePrixGaz).where(CpePrixGaz.annee == annee)).first()
+def get_prix_gaz(db: Session, annee: int, tarif: str | None = None) -> CpePrixGaz | None:
+    """Retourne le prix gaz pour un exercice et un tarif donné.
+
+    tarif = 'T1' | 'T2' | 'T3' (OS N°3) ou None pour un Pu global/fallback.
+    Si le tarif exact est absent, tente un fallback sur None (prix global).
+    """
+    q = select(CpePrixGaz).where(CpePrixGaz.annee == annee)
+    if tarif is not None:
+        q = q.where(CpePrixGaz.tarif == tarif)
+    else:
+        q = q.where(CpePrixGaz.tarif.is_(None))
+    result = db.scalars(q).first()
+    # Fallback : si tarif spécifique absent, tente None (Pu global)
+    if result is None and tarif is not None:
+        result = db.scalars(
+            select(CpePrixGaz)
+            .where(CpePrixGaz.annee == annee, CpePrixGaz.tarif.is_(None))
+        ).first()
+    return result
+
+
+def get_all_prix_gaz(db: Session, annee: int) -> list[CpePrixGaz]:
+    """Retourne tous les prix gaz d'un exercice (tous tarifs)."""
+    return list(db.scalars(select(CpePrixGaz).where(CpePrixGaz.annee == annee)).all())
 
 
 def upsert_prix_gaz(db: Session, payload: CpePrixGazCreate) -> CpePrixGaz:
-    existing = get_prix_gaz(db, payload.annee)
+    existing = get_prix_gaz(db, payload.annee, payload.tarif)
     if existing:
         existing.pu_eur_mwh_pci = payload.pu_eur_mwh_pci
         existing.source = payload.source
@@ -287,9 +315,9 @@ def calculer_resultat_site(
         dju_info = get_dju_annuel(annee)
         dju_reels = dju_info.dju_total if dju_info.nb_jours > 0 else None
 
-    # Prix gaz
+    # Prix gaz — lookup par tarif du site (T1/T2/T3, OS N°3)
     if pu_mwh is None:
-        prix = get_prix_gaz(db, annee)
+        prix = get_prix_gaz(db, annee, site.tarif)
         pu_mwh = prix.pu_eur_mwh_pci if prix else None
 
     # Relevés mensuels
@@ -392,8 +420,13 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
     dju_info = get_dju_annuel(annee)
     dju_reels = dju_info.dju_total if dju_info.nb_jours > 0 else None
 
-    prix = get_prix_gaz(db, annee)
-    pu_mwh = prix.pu_eur_mwh_pci if prix else None
+    # Prix par tarif — {tarif_str_ou_None: pu_pci}
+    prix_list = get_all_prix_gaz(db, annee)
+    prix_par_tarif: dict[str | None, float] = {p.tarif: p.pu_eur_mwh_pci for p in prix_list}
+    # Pu T2 pour affichage KPI (tarif le plus courant)
+    pu_mwh_display = prix_par_tarif.get("T2") or prix_par_tarif.get(None)
+    # Dict pour le frontend : uniquement les tarifs nommés
+    prix_tarifs: dict[str, float] = {k: v for k, v in prix_par_tarif.items() if k is not None}
 
     items: list[CpeSiteBilanItem] = []
     total_interessement = 0.0
@@ -401,6 +434,12 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
     nb_complets = 0
 
     for site in sites:
+        # Prix applicable à ce site
+        pu_site = prix_par_tarif.get(site.tarif) if site.tarif else None
+        if pu_site is None and site.tarif is not None:
+            # Fallback sur prix global si tarif spécifique absent
+            pu_site = prix_par_tarif.get(None)
+
         releves = get_releves(db, site.id, annee)
         nb_mois = len([r for r in releves if r.qt_mwh_pci is not None])
         qt_cumul = sum(r.qt_mwh_pci for r in releves if r.qt_mwh_pci is not None) or None
@@ -412,10 +451,10 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
         n_prime_b = calcul_n_prime_b(site.nb_mwh_pci, dju_reels, site.dju_reference) if dju_reels else None
 
         fin: dict[str, Any] = {}
-        if n_prime_b is not None and nc_cumul is not None and pu_mwh is not None:
-            fin = calcul_interessement(n_prime_b, nc_cumul, pu_mwh)
+        if n_prime_b is not None and nc_cumul is not None and pu_site is not None:
+            fin = calcul_interessement(n_prime_b, nc_cumul, pu_site)
 
-        if nb_mois == 12 and pu_mwh and dju_reels:
+        if nb_mois == 12 and pu_site and dju_reels:
             nb_complets += 1
             if fin.get("type_resultat") == "interessement":
                 total_interessement += fin.get("montant_ht") or 0.0
@@ -426,7 +465,7 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
         resultat_db = get_resultat_site(db, site.id, annee)
         resultat_out = CpeResultatAnnuelOut.model_validate(resultat_db) if resultat_db else None
 
-        statut = "partiel" if nb_mois < 12 else ("calcule" if pu_mwh and dju_reels else "partiel")
+        statut = "partiel" if nb_mois < 12 else ("calcule" if pu_site and dju_reels else "partiel")
 
         items.append(CpeSiteBilanItem(
             site=CpeSiteOut.model_validate(site),
@@ -445,7 +484,8 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
         annee=annee,
         dju_reels=dju_reels,
         dju_reference=DJU_REFERENCE,
-        pu_mwh=pu_mwh,
+        pu_mwh=pu_mwh_display,
+        prix_tarifs=prix_tarifs,
         nb_sites_actifs=len(sites),
         nb_sites_complets=nb_complets,
         total_interessement_ht=round(total_interessement, 2),

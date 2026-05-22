@@ -39,6 +39,14 @@ class CpeSite(Base):
     # Cibles électricité (Annexe 5.2 — information, pas d'intéressement direct)
     cible_elec_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Facturation gaz — OS N°3 (prix fixe 5 ans 2026-2030)
+    tarif: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    """Typ. tarifaire GRDF : T1 | T2 | T3 — détermine le Pu applicable (OS N°3).
+    None = pas de compteur gaz propre (sous-comptage ou site sans gaz)."""
+
+    pce: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    """Identifiant PCE GRDF du compteur gaz principal (ex : 24349204040145 ou GI091908)."""
+
     actif: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -90,16 +98,19 @@ class CpePrixGaz(Base):
     """
 
     __tablename__ = "cpe_prix_gaz"
-    __table_args__ = (UniqueConstraint("annee", name="uq_cpe_prix_gaz_annee"),)
+    __table_args__ = (UniqueConstraint("annee", "tarif", name="uq_cpe_prix_gaz_annee_tarif"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     annee: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    tarif: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    """Typ. tarifaire : T1 | T2 | T3 (OS N°3). None = global/fallback."""
+
     pu_eur_mwh_pci: Mapped[float] = mapped_column(Float, nullable=False)
-    """Prix unitaire moyen annuel en €/MWhPCI."""
+    """Prix unitaire en €/MWhPCI — converti depuis €/MWhPCS via ratio PCS/PCI ≈ 1.1068."""
 
     source: Mapped[str] = mapped_column(String(30), nullable=False, default="saisie_manuelle")
-    """Origine : contrat_p1 | saisie_manuelle"""
+    """Origine : os3_fixe | contrat_p1 | saisie_manuelle"""
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

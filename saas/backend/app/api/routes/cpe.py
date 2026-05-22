@@ -124,16 +124,20 @@ async def import_csv(
 
 # ── Prix gaz ──────────────────────────────────────────────────────────────────
 
-@router.get("/prix-gaz/{annee}", response_model=CpePrixGazOut)
+@router.get("/prix-gaz/{annee}", response_model=list[CpePrixGazOut])
 def get_prix_gaz(
     annee: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> CpePrixGazOut:
-    prix = svc.get_prix_gaz(db, annee)
-    if prix is None:
+) -> list[CpePrixGazOut]:
+    """Retourne tous les prix gaz de l'exercice (T1/T2/T3 + global si renseigné).
+
+    Depuis OS N°3, 3 tarifs coexistent selon le profil de consommation de chaque site.
+    """
+    prix_list = svc.get_all_prix_gaz(db, annee)
+    if not prix_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Prix gaz {annee} non renseigné")
-    return CpePrixGazOut.model_validate(prix)
+    return [CpePrixGazOut.model_validate(p) for p in prix_list]
 
 
 @router.post("/prix-gaz", response_model=CpePrixGazOut)
@@ -142,9 +146,11 @@ def set_prix_gaz(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CpePrixGazOut:
-    """Saisit ou met à jour le prix unitaire gaz d'un exercice (Pu en €/MWhPCI).
+    """Saisit ou met à jour le prix unitaire gaz (Pu en €/MWhPCI).
 
-    Ce Pu est issu du décompte définitif P1 (facture DALKIA au 15/02/N+1).
+    Pour les exercices 2026-2030 : prix fixe par tarif (T1/T2/T3) via OS N°3.
+    Utiliser seed_cpe_prix_gaz.py pour l'initialisation automatique.
+    Pour la révision P1 dès 2031 : saisir après réception décompte définitif (15/02/N+1).
     """
     prix = svc.upsert_prix_gaz(db, payload)
     return CpePrixGazOut.model_validate(prix)

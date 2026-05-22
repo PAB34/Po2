@@ -35,16 +35,19 @@ Fichier CSV             →  energie/DJU/dju_sete.csv (DJU quotidiens)
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `code_site` | String(50) UNIQUE | Ex : `VDS-ENS 02`, `VDS-SPORT 03` |
+| `code_site` | String(50) UNIQUE | Ex : `VDS-ENS 02`, `VDS-SPORT 03`, `CCAS 04` |
 | `nom_site` | String(255) | Nom complet du bâtiment |
-| `categorie` | String(20) | `ENS` / `SPORT` / `BAM` / `CULT` |
+| `categorie` | String(20) | `ENS` / `SPORT` / `BAM` / `CULT` / `CCAS` |
 | `nb_mwh_pci` | Float | NB contractuel (Annexe 5.1 AE) |
 | `ecs_ref_m3_an` | Float | Volume ECS de référence (m³/an) |
 | `q_ecs_mwh_pci_per_m3` | Float NULL | qECS (€/MWhPCI/m³) — null si inconnu |
 | `dju_reference` | Float | 1 426,0 (fixe contractuellement) |
 | `cible_elec_mwh` | Float NULL | Cible électricité (Annexe 5.2, info) |
+| `tarif` | String(5) NULL | `T1` / `T2` / `T3` — type tarifaire GRDF (OS N°3) |
+| `pce` | String(50) NULL | Identifiant PCE GRDF du compteur gaz |
 
-> 54 sites pré-chargés via `scripts/seed_cpe_sites.py` depuis l'Annexe 5.1 AE.
+> 64 sites chargés via `scripts/seed_cpe_sites.py` (54 Annexe 5.1 + 10 nouveaux OS N°3 : 4 CULT + 6 CCAS).  
+> Voir [[12-OS3-Prix-gaz]] pour la liste complète PCE/tarif.
 
 ### `cpe_gaz_releves` — Relevés mensuels QT
 
@@ -59,15 +62,18 @@ Fichier CSV             →  energie/DJU/dju_sete.csv (DJU quotidiens)
 > Alimenté par import CSV DALKIA (5e jour ouvrable) ou saisie manuelle.  
 > Prêt pour GRDF ADICT quand les droits d'accès seront obtenus.
 
-### `cpe_prix_gaz` — Prix unitaire annuel (Pu)
+### `cpe_prix_gaz` — Prix unitaire par tarif et par exercice
 
 | Colonne | Type | Description |
 |---------|------|-------------|
-| `annee` | Int UNIQUE | Exercice |
-| `pu_eur_mwh_pci` | Float | Prix moyen €/MWhPCI |
-| `source` | String(30) | `contrat_p1` / `saisie_manuelle` |
+| `annee` | Int | Exercice |
+| `tarif` | String(5) NULL | `T1` / `T2` / `T3` — unique(annee, tarif) |
+| `pu_eur_mwh_pci` | Float | Prix en €/MWhPCI (converti depuis PCS × 1,1068) |
+| `source` | String(30) | `os3_fixe` / `contrat_p1` / `saisie_manuelle` |
 
-> Issu du décompte définitif P1 DALKIA (facture au 15/02/N+1). Saisie manuelle en attendant.
+> **2026-2030** : prix fixes OS N°3 — pré-chargés via `scripts/seed_cpe_prix_gaz.py` (T1=118,50, T2=82,13, T3=78,42 €/MWhPCI).  
+> **2031+** : révision annuelle via décompte définitif P1 DALKIA (15/02/N+1).  
+> Conversion PCS→PCI : `Pu_PCI = Pu_PCS × 1,1068` (GRDF zone Languedoc-Roussillon).
 
 ### `cpe_resultats_annuels` — Résultats calculés
 
@@ -193,20 +199,25 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 ## Mise en service
 
 ```bash
-# 1. Migrer la base de données
+# 1. Migrer la base de données (inclut migration 0020 — tarif/pce)
 alembic upgrade head
 
-# 2. Charger les 54 sites contractuels (Annexe 5.1 AE)
+# 2. Charger les 64 sites contractuels (54 Annexe 5.1 + 10 OS N°3)
+#    Met aussi à jour tarif et pce sur les sites existants
 python -m app.scripts.seed_cpe_sites --city-id 1
+
+# 3. Charger les prix gaz OS N°3 (T1/T2/T3 pour 2026-2030)
+python -m app.scripts.seed_cpe_prix_gaz
 
 # Prévisualiser sans écrire :
 python -m app.scripts.seed_cpe_sites --dry-run
+python -m app.scripts.seed_cpe_prix_gaz --dry-run
 ```
 
 Ensuite via l'interface `/cpe` :
-1. **Saisir le Pu** — prix unitaire gaz de l'exercice (décompte définitif P1 au 15/02/N+1)
+1. Les **prix gaz 2026-2030 sont pré-chargés** (OS N°3 — T1/T2/T3 automatiquement appliqués par site)
 2. **Importer le CSV** DALKIA mensuel (ou saisir mois par mois)
-3. **Recalculer le bilan** → intéressement/pénalité calculé par site
+3. **Recalculer le bilan** → intéressement/pénalité calculé par site avec le bon Pu selon son tarif
 
 ---
 
@@ -215,11 +226,24 @@ Ensuite via l'interface `/cpe` :
 | Donnée | Sites concernés | Action |
 |--------|----------------|--------|
 | `q_ecs_mwh_pci_per_m3` (qECS) | Tous sauf ENS13, ENS15, ENS17.04, ENS18 | Récupérer dans le BPU complet (Annexe 7 AE) |
-| Pu gaz 2026 | Exercice 2026 | Saisir après réception décompte P1 (15/02/2027) |
+| Prix gaz 2026-2030 (T1/T2/T3) | Tous exercices | ✅ Pré-chargés via `seed_cpe_prix_gaz.py` (OS N°3) |
 | QT mensuels 2026 | Tous sites | Import CSV DALKIA chaque mois |
+| NB des 10 nouveaux sites | CULT 02.01/02/03, CULT 05, CCAS 01/04/05/07/08 | Récupérer dans Annexe 5.1 CCAS du marché |
 | qECS : ENS13=1,0 — ENS15=3,3 — ENS17.04=0,9 — ENS18=2,7 | Déjà chargés | ✅ |
 
-> Tant que qECS est null, le moteur pose NC = QT (NC légèrement surestimé, côté sécurité pour la collectivité).
+> Tant que qECS est null, le moteur pose NC = QT (NC légèrement surestimé, côté sécurité pour la collectivité).  
+> Les 10 nouveaux sites CCAS/CULT ont NB=0 par défaut — les calculs d'intéressement ne démarrent que quand NB > 0.
+
+---
+
+## Points d'attention OS N°3 (migration 0020)
+
+- **Prix par tarif** : `get_prix_gaz(db, annee, tarif)` prend maintenant un 3e paramètre. Sans tarif → fallback sur `tarif=None` (Pu global). L'ancien code qui passait 2 args reste compatible grâce au défaut `tarif=None`.
+- **Conversion PCS/PCI** : `PCS_PCI_RATIO = 1.1068` dans `services/cpe.py`. Les prix OS N°3 sont stockés **déjà convertis en PCI** dans `cpe_prix_gaz.pu_eur_mwh_pci`. La conversion est faite une seule fois à l'import via `seed_cpe_prix_gaz.py`.
+- **Bilan annuel** : `get_bilan_annuel()` charge maintenant un dict `{tarif: pu}` pour l'année, et applique le prix du tarif de chaque site. Le champ `pu_mwh` de `CpeBilanAnnuel` retourne le prix T2 pour l'affichage KPI.
+- **10 nouveaux sites** : les sites CCAS (01/04/05/07/08/09) et CULT (02.01/02.02/02.03/05) ont `nb_mwh_pci=0` → le calcul retourne `insuffisant` tant que NB n'est pas saisi. Pas d'impact sur les totaux.
+- **BAM 09 anomalie** : tarif='T3' stocké mais prix affiché dans l'OS N°3 = 74,17 (T2). À trancher avec DALKIA. En attendant le calcul utilise T3 (78,42 €/MWhPCI).
+- **Endpoint `/prix-gaz/{annee}`** : retourne maintenant une **liste** (`list[CpePrixGazOut]`) et non plus un objet unique. Le frontend a été mis à jour en conséquence.
 
 ---
 
@@ -237,6 +261,7 @@ Ensuite via l'interface `/cpe` :
 ## Liens
 
 - [[10-Roadmap-Po2]] — roadmap et phases suivantes
+- [[12-OS3-Prix-gaz]] — OS N°3 : prix fixe 5 ans, tarifs T1/T2/T3, PCE, CCAS
 - [[03-Cibles-et-intéressement]] — formules contractuelles complètes
 - [[04-Cibles-par-site]] — NB et qECS par site
 - [[06-Facturation-et-indices]] — P1/P2/P3, Pu, indices de révision

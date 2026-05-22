@@ -22,6 +22,7 @@
 | [[09-Mise-au-point]] | Modifications OUV11 signées (écarts CCAP/CCTPM) |
 | [[10-Roadmap-Po2]] | Fonctionnalités à développer dans Po2 — phases, priorités, données externes |
 | [[11-Implémentation-Po2]] | Détail technique Phase 1 — modèles DB, calculs, API, frontend, mise en service |
+| [[12-OS3-Prix-gaz]] | OS N°3 — prix fixe gaz 5 ans (2026-2030), tarifs T1/T2/T3, PCE, sites CCAS |
 
 ---
 

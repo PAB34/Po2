@@ -2371,6 +2371,8 @@ export type CpeSite = {
   q_ecs_mwh_pci_per_m3: number | null;
   dju_reference: number;
   cible_elec_mwh: number | null;
+  tarif: "T1" | "T2" | "T3" | null;  // OS N°3
+  pce: string | null;                  // PCE GRDF
   actif: boolean;
   notes: string | null;
   created_at: string;
@@ -2393,7 +2395,8 @@ export type CpeGazReleve = {
 export type CpePrixGaz = {
   id: number;
   annee: number;
-  pu_eur_mwh_pci: number;
+  tarif: "T1" | "T2" | "T3" | null;  // OS N°3
+  pu_eur_mwh_pci: number;             // en €/MWhPCI (converti depuis PCS)
   source: string;
   notes: string | null;
   updated_at: string;
@@ -2439,7 +2442,8 @@ export type CpeBilanAnnuel = {
   annee: number;
   dju_reels: number | null;
   dju_reference: number;
-  pu_mwh: number | null;
+  pu_mwh: number | null;            // prix T2 (affichage KPI)
+  prix_tarifs: Record<string, number>; // {T1: ..., T2: ..., T3: ...} en €/MWhPCI
   nb_sites_actifs: number;
   nb_sites_complets: number;
   total_interessement_ht: number;
@@ -2487,14 +2491,14 @@ export async function fetchCpeDju(token: string, annee: number): Promise<CpeDjuA
   return parseResponse<CpeDjuAnnuel>(response);
 }
 
-export async function fetchCpePrixGaz(token: string, annee: number): Promise<CpePrixGaz> {
+export async function fetchCpePrixGaz(token: string, annee: number): Promise<CpePrixGaz[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/prix-gaz/${annee}`, { headers: buildHeaders(token) });
-  return parseResponse<CpePrixGaz>(response);
+  return parseResponse<CpePrixGaz[]>(response);
 }
 
 export async function upsertCpePrixGaz(
   token: string,
-  payload: { annee: number; pu_eur_mwh_pci: number; notes?: string },
+  payload: { annee: number; tarif?: string | null; pu_eur_mwh_pci: number; notes?: string },
 ): Promise<CpePrixGaz> {
   const response = await fetch(`${apiBaseUrl}/cpe/prix-gaz`, {
     method: "POST",

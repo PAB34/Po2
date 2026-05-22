@@ -17,6 +17,8 @@ class CpeSiteBase(BaseModel):
     q_ecs_mwh_pci_per_m3: float | None = None
     dju_reference: float = 1426.0
     cible_elec_mwh: float | None = None
+    tarif: str | None = None   # T1 | T2 | T3 (OS N°3)
+    pce: str | None = None     # PCE GRDF
     actif: bool = True
     notes: str | None = None
 
@@ -30,6 +32,8 @@ class CpeSiteUpdate(BaseModel):
     ecs_ref_m3_an: float | None = None
     q_ecs_mwh_pci_per_m3: float | None = None
     cible_elec_mwh: float | None = None
+    tarif: str | None = None
+    pce: str | None = None
     actif: bool | None = None
     notes: str | None = None
 
@@ -80,6 +84,7 @@ class CpePrixGazOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     annee: int
+    tarif: str | None
     pu_eur_mwh_pci: float
     source: str
     notes: str | None
@@ -88,6 +93,7 @@ class CpePrixGazOut(BaseModel):
 
 class CpePrixGazCreate(BaseModel):
     annee: int
+    tarif: str | None = None  # T1 | T2 | T3 — None pour saisie manuelle globale
     pu_eur_mwh_pci: float
     source: str = "saisie_manuelle"
     notes: str | None = None
@@ -140,7 +146,8 @@ class CpeBilanAnnuel(BaseModel):
     annee: int
     dju_reels: float | None
     dju_reference: float
-    pu_mwh: float | None
+    pu_mwh: float | None          # prix T2 par défaut (affichage KPI)
+    prix_tarifs: dict[str, float]  # {T1: ..., T2: ..., T3: ...} — prix PCI par tarif
     nb_sites_actifs: int
     nb_sites_complets: int
     total_interessement_ht: float
