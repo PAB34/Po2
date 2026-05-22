@@ -23,6 +23,7 @@
 | [[10-Roadmap-Po2]] | Fonctionnalités à développer dans Po2 — phases, priorités, données externes |
 | [[11-Implémentation-Po2]] | Détail technique Phase 1 — modèles DB, calculs, API, frontend, mise en service |
 | [[12-OS3-Prix-gaz]] | OS N°3 — prix fixe gaz 5 ans (2026-2030), tarifs T1/T2/T3, PCE, sites CCAS |
+| [[13-Export-finances-DALKIA]] | Analyse du CSV finances DALKIA, potentiel P1/P2/P3 et stratégie d'import |
 
 ---
 

@@ -2535,6 +2535,47 @@ export type CpeImportResult = {
   sites_inconnus: string[];
 };
 
+export type CpeFinanceGroupSummary = {
+  code: string;
+  nb_lignes: number;
+  nb_factures: number;
+  montant_ht: number;
+};
+
+export type CpeFinanceContractSummary = {
+  code_contrat: string;
+  libelle_contrat: string | null;
+  nb_lignes: number;
+  nb_factures: number;
+  montant_ht: number;
+  periode_debut_min: string | null;
+  periode_fin_max: string | null;
+  marches: string[];
+  types_marche: string[];
+  nb_lignes_code_site_cpe: number;
+  nb_sites_cpe_distincts: number;
+  nb_lignes_consommation: number;
+  nb_lignes_index_releve: number;
+};
+
+export type CpeFinancePreview = {
+  filename: string | null;
+  nb_lignes: number;
+  nb_factures: number;
+  nb_contrats: number;
+  montant_ht: number;
+  nb_lignes_p1_p2_p3: number;
+  nb_lignes_code_site_cpe: number;
+  nb_sites_cpe_distincts: number;
+  nb_lignes_consommation: number;
+  nb_lignes_index_releve: number;
+  marches: CpeFinanceGroupSummary[];
+  types_facture: CpeFinanceGroupSummary[];
+  contrats: CpeFinanceContractSummary[];
+  sites_cpe_detectes: string[];
+  alertes: string[];
+};
+
 export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/sites`, { headers: buildHeaders(token) });
   return parseResponse<CpeSite[]>(response);
@@ -2605,4 +2646,15 @@ export async function importCpeCsv(token: string, file: File): Promise<CpeImport
     body: form,
   });
   return parseResponse<CpeImportResult>(response);
+}
+
+export async function previewCpeFinanceExport(token: string, file: File): Promise<CpeFinancePreview> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/preview`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeFinancePreview>(response);
 }

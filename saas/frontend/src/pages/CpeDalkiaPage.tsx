@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CpeBilanAnnuel,
+  CpeFinancePreview,
   CpeSiteBilanItem,
   calculerCpeBilan,
   fetchCpeBilan,
   fetchCpeDju,
   importCpeCsv,
+  previewCpeFinanceExport,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -96,8 +98,10 @@ export default function CpeDalkiaPage() {
   const [showCsvHelp, setShowCsvHelp] = useState(false);
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [financePreview, setFinancePreview] = useState<CpeFinancePreview | null>(null);
   const [view, setView] = useState<CpeView>("cockpit");
   const fileRef = useRef<HTMLInputElement>(null);
+  const financeFileRef = useRef<HTMLInputElement>(null);
 
   const bilanQ = useQuery({
     queryKey: ["cpe-bilan", annee],
@@ -135,6 +139,11 @@ export default function CpeDalkiaPage() {
           (res.erreurs.length > 0 ? ` Premières erreurs : ${res.erreurs.slice(0, 3).join(" | ")}` : "")
       );
     },
+  });
+
+  const financePreviewM = useMutation({
+    mutationFn: (file: File) => previewCpeFinanceExport(token!, file),
+    onSuccess: setFinancePreview,
   });
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
@@ -189,6 +198,11 @@ export default function CpeDalkiaPage() {
           bilan={bilan}
           djuTotal={dju?.dju_total ?? null}
           prixT2={prixT2}
+          financePreview={financePreview}
+          financePreviewPending={financePreviewM.isPending}
+          financePreviewError={financePreviewM.error instanceof Error ? financePreviewM.error.message : null}
+          financeFileRef={financeFileRef}
+          onFinanceFile={(file) => financePreviewM.mutate(file)}
           onOpenPerformance={() => setView("performance")}
         />
       )}
@@ -519,12 +533,22 @@ function CpeCockpit({
   bilan,
   djuTotal,
   prixT2,
+  financePreview,
+  financePreviewPending,
+  financePreviewError,
+  financeFileRef,
+  onFinanceFile,
   onOpenPerformance,
 }: {
   annee: number;
   bilan: CpeBilanAnnuel | undefined;
   djuTotal: number | null;
   prixT2: number | null;
+  financePreview: CpeFinancePreview | null;
+  financePreviewPending: boolean;
+  financePreviewError: string | null;
+  financeFileRef: React.RefObject<HTMLInputElement>;
+  onFinanceFile: (file: File) => void;
   onOpenPerformance: () => void;
 }) {
   return (
@@ -595,6 +619,84 @@ function CpeCockpit({
         </div>
       </section>
 
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Export finances DALKIA</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Apercu du CSV de l'espace client avant de creer le registre de factures CPE.
+            </p>
+          </div>
+          <div>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => financeFileRef.current?.click()}
+              disabled={financePreviewPending}
+            >
+              {financePreviewPending ? "Analyse..." : "Analyser l'export"}
+            </button>
+            <input
+              ref={financeFileRef}
+              type="file"
+              accept=".csv,.txt"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onFinanceFile(file);
+                event.target.value = "";
+              }}
+            />
+          </div>
+        </div>
+
+        {financePreviewError && <p style={{ color: "#dc2626", margin: "0 0 12px" }}>{financePreviewError}</p>}
+
+        {financePreview && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+              <KpiCard
+                label="Lignes export"
+                value={financePreview.nb_lignes.toLocaleString("fr-FR")}
+                sub={`${financePreview.nb_factures} facture(s), ${financePreview.nb_contrats} contrat(s)`}
+                color="#111827"
+              />
+              <KpiCard
+                label="Montant HT export"
+                value={fmtEur(financePreview.montant_ht)}
+                sub={`${financePreview.nb_lignes_p1_p2_p3} ligne(s) P1/P2/P3`}
+                color="#2563eb"
+              />
+              <KpiCard
+                label="Sites CPE detectes"
+                value={financePreview.nb_sites_cpe_distincts.toLocaleString("fr-FR")}
+                sub={`${financePreview.nb_lignes_code_site_cpe} ligne(s) avec code VDS/CCAS`}
+                color="#0f766e"
+              />
+              <KpiCard
+                label="Conso / releves"
+                value={`${financePreview.nb_lignes_consommation} / ${financePreview.nb_lignes_index_releve}`}
+                sub="Lignes avec consommation / index"
+                color="#9333ea"
+              />
+            </div>
+
+            {financePreview.alertes.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, background: "#fff7ed", borderRadius: 6, color: "#9a3412", fontSize: 13 }}>
+                {financePreview.alertes.map((warning) => (
+                  <p key={warning} style={{ margin: "0 0 4px" }}>{warning}</p>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 16 }}>
+              <FinanceMarketTable title="Marches trouves" rows={financePreview.marches} />
+              <FinanceContractTable rows={financePreview.contrats} />
+            </div>
+          </>
+        )}
+      </section>
+
       <section style={{ marginBottom: 16 }}>
         <h3 style={{ margin: "0 0 12px" }}>Prochain socle fonctionnel</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
@@ -613,6 +715,73 @@ function CpeCockpit({
         </div>
       </section>
     </>
+  );
+}
+
+function FinanceMarketTable({ title, rows }: { title: string; rows: CpeFinancePreview["marches"] }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>{title}</h4>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+            <th style={thStyle}>Code</th>
+            <th style={thStyle}>Lignes</th>
+            <th style={thStyle}>Factures</th>
+            <th style={thStyle}>HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.code} style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <td style={tdStyle}>{row.code}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{row.nb_lignes.toLocaleString("fr-FR")}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{row.nb_factures.toLocaleString("fr-FR")}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(row.montant_ht)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FinanceContractTable({ rows }: { rows: CpeFinancePreview["contrats"] }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Contrats trouves</h4>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+        <thead>
+          <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+            <th style={thStyle}>Contrat</th>
+            <th style={thStyle}>Marches</th>
+            <th style={thStyle}>Periode</th>
+            <th style={thStyle}>Lignes</th>
+            <th style={thStyle}>Sites</th>
+            <th style={thStyle}>Conso</th>
+            <th style={thStyle}>HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.code_contrat} style={{ borderBottom: "1px solid #f3f4f6" }}>
+              <td style={{ ...tdStyle, minWidth: 140 }}>
+                <strong>{row.code_contrat}</strong>
+                {row.libelle_contrat && <div style={{ color: "#6b7280" }}>{row.libelle_contrat}</div>}
+              </td>
+              <td style={tdStyle}>{row.marches.join(", ")}</td>
+              <td style={{ ...tdStyle, minWidth: 150 }}>
+                {row.periode_debut_min ?? "-"} au {row.periode_fin_max ?? "-"}
+              </td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{row.nb_lignes.toLocaleString("fr-FR")}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{row.nb_sites_cpe_distincts.toLocaleString("fr-FR")}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{row.nb_lignes_consommation.toLocaleString("fr-FR")}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(row.montant_ht)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

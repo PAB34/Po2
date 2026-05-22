@@ -45,7 +45,9 @@ L'entrée `/cpe` ne doit pas laisser croire que ce moteur constitue à lui seul 
 5. **Contrôle P3** : suivre le compte P3, les travaux et les écarts entre facturation et exécution.
 6. **Registre des écarts** : qualification commune en clarification, contestation, avoir attendu, pénalité ou validation.
 
-> Première tranche lancée le 22/05/2026 : `/cpe` est recadré en cockpit CPE avec une vue séparée pour le suivi énergétique existant.
+> Premières tranches lancées le 22/05/2026 :
+> - `/cpe` est recadré en cockpit CPE avec une vue séparée pour le suivi énergétique existant ;
+> - l'export finances DALKIA est analysable en preview avant ingestion définitive des lignes P1/P2/P3.
 
 ---
 

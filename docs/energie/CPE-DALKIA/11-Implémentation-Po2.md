@@ -25,6 +25,26 @@ Voir [[10-Roadmap-Po2]] pour le plan de développement par poste.
 
 ---
 
+## Preview export finances DALKIA
+
+La premiere brique facturation ajoutee au cockpit `/cpe` est une analyse non persistante du CSV finances exporte depuis l'espace client DALKIA.
+
+| Element | Implementation |
+|---------|----------------|
+| Endpoint | `POST /api/cpe/finances/preview` |
+| Service | `services/cpe_finance_preview.py` |
+| Frontend | bouton `Analyser l'export` dans le cockpit CPE |
+| Sortie | marches, types de facture, contrats, montants, codes sites CPE detectes, alertes |
+
+Ce preview est volontairement separe de l'import de releves gaz `POST /api/cpe/import/csv` :
+- le CSV finances decompose les factures et plusieurs contrats ;
+- le CSV releves alimente les consommations mensuelles QT ;
+- les lignes finances doivent etre filtrees et rattachees au bon contrat avant persistance.
+
+Voir [[13-Export-finances-DALKIA]] pour l'analyse de l'export du 22/05/2026.
+
+---
+
 ## Architecture générale
 
 ```
@@ -63,7 +83,7 @@ Fichier CSV             →  energie/DJU/dju_sete.csv (DJU quotidiens)
 | `tarif` | String(5) NULL | `T1` / `T2` / `T3` — type tarifaire GRDF (OS N°3) |
 | `pce` | String(50) NULL | Identifiant PCE GRDF du compteur gaz |
 
-> 64 sites chargés via `scripts/seed_cpe_sites.py` (54 Annexe 5.1 + 10 nouveaux OS N°3 : 4 CULT + 6 CCAS).  
+> 65 sites présents dans le seed courant `scripts/seed_cpe_sites.py`, dont les ajouts OS N°3 CULT/CCAS.
 > Voir [[12-OS3-Prix-gaz]] pour la liste complète PCE/tarif.
 
 ### `cpe_gaz_releves` — Relevés mensuels QT
@@ -219,7 +239,7 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 # 1. Migrer la base de données (inclut migration 0020 — tarif/pce)
 alembic upgrade head
 
-# 2. Charger les 64 sites contractuels (54 Annexe 5.1 + 10 OS N°3)
+# 2. Charger les 65 sites du seed CPE courant
 #    Met aussi à jour tarif et pce sur les sites existants
 python -m app.scripts.seed_cpe_sites --city-id 1
 

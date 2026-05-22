@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.cpe import (
     CpeBilanAnnuel,
     CpeDjuAnnuel,
+    CpeFinancePreview,
     CpeGazReleve,
     CpeGazReleveCreate,
     CpeGazReleveUpdate,
@@ -21,6 +22,7 @@ from app.schemas.cpe import (
     CpeSiteUpdate,
 )
 from app.services import cpe as svc
+from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
 
 router = APIRouter(prefix="/cpe", tags=["cpe"])
@@ -120,6 +122,18 @@ async def import_csv(
     """
     content = await file.read()
     return import_releves_csv(db, content, source="csv_dalkia")
+
+
+@router.post("/finances/preview", response_model=CpeFinancePreview)
+async def preview_finances_export(
+    file: UploadFile = File(..., description="Export finances CSV de l'espace client DALKIA"),
+    _current_user: User = Depends(get_current_user),
+) -> CpeFinancePreview:
+    """Analyse un export finances DALKIA avant ingestion des factures CPE."""
+    try:
+        return preview_finance_export(await file.read(), filename=file.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 # ── Prix gaz ──────────────────────────────────────────────────────────────────

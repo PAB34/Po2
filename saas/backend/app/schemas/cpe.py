@@ -167,6 +167,49 @@ class CpeImportResult(BaseModel):
     sites_inconnus: list[str]
 
 
+# ── Export finances DALKIA ───────────────────────────────────────────────────
+
+class CpeFinanceGroupSummary(BaseModel):
+    code: str
+    nb_lignes: int
+    nb_factures: int
+    montant_ht: float
+
+
+class CpeFinanceContractSummary(BaseModel):
+    code_contrat: str
+    libelle_contrat: str | None
+    nb_lignes: int
+    nb_factures: int
+    montant_ht: float
+    periode_debut_min: str | None
+    periode_fin_max: str | None
+    marches: list[str]
+    types_marche: list[str]
+    nb_lignes_code_site_cpe: int
+    nb_sites_cpe_distincts: int
+    nb_lignes_consommation: int
+    nb_lignes_index_releve: int
+
+
+class CpeFinancePreview(BaseModel):
+    filename: str | None
+    nb_lignes: int
+    nb_factures: int
+    nb_contrats: int
+    montant_ht: float
+    nb_lignes_p1_p2_p3: int
+    nb_lignes_code_site_cpe: int
+    nb_sites_cpe_distincts: int
+    nb_lignes_consommation: int
+    nb_lignes_index_releve: int
+    marches: list[CpeFinanceGroupSummary]
+    types_facture: list[CpeFinanceGroupSummary]
+    contrats: list[CpeFinanceContractSummary]
+    sites_cpe_detectes: list[str]
+    alertes: list[str]
+
+
 # ── DJU ──────────────────────────────────────────────────────────────────────
 
 class CpeDjuAnnuel(BaseModel):
