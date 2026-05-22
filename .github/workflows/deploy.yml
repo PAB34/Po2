@@ -62,4 +62,8 @@ jobs:
             fi
 
             docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" up -d --build
+
+            # Migrations Alembic — lancées automatiquement après chaque déploiement
+            docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" exec -T backend alembic upgrade head
+
             docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" restart caddy
