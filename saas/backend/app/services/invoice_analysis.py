@@ -302,11 +302,10 @@ def _record_bpu_mismatch(
     bpu_reference: str,
     source: str,
 ) -> None:
-    """Pousse un mismatch structuré dans bpu_summary['mismatches_detail'].
+    """Pousse un mismatch de prix unitaire dans bpu_summary['mismatches_detail'].
 
-    source : 'historical' (raccordement BPU historique) ou 'configured' (BillingBpuLine).
-    bpu_reference : libellé court (ex : 'C2/hph', 'LU/base', 'ENGIE 2025 lot 7 C2/hph').
-    Le delta total HT n'est renseigné que si la quantité est convertible en MWh.
+    type : 'price_mismatch' — le prix facturé ne correspond pas au prix BPU attendu
+    pour le même couple tarif/poste. Chiffrage par ligne facture.
     """
     delta_eur_mwh = invoice_price_eur_mwh - bpu_price_eur_mwh
     quantity_mwh = _quantity_to_mwh(line)
@@ -315,6 +314,7 @@ def _record_bpu_mismatch(
         delta_total = delta_eur_mwh * quantity_mwh
     bpu_summary["mismatches_detail"].append(
         {
+            "type": "price_mismatch",
             "scope": scope,
             "site_prm_id": site.get("prm_id"),
             "site_fic_number": site.get("fic_number"),
@@ -331,6 +331,66 @@ def _record_bpu_mismatch(
             "delta_total_eur_ht": float(delta_total) if delta_total is not None else None,
             "bpu_reference": bpu_reference,
             "source": source,
+        }
+    )
+
+
+def _record_bpu_tariff_poste_inconsistency(
+    bpu_summary: dict[str, Any],
+    *,
+    scope: str,
+    site: dict[str, Any],
+    expected_bpu_reference: str,
+    expected_bpu_price_eur_mwh: Decimal,
+    invoice_postes_used: list[str],
+    matching_bpu_lines: list[str],
+    lines: list[dict[str, Any]],
+) -> None:
+    """Pousse une incohérence tarif/poste chiffrée dans bpu_summary['mismatches_detail'].
+
+    type : 'tariff_poste_inconsistency' — les prix unitaires facturés sont cohérents
+    avec un BPU, mais sur les MAUVAIS postes pour le tarif applicable. Le chiffrage
+    est agrégé sur toutes les lignes du groupe :
+      delta = Σ(montant_HT_facturé) - (Σ quantité_MWh × prix_BPU_attendu)
+    Cela représente le surcoût (ou le sous-coût) si la facture avait appliqué le
+    couple tarif/poste contractuel.
+    """
+    total_qty_mwh = Decimal("0")
+    total_amount_invoice = Decimal("0")
+    total_qty_known = True
+    for entry in lines:
+        qty_mwh = entry.get("quantity_mwh")
+        amount = entry.get("invoice_amount_ht")
+        if qty_mwh is None:
+            total_qty_known = False
+        else:
+            total_qty_mwh += Decimal(str(qty_mwh))
+        if amount is not None:
+            total_amount_invoice += Decimal(str(amount))
+
+    amount_if_expected: Decimal | None = None
+    delta_total: Decimal | None = None
+    if total_qty_known and total_qty_mwh > 0:
+        amount_if_expected = total_qty_mwh * expected_bpu_price_eur_mwh
+        delta_total = total_amount_invoice - amount_if_expected
+
+    bpu_summary["mismatches_detail"].append(
+        {
+            "type": "tariff_poste_inconsistency",
+            "scope": scope,
+            "site_prm_id": site.get("prm_id"),
+            "site_fic_number": site.get("fic_number"),
+            "expected_bpu_reference": expected_bpu_reference,
+            "expected_bpu_price_eur_mwh": float(expected_bpu_price_eur_mwh),
+            "invoice_postes_used": invoice_postes_used,
+            "matching_bpu_lines": matching_bpu_lines,
+            "lines_count": len(lines),
+            "lines": lines,
+            "total_quantity_mwh": float(total_qty_mwh) if total_qty_known else None,
+            "total_amount_invoice_ht": float(total_amount_invoice),
+            "total_amount_if_expected_ht": float(amount_if_expected) if amount_if_expected is not None else None,
+            "delta_total_eur_ht": float(delta_total) if delta_total is not None else None,
+            "source": "configured",
         }
     )
 
@@ -462,8 +522,10 @@ def _check_bpu(
                         key,
                         {
                             "expected": f"{bpu_line.tariff_code}/{bpu_line.poste}",
+                            "expected_price_eur_mwh": expected,
                             "invoice_postes": set(),
                             "matching_bpu_lines": set(),
+                            "lines": [],
                         },
                     )
                     if poste:
@@ -476,6 +538,21 @@ def _check_bpu(
                         exclude=(bpu_line.tariff_code, bpu_line.poste),
                     ):
                         group["matching_bpu_lines"].add(f"{matching_line.tariff_code}/{matching_line.poste}")
+                    # Mémorise la ligne facture impliquée — sert au chiffrage agrégé du delta
+                    line_qty_mwh = _quantity_to_mwh(line)
+                    group["lines"].append(
+                        {
+                            "line_index": line_index,
+                            "line_label": line.get("label"),
+                            "line_normalized_component": line.get("normalized_component"),
+                            "line_poste": poste,
+                            "invoice_unit_price_eur_mwh": float(invoice_value_mwh),
+                            "invoice_amount_ht": line.get("amount_ht"),
+                            "quantity": line.get("quantity"),
+                            "quantity_unit": line.get("quantity_unit"),
+                            "quantity_mwh": float(line_qty_mwh) if line_qty_mwh is not None else None,
+                        }
+                    )
                     continue
 
                 bpu_summary["mismatches"] += 1
@@ -503,6 +580,8 @@ def _check_bpu(
 
         for group in tariff_poste_inconsistencies.values():
             bpu_summary["mismatches"] += 1
+            invoice_postes_sorted = sorted(group["invoice_postes"])
+            matching_bpu_lines_sorted = sorted(group["matching_bpu_lines"])
             invoice_postes = _format_bpu_group_values(group["invoice_postes"])
             matching_bpu_lines = _format_bpu_group_values(group["matching_bpu_lines"])
             issue(
@@ -510,6 +589,17 @@ def _check_bpu(
                 "BPU_TARIFF_POSTE_INCONSISTENCY",
                 _bpu_tariff_poste_inconsistency_message(scope, group["expected"], invoice_postes, matching_bpu_lines),
                 scope,
+            )
+            # Chiffrage agrégé : Σ(montant facturé) − Σ(quantité MWh) × prix BPU attendu
+            _record_bpu_tariff_poste_inconsistency(
+                bpu_summary,
+                scope=scope,
+                site=site,
+                expected_bpu_reference=group["expected"],
+                expected_bpu_price_eur_mwh=group["expected_price_eur_mwh"],
+                invoice_postes_used=invoice_postes_sorted,
+                matching_bpu_lines=matching_bpu_lines_sorted,
+                lines=group["lines"],
             )
 
     bpu_summary["historical_documents"] = [

@@ -32,6 +32,7 @@ Le module **Énergie** de Po2 doit permettre :
 1. **Suivi des consommations** — import CSV ENEDIS (électricité) + API GRDF ADICT (gaz)
 2. **Calcul automatique de l'intéressement** DALKIA — comparaison NC vs N'B corrigé DJU
 3. **Suivi des cibles** par site (gaz + électricité) avec alertes de dépassement
-4. **Tableau de bord CPE** — performance annuelle, état P2.4, solde P3
+4. **Contrôle CPE par poste** — factures, indices, livrables et écarts P1 / P2 / P3
+5. **Tableau de bord CPE** — performance annuelle, état P2.4, solde P3
 
 > **Attention** : l'électricité n'est PAS fournie par DALKIA. La Ville reste sur ses propres contrats (EDF/ENGIE via contrat cadre Hérault Énergie). DALKIA suit l'électricité par IPMVP option B mais ne facture pas l'électricité.

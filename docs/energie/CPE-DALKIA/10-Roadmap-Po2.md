@@ -20,6 +20,35 @@ Voir [[11-Implémentation-Po2]] pour le détail technique de ce qui a été cons
 
 ---
 
+## Recentrage du module au 22/05/2026
+
+Le développement déjà livré est utile, mais il couvre surtout le **contrôle de performance énergétique gaz** :
+- relevés mensuels DALKIA ou saisie manuelle ;
+- calcul des cibles corrigées DJU `NB / N'B / NC` ;
+- estimation de l'intéressement et des pénalités énergétiques.
+
+L'entrée `/cpe` ne doit pas laisser croire que ce moteur constitue à lui seul le suivi complet du CPE. Le pilotage cible doit distinguer :
+
+| Axe | Objet de contrôle | Données principales |
+|-----|-------------------|---------------------|
+| Performance et consommations | Écarts DALKIA vs cibles contractuelles, puis DALKIA vs GRDF | QT, GRDF, ECS, DJU, NB/N'B/NC |
+| P1 | Fourniture gaz et décompte définitif | Factures DALKIA, volumes, prix gaz, pièces fournisseur, GRDF |
+| P2 | Exploitation-maintenance et obligations | Factures P2.1 à P2.4, indices, livrables, objectifs |
+| P3 | Garantie totale et renouvellement | Factures P3.1 à P3.4, compte P3, travaux, pénalités |
+
+### Ordre de développement recommandé
+
+1. **Cockpit CPE** : rendre ce découpage visible dans `/cpe` et conserver le bilan énergétique dans une vue dédiée.
+2. **Socle de contrôle des factures CPE** : document/facture par poste `P1/P2/P3`, exercice, période, montant, statut et pièces justificatives.
+3. **Contrôle P1** : rapprocher les consommations DALKIA des données GRDF puis vérifier les factures gaz et le décompte définitif.
+4. **Contrôle P2** : vérifier les révisions, livrables et conséquences contractuelles de P2.4.
+5. **Contrôle P3** : suivre le compte P3, les travaux et les écarts entre facturation et exécution.
+6. **Registre des écarts** : qualification commune en clarification, contestation, avoir attendu, pénalité ou validation.
+
+> Première tranche lancée le 22/05/2026 : `/cpe` est recadré en cockpit CPE avec une vue séparée pour le suivi énergétique existant.
+
+---
+
 ## ✅ Phase 1 — Moteur de cibles énergétiques (LIVRÉ)
 
 ### 1.1 Import QT par site ✅

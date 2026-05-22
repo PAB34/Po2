@@ -41,6 +41,43 @@ const CATEGORIE_LABEL: Record<string, string> = {
   CCAS: "CCAS",
 };
 
+type CpeView = "cockpit" | "performance";
+
+const CPE_WORKSTREAMS = [
+  {
+    code: "P1",
+    title: "Fourniture gaz",
+    scope: "Acomptes, decompte definitif, quantites QT, prix unitaire et pieces fournisseur.",
+    control: "Comparer les factures DALKIA au tarif contractuel, aux volumes retenus et aux preuves GRDF.",
+    status: "Socle a creer",
+    statusClass: "badge-orange",
+  },
+  {
+    code: "P2",
+    title: "Exploitation et maintenance",
+    scope: "P2.1 a P2.4, revision des prix, obligations d'entretien et sensibilisation.",
+    control: "Verifier les revisions, les echeances, les livrables et l'effet des objectifs P2.4.",
+    status: "Socle a creer",
+    statusClass: "badge-orange",
+  },
+  {
+    code: "P3",
+    title: "Garantie totale",
+    scope: "P3.1 a P3.4, renouvellement, compte P3 et travaux programmes.",
+    control: "Suivre les montants factures, le compte P3, les interventions et les penalites associees.",
+    status: "Socle a creer",
+    statusClass: "badge-orange",
+  },
+  {
+    code: "ENERGIE",
+    title: "Performance et consommations",
+    scope: "Releves DALKIA, futures donnees GRDF, DJU, cibles NB/N'B/NC.",
+    control: "Mesurer les ecarts, l'interessement potentiel et les penalites energetiques.",
+    status: "Deja engage",
+    statusClass: "badge-green",
+  },
+] as const;
+
 function fmt(val: number | null | undefined, decimals = 1): string {
   if (val == null) return "—";
   return val.toFixed(decimals).replace(".", ",");
@@ -59,6 +96,7 @@ export default function CpeDalkiaPage() {
   const [showCsvHelp, setShowCsvHelp] = useState(false);
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [view, setView] = useState<CpeView>("cockpit");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const bilanQ = useQuery({
@@ -116,9 +154,9 @@ export default function CpeDalkiaPage() {
       {/* ── En-tête ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0 }}>CPE DALKIA — Bilan énergétique</h2>
+          <h2 style={{ margin: 0 }}>CPE DALKIA</h2>
           <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: 14 }}>
-            Contrat de Performance Énergétique — Lot 1 Bâtiments communaux — Ville de Sète
+            Pilotage contractuel, consommations et performance energetique du Lot 1
           </p>
         </div>
         <select
@@ -131,6 +169,38 @@ export default function CpeDalkiaPage() {
           ))}
         </select>
       </div>
+
+      <div
+        role="tablist"
+        aria-label="Vues CPE"
+        style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e5e7eb", paddingBottom: 12 }}
+      >
+        <CpeViewTab active={view === "cockpit"} onClick={() => setView("cockpit")}>
+          Cockpit CPE
+        </CpeViewTab>
+        <CpeViewTab active={view === "performance"} onClick={() => setView("performance")}>
+          Performance et consommations
+        </CpeViewTab>
+      </div>
+
+      {view === "cockpit" && (
+        <CpeCockpit
+          annee={annee}
+          bilan={bilan}
+          djuTotal={dju?.dju_total ?? null}
+          prixT2={prixT2}
+          onOpenPerformance={() => setView("performance")}
+        />
+      )}
+
+      {view === "performance" && (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: "0 0 4px" }}>Performance et consommations</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Suivi des consommations gaz DALKIA, cibles contractuelles et calcul des ecarts energetiques.
+            </p>
+          </div>
 
       {/* ── Cartes KPI ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
@@ -388,6 +458,8 @@ VDS-BAM 02;2026-01-31;6.1;;N`}
           )}
         </div>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -415,6 +487,140 @@ function KpiCard({
       <p style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color }}>{value}</p>
       <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{sub}</p>
       {action && <div style={{ marginTop: 8 }}>{action}</div>}
+    </div>
+  );
+}
+
+function CpeViewTab({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={active ? "primary-button" : "secondary-button"}
+      onClick={onClick}
+      style={{ minHeight: 36 }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CpeCockpit({
+  annee,
+  bilan,
+  djuTotal,
+  prixT2,
+  onOpenPerformance,
+}: {
+  annee: number;
+  bilan: CpeBilanAnnuel | undefined;
+  djuTotal: number | null;
+  prixT2: number | null;
+  onOpenPerformance: () => void;
+}) {
+  return (
+    <>
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 16 }}>
+          <KpiCard label="Exercice" value={String(annee)} sub="Suivi annuel CPE" color="#111827" />
+          <KpiCard
+            label="Sites actifs"
+            value={String(bilan?.nb_sites_actifs ?? 0)}
+            sub={`${bilan?.nb_sites_complets ?? 0} avec une annee complete`}
+            color="#2563eb"
+          />
+          <KpiCard
+            label="DJU mesures"
+            value={djuTotal == null ? "A verifier" : `${fmt(djuTotal, 0)} DJU`}
+            sub="Reference contractuelle : 1 426 DJU"
+            color="#0f766e"
+          />
+          <KpiCard
+            label="Prix gaz T2"
+            value={prixT2 == null ? "A renseigner" : `${fmt(prixT2, 2)} EUR/MWhPCI`}
+            sub="Point d'entree du controle P1"
+            color="#9333ea"
+          />
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Decoupage de controle</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Les postes factures et le controle de performance doivent rester suivis separement.
+            </p>
+          </div>
+          <button type="button" className="secondary-button" onClick={onOpenPerformance}>
+            Ouvrir le suivi energie
+          </button>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+                <th style={thStyle}>Poste</th>
+                <th style={thStyle}>Perimetre</th>
+                <th style={thStyle}>Controle attendu</th>
+                <th style={thStyle}>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CPE_WORKSTREAMS.map((item) => (
+                <tr key={item.code} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <td style={{ ...tdStyle, minWidth: 180 }}>
+                    <strong>{item.code}</strong>
+                    <div style={{ color: "#6b7280", marginTop: 2 }}>{item.title}</div>
+                  </td>
+                  <td style={{ ...tdStyle, minWidth: 280 }}>{item.scope}</td>
+                  <td style={{ ...tdStyle, minWidth: 300 }}>{item.control}</td>
+                  <td style={tdStyle}>
+                    <span className={`badge ${item.statusClass}`}>{item.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 16 }}>
+        <h3 style={{ margin: "0 0 12px" }}>Prochain socle fonctionnel</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+          <ControlBlock
+            title="Factures CPE"
+            detail="Importer ou saisir une facture par poste P1, P2 ou P3, son exercice, sa periode et son montant."
+          />
+          <ControlBlock
+            title="Preuves de controle"
+            detail="Rattacher revisions d'indices, livrables DALKIA, releves GRDF et calculs de cible au controle."
+          />
+          <ControlBlock
+            title="Ecarts et suites"
+            detail="Qualifier l'ecart en clarification, contestation, avoir attendu, penalite ou validation."
+          />
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ControlBlock({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="card" style={{ padding: 16, minHeight: 118 }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 15 }}>{title}</h4>
+      <p style={{ margin: 0, color: "#4b5563", fontSize: 13, lineHeight: 1.5 }}>{detail}</p>
     </div>
   );
 }

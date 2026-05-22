@@ -8,6 +8,23 @@ tags: #implémentation #développement #Po2 #CPE #backend #frontend #migration
 
 ---
 
+## Périmètre réellement couvert
+
+La Phase 1 implémente le **moteur de performance énergétique** du CPE, pas encore le contrôle complet du marché :
+
+| Couvert au 22/05/2026 | À construire ensuite |
+|-----------------------|----------------------|
+| Sites CPE, relevés gaz, import DALKIA, prix gaz, DJU | Factures CPE et justificatifs rattachés par poste P1/P2/P3 |
+| Calcul `NB / N'B / NC` | Rapprochement DALKIA vs GRDF pour fiabiliser les quantités P1 |
+| Intéressement et pénalités énergétiques potentielles | Vérification des révisions P1/P2/P3 et des échéances |
+| Vue énergétique multi-sites | Registre commun des écarts, avoirs, pénalités et validations |
+
+Le frontend `/cpe` présente désormais ce découpage dans un **cockpit CPE** et conserve le bilan existant dans la vue `Performance et consommations`.
+
+Voir [[10-Roadmap-Po2]] pour le plan de développement par poste.
+
+---
+
 ## Architecture générale
 
 ```

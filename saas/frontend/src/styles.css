@@ -2808,6 +2808,29 @@ button:disabled {
   font-weight: 700;
 }
 
+.invoice-report-subsection {
+  margin-top: 20px;
+  margin-bottom: 8px;
+  font-size: 1rem;
+  color: #1e293b;
+  border-bottom: 1px solid #cbd5e1;
+  padding-bottom: 4px;
+}
+
+.invoice-report-bpu-grand-total {
+  margin-top: 18px;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border-left: 4px solid #1e40af;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.invoice-report-bpu-grand-total span {
+  font-weight: 700;
+  margin-left: 6px;
+}
+
 .invoice-report-delta-over {
   color: #b91c1c;
 }
