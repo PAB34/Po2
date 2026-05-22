@@ -61,9 +61,13 @@ jobs:
               exit 1
             fi
 
-            docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" up -d --build
+            COMPOSE="docker compose -f $APP_DIR/infra/docker-compose.prod.yml --project-directory $APP_DIR/infra --env-file $ENV_FILE"
 
-            # Migrations Alembic — lancées automatiquement après chaque déploiement
-            docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" exec -T backend alembic upgrade head
+            $COMPOSE up -d --build
 
-            docker compose -f "$APP_DIR/infra/docker-compose.prod.yml" --project-directory "$APP_DIR/infra" --env-file "$ENV_FILE" restart caddy
+            # Caddy redémarre TOUJOURS (sinon 502 si le conteneur backend a une nouvelle IP)
+            $COMPOSE restart caddy
+
+            # Migrations Alembic — on attend que le backend soit prêt (5 s) puis on migre
+            sleep 5
+            $COMPOSE exec -T backend alembic upgrade head
