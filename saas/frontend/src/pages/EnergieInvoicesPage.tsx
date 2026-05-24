@@ -738,7 +738,7 @@ export function EnergieInvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {selectedBatchDetail.items.map((item) => (
+                {(selectedBatchDetail?.items ?? []).map((item) => (
                   <tr key={item.id}>
                     <td>
                       <div className="invoice-file-cell">
