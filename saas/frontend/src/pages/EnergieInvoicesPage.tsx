@@ -298,6 +298,7 @@ export function EnergieInvoicesPage() {
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxSummary, setXlsxSummary] = useState<string | null>(null);
+  const [xlsxForceUpdate, setXlsxForceUpdate] = useState(false);
   const [deleteAllSummary, setDeleteAllSummary] = useState<string | null>(null);
 
   // Tri du tableau factures : { column, direction }. Cycle clic : asc → desc → none.
@@ -532,17 +533,18 @@ export function EnergieInvoicesPage() {
   });
 
   const xlsxUploadMut = useMutation({
-    mutationFn: (file: File) => uploadEngieXlsxExport(token!, file),
+    mutationFn: (args: { file: File; forceUpdate: boolean }) =>
+      uploadEngieXlsxExport(token!, args.file, { forceUpdate: args.forceUpdate }),
     onSuccess: (summary) => {
-      const parts = [
-        `${summary.created} facture(s) creee(s)`,
-        `${summary.duplicates} doublon(s)`,
-        `${summary.errors} erreur(s)`,
-      ];
+      const parts = [`${summary.created} facture(s) créée(s)`];
+      if (summary.updated > 0) parts.push(`${summary.updated} mise(s) à jour`);
+      if (summary.duplicates > 0) parts.push(`${summary.duplicates} doublon(s) skippé(s)`);
+      if (summary.errors > 0) parts.push(`${summary.errors} erreur(s)`);
       setXlsxSummary(
-        `Export XLSX traite : ${summary.total_bordereaux} bordereau(x) lu(s) — ${parts.join(", ")}.`,
+        `Export XLSX traité : ${summary.total_bordereaux} bordereau(x) lu(s) — ${parts.join(", ")}.`,
       );
       setXlsxFile(null);
+      setXlsxForceUpdate(false);
       if (xlsxInputRef.current) xlsxInputRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
     },
@@ -617,49 +619,21 @@ export function EnergieInvoicesPage() {
         </div>
       </div>
 
-      <section className="invoice-upload-panel">
-        <div>
-          <p className="field-label">Depot manuel</p>
-          <p className="invoice-upload-copy">
-            Depose les PDF ENGIE telecharges depuis les espaces clients ou une archive ZIP de PDF. Le lot reste trace
-            avec ses factures importees, ses doublons et ses erreurs.
-          </p>
-        </div>
-        <div className="invoice-upload-actions">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.zip"
-            onChange={(e) => setSelectedFiles(Array.from(e.target.files ?? []))}
-            className="form-input"
-          />
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={selectedFiles.length === 0 || uploadMut.isPending}
-            onClick={() => uploadMut.mutate(selectedFiles)}
-          >
-            {uploadMut.isPending ? "Import en cours..." : "Importer"}
-          </button>
-        </div>
-        {selectedFiles.length > 0 && (
-          <p className="invoice-upload-selection">
-            {selectedFiles.length} fichier{selectedFiles.length > 1 ? "s" : ""} selectionne
-            {selectedFiles.length > 1 ? "s" : ""}
-          </p>
-        )}
-        {uploadSummary && <p className="sync-result-ok">{uploadSummary}</p>}
-        {uploadMut.isError && <p className="error-text">{(uploadMut.error as Error).message}</p>}
-      </section>
+      {/*
+        Pipeline PDF désactivé côté UI depuis le passage à l'import XLSX (mai 2026).
+        Le code backend reste en place pour conserver l'accès aux factures historiques
+        importées en PDF, mais on n'expose plus l'upload PDF/ZIP ni la section Lots
+        d'import. Les nouveaux imports se font exclusivement via l'export XLSX ENGIE
+        ci-dessous.
+      */}
 
       <section className="invoice-upload-panel">
         <div>
           <p className="field-label">Import export ENGIE (XLSX)</p>
           <p className="invoice-upload-copy">
-            Depose le fichier <strong>MesFactures_*.xlsx</strong> exporte depuis l'espace ENGIE Entreprise.
-            Chaque bordereau du fichier devient une facture importee separement, avec analyse BPU/TURPE/periodes
-            comme pour un PDF. Les bordereaux deja en base sont automatiquement ignores.
+            Dépose le fichier <strong>MesFactures_*.xlsx</strong> exporté depuis l'espace ENGIE Entreprise.
+            Chaque bordereau du fichier devient une facture importée séparément, avec analyse BPU/TURPE/périodes.
+            Par défaut, les bordereaux déjà en base sont conservés tels quels (ta décision et ton historique sont préservés).
           </p>
         </div>
         <div className="invoice-upload-actions">
@@ -674,18 +648,31 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-primary"
             disabled={xlsxFile === null || xlsxUploadMut.isPending}
-            onClick={() => xlsxFile && xlsxUploadMut.mutate(xlsxFile)}
+            onClick={() => xlsxFile && xlsxUploadMut.mutate({ file: xlsxFile, forceUpdate: xlsxForceUpdate })}
           >
-            {xlsxUploadMut.isPending ? "Analyse en cours..." : "Importer le XLSX"}
+            {xlsxUploadMut.isPending
+              ? (xlsxForceUpdate ? "Mise à jour en cours..." : "Analyse en cours...")
+              : (xlsxForceUpdate ? "Importer et mettre à jour" : "Importer le XLSX")}
           </button>
         </div>
+        <label className="invoice-upload-checkbox" title="Re-analyse les bordereaux déjà présents en base avec les données du nouveau fichier. La décision utilisateur (validée/contestée/à vérifier) est préservée.">
+          <input
+            type="checkbox"
+            checked={xlsxForceUpdate}
+            onChange={(e) => setXlsxForceUpdate(e.target.checked)}
+          />
+          <span>Forcer la mise à jour des bordereaux déjà importés <em>(préserve les décisions utilisateur)</em></span>
+        </label>
         {xlsxFile && (
-          <p className="invoice-upload-selection">Fichier selectionne : {xlsxFile.name}</p>
+          <p className="invoice-upload-selection">Fichier sélectionné : {xlsxFile.name}</p>
         )}
         {xlsxSummary && <p className="sync-result-ok">{xlsxSummary}</p>}
         {xlsxUploadMut.isError && <p className="error-text">{(xlsxUploadMut.error as Error).message}</p>}
       </section>
 
+      {/* Section "Lots d'import" désactivée depuis le passage XLSX-only (mai 2026).
+          Conservée en code pour pouvoir réafficher l'historique des dépôts PDF si besoin. */}
+      {false && (
       <details className="invoice-detail-section invoice-batch-disclosure">
         <summary className="invoice-batch-summary">
           <div>
@@ -776,6 +763,7 @@ export function EnergieInvoicesPage() {
           </div>
         )}
       </details>
+      )}
 
       <section className="invoice-detail-section">
         <h3>Filtrer les factures</h3>

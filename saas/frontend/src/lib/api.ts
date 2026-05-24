@@ -1627,6 +1627,7 @@ export type EnergyInvoiceXlsxImportSummary = {
   filename: string;
   total_bordereaux: number;
   created: number;
+  updated: number;
   duplicates: number;
   errors: number;
   imports: Array<{
@@ -1635,6 +1636,14 @@ export type EnergyInvoiceXlsxImportSummary = {
     control_status: string;
     site_count: number | null;
     total_ttc: number | null;
+  }>;
+  updates: Array<{
+    id: number;
+    invoice_number: string | null;
+    control_status: string;
+    site_count: number | null;
+    total_ttc: number | null;
+    decision_preserved: string | null;
   }>;
   duplicates_detail: Array<{
     invoice_number: string;
@@ -1661,10 +1670,12 @@ export async function deleteAllEnergyInvoiceImports(token: string): Promise<Dele
 export async function uploadEngieXlsxExport(
   token: string,
   file: File,
+  options?: { forceUpdate?: boolean },
 ): Promise<EnergyInvoiceXlsxImportSummary> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/xlsx`, {
+  const qs = options?.forceUpdate ? "?force_update=true" : "";
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/xlsx${qs}`, {
     method: "POST",
     headers: buildAuthHeaders(token),
     body: formData,

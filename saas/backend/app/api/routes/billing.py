@@ -296,14 +296,20 @@ async def upload_energy_invoice_import(
 @router.post("/invoices/imports/xlsx")
 async def upload_engie_xlsx_export(
     file: UploadFile = File(...),
+    force_update: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Upload de l'export XLSX ENGIE 'Mes Factures' : un fichier = N bordereaux.
 
     Chaque bordereau du XLSX devient un EnergyInvoiceImport indépendant
-    (analysé via le même pipeline que les PDF). Les bordereaux déjà présents
-    en base (même invoice_number) sont skip et tracés dans le résumé.
+    (analysé via le même pipeline que les PDF).
+
+    - force_update=False (défaut) : bordereaux déjà présents en base (même
+      invoice_number) sont skip et tracés comme doublons dans le résumé.
+    - force_update=True : bordereaux déjà présents sont re-analysés avec les
+      nouvelles données du fichier. Les champs decision_status / comment /
+      by / updated_at sont PRÉSERVÉS pour ne pas perdre l'historique utilisateur.
     """
     from app.services.engie_xlsx_import import import_engie_xlsx
 
@@ -328,6 +334,7 @@ async def upload_engie_xlsx_export(
             file_bytes=content,
             original_filename=filename,
             content_type=file.content_type,
+            force_update=force_update,
         )
     except ValueError as exc:
         raise HTTPException(

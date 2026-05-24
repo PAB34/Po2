@@ -2956,6 +2956,22 @@ button:disabled {
   background: #e2e8f0;
 }
 
+.invoice-upload-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.88rem;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.invoice-upload-checkbox em {
+  color: #64748b;
+  font-style: italic;
+  font-size: 0.82rem;
+}
+
 .invoice-report-delta-over {
   color: #b91c1c;
 }

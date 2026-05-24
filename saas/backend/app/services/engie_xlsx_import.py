@@ -45,8 +45,18 @@ def import_engie_xlsx(
     file_bytes: bytes,
     original_filename: str,
     content_type: str | None = None,
+    force_update: bool = False,
 ) -> dict[str, Any]:
-    """Persiste le XLSX, parse les bordereaux, crée les EnergyInvoiceImport.
+    """Persiste le XLSX, parse les bordereaux, crée ou met à jour les EnergyInvoiceImport.
+
+    Comportement par bordereau :
+    - Inconnu (invoice_number absent en base) → création
+    - Connu + force_update=False → skip (par défaut, préserve l'analyse existante)
+    - Connu + force_update=True → upsert : on RE-APPLIQUE l'analyse sur l'import existant
+      (le contrôle BPU/TURPE/etc est rejoué avec les nouvelles règles), mais on PRÉSERVE
+      les champs de décision utilisateur (decision_status, decision_comment,
+      decision_by_user_id, decision_updated_at). Le fichier XLSX courant remplace
+      le storage_path précédent.
 
     Returns: résumé structuré pour la réponse HTTP :
         {
@@ -54,11 +64,13 @@ def import_engie_xlsx(
           "filename": str,
           "total_bordereaux": int,
           "created": int,
-          "duplicates": int,
+          "updated": int,
+          "duplicates": int,   # skip car déjà existant (mode normal)
           "errors": int,
-          "imports": [{id, invoice_number, status}, ...],
-          "duplicates_detail": [{invoice_number, existing_import_id}, ...],
-          "errors_detail": [{invoice_number, message}, ...],
+          "imports": [...],
+          "updates": [...],
+          "duplicates_detail": [...],
+          "errors_detail": [...],
         }
     """
     storage_path, sha256_hex, file_size = _persist_file(file_bytes, original_filename)
@@ -70,8 +82,11 @@ def import_engie_xlsx(
         raise ValueError(f"Lecture du XLSX impossible : {exc}") from exc
 
     created_imports: list[dict[str, Any]] = []
+    updated_imports: list[dict[str, Any]] = []
     duplicates: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    # Storage paths obsolètes après upsert (à nettoyer si plus aucun import ne les référence)
+    obsolete_storage_paths: set[str] = set()
 
     for parsed in bordereaux:
         invoice_number = (parsed.get("invoice") or {}).get("invoice_number")
@@ -80,23 +95,69 @@ def import_engie_xlsx(
             continue
 
         # Dédup : un import avec ce invoice_number existe déjà pour la même city ?
-        existing = db.execute(
-            select(EnergyInvoiceImport.id, EnergyInvoiceImport.source)
+        existing_import = db.execute(
+            select(EnergyInvoiceImport)
             .where(EnergyInvoiceImport.city_id == city_id)
             .where(EnergyInvoiceImport.invoice_number == invoice_number)
             .limit(1)
-        ).first()
-        if existing is not None:
-            duplicates.append(
+        ).scalar_one_or_none()
+
+        if existing_import is not None:
+            if not force_update:
+                duplicates.append(
+                    {
+                        "invoice_number": invoice_number,
+                        "existing_import_id": existing_import.id,
+                        "existing_source": existing_import.source,
+                    }
+                )
+                continue
+
+            # --- Upsert : on met à jour l'import existant ---
+            # Préserve les champs de décision utilisateur (jamais écrasés par l'import)
+            preserved_decision = {
+                "decision_status": existing_import.decision_status,
+                "decision_comment": existing_import.decision_comment,
+                "decision_by_user_id": existing_import.decision_by_user_id,
+                "decision_updated_at": existing_import.decision_updated_at,
+            }
+            previous_storage_path = existing_import.storage_path
+            # On pointe l'import existant vers le nouveau fichier XLSX
+            existing_import.source = SOURCE_TAG
+            existing_import.original_filename = original_filename
+            existing_import.stored_filename = storage_path.name
+            existing_import.storage_path = str(storage_path)
+            existing_import.content_type = content_type or XLSX_CONTENT_TYPE
+            existing_import.file_size_bytes = file_size
+            existing_import.sha256 = sha256_hex
+            existing_import.supplier_guess = "ENGIE"
+            existing_import.analysis_status = "pending"
+            db.flush()
+            try:
+                apply_parsed_to_invoice_import(db, existing_import, parsed)
+                # Restaure les champs décision après l'analyse
+                for field, value in preserved_decision.items():
+                    setattr(existing_import, field, value)
+                db.flush()
+            except Exception as exc:
+                LOG.exception("Re-analyse bordereau %s échouée", invoice_number)
+                errors.append({"invoice_number": invoice_number, "message": str(exc)})
+                continue
+            if previous_storage_path and previous_storage_path != str(storage_path):
+                obsolete_storage_paths.add(previous_storage_path)
+            updated_imports.append(
                 {
+                    "id": existing_import.id,
                     "invoice_number": invoice_number,
-                    "existing_import_id": existing.id,
-                    "existing_source": existing.source,
+                    "control_status": existing_import.control_status,
+                    "site_count": existing_import.site_count,
+                    "total_ttc": existing_import.total_ttc,
+                    "decision_preserved": preserved_decision["decision_status"],
                 }
             )
             continue
 
-        # Crée un EnergyInvoiceImport partageant le fichier XLSX commun
+        # --- Création : nouveau bordereau ---
         invoice_import = EnergyInvoiceImport(
             city_id=city_id,
             uploaded_by_user_id=user_id,
@@ -112,17 +173,14 @@ def import_engie_xlsx(
             analysis_status="pending",
         )
         db.add(invoice_import)
-        db.flush()  # nécessaire pour avoir invoice_import.id avant la persistance des sites
-
+        db.flush()
         try:
             apply_parsed_to_invoice_import(db, invoice_import, parsed)
             db.flush()
         except Exception as exc:
             LOG.exception("Analyse bordereau %s échouée", invoice_number)
             errors.append({"invoice_number": invoice_number, "message": str(exc)})
-            # On garde l'import même en erreur pour traçabilité (status=failed posé par apply_…)
             continue
-
         created_imports.append(
             {
                 "id": invoice_import.id,
@@ -135,14 +193,30 @@ def import_engie_xlsx(
 
     db.commit()
 
+    # Nettoyage best-effort des anciens fichiers devenus orphelins après upsert
+    for old_path in obsolete_storage_paths:
+        still_used = db.execute(
+            select(EnergyInvoiceImport.id)
+            .where(EnergyInvoiceImport.storage_path == old_path)
+            .limit(1)
+        ).first()
+        if still_used is None:
+            try:
+                from pathlib import Path as _P
+                _P(old_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+
     return {
         "source": SOURCE_TAG,
         "filename": original_filename,
         "total_bordereaux": len(bordereaux),
         "created": len(created_imports),
+        "updated": len(updated_imports),
         "duplicates": len(duplicates),
         "errors": len(errors),
         "imports": created_imports,
+        "updates": updated_imports,
         "duplicates_detail": duplicates,
         "errors_detail": errors,
     }
