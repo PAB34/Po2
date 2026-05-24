@@ -218,6 +218,12 @@ function extractMismatchesDetail(detail: EnergyInvoiceImportDetail | undefined):
   return list as BpuMismatchDetail[];
 }
 
+function shouldShowBpuMismatch(detail: BpuMismatchDetail, filters: InvoiceSupplierReportFilters) {
+  if (filters.issueCodes.length === 0) return true;
+  const code = detail.type === "tariff_poste_inconsistency" ? "BPU_TARIFF_POSTE_INCONSISTENCY" : "BPU_PRICE_MISMATCH";
+  return filters.issueCodes.includes(code);
+}
+
 function prmListForInvoice(
   invoiceImport: EnergyInvoiceImport,
   filters: InvoiceSupplierReportFilters,
@@ -388,7 +394,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
     () =>
       reportInvoiceImports.filter((invoiceImport) =>
         selectedIssues(invoiceImport, filters).some(
-          (issue) => issue.code === "BPU_PRICE_MISMATCH",
+          (issue) => invoiceIssueFamily(issue) === "bpu",
         ),
       ),
     [filters, reportInvoiceImports],
@@ -444,6 +450,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
       }
       const ref = invoiceReference(invoiceImport);
       for (const m of mismatches) {
+        if (!shouldShowBpuMismatch(m, filters)) continue;
         // Fallback : les analyses très anciennes peuvent ne pas avoir le champ "type"
         const mtype = (m as BpuMismatchDetail).type ?? "price_mismatch";
         if (mtype === "tariff_poste_inconsistency") {
@@ -454,7 +461,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
       }
     }
     return { priceMismatches, inconsistencies, staleInvoices };
-  }, [bpuInvoiceImports, detailsByImportId]);
+  }, [bpuInvoiceImports, detailsByImportId, filters]);
 
   const bpuPriceTotalEur = useMemo(
     () => bpuView.priceMismatches.reduce((sum, d) => sum + (d.delta_total_eur_ht ?? 0), 0),
