@@ -41,6 +41,7 @@ from app.services.invoices import (
     analyze_existing_invoice_import,
     create_invoice_batch,
     create_invoice_import,
+    delete_all_invoice_imports,
     delete_invoice_import,
     get_invoice_batch,
     get_invoice_import,
@@ -346,6 +347,27 @@ def delete_energy_invoice_import(
     found = delete_invoice_import(db, city_id, invoice_import_id)
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+
+
+@router.delete("/invoices/imports")
+def delete_all_energy_invoice_imports(
+    confirm: str = "",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Suppression en masse de TOUS les EnergyInvoiceImport de la city courante.
+
+    Requiert le paramètre ?confirm=DELETE pour éviter les appels accidentels.
+    Gère correctement les fichiers physiques partagés (cas XLSX 1 fichier = N imports).
+    Retourne le résumé chiffré.
+    """
+    if confirm != "DELETE":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Action destructive : ajouter ?confirm=DELETE pour confirmer.",
+        )
+    city_id = _require_city(current_user)
+    return delete_all_invoice_imports(db, city_id)
 
 
 @router.post("/invoices/imports/{invoice_import_id}/analyze", response_model=EnergyInvoiceImportOut)

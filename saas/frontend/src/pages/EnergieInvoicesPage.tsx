@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import {
   analyzeEnergyInvoiceImport,
   deleteEnergyInvoiceImport,
+  deleteAllEnergyInvoiceImports,
   fetchEnergyInvoiceBatch,
   fetchEnergyInvoiceBatches,
   fetchEnergyInvoiceImports,
@@ -157,6 +158,54 @@ function invoiceIssueFamilies(issues: InvoiceControlIssue[]) {
   return Array.from(new Set(issues.map(invoiceIssueFamily)));
 }
 
+// Comparateur de tri colonne par colonne. Retourne -1/0/+1 (ordre ascendant).
+function compareInvoiceColumn(
+  a: EnergyInvoiceImport,
+  b: EnergyInvoiceImport,
+  column: "fichier" | "facture" | "regroupement" | "titulaire" | "montant" | "controle" | "decision" | "import",
+): number {
+  function cmpStr(x: string | null | undefined, y: string | null | undefined): number {
+    const xs = (x ?? "").toLowerCase();
+    const ys = (y ?? "").toLowerCase();
+    if (xs === ys) return 0;
+    // Les valeurs vides en fin
+    if (!xs) return 1;
+    if (!ys) return -1;
+    return xs.localeCompare(ys, "fr");
+  }
+  function cmpNum(x: number | null | undefined, y: number | null | undefined): number {
+    const xv = x ?? Number.NEGATIVE_INFINITY;
+    const yv = y ?? Number.NEGATIVE_INFINITY;
+    return xv - yv;
+  }
+  function cmpDate(x: string | null | undefined, y: string | null | undefined): number {
+    // ISO strings se comparent bien lexicographiquement
+    return cmpStr(x, y);
+  }
+  switch (column) {
+    case "fichier":
+      return cmpStr(a.original_filename, b.original_filename);
+    case "facture":
+      // Tri principal sur invoice_number, fallback date facture
+      return cmpStr(a.invoice_number, b.invoice_number) || cmpDate(a.invoice_date, b.invoice_date);
+    case "regroupement":
+      return cmpStr(a.regroupement, b.regroupement);
+    case "titulaire":
+      return cmpStr(a.contract_holder, b.contract_holder);
+    case "montant":
+      return cmpNum(a.total_ttc, b.total_ttc);
+    case "controle":
+      // Tri par statut puis par nb erreurs décroissant
+      return cmpStr(a.control_status, b.control_status) || cmpNum(b.control_errors_count, a.control_errors_count);
+    case "decision":
+      return cmpStr(a.decision_status, b.decision_status);
+    case "import":
+      return cmpDate(a.created_at, b.created_at);
+    default:
+      return 0;
+  }
+}
+
 function invoiceIssueCodes(issues: InvoiceControlIssue[]) {
   return Array.from(new Set(issues.map((issue) => issue.code))).filter(Boolean);
 }
@@ -249,6 +298,30 @@ export function EnergieInvoicesPage() {
   const [uploadSummary, setUploadSummary] = useState<string | null>(null);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxSummary, setXlsxSummary] = useState<string | null>(null);
+  const [deleteAllSummary, setDeleteAllSummary] = useState<string | null>(null);
+
+  // Tri du tableau factures : { column, direction }. Cycle clic : asc → desc → none.
+  type SortColumn = "fichier" | "facture" | "regroupement" | "titulaire" | "montant" | "controle" | "decision" | "import";
+  type SortDir = "asc" | "desc";
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function toggleSort(column: SortColumn) {
+    if (sortColumn !== column) {
+      setSortColumn(column);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortColumn(null);
+      setSortDir("asc");
+    }
+  }
+
+  function sortIndicator(column: SortColumn): string {
+    if (sortColumn !== column) return " ⇅";
+    return sortDir === "asc" ? " ↑" : " ↓";
+  }
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [controlFilters, setControlFilters] = useState<string[]>([]);
@@ -373,6 +446,18 @@ export function EnergieInvoicesPage() {
     issueFamilyFilters,
     regroupementFilters,
   ]);
+  // Tri appliqué après filtrage. Si aucune colonne sélectionnée, on garde l'ordre naturel (created_at desc).
+  const sortedImports = useMemo(() => {
+    if (sortColumn === null) return filteredImports;
+    const direction = sortDir === "asc" ? 1 : -1;
+    const list = [...filteredImports];
+    list.sort((a, b) => {
+      const cmp = compareInvoiceColumn(a, b, sortColumn);
+      return cmp * direction;
+    });
+    return list;
+  }, [filteredImports, sortColumn, sortDir]);
+
   // Construction des groupes timeline depuis les factures filtrées : 1 barre par facture,
   // groupée par regroupement (fallback titulaire/"Non regroupe"). Les factures avec
   // anomalies Periode sont marquées isIssue=true pour mise en évidence visuelle.
@@ -476,6 +561,33 @@ export function EnergieInvoicesPage() {
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
     },
   });
+
+  const deleteAllMut = useMutation({
+    mutationFn: () => deleteAllEnergyInvoiceImports(token!),
+    onSuccess: (result) => {
+      setDeleteAllSummary(
+        `${result.deleted} facture(s) supprimée(s), ${result.files_removed} fichier(s) supprimé(s) du disque (${result.files_kept} conservé(s) ou inaccessible(s)).`,
+      );
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+    },
+  });
+
+  function handleDeleteAll() {
+    if (filteredImports.length === 0 && imports.length === 0) {
+      window.alert("Aucune facture à supprimer.");
+      return;
+    }
+    const typed = window.prompt(
+      `⚠️ Vous êtes sur le point de supprimer DÉFINITIVEMENT TOUTES les ${imports.length} factures importées (et les fichiers associés). ` +
+        `Cette action est IRRÉVERSIBLE.\n\nPour confirmer, tapez exactement : SUPPRIMER`,
+    );
+    if (typed === "SUPPRIMER") {
+      deleteAllMut.mutate();
+    } else if (typed !== null) {
+      window.alert("Confirmation incorrecte : aucune suppression effectuée.");
+    }
+  }
 
   return (
     <div className="page">
@@ -829,23 +941,46 @@ export function EnergieInvoicesPage() {
         )}
       </section>
 
+      <div className="invoice-table-toolbar">
+        <div>
+          <strong>{sortedImports.length} facture{sortedImports.length > 1 ? "s" : ""}</strong>
+          {sortedImports.length !== imports.length && (
+            <span className="text-muted"> (sur {imports.length} importée{imports.length > 1 ? "s" : ""})</span>
+          )}
+          {sortColumn && (
+            <span className="text-muted"> · trié par {sortColumn} {sortDir === "asc" ? "↑" : "↓"}</span>
+          )}
+        </div>
+        <div className="invoice-action-cell">
+          {deleteAllSummary && <span className="sync-result-ok">{deleteAllSummary}</span>}
+          <button
+            type="button"
+            className="btn-danger btn-compact"
+            disabled={deleteAllMut.isPending || imports.length === 0}
+            onClick={handleDeleteAll}
+          >
+            {deleteAllMut.isPending ? "Suppression en cours..." : "Tout supprimer"}
+          </button>
+        </div>
+      </div>
+
       <div className="table-wrapper">
-        <table className="data-table">
+        <table className="data-table invoice-sortable-table">
           <thead>
             <tr>
-              <th>Fichier</th>
-              <th>Facture</th>
-              <th>Regroupement</th>
-              <th>Titulaire</th>
-              <th>Montant</th>
-              <th>Controle</th>
-              <th>Decision</th>
-              <th>Import</th>
+              <th onClick={() => toggleSort("fichier")} className="sortable">Fichier{sortIndicator("fichier")}</th>
+              <th onClick={() => toggleSort("facture")} className="sortable">Facture{sortIndicator("facture")}</th>
+              <th onClick={() => toggleSort("regroupement")} className="sortable">Regroupement{sortIndicator("regroupement")}</th>
+              <th onClick={() => toggleSort("titulaire")} className="sortable">Titulaire{sortIndicator("titulaire")}</th>
+              <th onClick={() => toggleSort("montant")} className="sortable">Montant{sortIndicator("montant")}</th>
+              <th onClick={() => toggleSort("controle")} className="sortable">Controle{sortIndicator("controle")}</th>
+              <th onClick={() => toggleSort("decision")} className="sortable">Decision{sortIndicator("decision")}</th>
+              <th onClick={() => toggleSort("import")} className="sortable">Import{sortIndicator("import")}</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {filteredImports.map((invoiceImport) => (
+            {sortedImports.map((invoiceImport) => (
               <tr key={invoiceImport.id}>
                 <td>
                   <div className="invoice-file-cell">
@@ -922,7 +1057,7 @@ export function EnergieInvoicesPage() {
                 </td>
               </tr>
             ))}
-            {!importsQuery.isLoading && filteredImports.length === 0 && (
+            {!importsQuery.isLoading && sortedImports.length === 0 && (
               <tr>
                 <td colSpan={9} className="cell-empty">Aucune facture ne correspond aux filtres.</td>
               </tr>

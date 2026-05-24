@@ -1644,6 +1644,20 @@ export type EnergyInvoiceXlsxImportSummary = {
   errors_detail: Array<{ invoice_number: string | null; message: string }>;
 };
 
+export type DeleteAllInvoiceImportsResult = {
+  deleted: number;
+  files_removed: number;
+  files_kept: number;
+};
+
+export async function deleteAllEnergyInvoiceImports(token: string): Promise<DeleteAllInvoiceImportsResult> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports?confirm=DELETE`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<DeleteAllInvoiceImportsResult>(response);
+}
+
 export async function uploadEngieXlsxExport(
   token: string,
   file: File,

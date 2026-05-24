@@ -110,13 +110,67 @@ def delete_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> 
     invoice_import = get_invoice_import(db, city_id, invoice_import_id)
     if invoice_import is None:
         return False
-    try:
-        Path(invoice_import.storage_path).unlink(missing_ok=True)
-    except OSError:
-        pass
+    storage_path = invoice_import.storage_path
     db.delete(invoice_import)
     db.commit()
+    _cleanup_storage_path_if_orphan(db, storage_path)
     return True
+
+
+def delete_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
+    """Supprime tous les EnergyInvoiceImport d'une city + fichiers physiques.
+
+    Gère correctement les fichiers XLSX partagés par plusieurs imports :
+    on collecte les storage_path uniques avant suppression DB, puis on
+    nettoie les fichiers une seule fois après le commit. Retour :
+        {"deleted": N, "files_removed": M, "files_kept": K}
+    où "files_kept" = chemins manquants ou inaccessibles.
+    """
+    imports = (
+        db.query(EnergyInvoiceImport)
+        .filter(EnergyInvoiceImport.city_id == city_id)
+        .all()
+    )
+    deleted_count = len(imports)
+    storage_paths: set[str] = {imp.storage_path for imp in imports if imp.storage_path}
+
+    for imp in imports:
+        db.delete(imp)
+    db.commit()
+
+    files_removed = 0
+    files_kept = 0
+    for path_str in storage_paths:
+        try:
+            removed = _cleanup_storage_path_if_orphan(db, path_str)
+            if removed:
+                files_removed += 1
+            else:
+                files_kept += 1
+        except Exception:
+            files_kept += 1
+    return {"deleted": deleted_count, "files_removed": files_removed, "files_kept": files_kept}
+
+
+def _cleanup_storage_path_if_orphan(db: Session, storage_path: str | None) -> bool:
+    """Supprime le fichier sur disque uniquement si plus AUCUN EnergyInvoiceImport
+    ne référence ce chemin. Utilisé pour ne pas casser l'analyse XLSX (1 fichier
+    partagé par N imports). Retour True si fichier effectivement supprimé.
+    """
+    if not storage_path:
+        return False
+    still_referenced = (
+        db.query(EnergyInvoiceImport.id)
+        .filter(EnergyInvoiceImport.storage_path == storage_path)
+        .first()
+    )
+    if still_referenced is not None:
+        return False
+    try:
+        Path(storage_path).unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
 
 
 async def create_invoice_import(

@@ -2924,6 +2924,38 @@ button:disabled {
   margin-top: 2px;
 }
 
+.invoice-table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 6px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.88rem;
+}
+
+.invoice-table-toolbar strong {
+  color: #0f172a;
+}
+
+.invoice-table-toolbar .text-muted {
+  color: #64748b;
+  margin-left: 6px;
+}
+
+.invoice-sortable-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.invoice-sortable-table th.sortable:hover {
+  background: #e2e8f0;
+}
+
 .invoice-report-delta-over {
   color: #b91c1c;
 }
