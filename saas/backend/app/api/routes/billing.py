@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from hashlib import sha256
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.db import SessionLocal
+from app.models.invoice import EnergyInvoiceBatch, EnergyInvoiceBatchItem
 from app.models.user import User
 from app.schemas.billing import (
     BillingBpuLineIn,
@@ -293,8 +297,13 @@ async def upload_energy_invoice_import(
     }
 
 
-@router.post("/invoices/imports/xlsx")
+@router.post(
+    "/invoices/imports/xlsx",
+    response_model=EnergyInvoiceBatchDetailOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_engie_xlsx_export(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force_update: bool = False,
     current_user: User = Depends(get_current_user),
@@ -311,8 +320,6 @@ async def upload_engie_xlsx_export(
       nouvelles données du fichier. Les champs decision_status / comment /
       by / updated_at sont PRÉSERVÉS pour ne pas perdre l'historique utilisateur.
     """
-    from app.services.engie_xlsx_import import import_engie_xlsx
-
     city_id = _require_city(current_user)
     filename = file.filename or ""
     if not filename.lower().endswith((".xlsx", ".xlsm")):
@@ -326,22 +333,92 @@ async def upload_engie_xlsx_export(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Fichier vide.",
         )
-    try:
-        summary = import_engie_xlsx(
-            db,
-            city_id=city_id,
-            user_id=current_user.id,
-            file_bytes=content,
+    batch = EnergyInvoiceBatch(
+        city_id=city_id,
+        uploaded_by_user_id=current_user.id,
+        source="engie_xlsx_export",
+        status="processing",
+        file_count=1,
+    )
+    batch.items.append(
+        EnergyInvoiceBatchItem(
             original_filename=filename,
             content_type=file.content_type,
-            force_update=force_update,
+            file_size_bytes=len(content),
+            sha256=sha256(content).hexdigest(),
+            status="processing",
+            message="Analyse XLSX lancee en arriere-plan.",
         )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-    return summary
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+
+    background_tasks.add_task(
+        _run_engie_xlsx_import_job,
+        batch.id,
+        city_id,
+        current_user.id,
+        content,
+        filename,
+        file.content_type,
+        force_update,
+    )
+    return batch
+
+
+def _run_engie_xlsx_import_job(
+    batch_id: int,
+    city_id: int,
+    user_id: int,
+    file_bytes: bytes,
+    original_filename: str,
+    content_type: str | None,
+    force_update: bool,
+) -> None:
+    from app.services.engie_xlsx_import import import_engie_xlsx
+
+    db = SessionLocal()
+    try:
+        batch = db.query(EnergyInvoiceBatch).filter_by(id=batch_id, city_id=city_id).first()
+        item = batch.items[0] if batch and batch.items else None
+        try:
+            summary = import_engie_xlsx(
+                db,
+                city_id=city_id,
+                user_id=user_id,
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+                force_update=force_update,
+            )
+        except Exception as exc:
+            if batch is not None:
+                batch.status = "completed_with_errors"
+                batch.error_count = 1
+                if item is not None:
+                    item.status = "error"
+                    item.message = f"Analyse XLSX impossible : {exc}"
+                db.commit()
+            return
+
+        if batch is not None:
+            batch.status = "completed_with_errors" if summary["errors"] else "completed"
+            batch.file_count = summary["total_bordereaux"]
+            batch.imported_count = summary["created"] + summary["updated"]
+            batch.duplicate_count = summary["duplicates"]
+            batch.error_count = summary["errors"]
+            batch.ignored_count = 0
+            if item is not None:
+                item.status = "imported" if summary["errors"] == 0 else "error"
+                item.message = (
+                    f"Export XLSX traite : {summary['total_bordereaux']} bordereau(x), "
+                    f"{summary['created']} cree(s), {summary['updated']} mis a jour, "
+                    f"{summary['duplicates']} doublon(s), {summary['errors']} erreur(s)."
+                )
+            db.commit()
+    finally:
+        db.close()
 
 
 @router.delete("/invoices/imports/{invoice_import_id}", status_code=status.HTTP_204_NO_CONTENT)

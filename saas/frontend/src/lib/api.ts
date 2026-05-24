@@ -1671,7 +1671,7 @@ export async function uploadEngieXlsxExport(
   token: string,
   file: File,
   options?: { forceUpdate?: boolean },
-): Promise<EnergyInvoiceXlsxImportSummary> {
+): Promise<EnergyInvoiceBatchDetail> {
   const formData = new FormData();
   formData.append("file", file);
   const qs = options?.forceUpdate ? "?force_update=true" : "";
@@ -1680,7 +1680,7 @@ export async function uploadEngieXlsxExport(
     headers: buildAuthHeaders(token),
     body: formData,
   });
-  return parseResponse<EnergyInvoiceXlsxImportSummary>(response);
+  return parseResponse<EnergyInvoiceBatchDetail>(response);
 }
 
 export async function uploadEnergyInvoiceBatch(token: string, files: File[]): Promise<EnergyInvoiceBatchDetail> {

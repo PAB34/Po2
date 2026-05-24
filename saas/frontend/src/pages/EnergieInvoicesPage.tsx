@@ -338,6 +338,7 @@ export function EnergieInvoicesPage() {
     queryKey: ["energy-invoice-imports"],
     queryFn: () => fetchEnergyInvoiceImports(token!),
     enabled: !!token,
+    refetchInterval: 10000,
   });
 
   const turpeVersionsQuery = useQuery({
@@ -350,6 +351,7 @@ export function EnergieInvoicesPage() {
     queryKey: ["energy-invoice-batches"],
     queryFn: () => fetchEnergyInvoiceBatches(token!),
     enabled: !!token,
+    refetchInterval: 5000,
   });
 
   const batchDetailQuery = useQuery({
@@ -360,6 +362,7 @@ export function EnergieInvoicesPage() {
 
   const imports = importsQuery.data ?? [];
   const batches = batchesQuery.data ?? [];
+  const xlsxBatches = batches.filter((batch) => batch.source === "engie_xlsx_export");
   const activeTurpeVersion = turpeVersionsQuery.data?.[0];
   const regroupements = useMemo(
     () =>
@@ -537,18 +540,15 @@ export function EnergieInvoicesPage() {
   const xlsxUploadMut = useMutation({
     mutationFn: (args: { file: File; forceUpdate: boolean }) =>
       uploadEngieXlsxExport(token!, args.file, { forceUpdate: args.forceUpdate }),
-    onSuccess: (summary) => {
-      const parts = [`${summary.created} facture(s) créée(s)`];
-      if (summary.updated > 0) parts.push(`${summary.updated} mise(s) à jour`);
-      if (summary.duplicates > 0) parts.push(`${summary.duplicates} doublon(s) skippé(s)`);
-      if (summary.errors > 0) parts.push(`${summary.errors} erreur(s)`);
-      setXlsxSummary(
-        `Export XLSX traité : ${summary.total_bordereaux} bordereau(x) lu(s) — ${parts.join(", ")}.`,
-      );
+    onSuccess: (batch) => {
+      setXlsxSummary(`Analyse XLSX lancee en arriere-plan (lot #${batch.id}). Les factures apparaitront automatiquement.`);
       setXlsxFile(null);
       setXlsxForceUpdate(false);
       if (xlsxInputRef.current) xlsxInputRef.current.value = "";
+      setSelectedBatchId(batch.id);
+      qc.setQueryData(["energy-invoice-batch", batch.id], batch);
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
     },
   });
 
@@ -674,18 +674,18 @@ export function EnergieInvoicesPage() {
 
       {/* Section "Lots d'import" désactivée depuis le passage XLSX-only (mai 2026).
           Conservée en code pour pouvoir réafficher l'historique des dépôts PDF si besoin. */}
-      {false && (
+      {xlsxBatches.length > 0 && (
       <details className="invoice-detail-section invoice-batch-disclosure">
         <summary className="invoice-batch-summary">
           <div>
-            <h3>Lots d'import</h3>
-            <p className="page-subtitle">Historique des depots manuels avant la connexion API ENGIE.</p>
+            <h3>Traitements XLSX</h3>
+            <p className="page-subtitle">Suivi des analyses lancees depuis les exports ENGIE.</p>
           </div>
-          <span>{batches.length} lot{batches.length > 1 ? "s" : ""}</span>
+          <span>{xlsxBatches.length} traitement{xlsxBatches.length > 1 ? "s" : ""}</span>
         </summary>
         {batchesQuery.isLoading && <p className="loading-text">Chargement des lots...</p>}
         {batchesQuery.isError && <p className="error-text">{(batchesQuery.error as Error).message}</p>}
-        {batches.length > 0 && (
+        {xlsxBatches.length > 0 && (
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
@@ -699,7 +699,7 @@ export function EnergieInvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {batches.slice(0, 8).map((batch) => (
+                {xlsxBatches.slice(0, 8).map((batch) => (
                   <tr key={batch.id}>
                     <td>
                       <div className="invoice-file-cell">
@@ -722,7 +722,7 @@ export function EnergieInvoicesPage() {
             </table>
           </div>
         )}
-        {!batchesQuery.isLoading && batches.length === 0 && <p className="cell-empty">Aucun lot facture importe.</p>}
+        {!batchesQuery.isLoading && xlsxBatches.length === 0 && <p className="cell-empty">Aucun traitement XLSX.</p>}
 
         {batchDetailQuery.isLoading && <p className="loading-text">Chargement du lot selectionne...</p>}
         {selectedBatchDetail && (

@@ -50,4 +50,8 @@ except Exception as exc:
     print("Démarrage uvicorn malgré tout pour préserver l'API.", file=sys.stderr, flush=True)
 
 print("Starting server...", flush=True)
-os.execvp("uvicorn", ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"])
+workers = os.environ.get("WEB_CONCURRENCY", "2")
+os.execvp(
+    "uvicorn",
+    ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", workers],
+)
