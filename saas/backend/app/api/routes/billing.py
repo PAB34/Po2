@@ -1,7 +1,7 @@
 from hashlib import sha256
 from threading import Thread
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -26,6 +26,7 @@ from app.schemas.invoice import (
     EnergyInvoiceDecisionIn,
     EnergyInvoiceImportDetailOut,
     EnergyInvoiceImportOut,
+    EnergyInvoiceMonthlyConsumptionOut,
     EnergyInvoiceUploadResponse,
 )
 from app.services.billing import (
@@ -50,6 +51,7 @@ from app.services.invoices import (
     delete_invoice_import,
     get_invoice_batch,
     get_invoice_import,
+    get_monthly_invoice_consumption,
     list_invoice_batches,
     list_invoice_imports,
     update_invoice_decision,
@@ -215,6 +217,34 @@ def list_energy_invoice_imports(
 ):
     city_id = _require_city(current_user)
     return list_invoice_imports(db, city_id)
+
+
+@router.get("/invoices/consumption-monthly", response_model=EnergyInvoiceMonthlyConsumptionOut)
+def get_energy_invoice_consumption_monthly(
+    year: int = Query(..., ge=2000, le=2100),
+    search: str | None = None,
+    control_status: list[str] = Query(default_factory=list),
+    decision_status: list[str] = Query(default_factory=list),
+    regroupement: list[str] = Query(default_factory=list),
+    contract_holder: list[str] = Query(default_factory=list),
+    issue_family: list[str] = Query(default_factory=list),
+    issue_code: list[str] = Query(default_factory=list),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return get_monthly_invoice_consumption(
+        db,
+        city_id,
+        year,
+        search=search,
+        control_statuses=control_status,
+        decision_statuses=decision_status,
+        regroupements=regroupement,
+        contract_holders=contract_holder,
+        issue_families=issue_family,
+        issue_codes=issue_code,
+    )
 
 
 @router.get("/invoices/batches", response_model=list[EnergyInvoiceBatchOut])

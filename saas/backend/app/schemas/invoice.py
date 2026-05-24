@@ -64,6 +64,29 @@ class EnergyInvoiceUploadResponse(BaseModel):
     message: str
 
 
+class EnergyInvoiceMonthlyConsumptionPoint(BaseModel):
+    month: str
+    billed_kwh: float
+    enedis_kwh: float | None
+    delta_kwh: float | None
+    invoice_count: int
+    prm_count: int
+    enedis_prm_count: int
+
+
+class EnergyInvoiceMonthlyConsumptionOut(BaseModel):
+    year: int
+    generated_from: date
+    generated_to: date
+    billed_total_kwh: float
+    enedis_total_kwh: float | None
+    delta_total_kwh: float | None
+    invoice_count: int
+    prm_count: int
+    enedis_prm_count: int
+    months: list[EnergyInvoiceMonthlyConsumptionPoint]
+
+
 class EnergyInvoiceBatchItemOut(BaseModel):
     id: int
     invoice_import_id: int | None

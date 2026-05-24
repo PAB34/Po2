@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.models.invoice import EnergyInvoiceBatch, EnergyInvoiceBatchItem, EnergyInvoiceImport
+from app.services.energie import _daily_consumption_index
 from app.services.invoice_analysis import analyze_invoice_import
 
 ALLOWED_EXTENSIONS = {".pdf", ".xml", ".csv", ".txt", ".xlsx", ".xls", ".zip"}
@@ -59,6 +61,296 @@ def list_invoice_batches(db: Session, city_id: int) -> list[EnergyInvoiceBatch]:
         .order_by(EnergyInvoiceBatch.created_at.desc(), EnergyInvoiceBatch.id.desc())
         .all()
     )
+
+
+def get_monthly_invoice_consumption(
+    db: Session,
+    city_id: int,
+    year: int,
+    *,
+    search: str | None = None,
+    control_statuses: list[str] | None = None,
+    decision_statuses: list[str] | None = None,
+    regroupements: list[str] | None = None,
+    contract_holders: list[str] | None = None,
+    issue_families: list[str] | None = None,
+    issue_codes: list[str] | None = None,
+) -> dict:
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    today = date.today()
+    generated_to = min(today, year_end) if today.year == year else year_end
+
+    imports = list_invoice_imports(db, city_id)
+    imports = [
+        invoice_import
+        for invoice_import in imports
+        if _invoice_import_matches_monthly_filters(
+            invoice_import,
+            search=search,
+            control_statuses=control_statuses or [],
+            decision_statuses=decision_statuses or [],
+            regroupements=regroupements or [],
+            contract_holders=contract_holders or [],
+            issue_families=issue_families or [],
+            issue_codes=issue_codes or [],
+        )
+    ]
+
+    month_keys = [f"{year}-{month:02d}" for month in range(1, 13)]
+    billed_by_month = {month: Decimal("0") for month in month_keys}
+    invoice_ids_by_month: dict[str, set[int]] = {month: set() for month in month_keys}
+    prm_ids: set[str] = set()
+
+    for invoice_import in imports:
+        allocated = False
+        for site in _iter_invoice_import_sites(invoice_import):
+            prm_id = _clean_prm(site.get("prm_id"))
+            if prm_id:
+                prm_ids.add(prm_id)
+            consumption = _invoice_site_consumption_kwh(site)
+            start = _date_value(site.get("period_start")) or invoice_import.period_start
+            end = _date_value(site.get("period_end")) or invoice_import.period_end
+            if consumption is None or start is None or end is None:
+                continue
+            if _allocate_consumption_to_months(consumption, start, end, year, billed_by_month):
+                allocated = True
+                for month in _months_between(max(start, year_start), min(end, year_end)):
+                    invoice_ids_by_month[month].add(invoice_import.id)
+
+        if allocated:
+            continue
+
+        consumption = _decimal(invoice_import.total_consumption_kwh)
+        if consumption is None or invoice_import.period_start is None or invoice_import.period_end is None:
+            continue
+        if _allocate_consumption_to_months(
+            consumption,
+            invoice_import.period_start,
+            invoice_import.period_end,
+            year,
+            billed_by_month,
+        ):
+            for month in _months_between(
+                max(invoice_import.period_start, year_start),
+                min(invoice_import.period_end, year_end),
+            ):
+                invoice_ids_by_month[month].add(invoice_import.id)
+
+    enedis_by_month = {month: Decimal("0") for month in month_keys}
+    enedis_prms_by_month: dict[str, set[str]] = {month: set() for month in month_keys}
+    daily_consumption = _daily_consumption_index()
+    for prm_id in prm_ids:
+        for point in daily_consumption.get(prm_id, []):
+            point_date = str(point.get("date", ""))[:10]
+            if not (f"{year}-01-01" <= point_date <= f"{year}-12-31"):
+                continue
+            month = point_date[:7]
+            if month not in enedis_by_month:
+                continue
+            enedis_by_month[month] += Decimal(str(point["value_wh"])) / Decimal("1000")
+            enedis_prms_by_month[month].add(prm_id)
+
+    months = []
+    for month in month_keys:
+        billed = billed_by_month[month]
+        enedis = enedis_by_month[month]
+        has_enedis = len(enedis_prms_by_month[month]) > 0
+        months.append(
+            {
+                "month": month,
+                "billed_kwh": _round_float(billed),
+                "enedis_kwh": _round_float(enedis) if has_enedis else None,
+                "delta_kwh": _round_float(billed - enedis) if has_enedis else None,
+                "invoice_count": len(invoice_ids_by_month[month]),
+                "prm_count": len(prm_ids),
+                "enedis_prm_count": len(enedis_prms_by_month[month]),
+            }
+        )
+
+    billed_total = sum(billed_by_month.values(), Decimal("0"))
+    enedis_total = sum(enedis_by_month.values(), Decimal("0"))
+    has_any_enedis = any(enedis_prms_by_month[month] for month in month_keys)
+    return {
+        "year": year,
+        "generated_from": year_start,
+        "generated_to": generated_to,
+        "billed_total_kwh": _round_float(billed_total),
+        "enedis_total_kwh": _round_float(enedis_total) if has_any_enedis else None,
+        "delta_total_kwh": _round_float(billed_total - enedis_total) if has_any_enedis else None,
+        "invoice_count": len(imports),
+        "prm_count": len(prm_ids),
+        "enedis_prm_count": len({prm for month in month_keys for prm in enedis_prms_by_month[month]}),
+        "months": months,
+    }
+
+
+def _invoice_import_matches_monthly_filters(
+    invoice_import: EnergyInvoiceImport,
+    *,
+    search: str | None,
+    control_statuses: list[str],
+    decision_statuses: list[str],
+    regroupements: list[str],
+    contract_holders: list[str],
+    issue_families: list[str],
+    issue_codes: list[str],
+) -> bool:
+    if control_statuses and invoice_import.control_status not in control_statuses:
+        return False
+    if decision_statuses and invoice_import.decision_status not in decision_statuses:
+        return False
+    if regroupements and (not invoice_import.regroupement or invoice_import.regroupement not in regroupements):
+        return False
+    if contract_holders and (not invoice_import.contract_holder or invoice_import.contract_holder not in contract_holders):
+        return False
+    if issue_families or issue_codes:
+        if not any(
+            (not issue_families or _invoice_issue_family(issue) in issue_families)
+            and (not issue_codes or issue.get("code") in issue_codes)
+            for issue in invoice_import.control_issues
+            if isinstance(issue, dict)
+        ):
+            return False
+    needle = (search or "").strip().lower()
+    if not needle:
+        return True
+    values = [
+        invoice_import.original_filename,
+        invoice_import.invoice_number,
+        invoice_import.regroupement,
+        invoice_import.contract_holder,
+        invoice_import.supplier_guess,
+    ]
+    return any(needle in str(value).lower() for value in values if value)
+
+
+def _invoice_issue_family(issue: dict) -> str:
+    code = str(issue.get("code") or "")
+    if code.startswith("BPU_"):
+        return "bpu"
+    if code.startswith("TURPE_"):
+        return "turpe"
+    if "CONSUMPTION" in code or code.startswith("ENEDIS_CONSUMPTION") or code.startswith("LOAD_CURVE_CONSUMPTION"):
+        return "consumption"
+    if "POWER" in code or code.startswith("SUBSCRIBED_POWER"):
+        return "power"
+    if "VAT" in code or "TAX" in code or code in {"HT_TOTAL_MISMATCH", "INVOICE_VAT_TOTAL_MISMATCH"}:
+        return "taxes"
+    if "PERIOD" in code:
+        return "periods"
+    if any(token in code for token in ("PRM", "SUPPLIER", "MARKET", "REGROUPEMENT", "INVOICE", "CHORUS", "DOCUMENT")):
+        return "document"
+    return "other"
+
+
+def _iter_invoice_import_sites(invoice_import: EnergyInvoiceImport) -> list[dict]:
+    result = invoice_import.analysis_result
+    sites = result.get("sites") if isinstance(result, dict) else None
+    return sites if isinstance(sites, list) else []
+
+
+def _clean_prm(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _date_value(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _decimal(value: object) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _invoice_site_consumption_kwh(site: dict) -> Decimal | None:
+    supply_total = Decimal("0")
+    has_supply = False
+    network_total = Decimal("0")
+    has_network = False
+    for line in site.get("invoice_lines", []):
+        if not isinstance(line, dict):
+            continue
+        quantity = _decimal(line.get("quantity"))
+        if quantity is None:
+            continue
+        component = line.get("normalized_component")
+        if component == "supply":
+            has_supply = True
+            supply_total += quantity
+        elif component == "network_variable":
+            has_network = True
+            network_total += quantity
+    if has_supply:
+        return supply_total
+    if has_network:
+        return network_total
+    total = _decimal(site.get("total_consumption_kwh"))
+    if total is not None:
+        return total
+    return None
+
+
+def _allocate_consumption_to_months(
+    consumption_kwh: Decimal,
+    start: date,
+    end: date,
+    year: int,
+    target: dict[str, Decimal],
+) -> bool:
+    if end < start:
+        return False
+    clipped_start = max(start, date(year, 1, 1))
+    clipped_end = min(end, date(year, 12, 31))
+    if clipped_end < clipped_start:
+        return False
+    total_days = Decimal((end - start).days + 1)
+    if total_days <= 0:
+        return False
+    for month in _months_between(clipped_start, clipped_end):
+        month_start = date.fromisoformat(f"{month}-01")
+        month_end = _month_end(month_start)
+        overlap_start = max(clipped_start, month_start)
+        overlap_end = min(clipped_end, month_end)
+        overlap_days = Decimal((overlap_end - overlap_start).days + 1)
+        target[month] += consumption_kwh * (overlap_days / total_days)
+    return True
+
+
+def _months_between(start: date, end: date) -> list[str]:
+    if end < start:
+        return []
+    months = []
+    current = date(start.year, start.month, 1)
+    limit = date(end.year, end.month, 1)
+    while current <= limit:
+        months.append(f"{current.year}-{current.month:02d}")
+        current = date(current.year + (1 if current.month == 12 else 0), 1 if current.month == 12 else current.month + 1, 1)
+    return months
+
+
+def _month_end(month_start: date) -> date:
+    if month_start.month == 12:
+        return date(month_start.year, 12, 31)
+    return date(month_start.year, month_start.month + 1, 1) - timedelta(days=1)
+
+
+def _round_float(value: Decimal) -> float:
+    return round(float(value), 1)
     _mark_stale_xlsx_batches(db, batches)
     return batches
 

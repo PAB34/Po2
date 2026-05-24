@@ -1575,11 +1575,64 @@ export type EnergyInvoiceBatchDetail = EnergyInvoiceBatch & {
   items: EnergyInvoiceBatchItem[];
 };
 
+export type EnergyInvoiceMonthlyConsumptionPoint = {
+  month: string;
+  billed_kwh: number;
+  enedis_kwh: number | null;
+  delta_kwh: number | null;
+  invoice_count: number;
+  prm_count: number;
+  enedis_prm_count: number;
+};
+
+export type EnergyInvoiceMonthlyConsumption = {
+  year: number;
+  generated_from: string;
+  generated_to: string;
+  billed_total_kwh: number;
+  enedis_total_kwh: number | null;
+  delta_total_kwh: number | null;
+  invoice_count: number;
+  prm_count: number;
+  enedis_prm_count: number;
+  months: EnergyInvoiceMonthlyConsumptionPoint[];
+};
+
+export type EnergyInvoiceMonthlyConsumptionFilters = {
+  search?: string;
+  controlStatuses?: string[];
+  decisionStatuses?: string[];
+  regroupements?: string[];
+  contractHolders?: string[];
+  issueFamilies?: string[];
+  issueCodes?: string[];
+};
+
 export async function fetchTurpeVersions(token: string): Promise<TurpeVersion[]> {
   const response = await fetch(`${apiBaseUrl}/billing/turpe/versions`, {
     headers: buildHeaders(token),
   });
   return parseResponse<TurpeVersion[]>(response);
+}
+
+export async function fetchEnergyInvoiceMonthlyConsumption(
+  token: string,
+  year: number,
+  filters: EnergyInvoiceMonthlyConsumptionFilters = {},
+): Promise<EnergyInvoiceMonthlyConsumption> {
+  const params = new URLSearchParams({ year: String(year) });
+  const search = filters.search?.trim();
+  if (search) params.set("search", search);
+  filters.controlStatuses?.forEach((value) => params.append("control_status", value));
+  filters.decisionStatuses?.forEach((value) => params.append("decision_status", value));
+  filters.regroupements?.forEach((value) => params.append("regroupement", value));
+  filters.contractHolders?.forEach((value) => params.append("contract_holder", value));
+  filters.issueFamilies?.forEach((value) => params.append("issue_family", value));
+  filters.issueCodes?.forEach((value) => params.append("issue_code", value));
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/consumption-monthly?${params.toString()}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<EnergyInvoiceMonthlyConsumption>(response);
 }
 
 export async function fetchEnergyInvoiceImports(token: string): Promise<EnergyInvoiceImport[]> {

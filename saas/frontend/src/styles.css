@@ -2831,6 +2831,78 @@ button:disabled {
   margin-left: 6px;
 }
 
+.invoice-consumption-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.invoice-consumption-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.invoice-consumption-header h3 {
+  margin: 2px 0 4px;
+  color: #e2e8f0;
+  font-size: 1.05rem;
+}
+
+.invoice-consumption-header span,
+.invoice-consumption-note {
+  color: #94a3b8;
+  font-size: 0.86rem;
+}
+
+.invoice-consumption-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+  min-width: min(520px, 100%);
+}
+
+.invoice-consumption-kpis div {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(30, 41, 59, 0.58);
+}
+
+.invoice-consumption-kpis strong,
+.invoice-consumption-kpis span {
+  display: block;
+}
+
+.invoice-consumption-kpis strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.invoice-consumption-kpis span {
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 0.76rem;
+}
+
+.invoice-consumption-chart {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 8px 8px 0;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.invoice-consumption-note {
+  margin: 0;
+}
+
 .invoice-timeline-wrapper {
   margin: 12px 0;
   background: #ffffff;
@@ -2842,7 +2914,12 @@ button:disabled {
 
 .invoice-timeline-svg {
   display: block;
-  min-width: 700px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.invoice-timeline-wrapper-compact {
+  overflow-x: visible;
 }
 
 .invoice-timeline-empty {
@@ -2893,6 +2970,30 @@ button:disabled {
   margin-bottom: 6px;
   font-size: 0.95rem;
   color: #1e293b;
+}
+
+.invoice-period-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.invoice-period-summary span {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+}
+
+.invoice-period-summary strong {
+  color: #0f172a;
+}
+
+.invoice-period-issues-table {
+  margin-top: 8px;
 }
 
 .invoice-timeline-panel {
@@ -3050,6 +3151,16 @@ button:disabled {
     align-items: flex-start;
   }
 
+  .invoice-consumption-header {
+    flex-direction: column;
+  }
+
+  .invoice-consumption-kpis {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    width: 100%;
+  }
+
   .invoice-report-backdrop {
     padding: 10px;
   }
@@ -3075,6 +3186,11 @@ button:disabled {
 }
 
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
   body {
     background: #fff;
   }
@@ -3126,6 +3242,16 @@ button:disabled {
 
   .invoice-supplier-report table {
     page-break-inside: auto;
+  }
+
+  .invoice-timeline-wrapper {
+    overflow: visible;
+    page-break-inside: avoid;
+  }
+
+  .invoice-timeline-svg {
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .invoice-supplier-report tr {

@@ -49,6 +49,14 @@ type IssueGroup = {
   count: number;
 };
 
+type PeriodIssueRow = {
+  invoiceRef: string;
+  code: string;
+  message: string;
+  scope: string;
+  kind: "gap" | "overlap" | "other";
+};
+
 // Structures persistées par le backend dans control_report.bpu.mismatches_detail
 // (cf. _record_bpu_mismatch / _record_bpu_tariff_poste_inconsistency dans
 // saas/backend/app/services/invoice_analysis.py). Aucun parsing de message ni heuristique.
@@ -257,6 +265,29 @@ function uniqueIssueScopesForFamily(
   return Array.from(set).sort();
 }
 
+function periodIssueRows(invoiceImports: EnergyInvoiceImport[], filters: InvoiceSupplierReportFilters): PeriodIssueRow[] {
+  const rows: PeriodIssueRow[] = [];
+  for (const invoiceImport of invoiceImports) {
+    for (const issue of selectedIssues(invoiceImport, filters)) {
+      if (invoiceIssueFamily(issue) !== "periods" || !issue.scope) continue;
+      rows.push({
+        invoiceRef: invoiceReference(invoiceImport),
+        code: issue.code,
+        message: issue.message,
+        scope: issue.scope,
+        kind: issue.code === "PERIOD_OVERLAP" ? "overlap" : issue.code === "PERIOD_GAP" ? "gap" : "other",
+      });
+    }
+  }
+  return rows.sort((a, b) => a.scope.localeCompare(b.scope, "fr") || a.invoiceRef.localeCompare(b.invoiceRef, "fr"));
+}
+
+function periodIssueKindLabel(kind: PeriodIssueRow["kind"]) {
+  if (kind === "overlap") return "Chevauchement : risque de double facturation sur les memes jours.";
+  if (kind === "gap") return "Trou : jours potentiellement non factures entre deux periodes.";
+  return "Periode a verifier : date manquante ou incoherence detectee.";
+}
+
 // Parse un scope d'issue Periode au format "PRM / FIC nnnn / YYYY-MM-DD - YYYY-MM-DD"
 // → {prm, fic, period_start, period_end}. Retourne null si le format ne match pas.
 function parseScopeWithPeriod(scope: string): {
@@ -362,6 +393,15 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
   const periodTimelineGroups = useMemo(
     () => buildPeriodTimelineGroups(invoiceImports, filters),
     [invoiceImports, filters],
+  );
+  const periodRows = useMemo(() => periodIssueRows(invoiceImports, filters), [invoiceImports, filters]);
+  const periodSummary = useMemo(
+    () => ({
+      overlap: periodRows.filter((row) => row.kind === "overlap").length,
+      gap: periodRows.filter((row) => row.kind === "gap").length,
+      other: periodRows.filter((row) => row.kind === "other").length,
+    }),
+    [periodRows],
   );
   const totalTtc = reportInvoiceImports.reduce((total, invoiceImport) => total + (invoiceImport.total_ttc ?? 0), 0);
   const errorCount = reportInvoiceImports.reduce(
@@ -634,8 +674,35 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
                         )}
                         {group.family === "periods" && periodTimelineGroups.length > 0 && (
                           <div className="invoice-timeline-section">
-                            <h3>Visualisation des periodes facturees (anomalies sur 12 mois glissants)</h3>
-                            <InvoicePeriodTimeline groups={periodTimelineGroups} />
+                            <h3>Visualisation des periodes facturees</h3>
+                            <div className="invoice-period-summary">
+                              <span><strong>{periodSummary.overlap}</strong> chevauchement{periodSummary.overlap > 1 ? "s" : ""}</span>
+                              <span><strong>{periodSummary.gap}</strong> trou{periodSummary.gap > 1 ? "s" : ""}</span>
+                              <span><strong>{periodSummary.other}</strong> autre{periodSummary.other > 1 ? "s" : ""} periode{periodSummary.other > 1 ? "s" : ""} a verifier</span>
+                            </div>
+                            <InvoicePeriodTimeline groups={periodTimelineGroups} compact labelWidth={190} />
+                            {periodRows.length > 0 && (
+                              <table className="invoice-period-issues-table">
+                                <thead>
+                                  <tr>
+                                    <th>Facture</th>
+                                    <th>Probleme</th>
+                                    <th>Periode / compteur</th>
+                                    <th>A lire</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {periodRows.slice(0, 16).map((row) => (
+                                    <tr key={`${row.invoiceRef}-${row.code}-${row.scope}`}>
+                                      <td>{row.invoiceRef}</td>
+                                      <td>{row.code}</td>
+                                      <td>{row.scope}</td>
+                                      <td>{periodIssueKindLabel(row.kind)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
                           </div>
                         )}
                       </div>

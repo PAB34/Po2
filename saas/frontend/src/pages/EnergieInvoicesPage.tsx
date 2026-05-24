@@ -2,17 +2,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   analyzeEnergyInvoiceImport,
   deleteEnergyInvoiceImport,
   deleteAllEnergyInvoiceImports,
   fetchEnergyInvoiceBatch,
   fetchEnergyInvoiceBatches,
   fetchEnergyInvoiceImports,
+  fetchEnergyInvoiceMonthlyConsumption,
   fetchTurpeVersions,
   uploadEnergyInvoiceBatch,
   uploadEngieXlsxExport,
 } from "../lib/api";
-import type { EnergyInvoiceImport } from "../lib/api";
+import type { EnergyInvoiceImport, EnergyInvoiceMonthlyConsumptionPoint } from "../lib/api";
 import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
 import { InvoicePeriodTimeline } from "../components/InvoicePeriodTimeline";
 import type { TimelineGroup, TimelineItem } from "../components/InvoicePeriodTimeline";
@@ -71,6 +83,8 @@ const DECISION_FILTER_OPTIONS = [
   { value: "dispute_sent", label: "Contestation envoyee" },
 ];
 
+const MONTH_LABELS_SHORT = ["Jan", "Fev", "Mar", "Avr", "Mai", "Juin", "Juil", "Aout", "Sep", "Oct", "Nov", "Dec"];
+
 type MultiFilterOption<T extends string> = {
   value: T;
   label: string;
@@ -90,6 +104,11 @@ function formatShortDate(value: string | null) {
 function formatCurrency(value: number | null) {
   if (value === null || value === undefined) return "-";
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+}
+
+function formatKwh(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${Math.round(value).toLocaleString("fr-FR")} kWh`;
 }
 
 function formatSize(bytes: number) {
@@ -360,6 +379,32 @@ export function EnergieInvoicesPage() {
     enabled: !!token && selectedBatchId !== null,
   });
 
+  const currentYear = new Date().getFullYear();
+  const monthlyConsumptionQuery = useQuery({
+    queryKey: [
+      "energy-invoice-monthly-consumption",
+      currentYear,
+      invoiceSearch,
+      controlFilters,
+      decisionFilters,
+      regroupementFilters,
+      contractHolderFilters,
+      issueFamilyFilters,
+      issueCodeFilters,
+    ],
+    queryFn: () =>
+      fetchEnergyInvoiceMonthlyConsumption(token!, currentYear, {
+        search: invoiceSearch,
+        controlStatuses: controlFilters,
+        decisionStatuses: decisionFilters,
+        regroupements: regroupementFilters,
+        contractHolders: contractHolderFilters,
+        issueFamilies: issueFamilyFilters,
+        issueCodes: issueCodeFilters,
+      }),
+    enabled: !!token,
+  });
+
   const imports = importsQuery.data ?? [];
   const batches = batchesQuery.data ?? [];
   const xlsxBatches = batches.filter((batch) => batch.source === "engie_xlsx_export");
@@ -462,6 +507,18 @@ export function EnergieInvoicesPage() {
     return list;
   }, [filteredImports, sortColumn, sortDir]);
 
+  const monthlyConsumptionChartData = useMemo(() => {
+    const points = monthlyConsumptionQuery.data?.months ?? [];
+    return points.map((point: EnergyInvoiceMonthlyConsumptionPoint) => {
+      const monthIndex = Number(point.month.slice(5, 7)) - 1;
+      return {
+        ...point,
+        label: MONTH_LABELS_SHORT[monthIndex] ?? point.month,
+        enedis_kwh: point.enedis_kwh ?? undefined,
+      };
+    });
+  }, [monthlyConsumptionQuery.data]);
+
   // Construction des groupes timeline depuis les factures filtrées : 1 barre par facture,
   // groupée par regroupement (fallback titulaire/"Non regroupe"). Les factures avec
   // anomalies Periode sont marquées isIssue=true pour mise en évidence visuelle.
@@ -533,6 +590,7 @@ export function EnergieInvoicesPage() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
       qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
       qc.setQueryData(["energy-invoice-batch", batch.id], batch);
     },
   });
@@ -549,6 +607,7 @@ export function EnergieInvoicesPage() {
       qc.setQueryData(["energy-invoice-batch", batch.id], batch);
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
       qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
     },
   });
 
@@ -556,6 +615,7 @@ export function EnergieInvoicesPage() {
     mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
     },
   });
 
@@ -563,6 +623,7 @@ export function EnergieInvoicesPage() {
     mutationFn: (invoiceImport: EnergyInvoiceImport) => deleteEnergyInvoiceImport(token!, invoiceImport.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
     },
   });
 
@@ -574,6 +635,7 @@ export function EnergieInvoicesPage() {
       );
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
       qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
     },
   });
 
@@ -620,6 +682,78 @@ export function EnergieInvoicesPage() {
           <span className="kpi-value">{stats.valid}</span>
         </div>
       </div>
+
+      <section className="invoice-consumption-panel">
+        <header className="invoice-consumption-header">
+          <div>
+            <p className="field-label">Suivi mensuel de facturation</p>
+            <h3>ENGIE facture vs ENEDIS releve - {currentYear}</h3>
+            <span>Janvier a decembre, avec les filtres facture actifs.</span>
+          </div>
+          {monthlyConsumptionQuery.data && (
+            <div className="invoice-consumption-kpis">
+              <div>
+                <strong>{formatKwh(monthlyConsumptionQuery.data.billed_total_kwh)}</strong>
+                <span>ENGIE facture</span>
+              </div>
+              <div>
+                <strong>{formatKwh(monthlyConsumptionQuery.data.enedis_total_kwh)}</strong>
+                <span>ENEDIS releve</span>
+              </div>
+              <div>
+                <strong>{formatKwh(monthlyConsumptionQuery.data.delta_total_kwh)}</strong>
+                <span>Ecart facture - releve</span>
+              </div>
+            </div>
+          )}
+        </header>
+        {monthlyConsumptionQuery.isLoading && <p className="loading-text">Chargement du suivi mensuel...</p>}
+        {monthlyConsumptionQuery.isError && <p className="error-text">{(monthlyConsumptionQuery.error as Error).message}</p>}
+        {monthlyConsumptionQuery.data && (
+          <>
+            <div className="invoice-consumption-chart">
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={monthlyConsumptionChartData} margin={{ top: 12, right: 18, bottom: 8, left: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+                  <XAxis dataKey="label" tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fill: "#cbd5e1", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={84}
+                    tickFormatter={(value) => `${Math.round(Number(value) / 1000).toLocaleString("fr-FR")} MWh`}
+                  />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      formatKwh(Number(value)),
+                      name === "billed_kwh" ? "ENGIE facture" : name === "enedis_kwh" ? "ENEDIS releve" : String(name),
+                    ]}
+                    labelFormatter={(label) => `Mois : ${label}`}
+                    contentStyle={{ background: "#0f172a", border: "1px solid rgba(148, 163, 184, 0.28)", borderRadius: 8 }}
+                    labelStyle={{ color: "#e2e8f0" }}
+                  />
+                  <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
+                  <Bar dataKey="billed_kwh" name="ENGIE facture" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                  <Line
+                    type="monotone"
+                    dataKey="enedis_kwh"
+                    name="ENEDIS releve"
+                    stroke="#22c55e"
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="invoice-consumption-note">
+              Factures : consommation repartie au prorata des jours couverts par chaque periode. ENEDIS :
+              donnees journalieres disponibles sur {monthlyConsumptionQuery.data.enedis_prm_count} PRM sur{" "}
+              {monthlyConsumptionQuery.data.prm_count} PRM identifies dans les factures retenues.
+            </p>
+          </>
+        )}
+      </section>
 
       {/*
         Pipeline PDF désactivé côté UI depuis le passage à l'import XLSX (mai 2026).

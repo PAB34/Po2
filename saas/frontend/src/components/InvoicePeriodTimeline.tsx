@@ -48,6 +48,7 @@ type Props = {
   rowHeight?: number;
   // Largeur de la colonne libellés
   labelWidth?: number;
+  compact?: boolean;
 };
 
 const MONTH_LABELS_FR = [
@@ -103,6 +104,7 @@ export function InvoicePeriodTimeline({
   endDateISO,
   rowHeight = 24,
   labelWidth = 240,
+  compact = false,
 }: Props) {
   // ── Calcul des bornes temporelles ─────────────────────────────────────────
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -173,7 +175,7 @@ export function InvoicePeriodTimeline({
   const totalRows = renderedGroups.reduce((sum, g) => sum + g.rows.length, 0);
   const groupHeaderHeight = 22;
   const axisHeight = 30;
-  const chartWidth = 760;
+  const chartWidth = compact ? 620 : 760;
   const chartHeight = totalRows * rowHeight + renderedGroups.length * groupHeaderHeight + axisHeight + 8;
   const totalWidth = labelWidth + chartWidth + 20;
 
@@ -217,7 +219,7 @@ export function InvoicePeriodTimeline({
 
   let y = axisHeight;
   return (
-    <div className="invoice-timeline-wrapper">
+    <div className={compact ? "invoice-timeline-wrapper invoice-timeline-wrapper-compact" : "invoice-timeline-wrapper"}>
       <svg
         className="invoice-timeline-svg"
         viewBox={`0 0 ${totalWidth} ${chartHeight}`}
@@ -376,7 +378,7 @@ export function InvoicePeriodTimeline({
           <span className="invoice-timeline-swatch" style={{ background: "#2563eb" }} /> Periode facturee
         </span>
         <span className="invoice-timeline-legend-item">
-          <span className="invoice-timeline-swatch" style={{ background: "#f59e0b" }} /> Periode signalee
+          <span className="invoice-timeline-swatch" style={{ background: "#f59e0b" }} /> Facture avec anomalie de periode
         </span>
         <span className="invoice-timeline-legend-item">
           <span className="invoice-timeline-swatch" style={{ background: "#dc2626" }} /> Chevauchement
