@@ -626,7 +626,10 @@ def parse_engie_xlsx(path: Path) -> list[dict[str, Any]]:
     Le moteur d'analyse (_build_control_report) est alors directement
     réutilisable sans modification.
     """
-    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    # The parser performs many keyed cell lookups per row. openpyxl's read-only
+    # worksheets are streaming-oriented and make random ws.cell(...) access
+    # extremely slow on wide ENGIE exports, so load the small workbook normally.
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=False)
 
     # Accumule les sites par bordereau (cross-sheets car un bordereau peut couvrir
     # plusieurs segments tarifaires dans le même export)

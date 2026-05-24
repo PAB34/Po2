@@ -1,6 +1,7 @@
 from hashlib import sha256
+from threading import Thread
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -303,7 +304,6 @@ async def upload_energy_invoice_import(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_engie_xlsx_export(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     force_update: bool = False,
     current_user: User = Depends(get_current_user),
@@ -354,16 +354,12 @@ async def upload_engie_xlsx_export(
     db.commit()
     db.refresh(batch)
 
-    background_tasks.add_task(
-        _run_engie_xlsx_import_job,
-        batch.id,
-        city_id,
-        current_user.id,
-        content,
-        filename,
-        file.content_type,
-        force_update,
+    worker = Thread(
+        target=_run_engie_xlsx_import_job,
+        args=(batch.id, city_id, current_user.id, content, filename, file.content_type, force_update),
+        daemon=True,
     )
+    worker.start()
     return batch
 
 
@@ -382,6 +378,9 @@ def _run_engie_xlsx_import_job(
     try:
         batch = db.query(EnergyInvoiceBatch).filter_by(id=batch_id, city_id=city_id).first()
         item = batch.items[0] if batch and batch.items else None
+        if item is not None:
+            item.message = "Analyse XLSX en cours : lecture et controle des bordereaux."
+            db.commit()
         try:
             summary = import_engie_xlsx(
                 db,

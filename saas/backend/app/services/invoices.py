@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -15,6 +15,7 @@ from app.services.invoice_analysis import analyze_invoice_import
 ALLOWED_EXTENSIONS = {".pdf", ".xml", ".csv", ".txt", ".xlsx", ".xls", ".zip"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 DECISION_STATUSES = {"to_review", "approved", "rejected", "dispute_sent"}
+XLSX_PROCESSING_STALE_AFTER = timedelta(minutes=10)
 
 
 def _safe_original_filename(filename: str | None) -> str:
@@ -52,16 +53,43 @@ def list_invoice_imports(db: Session, city_id: int) -> list[EnergyInvoiceImport]
 
 
 def list_invoice_batches(db: Session, city_id: int) -> list[EnergyInvoiceBatch]:
-    return (
+    batches = (
         db.query(EnergyInvoiceBatch)
         .filter_by(city_id=city_id)
         .order_by(EnergyInvoiceBatch.created_at.desc(), EnergyInvoiceBatch.id.desc())
         .all()
     )
+    _mark_stale_xlsx_batches(db, batches)
+    return batches
 
 
 def get_invoice_batch(db: Session, city_id: int, batch_id: int) -> EnergyInvoiceBatch | None:
-    return db.query(EnergyInvoiceBatch).filter_by(city_id=city_id, id=batch_id).first()
+    batch = db.query(EnergyInvoiceBatch).filter_by(city_id=city_id, id=batch_id).first()
+    if batch is not None:
+        _mark_stale_xlsx_batches(db, [batch])
+    return batch
+
+
+def _mark_stale_xlsx_batches(db: Session, batches: list[EnergyInvoiceBatch]) -> None:
+    now = datetime.now(timezone.utc)
+    changed = False
+    for batch in batches:
+        if batch.source != "engie_xlsx_export" or batch.status != "processing":
+            continue
+        created_at = batch.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if now - created_at < XLSX_PROCESSING_STALE_AFTER:
+            continue
+        batch.status = "completed_with_errors"
+        batch.error_count = max(batch.error_count, 1)
+        for item in batch.items:
+            if item.status == "processing":
+                item.status = "error"
+                item.message = "Analyse XLSX interrompue ou trop longue. Relance l'import avec le meme fichier."
+        changed = True
+    if changed:
+        db.commit()
 
 
 def get_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> EnergyInvoiceImport | None:
