@@ -8,17 +8,23 @@ Conversion PCS → PCI : ratio 1.1068 (GRDF zone Languedoc-Roussillon)
   T2 :  74.17 €/MWhPCS × 1.1068 =  82.1313 €/MWhPCI
   T3 :  70.78 €/MWhPCS × 1.1068 =  78.3775 €/MWhPCI
 
-Revision: 0021
-Revises: 0020_add_cpe_tarif_pce
+Revision: 0022
+Revises: 0021 (add_building_meter_links)
 Create Date: 2026-05-22
+
+Note : initialement créée comme 0021, renumérotée en 0022 après collision
+avec 0021_add_building_meter_links (commit Codespaces parallèle qui prenait
+le même numéro). Comme la migration est idempotente (ON CONFLICT DO NOTHING
+sur (annee, tarif)), re-jouer si elle avait déjà tourné en base sous le
+nom 0021 ne crée pas de doublons.
 """
 from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0021"
-down_revision = "0020"
+revision = "0022"
+down_revision = "0021"
 branch_labels = None
 depends_on = None
 
