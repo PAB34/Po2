@@ -517,6 +517,8 @@ export function EnergieInvoicesPage() {
     }
   }, [batches, selectedBatchId]);
 
+  const selectedBatchDetail = batchDetailQuery.data;
+
   const uploadMut = useMutation({
     mutationFn: (files: File[]) => uploadEnergyInvoiceBatch(token!, files),
     onSuccess: (batch) => {
@@ -723,7 +725,7 @@ export function EnergieInvoicesPage() {
         {!batchesQuery.isLoading && batches.length === 0 && <p className="cell-empty">Aucun lot facture importe.</p>}
 
         {batchDetailQuery.isLoading && <p className="loading-text">Chargement du lot selectionne...</p>}
-        {batchDetailQuery.data && (
+        {selectedBatchDetail && (
           <div className="table-wrapper">
             <table className="data-table">
               <thead>
@@ -736,7 +738,7 @@ export function EnergieInvoicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {batchDetailQuery.data.items.map((item) => (
+                {selectedBatchDetail.items.map((item) => (
                   <tr key={item.id}>
                     <td>
                       <div className="invoice-file-cell">
