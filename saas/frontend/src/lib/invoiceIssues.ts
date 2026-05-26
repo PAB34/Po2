@@ -23,6 +23,17 @@ export const INVOICE_ISSUE_FAMILY_LABEL: Record<InvoiceIssueFamily, string> = {
   other: "Autres controles",
 };
 
+export const INVOICE_ISSUE_FAMILY_ORDER: InvoiceIssueFamily[] = [
+  "bpu",
+  "turpe",
+  "consumption",
+  "periods",
+  "power",
+  "taxes",
+  "document",
+  "other",
+];
+
 export const INVOICE_ISSUE_FAMILY_DETAIL: Record<InvoiceIssueFamily, string> = {
   bpu: "Prix, poste ou option tarifaire incoherent avec le BPU.",
   turpe: "Controle des composantes d'acheminement : ecart TURPE calcule ou limite de verification.",
@@ -33,6 +44,38 @@ export const INVOICE_ISSUE_FAMILY_DETAIL: Record<InvoiceIssueFamily, string> = {
   document: "Reference, perimetre ou donnees d'identification a verifier.",
   other: "Point technique a examiner dans le detail des controles.",
 };
+
+export const INVOICE_KNOWN_ISSUE_CODES: Array<{
+  code: string;
+  family: InvoiceIssueFamily;
+  label: string;
+  message: string;
+}> = [
+  {
+    code: "BPU_PRICE_MISMATCH",
+    family: "bpu",
+    label: "Ecart prix facture / BPU",
+    message: "Prix unitaire facture different du prix contractuel BPU, avec recalcul de l'ecart dans le rapport.",
+  },
+  {
+    code: "BPU_TARIFF_POSTE_INCONSISTENCY",
+    family: "bpu",
+    label: "Incoherence tarif/poste BPU",
+    message: "Le prix facture correspond a une autre ligne BPU que celle attendue pour le tarif et le poste.",
+  },
+  {
+    code: "BPU_REFERENCE_MISSING",
+    family: "bpu",
+    label: "Reference BPU manquante",
+    message: "Aucune ligne BPU n'a pu etre associee au tarif/poste facture.",
+  },
+  {
+    code: "BPU_PRICE_MISSING",
+    family: "bpu",
+    label: "Prix BPU manquant",
+    message: "La ligne BPU existe, mais le prix du composant controle n'est pas renseigne.",
+  },
+];
 
 export function invoiceIssueFamily(issue: InvoiceControlIssue): InvoiceIssueFamily {
   const code = issue.code ?? "";

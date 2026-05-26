@@ -29,7 +29,9 @@ import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
 import { InvoicePeriodTimeline } from "../components/InvoicePeriodTimeline";
 import type { TimelineGroup, TimelineItem } from "../components/InvoicePeriodTimeline";
 import {
+  INVOICE_ISSUE_FAMILY_ORDER,
   INVOICE_ISSUE_FAMILY_LABEL,
+  INVOICE_KNOWN_ISSUE_CODES,
   invoiceIssueFamily,
 } from "../lib/invoiceIssues";
 import type { InvoiceControlIssue, InvoiceIssueFamily } from "../lib/invoiceIssues";
@@ -436,15 +438,13 @@ export function EnergieInvoicesPage() {
       ).sort((a, b) => a.localeCompare(b, "fr")),
     [imports],
   );
-  const issueFamilies = useMemo(
-    () =>
-      Array.from(new Set(imports.flatMap((invoiceImport) => invoiceIssueFamilies(invoiceImport.control_issues)))).sort((a, b) =>
-        INVOICE_ISSUE_FAMILY_LABEL[a].localeCompare(INVOICE_ISSUE_FAMILY_LABEL[b], "fr"),
-      ),
-    [imports],
-  );
+  const issueFamilies = INVOICE_ISSUE_FAMILY_ORDER;
   const issueCodes = useMemo(() => {
-    const options = new Map<string, { code: string; family: InvoiceIssueFamily; message: string }>();
+    const options = new Map<string, { code: string; family: InvoiceIssueFamily; message: string; label?: string }>();
+    for (const knownIssue of INVOICE_KNOWN_ISSUE_CODES) {
+      if (issueFamilyFilters.length > 0 && !issueFamilyFilters.includes(knownIssue.family)) continue;
+      options.set(knownIssue.code, knownIssue);
+    }
     for (const invoiceImport of imports) {
       for (const issue of invoiceImport.control_issues) {
         const family = invoiceIssueFamily(issue);
@@ -1084,7 +1084,7 @@ export function EnergieInvoicesPage() {
             allLabel="Tous"
             options={issueCodes.map((issue) => ({
               value: issue.code,
-              label: `${INVOICE_ISSUE_FAMILY_LABEL[issue.family]} : ${issue.code}`,
+              label: `${INVOICE_ISSUE_FAMILY_LABEL[issue.family]} : ${issue.label ?? issue.code}`,
               title: issue.message,
             }))}
             values={issueCodeFilters}
