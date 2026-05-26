@@ -885,6 +885,12 @@ export function EnergieInvoicesPage() {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+            <div className="invoice-consumption-legend" aria-label="Legende du graphique de facturation">
+              <span><strong>ENGIE facture</strong> : kWh factures par ENGIE, repartis au prorata des jours couverts.</span>
+              <span><strong>ENEDIS releve</strong> : kWh releves par ENEDIS sur les PRM identifies.</span>
+              <span><strong>Factures</strong> : nombre de bordereaux ENGIE retenus par mois.</span>
+              <span><strong>PRM factures</strong> : nombre de compteurs distincts presents dans les factures du mois.</span>
+            </div>
             {potentialGapMonths.length > 0 && (
               <div className="invoice-consumption-alert">
                 <strong>Trou potentiel</strong>

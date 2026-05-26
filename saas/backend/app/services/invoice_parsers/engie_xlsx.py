@@ -567,8 +567,8 @@ def _parse_row(ws: Worksheet, row: int, idx: ColumnIndex) -> dict[str, Any] | No
             or _coerce_float(_cell_by_name(ws, row, idx, "Puissances")),
         "max_reached_power_kva": _coerce_float(_cell_by_name(ws, row, idx, "Puissance atteinte (kVA)")),
         "total_consumption_kwh": _coerce_float(_cell(ws, row, idx, "total_consumption")),
-        "total_ht": _coerce_float(_cell(ws, row, idx, "amount_htt"))
-            or _coerce_float(_cell(ws, row, idx, "amount_excl_vat")),
+        "total_ht": _coerce_float(_cell(ws, row, idx, "amount_excl_vat"))
+            or _coerce_float(_cell(ws, row, idx, "amount_htt")),
         "total_vat": _coerce_float(_cell(ws, row, idx, "vat_total")),
         "total_ttc": _coerce_float(_cell(ws, row, idx, "total_ttc")),
     }

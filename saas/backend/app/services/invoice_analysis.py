@@ -188,6 +188,8 @@ def _build_control_report(
     _check_consumption_against_enedis(sites, issue, consumption_summary)
     _check_power_controls(sites, issue, power_summary)
 
+    _apply_invoice_severity_policy(issues)
+
     error_count = sum(1 for item in issues if item["severity"] == "error")
     warning_count = sum(1 for item in issues if item["severity"] == "warning")
     status = "invalid" if error_count else "review" if warning_count else "valid"
@@ -204,6 +206,52 @@ def _build_control_report(
         "consumption": consumption_summary,
         "power": power_summary,
     }
+
+
+NON_BLOCKING_CONTROL_CODES = {
+    "MISSING_INVOICE_DATE",
+    "MISSING_REGROUPEMENT",
+    "MISSING_CHORUS_DATA",
+    "MISSING_MARKET_REFERENCE",
+    "MARKET_REFERENCE_MISMATCH",
+    "MISSING_PRM",
+    "UNKNOWN_PRM",
+    "SUPPLIER_CONTRACT_MISMATCH",
+    "CONSUMPTION_REFERENCE_MISSING",
+    "CONSUMPTION_ENEDIS_MISMATCH",
+    "CONSUMPTION_LOAD_CURVE_MISMATCH",
+    "LOAD_CURVE_CONSUMPTION_PARTIAL",
+    "ENEDIS_CONSUMPTION_PARTIAL",
+    "ENEDIS_CONSUMPTION_MISSING",
+    "POWER_REFERENCE_MISSING",
+    "SUBSCRIBED_POWER_MISSING",
+    "SUBSCRIBED_POWER_CONTRACT_MISMATCH",
+    "POWER_OVERRUN",
+    "POWER_OVERRUN_BILLED",
+    "POWER_LOAD_CURVE_MISMATCH",
+    "POWER_LOAD_CURVE_OVERRUN",
+    "LOAD_CURVE_POWER_PARTIAL",
+    "POWER_ENEDIS_MISMATCH",
+    "POWER_ENEDIS_OVERRUN",
+    "ENEDIS_POWER_MISSING",
+}
+
+
+def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
+    """Classe les controles informatifs en alertes non invalidantes.
+
+    Une facture devient invalide seulement quand le controle detecte une
+    incoherence de facturation exploitable directement (prix BPU, totaux,
+    TURPE chiffrable, document illisible...). Les donnees absentes ou les
+    rapprochements ENEDIS/puissance/identite restent visibles, mais ne bloquent
+    plus la decision fournisseur.
+    """
+    for item in issues:
+        if item.get("severity") != "error":
+            continue
+        code = str(item.get("code") or "")
+        if code in NON_BLOCKING_CONTROL_CODES:
+            item["severity"] = "warning"
 
 
 def _check_document_identity(

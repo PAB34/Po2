@@ -2899,6 +2899,25 @@ button:disabled {
   background: rgba(2, 6, 23, 0.24);
 }
 
+.invoice-consumption-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+
+.invoice-consumption-legend span {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.invoice-consumption-legend strong {
+  color: #f8fafc;
+}
+
 .invoice-consumption-note {
   margin: 0;
 }

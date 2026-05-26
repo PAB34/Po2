@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unicodedata
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable
 
@@ -112,6 +112,20 @@ def _dec(value: str | int | float | Decimal | None) -> Decimal | None:
         return Decimal(str(value))
     except (InvalidOperation, ValueError):
         return None
+
+
+def _date_value(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
+            try:
+                return datetime.strptime(value.strip(), fmt).date()
+            except ValueError:
+                continue
+    return None
 
 
 def _money(value: Decimal) -> Decimal:
@@ -559,10 +573,10 @@ def _expected_line_amount(
 
 
 def _expected_variable_line(line: dict[str, Any], tariff_key: str) -> dict[str, Any]:
-    start = line.get("period_start")
-    end = line.get("period_end")
+    start = _date_value(line.get("period_start"))
+    end = _date_value(line.get("period_end"))
     line_date = start or end
-    if not isinstance(line_date, date):
+    if line_date is None:
         return {
             "partial": True,
             "code": "TURPE_PERIOD_MISSING",
@@ -577,7 +591,7 @@ def _expected_variable_line(line: dict[str, Any], tariff_key: str) -> dict[str, 
             "code": "TURPE_VERSION_MISSING",
             "message": f"aucun bareme charge pour le {line_date.isoformat()}.",
         }
-    if isinstance(start, date) and isinstance(end, date):
+    if start is not None and end is not None:
         end_table = find_turpe_table(end)
         if end_table is None:
             return {
@@ -717,9 +731,9 @@ def _power_by_poste(site: dict[str, Any]) -> dict[str, Decimal]:
 
 
 def _line_period(line: dict[str, Any], site: dict[str, Any]) -> tuple[date, date] | None:
-    start = line.get("period_start") or site.get("period_start")
-    end = line.get("period_end") or site.get("period_end")
-    if isinstance(start, date) and isinstance(end, date) and start <= end:
+    start = _date_value(line.get("period_start")) or _date_value(site.get("period_start"))
+    end = _date_value(line.get("period_end")) or _date_value(site.get("period_end"))
+    if start is not None and end is not None and start <= end:
         return start, end
     return None
 
