@@ -9,7 +9,6 @@ import {
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
   isInternalControlLimit,
-  isSupplierReportIssue,
 } from "../lib/invoiceIssues";
 import type { InvoiceIssueFamily } from "../lib/invoiceIssues";
 import { InvoicePeriodTimeline } from "./InvoicePeriodTimeline";
@@ -157,7 +156,7 @@ function filteredIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupp
 }
 
 function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
-  return filteredIssues(invoiceImport, filters).filter(isSupplierReportIssue);
+  return filteredIssues(invoiceImport, filters);
 }
 
 function excludedInternalIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
@@ -559,12 +558,11 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
             {excludedInternalGroups.length > 0 && (
               <aside className="invoice-report-internal-note">
                 <strong>
-                  {excludedInternalIssueCount} limite{excludedInternalIssueCount > 1 ? "s" : ""} de controle exclue
-                  {excludedInternalIssueCount > 1 ? "s" : ""}
+                  {excludedInternalIssueCount} point{excludedInternalIssueCount > 1 ? "s" : ""} sans chiffrage direct
                 </strong>
                 <p>
-                  Ces points restent internes : reference BPU ou ENEDIS absente, controle partiel ou perimetre local
-                  incomplet, sans ecart fournisseur demontre.
+                  Ces points suivent les filtres appliques mais ne produisent pas toujours un ecart financier direct :
+                  reference BPU ou ENEDIS absente, controle partiel ou perimetre local incomplet.
                 </p>
                 <span>
                   {Array.from(new Set(excludedInternalGroups.flatMap((group) => Array.from(group.codes)))).join(", ")}
@@ -635,7 +633,7 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
             <section>
               <h2>Points soumis a clarification</h2>
               {issueGroups.length === 0 ? (
-                <p>Aucun ecart fournisseur retenu avec les filtres appliques.</p>
+                <p>Aucun point de controle ne correspond aux filtres appliques.</p>
               ) : (
                 <div className="invoice-report-issue-cards">
                   {issueGroups.map((group) => {
@@ -728,7 +726,10 @@ export function InvoiceSupplierReport({ invoiceImports, filters, onClose, token 
                   bpuView.priceMismatches.length === 0 &&
                   bpuView.inconsistencies.length === 0 &&
                   bpuView.staleInvoices.length === 0 && (
-                    <p>Aucun ecart BPU chiffrable sur les factures retenues.</p>
+                    <p>
+                      Aucun ecart BPU chiffrable ligne par ligne sur les factures retenues. Les points BPU non
+                      chiffrables restent listes dans la section des points soumis a clarification.
+                    </p>
                   )}
                 {bpuView.staleInvoices.length > 0 && (
                   <p className="invoice-report-warning">

@@ -1020,14 +1020,54 @@ def _check_power_controls(
 def _tariff_code_for_site(site: dict[str, Any]) -> str:
     label = site.get("tariff_option_label") or site.get("segment") or ""
     upper = label.upper()
+    segment = (site.get("segment") or "").upper()
+    version = _normalize_xlsx_tariff_code(site.get("tariff_code"))
     extracted = _extract_tariff_code(label)
-    if "SEGMENT C4" in upper or site.get("segment") == "C4":
+    if "SEGMENT C4" in upper or segment == "C4":
         return "C4"
-    if ("SEGMENT C5" in upper or site.get("segment") == "C5") and "4 PLAGES" in upper:
-        if extracted in {"CU4", "MU4"}:
-            return extracted
-        return "CU4"
+    if segment == "C5" or "SEGMENT C5" in upper:
+        has_multi_poste = _site_has_multi_poste_energy(site)
+        if "4 PLAGES" in upper or has_multi_poste:
+            if version == "MU":
+                return "MU4"
+            if version in {"CU", "CU4"}:
+                return "CU4"
+            if version == "MU4":
+                return "MU4"
+            if version == "LU" and not has_multi_poste:
+                return "LU"
+            return extracted if extracted in {"CU4", "MU4"} else "CU4"
+        if "SANS DIFFERENCIATION" in upper or "SANS DIFFÉRENCIATION" in upper:
+            if version == "CU":
+                return "CU"
+            if version == "LU":
+                return "LU"
+            if version == "MU":
+                return "MUDT"
+        if version == "CU":
+            return "CU"
+        if version == "LU":
+            return "LU"
+        if version == "MU":
+            return "MUDT"
     return extracted
+
+
+def _normalize_xlsx_tariff_code(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip().upper().replace(" ", "")
+    return normalized or None
+
+
+def _site_has_multi_poste_energy(site: dict[str, Any]) -> bool:
+    multi_postes = {"hph", "hch", "hpe", "hce", "hp", "hc", "pointe"}
+    for line in site.get("invoice_lines", []):
+        if _bpu_component_field(line.get("normalized_component")) is None:
+            continue
+        if (line.get("poste") or "").lower() in multi_postes:
+            return True
+    return False
 
 
 def _bpu_component_field(component: str | None) -> str | None:
