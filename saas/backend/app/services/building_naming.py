@@ -49,6 +49,26 @@ _APP_STATE: dict[str, Any] = {
     "last_call_by_host": {},
 }
 
+# Bornes max pour eviter l'accumulation memoire qui a deja OOM le backend.
+_CACHE_LIMITS = {
+    "cache_geopf": 1000,
+    "cache_geocode": 1000,
+    "cache_ign_features": 300,
+    "cache_ign_toponymy": 300,
+}
+
+
+def _store_in_bounded_cache(cache_name: str, key: str, value: Any) -> None:
+    """Stocke value dans le cache nomme, en supprimant les plus anciens si depassement de borne."""
+    cache: dict[str, Any] = _APP_STATE[cache_name]
+    limit = _CACHE_LIMITS.get(cache_name)
+    if limit is not None and len(cache) >= limit:
+        # On supprime les 10% les plus anciens (insertion order grace a Python 3.7+).
+        to_drop = max(1, limit // 10)
+        for old_key in list(cache.keys())[:to_drop]:
+            cache.pop(old_key, None)
+    cache[key] = value
+
 
 def _normalize_text(value: Any) -> str:
     if value is None:
@@ -434,7 +454,7 @@ def _geopf_parcel(reference_norm: str) -> dict[str, Any]:
         ),
         "raw": feature,
     }
-    _APP_STATE["cache_geopf"][reference_norm] = result
+    _store_in_bounded_cache("cache_geopf", reference_norm, result)
     return result
 
 
@@ -520,7 +540,7 @@ def _geocode_address(
         "dept_mismatch": dept_mismatch,
         "commune_mismatch": commune_mismatch,
     }
-    _APP_STATE["cache_geocode"][cache_key] = result
+    _store_in_bounded_cache("cache_geocode", cache_key, result)
     return result
 
 
@@ -571,7 +591,7 @@ def _ign_toponymy(lat: float, lon: float, radius_m: int = 80) -> list[dict[str, 
                     "geometry": geometry,
                 }
             )
-    _APP_STATE["cache_ign_toponymy"][cache_key] = candidates
+    _store_in_bounded_cache("cache_ign_toponymy", cache_key, candidates)
     return candidates
 
 
@@ -615,7 +635,7 @@ def _ign_named_areas(lat: float, lon: float, radius_m: int = 180) -> list[dict[s
                     "geometry": geometry,
                 }
             )
-    _APP_STATE["cache_ign_features"][cache_key] = areas
+    _store_in_bounded_cache("cache_ign_features", cache_key, areas)
     return areas
 
 
@@ -813,7 +833,7 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
         )
     )
     collection = {"type": "FeatureCollection", "features": features}
-    _APP_STATE["cache_ign_features"][cache_key] = collection
+    _store_in_bounded_cache("cache_ign_features", cache_key, collection)
     return collection
 
 
@@ -999,10 +1019,14 @@ def preview_building_import_file(
                     cached_validation = validation_cache.get(cache_key)
                     if cached_validation is None:
                         try:
+                            # skip_ign_buildings=True : pas d'enrichissement IGN bati pendant le bulk
+                            # (qui consommait jusqu'a 10 GB de RAM sur 257 adresses et killait le backend).
+                            # L'enrichissement se fera au clic individuel sur une ligne.
                             lookup = lookup_free_address_candidates(
                                 address_display,
                                 city_name=city_name,
                                 citycode=expected_citycode,
+                                skip_ign_buildings=True,
                             )
                             geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
                             display_name = str(geocoder.get("display_name") or address_display)
@@ -1010,21 +1034,20 @@ def preview_building_import_file(
                             geocoder_postcode = str(geocoder.get("resolved_postcode") or "")
                             geocoder_citycode = str(geocoder.get("resolved_citycode") or "")
                             mismatch = bool(geocoder.get("commune_mismatch")) or bool(geocoder.get("dept_mismatch"))
-                            feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
-                            feature_count = len(feature_collection.get("features") or [])
+                            has_coords = lookup.get("lat") is not None and lookup.get("lon") is not None
                             mismatch_note = (
                                 f" — ATTENTION : commune résolue '{geocoder_city}' différente de la parcelle ({expected_citycode})"
                                 if mismatch and expected_citycode
                                 else ""
                             )
-                            if feature_count > 0 and not mismatch:
-                                msg = f"Adresse géolocalisée : {display_name}. {feature_count} bâtiment(s) IGN détecté(s)."
+                            if has_coords and not mismatch:
+                                msg = f"Adresse géolocalisée : {display_name}."
                                 status = "valid"
-                            elif feature_count > 0 and mismatch:
+                            elif has_coords and mismatch:
                                 msg = f"Adresse géolocalisée : {display_name}.{mismatch_note}"
                                 status = "warning"
                             else:
-                                msg = f"Adresse géolocalisée : {display_name}. Aucun bâtiment IGN n’a été détecté à proximité.{mismatch_note}"
+                                msg = f"Adresse non géolocalisée : {display_name}.{mismatch_note}"
                                 status = "invalid"
                             cached_validation = {
                                 "validation_status": status,
@@ -1103,6 +1126,7 @@ def lookup_free_address_candidates(
     city_name: str | None = None,
     citycode: str | None = None,
     parcel_reference: str | None = None,
+    skip_ign_buildings: bool = False,
 ) -> dict[str, Any]:
     address_display = re.sub(r"\s+", " ", str(address).strip()).strip()
     if len(address_display) < 3:
@@ -1131,7 +1155,11 @@ def lookup_free_address_candidates(
         "parcel_feature_collection": point_and_parcels.get("parcel_feature_collection") or {"type": "FeatureCollection", "features": []},
         "parcel_labels": point_and_parcels.get("parcel_labels") or [],
         "geocoder": point_and_parcels.get("geocoder") or {"display_name": address_display},
-        "feature_collection": _ign_buildings(lat, lon, radius_m=200),
+        "feature_collection": (
+            {"type": "FeatureCollection", "features": []}
+            if skip_ign_buildings
+            else _ign_buildings(lat, lon, radius_m=200)
+        ),
     }
 
 
