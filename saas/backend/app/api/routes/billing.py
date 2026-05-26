@@ -229,6 +229,15 @@ def get_energy_invoice_consumption_monthly(
     contract_holder: list[str] = Query(default_factory=list),
     issue_family: list[str] = Query(default_factory=list),
     issue_code: list[str] = Query(default_factory=list),
+    invoice_month: list[str] = Query(default_factory=list),
+    prm_id: list[str] = Query(default_factory=list),
+    fic_number: list[str] = Query(default_factory=list),
+    site_name: list[str] = Query(default_factory=list),
+    site_city: list[str] = Query(default_factory=list),
+    segment: list[str] = Query(default_factory=list),
+    tariff_code: list[str] = Query(default_factory=list),
+    tariff_option_label: list[str] = Query(default_factory=list),
+    document_type: list[str] = Query(default_factory=list),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -244,6 +253,15 @@ def get_energy_invoice_consumption_monthly(
         contract_holders=contract_holder,
         issue_families=issue_family,
         issue_codes=issue_code,
+        invoice_months=invoice_month,
+        prm_ids=prm_id,
+        fic_numbers=fic_number,
+        site_names=site_name,
+        site_cities=site_city,
+        segments=segment,
+        tariff_codes=tariff_code,
+        tariff_option_labels=tariff_option_label,
+        document_types=document_type,
     )
 
 

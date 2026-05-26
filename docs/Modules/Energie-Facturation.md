@@ -230,3 +230,25 @@ Artefacts locaux generes mais ignores par Git car le dossier `saas/energie/ENGIE
 - Les rapports de controle deja stockes en BDD ne se recalculent pas seuls apres correction du code : il faut reimporter le XLSX avec `Forcer la mise a jour des bordereaux deja importes`.
 - Les derniers commits sont pousses sur `main`, mais le deploy OVH etait bloque par un probleme externe Docker Hub (`TLS handshake timeout`) au moment de la documentation.
 - Les 13 ecarts potentiels doivent etre relus apres reimport force, pour verifier s'ils apparaissent encore en application ou s'ils relevent seulement du rapport local calcule a partir de montants arrondis.
+
+### Complement filtres - 2026-05-26
+
+Audit direct du fichier `MesFactures_20260522150740.xlsx` :
+
+- 1069 lignes site/FIC, 144 bordereaux, 268 PRM/PCE.
+- Les filtres initiaux etaient coherents pour controle, decision, regroupement, titulaire, categorie et type de probleme.
+- Ils etaient insuffisants pour une relecture metier complete du XLSX.
+
+Filtres ajoutes sur `/energie/factures` et propages a la liste, au rapport fournisseur et au graphique mensuel :
+
+- mois de facture ;
+- PRM/PCE ;
+- FIC ;
+- nom de site ;
+- commune ;
+- segment distributeur ;
+- version tarifaire ;
+- libelle tarifaire ;
+- type de document.
+
+Point d'attention : pour le graphique mensuel, les filtres site/PRM/FIC/segment/tarif n'additionnent que les sites correspondants dans un bordereau, pas tout le bordereau.

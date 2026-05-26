@@ -142,6 +142,53 @@ class EnergyInvoiceImport(Base):
         value = invoice.get("contract_holder") if isinstance(invoice, dict) else None
         return value if isinstance(value, str) and value.strip() else None
 
+    @property
+    def filter_facets(self) -> dict[str, list[str]]:
+        result = self.analysis_result
+        sites = result.get("sites") if isinstance(result, dict) else None
+        invoice = result.get("invoice") if isinstance(result, dict) else None
+
+        facets: dict[str, set[str]] = {
+            "invoice_months": set(),
+            "prm_ids": set(),
+            "fic_numbers": set(),
+            "site_names": set(),
+            "site_cities": set(),
+            "segments": set(),
+            "tariff_codes": set(),
+            "tariff_option_labels": set(),
+            "document_types": set(),
+        }
+
+        if self.invoice_date is not None:
+            facets["invoice_months"].add(self.invoice_date.strftime("%Y-%m"))
+        document_type = result.get("document_type") if isinstance(result, dict) else None
+        if not isinstance(document_type, str) and isinstance(invoice, dict):
+            document_type = invoice.get("document_type")
+        if isinstance(document_type, str) and document_type.strip():
+            facets["document_types"].add(document_type.strip())
+
+        if isinstance(sites, list):
+            for site in sites:
+                if not isinstance(site, dict):
+                    continue
+                for facet, keys in {
+                    "prm_ids": ("prm_id",),
+                    "fic_numbers": ("fic_number",),
+                    "site_names": ("delivery_site_name", "site_name"),
+                    "site_cities": ("delivery_city",),
+                    "segments": ("segment",),
+                    "tariff_codes": ("tariff_code",),
+                    "tariff_option_labels": ("tariff_option_label",),
+                }.items():
+                    for key in keys:
+                        value = site.get(key)
+                        if isinstance(value, str) and value.strip():
+                            facets[facet].add(value.strip())
+                            break
+
+        return {key: sorted(values) for key, values in facets.items()}
+
 
 class EnergyInvoice(Base):
     __tablename__ = "energy_invoices"

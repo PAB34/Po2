@@ -36,6 +36,15 @@ type InvoiceSupplierReportFilters = {
   decisions: string[];
   regroupements: string[];
   contractHolders: string[];
+  invoiceMonths: string[];
+  prmIds: string[];
+  ficNumbers: string[];
+  siteNames: string[];
+  siteCities: string[];
+  segments: string[];
+  tariffCodes: string[];
+  tariffOptionLabels: string[];
+  documentTypes: string[];
   issueFamilies: InvoiceIssueFamily[];
   issueCodes: string[];
 };
@@ -175,6 +184,15 @@ function activeFilters(filters: InvoiceSupplierReportFilters) {
   }
   if (filters.regroupements.length > 0) values.push(`Regroupement : ${filters.regroupements.join(", ")}`);
   if (filters.contractHolders.length > 0) values.push(`Titulaire : ${filters.contractHolders.join(", ")}`);
+  if (filters.invoiceMonths.length > 0) values.push(`Mois facture : ${filters.invoiceMonths.join(", ")}`);
+  if (filters.prmIds.length > 0) values.push(`PRM/PCE : ${filters.prmIds.join(", ")}`);
+  if (filters.ficNumbers.length > 0) values.push(`FIC : ${filters.ficNumbers.join(", ")}`);
+  if (filters.siteNames.length > 0) values.push(`Site : ${filters.siteNames.join(", ")}`);
+  if (filters.siteCities.length > 0) values.push(`Commune : ${filters.siteCities.join(", ")}`);
+  if (filters.segments.length > 0) values.push(`Segment : ${filters.segments.join(", ")}`);
+  if (filters.tariffCodes.length > 0) values.push(`Tarif : ${filters.tariffCodes.join(", ")}`);
+  if (filters.tariffOptionLabels.length > 0) values.push(`Libelle tarifaire : ${filters.tariffOptionLabels.join(", ")}`);
+  if (filters.documentTypes.length > 0) values.push(`Document : ${filters.documentTypes.join(", ")}`);
   if (filters.issueFamilies.length > 0) {
     values.push(`Categorie : ${filters.issueFamilies.map((family) => INVOICE_ISSUE_FAMILY_LABEL[family]).join(", ")}`);
   }

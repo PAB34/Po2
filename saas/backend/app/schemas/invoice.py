@@ -35,6 +35,7 @@ class EnergyInvoiceImportOut(BaseModel):
     control_status: str
     control_errors_count: int
     control_warnings_count: int
+    filter_facets: dict[str, list[str]]
     decision_status: str
     decision_comment: str | None
     decision_by_user_id: int | None

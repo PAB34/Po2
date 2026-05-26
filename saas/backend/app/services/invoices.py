@@ -75,6 +75,15 @@ def get_monthly_invoice_consumption(
     contract_holders: list[str] | None = None,
     issue_families: list[str] | None = None,
     issue_codes: list[str] | None = None,
+    invoice_months: list[str] | None = None,
+    prm_ids: list[str] | None = None,
+    fic_numbers: list[str] | None = None,
+    site_names: list[str] | None = None,
+    site_cities: list[str] | None = None,
+    segments: list[str] | None = None,
+    tariff_codes: list[str] | None = None,
+    tariff_option_labels: list[str] | None = None,
+    document_types: list[str] | None = None,
 ) -> dict:
     year_start = date(year, 1, 1)
     year_end = date(year, 12, 31)
@@ -94,6 +103,15 @@ def get_monthly_invoice_consumption(
             contract_holders=contract_holders or [],
             issue_families=issue_families or [],
             issue_codes=issue_codes or [],
+            invoice_months=invoice_months or [],
+            prm_ids=prm_ids or [],
+            fic_numbers=fic_numbers or [],
+            site_names=site_names or [],
+            site_cities=site_cities or [],
+            segments=segments or [],
+            tariff_codes=tariff_codes or [],
+            tariff_option_labels=tariff_option_labels or [],
+            document_types=document_types or [],
         )
     ]
 
@@ -101,14 +119,26 @@ def get_monthly_invoice_consumption(
     billed_by_month = {month: Decimal("0") for month in month_keys}
     invoice_ids_by_month: dict[str, set[int]] = {month: set() for month in month_keys}
     billed_prms_by_month: dict[str, set[str]] = {month: set() for month in month_keys}
-    prm_ids: set[str] = set()
+    invoice_prm_ids: set[str] = set()
+    has_site_filters = any([prm_ids, fic_numbers, site_names, site_cities, segments, tariff_codes, tariff_option_labels])
 
     for invoice_import in imports:
         allocated = False
         for site in _iter_invoice_import_sites(invoice_import):
+            if has_site_filters and not _site_matches_monthly_filters(
+                site,
+                prm_ids=prm_ids or [],
+                fic_numbers=fic_numbers or [],
+                site_names=site_names or [],
+                site_cities=site_cities or [],
+                segments=segments or [],
+                tariff_codes=tariff_codes or [],
+                tariff_option_labels=tariff_option_labels or [],
+            ):
+                continue
             prm_id = _clean_prm(site.get("prm_id"))
             if prm_id:
-                prm_ids.add(prm_id)
+                invoice_prm_ids.add(prm_id)
             consumption = _invoice_site_consumption_kwh(site)
             start = _date_value(site.get("period_start")) or invoice_import.period_start
             end = _date_value(site.get("period_end")) or invoice_import.period_end
@@ -122,6 +152,9 @@ def get_monthly_invoice_consumption(
                         billed_prms_by_month[month].add(prm_id)
 
         if allocated:
+            continue
+
+        if has_site_filters:
             continue
 
         consumption = _decimal(invoice_import.total_consumption_kwh)
@@ -143,7 +176,7 @@ def get_monthly_invoice_consumption(
     enedis_by_month = {month: Decimal("0") for month in month_keys}
     enedis_prms_by_month: dict[str, set[str]] = {month: set() for month in month_keys}
     daily_consumption = _daily_consumption_index()
-    for prm_id in prm_ids:
+    for prm_id in invoice_prm_ids:
         for point in daily_consumption.get(prm_id, []):
             point_date = str(point.get("date", ""))[:10]
             if not (f"{year}-01-01" <= point_date <= f"{year}-12-31"):
@@ -167,7 +200,7 @@ def get_monthly_invoice_consumption(
                 "delta_kwh": _round_float(billed - enedis) if has_enedis else None,
                 "invoice_count": len(invoice_ids_by_month[month]),
                 "billed_prm_count": len(billed_prms_by_month[month]),
-                "prm_count": len(prm_ids),
+                "prm_count": len(invoice_prm_ids),
                 "enedis_prm_count": len(enedis_prms_by_month[month]),
             }
         )
@@ -183,7 +216,7 @@ def get_monthly_invoice_consumption(
         "enedis_total_kwh": _round_float(enedis_total) if has_any_enedis else None,
         "delta_total_kwh": _round_float(billed_total - enedis_total) if has_any_enedis else None,
         "invoice_count": len(imports),
-        "prm_count": len(prm_ids),
+        "prm_count": len(invoice_prm_ids),
         "enedis_prm_count": len({prm for month in month_keys for prm in enedis_prms_by_month[month]}),
         "months": months,
     }
@@ -199,6 +232,15 @@ def _invoice_import_matches_monthly_filters(
     contract_holders: list[str],
     issue_families: list[str],
     issue_codes: list[str],
+    invoice_months: list[str],
+    prm_ids: list[str],
+    fic_numbers: list[str],
+    site_names: list[str],
+    site_cities: list[str],
+    segments: list[str],
+    tariff_codes: list[str],
+    tariff_option_labels: list[str],
+    document_types: list[str],
 ) -> bool:
     if control_statuses and invoice_import.control_status not in control_statuses:
         return False
@@ -216,6 +258,31 @@ def _invoice_import_matches_monthly_filters(
             if isinstance(issue, dict)
         ):
             return False
+    if invoice_months and (invoice_import.invoice_date is None or invoice_import.invoice_date.strftime("%Y-%m") not in invoice_months):
+        return False
+    if document_types:
+        result = invoice_import.analysis_result
+        invoice = result.get("invoice") if isinstance(result, dict) else None
+        document_type = result.get("document_type") if isinstance(result, dict) else None
+        if not isinstance(document_type, str) and isinstance(invoice, dict):
+            document_type = invoice.get("document_type")
+        if not isinstance(document_type, str) or document_type not in document_types:
+            return False
+    if any([prm_ids, fic_numbers, site_names, site_cities, segments, tariff_codes, tariff_option_labels]):
+        if not any(
+            _site_matches_monthly_filters(
+                site,
+                prm_ids=prm_ids,
+                fic_numbers=fic_numbers,
+                site_names=site_names,
+                site_cities=site_cities,
+                segments=segments,
+                tariff_codes=tariff_codes,
+                tariff_option_labels=tariff_option_labels,
+            )
+            for site in _iter_invoice_import_sites(invoice_import)
+        ):
+            return False
     needle = (search or "").strip().lower()
     if not needle:
         return True
@@ -227,6 +294,36 @@ def _invoice_import_matches_monthly_filters(
         invoice_import.supplier_guess,
     ]
     return any(needle in str(value).lower() for value in values if value)
+
+
+def _site_matches_monthly_filters(
+    site: dict,
+    *,
+    prm_ids: list[str],
+    fic_numbers: list[str],
+    site_names: list[str],
+    site_cities: list[str],
+    segments: list[str],
+    tariff_codes: list[str],
+    tariff_option_labels: list[str],
+) -> bool:
+    if prm_ids and site.get("prm_id") not in prm_ids:
+        return False
+    if fic_numbers and site.get("fic_number") not in fic_numbers:
+        return False
+    if site_names:
+        site_value = site.get("delivery_site_name") or site.get("site_name")
+        if site_value not in site_names:
+            return False
+    if site_cities and site.get("delivery_city") not in site_cities:
+        return False
+    if segments and site.get("segment") not in segments:
+        return False
+    if tariff_codes and site.get("tariff_code") not in tariff_codes:
+        return False
+    if tariff_option_labels and site.get("tariff_option_label") not in tariff_option_labels:
+        return False
+    return True
 
 
 def _invoice_issue_family(issue: dict) -> str:

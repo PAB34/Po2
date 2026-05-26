@@ -1438,6 +1438,17 @@ export type EnergyInvoiceImport = {
   control_status: string;
   control_errors_count: number;
   control_warnings_count: number;
+  filter_facets: {
+    invoice_months: string[];
+    prm_ids: string[];
+    fic_numbers: string[];
+    site_names: string[];
+    site_cities: string[];
+    segments: string[];
+    tariff_codes: string[];
+    tariff_option_labels: string[];
+    document_types: string[];
+  };
   decision_status: string;
   decision_comment: string | null;
   decision_by_user_id: number | null;
@@ -1607,6 +1618,15 @@ export type EnergyInvoiceMonthlyConsumptionFilters = {
   contractHolders?: string[];
   issueFamilies?: string[];
   issueCodes?: string[];
+  invoiceMonths?: string[];
+  prmIds?: string[];
+  ficNumbers?: string[];
+  siteNames?: string[];
+  siteCities?: string[];
+  segments?: string[];
+  tariffCodes?: string[];
+  tariffOptionLabels?: string[];
+  documentTypes?: string[];
 };
 
 export async function fetchTurpeVersions(token: string): Promise<TurpeVersion[]> {
@@ -1630,6 +1650,15 @@ export async function fetchEnergyInvoiceMonthlyConsumption(
   filters.contractHolders?.forEach((value) => params.append("contract_holder", value));
   filters.issueFamilies?.forEach((value) => params.append("issue_family", value));
   filters.issueCodes?.forEach((value) => params.append("issue_code", value));
+  filters.invoiceMonths?.forEach((value) => params.append("invoice_month", value));
+  filters.prmIds?.forEach((value) => params.append("prm_id", value));
+  filters.ficNumbers?.forEach((value) => params.append("fic_number", value));
+  filters.siteNames?.forEach((value) => params.append("site_name", value));
+  filters.siteCities?.forEach((value) => params.append("site_city", value));
+  filters.segments?.forEach((value) => params.append("segment", value));
+  filters.tariffCodes?.forEach((value) => params.append("tariff_code", value));
+  filters.tariffOptionLabels?.forEach((value) => params.append("tariff_option_label", value));
+  filters.documentTypes?.forEach((value) => params.append("document_type", value));
   const response = await fetch(`${apiBaseUrl}/billing/invoices/consumption-monthly?${params.toString()}`, {
     headers: buildHeaders(token),
   });

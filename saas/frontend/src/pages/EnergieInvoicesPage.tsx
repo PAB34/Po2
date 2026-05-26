@@ -236,6 +236,22 @@ function invoiceIssueCodes(issues: InvoiceControlIssue[]) {
   return Array.from(new Set(issues.map((issue) => issue.code))).filter(Boolean);
 }
 
+function filterFacetValues(invoiceImport: EnergyInvoiceImport, key: keyof EnergyInvoiceImport["filter_facets"]) {
+  return invoiceImport.filter_facets?.[key] ?? [];
+}
+
+function hasAnyFacetValue(invoiceImport: EnergyInvoiceImport, key: keyof EnergyInvoiceImport["filter_facets"], selected: string[]) {
+  if (selected.length === 0) return true;
+  const values = filterFacetValues(invoiceImport, key);
+  return values.some((value) => selected.includes(value));
+}
+
+function collectFacetOptions(imports: EnergyInvoiceImport[], key: keyof EnergyInvoiceImport["filter_facets"]) {
+  return Array.from(new Set(imports.flatMap((invoiceImport) => filterFacetValues(invoiceImport, key)))).sort((a, b) =>
+    a.localeCompare(b, "fr"),
+  );
+}
+
 function controlIssueTags(invoiceImport: EnergyInvoiceImport) {
   const families = invoiceIssueFamilies(invoiceImport.control_issues);
   const codes = invoiceIssueCodes(invoiceImport.control_issues);
@@ -355,6 +371,15 @@ export function EnergieInvoicesPage() {
   const [decisionFilters, setDecisionFilters] = useState<string[]>([]);
   const [regroupementFilters, setRegroupementFilters] = useState<string[]>([]);
   const [contractHolderFilters, setContractHolderFilters] = useState<string[]>([]);
+  const [invoiceMonthFilters, setInvoiceMonthFilters] = useState<string[]>([]);
+  const [prmFilters, setPrmFilters] = useState<string[]>([]);
+  const [ficFilters, setFicFilters] = useState<string[]>([]);
+  const [siteFilters, setSiteFilters] = useState<string[]>([]);
+  const [siteCityFilters, setSiteCityFilters] = useState<string[]>([]);
+  const [segmentFilters, setSegmentFilters] = useState<string[]>([]);
+  const [tariffCodeFilters, setTariffCodeFilters] = useState<string[]>([]);
+  const [tariffOptionLabelFilters, setTariffOptionLabelFilters] = useState<string[]>([]);
+  const [documentTypeFilters, setDocumentTypeFilters] = useState<string[]>([]);
   const [issueFamilyFilters, setIssueFamilyFilters] = useState<InvoiceIssueFamily[]>([]);
   const [issueCodeFilters, setIssueCodeFilters] = useState<string[]>([]);
   const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
@@ -396,6 +421,15 @@ export function EnergieInvoicesPage() {
       decisionFilters,
       regroupementFilters,
       contractHolderFilters,
+      invoiceMonthFilters,
+      prmFilters,
+      ficFilters,
+      siteFilters,
+      siteCityFilters,
+      segmentFilters,
+      tariffCodeFilters,
+      tariffOptionLabelFilters,
+      documentTypeFilters,
       issueFamilyFilters,
       issueCodeFilters,
     ],
@@ -406,6 +440,15 @@ export function EnergieInvoicesPage() {
         decisionStatuses: decisionFilters,
         regroupements: regroupementFilters,
         contractHolders: contractHolderFilters,
+        invoiceMonths: invoiceMonthFilters,
+        prmIds: prmFilters,
+        ficNumbers: ficFilters,
+        siteNames: siteFilters,
+        siteCities: siteCityFilters,
+        segments: segmentFilters,
+        tariffCodes: tariffCodeFilters,
+        tariffOptionLabels: tariffOptionLabelFilters,
+        documentTypes: documentTypeFilters,
         issueFamilies: issueFamilyFilters,
         issueCodes: issueCodeFilters,
       }),
@@ -438,6 +481,15 @@ export function EnergieInvoicesPage() {
       ).sort((a, b) => a.localeCompare(b, "fr")),
     [imports],
   );
+  const invoiceMonths = useMemo(() => collectFacetOptions(imports, "invoice_months"), [imports]);
+  const prmIds = useMemo(() => collectFacetOptions(imports, "prm_ids"), [imports]);
+  const ficNumbers = useMemo(() => collectFacetOptions(imports, "fic_numbers"), [imports]);
+  const siteNames = useMemo(() => collectFacetOptions(imports, "site_names"), [imports]);
+  const siteCities = useMemo(() => collectFacetOptions(imports, "site_cities"), [imports]);
+  const segments = useMemo(() => collectFacetOptions(imports, "segments"), [imports]);
+  const tariffCodes = useMemo(() => collectFacetOptions(imports, "tariff_codes"), [imports]);
+  const tariffOptionLabels = useMemo(() => collectFacetOptions(imports, "tariff_option_labels"), [imports]);
+  const documentTypes = useMemo(() => collectFacetOptions(imports, "document_types"), [imports]);
   const issueFamilies = INVOICE_ISSUE_FAMILY_ORDER;
   const issueCodes = useMemo(() => {
     const options = new Map<string, { code: string; family: InvoiceIssueFamily; message: string; label?: string }>();
@@ -472,6 +524,15 @@ export function EnergieInvoicesPage() {
       ) {
         return false;
       }
+      if (!hasAnyFacetValue(invoiceImport, "invoice_months", invoiceMonthFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "prm_ids", prmFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "fic_numbers", ficFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "site_names", siteFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "site_cities", siteCityFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "segments", segmentFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "tariff_codes", tariffCodeFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "tariff_option_labels", tariffOptionLabelFilters)) return false;
+      if (!hasAnyFacetValue(invoiceImport, "document_types", documentTypeFilters)) return false;
       if (
         issueFamilyFilters.length > 0 &&
         !invoiceImport.control_issues.some((issue) => issueFamilyFilters.includes(invoiceIssueFamily(issue)))
@@ -486,6 +547,13 @@ export function EnergieInvoicesPage() {
         invoiceImport.regroupement,
         invoiceImport.contract_holder,
         invoiceImport.supplier_guess,
+        ...filterFacetValues(invoiceImport, "prm_ids"),
+        ...filterFacetValues(invoiceImport, "fic_numbers"),
+        ...filterFacetValues(invoiceImport, "site_names"),
+        ...filterFacetValues(invoiceImport, "site_cities"),
+        ...filterFacetValues(invoiceImport, "segments"),
+        ...filterFacetValues(invoiceImport, "tariff_codes"),
+        ...filterFacetValues(invoiceImport, "tariff_option_labels"),
       ]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(search));
@@ -494,11 +562,20 @@ export function EnergieInvoicesPage() {
     contractHolderFilters,
     controlFilters,
     decisionFilters,
+    documentTypeFilters,
+    ficFilters,
     imports,
+    invoiceMonthFilters,
     invoiceSearch,
     issueCodeFilters,
     issueFamilyFilters,
+    prmFilters,
     regroupementFilters,
+    segmentFilters,
+    siteCityFilters,
+    siteFilters,
+    tariffCodeFilters,
+    tariffOptionLabelFilters,
   ]);
   // Tri appliqué après filtrage. Si aucune colonne sélectionnée, on garde l'ordre naturel (created_at desc).
   const sortedImports = useMemo(() => {
@@ -1014,6 +1091,15 @@ export function EnergieInvoicesPage() {
               setDecisionFilters([]);
               setRegroupementFilters([]);
               setContractHolderFilters([]);
+              setInvoiceMonthFilters([]);
+              setPrmFilters([]);
+              setFicFilters([]);
+              setSiteFilters([]);
+              setSiteCityFilters([]);
+              setSegmentFilters([]);
+              setTariffCodeFilters([]);
+              setTariffOptionLabelFilters([]);
+              setDocumentTypeFilters([]);
               setIssueFamilyFilters([]);
               setIssueCodeFilters([]);
               setInvoiceSearch("");
@@ -1068,6 +1154,69 @@ export function EnergieInvoicesPage() {
             options={contractHolders.map((contractHolder) => ({ value: contractHolder, label: contractHolder }))}
             values={contractHolderFilters}
             onChange={setContractHolderFilters}
+          />
+          <InvoiceMultiFilter
+            label="Mois facture"
+            allLabel="Tous"
+            options={invoiceMonths.map((month) => ({ value: month, label: month }))}
+            values={invoiceMonthFilters}
+            onChange={setInvoiceMonthFilters}
+          />
+          <InvoiceMultiFilter
+            label="Segment"
+            allLabel="Tous"
+            options={segments.map((segment) => ({ value: segment, label: segment }))}
+            values={segmentFilters}
+            onChange={setSegmentFilters}
+          />
+          <InvoiceMultiFilter
+            label="Version tarifaire"
+            allLabel="Toutes"
+            options={tariffCodes.map((tariffCode) => ({ value: tariffCode, label: tariffCode }))}
+            values={tariffCodeFilters}
+            onChange={setTariffCodeFilters}
+          />
+          <InvoiceMultiFilter
+            label="Libelle tarifaire"
+            allLabel="Tous"
+            options={tariffOptionLabels.map((label) => ({ value: label, label }))}
+            values={tariffOptionLabelFilters}
+            onChange={setTariffOptionLabelFilters}
+          />
+          <InvoiceMultiFilter
+            label="PRM/PCE"
+            allLabel="Tous"
+            options={prmIds.map((prm) => ({ value: prm, label: prm }))}
+            values={prmFilters}
+            onChange={setPrmFilters}
+          />
+          <InvoiceMultiFilter
+            label="FIC"
+            allLabel="Tous"
+            options={ficNumbers.map((fic) => ({ value: fic, label: fic }))}
+            values={ficFilters}
+            onChange={setFicFilters}
+          />
+          <InvoiceMultiFilter
+            label="Site"
+            allLabel="Tous"
+            options={siteNames.map((siteName) => ({ value: siteName, label: siteName }))}
+            values={siteFilters}
+            onChange={setSiteFilters}
+          />
+          <InvoiceMultiFilter
+            label="Commune"
+            allLabel="Toutes"
+            options={siteCities.map((city) => ({ value: city, label: city }))}
+            values={siteCityFilters}
+            onChange={setSiteCityFilters}
+          />
+          <InvoiceMultiFilter
+            label="Type document"
+            allLabel="Tous"
+            options={documentTypes.map((documentType) => ({ value: documentType, label: documentType }))}
+            values={documentTypeFilters}
+            onChange={setDocumentTypeFilters}
           />
           <InvoiceMultiFilter
             label="Categorie de probleme"
@@ -1271,6 +1420,15 @@ export function EnergieInvoicesPage() {
             decisions: decisionFilters,
             regroupements: regroupementFilters,
             contractHolders: contractHolderFilters,
+            invoiceMonths: invoiceMonthFilters,
+            prmIds: prmFilters,
+            ficNumbers: ficFilters,
+            siteNames: siteFilters,
+            siteCities: siteCityFilters,
+            segments: segmentFilters,
+            tariffCodes: tariffCodeFilters,
+            tariffOptionLabels: tariffOptionLabelFilters,
+            documentTypes: documentTypeFilters,
             issueFamilies: issueFamilyFilters,
             issueCodes: issueCodeFilters,
           }}
