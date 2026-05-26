@@ -1030,6 +1030,8 @@ def _tariff_code_for_site(site: dict[str, Any]) -> str:
         if "4 PLAGES" in upper or has_multi_poste:
             if version == "MU":
                 return "MU4"
+            if version in {"CU", "CU4"} and not has_multi_poste:
+                return "CU"
             if version in {"CU", "CU4"}:
                 return "CU4"
             if version == "MU4":
