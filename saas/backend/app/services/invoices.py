@@ -100,6 +100,7 @@ def get_monthly_invoice_consumption(
     month_keys = [f"{year}-{month:02d}" for month in range(1, 13)]
     billed_by_month = {month: Decimal("0") for month in month_keys}
     invoice_ids_by_month: dict[str, set[int]] = {month: set() for month in month_keys}
+    billed_prms_by_month: dict[str, set[str]] = {month: set() for month in month_keys}
     prm_ids: set[str] = set()
 
     for invoice_import in imports:
@@ -117,6 +118,8 @@ def get_monthly_invoice_consumption(
                 allocated = True
                 for month in _months_between(max(start, year_start), min(end, year_end)):
                     invoice_ids_by_month[month].add(invoice_import.id)
+                    if prm_id:
+                        billed_prms_by_month[month].add(prm_id)
 
         if allocated:
             continue
@@ -163,6 +166,7 @@ def get_monthly_invoice_consumption(
                 "enedis_kwh": _round_float(enedis) if has_enedis else None,
                 "delta_kwh": _round_float(billed - enedis) if has_enedis else None,
                 "invoice_count": len(invoice_ids_by_month[month]),
+                "billed_prm_count": len(billed_prms_by_month[month]),
                 "prm_count": len(prm_ids),
                 "enedis_prm_count": len(enedis_prms_by_month[month]),
             }

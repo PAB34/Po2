@@ -111,6 +111,11 @@ function formatKwh(value: number | null | undefined) {
   return `${Math.round(value).toLocaleString("fr-FR")} kWh`;
 }
 
+function formatCount(value: number | null | undefined, unit: string) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${Math.round(value).toLocaleString("fr-FR")} ${unit}`;
+}
+
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} o`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
@@ -511,13 +516,19 @@ export function EnergieInvoicesPage() {
     const points = monthlyConsumptionQuery.data?.months ?? [];
     return points.map((point: EnergyInvoiceMonthlyConsumptionPoint) => {
       const monthIndex = Number(point.month.slice(5, 7)) - 1;
+      const hasPotentialGap = point.invoice_count === 0 && (point.enedis_kwh ?? 0) > 0;
       return {
         ...point,
         label: MONTH_LABELS_SHORT[monthIndex] ?? point.month,
         enedis_kwh: point.enedis_kwh ?? undefined,
+        hasPotentialGap,
       };
     });
   }, [monthlyConsumptionQuery.data]);
+  const potentialGapMonths = useMemo(
+    () => monthlyConsumptionChartData.filter((point) => point.hasPotentialGap),
+    [monthlyConsumptionChartData],
+  );
 
   // Construction des groupes timeline depuis les factures filtrées : 1 barre par facture,
   // groupée par regroupement (fallback titulaire/"Non regroupe"). Les factures avec
@@ -704,6 +715,10 @@ export function EnergieInvoicesPage() {
                 <strong>{formatKwh(monthlyConsumptionQuery.data.delta_total_kwh)}</strong>
                 <span>Ecart facture - releve</span>
               </div>
+              <div>
+                <strong>{monthlyConsumptionQuery.data.invoice_count.toLocaleString("fr-FR")}</strong>
+                <span>Factures retenues</span>
+              </div>
             </div>
           )}
         </header>
@@ -717,24 +732,50 @@ export function EnergieInvoicesPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
                   <XAxis dataKey="label" tick={{ fill: "#cbd5e1", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis
+                    yAxisId="kwh"
                     tick={{ fill: "#cbd5e1", fontSize: 12 }}
                     axisLine={false}
                     tickLine={false}
                     width={84}
                     tickFormatter={(value) => `${Math.round(Number(value) / 1000).toLocaleString("fr-FR")} MWh`}
                   />
+                  <YAxis
+                    yAxisId="count"
+                    orientation="right"
+                    allowDecimals={false}
+                    tick={{ fill: "#fbbf24", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={48}
+                  />
                   <Tooltip
                     formatter={(value, name) => [
-                      formatKwh(Number(value)),
-                      name === "billed_kwh" ? "ENGIE facture" : name === "enedis_kwh" ? "ENEDIS releve" : String(name),
+                      name === "invoice_count"
+                        ? formatCount(Number(value), "facture(s)")
+                        : name === "billed_prm_count"
+                          ? formatCount(Number(value), "PRM")
+                          : formatKwh(Number(value)),
+                      name === "billed_kwh"
+                        ? "ENGIE facture"
+                        : name === "enedis_kwh"
+                          ? "ENEDIS releve"
+                          : name === "invoice_count"
+                            ? "Factures"
+                            : name === "billed_prm_count"
+                              ? "PRM factures"
+                              : String(name),
                     ]}
-                    labelFormatter={(label) => `Mois : ${label}`}
+                    labelFormatter={(label, payload) => {
+                      const point = payload?.[0]?.payload;
+                      return `Mois : ${label}${point?.hasPotentialGap ? " - trou potentiel" : ""}`;
+                    }}
                     contentStyle={{ background: "#0f172a", border: "1px solid rgba(148, 163, 184, 0.28)", borderRadius: 8 }}
                     labelStyle={{ color: "#e2e8f0" }}
                   />
                   <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
-                  <Bar dataKey="billed_kwh" name="ENGIE facture" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="kwh" dataKey="billed_kwh" name="ENGIE facture" fill="#2563eb" radius={[3, 3, 0, 0]} />
                   <Line
+                    yAxisId="kwh"
                     type="monotone"
                     dataKey="enedis_kwh"
                     name="ENEDIS releve"
@@ -743,13 +784,44 @@ export function EnergieInvoicesPage() {
                     dot={{ r: 3 }}
                     connectNulls={false}
                   />
+                  <Line
+                    yAxisId="count"
+                    type="monotone"
+                    dataKey="invoice_count"
+                    name="Factures"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls={false}
+                  />
+                  <Line
+                    yAxisId="count"
+                    type="monotone"
+                    dataKey="billed_prm_count"
+                    name="PRM factures"
+                    stroke="#fbbf24"
+                    strokeDasharray="5 4"
+                    strokeWidth={2}
+                    dot={{ r: 2 }}
+                    connectNulls={false}
+                  />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+            {potentialGapMonths.length > 0 && (
+              <div className="invoice-consumption-alert">
+                <strong>Trou potentiel</strong>
+                <span>
+                  {potentialGapMonths.map((point) => point.label).join(", ")} : releves ENEDIS presents, mais aucune facture
+                  rattachee au mois avec les filtres actifs.
+                </span>
+              </div>
+            )}
             <p className="invoice-consumption-note">
               Factures : consommation repartie au prorata des jours couverts par chaque periode. ENEDIS :
               donnees journalieres disponibles sur {monthlyConsumptionQuery.data.enedis_prm_count} PRM sur{" "}
-              {monthlyConsumptionQuery.data.prm_count} PRM identifies dans les factures retenues.
+              {monthlyConsumptionQuery.data.prm_count} PRM identifies dans les factures retenues. Les courbes "Factures" et
+              "PRM factures" aident a reperer une baisse de couverture ou un mois absent.
             </p>
           </>
         )}

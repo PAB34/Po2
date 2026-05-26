@@ -70,6 +70,7 @@ class EnergyInvoiceMonthlyConsumptionPoint(BaseModel):
     enedis_kwh: float | None
     delta_kwh: float | None
     invoice_count: int
+    billed_prm_count: int
     prm_count: int
     enedis_prm_count: int
 

@@ -1581,6 +1581,7 @@ export type EnergyInvoiceMonthlyConsumptionPoint = {
   enedis_kwh: number | null;
   delta_kwh: number | null;
   invoice_count: number;
+  billed_prm_count: number;
   prm_count: number;
   enedis_prm_count: number;
 };

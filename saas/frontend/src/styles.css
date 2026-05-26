@@ -2863,9 +2863,9 @@ button:disabled {
 
 .invoice-consumption-kpis {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
   gap: 8px;
-  min-width: min(520px, 100%);
+  min-width: min(680px, 100%);
 }
 
 .invoice-consumption-kpis div {
@@ -2901,6 +2901,23 @@ button:disabled {
 
 .invoice-consumption-note {
   margin: 0;
+}
+
+.invoice-consumption-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(120, 53, 15, 0.2);
+  color: #fed7aa;
+  font-size: 0.86rem;
+}
+
+.invoice-consumption-alert strong {
+  color: #fffbeb;
+  white-space: nowrap;
 }
 
 .invoice-timeline-wrapper {
