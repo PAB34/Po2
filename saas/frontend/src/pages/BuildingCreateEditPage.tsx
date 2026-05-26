@@ -476,9 +476,22 @@ export function BuildingCreateEditPage() {
     }
     setValidatingRowNumber(selectedImportRow.row_number);
     try {
-      const lookup = await fetchFreeAddressLookup(token, address);
+      const lookup = await fetchFreeAddressLookup(token, address, {
+        citycode: selectedImportRow.expected_citycode ?? undefined,
+        parcel_reference: selectedImportRow.source_parcel ?? undefined,
+      });
       const featureCount = lookup.feature_collection.features.length;
       const normalizedMessage = String(lookup.geocoder.display_name ?? lookup.input_address);
+      const geocoder = (lookup.geocoder ?? {}) as Record<string, unknown>;
+      const resolvedCity = typeof geocoder.resolved_city === "string" ? geocoder.resolved_city : null;
+      const resolvedPostcode = typeof geocoder.resolved_postcode === "string" ? geocoder.resolved_postcode : null;
+      const resolvedCitycode = typeof geocoder.resolved_citycode === "string" ? geocoder.resolved_citycode : null;
+      const mismatch =
+        Boolean(geocoder.commune_mismatch) || Boolean(geocoder.dept_mismatch);
+      const mismatchNote =
+        mismatch && selectedImportRow.expected_citycode
+          ? ` — ATTENTION : commune résolue "${resolvedCity ?? ""}" différente de la parcelle (${selectedImportRow.expected_citycode}).`
+          : "";
       updateImportRow(selectedImportRow.row_number, (row: ImportedRowState) => ({
         ...row,
         editableAddress: lookup.input_address,
@@ -486,10 +499,14 @@ export function BuildingCreateEditPage() {
         validation_status: featureCount > 0 ? "valid" : "invalid",
         validation_message:
           featureCount > 0
-            ? `Adresse géolocalisée : ${normalizedMessage}. ${featureCount} bâtiment(s) IGN détecté(s).`
-            : `Adresse géolocalisée : ${normalizedMessage}. Aucun bâtiment IGN n’a été détecté à proximité.`,
+            ? `Adresse géolocalisée : ${normalizedMessage}. ${featureCount} bâtiment(s) IGN détecté(s).${mismatchNote}`
+            : `Adresse géolocalisée : ${normalizedMessage}. Aucun bâtiment IGN n’a été détecté à proximité.${mismatchNote}`,
         lat: lookup.lat,
         lon: lookup.lon,
+        resolved_city: resolvedCity,
+        resolved_postcode: resolvedPostcode,
+        resolved_citycode: resolvedCitycode,
+        commune_mismatch: mismatch,
       }));
       if (featureCount > 0) {
         setImportError(null);
@@ -1124,6 +1141,7 @@ export function BuildingCreateEditPage() {
                             : row.validation_status === "invalid"
                               ? "Adresse KO"
                               : "À vérifier";
+                        const resolvedCityLabel = [row.resolved_postcode, row.resolved_city].filter(Boolean).join(" ") || "-";
                         return (
                           <article key={row.row_number} className={`resource-card ${stateClass} ${isActive ? "resource-card-active" : ""}`}>
                             <div className="resource-card-header">
@@ -1145,6 +1163,17 @@ export function BuildingCreateEditPage() {
                               <div>
                                 <dt>Parent</dt>
                                 <dd>{row.source_parent ?? "-"}</dd>
+                              </div>
+                              <div>
+                                <dt>Commune résolue (IGN)</dt>
+                                <dd>
+                                  {resolvedCityLabel}
+                                  {row.commune_mismatch ? (
+                                    <span className="resource-badge resource-badge-danger" style={{ marginLeft: 8 }}>
+                                      ≠ parcelle {row.expected_citycode ?? ""}
+                                    </span>
+                                  ) : null}
+                                </dd>
                               </div>
                               <div>
                                 <dt>Latitude</dt>

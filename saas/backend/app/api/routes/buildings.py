@@ -104,7 +104,14 @@ def post_free_address_lookup(
 ) -> FreeAddressLookupRead:
     try:
         city_name = _get_current_user_city_name(db, current_user)
-        return FreeAddressLookupRead.model_validate(lookup_free_address_candidates(payload.address, city_name=city_name))
+        return FreeAddressLookupRead.model_validate(
+            lookup_free_address_candidates(
+                payload.address,
+                city_name=city_name,
+                citycode=payload.citycode,
+                parcel_reference=payload.parcel_reference,
+            )
+        )
     except ValueError as error:
         _raise_naming_http_error(error)
 

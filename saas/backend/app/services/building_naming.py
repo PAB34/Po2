@@ -70,6 +70,29 @@ def _display_text(value: Any) -> str:
     return "" if text.lower() in {"nan", "none", "null"} else text
 
 
+def _strip_leading_zeros_in_address(text: str) -> str:
+    """Remplace les nombres avec zeros initiaux par leur version sans zeros.
+
+    Ex : '0021 RTE DE MONTPELLIER' -> '21 RTE DE MONTPELLIER'
+    L'API IGN GeoPF interprete mal '0021' comme numero de voirie.
+    """
+    if not text:
+        return text
+    return re.sub(r"\b0+(\d+)\b", r"\1", text)
+
+
+def _insee_from_reference(reference: str | None) -> str | None:
+    """Extrait le code INSEE 5 chiffres depuis une reference parcellaire MAJIC.
+
+    Ex : '34301000AK0149' -> '34301'
+    """
+    if not reference:
+        return None
+    text = str(reference).strip().upper()
+    match = re.match(r"^(\d{5})", text)
+    return match.group(1) if match else None
+
+
 def _safe_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -127,7 +150,8 @@ def _build_address_display(row: pd.Series, mapping: dict[str, str | None]) -> st
     street_name = _display_text(row.get(mapping["street_name"])) if mapping.get("street_name") else ""
     city_name = _display_text(row.get(mapping["city_name"])) if mapping.get("city_name") else ""
     parts = [street_number, street_repeat, street_type, street_name, city_name]
-    return re.sub(r"\s+", " ", " ".join(part for part in parts if part).strip()).strip()
+    address = re.sub(r"\s+", " ", " ".join(part for part in parts if part).strip()).strip()
+    return _strip_leading_zeros_in_address(address)
 
 
 def _feature_actual_name(attributes: dict[str, Any]) -> str:
@@ -418,38 +442,83 @@ def _city_in_address(address: str, city_name: str) -> bool:
     return _normalize_text(city_name) in _normalize_text(address)
 
 
-def _geocode_address(address: str, city_hint: str | None = None) -> dict[str, Any]:
-    address_for_geocode = address
-    city_appended = False
-    if city_hint and not _city_in_address(address, city_hint):
-        address_for_geocode = f"{address}, {city_hint}"
-        city_appended = True
+def _geocode_address(
+    address: str,
+    city_hint: str | None = None,
+    citycode: str | None = None,
+) -> dict[str, Any]:
+    """Geocode une adresse via IGN GeoPF.
 
-    cache_key = address_for_geocode
+    Strategie hybride :
+    1. Strip zeros initiaux du numero de voirie (sinon IGN echoue).
+    2. Si `citycode` fourni : tentative avec filtre strict commune INSEE.
+    3. Sinon ou si pas de resultat : recherche libre, en rejetant les
+       resultats hors departement attendu (premiers 2 chiffres du citycode).
+    """
+    address_clean = _strip_leading_zeros_in_address(address)
+    expected_dept = (citycode or "")[:2] if citycode else None
+
+    cache_key = f"{address_clean}|{citycode or ''}"
     if cache_key in _APP_STATE["cache_geocode"]:
         return _APP_STATE["cache_geocode"][cache_key]
 
-    response = _rate_limited_get(
-        GEOPF_SEARCH_URL,
-        {"q": address_for_geocode, "limit": 1},
-        host_key="geopf_search",
-        timeout=30,
-    )
-    features = response.json().get("features", [])
-    if not features:
-        raise ValueError(f"Aucun résultat de géocodage pour : {address_for_geocode}")
-    feature = features[0]
+    used_strategy = "freeform"
+    used_address = address_clean
+    feature: dict[str, Any] | None = None
+
+    if citycode:
+        response = _rate_limited_get(
+            GEOPF_SEARCH_URL,
+            {"q": address_clean, "limit": 1, "citycode": citycode},
+            host_key="geopf_search",
+            timeout=30,
+        )
+        features = response.json().get("features", [])
+        if features:
+            feature = features[0]
+            used_strategy = "citycode"
+
+    if feature is None:
+        used_address = address_clean
+        if city_hint and not _city_in_address(address_clean, city_hint):
+            used_address = f"{address_clean}, {city_hint}"
+        response = _rate_limited_get(
+            GEOPF_SEARCH_URL,
+            {"q": used_address, "limit": 1},
+            host_key="geopf_search",
+            timeout=30,
+        )
+        features = response.json().get("features", [])
+        if not features:
+            raise ValueError(f"Aucun résultat de géocodage pour : {used_address}")
+        feature = features[0]
+        used_strategy = "freeform_with_city" if city_hint else "freeform"
+
     properties = feature.get("properties", {}) or {}
     geometry = feature.get("geometry", {}) or {}
     lat, lon = _extract_center_from_geometry(geometry)
+    resolved_postcode = str(properties.get("postcode") or "")
+    resolved_dept = resolved_postcode[:2] if resolved_postcode else ""
+    resolved_citycode = str(properties.get("citycode") or "")
+    resolved_city = str(properties.get("city") or properties.get("municipality") or "")
+    dept_mismatch = bool(expected_dept and resolved_dept and resolved_dept != expected_dept)
+    commune_mismatch = bool(citycode and resolved_citycode and resolved_citycode != citycode)
+
     result = {
         "lat": lat,
         "lon": lon,
-        "display_name": properties.get("label") or properties.get("name") or address_for_geocode,
+        "display_name": properties.get("label") or properties.get("name") or used_address,
         "properties": properties,
         "raw": feature,
-        "city_appended": city_appended,
+        "city_appended": used_strategy == "freeform_with_city",
         "city_hint": city_hint,
+        "citycode": citycode,
+        "resolved_citycode": resolved_citycode,
+        "resolved_postcode": resolved_postcode,
+        "resolved_city": resolved_city,
+        "strategy": used_strategy,
+        "dept_mismatch": dept_mismatch,
+        "commune_mismatch": commune_mismatch,
     }
     _APP_STATE["cache_geocode"][cache_key] = result
     return result
@@ -748,13 +817,19 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
     return collection
 
 
-def _resolve_point_and_parcels(address_display: str, references: list[str], city_hint: str | None = None) -> dict[str, Any]:
+def _resolve_point_and_parcels(
+    address_display: str,
+    references: list[str],
+    city_hint: str | None = None,
+    citycode: str | None = None,
+) -> dict[str, Any]:
     parcel_features = []
     used_source = "address"
     lat = None
     lon = None
     geocoder_data = None
     parcel_labels: list[str] = []
+    derived_citycode = citycode
     for reference in references:
         try:
             parcel = _geopf_parcel(reference)
@@ -767,8 +842,10 @@ def _resolve_point_and_parcels(address_display: str, references: list[str], city
                 used_source = "parcel"
         except Exception:
             continue
+        if derived_citycode is None:
+            derived_citycode = _insee_from_reference(reference)
     if lat is None or lon is None:
-        geocoder_data = _geocode_address(address_display, city_hint=city_hint)
+        geocoder_data = _geocode_address(address_display, city_hint=city_hint, citycode=derived_citycode)
         lat = geocoder_data["lat"]
         lon = geocoder_data["lon"]
         used_source = "address"
@@ -903,6 +980,12 @@ def preview_building_import_file(
             source_typology = _optional_import_value(row, typology_column)
             asset_type = _normalize_import_asset_type(source_typology or "")
             address_display = re.sub(r"\s+", " ", source_address).strip()
+            source_parcel_value = _optional_import_value(row, parcel_column)
+            expected_citycode = _insee_from_reference(source_parcel_value)
+            resolved_city = None
+            resolved_postcode = None
+            resolved_citycode = None
+            commune_mismatch = False
             validation_status = "invalid"
             validation_message = "Adresse absente ou vide."
             lat = None
@@ -912,25 +995,46 @@ def preview_building_import_file(
                     validation_status = "pending"
                     validation_message = "Adresse chargée. Lance le contrôle IGN pour la valider."
                 else:
-                    cached_validation = validation_cache.get(address_display)
+                    cache_key = f"{address_display}|{expected_citycode or ''}"
+                    cached_validation = validation_cache.get(cache_key)
                     if cached_validation is None:
                         try:
-                            lookup = lookup_free_address_candidates(address_display, city_name=city_name)
+                            lookup = lookup_free_address_candidates(
+                                address_display,
+                                city_name=city_name,
+                                citycode=expected_citycode,
+                            )
                             geocoder = lookup.get("geocoder") if isinstance(lookup.get("geocoder"), dict) else {}
                             display_name = str(geocoder.get("display_name") or address_display)
-                            city_appended = bool(geocoder.get("city_appended"))
+                            geocoder_city = str(geocoder.get("resolved_city") or "")
+                            geocoder_postcode = str(geocoder.get("resolved_postcode") or "")
+                            geocoder_citycode = str(geocoder.get("resolved_citycode") or "")
+                            mismatch = bool(geocoder.get("commune_mismatch")) or bool(geocoder.get("dept_mismatch"))
                             feature_collection = lookup.get("feature_collection") if isinstance(lookup.get("feature_collection"), dict) else {}
                             feature_count = len(feature_collection.get("features") or [])
-                            city_note = f" (ville ‘{city_name}’ ajoutée automatiquement)" if city_appended else ""
+                            mismatch_note = (
+                                f" — ATTENTION : commune résolue '{geocoder_city}' différente de la parcelle ({expected_citycode})"
+                                if mismatch and expected_citycode
+                                else ""
+                            )
+                            if feature_count > 0 and not mismatch:
+                                msg = f"Adresse géolocalisée : {display_name}. {feature_count} bâtiment(s) IGN détecté(s)."
+                                status = "valid"
+                            elif feature_count > 0 and mismatch:
+                                msg = f"Adresse géolocalisée : {display_name}.{mismatch_note}"
+                                status = "warning"
+                            else:
+                                msg = f"Adresse géolocalisée : {display_name}. Aucun bâtiment IGN n’a été détecté à proximité.{mismatch_note}"
+                                status = "invalid"
                             cached_validation = {
-                                "validation_status": "valid" if feature_count > 0 else "invalid",
-                                "validation_message": (
-                                    f"Adresse géolocalisée : {display_name}{city_note}. {feature_count} bâtiment(s) IGN détecté(s)."
-                                    if feature_count > 0
-                                    else f"Adresse géolocalisée : {display_name}{city_note}. Aucun bâtiment IGN n’a été détecté à proximité."
-                                ),
+                                "validation_status": status,
+                                "validation_message": msg,
                                 "lat": lookup.get("lat"),
                                 "lon": lookup.get("lon"),
+                                "resolved_city": geocoder_city or None,
+                                "resolved_postcode": geocoder_postcode or None,
+                                "resolved_citycode": geocoder_citycode or None,
+                                "commune_mismatch": mismatch,
                             }
                         except Exception as error:
                             cached_validation = {
@@ -938,12 +1042,20 @@ def preview_building_import_file(
                                 "validation_message": str(error),
                                 "lat": None,
                                 "lon": None,
+                                "resolved_city": None,
+                                "resolved_postcode": None,
+                                "resolved_citycode": None,
+                                "commune_mismatch": False,
                             }
-                        validation_cache[address_display] = cached_validation
+                        validation_cache[cache_key] = cached_validation
                     validation_status = str(cached_validation["validation_status"])
                     validation_message = str(cached_validation["validation_message"])
                     lat = _safe_float(cached_validation.get("lat"))
                     lon = _safe_float(cached_validation.get("lon"))
+                    resolved_city = cached_validation.get("resolved_city")
+                    resolved_postcode = cached_validation.get("resolved_postcode")
+                    resolved_citycode = cached_validation.get("resolved_citycode")
+                    commune_mismatch = bool(cached_validation.get("commune_mismatch"))
             rows.append(
                 {
                     "row_number": row_index,
@@ -958,12 +1070,17 @@ def preview_building_import_file(
                     "source_typology": source_typology,
                     "source_parent": _optional_import_value(row, parent_column),
                     "source_local_id": _optional_import_value(row, local_id_column),
-                    "source_parcel": _optional_import_value(row, parcel_column),
+                    "source_parcel": source_parcel_value,
                     "source_short_name": _optional_import_value(row, short_name_column),
                     "source_building_code": _optional_import_value(row, building_code_column),
                     "source_floor": _optional_import_value(row, floor_column),
                     "source_door": _optional_import_value(row, door_column),
                     "source_occupancy_status": _optional_import_value(row, occupancy_column),
+                    "expected_citycode": expected_citycode,
+                    "resolved_city": resolved_city,
+                    "resolved_postcode": resolved_postcode,
+                    "resolved_citycode": resolved_citycode,
+                    "commune_mismatch": commune_mismatch,
                 }
             )
     return {
@@ -981,11 +1098,22 @@ def preview_building_import_file(
     }
 
 
-def lookup_free_address_candidates(address: str, city_name: str | None = None) -> dict[str, Any]:
+def lookup_free_address_candidates(
+    address: str,
+    city_name: str | None = None,
+    citycode: str | None = None,
+    parcel_reference: str | None = None,
+) -> dict[str, Any]:
     address_display = re.sub(r"\s+", " ", str(address).strip()).strip()
     if len(address_display) < 3:
         raise ValueError("L'adresse doit contenir au moins 3 caractères.")
-    point_and_parcels = _resolve_point_and_parcels(address_display, [], city_hint=city_name)
+    effective_citycode = citycode or _insee_from_reference(parcel_reference)
+    point_and_parcels = _resolve_point_and_parcels(
+        address_display,
+        [parcel_reference] if parcel_reference else [],
+        city_hint=city_name,
+        citycode=effective_citycode,
+    )
     lat = _safe_float(point_and_parcels.get("lat"))
     lon = _safe_float(point_and_parcels.get("lon"))
     if lat is None or lon is None:

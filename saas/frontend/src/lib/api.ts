@@ -189,6 +189,11 @@ export type BuildingImportRow = {
   source_floor: string | null;
   source_door: string | null;
   source_occupancy_status: string | null;
+  expected_citycode: string | null;
+  resolved_city: string | null;
+  resolved_postcode: string | null;
+  resolved_citycode: string | null;
+  commune_mismatch: boolean;
 };
 
 export type Site = {
@@ -516,11 +521,18 @@ export async function fetchBuildingNamingLookup(token: string, uniqueKey: string
   return parseResponse<BuildingNamingLookup>(response);
 }
 
-export async function fetchFreeAddressLookup(token: string, address: string): Promise<FreeAddressLookup> {
+export async function fetchFreeAddressLookup(
+  token: string,
+  address: string,
+  options?: { citycode?: string | null; parcel_reference?: string | null },
+): Promise<FreeAddressLookup> {
+  const payload: Record<string, string> = { address };
+  if (options?.citycode) payload.citycode = options.citycode;
+  if (options?.parcel_reference) payload.parcel_reference = options.parcel_reference;
   const response = await fetch(`${apiBaseUrl}/buildings/lookup/free-address`, {
     method: "POST",
     headers: buildHeaders(token),
-    body: JSON.stringify({ address }),
+    body: JSON.stringify(payload),
   });
 
   return parseResponse<FreeAddressLookup>(response);

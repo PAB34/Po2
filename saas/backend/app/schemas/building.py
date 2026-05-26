@@ -84,6 +84,11 @@ class BuildingImportRow(BaseModel):
     source_floor: str | None = None
     source_door: str | None = None
     source_occupancy_status: str | None = None
+    expected_citycode: str | None = None
+    resolved_city: str | None = None
+    resolved_postcode: str | None = None
+    resolved_citycode: str | None = None
+    commune_mismatch: bool = False
 
 
 class BuildingImportPreview(BaseModel):
@@ -128,6 +133,8 @@ class SiteRead(BaseModel):
 
 class FreeAddressLookupPayload(BaseModel):
     address: str = Field(min_length=3, max_length=255)
+    citycode: str | None = Field(default=None, max_length=5)
+    parcel_reference: str | None = Field(default=None, max_length=64)
 
 
 class FreeAddressLookupRead(BaseModel):
