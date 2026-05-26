@@ -80,6 +80,31 @@ def get_building_naming_dataset(
         city_name = _get_current_user_city_name(db, current_user)
         return BuildingNamingDataset.model_validate(get_building_naming_rows(city_name=city_name))
     except ValueError as error:
+        # Cas "MAJIC non configure / introuvable" : on degrade en dataset vide
+        # plutot que de spammer le frontend avec un 400. Le mode "Creation depuis
+        # MAJIC" sera signale comme indisponible. Le mode "Import" continue normalement.
+        message = str(error)
+        majic_unavailable = (
+            "DGFIP/MAJIC n'est pas configuré" in message
+            or "DGFIP/MAJIC introuvable" in message
+        )
+        if majic_unavailable:
+            return BuildingNamingDataset.model_validate({
+                "filename": "",
+                "columns": [],
+                "mapping": {},
+                "total_rows": 0,
+                "unique_addresses": 0,
+                "filtered_city_name": None,
+                "group_person_column": "",
+                "group_person_filter": "",
+                "cache_status": "unavailable",
+                "build_duration_ms": 0,
+                "served_duration_ms": 0,
+                "rows": [],
+                "majic_configured": False,
+                "majic_unavailable_reason": message,
+            })
         _raise_naming_http_error(error)
 
 

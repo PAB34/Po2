@@ -227,6 +227,7 @@ export function BuildingCreateEditPage() {
     queryKey: ["buildings", "naming-dataset", token],
     queryFn: () => fetchBuildingNamingDataset(token as string),
     enabled: Boolean(token),
+    retry: false,
   });
 
   const namingLookupQuery = useQuery({
@@ -832,10 +833,14 @@ export function BuildingCreateEditPage() {
                   <div className="section-heading">
                     <h3>Source DGFIP / MAJIC</h3>
                     <p>
-                      Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename ?? "non configuré"}</strong>. Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
+                      Le fichier source actuellement exploité est <strong>{namingDatasetQuery.data?.filename || "non configuré"}</strong>. Les bâtiments sont regroupés par adresse unique avant rapprochement avec l’IGN.
                     </p>
                   </div>
-                  {namingDatasetQuery.data ? (
+                  {namingDatasetQuery.data && namingDatasetQuery.data.majic_configured === false ? (
+                    <div className="info-banner" style={{ background: "#fff4e6", borderColor: "#e07a5f" }}>
+                      <strong>Mode "Création depuis MAJIC" indisponible :</strong> {namingDatasetQuery.data.majic_unavailable_reason ?? "fichier DGFIP/MAJIC non configuré sur ce serveur"}. Utilise le mode "Import" ci-contre pour ajouter des bâtiments depuis un fichier xlsm.
+                    </div>
+                  ) : namingDatasetQuery.data ? (
                     <div className="info-banner">
                       <strong>Commune filtrée :</strong> {namingDatasetQuery.data.filtered_city_name ?? "toutes les communes"}. <strong>Filtre MAJIC :</strong> {namingDatasetQuery.data.group_person_column} = {namingDatasetQuery.data.group_person_filter}. <strong>Cache :</strong> {namingDatasetQuery.data.cache_status}. <strong>Préparation :</strong> {namingDatasetQuery.data.build_duration_ms} ms. <strong>Réponse :</strong> {namingDatasetQuery.data.served_duration_ms} ms.
                     </div>

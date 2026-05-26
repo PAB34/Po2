@@ -47,6 +47,8 @@ class BuildingNamingDataset(BaseModel):
     build_duration_ms: int
     served_duration_ms: int
     rows: list[BuildingNamingRow]
+    majic_configured: bool = True
+    majic_unavailable_reason: str | None = None
 
 
 class BuildingNamingLookupRead(BaseModel):

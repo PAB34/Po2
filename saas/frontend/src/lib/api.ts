@@ -138,6 +138,8 @@ export type BuildingNamingDataset = {
   build_duration_ms: number;
   served_duration_ms: number;
   rows: BuildingNamingRow[];
+  majic_configured?: boolean;
+  majic_unavailable_reason?: string | null;
 };
 
 export type GeoJsonFeature = {
