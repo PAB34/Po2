@@ -1,6 +1,6 @@
 # État actuel du développement
-> **Mise a jour complementaire** : 2026-05-26 (facturation ENGIE XLSX + rapport BPU + suivi mensuel)
-> **Dernier commit pousse sur `main`** : `9e36f19` (fix(invoices): match base-only C5 tariffs)
+> **Mise a jour complementaire** : 2026-05-26 (9 filtres facettes /energie/factures + graphe mensuel per-site)
+> **Dernier commit pousse sur `main`** : `9b2c8ca` (feat(invoices): add 9 facet filters on billing page and monthly graph)
 > **Prod OVH** : API OK, mais derniers deploys GitHub Actions en echec transitoire Docker Hub (`TLS handshake timeout` sur images `nginx`, `python`, `node`). Relancer Deploy avant de considerer les derniers commits visibles en prod.
 
 > **Mise à jour** : 2026-05-22 (socle rattachement compteurs fluides + BPU gaz TotalEnergies lot 7)
@@ -205,6 +205,19 @@ b899ad3 fix(invoices): include tariff BPU issues in report
 22c7ff7 fix(invoices): run XLSX imports in background
 01b94b1 feat(invoices): bascule XLSX-only — upsert avec préservation décisions utilisateur
 ```
+
+Commit 9 filtres facettes - 2026-05-26 :
+
+```text
+9b2c8ca feat(invoices): add 9 facet filters on billing page and monthly graph
+```
+
+Ajouts :
+- `filter_facets` property sur `EnergyInvoiceImport` : extrait mois, PRM/PCE, FIC, site, commune, segment, code tarif, libelle tarif, type document depuis `analysis_result`.
+- Schema `EnergyInvoiceImportOut` expose `filter_facets: dict[str, list[str]]`.
+- Endpoint monthly graph accepte 9 nouveaux parametres Query.
+- Service `get_monthly_invoice_consumption()` filtre per-site quand des filtres site/PRM/segment sont actifs (correction graphe qui additionnait toute la facture au lieu des seuls sites concernes).
+- Frontend : 9 `useState` + `useMemo` + `InvoiceMultiFilter` dans `EnergieInvoicesPage.tsx`, bouton reset, integration dans l'index de recherche.
 
 A faire juste apres deploy OVH reussi :
 
