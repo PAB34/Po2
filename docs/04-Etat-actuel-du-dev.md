@@ -1,4 +1,7 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-05-26 (facturation ENGIE XLSX + rapport BPU + suivi mensuel)
+> **Dernier commit pousse sur `main`** : `9e36f19` (fix(invoices): match base-only C5 tariffs)
+> **Prod OVH** : API OK, mais derniers deploys GitHub Actions en echec transitoire Docker Hub (`TLS handshake timeout` sur images `nginx`, `python`, `node`). Relancer Deploy avant de considerer les derniers commits visibles en prod.
 
 > **Mise à jour** : 2026-05-22 (socle rattachement compteurs fluides + BPU gaz TotalEnergies lot 7)
 > **Mainteneur principal** : PAB34 + assistance IA (Claude Sonnet 4.6)
@@ -172,3 +175,40 @@ Cf. spec `saas/specs/08_enedis_async_kit_analysis.json` (synthèse dans [[Module
 - **Clé AES déchiffrement ENEDIS** : dans `.env` prod variable `ENEDIS_DECRYPTION_KEY`
 - **Canal contact ENEDIS** : `506350699` (SETE_ENERGIE)
 - ⚠️ **Ne JAMAIS afficher de password ou de clé en clair dans une conversation, un commit, ou ce vault** — l'utilisateur a déjà rotaté un mot de passe à cause de ça
+
+## Mise a jour facturation ENGIE - 2026-05-26
+
+Chantier concerne : `PO2-FACT-001`.
+
+Travaux recents documentes :
+
+- Import XLSX ENGIE `MesFactures_*.xlsx` asynchrone et bascule UI XLSX-only pour les nouveaux imports.
+- Upsert avec preservation des decisions utilisateur via option `force_update`.
+- Parser XLSX optimise et controles BPU/TURPE/ENEDIS reutilises par le meme pipeline que les PDF.
+- Filtres facture consolides : controle, decision, regroupement, titulaire, categorie/type de probleme.
+- Rapport fournisseur filtre : les points BPU restent visibles, et les ecarts chiffrables sont recalcules sur base BPU.
+- Filtres `Prix contractuels` corriges : la categorie et les types BPU restent disponibles meme quand aucun ecart BPU n'est present.
+- Suivi mensuel en tete de `/energie/factures` : consommation facturee ENGIE, releve ENEDIS, nombre de factures, nombre de PRM factures, alerte de trou potentiel.
+- Synthese contractuelle creee : `saas/energie/HERAULT ENERGIE/SYNTHESE_FACTURATION.md`.
+- Controle tarifaire local complet : `MesFactures_20260522150740.xlsx` vs BPU 2026 Lot 1 = 5368 lignes, 5355 OK, 13 ecarts potentiels, 0 reference manquante.
+
+Commits associes :
+
+```text
+9e36f19 fix(invoices): match base-only C5 tariffs
+a18ef4c fix(invoices): keep BPU filters visible
+6a1e1f2 feat(invoices): show monthly billing coverage
+56a1843 fix(invoices): match ENGIE XLSX BPU tariffs
+e0b69ef feat(invoices): add monthly consumption tracking
+b899ad3 fix(invoices): include tariff BPU issues in report
+3eba12c fix(invoices): speed up ENGIE XLSX parsing
+22c7ff7 fix(invoices): run XLSX imports in background
+01b94b1 feat(invoices): bascule XLSX-only — upsert avec préservation décisions utilisateur
+```
+
+A faire juste apres deploy OVH reussi :
+
+1. Reimporter `MesFactures_20260522150740.xlsx` avec `Forcer la mise a jour des bordereaux deja importes`.
+2. Verifier que `Prix contractuels` et les types BPU sont visibles dans les filtres.
+3. Filtrer sur `Prix contractuels` puis `Ecart prix facture / BPU`, editer le rapport, verifier le recalcul BPU.
+4. Relire les 13 ecarts potentiels restants, surtout `BORNE FIXE MARCHE DU BARROU` en `LU/base`.

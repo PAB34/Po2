@@ -175,3 +175,58 @@ lot EDF eclairage public.
 
 - [[Modules/Energie-BPU]] — Source des prix attendus
 - [[Modules/Energie-Preconisations]] — Calcul prix unitaires
+
+## Note de consolidation - 2026-05-26
+
+### Ce qui a ete developpe recemment
+
+- Import XLSX ENGIE `MesFactures_*.xlsx` depuis `/energie/factures`, avec traitement en arriere-plan pour eviter les timeouts.
+- Bascule UI vers le flux XLSX-only pour les nouveaux imports, tout en conservant le code PDF pour l'historique.
+- Upsert des bordereaux deja presents avec option `force_update`, en preservant les decisions utilisateur.
+- Acceleration du parser XLSX `services/invoice_parsers/engie_xlsx.py` pour traiter l'export complet sans blocage.
+- Filtres facture multi-criteres : controle, decision, regroupement, titulaire, categorie de probleme, type de probleme, recherche.
+- Rapport fournisseur imprime depuis les factures filtrees, avec points de controle retenus et recalcul des ecarts BPU quand le detail `mismatches_detail` est disponible.
+- Correction du rapport : les points BPU non chiffrables ne rendent plus le rapport vide.
+- Filtres BPU fixes : la categorie `Prix contractuels` et les types BPU restent visibles meme si aucun ecart BPU n'est present dans les factures courantes.
+- Suivi mensuel de facturation en tete de `/energie/factures` : consommation facturee ENGIE vs releve ENEDIS, nombre de factures, nombre de PRM factures, alerte de trou potentiel.
+- Synthese contractuelle locale : `saas/energie/HERAULT ENERGIE/SYNTHESE_FACTURATION.md` pour documenter frequence, delais, penalites et controles attendus.
+
+### Controle tarifaire direct du 2026-05-26
+
+Fichier controle : `saas/energie/ENGIE/EXPORTS/MesFactures_20260522150740.xlsx`.
+
+BPU controle : `saas/energie/HERAULT ENERGIE/BPU_2026_Lots_1_2_et_7.xlsx`.
+
+Resultat Lot 1 - Batiment :
+
+| Indicateur | Valeur |
+|---|---:|
+| Lignes tarifaires candidates | 5368 |
+| Lignes OK | 5355 |
+| Ecarts potentiels | 13 |
+| References BPU manquantes | 0 |
+| Prix BPU manquants | 0 |
+
+Contre-epreuve Lot 2 - EP : 5323 ecarts sur 5368 lignes. Conclusion : le fichier analyse releve bien du Lot 1 - Batiment, pas du Lot 2 - EP.
+
+Les 13 ecarts restants sont uniquement sur `Fourniture/base` : 10 lignes `CU/base`, souvent sur tres petites consommations avec impact HT estime a 0,00 EUR, et 3 lignes `LU/base` sur `BORNE FIXE MARCHE DU BARROU` avec impacts estimes 0,04 / 0,14 / 0,23 EUR HT.
+
+Artefacts locaux generes mais ignores par Git car le dossier `saas/energie/ENGIE/` est gitignore :
+
+- `saas/energie/ENGIE/RAPPORTS/rapport_ecarts_tarification_bpu_2026.md`
+- `saas/energie/ENGIE/RAPPORTS/rapport_ecarts_tarification_bpu_2026_detail_lignes.csv`
+- `saas/energie/ENGIE/RAPPORTS/rapport_ecarts_tarification_bpu_2026_anomalies.csv`
+
+### Regles de matching BPU ajoutees / confirmees
+
+- C5 sans differenciation temporelle + `Version d'Utilisation = CU` -> `CU/base`.
+- C5 sans differenciation temporelle + `Version d'Utilisation = LU` -> `LU/base`.
+- C5 4 plages avec postes saisonniers -> `CU4` ou `MU4` selon version.
+- C5 libelle 4 plages mais facture uniquement en `BASE` + version `CU` -> `CU/base`, pas `CU4/base`.
+- CEE et garantie d'origine sont des composantes transverses : quand le fichier ne porte pas de poste horosaisonnier, utiliser le prix BPU applicable au tarif si le prix est identique sur les postes.
+
+### Limites connues
+
+- Les rapports de controle deja stockes en BDD ne se recalculent pas seuls apres correction du code : il faut reimporter le XLSX avec `Forcer la mise a jour des bordereaux deja importes`.
+- Les derniers commits sont pousses sur `main`, mais le deploy OVH etait bloque par un probleme externe Docker Hub (`TLS handshake timeout`) au moment de la documentation.
+- Les 13 ecarts potentiels doivent etre relus apres reimport force, pour verifier s'ils apparaissent encore en application ou s'ils relevent seulement du rapport local calcule a partir de montants arrondis.
