@@ -71,10 +71,20 @@ function parseJsonArray(value: string | null): string[] {
 type IgnFeatureSummary = {
   ign_id: string;
   ign_layer: string;
+  ign_typename: string;
   name: string;
   label: string;
   resolved_name: string;
+  attributes: [string, string][];
 };
+
+function _attributesToSortedEntries(value: unknown): [string, string][] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value as Record<string, unknown>)
+    .map(([k, v]) => [k, v == null ? "" : String(v)] as [string, string])
+    .filter(([key, val]) => val !== "" && !key.startsWith("_"))
+    .sort(([a], [b]) => a.localeCompare(b, "fr"));
+}
 
 function parseIgnFeatures(value: string | null): IgnFeatureSummary[] {
   if (!value) return [];
@@ -89,9 +99,11 @@ function parseIgnFeatures(value: string | null): IgnFeatureSummary[] {
         return {
           ign_id: String(props.ign_id ?? ""),
           ign_layer: String(props.ign_layer ?? ""),
+          ign_typename: String(props.ign_typename ?? ""),
           name: String(props.name ?? ""),
           label: String(props.label ?? ""),
           resolved_name: String(props.resolved_name ?? props.resolved_label ?? ""),
+          attributes: _attributesToSortedEntries(props.attributes),
         };
       })
       .filter((entry): entry is IgnFeatureSummary => entry !== null && Boolean(entry.ign_id));
@@ -692,48 +704,76 @@ export function BuildingDetailPage() {
                 <strong>{parseJsonArray(buildingQuery.data.parcel_labels_json).join(", ") || "Aucune"}</strong>
               </div>
             </div>
-            {parseIgnFeatures(buildingQuery.data.ign_features_json).length > 0 && (
-              <div className="section-block">
-                <div className="section-heading">
-                  <h3>Bâtiments IGN rattachés ({parseIgnFeatures(buildingQuery.data.ign_features_json).length})</h3>
-                  <p>Liste complète des polygones IGN BDTOPO rattachés. Le premier est le « principal » (alimente les champs ci-dessus).</p>
-                </div>
-                <div className="resource-list">
-                  {parseIgnFeatures(buildingQuery.data.ign_features_json).map((feature, index) => (
-                    <article key={feature.ign_id || index} className="resource-card">
-                      <div className="resource-card-header">
-                        <div>
-                          <h3>
-                            {index === 0 ? "★ " : ""}
-                            {feature.resolved_name || feature.label || feature.ign_id}
-                          </h3>
-                          <p>
-                            {feature.ign_layer} — id {feature.ign_id}
-                            {index === 0 ? " (principal)" : ""}
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            )}
-            {parseIgnAttributes(buildingQuery.data.ign_attributes_json).length > 0 && (
-              <div className="section-block">
-                <div className="section-heading">
-                  <h3>Attributs topographiques IGN (bâtiment principal)</h3>
-                  <p>Attributs bruts de l’objet IGN principal (BD TOPO).</p>
-                </div>
-                <div className="attribute-table">
-                  {parseIgnAttributes(buildingQuery.data.ign_attributes_json).map(([key, value]) => (
-                    <div key={key} className="attribute-row">
-                      <dt>{key}</dt>
-                      <dd>{value}</dd>
+            {(() => {
+              const features = parseIgnFeatures(buildingQuery.data.ign_features_json);
+              const principalAttributes = parseIgnAttributes(buildingQuery.data.ign_attributes_json);
+              // Si on a une liste multi (>=1), on affiche cette liste avec les attributs de chaque feature.
+              // Sinon on retombe sur l'ancien affichage simple (1 seul bloc d'attributs).
+              if (features.length > 0) {
+                return (
+                  <div className="section-block">
+                    <div className="section-heading">
+                      <h3>Attributs IGN par bâtiment rattaché ({features.length})</h3>
+                      <p>
+                        {features.length === 1
+                          ? "Attributs bruts (BD TOPO) du bâtiment IGN rattaché."
+                          : "Attributs bruts (BD TOPO) pour chaque polygone IGN sélectionné. Le bâtiment marqué ★ est le « principal » (alimente les champs ign_id / ign_name de la fiche ci-dessus)."}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    <div className="stack-md">
+                      {features.map((feature, index) => (
+                        <div key={feature.ign_id || index} className="section-block">
+                          <div className="section-heading">
+                            <h4>
+                              {index === 0 ? "★ " : `#${index + 1} `}
+                              {feature.resolved_name || feature.label || feature.ign_id}
+                              {index === 0 ? " (principal)" : ""}
+                            </h4>
+                            <p>
+                              <strong>Couche IGN :</strong> {feature.ign_layer || "-"} ·{" "}
+                              <strong>Type :</strong> {feature.ign_typename || "-"} ·{" "}
+                              <strong>Identifiant :</strong> {feature.ign_id || "-"}
+                            </p>
+                          </div>
+                          {feature.attributes.length > 0 ? (
+                            <div className="attribute-table">
+                              {feature.attributes.map(([key, value]) => (
+                                <div key={key} className="attribute-row">
+                                  <dt>{key}</dt>
+                                  <dd>{value}</dd>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="empty-state-text">Aucun attribut détaillé pour ce polygone IGN.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              // Fallback : pas de ign_features_json (anciens bâtiments) mais peut-être des attributs principaux.
+              if (principalAttributes.length > 0) {
+                return (
+                  <div className="section-block">
+                    <div className="section-heading">
+                      <h3>Attributs topographiques IGN</h3>
+                      <p>Attributs bruts de l’objet IGN sélectionné (BD TOPO).</p>
+                    </div>
+                    <div className="attribute-table">
+                      {principalAttributes.map(([key, value]) => (
+                        <div key={key} className="attribute-row">
+                          <dt>{key}</dt>
+                          <dd>{value}</dd>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           <div className="section-block">
