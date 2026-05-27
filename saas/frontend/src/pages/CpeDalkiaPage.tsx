@@ -24,7 +24,9 @@ import {
   importCpeFinanceExport,
   previewCpeFinanceExport,
   deleteCpeAccountingSiteMapping,
+  downloadCpeFinanceInvoiceLiaison,
   updateCpeAccountingSiteMapping,
+  updateCpeFinanceInvoice,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -216,6 +218,25 @@ export default function CpeDalkiaPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-site-mappings"] }),
   });
 
+  const updateFinanceInvoiceM = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) => updateCpeFinanceInvoice(token!, id, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
+  });
+
+  const exportLiaisonM = useMutation({
+    mutationFn: async (invoice: CpeFinanceInvoice) => {
+      const blob = await downloadCpeFinanceInvoiceLiaison(token!, invoice.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `fiche-liaison-dalkia-${invoice.invoice_number}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    },
+  });
+
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
   const dju = djuQ.data;
 
@@ -297,10 +318,13 @@ export default function CpeDalkiaPage() {
           financeImportError={financeImportM.error instanceof Error ? financeImportM.error.message : null}
           saveSiteMappingPending={saveSiteMappingM.isPending}
           deleteSiteMappingPending={deleteSiteMappingM.isPending}
+          invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
           onFinanceImportFile={(file) => financeImportM.mutate(file)}
           onSaveSiteMapping={(payload) => saveSiteMappingM.mutate(payload)}
           onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
+          onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
+          onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
         />
       )}
 
@@ -847,10 +871,13 @@ function CpeFinanceReference({
   financeImportError,
   saveSiteMappingPending,
   deleteSiteMappingPending,
+  invoiceActionPending,
   onCodificationFile,
   onFinanceImportFile,
   onSaveSiteMapping,
   onDeleteSiteMapping,
+  onInvoiceStatus,
+  onExportLiaison,
 }: {
   codificationFileRef: React.RefObject<HTMLInputElement>;
   financeImportFileRef: React.RefObject<HTMLInputElement>;
@@ -867,10 +894,13 @@ function CpeFinanceReference({
   financeImportError: string | null;
   saveSiteMappingPending: boolean;
   deleteSiteMappingPending: boolean;
+  invoiceActionPending: boolean;
   onCodificationFile: (file: File) => void;
   onFinanceImportFile: (file: File) => void;
   onSaveSiteMapping: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) => void;
   onDeleteSiteMapping: (id: number) => void;
+  onInvoiceStatus: (id: number, nextStatus: string) => void;
+  onExportLiaison: (invoice: CpeFinanceInvoice) => void;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1086,6 +1116,7 @@ function CpeFinanceReference({
                 <th style={thStyle}>Periode</th>
                 <th style={thStyle}>HT</th>
                 <th style={thStyle}>Statut</th>
+                <th style={thStyle}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1095,12 +1126,35 @@ function CpeFinanceReference({
                   <td style={tdStyle}>{invoice.contract_code ?? "-"}</td>
                   <td style={tdStyle}>{invoice.period_start ?? "-"} au {invoice.period_end ?? "-"}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
-                  <td style={tdStyle}><span className="badge badge-orange">{invoice.status}</span></td>
+                  <td style={tdStyle}>
+                    <select
+                      value={invoice.status}
+                      disabled={invoiceActionPending}
+                      onChange={(event) => onInvoiceStatus(invoice.id, event.target.value)}
+                      style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 12 }}
+                    >
+                      <option value="a_controler">A controler</option>
+                      <option value="valide">Valide</option>
+                      <option value="refuse">Refuse</option>
+                      <option value="conteste">Conteste</option>
+                    </select>
+                  </td>
+                  <td style={tdStyle}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ fontSize: 12, padding: "4px 8px" }}
+                      disabled={invoiceActionPending}
+                      onClick={() => onExportLiaison(invoice)}
+                    >
+                      Export XLSX
+                    </button>
+                  </td>
                 </tr>
               ))}
               {recentInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
                     Aucun export finances importe.
                   </td>
                 </tr>

@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import openpyxl
+from openpyxl.styles import Font, PatternFill
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -432,6 +433,128 @@ def list_finance_invoices(
         query = query.where(CpeFinanceInvoice.batch_id == batch_id)
     query = query.order_by(CpeFinanceInvoice.invoice_date.desc().nullslast(), CpeFinanceInvoice.invoice_number)
     return list(db.scalars(query).all())
+
+
+def get_finance_invoice(db: Session, invoice_id: int, city_id: int | None = None) -> CpeFinanceInvoice | None:
+    query = select(CpeFinanceInvoice).where(CpeFinanceInvoice.id == invoice_id)
+    if city_id is not None:
+        query = query.where(CpeFinanceInvoice.city_id == city_id)
+    return db.scalars(query).first()
+
+
+def list_finance_lines(db: Session, invoice_id: int, city_id: int | None = None) -> list[CpeFinanceLine]:
+    query = select(CpeFinanceLine).where(CpeFinanceLine.invoice_id == invoice_id)
+    if city_id is not None:
+        query = query.where(CpeFinanceLine.city_id == city_id)
+    query = query.order_by(CpeFinanceLine.row_number)
+    return list(db.scalars(query).all())
+
+
+def update_finance_invoice(
+    db: Session,
+    invoice: CpeFinanceInvoice,
+    *,
+    status: str | None = None,
+    notes: str | None = None,
+) -> CpeFinanceInvoice:
+    if status is not None:
+        invoice.status = status
+    if notes is not None:
+        invoice.notes = notes
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
+    """Construit une fiche de liaison finances XLSX pour une facture."""
+    lines = list_finance_lines(db, invoice.id, invoice.city_id)
+    sites = {
+        mapping.id: mapping
+        for mapping in db.scalars(
+            select(CpeAccountingSiteMapping).where(
+                CpeAccountingSiteMapping.id.in_([line.accounting_site_id for line in lines if line.accounting_site_id])
+            )
+        ).all()
+    }
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fiche liaison"
+    ws["A1"] = "Fiche de liaison finance DALKIA"
+    ws["A1"].font = Font(bold=True, size=15)
+    ws["A3"] = "Facture"
+    ws["B3"] = invoice.invoice_number
+    ws["A4"] = "Contrat"
+    ws["B4"] = invoice.contract_code
+    ws["A5"] = "Période"
+    ws["B5"] = f"{invoice.period_start or '-'} au {invoice.period_end or '-'}"
+    ws["A6"] = "Statut"
+    ws["B6"] = invoice.status
+    ws["A7"] = "Total HT"
+    ws["B7"] = invoice.total_ht
+    ws["B7"].number_format = '#,##0.00 "€"'
+    if invoice.notes:
+        ws["A8"] = "Notes"
+        ws["B8"] = invoice.notes
+
+    headers = [
+        "Ligne",
+        "Marché",
+        "Service vendu",
+        "Poste facturé",
+        "Site détecté",
+        "Nom site",
+        "Service",
+        "Fonction",
+        "Antenne",
+        "Opération",
+        "Nature",
+        "Libellé nature",
+        "Montant HT",
+        "Conso",
+        "Unité",
+        "Détail",
+    ]
+    start_row = 11
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=start_row, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F4E78")
+
+    for row_index, line in enumerate(lines, start=start_row + 1):
+        site = sites.get(line.accounting_site_id or 0)
+        values = [
+            line.row_number,
+            line.market,
+            line.service_sold,
+            line.billed_item,
+            line.site_code_detected,
+            site.site_name if site else None,
+            site.service_code if site else None,
+            site.function_code if site else None,
+            site.antenna_code if site else None,
+            site.operation_code if site else None,
+            line.accounting_nature,
+            line.accounting_label,
+            line.amount_ht,
+            line.consumption,
+            line.unit,
+            line.detail,
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_index, column=col, value=value)
+        ws.cell(row=row_index, column=13).number_format = '#,##0.00 "€"'
+
+    widths = [10, 12, 20, 18, 18, 32, 14, 14, 16, 16, 12, 24, 14, 12, 10, 42]
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
+    ws.freeze_panes = "A12"
+    ws.auto_filter.ref = f"A{start_row}:P{max(start_row + 1, start_row + len(lines))}"
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
 
 
 def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:

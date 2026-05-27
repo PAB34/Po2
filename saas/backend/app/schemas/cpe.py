@@ -342,6 +342,11 @@ class CpeFinanceInvoiceOut(BaseModel):
     updated_at: datetime
 
 
+class CpeFinanceInvoiceUpdate(BaseModel):
+    status: str | None = None
+    notes: str | None = None
+
+
 class CpeFinanceLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

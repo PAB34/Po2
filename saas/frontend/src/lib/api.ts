@@ -2839,6 +2839,31 @@ export type CpeFinanceImportResult = {
   warnings: string[];
 };
 
+export type CpeFinanceLine = {
+  id: number;
+  batch_id: number;
+  invoice_id: number;
+  row_number: number;
+  contract_code: string | null;
+  invoice_number: string | null;
+  market: string | null;
+  market_type: string | null;
+  service_sold: string | null;
+  billed_item: string | null;
+  vat_rate: number | null;
+  amount_ht: number;
+  consumption: number | null;
+  unit: string | null;
+  detail: string | null;
+  site_code_detected: string | null;
+  accounting_site_id: number | null;
+  accounting_rule_id: number | null;
+  accounting_nature: string | null;
+  accounting_label: string | null;
+  period_start: string | null;
+  period_end: string | null;
+};
+
 export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/sites`, { headers: buildHeaders(token) });
   return parseResponse<CpeSite[]>(response);
@@ -2996,4 +3021,33 @@ export async function fetchCpeFinanceInvoices(token: string, batchId?: number): 
   const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
   const response = await fetch(url, { headers: buildHeaders(token) });
   return parseResponse<CpeFinanceInvoice[]>(response);
+}
+
+export async function fetchCpeFinanceInvoiceLines(token: string, invoiceId: number): Promise<CpeFinanceLine[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/lines`, { headers: buildHeaders(token) });
+  return parseResponse<CpeFinanceLine[]>(response);
+}
+
+export async function updateCpeFinanceInvoice(
+  token: string,
+  invoiceId: number,
+  payload: { status?: string; notes?: string | null },
+): Promise<CpeFinanceInvoice> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeFinanceInvoice>(response);
+}
+
+export async function downloadCpeFinanceInvoiceLiaison(token: string, invoiceId: number): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/liaison.xlsx`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur ${response.status}`);
+  }
+  return response.blob();
 }

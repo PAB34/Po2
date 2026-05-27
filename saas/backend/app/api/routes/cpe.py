@@ -1,7 +1,7 @@
 """Routes API CPE DALKIA — Contrat de Performance Énergétique."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -20,6 +20,8 @@ from app.schemas.cpe import (
     CpeFinanceImportBatchOut,
     CpeFinanceImportResult,
     CpeFinanceInvoiceOut,
+    CpeFinanceInvoiceUpdate,
+    CpeFinanceLineOut,
     CpeFinancePreview,
     CpeGazReleve,
     CpeGazReleveCreate,
@@ -295,6 +297,51 @@ def list_finance_invoices(
 ) -> list[CpeFinanceInvoiceOut]:
     invoices = accounting_svc.list_finance_invoices(db, current_user.city_id, batch_id=batch_id)
     return [CpeFinanceInvoiceOut.model_validate(item) for item in invoices]
+
+
+@router.get("/finances/invoices/{invoice_id}/lines", response_model=list[CpeFinanceLineOut])
+def list_finance_invoice_lines(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeFinanceLineOut]:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    lines = accounting_svc.list_finance_lines(db, invoice.id, current_user.city_id)
+    return [CpeFinanceLineOut.model_validate(item) for item in lines]
+
+
+@router.patch("/finances/invoices/{invoice_id}", response_model=CpeFinanceInvoiceOut)
+def update_finance_invoice(
+    invoice_id: int,
+    payload: CpeFinanceInvoiceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeFinanceInvoiceOut:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    updated = accounting_svc.update_finance_invoice(db, invoice, status=payload.status, notes=payload.notes)
+    return CpeFinanceInvoiceOut.model_validate(updated)
+
+
+@router.get("/finances/invoices/{invoice_id}/liaison.xlsx")
+def export_finance_invoice_liaison(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    content = accounting_svc.build_finance_liaison_workbook(db, invoice)
+    filename = f"fiche-liaison-dalkia-{invoice.invoice_number}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Prix gaz ──────────────────────────────────────────────────────────────────
