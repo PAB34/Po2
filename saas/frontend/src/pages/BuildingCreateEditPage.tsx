@@ -242,8 +242,12 @@ export function BuildingCreateEditPage() {
   );
 
   const createBlankBuildingMutation = useMutation({
-    mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null }) =>
-      createBuildingFromNamingSelection(token as string, payload),
+    mutationFn: (payload: {
+      unique_key: string;
+      validated_name?: string;
+      selected_feature?: GeoJsonFeature | null;
+      selected_features?: GeoJsonFeature[];
+    }) => createBuildingFromNamingSelection(token as string, payload),
     onSuccess: async (building: Building) => {
       setBlankSuccess(`Bâtiment « ${building.nom_batiment || `#${building.id}`} » créé avec succès.`);
       setBlankError(null);

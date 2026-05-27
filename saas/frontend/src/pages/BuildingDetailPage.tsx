@@ -246,8 +246,12 @@ export function BuildingDetailPage() {
   }, [buildingQuery.data]);
 
   const attachGeoMutation = useMutation({
-    mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null }) =>
-      attachBuildingGeoRequest(token as string, parsedBuildingId, payload),
+    mutationFn: (payload: {
+      unique_key: string;
+      validated_name?: string;
+      selected_feature?: GeoJsonFeature | null;
+      selected_features?: GeoJsonFeature[];
+    }) => attachBuildingGeoRequest(token as string, parsedBuildingId, payload),
     onSuccess: async (building: Building) => {
       setGeoAttachSuccess(`Attachement DGFIP + IGN réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
       setGeoAttachError(null);
