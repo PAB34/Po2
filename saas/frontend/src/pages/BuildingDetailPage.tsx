@@ -135,7 +135,8 @@ export function BuildingDetailPage() {
   const [meterError, setMeterError] = useState<string | null>(null);
   const [meterSuccess, setMeterSuccess] = useState<string | null>(null);
 
-  const [showGeoAttachment, setShowGeoAttachment] = useState(false);
+  const [showIgnAttachment, setShowIgnAttachment] = useState(false);
+  const [showDgfipAttachment, setShowDgfipAttachment] = useState(false);
   const [selectedDgfipKey, setSelectedDgfipKey] = useState<string | null>(null);
   const [geoAttachError, setGeoAttachError] = useState<string | null>(null);
   const [geoAttachSuccess, setGeoAttachSuccess] = useState<string | null>(null);
@@ -163,19 +164,21 @@ export function BuildingDetailPage() {
   const freeAddressLookupQuery = useQuery({
     queryKey: ["buildings", "free-address-lookup", attachmentAddress, token],
     queryFn: () => fetchFreeAddressLookup(token as string, attachmentAddress as string),
-    enabled: Boolean(token) && Boolean(attachmentAddress) && showGeoAttachment && !selectedDgfipKey,
+    enabled: Boolean(token) && Boolean(attachmentAddress) && showIgnAttachment && !selectedDgfipKey,
   });
 
   const dgfipNamingLookupQuery = useQuery({
     queryKey: ["buildings", "naming-lookup", selectedDgfipKey, token],
     queryFn: () => fetchBuildingNamingLookup(token as string, selectedDgfipKey as string),
-    enabled: Boolean(token) && Boolean(selectedDgfipKey) && showGeoAttachment,
+    enabled: Boolean(token) && Boolean(selectedDgfipKey) && showIgnAttachment,
+    retry: false,
   });
 
   const nearbyDgfipQuery = useQuery({
     queryKey: ["buildings", "nearby-dgfip", parsedBuildingId, token],
     queryFn: () => fetchNearbyDgfip(token as string, parsedBuildingId),
-    enabled: Boolean(token) && Number.isInteger(parsedBuildingId) && showGeoAttachment,
+    enabled: Boolean(token) && Number.isInteger(parsedBuildingId) && showDgfipAttachment,
+    retry: false,
   });
 
   const activeLookupQuery = selectedDgfipKey ? dgfipNamingLookupQuery : freeAddressLookupQuery;
@@ -204,7 +207,8 @@ export function BuildingDetailPage() {
     onSuccess: async (building: Building) => {
       setGeoAttachSuccess(`Attachement DGFIP + IGN réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
       setGeoAttachError(null);
-      setShowGeoAttachment(false);
+      setShowIgnAttachment(false);
+      setShowDgfipAttachment(false);
       setSelectedDgfipKey(null);
       await queryClient.invalidateQueries({ queryKey: ["building", parsedBuildingId] });
       await queryClient.invalidateQueries({ queryKey: ["buildings"] });
@@ -221,7 +225,7 @@ export function BuildingDetailPage() {
     onSuccess: async (building: Building) => {
       setGeoAttachSuccess(`Attachement IGN réalisé. Bâtiment mis à jour : « ${building.nom_batiment || `#${building.id}`} ».`);
       setGeoAttachError(null);
-      setShowGeoAttachment(false);
+      setShowIgnAttachment(false);
       setSelectedDgfipKey(null);
       await queryClient.invalidateQueries({ queryKey: ["building", parsedBuildingId] });
       await queryClient.invalidateQueries({ queryKey: ["buildings"] });
@@ -740,13 +744,17 @@ export function BuildingDetailPage() {
             </form>
           </div>
 
+          {geoAttachError && <p className="error-text">{geoAttachError}</p>}
+          {geoAttachSuccess && <p className="success-text">{geoAttachSuccess}</p>}
+
+          {/* SECTION 1 - Attachement IGN (carte + selection des batiments IGN BDTOPO) */}
           <div className="section-block">
             <div className="panel-header">
               <div className="section-heading">
-                <h3>Attachement GEO</h3>
+                <h3>Attachement IGN</h3>
                 <p>
                   {attachmentAddress
-                    ? `Adresse de référence : « ${attachmentAddress} ».`
+                    ? `Carte IGN centrée sur « ${attachmentAddress} ». Sélectionne le ou les bâtiments IGN qui correspondent.`
                     : "Aucune adresse renseignée — complétez la fiche avant de lancer l'attachement."}
                 </p>
               </div>
@@ -755,90 +763,117 @@ export function BuildingDetailPage() {
                   type="button"
                   className="secondary-button"
                   onClick={() => {
-                    setShowGeoAttachment(!showGeoAttachment);
-                    setSelectedDgfipKey(null);
+                    setShowIgnAttachment(!showIgnAttachment);
                     setGeoAttachError(null);
                     setGeoAttachSuccess(null);
                   }}
                 >
-                  {showGeoAttachment ? "Fermer l'attachement GEO" : "Lancer l'attachement GEO"}
+                  {showIgnAttachment ? "Fermer l'attachement IGN" : "Lancer l'attachement IGN"}
                 </button>
               </div>
             </div>
-            {geoAttachError && <p className="error-text">{geoAttachError}</p>}
-            {geoAttachSuccess && <p className="success-text">{geoAttachSuccess}</p>}
-            {showGeoAttachment ? (
-              <div className="buildings-workspace">
-                <aside className="buildings-sidebar">
-                  <div className="section-block buildings-addresses-section">
-                    <div className="section-heading">
-                      <h3>Adresses DGFIP à 200 m</h3>
-                      <p>Adresses DGFIP / MAJIC situées dans un rayon de 200 m autour du point de référence. En sélectionner une recadre la carte IGN sur sa parcelle cadastrale.</p>
-                    </div>
-                    {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
-                    {nearbyDgfipQuery.error instanceof Error ? (
-                      <p className="error-text">{nearbyDgfipQuery.error.message}</p>
-                    ) : null}
-                    {nearbyDgfipQuery.data && nearbyDgfipQuery.data.length === 0 ? (
-                      <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 200 m.</p>
-                    ) : null}
-                    <div className="resource-list buildings-address-list">
-                      {(nearbyDgfipQuery.data ?? []).map((row: NearbyDgfipRow) => {
-                        const isActive = selectedDgfipKey === row.unique_key;
-                        return (
-                          <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
-                            <div className="resource-card-header">
-                              <div>
-                                <h3>{row.address_display}</h3>
-                                <p>{row.nom_commune}</p>
-                              </div>
-                              <span className="resource-badge">{row.distance_m} m</span>
-                            </div>
-                            <dl className="resource-metadata">
-                              <div>
-                                <dt>Indices MAJIC</dt>
-                                <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
-                              </div>
-                            </dl>
-                            <div className="resource-card-actions">
-                              <button
-                                type="button"
-                                className="secondary-button"
-                                onClick={() => {
-                                  setSelectedDgfipKey(isActive ? null : row.unique_key);
-                                  setGeoAttachError(null);
-                                }}
-                              >
-                                {isActive ? "Désélectionner" : "Sélectionner cette adresse DGFIP"}
-                              </button>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
+            {showIgnAttachment ? (
+              <div className="buildings-main-content">
+                {activeLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+                {activeLookupQuery.error instanceof Error ? (
+                  <p className="error-text">{activeLookupQuery.error.message}</p>
+                ) : null}
+                <BuildingSelectionWorkspace
+                  lookupData={(activeLookupQuery.data ?? null) as BuildingNamingLookup | FreeAddressLookup | null}
+                  emptyTitle={attachmentAddress ? "Chargement de la carte IGN..." : "Adresse manquante."}
+                  emptyDescription={
+                    attachmentAddress
+                      ? "La carte IGN se charge à partir de l'adresse de la fiche."
+                      : "Renseignez l'adresse reconstituée ou les champs de voirie dans la fiche bâtiment."
+                  }
+                  createPending={attachGeoMutation.isPending || attachIgnMutation.isPending}
+                  error={geoAttachError}
+                  success={geoAttachSuccess}
+                  createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
+                  createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
+                  onCreate={handleGeoAttach}
+                  nearbyDgfipMarkers={nearbyDgfipQuery.data?.rows}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {/* SECTION 2 - Attachement DGFIP / MAJIC (adresses cadastrales a proximite) */}
+          <div className="section-block">
+            <div className="panel-header">
+              <div className="section-heading">
+                <h3>Attachement DGFIP / MAJIC</h3>
+                <p>Adresses DGFIP / MAJIC dans un rayon de 200 m. Cliquer sur une adresse recadre la carte IGN sur sa parcelle cadastrale (ouvre l'attachement IGN si nécessaire).</p>
+              </div>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => {
+                    setShowDgfipAttachment(!showDgfipAttachment);
+                    setSelectedDgfipKey(null);
+                  }}
+                >
+                  {showDgfipAttachment ? "Fermer l'attachement DGFIP" : "Lancer l'attachement DGFIP"}
+                </button>
+              </div>
+            </div>
+            {showDgfipAttachment ? (
+              <div className="buildings-addresses-section">
+                {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
+                {nearbyDgfipQuery.error instanceof Error ? (
+                  <p className="error-text">Impossible de charger les adresses DGFIP : {nearbyDgfipQuery.error.message}</p>
+                ) : null}
+                {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured === false ? (
+                  <div className="info-banner" style={{ background: "#fff4e6", borderColor: "#e07a5f" }}>
+                    <strong>Source MAJIC non disponible sur ce serveur.</strong>
+                    <p style={{ marginTop: 8 }}>
+                      Le fichier DGFIP / MAJIC n'est pas configuré côté backend ({nearbyDgfipQuery.data.majic_unavailable_reason ?? "fichier introuvable"}). L'attachement DGFIP automatique n'est donc pas disponible pour l'instant. Les données DGFIP du bâtiment (parcelle, adresse cadastrale) restent visibles dans la fiche ci-dessus, importées lors de la création.
+                    </p>
                   </div>
-                </aside>
-                <div className="buildings-main-content">
-                  {activeLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-                  {activeLookupQuery.error instanceof Error ? (
-                    <p className="error-text">{activeLookupQuery.error.message}</p>
-                  ) : null}
-                  <BuildingSelectionWorkspace
-                    lookupData={(activeLookupQuery.data ?? null) as BuildingNamingLookup | FreeAddressLookup | null}
-                    emptyTitle={attachmentAddress ? "Chargement de la carte IGN..." : "Adresse manquante."}
-                    emptyDescription={
-                      attachmentAddress
-                        ? "La carte IGN se charge à partir de l'adresse de la fiche."
-                        : "Renseignez l'adresse reconstituée ou les champs de voirie dans la fiche bâtiment."
-                    }
-                    createPending={attachGeoMutation.isPending || attachIgnMutation.isPending}
-                    error={geoAttachError}
-                    success={geoAttachSuccess}
-                    createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
-                    createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
-                    onCreate={handleGeoAttach}
-                    nearbyDgfipMarkers={nearbyDgfipQuery.data}
-                  />
+                ) : null}
+                {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured && nearbyDgfipQuery.data.rows.length === 0 ? (
+                  <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 200 m.</p>
+                ) : null}
+                <div className="resource-list buildings-address-list">
+                  {(nearbyDgfipQuery.data?.rows ?? []).map((row: NearbyDgfipRow) => {
+                    const isActive = selectedDgfipKey === row.unique_key;
+                    return (
+                      <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                        <div className="resource-card-header">
+                          <div>
+                            <h3>{row.address_display}</h3>
+                            <p>{row.nom_commune}</p>
+                          </div>
+                          <span className="resource-badge">{row.distance_m} m</span>
+                        </div>
+                        <dl className="resource-metadata">
+                          <div>
+                            <dt>Indices MAJIC</dt>
+                            <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
+                          </div>
+                        </dl>
+                        <div className="resource-card-actions">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => {
+                              const nextKey = isActive ? null : row.unique_key;
+                              setSelectedDgfipKey(nextKey);
+                              setGeoAttachError(null);
+                              // Si on selectionne une adresse DGFIP, on ouvre l'attachement IGN
+                              // pour montrer la parcelle sur la carte.
+                              if (nextKey && !showIgnAttachment) {
+                                setShowIgnAttachment(true);
+                              }
+                            }}
+                          >
+                            {isActive ? "Désélectionner" : "Sélectionner cette adresse DGFIP"}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </div>
             ) : null}

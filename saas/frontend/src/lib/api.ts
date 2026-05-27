@@ -249,6 +249,12 @@ export type NearbyDgfipRow = {
   majic_door_values: string[];
 };
 
+export type NearbyDgfipResult = {
+  majic_configured: boolean;
+  majic_unavailable_reason: string | null;
+  rows: NearbyDgfipRow[];
+};
+
 export type BuildingIgnAttachmentPayload = {
   validated_name?: string;
   selected_feature?: GeoJsonFeature | null;
@@ -617,12 +623,12 @@ export async function attachBuildingIgnRequest(
   return parseResponse<Building>(response);
 }
 
-export async function fetchNearbyDgfip(token: string, buildingId: number): Promise<NearbyDgfipRow[]> {
+export async function fetchNearbyDgfip(token: string, buildingId: number): Promise<NearbyDgfipResult> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/nearby-dgfip`, {
     headers: buildHeaders(token),
   });
 
-  return parseResponse<NearbyDgfipRow[]>(response);
+  return parseResponse<NearbyDgfipResult>(response);
 }
 
 export async function fetchBuilding(token: string, buildingId: number): Promise<Building> {

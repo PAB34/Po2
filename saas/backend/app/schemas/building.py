@@ -182,6 +182,12 @@ class NearbyDgfipRow(BaseModel):
     majic_door_values: list[str]
 
 
+class NearbyDgfipResult(BaseModel):
+    majic_configured: bool = True
+    majic_unavailable_reason: str | None = None
+    rows: list[NearbyDgfipRow] = []
+
+
 class BuildingCreate(BaseModel):
     city_id: int | None = None
     site_id: int | None = None

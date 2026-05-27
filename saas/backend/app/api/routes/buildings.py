@@ -20,6 +20,7 @@ from app.schemas.building import (
     LocalCreate,
     LocalRead,
     LocalUpdate,
+    NearbyDgfipResult,
     NearbyDgfipRow,
     SiteCreate,
     SiteRead,
@@ -287,12 +288,12 @@ def post_building_ign_attachment(
     return BuildingRead.model_validate(updated_building)
 
 
-@router.get("/{building_id}/nearby-dgfip", response_model=list[NearbyDgfipRow])
+@router.get("/{building_id}/nearby-dgfip", response_model=NearbyDgfipResult)
 def get_nearby_dgfip(
     building_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[NearbyDgfipRow]:
+) -> NearbyDgfipResult:
     building = get_building_or_404(db, building_id, current_user)
     city_name = _get_current_user_city_name(db, current_user)
     address: str | None = None
@@ -303,14 +304,35 @@ def get_nearby_dgfip(
         clean = [p.strip() for p in parts if p and p.strip()]
         if len(clean) >= 2:
             address = " ".join(clean)
-    rows = find_nearby_dgfip_rows(
-        ref_lat=building.latitude,
-        ref_lon=building.longitude,
-        address=address,
-        nom_voie=building.nom_voie,
-        city_name=city_name,
-    )
-    return [NearbyDgfipRow.model_validate(r) for r in rows]
+    try:
+        rows = find_nearby_dgfip_rows(
+            ref_lat=building.latitude,
+            ref_lon=building.longitude,
+            address=address,
+            nom_voie=building.nom_voie,
+            city_name=city_name,
+        )
+        return NearbyDgfipResult(
+            majic_configured=True,
+            majic_unavailable_reason=None,
+            rows=[NearbyDgfipRow.model_validate(r) for r in rows],
+        )
+    except ValueError as error:
+        # Cas "MAJIC non configure / introuvable" : on degrade en resultat vide
+        # avec un flag explicite plutot que de renvoyer 500. Le frontend affichera
+        # un message clair "Source MAJIC non disponible".
+        message = str(error)
+        majic_unavailable = (
+            "DGFIP/MAJIC n'est pas configuré" in message
+            or "DGFIP/MAJIC introuvable" in message
+        )
+        if majic_unavailable:
+            return NearbyDgfipResult(
+                majic_configured=False,
+                majic_unavailable_reason=message,
+                rows=[],
+            )
+        raise
 
 
 @router.get("/{building_id}/locals", response_model=list[LocalRead])
