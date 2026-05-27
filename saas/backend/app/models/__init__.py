@@ -30,10 +30,12 @@ from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,
     CpeFinanceImportBatch,
+    CpeFinanceControl,
     CpeFinanceInvoice,
     CpeFinanceLine,
     CpeGazReleve,
     CpePrixGaz,
     CpeResultatAnnuel,
+    CpeRevisionIndex,
     CpeSite,
 )

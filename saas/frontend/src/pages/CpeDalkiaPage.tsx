@@ -5,11 +5,13 @@ import {
   CpeAccountingSiteMapping,
   CpeAccountingNatureRule,
   CpeBilanAnnuel,
+  CpeFinanceControl,
   CpeFinanceImportBatch,
   CpeFinanceImportResult,
   CpeFinanceInvoice,
   CpeFinancePreview,
   CpeAccountingImportResult,
+  CpeRevisionIndex,
   CpeSiteBilanItem,
   calculerCpeBilan,
   createCpeAccountingSiteMapping,
@@ -18,15 +20,18 @@ import {
   fetchCpeAccountingSiteMappings,
   fetchCpeDju,
   fetchCpeFinanceBatches,
+  fetchCpeRevisionIndices,
   fetchCpeFinanceInvoices,
   importCpeCsv,
   importCpeAccountingCodification,
   importCpeFinanceExport,
   previewCpeFinanceExport,
+  recalculateCpeFinanceControls,
   deleteCpeAccountingSiteMapping,
   downloadCpeFinanceInvoiceLiaison,
   updateCpeAccountingSiteMapping,
   updateCpeFinanceInvoice,
+  upsertCpeRevisionIndex,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -158,6 +163,12 @@ export default function CpeDalkiaPage() {
     enabled: !!token && view === "finance",
   });
 
+  const revisionIndicesQ = useQuery({
+    queryKey: ["cpe-revision-indices", annee],
+    queryFn: () => fetchCpeRevisionIndices(token!, annee),
+    enabled: !!token && view === "finance",
+  });
+
   const calculerM = useMutation({
     mutationFn: () => calculerCpeBilan(token!, annee),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] }),
@@ -221,6 +232,16 @@ export default function CpeDalkiaPage() {
   const updateFinanceInvoiceM = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateCpeFinanceInvoice(token!, id, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
+  });
+
+  const upsertRevisionIndexM = useMutation({
+    mutationFn: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) =>
+      upsertCpeRevisionIndex(token!, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-revision-indices", annee] }),
+  });
+
+  const recalculateControlsM = useMutation({
+    mutationFn: (invoiceId: number) => recalculateCpeFinanceControls(token!, invoiceId),
   });
 
   const exportLiaisonM = useMutation({
@@ -303,12 +324,15 @@ export default function CpeDalkiaPage() {
 
       {view === "finance" && (
         <CpeFinanceReference
+          annee={annee}
           codificationFileRef={codificationFileRef}
           financeImportFileRef={financeImportFileRef}
           siteMappings={siteMappingsQ.data ?? []}
           natureRules={accountingRulesQ.data ?? []}
           batches={financeBatchesQ.data ?? []}
           invoices={financeInvoicesQ.data ?? []}
+          indices={revisionIndicesQ.data ?? []}
+          lastControls={recalculateControlsM.data ?? null}
           loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
           codificationImportResult={codificationImportM.data ?? null}
@@ -319,12 +343,16 @@ export default function CpeDalkiaPage() {
           saveSiteMappingPending={saveSiteMappingM.isPending}
           deleteSiteMappingPending={deleteSiteMappingM.isPending}
           invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending}
+          indexSavePending={upsertRevisionIndexM.isPending}
+          controlsPending={recalculateControlsM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
           onFinanceImportFile={(file) => financeImportM.mutate(file)}
           onSaveSiteMapping={(payload) => saveSiteMappingM.mutate(payload)}
           onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
           onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
           onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
+          onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
+          onRecalculateControls={(invoiceId) => recalculateControlsM.mutate(invoiceId)}
         />
       )}
 
@@ -856,12 +884,15 @@ const EMPTY_SITE_MAPPING = {
 };
 
 function CpeFinanceReference({
+  annee,
   codificationFileRef,
   financeImportFileRef,
   siteMappings,
   natureRules,
   batches,
   invoices,
+  indices,
+  lastControls,
   loading,
   codificationImportPending,
   codificationImportResult,
@@ -872,19 +903,26 @@ function CpeFinanceReference({
   saveSiteMappingPending,
   deleteSiteMappingPending,
   invoiceActionPending,
+  indexSavePending,
+  controlsPending,
   onCodificationFile,
   onFinanceImportFile,
   onSaveSiteMapping,
   onDeleteSiteMapping,
   onInvoiceStatus,
   onExportLiaison,
+  onSaveIndex,
+  onRecalculateControls,
 }: {
+  annee: number;
   codificationFileRef: React.RefObject<HTMLInputElement>;
   financeImportFileRef: React.RefObject<HTMLInputElement>;
   siteMappings: CpeAccountingSiteMapping[];
   natureRules: CpeAccountingNatureRule[];
   batches: CpeFinanceImportBatch[];
   invoices: CpeFinanceInvoice[];
+  indices: CpeRevisionIndex[];
+  lastControls: CpeFinanceControl[] | null;
   loading: boolean;
   codificationImportPending: boolean;
   codificationImportResult: CpeAccountingImportResult | null;
@@ -895,16 +933,28 @@ function CpeFinanceReference({
   saveSiteMappingPending: boolean;
   deleteSiteMappingPending: boolean;
   invoiceActionPending: boolean;
+  indexSavePending: boolean;
+  controlsPending: boolean;
   onCodificationFile: (file: File) => void;
   onFinanceImportFile: (file: File) => void;
   onSaveSiteMapping: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) => void;
   onDeleteSiteMapping: (id: number) => void;
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
+  onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) => void;
+  onRecalculateControls: (invoiceId: number) => void;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
   const recentInvoices = invoices.slice(0, 8);
+  const controlsSummary = lastControls
+    ? {
+        ok: lastControls.filter((item) => item.status === "ok").length,
+        error: lastControls.filter((item) => item.status === "error").length,
+        blocked: lastControls.filter((item) => item.status === "blocked").length,
+      }
+    : null;
 
   const startEdit = (mapping: CpeAccountingSiteMapping) => {
     setEditingId(mapping.id);
@@ -957,6 +1007,7 @@ function CpeFinanceReference({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
           <KpiCard label="Sites codifies" value={String(siteMappings.length)} sub="Lignes du referentiel finance" color="#2563eb" />
           <KpiCard label="Regles nature" value={String(natureRules.length)} sub="Poste facture vers nature" color="#0f766e" />
+          <KpiCard label="Indices revision" value={String(indices.length)} sub={`Exercice ${annee}, ICHT-IME / BT40`} color="#b45309" />
           <KpiCard label="Lots importes" value={String(batches.length)} sub={`${invoices.length} facture(s) archivees`} color="#9333ea" />
           <KpiCard
             label="Dernier lot"
@@ -1024,6 +1075,73 @@ function CpeFinanceReference({
         {financeImportResult?.warnings.map((warning) => (
           <p key={warning} style={{ color: "#9a3412", fontSize: 13, margin: "8px 0 0" }}>{warning}</p>
         ))}
+      </section>
+
+      <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Indices de revision P3 / P3.4</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Formule controlee : P3 = P30 x (0,15 + 0,30 ICHT-IME/141,4 + 0,55 BT40/128,4).
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <select
+              value={indexDraft.index_code}
+              onChange={(event) => setIndexDraft({ ...indexDraft, index_code: event.target.value })}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
+            >
+              <option value="ICHT_IME">ICHT-IME</option>
+              <option value="BT40">BT40</option>
+              <option value="FSD2">FSD2</option>
+            </select>
+            <select
+              value={indexDraft.quarter}
+              onChange={(event) => setIndexDraft({ ...indexDraft, quarter: Number(event.target.value) })}
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
+            >
+              {[1, 2, 3, 4].map((quarter) => (
+                <option key={quarter} value={quarter}>T{quarter}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              step="0.01"
+              value={indexDraft.value}
+              onChange={(event) => setIndexDraft({ ...indexDraft, value: event.target.value })}
+              placeholder="Valeur"
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", width: 110 }}
+            />
+            <button
+              type="button"
+              className="primary-button"
+              disabled={indexSavePending || !indexDraft.value}
+              onClick={() => {
+                onSaveIndex({
+                  index_code: indexDraft.index_code,
+                  year: annee,
+                  quarter: indexDraft.quarter,
+                  value: Number(indexDraft.value),
+                  source: indexDraft.source,
+                });
+                setIndexDraft({ ...indexDraft, value: "" });
+              }}
+            >
+              Enregistrer indice
+            </button>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {indices.length === 0 ? (
+            <span style={{ color: "#9ca3af", fontSize: 13 }}>Aucun indice saisi pour {annee}.</span>
+          ) : (
+            indices.map((item) => (
+              <span key={item.id} className="badge badge-blue">
+                {item.index_code} T{item.quarter} : {fmt(item.value, 2)}
+              </span>
+            ))
+          )}
+        </div>
       </section>
 
       <section style={{ display: "grid", gridTemplateColumns: "minmax(320px, 0.95fr) minmax(420px, 1.4fr)", gap: 16, marginBottom: 24 }}>
@@ -1115,8 +1233,8 @@ function CpeFinanceReference({
                 <th style={thStyle}>Contrat</th>
                 <th style={thStyle}>Periode</th>
                 <th style={thStyle}>HT</th>
-                <th style={thStyle}>Statut</th>
-                <th style={thStyle}>Actions</th>
+                  <th style={thStyle}>Statut</th>
+                  <th style={thStyle}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1149,6 +1267,16 @@ function CpeFinanceReference({
                     >
                       Export XLSX
                     </button>
+                    {" "}
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ fontSize: 12, padding: "4px 8px" }}
+                      disabled={controlsPending}
+                      onClick={() => onRecalculateControls(invoice.id)}
+                    >
+                      Controle P3
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -1161,6 +1289,18 @@ function CpeFinanceReference({
               )}
             </tbody>
           </table>
+          {controlsSummary && (
+            <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
+              Dernier controle P3 : <strong>{controlsSummary.ok}</strong> OK,{" "}
+              <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
+              <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
+              {lastControls?.slice(0, 3).map((control) => (
+                <p key={control.id} style={{ margin: "6px 0 0", color: control.status === "error" ? "#dc2626" : "#6b7280" }}>
+                  {control.message}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </>

@@ -2854,6 +2854,8 @@ export type CpeFinanceLine = {
   amount_ht: number;
   consumption: number | null;
   unit: string | null;
+  base_price: number | null;
+  revised_price: number | null;
   detail: string | null;
   site_code_detected: string | null;
   accounting_site_id: number | null;
@@ -2862,6 +2864,43 @@ export type CpeFinanceLine = {
   accounting_label: string | null;
   period_start: string | null;
   period_end: string | null;
+};
+
+export type CpeRevisionIndex = {
+  id: number;
+  city_id: number | null;
+  index_code: string;
+  year: number;
+  quarter: number;
+  value: number;
+  source: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CpeFinanceControl = {
+  id: number;
+  city_id: number | null;
+  batch_id: number;
+  invoice_id: number;
+  line_id: number;
+  control_type: string;
+  status: string;
+  severity: string;
+  message: string;
+  formula: string | null;
+  index_year: number | null;
+  index_quarter: number | null;
+  icht_ime_value: number | null;
+  bt40_value: number | null;
+  expected_factor: number | null;
+  base_price: number | null;
+  expected_revised_price: number | null;
+  actual_revised_price: number | null;
+  delta_abs: number | null;
+  delta_pct: number | null;
+  computed_at: string;
 };
 
 export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
@@ -3026,6 +3065,37 @@ export async function fetchCpeFinanceInvoices(token: string, batchId?: number): 
 export async function fetchCpeFinanceInvoiceLines(token: string, invoiceId: number): Promise<CpeFinanceLine[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/lines`, { headers: buildHeaders(token) });
   return parseResponse<CpeFinanceLine[]>(response);
+}
+
+export async function fetchCpeRevisionIndices(token: string, year?: number): Promise<CpeRevisionIndex[]> {
+  const url = year ? `${apiBaseUrl}/cpe/revision-indices?year=${year}` : `${apiBaseUrl}/cpe/revision-indices`;
+  const response = await fetch(url, { headers: buildHeaders(token) });
+  return parseResponse<CpeRevisionIndex[]>(response);
+}
+
+export async function upsertCpeRevisionIndex(
+  token: string,
+  payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null },
+): Promise<CpeRevisionIndex> {
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-indices`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeRevisionIndex>(response);
+}
+
+export async function fetchCpeFinanceControls(token: string, invoiceId: number): Promise<CpeFinanceControl[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/controls`, { headers: buildHeaders(token) });
+  return parseResponse<CpeFinanceControl[]>(response);
+}
+
+export async function recalculateCpeFinanceControls(token: string, invoiceId: number): Promise<CpeFinanceControl[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/controls/recalculate`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeFinanceControl[]>(response);
 }
 
 export async function updateCpeFinanceInvoice(

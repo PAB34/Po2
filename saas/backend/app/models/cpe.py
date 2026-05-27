@@ -322,6 +322,8 @@ class CpeFinanceLine(Base):
     amount_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     consumption: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    base_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    revised_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     site_code_detected: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     accounting_site_id: Mapped[int | None] = mapped_column(
@@ -335,3 +337,53 @@ class CpeFinanceLine(Base):
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CpeRevisionIndex(Base):
+    """Valeur trimestrielle d'un indice contractuel de révision CPE."""
+
+    __tablename__ = "cpe_revision_indices"
+    __table_args__ = (UniqueConstraint("city_id", "index_code", "year", "quarter", name="uq_cpe_revision_index_period"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    index_code: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    quarter: Mapped[int] = mapped_column(Integer, nullable=False)
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CpeFinanceControl(Base):
+    """Résultat de contrôle contractuel d'une ligne de facture DALKIA."""
+
+    __tablename__ = "cpe_finance_controls"
+    __table_args__ = (UniqueConstraint("line_id", "control_type", name="uq_cpe_finance_control_line_type"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_import_batches.id"), nullable=False, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_invoices.id"), nullable=False, index=True)
+    line_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_lines.id"), nullable=False, index=True)
+
+    control_type: Mapped[str] = mapped_column(String(40), nullable=False, default="revision_p3")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="blocked")
+    severity: Mapped[str] = mapped_column(String(30), nullable=False, default="warning")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    formula: Mapped[str | None] = mapped_column(Text, nullable=True)
+    index_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    index_quarter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    icht_ime_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bt40_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_factor: Mapped[float | None] = mapped_column(Float, nullable=True)
+    base_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_revised_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_revised_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_abs: Mapped[float | None] = mapped_column(Float, nullable=True)
+    delta_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

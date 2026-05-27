@@ -18,9 +18,11 @@ from sqlalchemy.orm import Session
 from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,
+    CpeFinanceControl,
     CpeFinanceImportBatch,
     CpeFinanceInvoice,
     CpeFinanceLine,
+    CpeRevisionIndex,
 )
 from app.schemas.cpe import (
     CpeAccountingImportResult,
@@ -29,9 +31,14 @@ from app.schemas.cpe import (
     CpeAccountingSiteMappingCreate,
     CpeAccountingSiteMappingUpdate,
     CpeFinanceImportResult,
+    CpeRevisionIndexCreate,
 )
 
 _SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
+ICHT_IME_BASE = 141.4
+FSD2_BASE = 169.8
+BT40_BASE = 128.4
+P3_REVISION_FORMULA = "P3 = P30 x (0,15 + 0,30 x ICHT-IME/ICHT-IME0 + 0,55 x BT40/BT400)"
 
 
 def _norm_header(value: Any) -> str:
@@ -379,6 +386,8 @@ def import_finance_workbook(
                 amount_ht=_float(source_row.get("montant_ht")) or 0.0,
                 consumption=_float(source_row.get("consommation")),
                 unit=_clean(source_row.get("unite")),
+                base_price=_float(source_row.get("prix_de_base")),
+                revised_price=_float(source_row.get("prix_ou_forfait_revise")),
                 detail=detail,
                 site_code_detected=detected_site,
                 accounting_site_id=site_mapping.id if site_mapping else None,
@@ -411,6 +420,172 @@ def import_finance_workbook(
         matched_site_mappings=matched_sites,
         warnings=warnings,
     )
+
+
+def list_revision_indices(
+    db: Session,
+    city_id: int | None = None,
+    year: int | None = None,
+) -> list[CpeRevisionIndex]:
+    query = select(CpeRevisionIndex)
+    if city_id is not None:
+        query = query.where(CpeRevisionIndex.city_id == city_id)
+    if year is not None:
+        query = query.where(CpeRevisionIndex.year == year)
+    query = query.order_by(CpeRevisionIndex.year.desc(), CpeRevisionIndex.quarter.desc(), CpeRevisionIndex.index_code)
+    return list(db.scalars(query).all())
+
+
+def upsert_revision_index(db: Session, payload: CpeRevisionIndexCreate) -> CpeRevisionIndex:
+    index_code = payload.index_code.strip().upper().replace("-", "_")
+    existing = db.scalars(
+        select(CpeRevisionIndex).where(
+            CpeRevisionIndex.city_id == payload.city_id,
+            CpeRevisionIndex.index_code == index_code,
+            CpeRevisionIndex.year == payload.year,
+            CpeRevisionIndex.quarter == payload.quarter,
+        )
+    ).first()
+    if existing:
+        existing.value = payload.value
+        existing.source = payload.source
+        existing.notes = payload.notes
+        db.commit()
+        db.refresh(existing)
+        return existing
+    item = CpeRevisionIndex(**payload.model_dump(exclude={"index_code"}), index_code=index_code)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def _line_index_period(line: CpeFinanceLine) -> tuple[int | None, int | None]:
+    period_date = line.period_end or line.period_start
+    if period_date is None:
+        return None, None
+    return period_date.year, ((period_date.month - 1) // 3) + 1
+
+
+def _index_value(indices: dict[tuple[str, int, int], float], code: str, year: int, quarter: int) -> float | None:
+    return indices.get((code, year, quarter))
+
+
+def _p3_factor(icht_ime: float, bt40: float) -> float:
+    return 0.15 + 0.30 * (icht_ime / ICHT_IME_BASE) + 0.55 * (bt40 / BT40_BASE)
+
+
+def _line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
+    if not line.raw_json:
+        return None
+    try:
+        raw = json.loads(line.raw_json)
+    except json.JSONDecodeError:
+        return None
+    return _float(raw.get(key))
+
+
+def _control_revision_p3(
+    line: CpeFinanceLine,
+    indices: dict[tuple[str, int, int], float],
+) -> CpeFinanceControl:
+    year, quarter = _line_index_period(line)
+    base_price = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
+    actual = line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise")
+    message = ""
+    status = "blocked"
+    severity = "warning"
+    icht = bt40 = factor = expected = delta = delta_pct = None
+
+    if year is None or quarter is None:
+        message = "Période de ligne absente : impossible de sélectionner le trimestre d'indices."
+    elif base_price is None or actual is None:
+        message = "Prix de base ou prix révisé absent dans l'export DALKIA."
+    else:
+        icht = _index_value(indices, "ICHT_IME", year, quarter)
+        bt40 = _index_value(indices, "BT40", year, quarter)
+        if icht is None or bt40 is None:
+            missing = []
+            if icht is None:
+                missing.append("ICHT-IME")
+            if bt40 is None:
+                missing.append("BT40")
+            message = f"Indice(s) manquant(s) pour {year} T{quarter} : {', '.join(missing)}."
+        else:
+            factor = _p3_factor(icht, bt40)
+            expected = round(base_price * factor, 4)
+            delta = round(actual - expected, 4)
+            delta_pct = round(delta / expected, 6) if expected else None
+            if abs(delta) <= 0.05 or (delta_pct is not None and abs(delta_pct) <= 0.0015):
+                status = "ok"
+                severity = "info"
+                message = f"Prix révisé cohérent avec la formule P3/P3.4 pour {year} T{quarter}."
+            else:
+                status = "error"
+                severity = "error"
+                message = (
+                    f"Écart de révision P3/P3.4 sur {year} T{quarter} : attendu {expected:.4f}, "
+                    f"facturé {actual:.4f}, écart {delta:.4f}."
+                )
+
+    return CpeFinanceControl(
+        city_id=line.city_id,
+        batch_id=line.batch_id,
+        invoice_id=line.invoice_id,
+        line_id=line.id,
+        control_type="revision_p3",
+        status=status,
+        severity=severity,
+        message=message,
+        formula=P3_REVISION_FORMULA,
+        index_year=year,
+        index_quarter=quarter,
+        icht_ime_value=icht,
+        bt40_value=bt40,
+        expected_factor=factor,
+        base_price=base_price,
+        expected_revised_price=expected,
+        actual_revised_price=actual,
+        delta_abs=delta,
+        delta_pct=delta_pct,
+    )
+
+
+def recompute_finance_invoice_controls(
+    db: Session,
+    invoice: CpeFinanceInvoice,
+) -> list[CpeFinanceControl]:
+    lines = list_finance_lines(db, invoice.id, invoice.city_id)
+    p3_lines = [line for line in lines if (line.market or "").upper() == "P3"]
+    db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id))
+    if not p3_lines:
+        db.commit()
+        return []
+
+    years = {year for line in p3_lines for year, _quarter in [_line_index_period(line)] if year is not None}
+    index_rows = []
+    if years:
+        index_rows = db.scalars(
+            select(CpeRevisionIndex).where(
+                CpeRevisionIndex.city_id == invoice.city_id,
+                CpeRevisionIndex.year.in_(years),
+            )
+        ).all()
+    indices = {(item.index_code, item.year, item.quarter): item.value for item in index_rows}
+    controls = [_control_revision_p3(line, indices) for line in p3_lines]
+    db.add_all(controls)
+    db.commit()
+    for control in controls:
+        db.refresh(control)
+    return controls
+
+
+def list_finance_controls(db: Session, invoice_id: int, city_id: int | None = None) -> list[CpeFinanceControl]:
+    query = select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice_id)
+    if city_id is not None:
+        query = query.where(CpeFinanceControl.city_id == city_id)
+    query = query.order_by(CpeFinanceControl.status.desc(), CpeFinanceControl.id)
+    return list(db.scalars(query).all())
 
 
 def list_finance_batches(db: Session, city_id: int | None = None) -> list[CpeFinanceImportBatch]:
@@ -469,6 +644,12 @@ def update_finance_invoice(
 def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
     """Construit une fiche de liaison finances XLSX pour une facture."""
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
+    controls_by_line = {
+        control.line_id: control
+        for control in db.scalars(
+            select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id)
+        ).all()
+    }
     sites = {
         mapping.id: mapping
         for mapping in db.scalars(
@@ -511,6 +692,10 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
         "Opération",
         "Nature",
         "Libellé nature",
+        "Prix base",
+        "Prix révisé",
+        "Contrôle",
+        "Message contrôle",
         "Montant HT",
         "Conso",
         "Unité",
@@ -537,6 +722,10 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
             site.operation_code if site else None,
             line.accounting_nature,
             line.accounting_label,
+            line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base"),
+            line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise"),
+            controls_by_line.get(line.id).status if controls_by_line.get(line.id) else None,
+            controls_by_line.get(line.id).message if controls_by_line.get(line.id) else None,
             line.amount_ht,
             line.consumption,
             line.unit,
@@ -544,13 +733,15 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
         ]
         for col, value in enumerate(values, start=1):
             ws.cell(row=row_index, column=col, value=value)
-        ws.cell(row=row_index, column=13).number_format = '#,##0.00 "€"'
+        ws.cell(row=row_index, column=13).number_format = '#,##0.0000'
+        ws.cell(row=row_index, column=14).number_format = '#,##0.0000'
+        ws.cell(row=row_index, column=17).number_format = '#,##0.00 "€"'
 
-    widths = [10, 12, 20, 18, 18, 32, 14, 14, 16, 16, 12, 24, 14, 12, 10, 42]
+    widths = [10, 12, 20, 18, 18, 32, 14, 14, 16, 16, 12, 24, 12, 12, 12, 48, 14, 12, 10, 42]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
     ws.freeze_panes = "A12"
-    ws.auto_filter.ref = f"A{start_row}:P{max(start_row + 1, start_row + len(lines))}"
+    ws.auto_filter.ref = f"A{start_row}:T{max(start_row + 1, start_row + len(lines))}"
 
     output = io.BytesIO()
     wb.save(output)

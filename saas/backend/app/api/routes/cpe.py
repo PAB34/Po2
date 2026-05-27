@@ -18,6 +18,7 @@ from app.schemas.cpe import (
     CpeBilanAnnuel,
     CpeDjuAnnuel,
     CpeFinanceImportBatchOut,
+    CpeFinanceControlOut,
     CpeFinanceImportResult,
     CpeFinanceInvoiceOut,
     CpeFinanceInvoiceUpdate,
@@ -30,6 +31,8 @@ from app.schemas.cpe import (
     CpePrixGazCreate,
     CpePrixGazOut,
     CpeResultatAnnuelOut,
+    CpeRevisionIndexCreate,
+    CpeRevisionIndexOut,
     CpeSiteCreate,
     CpeSiteOut,
     CpeSiteUpdate,
@@ -310,6 +313,54 @@ def list_finance_invoice_lines(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
     lines = accounting_svc.list_finance_lines(db, invoice.id, current_user.city_id)
     return [CpeFinanceLineOut.model_validate(item) for item in lines]
+
+
+@router.get("/revision-indices", response_model=list[CpeRevisionIndexOut])
+def list_revision_indices(
+    year: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeRevisionIndexOut]:
+    indices = accounting_svc.list_revision_indices(db, current_user.city_id, year=year)
+    return [CpeRevisionIndexOut.model_validate(item) for item in indices]
+
+
+@router.post("/revision-indices", response_model=CpeRevisionIndexOut)
+def upsert_revision_index(
+    payload: CpeRevisionIndexCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeRevisionIndexOut:
+    if payload.city_id is None:
+        payload = payload.model_copy(update={"city_id": current_user.city_id})
+    index = accounting_svc.upsert_revision_index(db, payload)
+    return CpeRevisionIndexOut.model_validate(index)
+
+
+@router.get("/finances/invoices/{invoice_id}/controls", response_model=list[CpeFinanceControlOut])
+def list_finance_invoice_controls(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeFinanceControlOut]:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    controls = accounting_svc.list_finance_controls(db, invoice.id, current_user.city_id)
+    return [CpeFinanceControlOut.model_validate(item) for item in controls]
+
+
+@router.post("/finances/invoices/{invoice_id}/controls/recalculate", response_model=list[CpeFinanceControlOut])
+def recalculate_finance_invoice_controls(
+    invoice_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeFinanceControlOut]:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    controls = accounting_svc.recompute_finance_invoice_controls(db, invoice)
+    return [CpeFinanceControlOut.model_validate(item) for item in controls]
 
 
 @router.patch("/finances/invoices/{invoice_id}", response_model=CpeFinanceInvoiceOut)

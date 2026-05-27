@@ -347,6 +347,27 @@ class CpeFinanceInvoiceUpdate(BaseModel):
     notes: str | None = None
 
 
+class CpeRevisionIndexBase(BaseModel):
+    index_code: str
+    year: int
+    quarter: int
+    value: float
+    source: str | None = None
+    notes: str | None = None
+
+
+class CpeRevisionIndexCreate(CpeRevisionIndexBase):
+    city_id: int | None = None
+
+
+class CpeRevisionIndexOut(CpeRevisionIndexBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class CpeFinanceLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -363,6 +384,8 @@ class CpeFinanceLineOut(BaseModel):
     amount_ht: float
     consumption: float | None
     unit: str | None
+    base_price: float | None
+    revised_price: float | None
     detail: str | None
     site_code_detected: str | None
     accounting_site_id: int | None
@@ -371,6 +394,31 @@ class CpeFinanceLineOut(BaseModel):
     accounting_label: str | None
     period_start: date | None
     period_end: date | None
+
+
+class CpeFinanceControlOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    batch_id: int
+    invoice_id: int
+    line_id: int
+    control_type: str
+    status: str
+    severity: str
+    message: str
+    formula: str | None
+    index_year: int | None
+    index_quarter: int | None
+    icht_ime_value: float | None
+    bt40_value: float | None
+    expected_factor: float | None
+    base_price: float | None
+    expected_revised_price: float | None
+    actual_revised_price: float | None
+    delta_abs: float | None
+    delta_pct: float | None
+    computed_at: datetime
 
 
 class CpeFinanceImportResult(BaseModel):

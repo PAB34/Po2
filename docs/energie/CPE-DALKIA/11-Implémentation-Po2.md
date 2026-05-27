@@ -211,6 +211,10 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 | POST | `/api/cpe/finances/import` | Import et archivage XLSX export finances DALKIA |
 | GET | `/api/cpe/finances/batches` | Lots d'import finances archivés |
 | GET | `/api/cpe/finances/invoices` | Factures DALKIA reconstruites depuis les lots |
+| GET/POST | `/api/cpe/revision-indices` | Saisie et lecture des indices ICHT-IME / BT40 / FSD2 par trimestre |
+| GET | `/api/cpe/finances/invoices/{id}/controls` | Résultats de contrôle contractuel d'une facture |
+| POST | `/api/cpe/finances/invoices/{id}/controls/recalculate` | Recalcul du contrôle P3/P3.4 |
+| GET | `/api/cpe/finances/invoices/{id}/liaison.xlsx` | Export XLSX fiche liaison finance |
 | GET | `/api/cpe/dju/{annee}` | DJU réels de l'exercice |
 | GET | `/api/cpe/prix-gaz/{annee}` | Prix unitaire gaz d'un exercice |
 | POST | `/api/cpe/prix-gaz` | Saisir / modifier le Pu |
@@ -283,7 +287,28 @@ Le premier socle persiste :
 - `cpe_finance_invoices` : factures reconstruites
 - `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
 
-À ce stade, le contrôle contractuel P1/P2/P3 et l'export de fiche liaison XLSX restent à brancher sur ce registre.
+À ce stade, le contrôle P3/P3.4 et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, P2 et les livrables/preuves restent à développer.
+
+### Contrôle P3 / P3.4
+
+Le premier contrôle contractuel automatisé porte sur les lignes importées avec `MARCHÉ = P3`.
+
+Pré-requis :
+- l'export DALKIA doit contenir `PRIX DE BASE` et `PRIX OU FORFAIT RÉVISÉ`
+- les indices trimestriels `ICHT_IME` et `BT40` doivent être saisis dans `/cpe` → Référentiel finance
+
+Formule utilisée :
+
+```text
+P3 = P30 × (0,15 + 0,30 × ICHT-IME/141,4 + 0,55 × BT40/128,4)
+```
+
+Le contrôle compare le prix révisé DALKIA au prix attendu et classe chaque ligne :
+- `ok` : prix cohérent
+- `error` : écart de révision
+- `blocked` : indice ou prix source manquant
+
+Les résultats sont stockés dans `cpe_finance_controls` et repris dans l'export XLSX de fiche liaison.
 
 ---
 

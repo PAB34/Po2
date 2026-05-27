@@ -82,6 +82,10 @@ P3.4 = P30 × (0,70 × ICHT-IME/ICHT-IME0 + 0,10 × [indice] + 0,20 × [indice])
 ```
 > ⚠️ La formule P3.4 du CCAP a été remplacée lors de la mise au point (OUV11, article CCAP 7.4.2). Se référer au document OUV11 signé pour la formule définitive.
 
+> Note Po2 2026-05-27 : la formule P3.4 lue dans la mise au point OUV11 est maintenant confirmée et remplace la formule incertaine ci-dessus :
+> `P3.4 = P30 × (0,15 + 0,30 × ICHT-IME/ICHT-IME0 + 0,55 × BT40/BT400)`.
+> Le contrôle automatique Po2 des lignes P3/P3.4 utilise ICHT-IME0 = 141,4 et BT400 = 128,4.
+
 ### Calendrier facturation P3
 | Échéance | Montant |
 |----------|---------|
