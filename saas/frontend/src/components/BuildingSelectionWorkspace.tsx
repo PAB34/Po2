@@ -19,7 +19,11 @@ type BuildingSelectionWorkspaceProps = {
   success: string | null;
   createLabelWithSelection: string;
   createLabelWithoutSelection: string;
-  onCreate: (payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) => Promise<void> | void;
+  onCreate: (payload: {
+    validatedName?: string;
+    selectedFeature?: GeoJsonFeature | null;
+    selectedFeatures?: GeoJsonFeature[];
+  }) => Promise<void> | void;
   nearbyDgfipMarkers?: NearbyDgfipRow[];
 };
 
@@ -167,6 +171,28 @@ export function BuildingSelectionWorkspace({
     setLocalError(null);
   }
 
+  // Recupere TOUTES les features selectionnees (multi-selection sur la carte).
+  // Le 1er feature reste le 'principal' (selectedFeature) pour les champs ign_id/name/etc.
+  // legacy ; selectedFeatures contient le tableau complet stocke dans ign_features_json.
+  const selectedFeatures = useMemo(() => {
+    if (selectedFeatureIds.length === 0) {
+      return [] as GeoJsonFeature[];
+    }
+    const byId = new Map<string, GeoJsonFeature>();
+    for (const feature of candidateFeatures) {
+      const properties = feature.properties ?? {};
+      const featureId = String(
+        (properties as Record<string, unknown>).ign_id ?? (properties as Record<string, unknown>).id ?? "",
+      );
+      if (featureId) {
+        byId.set(featureId, feature);
+      }
+    }
+    return selectedFeatureIds
+      .map((id) => byId.get(id))
+      .filter((feature): feature is GeoJsonFeature => Boolean(feature));
+  }, [selectedFeatureIds, candidateFeatures]);
+
   async function handleCreate() {
     if (!lookupData) {
       return;
@@ -179,6 +205,7 @@ export function BuildingSelectionWorkspace({
     await onCreate({
       validatedName: validatedName.trim() || undefined,
       selectedFeature,
+      selectedFeatures: selectedFeatures.length > 0 ? selectedFeatures : undefined,
     });
   }
 

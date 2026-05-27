@@ -1329,16 +1329,27 @@ def lookup_building_candidates(unique_key: str, city_name: str | None = None) ->
 
 def build_building_payload(
     unique_key: str,
-    selected_feature: dict[str, Any] | None,
-    validated_name: str | None,
+    selected_feature: dict[str, Any] | None = None,
+    validated_name: str | None = None,
     city_name: str | None = None,
+    selected_features: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     data = get_building_naming_rows(city_name=city_name)
     row = next((item for item in data["rows"] if item["unique_key"] == str(unique_key)), None)
     if row is None:
         raise ValueError(f"Clé inconnue : {unique_key}")
     resolved = _resolve_point_and_parcels(row["address_display"], row["references"])
-    feature_properties = (selected_feature or {}).get("properties", {}) or {}
+
+    # Resolution multi-features : selected_features (liste) prevaut sur selected_feature.
+    # Le 1er feature de la liste est le 'principal' (alimente les champs ign_* legacy).
+    features_list: list[dict[str, Any]] = []
+    if selected_features:
+        features_list = [f for f in selected_features if isinstance(f, dict)]
+    elif selected_feature:
+        features_list = [selected_feature]
+    primary_feature = features_list[0] if features_list else None
+
+    feature_properties = (primary_feature or {}).get("properties", {}) or {}
     attributes = feature_properties.get("attributes", {}) or {}
     resolved_candidates = _dedupe_candidate_dicts(feature_properties.get("resolved_name_candidates") or [])
     proposed_name = str(
@@ -1367,20 +1378,21 @@ def build_building_payload(
         "latitude": resolved["lat"],
         "longitude": resolved["lon"],
         "source_creation": "DGFIP_MAJIC",
-        "statut_geocodage": "IGN_VALIDE" if selected_feature else "A_VERIFIER",
+        "statut_geocodage": "IGN_VALIDE" if primary_feature else "A_VERIFIER",
         "majic_building_values_json": json.dumps(row["majic_building_values"], ensure_ascii=False),
         "majic_entry_values_json": json.dumps(row["majic_entry_values"], ensure_ascii=False),
         "majic_level_values_json": json.dumps(row["majic_level_values"], ensure_ascii=False),
         "majic_door_values_json": json.dumps(row["majic_door_values"], ensure_ascii=False),
-        "ign_layer": feature_properties.get("ign_layer") if selected_feature else None,
-        "ign_typename": feature_properties.get("ign_typename") if selected_feature else None,
-        "ign_id": feature_properties.get("ign_id") if selected_feature else None,
-        "ign_name": feature_properties.get("name") if selected_feature else None,
-        "ign_label": feature_properties.get("label") if selected_feature else None,
-        "ign_name_proposed": feature_properties.get("resolved_name") if selected_feature else None,
-        "ign_name_source": feature_properties.get("resolved_name_source") if selected_feature else None,
-        "ign_name_distance_m": feature_properties.get("resolved_name_distance_m") if selected_feature else None,
+        "ign_layer": feature_properties.get("ign_layer") if primary_feature else None,
+        "ign_typename": feature_properties.get("ign_typename") if primary_feature else None,
+        "ign_id": feature_properties.get("ign_id") if primary_feature else None,
+        "ign_name": feature_properties.get("name") if primary_feature else None,
+        "ign_label": feature_properties.get("label") if primary_feature else None,
+        "ign_name_proposed": feature_properties.get("resolved_name") if primary_feature else None,
+        "ign_name_source": feature_properties.get("resolved_name_source") if primary_feature else None,
+        "ign_name_distance_m": feature_properties.get("resolved_name_distance_m") if primary_feature else None,
         "ign_attributes_json": json.dumps(attributes, ensure_ascii=False) if attributes else None,
+        "ign_features_json": json.dumps(features_list, ensure_ascii=False) if features_list else None,
         "ign_toponym_candidates_json": json.dumps(resolved_candidates, ensure_ascii=False) if resolved_candidates else None,
         "parcel_labels_json": json.dumps(resolved["parcel_labels"], ensure_ascii=False) if resolved["parcel_labels"] else None,
     }

@@ -68,6 +68,38 @@ function parseJsonArray(value: string | null): string[] {
   }
 }
 
+type IgnFeatureSummary = {
+  ign_id: string;
+  ign_layer: string;
+  name: string;
+  label: string;
+  resolved_name: string;
+};
+
+function parseIgnFeatures(value: string | null): IgnFeatureSummary[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((feature) => {
+        if (!feature || typeof feature !== "object") return null;
+        const properties = (feature as Record<string, unknown>).properties ?? {};
+        const props = properties as Record<string, unknown>;
+        return {
+          ign_id: String(props.ign_id ?? ""),
+          ign_layer: String(props.ign_layer ?? ""),
+          name: String(props.name ?? ""),
+          label: String(props.label ?? ""),
+          resolved_name: String(props.resolved_name ?? props.resolved_label ?? ""),
+        };
+      })
+      .filter((entry): entry is IgnFeatureSummary => entry !== null && Boolean(entry.ign_id));
+  } catch {
+    return [];
+  }
+}
+
 function parseIgnAttributes(value: string | null): [string, string][] {
   if (!value) return [];
   try {
@@ -349,7 +381,11 @@ export function BuildingDetailPage() {
     setSuccess(null);
   }
 
-  async function handleGeoAttach(payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) {
+  async function handleGeoAttach(payload: {
+    validatedName?: string;
+    selectedFeature?: GeoJsonFeature | null;
+    selectedFeatures?: GeoJsonFeature[];
+  }) {
     setGeoAttachError(null);
     setGeoAttachSuccess(null);
     if (selectedDgfipKey) {
@@ -357,12 +393,14 @@ export function BuildingDetailPage() {
         unique_key: selectedDgfipKey,
         validated_name: payload.validatedName,
         selected_feature: payload.selectedFeature,
+        selected_features: payload.selectedFeatures,
       });
     } else {
       const lookupData = activeLookupQuery.data;
       await attachIgnMutation.mutateAsync({
         validated_name: payload.validatedName,
         selected_feature: payload.selectedFeature,
+        selected_features: payload.selectedFeatures,
         lat: lookupData?.lat ?? null,
         lon: lookupData?.lon ?? null,
       });
@@ -654,11 +692,37 @@ export function BuildingDetailPage() {
                 <strong>{parseJsonArray(buildingQuery.data.parcel_labels_json).join(", ") || "Aucune"}</strong>
               </div>
             </div>
+            {parseIgnFeatures(buildingQuery.data.ign_features_json).length > 0 && (
+              <div className="section-block">
+                <div className="section-heading">
+                  <h3>Bâtiments IGN rattachés ({parseIgnFeatures(buildingQuery.data.ign_features_json).length})</h3>
+                  <p>Liste complète des polygones IGN BDTOPO rattachés. Le premier est le « principal » (alimente les champs ci-dessus).</p>
+                </div>
+                <div className="resource-list">
+                  {parseIgnFeatures(buildingQuery.data.ign_features_json).map((feature, index) => (
+                    <article key={feature.ign_id || index} className="resource-card">
+                      <div className="resource-card-header">
+                        <div>
+                          <h3>
+                            {index === 0 ? "★ " : ""}
+                            {feature.resolved_name || feature.label || feature.ign_id}
+                          </h3>
+                          <p>
+                            {feature.ign_layer} — id {feature.ign_id}
+                            {index === 0 ? " (principal)" : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            )}
             {parseIgnAttributes(buildingQuery.data.ign_attributes_json).length > 0 && (
               <div className="section-block">
                 <div className="section-heading">
-                  <h3>Attributs topographiques IGN</h3>
-                  <p>Attributs bruts de l’objet IGN sélectionné (BD TOPO).</p>
+                  <h3>Attributs topographiques IGN (bâtiment principal)</h3>
+                  <p>Attributs bruts de l’objet IGN principal (BD TOPO).</p>
                 </div>
                 <div className="attribute-table">
                   {parseIgnAttributes(buildingQuery.data.ign_attributes_json).map(([key, value]) => (

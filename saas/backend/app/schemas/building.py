@@ -159,12 +159,17 @@ class BuildingNamingSelectionPayload(BaseModel):
     unique_key: str
     validated_name: str | None = Field(default=None, max_length=255)
     city_id: int | None = None
+    # selected_feature : retro-compat (1 seul batiment IGN principal).
+    # selected_features : nouvelle API multi (le 1er reste 'principal',
+    # tous sont stockes en JSON dans ign_features_json).
     selected_feature: dict[str, object] | None = None
+    selected_features: list[dict[str, object]] | None = None
 
 
 class BuildingIgnAttachmentPayload(BaseModel):
     validated_name: str | None = Field(default=None, max_length=255)
     selected_feature: dict[str, object] | None = None
+    selected_features: list[dict[str, object]] | None = None
     lat: float | None = None
     lon: float | None = None
 
@@ -217,6 +222,7 @@ class BuildingCreate(BaseModel):
     ign_name_source: str | None = Field(default=None, max_length=120)
     ign_name_distance_m: float | None = None
     ign_attributes_json: str | None = None
+    ign_features_json: str | None = None
     ign_toponym_candidates_json: str | None = None
     parcel_labels_json: str | None = None
     majic_building_values_json: str | None = None
@@ -276,6 +282,7 @@ class BuildingRead(BaseModel):
     ign_name_source: str | None
     ign_name_distance_m: float | None
     ign_attributes_json: str | None
+    ign_features_json: str | None = None
     ign_toponym_candidates_json: str | None
     parcel_labels_json: str | None
     majic_building_values_json: str | None

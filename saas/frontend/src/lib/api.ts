@@ -91,6 +91,7 @@ export type Building = {
   ign_name_source: string | null;
   ign_name_distance_m: number | null;
   ign_attributes_json: string | null;
+  ign_features_json: string | null;
   ign_toponym_candidates_json: string | null;
   parcel_labels_json: string | null;
   majic_building_values_json: string | null;
@@ -258,6 +259,7 @@ export type NearbyDgfipResult = {
 export type BuildingIgnAttachmentPayload = {
   validated_name?: string;
   selected_feature?: GeoJsonFeature | null;
+  selected_features?: GeoJsonFeature[];
   lat?: number | null;
   lon?: number | null;
 };
@@ -267,6 +269,7 @@ export type CreateBuildingFromNamingPayload = {
   validated_name?: string;
   city_id?: number;
   selected_feature?: GeoJsonFeature | null;
+  selected_features?: GeoJsonFeature[];
 };
 
 export type CreateBuildingPayload = {
@@ -297,6 +300,7 @@ export type CreateBuildingPayload = {
   ign_name_source?: string;
   ign_name_distance_m?: number;
   ign_attributes_json?: string;
+  ign_features_json?: string;
   ign_toponym_candidates_json?: string;
   parcel_labels_json?: string;
   majic_building_values_json?: string;

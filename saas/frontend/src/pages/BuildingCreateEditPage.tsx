@@ -321,7 +321,11 @@ export function BuildingCreateEditPage() {
     );
   }, [importRows]);
 
-  async function handleBlankCreate(payload: { validatedName?: string; selectedFeature?: GeoJsonFeature | null }) {
+  async function handleBlankCreate(payload: {
+    validatedName?: string;
+    selectedFeature?: GeoJsonFeature | null;
+    selectedFeatures?: GeoJsonFeature[];
+  }) {
     if (!selectedUniqueKey) {
       setBlankError("Sélectionne une adresse source DGFIP avant de créer un bâtiment.");
       return;
@@ -336,6 +340,7 @@ export function BuildingCreateEditPage() {
       unique_key: selectedUniqueKey,
       validated_name: payload.validatedName,
       selected_feature: payload.selectedFeature,
+      selected_features: payload.selectedFeatures,
     });
   }
 

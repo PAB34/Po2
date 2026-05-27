@@ -134,6 +134,7 @@ def _apply_building_payload(building: Building, payload: BuildingCreate, nom_com
     building.ign_name_source = payload.ign_name_source.strip() if payload.ign_name_source else None
     building.ign_name_distance_m = payload.ign_name_distance_m
     building.ign_attributes_json = payload.ign_attributes_json.strip() if payload.ign_attributes_json else None
+    building.ign_features_json = payload.ign_features_json.strip() if payload.ign_features_json else None
     building.ign_toponym_candidates_json = (
         payload.ign_toponym_candidates_json.strip() if payload.ign_toponym_candidates_json else None
     )
@@ -184,6 +185,7 @@ def create_building_from_naming_selection(
     generated_payload = build_building_payload(
         unique_key=payload.unique_key,
         selected_feature=dict(payload.selected_feature) if payload.selected_feature else None,
+        selected_features=[dict(f) for f in (payload.selected_features or []) if isinstance(f, dict)] or None,
         validated_name=payload.validated_name,
         city_name=target_city_name,
     )
@@ -224,6 +226,7 @@ def create_building_from_naming_selection(
         ign_name_source=generated_payload["ign_name_source"],
         ign_name_distance_m=generated_payload["ign_name_distance_m"],
         ign_attributes_json=generated_payload["ign_attributes_json"],
+        ign_features_json=generated_payload.get("ign_features_json"),
         ign_toponym_candidates_json=generated_payload["ign_toponym_candidates_json"],
         parcel_labels_json=generated_payload["parcel_labels_json"],
         majic_building_values_json=generated_payload["majic_building_values_json"],
@@ -248,6 +251,7 @@ def attach_building_geo(
     generated_payload = build_building_payload(
         unique_key=payload.unique_key,
         selected_feature=dict(payload.selected_feature) if payload.selected_feature else None,
+        selected_features=[dict(f) for f in (payload.selected_features or []) if isinstance(f, dict)] or None,
         validated_name=payload.validated_name,
         city_name=target_city_name,
     )
@@ -291,6 +295,7 @@ def attach_building_geo(
         ign_name_source=generated_payload["ign_name_source"],
         ign_name_distance_m=generated_payload["ign_name_distance_m"],
         ign_attributes_json=generated_payload["ign_attributes_json"],
+        ign_features_json=generated_payload.get("ign_features_json"),
         ign_toponym_candidates_json=generated_payload["ign_toponym_candidates_json"],
         parcel_labels_json=generated_payload["parcel_labels_json"],
         majic_building_values_json=generated_payload["majic_building_values_json"],
@@ -313,7 +318,18 @@ def attach_building_ign(
     building: Building,
     payload: BuildingIgnAttachmentPayload,
 ) -> Building:
-    feature_properties = (payload.selected_feature or {}).get("properties", {}) or {}
+    # Resolution multi-features :
+    # - payload.selected_features (liste, nouvelle API) si fourni
+    # - sinon retro-compat avec payload.selected_feature (singulier)
+    features_list: list[dict[str, object]] = []
+    if payload.selected_features:
+        features_list = [f for f in payload.selected_features if isinstance(f, dict)]
+    elif payload.selected_feature:
+        features_list = [payload.selected_feature]
+
+    # 1er feature = principal (alimente les champs ign_* legacy)
+    primary_feature = features_list[0] if features_list else None
+    feature_properties = (primary_feature or {}).get("properties", {}) or {}
     attributes = feature_properties.get("attributes", {}) or {}
     resolved_candidates = _dedupe_candidate_dicts(feature_properties.get("resolved_name_candidates") or [])
 
@@ -327,7 +343,7 @@ def attach_building_ign(
 
     if proposed_name:
         building.nom_batiment = proposed_name
-    if payload.selected_feature:
+    if primary_feature:
         building.ign_layer = feature_properties.get("ign_layer")
         building.ign_typename = feature_properties.get("ign_typename")
         building.ign_id = feature_properties.get("ign_id")
@@ -339,6 +355,8 @@ def attach_building_ign(
         building.ign_attributes_json = json.dumps(attributes, ensure_ascii=False) if attributes else None
         building.ign_toponym_candidates_json = json.dumps(resolved_candidates, ensure_ascii=False) if resolved_candidates else None
         building.statut_geocodage = "IGN_VALIDE"
+        # Stockage de la liste complete des batiments IGN (incluant le principal)
+        building.ign_features_json = json.dumps(features_list, ensure_ascii=False) if features_list else None
     if payload.lat is not None:
         building.latitude = payload.lat
     if payload.lon is not None:

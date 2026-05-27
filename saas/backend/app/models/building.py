@@ -39,6 +39,7 @@ class Building(Base):
     ign_name_source: Mapped[str | None] = mapped_column(String(120), nullable=True)
     ign_name_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     ign_attributes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ign_features_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     ign_toponym_candidates_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     parcel_labels_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     majic_building_values_json: Mapped[str | None] = mapped_column(Text, nullable=True)
