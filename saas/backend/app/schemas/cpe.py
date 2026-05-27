@@ -1,7 +1,7 @@
 """Schemas Pydantic pour le module CPE DALKIA."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -208,6 +208,173 @@ class CpeFinancePreview(BaseModel):
     contrats: list[CpeFinanceContractSummary]
     sites_cpe_detectes: list[str]
     alertes: list[str]
+
+
+# ── Référentiel comptable DALKIA ─────────────────────────────────────────────
+
+class CpeAccountingNatureRuleBase(BaseModel):
+    market: str
+    service_sold: str | None = None
+    billed_item: str
+    frequency: str | None = None
+    accounting_nature: str
+    accounting_label: str | None = None
+    active: bool = True
+    notes: str | None = None
+
+
+class CpeAccountingNatureRuleCreate(CpeAccountingNatureRuleBase):
+    city_id: int | None = None
+
+
+class CpeAccountingNatureRuleUpdate(BaseModel):
+    market: str | None = None
+    service_sold: str | None = None
+    billed_item: str | None = None
+    frequency: str | None = None
+    accounting_nature: str | None = None
+    accounting_label: str | None = None
+    active: bool | None = None
+    notes: str | None = None
+
+
+class CpeAccountingNatureRuleOut(CpeAccountingNatureRuleBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CpeAccountingSiteMappingBase(BaseModel):
+    code_site: str
+    site_name: str
+    family: str | None = None
+    manager: str | None = None
+    alternate_manager: str | None = None
+    service_code: str | None = None
+    service_label: str | None = None
+    function_code: str | None = None
+    function_label: str | None = None
+    antenna_code: str | None = None
+    antenna_label: str | None = None
+    operation_code: str | None = None
+    operation_label: str | None = None
+    active: bool = True
+    notes: str | None = None
+
+
+class CpeAccountingSiteMappingCreate(CpeAccountingSiteMappingBase):
+    city_id: int | None = None
+
+
+class CpeAccountingSiteMappingUpdate(BaseModel):
+    code_site: str | None = None
+    site_name: str | None = None
+    family: str | None = None
+    manager: str | None = None
+    alternate_manager: str | None = None
+    service_code: str | None = None
+    service_label: str | None = None
+    function_code: str | None = None
+    function_label: str | None = None
+    antenna_code: str | None = None
+    antenna_label: str | None = None
+    operation_code: str | None = None
+    operation_label: str | None = None
+    active: bool | None = None
+    notes: str | None = None
+
+
+class CpeAccountingSiteMappingOut(CpeAccountingSiteMappingBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CpeAccountingImportResult(BaseModel):
+    filename: str | None
+    nature_rules_created: int
+    nature_rules_updated: int
+    site_mappings_created: int
+    site_mappings_updated: int
+    errors: list[str]
+
+
+# ── Registre factures finances DALKIA ────────────────────────────────────────
+
+class CpeFinanceImportBatchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    filename: str | None
+    source: str
+    status: str
+    line_count: int
+    invoice_count: int
+    total_ht: float
+    notes: str | None
+    created_at: datetime
+
+
+class CpeFinanceInvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    batch_id: int
+    city_id: int | None
+    invoice_number: str
+    contract_code: str | None
+    contract_label: str | None
+    invoice_type: str | None
+    supplier: str | None
+    customer_code: str | None
+    customer_name: str | None
+    invoice_date: date | None
+    due_date: date | None
+    period_start: date | None
+    period_end: date | None
+    total_ht: float
+    status: str
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CpeFinanceLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    batch_id: int
+    invoice_id: int
+    row_number: int
+    contract_code: str | None
+    invoice_number: str | None
+    market: str | None
+    market_type: str | None
+    service_sold: str | None
+    billed_item: str | None
+    vat_rate: float | None
+    amount_ht: float
+    consumption: float | None
+    unit: str | None
+    detail: str | None
+    site_code_detected: str | None
+    accounting_site_id: int | None
+    accounting_rule_id: int | None
+    accounting_nature: str | None
+    accounting_label: str | None
+    period_start: date | None
+    period_end: date | None
+
+
+class CpeFinanceImportResult(BaseModel):
+    batch: CpeFinanceImportBatchOut
+    invoices: list[CpeFinanceInvoiceOut]
+    line_count: int
+    matched_accounting_rules: int
+    matched_site_mappings: int
+    warnings: list[str]
 
 
 # ── DJU ──────────────────────────────────────────────────────────────────────

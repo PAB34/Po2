@@ -5,10 +5,21 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping
 from app.models.user import User
 from app.schemas.cpe import (
+    CpeAccountingImportResult,
+    CpeAccountingNatureRuleCreate,
+    CpeAccountingNatureRuleOut,
+    CpeAccountingNatureRuleUpdate,
+    CpeAccountingSiteMappingCreate,
+    CpeAccountingSiteMappingOut,
+    CpeAccountingSiteMappingUpdate,
     CpeBilanAnnuel,
     CpeDjuAnnuel,
+    CpeFinanceImportBatchOut,
+    CpeFinanceImportResult,
+    CpeFinanceInvoiceOut,
     CpeFinancePreview,
     CpeGazReleve,
     CpeGazReleveCreate,
@@ -22,6 +33,7 @@ from app.schemas.cpe import (
     CpeSiteUpdate,
 )
 from app.services import cpe as svc
+from app.services import cpe_accounting as accounting_svc
 from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
 
@@ -134,6 +146,155 @@ async def preview_finances_export(
         return preview_finance_export(await file.read(), filename=file.filename)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/accounting/import-codification", response_model=CpeAccountingImportResult)
+async def import_accounting_codification(
+    file: UploadFile = File(..., description="Classeur analyse_codification_dalkia.xlsx"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAccountingImportResult:
+    """Importe le référentiel comptable DALKIA depuis le classeur de codification."""
+    try:
+        return accounting_svc.import_codification_workbook(
+            db,
+            await file.read(),
+            filename=file.filename,
+            city_id=current_user.city_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/accounting/nature-rules", response_model=list[CpeAccountingNatureRuleOut])
+def list_accounting_nature_rules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeAccountingNatureRuleOut]:
+    rules = accounting_svc.list_accounting_nature_rules(db, current_user.city_id)
+    return [CpeAccountingNatureRuleOut.model_validate(item) for item in rules]
+
+
+@router.post("/accounting/nature-rules", response_model=CpeAccountingNatureRuleOut, status_code=status.HTTP_201_CREATED)
+def create_accounting_nature_rule(
+    payload: CpeAccountingNatureRuleCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAccountingNatureRuleOut:
+    if payload.city_id is None:
+        payload = payload.model_copy(update={"city_id": current_user.city_id})
+    rule = accounting_svc.create_accounting_nature_rule(db, payload)
+    return CpeAccountingNatureRuleOut.model_validate(rule)
+
+
+@router.patch("/accounting/nature-rules/{rule_id}", response_model=CpeAccountingNatureRuleOut)
+def update_accounting_nature_rule(
+    rule_id: int,
+    payload: CpeAccountingNatureRuleUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAccountingNatureRuleOut:
+    rule = db.get(CpeAccountingNatureRule, rule_id)
+    if rule is None or rule.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle comptable introuvable")
+    updated = accounting_svc.update_accounting_nature_rule(db, rule, payload)
+    return CpeAccountingNatureRuleOut.model_validate(updated)
+
+
+@router.delete("/accounting/nature-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_accounting_nature_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    rule = db.get(CpeAccountingNatureRule, rule_id)
+    if rule is None or rule.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle comptable introuvable")
+    accounting_svc.delete_accounting_nature_rule(db, rule)
+
+
+@router.get("/accounting/site-mappings", response_model=list[CpeAccountingSiteMappingOut])
+def list_accounting_site_mappings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeAccountingSiteMappingOut]:
+    mappings = accounting_svc.list_accounting_site_mappings(db, current_user.city_id)
+    return [CpeAccountingSiteMappingOut.model_validate(item) for item in mappings]
+
+
+@router.post("/accounting/site-mappings", response_model=CpeAccountingSiteMappingOut, status_code=status.HTTP_201_CREATED)
+def create_accounting_site_mapping(
+    payload: CpeAccountingSiteMappingCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAccountingSiteMappingOut:
+    if payload.city_id is None:
+        payload = payload.model_copy(update={"city_id": current_user.city_id})
+    mapping = accounting_svc.create_accounting_site_mapping(db, payload)
+    return CpeAccountingSiteMappingOut.model_validate(mapping)
+
+
+@router.patch("/accounting/site-mappings/{mapping_id}", response_model=CpeAccountingSiteMappingOut)
+def update_accounting_site_mapping(
+    mapping_id: int,
+    payload: CpeAccountingSiteMappingUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAccountingSiteMappingOut:
+    mapping = db.get(CpeAccountingSiteMapping, mapping_id)
+    if mapping is None or mapping.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site de codification introuvable")
+    updated = accounting_svc.update_accounting_site_mapping(db, mapping, payload)
+    return CpeAccountingSiteMappingOut.model_validate(updated)
+
+
+@router.delete("/accounting/site-mappings/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_accounting_site_mapping(
+    mapping_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    mapping = db.get(CpeAccountingSiteMapping, mapping_id)
+    if mapping is None or mapping.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site de codification introuvable")
+    accounting_svc.delete_accounting_site_mapping(db, mapping)
+
+
+@router.post("/finances/import", response_model=CpeFinanceImportResult)
+async def import_finances_export(
+    file: UploadFile = File(..., description="Export finances XLSX de l'espace client DALKIA"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeFinanceImportResult:
+    """Importe et archive un export finances DALKIA au format XLSX."""
+    try:
+        return accounting_svc.import_finance_workbook(
+            db,
+            await file.read(),
+            filename=file.filename,
+            city_id=current_user.city_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/finances/batches", response_model=list[CpeFinanceImportBatchOut])
+def list_finance_batches(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeFinanceImportBatchOut]:
+    batches = accounting_svc.list_finance_batches(db, current_user.city_id)
+    return [CpeFinanceImportBatchOut.model_validate(item) for item in batches]
+
+
+@router.get("/finances/invoices", response_model=list[CpeFinanceInvoiceOut])
+def list_finance_invoices(
+    batch_id: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeFinanceInvoiceOut]:
+    invoices = accounting_svc.list_finance_invoices(db, current_user.city_id, batch_id=batch_id)
+    return [CpeFinanceInvoiceOut.model_validate(item) for item in invoices]
 
 
 # ── Prix gaz ──────────────────────────────────────────────────────────────────

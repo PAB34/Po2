@@ -1,9 +1,9 @@
 """Modèles CPE DALKIA — Contrat de Performance Énergétique Ville de Sète."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -188,3 +188,150 @@ class CpeResultatAnnuel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class CpeAccountingNatureRule(Base):
+    """Mapping entre les postes factures DALKIA et la nature comptable cible."""
+
+    __tablename__ = "cpe_accounting_nature_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "city_id",
+            "market",
+            "service_sold",
+            "billed_item",
+            "frequency",
+            name="uq_cpe_accounting_rule_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    market: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    service_sold: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    billed_item: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    frequency: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    accounting_nature: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    accounting_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CpeAccountingSiteMapping(Base):
+    """Codification comptable d'un site DALKIA pour la fiche de liaison finances."""
+
+    __tablename__ = "cpe_accounting_site_mappings"
+    __table_args__ = (UniqueConstraint("city_id", "code_site", name="uq_cpe_accounting_site_city_code"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    code_site: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    site_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    family: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    manager: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    alternate_manager: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    service_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    service_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    function_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    function_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    antenna_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    antenna_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    operation_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    operation_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CpeFinanceImportBatch(Base):
+    """Lot d'import d'un export finances DALKIA."""
+
+    __tablename__ = "cpe_finance_import_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="dalkia_finance_export")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="imported")
+    line_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    invoice_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class CpeFinanceInvoice(Base):
+    """Facture DALKIA reconstruite depuis l'export finances."""
+
+    __tablename__ = "cpe_finance_invoices"
+    __table_args__ = (UniqueConstraint("batch_id", "invoice_number", name="uq_cpe_finance_invoice_batch_number"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_import_batches.id"), nullable=False, index=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    invoice_number: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    contract_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    contract_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    invoice_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    supplier: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    customer_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    customer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    total_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="a_controler")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CpeFinanceLine(Base):
+    """Ligne d'export finances DALKIA, avec premiers rattachements comptables."""
+
+    __tablename__ = "cpe_finance_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_import_batches.id"), nullable=False, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_invoices.id"), nullable=False, index=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    contract_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    market: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    market_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    service_sold: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    billed_item: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    vat_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    amount_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    consumption: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    site_code_detected: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    accounting_site_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cpe_accounting_site_mappings.id"), nullable=True, index=True
+    )
+    accounting_rule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cpe_accounting_nature_rules.id"), nullable=True, index=True
+    )
+    accounting_nature: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    accounting_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)

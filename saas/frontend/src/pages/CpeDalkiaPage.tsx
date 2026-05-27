@@ -2,14 +2,29 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CpeAccountingSiteMapping,
+  CpeAccountingNatureRule,
   CpeBilanAnnuel,
+  CpeFinanceImportBatch,
+  CpeFinanceImportResult,
+  CpeFinanceInvoice,
   CpeFinancePreview,
+  CpeAccountingImportResult,
   CpeSiteBilanItem,
   calculerCpeBilan,
+  createCpeAccountingSiteMapping,
   fetchCpeBilan,
+  fetchCpeAccountingNatureRules,
+  fetchCpeAccountingSiteMappings,
   fetchCpeDju,
+  fetchCpeFinanceBatches,
+  fetchCpeFinanceInvoices,
   importCpeCsv,
+  importCpeAccountingCodification,
+  importCpeFinanceExport,
   previewCpeFinanceExport,
+  deleteCpeAccountingSiteMapping,
+  updateCpeAccountingSiteMapping,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -43,7 +58,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
   CCAS: "CCAS",
 };
 
-type CpeView = "cockpit" | "performance";
+type CpeView = "cockpit" | "finance" | "performance";
 
 const CPE_WORKSTREAMS = [
   {
@@ -102,6 +117,8 @@ export default function CpeDalkiaPage() {
   const [view, setView] = useState<CpeView>("cockpit");
   const fileRef = useRef<HTMLInputElement>(null);
   const financeFileRef = useRef<HTMLInputElement>(null);
+  const codificationFileRef = useRef<HTMLInputElement>(null);
+  const financeImportFileRef = useRef<HTMLInputElement>(null);
 
   const bilanQ = useQuery({
     queryKey: ["cpe-bilan", annee],
@@ -113,6 +130,30 @@ export default function CpeDalkiaPage() {
     queryKey: ["cpe-dju", annee],
     queryFn: () => fetchCpeDju(token!, annee),
     enabled: !!token,
+  });
+
+  const accountingRulesQ = useQuery({
+    queryKey: ["cpe-accounting-nature-rules"],
+    queryFn: () => fetchCpeAccountingNatureRules(token!),
+    enabled: !!token && view === "finance",
+  });
+
+  const siteMappingsQ = useQuery({
+    queryKey: ["cpe-accounting-site-mappings"],
+    queryFn: () => fetchCpeAccountingSiteMappings(token!),
+    enabled: !!token && view === "finance",
+  });
+
+  const financeBatchesQ = useQuery({
+    queryKey: ["cpe-finance-batches"],
+    queryFn: () => fetchCpeFinanceBatches(token!),
+    enabled: !!token && view === "finance",
+  });
+
+  const financeInvoicesQ = useQuery({
+    queryKey: ["cpe-finance-invoices"],
+    queryFn: () => fetchCpeFinanceInvoices(token!),
+    enabled: !!token && view === "finance",
   });
 
   const calculerM = useMutation({
@@ -144,6 +185,35 @@ export default function CpeDalkiaPage() {
   const financePreviewM = useMutation({
     mutationFn: (file: File) => previewCpeFinanceExport(token!, file),
     onSuccess: setFinancePreview,
+  });
+
+  const codificationImportM = useMutation({
+    mutationFn: (file: File) => importCpeAccountingCodification(token!, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-accounting-nature-rules"] });
+      qc.invalidateQueries({ queryKey: ["cpe-accounting-site-mappings"] });
+    },
+  });
+
+  const financeImportM = useMutation({
+    mutationFn: (file: File) => importCpeFinanceExport(token!, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-batches"] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    },
+  });
+
+  const saveSiteMappingM = useMutation({
+    mutationFn: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) =>
+      payload.id
+        ? updateCpeAccountingSiteMapping(token!, payload.id, payload)
+        : createCpeAccountingSiteMapping(token!, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-site-mappings"] }),
+  });
+
+  const deleteSiteMappingM = useMutation({
+    mutationFn: (id: number) => deleteCpeAccountingSiteMapping(token!, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-site-mappings"] }),
   });
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
@@ -187,6 +257,9 @@ export default function CpeDalkiaPage() {
         <CpeViewTab active={view === "cockpit"} onClick={() => setView("cockpit")}>
           Cockpit CPE
         </CpeViewTab>
+        <CpeViewTab active={view === "finance"} onClick={() => setView("finance")}>
+          Referentiel finance
+        </CpeViewTab>
         <CpeViewTab active={view === "performance"} onClick={() => setView("performance")}>
           Performance et consommations
         </CpeViewTab>
@@ -204,6 +277,30 @@ export default function CpeDalkiaPage() {
           financeFileRef={financeFileRef}
           onFinanceFile={(file) => financePreviewM.mutate(file)}
           onOpenPerformance={() => setView("performance")}
+        />
+      )}
+
+      {view === "finance" && (
+        <CpeFinanceReference
+          codificationFileRef={codificationFileRef}
+          financeImportFileRef={financeImportFileRef}
+          siteMappings={siteMappingsQ.data ?? []}
+          natureRules={accountingRulesQ.data ?? []}
+          batches={financeBatchesQ.data ?? []}
+          invoices={financeInvoicesQ.data ?? []}
+          loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || financeBatchesQ.isLoading}
+          codificationImportPending={codificationImportM.isPending}
+          codificationImportResult={codificationImportM.data ?? null}
+          codificationImportError={codificationImportM.error instanceof Error ? codificationImportM.error.message : null}
+          financeImportPending={financeImportM.isPending}
+          financeImportResult={financeImportM.data ?? null}
+          financeImportError={financeImportM.error instanceof Error ? financeImportM.error.message : null}
+          saveSiteMappingPending={saveSiteMappingM.isPending}
+          deleteSiteMappingPending={deleteSiteMappingM.isPending}
+          onCodificationFile={(file) => codificationImportM.mutate(file)}
+          onFinanceImportFile={(file) => financeImportM.mutate(file)}
+          onSaveSiteMapping={(payload) => saveSiteMappingM.mutate(payload)}
+          onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
         />
       )}
 
@@ -715,6 +812,327 @@ function CpeCockpit({
         </div>
       </section>
     </>
+  );
+}
+
+const EMPTY_SITE_MAPPING = {
+  code_site: "",
+  site_name: "",
+  family: "",
+  manager: "",
+  service_code: "",
+  service_label: "",
+  function_code: "",
+  function_label: "",
+  antenna_code: "",
+  antenna_label: "",
+  operation_code: "",
+  operation_label: "",
+  active: true,
+};
+
+function CpeFinanceReference({
+  codificationFileRef,
+  financeImportFileRef,
+  siteMappings,
+  natureRules,
+  batches,
+  invoices,
+  loading,
+  codificationImportPending,
+  codificationImportResult,
+  codificationImportError,
+  financeImportPending,
+  financeImportResult,
+  financeImportError,
+  saveSiteMappingPending,
+  deleteSiteMappingPending,
+  onCodificationFile,
+  onFinanceImportFile,
+  onSaveSiteMapping,
+  onDeleteSiteMapping,
+}: {
+  codificationFileRef: React.RefObject<HTMLInputElement>;
+  financeImportFileRef: React.RefObject<HTMLInputElement>;
+  siteMappings: CpeAccountingSiteMapping[];
+  natureRules: CpeAccountingNatureRule[];
+  batches: CpeFinanceImportBatch[];
+  invoices: CpeFinanceInvoice[];
+  loading: boolean;
+  codificationImportPending: boolean;
+  codificationImportResult: CpeAccountingImportResult | null;
+  codificationImportError: string | null;
+  financeImportPending: boolean;
+  financeImportResult: CpeFinanceImportResult | null;
+  financeImportError: string | null;
+  saveSiteMappingPending: boolean;
+  deleteSiteMappingPending: boolean;
+  onCodificationFile: (file: File) => void;
+  onFinanceImportFile: (file: File) => void;
+  onSaveSiteMapping: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) => void;
+  onDeleteSiteMapping: (id: number) => void;
+}) {
+  const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const recentInvoices = invoices.slice(0, 8);
+
+  const startEdit = (mapping: CpeAccountingSiteMapping) => {
+    setEditingId(mapping.id);
+    setDraft({
+      code_site: mapping.code_site,
+      site_name: mapping.site_name,
+      family: mapping.family ?? "",
+      manager: mapping.manager ?? "",
+      service_code: mapping.service_code ?? "",
+      service_label: mapping.service_label ?? "",
+      function_code: mapping.function_code ?? "",
+      function_label: mapping.function_label ?? "",
+      antenna_code: mapping.antenna_code ?? "",
+      antenna_label: mapping.antenna_label ?? "",
+      operation_code: mapping.operation_code ?? "",
+      operation_label: mapping.operation_label ?? "",
+      active: mapping.active,
+    });
+  };
+
+  const resetDraft = () => {
+    setEditingId(null);
+    setDraft(EMPTY_SITE_MAPPING);
+  };
+
+  const submitDraft = () => {
+    if (!draft.code_site.trim() || !draft.site_name.trim()) return;
+    onSaveSiteMapping({
+      ...(editingId ? { id: editingId } : {}),
+      code_site: draft.code_site.trim().toUpperCase(),
+      site_name: draft.site_name.trim(),
+      family: draft.family || null,
+      manager: draft.manager || null,
+      service_code: draft.service_code || null,
+      service_label: draft.service_label || null,
+      function_code: draft.function_code || null,
+      function_label: draft.function_label || null,
+      antenna_code: draft.antenna_code || null,
+      antenna_label: draft.antenna_label || null,
+      operation_code: draft.operation_code || null,
+      operation_label: draft.operation_label || null,
+      active: draft.active,
+    });
+    resetDraft();
+  };
+
+  return (
+    <>
+      <section style={{ marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+          <KpiCard label="Sites codifies" value={String(siteMappings.length)} sub="Lignes du referentiel finance" color="#2563eb" />
+          <KpiCard label="Regles nature" value={String(natureRules.length)} sub="Poste facture vers nature" color="#0f766e" />
+          <KpiCard label="Lots importes" value={String(batches.length)} sub={`${invoices.length} facture(s) archivees`} color="#9333ea" />
+          <KpiCard
+            label="Dernier lot"
+            value={batches[0] ? fmtEur(batches[0].total_ht) : "Aucun"}
+            sub={batches[0] ? `${batches[0].line_count} ligne(s), ${batches[0].invoice_count} facture(s)` : "Import finances a lancer"}
+            color="#111827"
+          />
+        </div>
+      </section>
+
+      <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Initialisation du referentiel</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Importe la matrice de codification DALKIA, puis archive les exports finances XLSX pour preparer les fiches de liaison.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button type="button" className="secondary-button" onClick={() => codificationFileRef.current?.click()} disabled={codificationImportPending}>
+              {codificationImportPending ? "Import..." : "Importer codification"}
+            </button>
+            <input
+              ref={codificationFileRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onCodificationFile(file);
+                event.target.value = "";
+              }}
+            />
+            <button type="button" className="primary-button" onClick={() => financeImportFileRef.current?.click()} disabled={financeImportPending}>
+              {financeImportPending ? "Import..." : "Importer export finances"}
+            </button>
+            <input
+              ref={financeImportFileRef}
+              type="file"
+              accept=".xlsx"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onFinanceImportFile(file);
+                event.target.value = "";
+              }}
+            />
+          </div>
+        </div>
+        {codificationImportResult && (
+          <p style={{ color: "#166534", fontSize: 13, margin: "12px 0 0" }}>
+            Codification importee : {codificationImportResult.site_mappings_created} site(s) crees, {codificationImportResult.site_mappings_updated} mis a jour,
+            {" "}{codificationImportResult.nature_rules_created} regle(s) creees, {codificationImportResult.nature_rules_updated} mises a jour.
+          </p>
+        )}
+        {financeImportResult && (
+          <p style={{ color: "#166534", fontSize: 13, margin: "12px 0 0" }}>
+            Export archive : lot #{financeImportResult.batch.id}, {financeImportResult.line_count} ligne(s),
+            {" "}{financeImportResult.invoices.length} facture(s), {financeImportResult.matched_accounting_rules} ligne(s) avec nature.
+          </p>
+        )}
+        {[codificationImportError, financeImportError].filter(Boolean).map((message) => (
+          <p key={message} style={{ color: "#dc2626", fontSize: 13, margin: "12px 0 0" }}>{message}</p>
+        ))}
+        {financeImportResult?.warnings.map((warning) => (
+          <p key={warning} style={{ color: "#9a3412", fontSize: 13, margin: "8px 0 0" }}>{warning}</p>
+        ))}
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "minmax(320px, 0.95fr) minmax(420px, 1.4fr)", gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <h3 style={{ margin: "0 0 12px" }}>{editingId ? "Modifier un site finance" : "Ajouter un site finance"}</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <FinanceInput label="Code site" value={draft.code_site} onChange={(value) => setDraft({ ...draft, code_site: value })} />
+            <FinanceInput label="Famille" value={draft.family} onChange={(value) => setDraft({ ...draft, family: value })} />
+            <FinanceInput label="Nom du site" value={draft.site_name} onChange={(value) => setDraft({ ...draft, site_name: value })} wide />
+            <FinanceInput label="Gestionnaire" value={draft.manager} onChange={(value) => setDraft({ ...draft, manager: value })} />
+            <FinanceInput label="Service" value={draft.service_code} onChange={(value) => setDraft({ ...draft, service_code: value })} />
+            <FinanceInput label="Libelle service" value={draft.service_label} onChange={(value) => setDraft({ ...draft, service_label: value })} wide />
+            <FinanceInput label="Fonction" value={draft.function_code} onChange={(value) => setDraft({ ...draft, function_code: value })} />
+            <FinanceInput label="Libelle fonction" value={draft.function_label} onChange={(value) => setDraft({ ...draft, function_label: value })} />
+            <FinanceInput label="Antenne" value={draft.antenna_code} onChange={(value) => setDraft({ ...draft, antenna_code: value })} />
+            <FinanceInput label="Operation" value={draft.operation_code} onChange={(value) => setDraft({ ...draft, operation_code: value })} />
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button type="button" className="primary-button" disabled={saveSiteMappingPending || !draft.code_site || !draft.site_name} onClick={submitDraft}>
+              {editingId ? "Enregistrer" : "Ajouter"}
+            </button>
+            {editingId && (
+              <button type="button" className="secondary-button" onClick={resetDraft}>
+                Annuler
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <h3 style={{ margin: "0 0 8px" }}>Sites de codification</h3>
+          {loading ? (
+            <p>Chargement...</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                  <th style={thStyle}>Code</th>
+                  <th style={thStyle}>Site</th>
+                  <th style={thStyle}>Service</th>
+                  <th style={thStyle}>Fonction</th>
+                  <th style={thStyle}>Antenne</th>
+                  <th style={thStyle}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {siteMappings.slice(0, 80).map((mapping) => (
+                  <tr key={mapping.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <td style={tdStyle}><code>{mapping.code_site}</code></td>
+                    <td style={{ ...tdStyle, minWidth: 220 }}>{mapping.site_name}</td>
+                    <td style={tdStyle}>{mapping.service_code ?? "-"}<div style={{ color: "#6b7280" }}>{mapping.service_label}</div></td>
+                    <td style={tdStyle}>{mapping.function_code ?? "-"}<div style={{ color: "#6b7280" }}>{mapping.function_label}</div></td>
+                    <td style={tdStyle}>{mapping.antenna_code ?? "-"}</td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startEdit(mapping)}>
+                        Modifier
+                      </button>{" "}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: 12, padding: "4px 8px", color: "#b91c1c" }}
+                        disabled={deleteSiteMappingPending}
+                        onClick={() => onDeleteSiteMapping(mapping.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <FinanceMarketTable title="Regles nature comptable" rows={natureRules.map((rule) => ({
+          code: `${rule.market} / ${rule.billed_item}`,
+          nb_lignes: Number(rule.frequency ?? 0) || 0,
+          nb_factures: 0,
+          montant_ht: 0,
+        }))} />
+        <div style={{ overflowX: "auto" }}>
+          <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Factures archivees recentes</h4>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                <th style={thStyle}>Facture</th>
+                <th style={thStyle}>Contrat</th>
+                <th style={thStyle}>Periode</th>
+                <th style={thStyle}>HT</th>
+                <th style={thStyle}>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentInvoices.map((invoice) => (
+                <tr key={invoice.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                  <td style={tdStyle}>{invoice.invoice_number}</td>
+                  <td style={tdStyle}>{invoice.contract_code ?? "-"}</td>
+                  <td style={tdStyle}>{invoice.period_start ?? "-"} au {invoice.period_end ?? "-"}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
+                  <td style={tdStyle}><span className="badge badge-orange">{invoice.status}</span></td>
+                </tr>
+              ))}
+              {recentInvoices.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                    Aucun export finances importe.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function FinanceInput({
+  label,
+  value,
+  wide,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label style={{ display: "grid", gap: 4, gridColumn: wide ? "1 / -1" : undefined, fontSize: 12, color: "#6b7280" }}>
+      {label}
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={{ padding: "7px 9px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13, color: "#111827" }}
+      />
+    </label>
   );
 }
 

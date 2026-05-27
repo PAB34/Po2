@@ -203,6 +203,14 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 | GET | `/api/cpe/sites/{id}/releves` | Relevés mensuels d'un site |
 | POST | `/api/cpe/sites/{id}/releves` | Saisir / mettre à jour un relevé |
 | POST | `/api/cpe/import/csv` | Import fichier CSV DALKIA |
+| POST | `/api/cpe/accounting/import-codification` | Import XLSX matrice codification DALKIA |
+| GET | `/api/cpe/accounting/site-mappings` | Liste des sites de codification finance |
+| POST/PATCH/DELETE | `/api/cpe/accounting/site-mappings` | Ajouter, modifier, supprimer un site finance |
+| GET | `/api/cpe/accounting/nature-rules` | Mapping poste facturé vers nature comptable |
+| POST/PATCH/DELETE | `/api/cpe/accounting/nature-rules` | Maintenir les règles de nature comptable |
+| POST | `/api/cpe/finances/import` | Import et archivage XLSX export finances DALKIA |
+| GET | `/api/cpe/finances/batches` | Lots d'import finances archivés |
+| GET | `/api/cpe/finances/invoices` | Factures DALKIA reconstruites depuis les lots |
 | GET | `/api/cpe/dju/{annee}` | DJU réels de l'exercice |
 | GET | `/api/cpe/prix-gaz/{annee}` | Prix unitaire gaz d'un exercice |
 | POST | `/api/cpe/prix-gaz` | Saisir / modifier le Pu |
@@ -223,6 +231,11 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 - Tableau tous sites : NB / N'B / NC / écart / résultat / montant / mois renseignés / statut
 - Filtres par catégorie (ENS / SPORT / BAM / CULT)
 - Totaux filtrés intéressement + pénalité
+- Onglet **Référentiel finance** :
+  - import de `analyse_codification_dalkia.xlsx`
+  - édition des sites de codification comptable
+  - import XLSX persistant des exports finances DALKIA
+  - premier registre des factures DALKIA archivées
 
 ### `/cpe/sites/:id` — `CpeSiteDetailPage.tsx`
 
@@ -255,6 +268,22 @@ Ensuite via l'interface `/cpe` :
 1. Les **prix gaz 2026-2030 sont pré-chargés** (OS N°3 — T1/T2/T3 automatiquement appliqués par site)
 2. **Importer le CSV** DALKIA mensuel (ou saisir mois par mois)
 3. **Recalculer le bilan** → intéressement/pénalité calculé par site avec le bon Pu selon son tarif
+
+### Initialisation finance DALKIA
+
+Dans `/cpe` → **Référentiel finance** :
+1. Importer `saas/energie/DALKIA/COMPTABILITE/analyse_codification_dalkia.xlsx`
+2. Vérifier les sites de codification et les compléter si besoin
+3. Importer un export finances XLSX DALKIA
+
+Le premier socle persiste :
+- `cpe_accounting_site_mappings` : site → service/fonction/antenne/opération
+- `cpe_accounting_nature_rules` : marché/service/poste facturé → nature comptable
+- `cpe_finance_import_batches` : lots d'import
+- `cpe_finance_invoices` : factures reconstruites
+- `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
+
+À ce stade, le contrôle contractuel P1/P2/P3 et l'export de fiche liaison XLSX restent à brancher sur ce registre.
 
 ---
 

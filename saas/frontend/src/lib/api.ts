@@ -2749,6 +2749,96 @@ export type CpeFinancePreview = {
   alertes: string[];
 };
 
+export type CpeAccountingImportResult = {
+  filename: string | null;
+  nature_rules_created: number;
+  nature_rules_updated: number;
+  site_mappings_created: number;
+  site_mappings_updated: number;
+  errors: string[];
+};
+
+export type CpeAccountingNatureRule = {
+  id: number;
+  city_id: number | null;
+  market: string;
+  service_sold: string | null;
+  billed_item: string;
+  frequency: string | null;
+  accounting_nature: string;
+  accounting_label: string | null;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CpeAccountingSiteMapping = {
+  id: number;
+  city_id: number | null;
+  code_site: string;
+  site_name: string;
+  family: string | null;
+  manager: string | null;
+  alternate_manager: string | null;
+  service_code: string | null;
+  service_label: string | null;
+  function_code: string | null;
+  function_label: string | null;
+  antenna_code: string | null;
+  antenna_label: string | null;
+  operation_code: string | null;
+  operation_label: string | null;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CpeFinanceImportBatch = {
+  id: number;
+  city_id: number | null;
+  filename: string | null;
+  source: string;
+  status: string;
+  line_count: number;
+  invoice_count: number;
+  total_ht: number;
+  notes: string | null;
+  created_at: string;
+};
+
+export type CpeFinanceInvoice = {
+  id: number;
+  batch_id: number;
+  city_id: number | null;
+  invoice_number: string;
+  contract_code: string | null;
+  contract_label: string | null;
+  invoice_type: string | null;
+  supplier: string | null;
+  customer_code: string | null;
+  customer_name: string | null;
+  invoice_date: string | null;
+  due_date: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  total_ht: number;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CpeFinanceImportResult = {
+  batch: CpeFinanceImportBatch;
+  invoices: CpeFinanceInvoice[];
+  line_count: number;
+  matched_accounting_rules: number;
+  matched_site_mappings: number;
+  warnings: string[];
+};
+
 export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/sites`, { headers: buildHeaders(token) });
   return parseResponse<CpeSite[]>(response);
@@ -2830,4 +2920,80 @@ export async function previewCpeFinanceExport(token: string, file: File): Promis
     body: form,
   });
   return parseResponse<CpeFinancePreview>(response);
+}
+
+export async function importCpeAccountingCodification(token: string, file: File): Promise<CpeAccountingImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/import-codification`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeAccountingImportResult>(response);
+}
+
+export async function fetchCpeAccountingNatureRules(token: string): Promise<CpeAccountingNatureRule[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules`, { headers: buildHeaders(token) });
+  return parseResponse<CpeAccountingNatureRule[]>(response);
+}
+
+export async function fetchCpeAccountingSiteMappings(token: string): Promise<CpeAccountingSiteMapping[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/site-mappings`, { headers: buildHeaders(token) });
+  return parseResponse<CpeAccountingSiteMapping[]>(response);
+}
+
+export async function createCpeAccountingSiteMapping(
+  token: string,
+  payload: Partial<CpeAccountingSiteMapping> & { code_site: string; site_name: string },
+): Promise<CpeAccountingSiteMapping> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/site-mappings`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeAccountingSiteMapping>(response);
+}
+
+export async function updateCpeAccountingSiteMapping(
+  token: string,
+  id: number,
+  payload: Partial<CpeAccountingSiteMapping>,
+): Promise<CpeAccountingSiteMapping> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/site-mappings/${id}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeAccountingSiteMapping>(response);
+}
+
+export async function deleteCpeAccountingSiteMapping(token: string, id: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/site-mappings/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function importCpeFinanceExport(token: string, file: File): Promise<CpeFinanceImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeFinanceImportResult>(response);
+}
+
+export async function fetchCpeFinanceBatches(token: string): Promise<CpeFinanceImportBatch[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/batches`, { headers: buildHeaders(token) });
+  return parseResponse<CpeFinanceImportBatch[]>(response);
+}
+
+export async function fetchCpeFinanceInvoices(token: string, batchId?: number): Promise<CpeFinanceInvoice[]> {
+  const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
+  const response = await fetch(url, { headers: buildHeaders(token) });
+  return parseResponse<CpeFinanceInvoice[]>(response);
 }
