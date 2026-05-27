@@ -380,6 +380,7 @@ class CpeFinanceControl(Base):
     index_quarter: Mapped[int | None] = mapped_column(Integer, nullable=True)
     icht_ime_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     bt40_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fsd2_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     expected_factor: Mapped[float | None] = mapped_column(Float, nullable=True)
     base_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     expected_revised_price: Mapped[float | None] = mapped_column(Float, nullable=True)

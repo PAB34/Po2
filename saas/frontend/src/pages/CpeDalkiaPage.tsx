@@ -1080,9 +1080,9 @@ function CpeFinanceReference({
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
-            <h3 style={{ margin: "0 0 4px" }}>Indices de revision P3 / P3.4</h3>
+            <h3 style={{ margin: "0 0 4px" }}>Indices de revision P2 / P3</h3>
             <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
-              Formule controlee : P3 = P30 x (0,15 + 0,30 ICHT-IME/141,4 + 0,55 BT40/128,4).
+              P2 utilise ICHT-IME + FSD2. P3/P3.4 utilise ICHT-IME + BT40.
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -1275,7 +1275,7 @@ function CpeFinanceReference({
                       disabled={controlsPending}
                       onClick={() => onRecalculateControls(invoice.id)}
                     >
-                      Controle P3
+                      Controle revisions
                     </button>
                   </td>
                 </tr>
@@ -1291,7 +1291,7 @@ function CpeFinanceReference({
           </table>
           {controlsSummary && (
             <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
-              Dernier controle P3 : <strong>{controlsSummary.ok}</strong> OK,{" "}
+              Dernier controle revisions : <strong>{controlsSummary.ok}</strong> OK,{" "}
               <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
               <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
               {lastControls?.slice(0, 3).map((control) => (

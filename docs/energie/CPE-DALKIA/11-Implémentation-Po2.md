@@ -213,7 +213,7 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 | GET | `/api/cpe/finances/invoices` | Factures DALKIA reconstruites depuis les lots |
 | GET/POST | `/api/cpe/revision-indices` | Saisie et lecture des indices ICHT-IME / BT40 / FSD2 par trimestre |
 | GET | `/api/cpe/finances/invoices/{id}/controls` | Résultats de contrôle contractuel d'une facture |
-| POST | `/api/cpe/finances/invoices/{id}/controls/recalculate` | Recalcul du contrôle P3/P3.4 |
+| POST | `/api/cpe/finances/invoices/{id}/controls/recalculate` | Recalcul des contrôles de révision P2 et P3/P3.4 |
 | GET | `/api/cpe/finances/invoices/{id}/liaison.xlsx` | Export XLSX fiche liaison finance |
 | GET | `/api/cpe/dju/{annee}` | DJU réels de l'exercice |
 | GET | `/api/cpe/prix-gaz/{annee}` | Prix unitaire gaz d'un exercice |
@@ -287,19 +287,20 @@ Le premier socle persiste :
 - `cpe_finance_invoices` : factures reconstruites
 - `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
 
-À ce stade, le contrôle P3/P3.4 et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, P2 et les livrables/preuves restent à développer.
+À ce stade, les contrôles de révision P2 et P3/P3.4 et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, P2.4/livrables et les preuves restent à développer.
 
-### Contrôle P3 / P3.4
+### Contrôles P2 et P3 / P3.4
 
-Le premier contrôle contractuel automatisé porte sur les lignes importées avec `MARCHÉ = P3`.
+Les premiers contrôles contractuels automatisés portent sur les lignes importées avec `MARCHÉ = P2` ou `MARCHÉ = P3`.
 
 Pré-requis :
 - l'export DALKIA doit contenir `PRIX DE BASE` et `PRIX OU FORFAIT RÉVISÉ`
-- les indices trimestriels `ICHT_IME` et `BT40` doivent être saisis dans `/cpe` → Référentiel finance
+- les indices trimestriels `ICHT_IME`, `FSD2` et/ou `BT40` doivent être saisis dans `/cpe` → Référentiel finance
 
-Formule utilisée :
+Formules utilisées :
 
 ```text
+P2 = P20 × (0,15 + 0,70 × ICHT-IME/141,4 + 0,15 × FSD2/169,8)
 P3 = P30 × (0,15 + 0,30 × ICHT-IME/141,4 + 0,55 × BT40/128,4)
 ```
 

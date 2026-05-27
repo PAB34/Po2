@@ -412,6 +412,7 @@ class CpeFinanceControlOut(BaseModel):
     index_quarter: int | None
     icht_ime_value: float | None
     bt40_value: float | None
+    fsd2_value: float | None
     expected_factor: float | None
     base_price: float | None
     expected_revised_price: float | None

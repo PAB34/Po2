@@ -2894,6 +2894,7 @@ export type CpeFinanceControl = {
   index_quarter: number | null;
   icht_ime_value: number | null;
   bt40_value: number | null;
+  fsd2_value: number | null;
   expected_factor: number | null;
   base_price: number | null;
   expected_revised_price: number | null;
