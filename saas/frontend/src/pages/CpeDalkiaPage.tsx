@@ -69,6 +69,15 @@ const CATEGORIE_LABEL: Record<string, string> = {
 };
 
 type CpeView = "cockpit" | "finance" | "performance";
+type CpeFinanceSection = "imports" | "sites" | "rules" | "indices" | "invoices";
+
+const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
+  { id: "imports", label: "Imports", detail: "Codification et exports finance" },
+  { id: "sites", label: "Sites", detail: "VDS, CCAS et rattachements" },
+  { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
+  { id: "indices", label: "Indices", detail: "ICHT-IME, BT40, FSD2" },
+  { id: "invoices", label: "Factures", detail: "Archives et fiches liaison" },
+];
 
 const CPE_WORKSTREAMS = [
   {
@@ -294,7 +303,7 @@ export default function CpeDalkiaPage() {
   const categories = ["tous", "ENS", "SPORT", "BAM", "CULT", "CCAS"];
 
   return (
-    <div style={{ maxWidth: 1200 }}>
+    <div style={{ width: "100%" }}>
       {/* ── En-tête ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
         <div style={{ flex: 1 }}>
@@ -997,9 +1006,33 @@ function CpeFinanceReference({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ruleDraft, setRuleDraft] = useState(EMPTY_NATURE_RULE);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [section, setSection] = useState<CpeFinanceSection>("imports");
+  const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
   const recentInvoices = invoices.slice(0, 8);
+  const visibleSiteMappings = siteMappings
+    .filter((mapping) => {
+      const haystack = [
+        mapping.code_site,
+        mapping.site_name,
+        mapping.family,
+        mapping.manager,
+        mapping.service_code,
+        mapping.service_label,
+        mapping.function_code,
+        mapping.function_label,
+        mapping.antenna_code,
+        mapping.antenna_label,
+        mapping.operation_code,
+        mapping.operation_label,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(siteFilter.trim().toLowerCase());
+    })
+    .slice(0, 220);
   const visibleRules = natureRules
     .filter((rule) => {
       const haystack = [
@@ -1124,6 +1157,30 @@ function CpeFinanceReference({
         </div>
       </section>
 
+      <nav
+        aria-label="Navigation referentiel finance CPE"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+          gap: 10,
+          marginBottom: 24,
+        }}
+      >
+        {CPE_FINANCE_SECTIONS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={section === item.id ? "primary-button" : "secondary-button"}
+            onClick={() => setSection(item.id)}
+            style={{ display: "grid", gap: 2, justifyItems: "start", minHeight: 58, textAlign: "left" }}
+          >
+            <span>{item.label}</span>
+            <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.72 }}>{item.detail}</span>
+          </button>
+        ))}
+      </nav>
+
+      {section === "imports" && (
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
           <div>
@@ -1182,7 +1239,9 @@ function CpeFinanceReference({
           <p key={warning} style={{ color: "#9a3412", fontSize: 13, margin: "8px 0 0" }}>{warning}</p>
         ))}
       </section>
+      )}
 
+      {section === "indices" && (
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
@@ -1249,8 +1308,10 @@ function CpeFinanceReference({
           )}
         </div>
       </section>
+      )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "minmax(320px, 0.95fr) minmax(420px, 1.4fr)", gap: 16, marginBottom: 24 }}>
+      {section === "sites" && (
+      <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 24 }}>
         <div className="card" style={{ padding: 16 }}>
           <h3 style={{ margin: "0 0 12px" }}>{editingId ? "Modifier un site finance" : "Ajouter un site finance"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1277,30 +1338,56 @@ function CpeFinanceReference({
           </div>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <h3 style={{ margin: "0 0 8px" }}>Sites de codification</h3>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <h3 style={{ margin: "0 0 4px" }}>Sites de codification</h3>
+              <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+                Correspondance entre les codes DALKIA, les sites Ville/CCAS et les axes analytiques finances.
+              </p>
+            </div>
+            <input
+              value={siteFilter}
+              onChange={(event) => setSiteFilter(event.target.value)}
+              placeholder="Filtrer site, code, service..."
+              style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 260 }}
+            />
+          </div>
+          <div style={{ overflowX: "auto", width: "100%" }}>
           {loading ? (
             <p>Chargement...</p>
           ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <table style={{ width: "100%", minWidth: 1500, borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                   <th style={thStyle}>Code</th>
                   <th style={thStyle}>Site</th>
+                  <th style={thStyle}>Famille</th>
+                  <th style={thStyle}>Gestionnaire</th>
                   <th style={thStyle}>Service</th>
+                  <th style={thStyle}>Libelle service</th>
                   <th style={thStyle}>Fonction</th>
+                  <th style={thStyle}>Libelle fonction</th>
                   <th style={thStyle}>Antenne</th>
+                  <th style={thStyle}>Operation</th>
+                  <th style={thStyle}>Actif</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {siteMappings.slice(0, 80).map((mapping) => (
+                {visibleSiteMappings.map((mapping) => (
                   <tr key={mapping.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                     <td style={tdStyle}><code>{mapping.code_site}</code></td>
-                    <td style={{ ...tdStyle, minWidth: 220 }}>{mapping.site_name}</td>
-                    <td style={tdStyle}>{mapping.service_code ?? "-"}<div style={{ color: "#6b7280" }}>{mapping.service_label}</div></td>
-                    <td style={tdStyle}>{mapping.function_code ?? "-"}<div style={{ color: "#6b7280" }}>{mapping.function_label}</div></td>
+                    <td style={{ ...tdStyle, minWidth: 240 }}>{mapping.site_name}</td>
+                    <td style={tdStyle}>{mapping.family ?? "-"}</td>
+                    <td style={tdStyle}>{mapping.manager ?? "-"}</td>
+                    <td style={tdStyle}>{mapping.service_code ?? "-"}</td>
+                    <td style={{ ...tdStyle, minWidth: 180 }}>{mapping.service_label ?? "-"}</td>
+                    <td style={tdStyle}>{mapping.function_code ?? "-"}</td>
+                    <td style={{ ...tdStyle, minWidth: 180 }}>{mapping.function_label ?? "-"}</td>
                     <td style={tdStyle}>{mapping.antenna_code ?? "-"}</td>
+                    <td style={tdStyle}>{mapping.operation_code ?? "-"}</td>
+                    <td style={tdStyle}>{mapping.active ? "Oui" : "Non"}</td>
                     <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                       <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startEdit(mapping)}>
                         Modifier
@@ -1317,12 +1404,27 @@ function CpeFinanceReference({
                     </td>
                   </tr>
                 ))}
+                {visibleSiteMappings.length === 0 && (
+                  <tr>
+                    <td colSpan={12} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                      Aucun site de codification.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           )}
+          </div>
+          {siteMappings.length > visibleSiteMappings.length && (
+            <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 12 }}>
+              {visibleSiteMappings.length} site(s) affiche(s) sur {siteMappings.length}. Utilise le filtre pour cibler une ligne.
+            </p>
+          )}
         </div>
       </section>
+      )}
 
+      {section === "rules" && (
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
@@ -1375,8 +1477,8 @@ function CpeFinanceReference({
               )}
             </div>
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                   <th style={thStyle}>Contrat</th>
@@ -1428,7 +1530,9 @@ function CpeFinanceReference({
           </div>
         </div>
       </section>
+      )}
 
+      {section === "invoices" && (
       <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
         <div style={{ overflowX: "auto" }}>
           <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Factures archivees recentes</h4>
@@ -1509,6 +1613,7 @@ function CpeFinanceReference({
           )}
         </div>
       </section>
+      )}
     </>
   );
 }
