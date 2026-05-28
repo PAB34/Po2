@@ -1219,7 +1219,7 @@ function CpeFinanceReference({
 
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <FinanceMarketTable title="Regles nature comptable" rows={natureRules.map((rule) => ({
-          code: `${rule.market} / ${rule.billed_item}`,
+          code: `${rule.contract_code ?? "Tous contrats"} / ${rule.market} / ${rule.billed_item}`,
           nb_lignes: Number(rule.frequency ?? 0) || 0,
           nb_factures: 0,
           montant_ht: 0,

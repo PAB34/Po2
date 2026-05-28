@@ -197,17 +197,19 @@ class CpeAccountingNatureRule(Base):
     __table_args__ = (
         UniqueConstraint(
             "city_id",
+            "contract_code",
             "market",
             "service_sold",
             "billed_item",
             "frequency",
-            name="uq_cpe_accounting_rule_key",
+            name="uq_cpe_accounting_rule_contract_key",
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
 
+    contract_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
     market: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     service_sold: Mapped[str | None] = mapped_column(String(120), nullable=True)
     billed_item: Mapped[str] = mapped_column(String(120), nullable=False, index=True)

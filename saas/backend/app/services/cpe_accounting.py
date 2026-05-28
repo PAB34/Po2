@@ -43,6 +43,13 @@ BT40_BASE = 128.4
 P2_REVISION_FORMULA = "P2 = P20 x (0,15 + 0,70 x ICHT-IME/ICHT-IME0 + 0,15 x FSD2/FSD20)"
 P3_REVISION_FORMULA = "P3 = P30 x (0,15 + 0,30 x ICHT-IME/ICHT-IME0 + 0,55 x BT40/BT400)"
 P2_4_OBJECTIVE_RULE = "P2.4 annuel : 100% si objectifs atteints, 50% si objectifs non atteints"
+INVOICE_TYPE_LABELS = {
+    "AC": "Acompte",
+    "AJ": "Ajustement / avoir",
+    "DE": "Facture definitive",
+    "EC": "Echeance / facture courante",
+    "RE": "Regularisation",
+}
 
 
 def _norm_header(value: Any) -> str:
@@ -106,6 +113,11 @@ def _site_code(value: Any) -> str | None:
     return re.sub(r"\s+", " ", match.group(1).upper()).strip()
 
 
+def _compact_text(value: Any) -> str:
+    text = _norm_text(value)
+    return re.sub(r"[^A-Z0-9]", "", text)
+
+
 def _rows_from_sheet(ws, header_row: int) -> list[dict[str, Any]]:
     headers = [_norm_header(cell.value) for cell in ws[header_row]]
     rows: list[dict[str, Any]] = []
@@ -120,7 +132,12 @@ def list_accounting_nature_rules(db: Session, city_id: int | None = None) -> lis
     query = select(CpeAccountingNatureRule)
     if city_id is not None:
         query = query.where(CpeAccountingNatureRule.city_id == city_id)
-    query = query.order_by(CpeAccountingNatureRule.market, CpeAccountingNatureRule.service_sold, CpeAccountingNatureRule.billed_item)
+    query = query.order_by(
+        CpeAccountingNatureRule.contract_code,
+        CpeAccountingNatureRule.market,
+        CpeAccountingNatureRule.service_sold,
+        CpeAccountingNatureRule.billed_item,
+    )
     return list(db.scalars(query).all())
 
 
@@ -182,6 +199,72 @@ def delete_accounting_site_mapping(db: Session, mapping: CpeAccountingSiteMappin
     db.commit()
 
 
+def _market_from_billed_item(billed_item: str | None) -> str:
+    item = (billed_item or "").upper()
+    for prefix in ("P1", "P2", "P3", "R1", "R2"):
+        if item.startswith(prefix):
+            return prefix
+    return item[:30] or "AUTRE"
+
+
+def _rule_notes_from_contract_row(row: dict[str, Any]) -> str | None:
+    parts = []
+    for key, label in [
+        ("marche_perimetre_a_confirmer", "Périmètre"),
+        ("statut_codification", "Statut"),
+        ("regle_de_codification", "Règle"),
+        ("question_precision_a_dalkia", "Question DALKIA"),
+        ("alerte_periode", "Alerte période"),
+    ]:
+        value = _clean(row.get(key))
+        if value:
+            parts.append(f"{label}: {value}")
+    return " | ".join(parts) or None
+
+
+def _upsert_nature_rule(
+    db: Session,
+    *,
+    city_id: int | None,
+    contract_code: str | None,
+    market: str,
+    service_sold: str | None,
+    billed_item: str,
+    frequency: str | None,
+    accounting_nature: str,
+    accounting_label: str | None,
+    notes: str | None,
+) -> bool:
+    existing = db.scalars(
+        select(CpeAccountingNatureRule).where(
+            CpeAccountingNatureRule.city_id == city_id,
+            func.coalesce(CpeAccountingNatureRule.contract_code, "") == (contract_code or ""),
+            CpeAccountingNatureRule.market == market,
+            func.coalesce(CpeAccountingNatureRule.service_sold, "") == (service_sold or ""),
+            CpeAccountingNatureRule.billed_item == billed_item,
+            func.coalesce(CpeAccountingNatureRule.frequency, "") == (frequency or ""),
+        )
+    ).first()
+    payload = {
+        "city_id": city_id,
+        "contract_code": contract_code,
+        "market": market,
+        "service_sold": service_sold,
+        "billed_item": billed_item,
+        "frequency": frequency,
+        "accounting_nature": accounting_nature,
+        "accounting_label": accounting_label,
+        "active": True,
+        "notes": notes,
+    }
+    if existing:
+        for key, value in payload.items():
+            setattr(existing, key, value)
+        return False
+    db.add(CpeAccountingNatureRule(**payload))
+    return True
+
+
 def import_codification_workbook(
     db: Session,
     raw_bytes: bytes,
@@ -194,7 +277,30 @@ def import_codification_workbook(
     errors: list[str] = []
     created_rules = updated_rules = created_sites = updated_sites = 0
 
-    if "Poste facturé vers Nature ctpab" in wb.sheetnames:
+    if "Postes x contrat x nature" in wb.sheetnames:
+        ws = wb["Postes x contrat x nature"]
+        for row in _rows_from_sheet(ws, 1):
+            contract_code = _upper(row.get("code_contrat"))
+            billed_item = _upper(row.get("poste_facture"))
+            nature = _clean(row.get("nature_proposee"))
+            if not contract_code or not billed_item or not nature:
+                continue
+            if _upsert_nature_rule(
+                db,
+                city_id=city_id,
+                contract_code=contract_code,
+                market=_market_from_billed_item(billed_item),
+                service_sold=None,
+                billed_item=billed_item,
+                frequency=_clean(row.get("nb_lignes")),
+                accounting_nature=nature,
+                accounting_label=_clean(row.get("libelle_nature")),
+                notes=_rule_notes_from_contract_row(row),
+            ):
+                created_rules += 1
+            else:
+                updated_rules += 1
+    elif "Poste facturé vers Nature ctpab" in wb.sheetnames:
         ws = wb["Poste facturé vers Nature ctpab"]
         for row in _rows_from_sheet(ws, 3):
             market = _upper(row.get("marche"))
@@ -204,34 +310,23 @@ def import_codification_workbook(
                 continue
             service_sold = _upper(row.get("service_vendu"))
             frequency = _clean(row.get("frequence"))
-            existing = db.scalars(
-                select(CpeAccountingNatureRule).where(
-                    CpeAccountingNatureRule.city_id == city_id,
-                    CpeAccountingNatureRule.market == market,
-                    func.coalesce(CpeAccountingNatureRule.service_sold, "") == (service_sold or ""),
-                    CpeAccountingNatureRule.billed_item == billed_item,
-                    func.coalesce(CpeAccountingNatureRule.frequency, "") == (frequency or ""),
-                )
-            ).first()
-            payload = {
-                "city_id": city_id,
-                "market": market,
-                "service_sold": service_sold,
-                "billed_item": billed_item,
-                "frequency": frequency,
-                "accounting_nature": nature,
-                "accounting_label": _clean(row.get("libelle_nature")),
-                "active": True,
-            }
-            if existing:
-                for key, value in payload.items():
-                    setattr(existing, key, value)
-                updated_rules += 1
-            else:
-                db.add(CpeAccountingNatureRule(**payload))
+            if _upsert_nature_rule(
+                db,
+                city_id=city_id,
+                contract_code=None,
+                market=market,
+                service_sold=service_sold,
+                billed_item=billed_item,
+                frequency=frequency,
+                accounting_nature=nature,
+                accounting_label=_clean(row.get("libelle_nature")),
+                notes=None,
+            ):
                 created_rules += 1
+            else:
+                updated_rules += 1
     else:
-        errors.append("Feuille absente : Poste facturé vers Nature ctpab")
+        errors.append("Feuille absente : Postes x contrat x nature ou Poste facturé vers Nature ctpab")
 
     if "Sites vers codes" in wb.sheetnames:
         ws = wb["Sites vers codes"]
@@ -286,17 +381,61 @@ def import_codification_workbook(
 
 def _find_accounting_rule(
     rules: list[CpeAccountingNatureRule],
+    contract_code: str | None,
     market: str | None,
     service_sold: str | None,
     billed_item: str | None,
 ) -> CpeAccountingNatureRule | None:
+    contract_norm = (contract_code or "").upper()
     market_norm = (market or "").upper()
     service_norm = (service_sold or "").upper()
     item_norm = (billed_item or "").upper()
+    contract_matches = [
+        rule
+        for rule in rules
+        if (rule.contract_code or "").upper() == contract_norm and (rule.billed_item or "").upper() == item_norm
+    ]
+    for rule in contract_matches:
+        if not rule.service_sold or rule.service_sold.upper() == service_norm:
+            return rule
     for rule in rules:
+        if rule.contract_code:
+            continue
         if rule.market.upper() == market_norm and (rule.billed_item or "").upper() == item_norm:
             if not rule.service_sold or rule.service_sold.upper() == service_norm:
                 return rule
+    return None
+
+
+def _find_site_mapping(
+    site_mappings_by_code: dict[str, CpeAccountingSiteMapping],
+    site_mappings: list[CpeAccountingSiteMapping],
+    detail: str | None,
+) -> CpeAccountingSiteMapping | None:
+    detected_site = _site_code(detail)
+    if detected_site:
+        direct = site_mappings_by_code.get(detected_site)
+        if direct:
+            return direct
+
+    compact_detail = _compact_text(detail)
+    if not compact_detail:
+        return None
+
+    ranked = sorted(
+        site_mappings,
+        key=lambda mapping: max(
+            len(_compact_text(mapping.code_site)),
+            len(_compact_text(mapping.site_name)),
+            len(_compact_text(mapping.antenna_label)),
+        ),
+        reverse=True,
+    )
+    for mapping in ranked:
+        for value in (mapping.code_site, mapping.site_name, mapping.antenna_label):
+            token = _compact_text(value)
+            if len(token) >= 8 and token in compact_detail:
+                return mapping
     return None
 
 
@@ -319,7 +458,8 @@ def import_finance_workbook(
     db.flush()
 
     rules = list_accounting_nature_rules(db, city_id)
-    site_mappings = {m.code_site.upper(): m for m in list_accounting_site_mappings(db, city_id)}
+    site_mapping_rows = list_accounting_site_mappings(db, city_id)
+    site_mappings = {m.code_site.upper(): m for m in site_mapping_rows}
     invoice_by_number: dict[str, CpeFinanceInvoice] = {}
     invoice_lines: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
     total_ht = 0.0
@@ -369,8 +509,16 @@ def import_finance_workbook(
             billed_item = _upper(source_row.get("poste_facture"))
             detail = _clean(source_row.get("lieu_ou_detail_de_la_prestation"))
             detected_site = _site_code(detail)
-            site_mapping = site_mappings.get(detected_site or "") if detected_site else None
-            rule = _find_accounting_rule(rules, market, service_sold, billed_item)
+            site_mapping = _find_site_mapping(site_mappings, site_mapping_rows, detail)
+            if site_mapping and not detected_site:
+                detected_site = site_mapping.code_site
+            rule = _find_accounting_rule(
+                rules,
+                _clean(source_row.get("code_contrat")),
+                market,
+                service_sold,
+                billed_item,
+            )
             if site_mapping:
                 matched_sites += 1
             if rule:
@@ -491,6 +639,13 @@ def _line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
     except json.JSONDecodeError:
         return None
     return _float(raw.get(key))
+
+
+def _invoice_type_label(value: str | None) -> str | None:
+    code = (value or "").strip().upper()
+    if not code:
+        return None
+    return INVOICE_TYPE_LABELS.get(code, code)
 
 
 def _norm_text(value: Any) -> str:
@@ -874,17 +1029,21 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
     ws["B4"] = invoice.contract_code
     ws["A5"] = "Période"
     ws["B5"] = f"{invoice.period_start or '-'} au {invoice.period_end or '-'}"
-    ws["A6"] = "Statut"
-    ws["B6"] = invoice.status
-    ws["A7"] = "Total HT"
-    ws["B7"] = invoice.total_ht
-    ws["B7"].number_format = '#,##0.00 "€"'
+    ws["A6"] = "Type facture"
+    ws["B6"] = f"{_invoice_type_label(invoice.invoice_type) or '-'} ({invoice.invoice_type or '-'})"
+    ws["A7"] = "Statut"
+    ws["B7"] = invoice.status
+    ws["A8"] = "Total HT"
+    ws["B8"] = invoice.total_ht
+    ws["B8"].number_format = '#,##0.00 "€"'
     if invoice.notes:
-        ws["A8"] = "Notes"
-        ws["B8"] = invoice.notes
+        ws["A9"] = "Notes"
+        ws["B9"] = invoice.notes
 
     headers = [
         "Ligne",
+        "Type facture",
+        "Code type",
         "Marché",
         "Service vendu",
         "Poste facturé",
@@ -917,6 +1076,8 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
         line_controls = controls_by_line.get(line.id, [])
         values = [
             line.row_number,
+            _invoice_type_label(invoice.invoice_type),
+            invoice.invoice_type,
             line.market,
             line.service_sold,
             line.billed_item,
@@ -940,15 +1101,15 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
         ]
         for col, value in enumerate(values, start=1):
             ws.cell(row=row_index, column=col, value=value)
-        ws.cell(row=row_index, column=13).number_format = '#,##0.0000'
-        ws.cell(row=row_index, column=14).number_format = '#,##0.0000'
-        ws.cell(row=row_index, column=18).number_format = '#,##0.00 "€"'
+        ws.cell(row=row_index, column=15).number_format = '#,##0.0000'
+        ws.cell(row=row_index, column=16).number_format = '#,##0.0000'
+        ws.cell(row=row_index, column=20).number_format = '#,##0.00 "€"'
 
-    widths = [10, 12, 20, 18, 18, 32, 14, 14, 16, 16, 12, 24, 12, 12, 12, 34, 48, 14, 12, 10, 42]
+    widths = [10, 22, 10, 12, 20, 18, 18, 32, 14, 14, 16, 16, 12, 24, 12, 12, 12, 34, 48, 14, 12, 10, 42]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
     ws.freeze_panes = "A12"
-    ws.auto_filter.ref = f"A{start_row}:U{max(start_row + 1, start_row + len(lines))}"
+    ws.auto_filter.ref = f"A{start_row}:W{max(start_row + 1, start_row + len(lines))}"
 
     output = io.BytesIO()
     wb.save(output)

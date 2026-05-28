@@ -282,7 +282,7 @@ Dans `/cpe` → **Référentiel finance** :
 
 Le premier socle persiste :
 - `cpe_accounting_site_mappings` : site → service/fonction/antenne/opération
-- `cpe_accounting_nature_rules` : marché/service/poste facturé → nature comptable
+- `cpe_accounting_nature_rules` : code contrat/marché/service/poste facturé → nature comptable
 - `cpe_finance_import_batches` : lots d'import
 - `cpe_finance_invoices` : factures reconstruites
 - `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
@@ -322,6 +322,18 @@ Règle appliquée :
 - si les résultats annuels sont absents ou incomplets, le contrôle reste `blocked`.
 
 Ce contrôle ne remplace pas encore la validation documentaire des livrables P2.4 : il sécurise l'annualité et rattache la décision aux résultats de performance déjà calculés.
+
+### Codification DALKIA par code contrat
+
+Depuis le fichier enrichi `analyse_codification_dalkia_enrichie_par_code_contrat`, la feuille prioritaire est `Postes x contrat x nature`.
+
+Règle appliquée :
+- rattacher d'abord par `CODE CONTRAT + POSTE FACTURÉ` ;
+- utiliser l'ancienne feuille `Poste facturé vers Nature ctpab` seulement en fallback ;
+- conserver les statuts et questions DALKIA dans les notes de règle ;
+- afficher le type de facture dans la fiche liaison finance (`AC` acompte, `AJ` ajustement/avoir, `DE` facture définitive, `EC` échéance/facture courante, `RE` régularisation).
+
+Sur l'export finances DALKIA du 27/05/2026, cette clé couvre les 2047 lignes de l'export.
 
 ---
 

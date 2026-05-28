@@ -213,6 +213,7 @@ class CpeFinancePreview(BaseModel):
 # ── Référentiel comptable DALKIA ─────────────────────────────────────────────
 
 class CpeAccountingNatureRuleBase(BaseModel):
+    contract_code: str | None = None
     market: str
     service_sold: str | None = None
     billed_item: str
@@ -228,6 +229,7 @@ class CpeAccountingNatureRuleCreate(CpeAccountingNatureRuleBase):
 
 
 class CpeAccountingNatureRuleUpdate(BaseModel):
+    contract_code: str | None = None
     market: str | None = None
     service_sold: str | None = None
     billed_item: str | None = None

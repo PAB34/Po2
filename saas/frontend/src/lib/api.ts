@@ -2761,6 +2761,7 @@ export type CpeAccountingImportResult = {
 export type CpeAccountingNatureRule = {
   id: number;
   city_id: number | null;
+  contract_code: string | null;
   market: string;
   service_sold: string | null;
   billed_item: string;
