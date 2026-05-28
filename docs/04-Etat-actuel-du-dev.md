@@ -1,4 +1,8 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-05-28 (CPE DALKIA finance : perimetre contrats, export liaison enrichi, controle acompte P1 gaz Lot 1)
+> **Dernier commit pousse sur `main`** : `add8d71` (feat(cpe): control DALKIA P1 acompte scope)
+> **Prod OVH** : API OK apres deploy GitHub Actions reussi. Healthcheck `https://patrimoineaucarre.com/api/health` = `status: ok`.
+
 > **Mise a jour complementaire** : 2026-05-26 (9 filtres facettes /energie/factures + graphe mensuel per-site)
 > **Dernier commit pousse sur `main`** : `9b2c8ca` (feat(invoices): add 9 facet filters on billing page and monthly graph)
 > **Prod OVH** : API OK, mais derniers deploys GitHub Actions en echec transitoire Docker Hub (`TLS handshake timeout` sur images `nginx`, `python`, `node`). Relancer Deploy avant de considerer les derniers commits visibles en prod.
@@ -24,6 +28,7 @@
 | Préconisations puissance | `/energie/preconisations` | Stable |
 | Factures | `/energie/factures`, `/energie/factures/:id` | Stable en prod pour parser ENGIE, controle/decision et import lot ; le controle BPU tente une reference historique exacte dans `bpu_*` avant le repli `BillingBpuLine` |
 | Facturation TURPE | `/energie/facturation` | Stable |
+| CPE DALKIA | `/cpe` | En cours avance : cockpit finance, matrice codification editable, import/archives factures DALKIA, export XLSX fiche liaison, controles P2/P3/P2.4, controle perimetre contrats et premier controle acompte P1 gaz Lot 1 |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
 | **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
 | **BPU — Documents & Import** | `/energie/bpu` (onglet Documents) | Nouveau 2026-05-21 — stats + table BPU filtrée + import admin (séparé de Timeline) |
@@ -225,3 +230,49 @@ A faire juste apres deploy OVH reussi :
 2. Verifier que `Prix contractuels` et les types BPU sont visibles dans les filtres.
 3. Filtrer sur `Prix contractuels` puis `Ecart prix facture / BPU`, editer le rapport, verifier le recalcul BPU.
 4. Relire les 13 ecarts potentiels restants, surtout `BORNE FIXE MARCHE DU BARROU` en `LU/base`.
+
+## Mise a jour CPE DALKIA finance - 2026-05-28
+
+Chantier concerne : module `/cpe`, factures DALKIA et fiche liaison finances.
+
+Travaux livres et pousses :
+
+- Navigation finance `/cpe` clarifiee en sous-vues : imports, sites, matrice, indices, factures.
+- Matrice de codification DALKIA importable et editable : sites finance, natures comptables par code contrat / marche / service / poste facture.
+- Historique des factures DALKIA supprimable via action dediee.
+- Liste "Factures archivees recentes" corrigee : elle affiche toutes les factures et dispose de filtres facture / contrat / statut.
+- Export XLSX fiche liaison enrichi : `Synthese`, `Lignes finance`, `Controles`, `Donnees source`.
+- Controle facture renforce : nature comptable, site finance, type de facture, total HT, coherence des periodes, P2, P3/P3.4 et P2.4 objectifs.
+- Correction de perimetre : les contrats DALKIA hors CPE Ville cible (ex. CREM Piscine Fonquerne `C00032657J`, thalassothermie, anciens marches) ne sont plus bloques par l'absence de site VDS/CCAS.
+- Controle P1 gaz Lot 1 ajoute pour `C00190116O` :
+  - lignes incluses : `P1`, `ABT`, `CTA`, `CPB`, `LOCATION`, `STOCKAGE`, `TERME FIXE` ;
+  - reference 2026 : DPGF Lot 1, synthese `P1 gaz Rev Temp`, total annuel `341 293,06 EUR HT` ;
+  - regle : acompte trimestriel = `1/4` du P1 annuel revise, tolerance `1%` ou `100 EUR`.
+
+Commits associes :
+
+```text
+695c0bd feat(cpe): clarify finance navigation
+5b0ecbf feat(cpe): improve DALKIA finance exports
+25e6bba feat(cpe): strengthen DALKIA invoice controls
+2419f9d fix(cpe): show all archived DALKIA invoices
+add8d71 feat(cpe): control DALKIA P1 acompte scope
+```
+
+Validation :
+
+- `python -m compileall app` OK localement.
+- Tests unitaires locaux non executes : environnement Codex sans `pytest`/`sqlalchemy` installes.
+- GitHub Actions `CI` OK pour `add8d71`.
+- GitHub Actions `Deploy` OK pour `add8d71`.
+- Healthcheck prod OK.
+
+Prochaines etapes recommandees :
+
+1. Reimporter la matrice codification enrichie puis l'export finances DALKIA dans `/cpe`.
+2. Relancer les controles sur les factures du contrat `C00190116O`.
+3. Verifier une facture P1 acompte T1 2026 : le controle doit comparer le total P1 gaz du lot importe a `85 323,27 EUR HT`.
+4. Completer les contrats cible si DALKIA confirme officiellement `C00190155J` comme Lot 2 et ses regles propres.
+5. Remplacer progressivement les constantes P1 DPGF par un referentiel editable en base : contrat, annee, poste, formule, total annuel, tolerance.
+6. Ajouter le rapprochement automatique fin vers site quand une facture contient plusieurs sites : code VDS/CCAS explicite, puis mapping detail DALKIA -> site, puis ecran de reconciliation des lignes non rattachees.
+7. Etendre P1 au decompte definitif : volumes GRDF/DALKIA, prix gaz fournisseur, ecart entre acompte et definitif, pieces justificatives.

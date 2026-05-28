@@ -209,6 +209,7 @@ VDS-SPORT 03;2026-01-31;9.8;;O
 | GET | `/api/cpe/accounting/nature-rules` | Mapping poste facturé vers nature comptable |
 | POST/PATCH/DELETE | `/api/cpe/accounting/nature-rules` | Maintenir les règles de nature comptable |
 | POST | `/api/cpe/finances/import` | Import et archivage XLSX export finances DALKIA |
+| DELETE | `/api/cpe/finances/history` | Suppression de l'historique des lots/factures/lignes/controles finances |
 | GET | `/api/cpe/finances/batches` | Lots d'import finances archivés |
 | GET | `/api/cpe/finances/invoices` | Factures DALKIA reconstruites depuis les lots |
 | GET/POST | `/api/cpe/revision-indices` | Saisie et lecture des indices ICHT-IME / BT40 / FSD2 par trimestre |
@@ -239,7 +240,9 @@ VDS-SPORT 03;2026-01-31;9.8;;O
   - import de `analyse_codification_dalkia.xlsx`
   - édition des sites de codification comptable
   - import XLSX persistant des exports finances DALKIA
-  - premier registre des factures DALKIA archivées
+  - registre des factures DALKIA archivees, filtres facture/contrat/statut
+  - suppression de l'historique finance si un import doit etre repris proprement
+  - export XLSX fiche liaison detaille par facture
 
 ### `/cpe/sites/:id` — `CpeSiteDetailPage.tsx`
 
@@ -287,7 +290,7 @@ Le premier socle persiste :
 - `cpe_finance_invoices` : factures reconstruites
 - `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
 
-À ce stade, les contrôles de révision P2 et P3/P3.4, le contrôle P2.4 annuel/objectifs et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, les livrables détaillés et les preuves documentaires restent à développer.
+À ce stade, les contrôles de révision P2 et P3/P3.4, le contrôle P2.4 annuel/objectifs, le contrôle de périmètre contrat, le premier contrôle d'acompte P1 gaz Lot 1 et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1 définitifs, les livrables détaillés et les preuves documentaires restent à développer.
 
 ### Contrôles P2 et P3 / P3.4
 
@@ -322,6 +325,29 @@ Règle appliquée :
 - si les résultats annuels sont absents ou incomplets, le contrôle reste `blocked`.
 
 Ce contrôle ne remplace pas encore la validation documentaire des livrables P2.4 : il sécurise l'annualité et rattache la décision aux résultats de performance déjà calculés.
+
+### Perimetre contrats et controle P1 gaz Lot 1
+
+Le registre finance DALKIA contient plusieurs contrats qui ne relèvent pas tous du marché CPE Ville à contrôler maintenant. Le code distingue donc :
+- contrats CPE Ville cible : `C00190116O` et `C00190155J` ;
+- contrats hors périmètre courant : anciens marchés, CREM Piscine Fonquerne, thalassothermie, sous-stations, etc.
+
+Conséquence métier :
+- une ligne hors périmètre peut être correctement codifiée en nature comptable sans être bloquée par l'absence de site VDS/CCAS ;
+- pour les contrats CPE Ville cible, l'absence de rattachement site reste une alerte bloquante si un site est attendu.
+
+Premier contrôle P1 livré :
+- contrat : `C00190116O` (Lot 1 gaz) ;
+- postes inclus : `P1`, `ABT`, `CTA`, `CPB`, `LOCATION`, `STOCKAGE`, `TERME FIXE` ;
+- référence 2026 : DPGF Lot 1, synthèse `P1 gaz Rev Temp`, total annuel `341 293,06 EUR HT` ;
+- règle d'acompte : `1/4` du P1 annuel révisé aux échéances 31/03, 30/06 et 30/09 ;
+- tolérance : `1%` ou `100 EUR`.
+
+Le contrôle est agrégé sur toutes les lignes du lot importé qui partagent le même contrat, la même période et les mêmes postes P1 gaz. Il apparaît dans `cpe_finance_controls` avec le type `p1_gaz_acompte_dpgf` et est repris dans l'export XLSX.
+
+Limite volontaire :
+- la référence DPGF 2026 est actuellement codée en constante applicative pour sécuriser rapidement le contrôle ;
+- prochaine étape : créer un référentiel editable en base pour porter contrat, année, formule, total annuel, postes inclus et tolérance.
 
 ### Codification DALKIA par code contrat
 
