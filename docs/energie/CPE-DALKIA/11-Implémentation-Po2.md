@@ -287,7 +287,7 @@ Le premier socle persiste :
 - `cpe_finance_invoices` : factures reconstruites
 - `cpe_finance_lines` : lignes détaillées avec premier rattachement comptable
 
-À ce stade, les contrôles de révision P2 et P3/P3.4 et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, P2.4/livrables et les preuves restent à développer.
+À ce stade, les contrôles de révision P2 et P3/P3.4, le contrôle P2.4 annuel/objectifs et l'export de fiche liaison XLSX sont branchés sur ce registre. Les contrôles P1, les livrables détaillés et les preuves documentaires restent à développer.
 
 ### Contrôles P2 et P3 / P3.4
 
@@ -310,6 +310,18 @@ Le contrôle compare le prix révisé DALKIA au prix attendu et classe chaque li
 - `blocked` : indice ou prix source manquant
 
 Les résultats sont stockés dans `cpe_finance_controls` et repris dans l'export XLSX de fiche liaison.
+
+### Contrôle P2.4 annuel / objectifs
+
+Le contrôle `p2_4_objectives` est ajouté sur les lignes DALKIA détectées comme P2.4 (`P2.4`, `P2-4`, `P2 4` ou libellé de maîtrise de l'énergie).
+
+Règle appliquée :
+- P2.4 doit être facturé annuellement après validation des objectifs énergétiques ;
+- si les résultats annuels CPE calculés contiennent une pénalité, le taux attendu est `0,5` ;
+- si les résultats annuels sont complets sans pénalité, le taux attendu est `1,0` ;
+- si les résultats annuels sont absents ou incomplets, le contrôle reste `blocked`.
+
+Ce contrôle ne remplace pas encore la validation documentaire des livrables P2.4 : il sécurise l'annualité et rattache la décision aux résultats de performance déjà calculés.
 
 ---
 
