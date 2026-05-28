@@ -119,6 +119,23 @@ Il peut alimenter :
 
 ## Decisions d'integration Po2
 
+### Perimetre de controle finance
+
+Les controles finances distinguent maintenant :
+- les contrats du CPE Ville cible (`C00190116O`, `C00190155J`) ;
+- les contrats presents dans l'export DALKIA mais hors perimetre courant (CREM Piscine, thalassothermie, anciens marches, etc.).
+
+Une ligne hors perimetre peut donc conserver sa nature comptable sans etre bloquee par l'absence de site VDS/CCAS. Le controle site reste bloquant pour le CPE Ville cible lorsqu'un rattachement finance est attendu.
+
+### Controle P1 gaz Lot 1
+
+Pour `C00190116O`, Po2 controle les acomptes P1 gaz par periode importee :
+- lignes incluses : `P1`, `ABT`, `CTA`, `CPB`, `LOCATION`, `STOCKAGE`, `TERME FIXE` ;
+- reference 2026 : DPGF Lot 1, synthese `P1 gaz Rev Temp`, soit `341 293,06 EUR HT` annuels ;
+- regle : acompte trimestriel = `1/4` du P1 annuel revise, avec tolerance de controle `1%` ou `100 EUR`.
+
+Ce controle est volontairement limite au Lot 1 gaz tant que les autres contrats ne sont pas confirmes dans le perimetre de marche.
+
 ### Tranche lancee
 
 Po2 expose maintenant un **preview d'export finances DALKIA** depuis le cockpit `/cpe` :

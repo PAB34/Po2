@@ -37,6 +37,15 @@ from app.schemas.cpe import (
 )
 
 _SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
+CURRENT_CPE_CONTRACT_CODES = {"C00190116O", "C00190155J"}
+P1_GAZ_LOT1_CONTRACT_CODE = "C00190116O"
+P1_GAZ_ACOMPTE_ITEMS = {"P1", "ABT", "CTA", "CPB", "LOCATION", "STOCKAGE", "TERME FIXE"}
+P1_GAZ_DPGF_REVISED_TOTALS = {
+    # DPGF Lot 1 2026, synthese "P1 gaz Rev Temp", periode 01/01/2026-31/12/2026.
+    2026: 341293.06,
+}
+P1_GAZ_ACOMPTE_TOLERANCE_PCT = 0.01
+P1_GAZ_ACOMPTE_TOLERANCE_EUR = 100.0
 ICHT_IME_BASE = 141.4
 FSD2_BASE = 169.8
 BT40_BASE = 128.4
@@ -205,6 +214,18 @@ def _market_from_billed_item(billed_item: str | None) -> str:
         if item.startswith(prefix):
             return prefix
     return item[:30] or "AUTRE"
+
+
+def _is_current_cpe_contract(contract_code: str | None) -> bool:
+    return (contract_code or "").strip().upper() in CURRENT_CPE_CONTRACT_CODES
+
+
+def _is_p1_gaz_lot1_line(line: CpeFinanceLine) -> bool:
+    return (
+        (line.contract_code or "").strip().upper() == P1_GAZ_LOT1_CONTRACT_CODE
+        and (line.market or "").strip().upper() == "P1"
+        and (line.billed_item or "").strip().upper() in P1_GAZ_ACOMPTE_ITEMS
+    )
 
 
 def _rule_notes_from_contract_row(row: dict[str, Any]) -> str | None:
@@ -948,7 +969,7 @@ def _control_accounting_nature(line: CpeFinanceLine) -> CpeFinanceControl:
     )
 
 
-def _control_accounting_site(line: CpeFinanceLine) -> CpeFinanceControl:
+def _control_accounting_site(line: CpeFinanceLine, invoice: CpeFinanceInvoice) -> CpeFinanceControl:
     if line.accounting_site_id:
         return _make_basic_control(
             line,
@@ -964,6 +985,17 @@ def _control_accounting_site(line: CpeFinanceLine) -> CpeFinanceControl:
             status="blocked",
             severity="warning",
             message=f"Code site detecte ({line.site_code_detected}) mais non rattache a la matrice de codification.",
+        )
+    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+        return _make_basic_control(
+            line,
+            control_type="accounting_site",
+            status="ok",
+            severity="info",
+            message=(
+                "Site finance non exige : contrat DALKIA hors perimetre CPE Ville cible "
+                f"({invoice.contract_code or line.contract_code or 'sans code contrat'})."
+            ),
         )
     return _make_basic_control(
         line,
@@ -1071,6 +1103,107 @@ def _control_invoice_period(invoice: CpeFinanceInvoice, lines: list[CpeFinanceLi
     )
 
 
+def _control_p1_gaz_acompte_against_dpgf(
+    db: Session,
+    invoice: CpeFinanceInvoice,
+    lines: list[CpeFinanceLine],
+) -> CpeFinanceControl | None:
+    p1_lines = [line for line in lines if _is_p1_gaz_lot1_line(line)]
+    if not p1_lines:
+        return None
+
+    anchor = p1_lines[0]
+    if not invoice.period_start or not invoice.period_end:
+        return _make_basic_control(
+            anchor,
+            control_type="p1_gaz_acompte_dpgf",
+            status="blocked",
+            severity="warning",
+            message="Controle acompte P1 gaz impossible : periode facture absente ou incomplete.",
+            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+        )
+
+    if (invoice.period_end.month, invoice.period_end.day) not in {(3, 31), (6, 30), (9, 30)}:
+        return _make_basic_control(
+            anchor,
+            control_type="p1_gaz_acompte_dpgf",
+            status="ok",
+            severity="info",
+            message=(
+                "Controle acompte P1 gaz non applique : la periode ne correspond pas "
+                "a une echeance trimestrielle d'acompte contractuelle."
+            ),
+            formula="Acomptes P1 attendus aux 31/03, 30/06 et 30/09 ; decompte definitif au 15/02/N+1",
+        )
+
+    annual_expected = P1_GAZ_DPGF_REVISED_TOTALS.get(invoice.period_end.year)
+    if annual_expected is None:
+        return _make_basic_control(
+            anchor,
+            control_type="p1_gaz_acompte_dpgf",
+            status="blocked",
+            severity="warning",
+            message=f"Controle acompte P1 gaz impossible : total DPGF annuel absent pour {invoice.period_end.year}.",
+            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+        )
+
+    scope_lines = list(
+        db.scalars(
+            select(CpeFinanceLine).where(
+                CpeFinanceLine.batch_id == invoice.batch_id,
+                CpeFinanceLine.city_id == invoice.city_id,
+                CpeFinanceLine.contract_code == P1_GAZ_LOT1_CONTRACT_CODE,
+                CpeFinanceLine.market == "P1",
+                CpeFinanceLine.period_start == invoice.period_start,
+                CpeFinanceLine.period_end == invoice.period_end,
+                CpeFinanceLine.billed_item.in_(P1_GAZ_ACOMPTE_ITEMS),
+            )
+        ).all()
+    )
+    actual = round(sum(line.amount_ht or 0.0 for line in scope_lines), 2)
+    expected = round(annual_expected / 4, 2)
+    delta = round(actual - expected, 2)
+    delta_pct = round(delta / expected, 6) if expected else None
+    tolerance = max(P1_GAZ_ACOMPTE_TOLERANCE_EUR, expected * P1_GAZ_ACOMPTE_TOLERANCE_PCT)
+    if abs(delta) <= tolerance:
+        return CpeFinanceControl(
+            city_id=anchor.city_id,
+            batch_id=anchor.batch_id,
+            invoice_id=anchor.invoice_id,
+            line_id=anchor.id,
+            control_type="p1_gaz_acompte_dpgf",
+            status="ok",
+            severity="info",
+            message=(
+                f"Acompte P1 gaz coherent sur le lot importe : {actual:.2f} EUR HT "
+                f"pour {invoice.period_start} - {invoice.period_end}, attendu {expected:.2f} EUR HT."
+            ),
+            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+            expected_revised_price=expected,
+            actual_revised_price=actual,
+            delta_abs=delta,
+            delta_pct=delta_pct,
+        )
+    return CpeFinanceControl(
+        city_id=anchor.city_id,
+        batch_id=anchor.batch_id,
+        invoice_id=anchor.invoice_id,
+        line_id=anchor.id,
+        control_type="p1_gaz_acompte_dpgf",
+        status="error",
+        severity="error",
+        message=(
+            f"Ecart acompte P1 gaz sur le lot importe : facture {actual:.2f} EUR HT, "
+            f"attendu {expected:.2f} EUR HT selon DPGF revise, ecart {delta:.2f} EUR."
+        ),
+        formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+        expected_revised_price=expected,
+        actual_revised_price=actual,
+        delta_abs=delta,
+        delta_pct=delta_pct,
+    )
+
+
 def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
@@ -1099,10 +1232,13 @@ def recompute_finance_invoice_controls(
     ]
     controls.extend(_control_p2_4_objectives(db, line) for line in p2_4_lines)
     controls.extend(_control_accounting_nature(line) for line in lines)
-    controls.extend(_control_accounting_site(line) for line in lines)
+    controls.extend(_control_accounting_site(line, invoice) for line in lines)
     controls.append(_control_invoice_type(invoice, lines[0]))
     controls.append(_control_invoice_total(invoice, lines, lines[0]))
     controls.append(_control_invoice_period(invoice, lines, lines[0]))
+    p1_gaz_control = _control_p1_gaz_acompte_against_dpgf(db, invoice, lines)
+    if p1_gaz_control is not None:
+        controls.append(p1_gaz_control)
     db.add_all(controls)
     db.commit()
     for control in controls:
