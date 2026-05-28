@@ -1030,8 +1030,25 @@ function CpeFinanceReference({
   const [section, setSection] = useState<CpeFinanceSection>("imports");
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
+  const [invoiceFilter, setInvoiceFilter] = useState("");
+  const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
-  const recentInvoices = invoices.slice(0, 8);
+  const visibleInvoices = invoices.filter((invoice) => {
+    const haystack = [
+      invoice.invoice_number,
+      invoice.contract_code,
+      invoice.contract_label,
+      invoice.invoice_type,
+      invoice.status,
+      invoice.period_start,
+      invoice.period_end,
+      invoice.total_ht,
+    ]
+      .filter((value) => value != null)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(invoiceFilter.trim().toLowerCase());
+  });
   const visibleSiteMappings = siteMappings
     .filter((mapping) => {
       const haystack = [
@@ -1558,24 +1575,32 @@ function CpeFinanceReference({
         <div style={{ overflowX: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
             <div>
-              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Factures archivees recentes</h4>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Factures archivees</h4>
               <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
-                {invoices.length} facture(s) archivee(s), {batches.length} lot(s) importe(s).
+                {visibleInvoices.length} facture(s) affichee(s) sur {invoices.length}, {batches.length} lot(s) importe(s).
               </p>
             </div>
-            <button
-              type="button"
-              className="secondary-button"
-              style={{ color: "#b91c1c" }}
-              disabled={deleteHistoryPending || invoices.length === 0}
-              onClick={() => {
-                if (window.confirm("Supprimer tout l'historique des factures DALKIA importees ? Le referentiel de codification sera conserve.")) {
-                  onDeleteHistory();
-                }
-              }}
-            >
-              {deleteHistoryPending ? "Suppression..." : "Supprimer l'historique des factures"}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <input
+                value={invoiceFilter}
+                onChange={(event) => setInvoiceFilter(event.target.value)}
+                placeholder="Filtrer facture, contrat, statut..."
+                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 260 }}
+              />
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ color: "#b91c1c" }}
+                disabled={deleteHistoryPending || invoices.length === 0}
+                onClick={() => {
+                  if (window.confirm("Supprimer tout l'historique des factures DALKIA importees ? Le referentiel de codification sera conserve.")) {
+                    onDeleteHistory();
+                  }
+                }}
+              >
+                {deleteHistoryPending ? "Suppression..." : "Supprimer l'historique des factures"}
+              </button>
+            </div>
           </div>
           {deleteHistoryResult && (
             <p style={{ color: "#166534", fontSize: 13, margin: "0 0 8px" }}>
@@ -1596,7 +1621,7 @@ function CpeFinanceReference({
               </tr>
             </thead>
             <tbody>
-              {recentInvoices.map((invoice) => (
+              {visibleInvoices.map((invoice) => (
                 <tr key={invoice.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={tdStyle}>{invoice.invoice_number}</td>
                   <td style={tdStyle}>{invoice.contract_code ?? "-"}</td>
@@ -1631,17 +1656,20 @@ function CpeFinanceReference({
                       className="secondary-button"
                       style={{ fontSize: 12, padding: "4px 8px" }}
                       disabled={controlsPending}
-                      onClick={() => onRecalculateControls(invoice.id)}
+                      onClick={() => {
+                        setLastControlledInvoice(invoice.invoice_number);
+                        onRecalculateControls(invoice.id);
+                      }}
                     >
                       Controle facture
                     </button>
                   </td>
                 </tr>
               ))}
-              {recentInvoices.length === 0 && (
+              {visibleInvoices.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
-                    Aucun export finances importe.
+                    Aucune facture ne correspond au filtre.
                   </td>
                 </tr>
               )}
@@ -1649,7 +1677,7 @@ function CpeFinanceReference({
           </table>
           {controlsSummary && (
             <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
-              Dernier controle facture : <strong>{controlsSummary.ok}</strong> OK,{" "}
+              Dernier controle facture{lastControlledInvoice ? ` ${lastControlledInvoice}` : ""} : <strong>{controlsSummary.ok}</strong> OK,{" "}
               <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
               <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
               {lastControls?.slice(0, 3).map((control) => (
