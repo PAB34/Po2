@@ -211,11 +211,12 @@ def delete_accounting_nature_rule(
     rule_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     rule = db.get(CpeAccountingNatureRule, rule_id)
     if rule is None or rule.city_id != current_user.city_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle comptable introuvable")
     accounting_svc.delete_accounting_nature_rule(db, rule)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/accounting/site-mappings", response_model=list[CpeAccountingSiteMappingOut])
@@ -258,11 +259,12 @@ def delete_accounting_site_mapping(
     mapping_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     mapping = db.get(CpeAccountingSiteMapping, mapping_id)
     if mapping is None or mapping.city_id != current_user.city_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site de codification introuvable")
     accounting_svc.delete_accounting_site_mapping(db, mapping)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/finances/import", response_model=CpeFinanceImportResult)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -79,7 +79,7 @@ def change_password(
     payload: ChangePasswordRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> None:
+) -> Response:
     try:
         update_user_password(db, current_user, payload.current_password, payload.new_password)
     except ValueError as exc:
@@ -89,3 +89,4 @@ def change_password(
                 detail="Mot de passe actuel invalide.",
             ) from exc
         raise
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

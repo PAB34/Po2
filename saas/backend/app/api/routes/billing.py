@@ -1,7 +1,7 @@
 from hashlib import sha256
 from threading import Thread
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -135,10 +135,11 @@ def delete_billing_config(
     config_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
     city_id = _require_city(current_user)
     cfg = _get_cfg_or_404(db, config_id, city_id)
     delete_config(db, cfg)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/configs/{config_id}/prices", response_model=list[BillingPriceEntryOut])
@@ -473,11 +474,12 @@ def delete_energy_invoice_import(
     invoice_import_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
     city_id = _require_city(current_user)
     found = delete_invoice_import(db, city_id, invoice_import_id)
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/invoices/imports")
