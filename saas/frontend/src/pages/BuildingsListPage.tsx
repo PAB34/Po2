@@ -324,7 +324,7 @@ export function BuildingsListPage() {
       ) : null}
 
       {totalCount > 0 ? (
-        <div className="buildings-list-layout">
+        <div className="buildings-workspace">
           {/* COLONNE GAUCHE - arborescence cascade */}
           <aside className="buildings-sidebar">
             <div className="section-block buildings-addresses-section">
@@ -341,43 +341,30 @@ export function BuildingsListPage() {
                   placeholder="Nom, adresse, parcelle..."
                 />
               </label>
-              <div className="resource-list buildings-address-list">
+              <div className="buildings-address-list patrimony-tree">
                 {visibleSites.map((site) => {
                   const isSiteSelected = selectedNode?.type === "site" && selectedNode.id === site.id;
                   const isSiteExpanded = expandedSites.has(site.id);
                   const siteBuildings = buildingsBySiteId.get(site.id) ?? [];
                   return (
-                    <div key={`site-${site.id}`} style={{ marginBottom: 4 }}>
-                      <div
-                        className={`tree-node tree-node-site${isSiteSelected ? " tree-node-active" : ""}`}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          padding: "6px 8px",
-                          cursor: "pointer",
-                          background: isSiteSelected ? "rgba(249, 115, 22, 0.15)" : undefined,
-                          borderLeft: isSiteSelected ? "3px solid #f97316" : "3px solid transparent",
-                        }}
-                      >
+                    <div key={`site-${site.id}`}>
+                      <div className={`patrimony-tree-node patrimony-tree-site${isSiteSelected ? " is-active" : ""}`}>
                         <span
+                          className="patrimony-tree-toggle"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleSiteExpand(site.id);
                           }}
-                          style={{ cursor: "pointer", userSelect: "none", minWidth: 14 }}
                         >
                           {isSiteExpanded ? "▼" : "▶"}
                         </span>
-                        <span style={{ flex: 1 }} onClick={() => selectAndExpand({ type: "site", id: site.id })}>
-                          <strong>{site.nom_site}</strong>
-                          <span style={{ marginLeft: 6, color: "#6b7280", fontSize: 12 }}>
-                            ({siteBuildings.length} bâtiment{siteBuildings.length > 1 ? "s" : ""})
-                          </span>
+                        <span className="patrimony-tree-label" onClick={() => selectAndExpand({ type: "site", id: site.id })}>
+                          {site.nom_site}
+                          <span className="patrimony-tree-count">({siteBuildings.length})</span>
                         </span>
                       </div>
                       {isSiteExpanded ? (
-                        <div style={{ marginLeft: 20 }}>
+                        <div className="patrimony-tree-children-site">
                           {siteBuildings.map((building) => {
                             const isBuildingSelected = selectedNode?.type === "building" && selectedNode.id === building.id;
                             const isBuildingExpanded = expandedBuildings.has(building.id);
@@ -385,57 +372,36 @@ export function BuildingsListPage() {
                             const hasIgn = building.statut_geocodage === "IGN_VALIDE";
                             return (
                               <div key={`building-${building.id}`}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    padding: "5px 8px",
-                                    cursor: "pointer",
-                                    background: isBuildingSelected ? "rgba(249, 115, 22, 0.15)" : undefined,
-                                    borderLeft: isBuildingSelected ? "3px solid #f97316" : "3px solid transparent",
-                                  }}
-                                >
+                                <div className={`patrimony-tree-node patrimony-tree-building${isBuildingSelected ? " is-active" : ""}`}>
                                   <span
+                                    className="patrimony-tree-toggle"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      toggleBuildingExpand(building.id);
+                                      if (buildingLocals.length > 0) toggleBuildingExpand(building.id);
                                     }}
-                                    style={{ cursor: "pointer", userSelect: "none", minWidth: 14 }}
                                   >
                                     {buildingLocals.length > 0 ? (isBuildingExpanded ? "▼" : "▶") : "·"}
                                   </span>
-                                  <span style={{ flex: 1 }} onClick={() => selectAndExpand({ type: "building", id: building.id })}>
-                                    <span style={{ color: hasIgn ? "#15803d" : undefined, fontWeight: hasIgn ? 600 : undefined }}>
-                                      {hasIgn ? "● " : "○ "}
-                                    </span>
+                                  <span className="patrimony-tree-label" onClick={() => selectAndExpand({ type: "building", id: building.id })}>
+                                    <span className={`patrimony-tree-ign-dot${hasIgn ? "" : " is-empty"}`}>{hasIgn ? "●" : "○"}</span>
                                     {building.nom_batiment || `Bâtiment #${building.id}`}
                                     {buildingLocals.length > 0 ? (
-                                      <span style={{ marginLeft: 6, color: "#6b7280", fontSize: 12 }}>
-                                        ({buildingLocals.length} local{buildingLocals.length > 1 ? "aux" : ""})
-                                      </span>
+                                      <span className="patrimony-tree-count">({buildingLocals.length})</span>
                                     ) : null}
                                   </span>
                                 </div>
                                 {isBuildingExpanded ? (
-                                  <div style={{ marginLeft: 20 }}>
+                                  <div className="patrimony-tree-children-building">
                                     {buildingLocals.map((local) => {
                                       const isLocalSelected = selectedNode?.type === "local" && selectedNode.id === local.id;
                                       return (
                                         <div
                                           key={`local-${local.id}`}
+                                          className={`patrimony-tree-local${isLocalSelected ? " is-active" : ""}`}
                                           onClick={() => selectAndExpand({ type: "local", id: local.id })}
-                                          style={{
-                                            padding: "4px 8px",
-                                            cursor: "pointer",
-                                            color: "#4b5563",
-                                            fontSize: 13,
-                                            background: isLocalSelected ? "rgba(249, 115, 22, 0.15)" : undefined,
-                                            borderLeft: isLocalSelected ? "3px solid #f97316" : "3px solid transparent",
-                                          }}
                                         >
                                           ◇ {local.nom_local}
-                                          {local.niveau ? <span style={{ color: "#9ca3af", marginLeft: 6 }}>· niv. {local.niveau}</span> : null}
+                                          {local.niveau ? <span className="patrimony-tree-count">· niv. {local.niveau}</span> : null}
                                         </div>
                                       );
                                     })}
@@ -450,32 +416,26 @@ export function BuildingsListPage() {
                   );
                 })}
                 {orphanBuildings.length > 0 ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ padding: "6px 8px", color: "#6b7280", fontSize: 12, fontStyle: "italic" }}>
-                      Bâtiments sans site rattaché ({orphanBuildings.length})
-                    </div>
+                  <>
+                    <div className="patrimony-tree-orphan-header">Bâtiments sans site rattaché ({orphanBuildings.length})</div>
                     {orphanBuildings.map((building) => {
                       const isSelected = selectedNode?.type === "building" && selectedNode.id === building.id;
                       const hasIgn = building.statut_geocodage === "IGN_VALIDE";
                       return (
                         <div
                           key={`orphan-${building.id}`}
+                          className={`patrimony-tree-node patrimony-tree-building${isSelected ? " is-active" : ""}`}
                           onClick={() => selectAndExpand({ type: "building", id: building.id })}
-                          style={{
-                            padding: "5px 8px",
-                            cursor: "pointer",
-                            background: isSelected ? "rgba(249, 115, 22, 0.15)" : undefined,
-                            borderLeft: isSelected ? "3px solid #f97316" : "3px solid transparent",
-                          }}
                         >
-                          <span style={{ color: hasIgn ? "#15803d" : undefined, fontWeight: hasIgn ? 600 : undefined }}>
-                            {hasIgn ? "● " : "○ "}
+                          <span className="patrimony-tree-toggle">·</span>
+                          <span className="patrimony-tree-label">
+                            <span className={`patrimony-tree-ign-dot${hasIgn ? "" : " is-empty"}`}>{hasIgn ? "●" : "○"}</span>
+                            {building.nom_batiment || `Bâtiment #${building.id}`}
                           </span>
-                          {building.nom_batiment || `Bâtiment #${building.id}`}
                         </div>
                       );
                     })}
-                  </div>
+                  </>
                 ) : null}
               </div>
             </div>
