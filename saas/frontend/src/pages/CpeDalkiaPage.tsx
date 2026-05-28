@@ -16,6 +16,7 @@ import {
   calculerCpeBilan,
   createCpeAccountingNatureRule,
   createCpeAccountingSiteMapping,
+  deleteCpeFinanceHistory,
   deleteCpeAccountingNatureRule,
   fetchCpeBilan,
   fetchCpeAccountingNatureRules,
@@ -228,6 +229,14 @@ export default function CpeDalkiaPage() {
     },
   });
 
+  const deleteFinanceHistoryM = useMutation({
+    mutationFn: () => deleteCpeFinanceHistory(token!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-batches"] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    },
+  });
+
   const saveSiteMappingM = useMutation({
     mutationFn: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) =>
       payload.id
@@ -372,6 +381,9 @@ export default function CpeDalkiaPage() {
           financeImportPending={financeImportM.isPending}
           financeImportResult={financeImportM.data ?? null}
           financeImportError={financeImportM.error instanceof Error ? financeImportM.error.message : null}
+          deleteHistoryPending={deleteFinanceHistoryM.isPending}
+          deleteHistoryResult={deleteFinanceHistoryM.data ?? null}
+          deleteHistoryError={deleteFinanceHistoryM.error instanceof Error ? deleteFinanceHistoryM.error.message : null}
           saveSiteMappingPending={saveSiteMappingM.isPending}
           deleteSiteMappingPending={deleteSiteMappingM.isPending}
           saveNatureRulePending={saveNatureRuleM.isPending}
@@ -381,6 +393,7 @@ export default function CpeDalkiaPage() {
           controlsPending={recalculateControlsM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
           onFinanceImportFile={(file) => financeImportM.mutate(file)}
+          onDeleteHistory={() => deleteFinanceHistoryM.mutate()}
           onSaveSiteMapping={(payload) => saveSiteMappingM.mutate(payload)}
           onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
           onSaveNatureRule={(payload) => saveNatureRuleM.mutate(payload)}
@@ -948,6 +961,9 @@ function CpeFinanceReference({
   financeImportPending,
   financeImportResult,
   financeImportError,
+  deleteHistoryPending,
+  deleteHistoryResult,
+  deleteHistoryError,
   saveSiteMappingPending,
   deleteSiteMappingPending,
   saveNatureRulePending,
@@ -957,6 +973,7 @@ function CpeFinanceReference({
   controlsPending,
   onCodificationFile,
   onFinanceImportFile,
+  onDeleteHistory,
   onSaveSiteMapping,
   onDeleteSiteMapping,
   onSaveNatureRule,
@@ -982,6 +999,9 @@ function CpeFinanceReference({
   financeImportPending: boolean;
   financeImportResult: CpeFinanceImportResult | null;
   financeImportError: string | null;
+  deleteHistoryPending: boolean;
+  deleteHistoryResult: { batches_deleted: number; invoices_deleted: number; lines_deleted: number; controls_deleted: number } | null;
+  deleteHistoryError: string | null;
   saveSiteMappingPending: boolean;
   deleteSiteMappingPending: boolean;
   saveNatureRulePending: boolean;
@@ -991,6 +1011,7 @@ function CpeFinanceReference({
   controlsPending: boolean;
   onCodificationFile: (file: File) => void;
   onFinanceImportFile: (file: File) => void;
+  onDeleteHistory: () => void;
   onSaveSiteMapping: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) => void;
   onDeleteSiteMapping: (id: number) => void;
   onSaveNatureRule: (
@@ -1535,7 +1556,34 @@ function CpeFinanceReference({
       {section === "invoices" && (
       <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
         <div style={{ overflowX: "auto" }}>
-          <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Factures archivees recentes</h4>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
+            <div>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Factures archivees recentes</h4>
+              <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+                {invoices.length} facture(s) archivee(s), {batches.length} lot(s) importe(s).
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              style={{ color: "#b91c1c" }}
+              disabled={deleteHistoryPending || invoices.length === 0}
+              onClick={() => {
+                if (window.confirm("Supprimer tout l'historique des factures DALKIA importees ? Le referentiel de codification sera conserve.")) {
+                  onDeleteHistory();
+                }
+              }}
+            >
+              {deleteHistoryPending ? "Suppression..." : "Supprimer l'historique des factures"}
+            </button>
+          </div>
+          {deleteHistoryResult && (
+            <p style={{ color: "#166534", fontSize: 13, margin: "0 0 8px" }}>
+              Historique supprime : {deleteHistoryResult.batches_deleted} lot(s), {deleteHistoryResult.invoices_deleted} facture(s),
+              {" "}{deleteHistoryResult.lines_deleted} ligne(s), {deleteHistoryResult.controls_deleted} controle(s).
+            </p>
+          )}
+          {deleteHistoryError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{deleteHistoryError}</p>}
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
@@ -1585,7 +1633,7 @@ function CpeFinanceReference({
                       disabled={controlsPending}
                       onClick={() => onRecalculateControls(invoice.id)}
                     >
-                      Controle facture
+                      Controle P2/P3
                     </button>
                   </td>
                 </tr>
@@ -1601,7 +1649,7 @@ function CpeFinanceReference({
           </table>
           {controlsSummary && (
             <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
-              Dernier controle facture : <strong>{controlsSummary.ok}</strong> OK,{" "}
+              Dernier controle P2/P3 et P2.4 : <strong>{controlsSummary.ok}</strong> OK,{" "}
               <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
               <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
               {lastControls?.slice(0, 3).map((control) => (

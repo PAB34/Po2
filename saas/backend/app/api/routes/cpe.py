@@ -304,6 +304,15 @@ def list_finance_invoices(
     return [CpeFinanceInvoiceOut.model_validate(item) for item in invoices]
 
 
+@router.delete("/finances/history")
+def delete_finance_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Supprime tous les lots, factures, lignes et controles DALKIA importes."""
+    return accounting_svc.delete_finance_history(db, current_user.city_id)
+
+
 @router.get("/finances/invoices/{invoice_id}/lines", response_model=list[CpeFinanceLineOut])
 def list_finance_invoice_lines(
     invoice_id: int,
@@ -388,7 +397,7 @@ def export_finance_invoice_liaison(
     invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
     if invoice is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
-    content = accounting_svc.build_finance_liaison_workbook(db, invoice)
+    content = accounting_svc.build_detailed_finance_liaison_workbook(db, invoice)
     filename = f"fiche-liaison-dalkia-{invoice.invoice_number}.xlsx"
     return Response(
         content=content,

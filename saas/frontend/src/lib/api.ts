@@ -2840,6 +2840,13 @@ export type CpeFinanceImportResult = {
   warnings: string[];
 };
 
+export type CpeFinanceHistoryDeleteResult = {
+  batches_deleted: number;
+  invoices_deleted: number;
+  lines_deleted: number;
+  controls_deleted: number;
+};
+
 export type CpeFinanceLine = {
   id: number;
   batch_id: number;
@@ -3095,6 +3102,14 @@ export async function fetchCpeFinanceInvoices(token: string, batchId?: number): 
   const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
   const response = await fetch(url, { headers: buildHeaders(token) });
   return parseResponse<CpeFinanceInvoice[]>(response);
+}
+
+export async function deleteCpeFinanceHistory(token: string): Promise<CpeFinanceHistoryDeleteResult> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/history`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeFinanceHistoryDeleteResult>(response);
 }
 
 export async function fetchCpeFinanceInvoiceLines(token: string, invoiceId: number): Promise<CpeFinanceLine[]> {

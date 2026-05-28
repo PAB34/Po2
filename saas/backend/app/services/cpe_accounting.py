@@ -1003,6 +1003,17 @@ def _controls_status_label(controls: list[CpeFinanceControl]) -> str | None:
     return max((control.status for control in controls), key=lambda status: priority.get(status, 0))
 
 
+def _style_header(cells: Any, fill: str = "1F4E78") -> None:
+    for cell in cells:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor=fill)
+
+
+def _set_widths(ws: Any, widths: list[float]) -> None:
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
+
+
 def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
     """Construit une fiche de liaison finances XLSX pour une facture."""
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
@@ -1116,8 +1127,259 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
     return output.getvalue()
 
 
+def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
+    """Construit une fiche de liaison finances complete pour audit et transmission."""
+    lines = list_finance_lines(db, invoice.id, invoice.city_id)
+    controls_by_line: dict[int, list[CpeFinanceControl]] = defaultdict(list)
+    for control in db.scalars(select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id)).all():
+        controls_by_line[control.line_id].append(control)
+    controls = [control for group in controls_by_line.values() for control in group]
+    sites = {
+        mapping.id: mapping
+        for mapping in db.scalars(
+            select(CpeAccountingSiteMapping).where(
+                CpeAccountingSiteMapping.id.in_([line.accounting_site_id for line in lines if line.accounting_site_id])
+            )
+        ).all()
+    }
+
+    wb = openpyxl.Workbook()
+    summary = wb.active
+    summary.title = "Synthese"
+    summary["A1"] = "Fiche de liaison finance DALKIA"
+    summary["A1"].font = Font(bold=True, size=15)
+    summary_rows = [
+        ("Facture", invoice.invoice_number),
+        ("Contrat", invoice.contract_code),
+        ("Libelle contrat", invoice.contract_label),
+        ("Societe", invoice.supplier),
+        ("Client", invoice.customer_name),
+        ("Code client", invoice.customer_code),
+        ("Date edition", invoice.invoice_date),
+        ("Date echeance", invoice.due_date),
+        ("Periode", f"{invoice.period_start or '-'} au {invoice.period_end or '-'}"),
+        ("Type facture", f"{_invoice_type_label(invoice.invoice_type) or '-'} ({invoice.invoice_type or '-'})"),
+        ("Statut decision", invoice.status),
+        ("Total HT", invoice.total_ht),
+        ("Lignes facture", len(lines)),
+        ("Lignes avec nature comptable", sum(1 for line in lines if line.accounting_nature)),
+        ("Lignes avec site rattache", sum(1 for line in lines if line.accounting_site_id)),
+        ("Notes", invoice.notes),
+    ]
+    for row_index, (label, value) in enumerate(summary_rows, start=3):
+        summary.cell(row=row_index, column=1, value=label).font = Font(bold=True)
+        summary.cell(row=row_index, column=2, value=value)
+    summary["B14"].number_format = '#,##0.00 "EUR"'
+    summary["A21"] = "Synthese des controles"
+    summary["A21"].font = Font(bold=True, size=13)
+    for offset, (label, value) in enumerate(
+        [
+            ("OK", sum(1 for control in controls if control.status == "ok")),
+            ("Ecarts", sum(1 for control in controls if control.status == "error")),
+            ("Bloques / a completer", sum(1 for control in controls if control.status == "blocked")),
+        ],
+        start=1,
+    ):
+        summary.cell(row=21 + offset, column=1, value=label)
+        summary.cell(row=21 + offset, column=2, value=value)
+    _set_widths(summary, [26, 48, 18, 18])
+
+    detail = wb.create_sheet("Lignes finance")
+    headers = [
+        "Ligne",
+        "Type facture",
+        "Code type",
+        "Contrat",
+        "Marche",
+        "Type marche",
+        "Service vendu",
+        "Poste facture",
+        "Site detecte",
+        "Nom site",
+        "Famille",
+        "Gestionnaire",
+        "Service",
+        "Libelle service",
+        "Fonction",
+        "Libelle fonction",
+        "Antenne",
+        "Libelle antenne",
+        "Operation",
+        "Libelle operation",
+        "Nature",
+        "Libelle nature",
+        "TVA",
+        "Prix base",
+        "Prix revise",
+        "Controle",
+        "Formule",
+        "Message controle",
+        "Montant HT",
+        "Conso",
+        "Unite",
+        "Detail",
+        "Debut periode",
+        "Fin periode",
+    ]
+    for col, header in enumerate(headers, start=1):
+        detail.cell(row=1, column=col, value=header)
+    _style_header(detail[1])
+
+    for row_index, line in enumerate(lines, start=2):
+        site = sites.get(line.accounting_site_id or 0)
+        line_controls = controls_by_line.get(line.id, [])
+        values = [
+            line.row_number,
+            _invoice_type_label(invoice.invoice_type),
+            invoice.invoice_type,
+            line.contract_code or invoice.contract_code,
+            line.market,
+            line.market_type,
+            line.service_sold,
+            line.billed_item,
+            line.site_code_detected,
+            site.site_name if site else None,
+            site.family if site else None,
+            site.manager if site else None,
+            site.service_code if site else None,
+            site.service_label if site else None,
+            site.function_code if site else None,
+            site.function_label if site else None,
+            site.antenna_code if site else None,
+            site.antenna_label if site else None,
+            site.operation_code if site else None,
+            site.operation_label if site else None,
+            line.accounting_nature,
+            line.accounting_label,
+            line.vat_rate,
+            line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base"),
+            line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise"),
+            _controls_status_label(line_controls),
+            " | ".join(control.formula for control in line_controls if control.formula) or None,
+            " | ".join(control.message for control in line_controls) or None,
+            line.amount_ht,
+            line.consumption,
+            line.unit,
+            line.detail,
+            line.period_start,
+            line.period_end,
+        ]
+        for col, value in enumerate(values, start=1):
+            detail.cell(row=row_index, column=col, value=value)
+        detail.cell(row=row_index, column=23).number_format = "0.00%"
+        detail.cell(row=row_index, column=24).number_format = '#,##0.0000'
+        detail.cell(row=row_index, column=25).number_format = '#,##0.0000'
+        detail.cell(row=row_index, column=29).number_format = '#,##0.00 "EUR"'
+    _set_widths(
+        detail,
+        [9, 22, 10, 14, 12, 16, 20, 18, 16, 32, 14, 20, 14, 28, 14, 28, 14, 28, 14, 28, 12, 28, 10, 12, 12, 12, 34, 55, 14, 12, 10, 48, 14, 14],
+    )
+    detail.freeze_panes = "A2"
+    detail.auto_filter.ref = f"A1:AH{max(2, len(lines) + 1)}"
+
+    if controls:
+        controls_sheet = wb.create_sheet("Controles")
+        control_headers = [
+            "Ligne",
+            "Type controle",
+            "Statut",
+            "Severite",
+            "Message",
+            "Formule",
+            "Annee indice",
+            "Trimestre indice",
+            "ICHT-IME",
+            "BT40",
+            "FSD2",
+            "Facteur attendu",
+            "Prix base",
+            "Prix revise attendu",
+            "Prix revise facture",
+            "Ecart",
+            "Ecart %",
+        ]
+        for col, header in enumerate(control_headers, start=1):
+            controls_sheet.cell(row=1, column=col, value=header)
+        _style_header(controls_sheet[1], "7C2D12")
+        line_by_id = {line.id: line for line in lines}
+        for row_index, control in enumerate(controls, start=2):
+            line = line_by_id.get(control.line_id)
+            values = [
+                line.row_number if line else None,
+                control.control_type,
+                control.status,
+                control.severity,
+                control.message,
+                control.formula,
+                control.index_year,
+                control.index_quarter,
+                control.icht_ime_value,
+                control.bt40_value,
+                control.fsd2_value,
+                control.expected_factor,
+                control.base_price,
+                control.expected_revised_price,
+                control.actual_revised_price,
+                control.delta_abs,
+                control.delta_pct,
+            ]
+            for col, value in enumerate(values, start=1):
+                controls_sheet.cell(row=row_index, column=col, value=value)
+        _set_widths(controls_sheet, [9, 18, 12, 12, 55, 40, 12, 12, 12, 12, 12, 14, 12, 16, 16, 12, 12])
+        controls_sheet.freeze_panes = "A2"
+        controls_sheet.auto_filter.ref = f"A1:Q{max(2, len(controls) + 1)}"
+
+    raw_sheet = wb.create_sheet("Donnees source")
+    raw_keys = sorted(
+        {
+            key
+            for line in lines
+            for key in (json.loads(line.raw_json or "{}").keys() if line.raw_json else [])
+        }
+    )
+    raw_headers = ["Ligne"] + raw_keys
+    for col, header in enumerate(raw_headers, start=1):
+        raw_sheet.cell(row=1, column=col, value=header)
+    _style_header(raw_sheet[1], "374151")
+    for row_index, line in enumerate(lines, start=2):
+        raw_data = json.loads(line.raw_json or "{}") if line.raw_json else {}
+        raw_sheet.cell(row=row_index, column=1, value=line.row_number)
+        for col, key in enumerate(raw_keys, start=2):
+            raw_sheet.cell(row=row_index, column=col, value=raw_data.get(key))
+    _set_widths(raw_sheet, [9] + [22] * len(raw_keys))
+    raw_sheet.freeze_panes = "A2"
+    raw_sheet.auto_filter.ref = f"A1:{openpyxl.utils.get_column_letter(len(raw_headers))}{max(2, len(lines) + 1)}"
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
 def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:
+    db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id == batch.id))
     db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id == batch.id))
     db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id == batch.id))
     db.delete(batch)
     db.commit()
+
+
+def delete_finance_history(db: Session, city_id: int | None = None) -> dict[str, int]:
+    """Supprime l'historique des factures DALKIA sans toucher au referentiel."""
+    batch_query = select(CpeFinanceImportBatch.id)
+    if city_id is not None:
+        batch_query = batch_query.where(CpeFinanceImportBatch.city_id == city_id)
+    batch_ids = list(db.scalars(batch_query).all())
+    if not batch_ids:
+        return {"batches_deleted": 0, "invoices_deleted": 0, "lines_deleted": 0, "controls_deleted": 0}
+
+    controls_deleted = db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id.in_(batch_ids))).rowcount or 0
+    lines_deleted = db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id.in_(batch_ids))).rowcount or 0
+    invoices_deleted = db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id.in_(batch_ids))).rowcount or 0
+    batches_deleted = db.execute(delete(CpeFinanceImportBatch).where(CpeFinanceImportBatch.id.in_(batch_ids))).rowcount or 0
+    db.commit()
+    return {
+        "batches_deleted": batches_deleted,
+        "invoices_deleted": invoices_deleted,
+        "lines_deleted": lines_deleted,
+        "controls_deleted": controls_deleted,
+    }
