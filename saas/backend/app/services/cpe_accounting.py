@@ -901,6 +901,176 @@ def _control_p2_4_objectives(
     )
 
 
+def _make_basic_control(
+    line: CpeFinanceLine,
+    *,
+    control_type: str,
+    status: str,
+    severity: str,
+    message: str,
+    formula: str | None = None,
+    delta_abs: float | None = None,
+    delta_pct: float | None = None,
+) -> CpeFinanceControl:
+    return CpeFinanceControl(
+        city_id=line.city_id,
+        batch_id=line.batch_id,
+        invoice_id=line.invoice_id,
+        line_id=line.id,
+        control_type=control_type,
+        status=status,
+        severity=severity,
+        message=message,
+        formula=formula,
+        delta_abs=delta_abs,
+        delta_pct=delta_pct,
+    )
+
+
+def _control_accounting_nature(line: CpeFinanceLine) -> CpeFinanceControl:
+    if line.accounting_nature:
+        return _make_basic_control(
+            line,
+            control_type="accounting_nature",
+            status="ok",
+            severity="info",
+            message=f"Nature comptable rattachee : {line.accounting_nature}.",
+        )
+    return _make_basic_control(
+        line,
+        control_type="accounting_nature",
+        status="error",
+        severity="error",
+        message=(
+            "Nature comptable absente : la ligne ne peut pas etre envoyee au service finances "
+            "sans regle de codification."
+        ),
+    )
+
+
+def _control_accounting_site(line: CpeFinanceLine) -> CpeFinanceControl:
+    if line.accounting_site_id:
+        return _make_basic_control(
+            line,
+            control_type="accounting_site",
+            status="ok",
+            severity="info",
+            message=f"Site finance rattache ({line.site_code_detected or 'mapping manuel'}).",
+        )
+    if line.site_code_detected:
+        return _make_basic_control(
+            line,
+            control_type="accounting_site",
+            status="blocked",
+            severity="warning",
+            message=f"Code site detecte ({line.site_code_detected}) mais non rattache a la matrice de codification.",
+        )
+    return _make_basic_control(
+        line,
+        control_type="accounting_site",
+        status="blocked",
+        severity="warning",
+        message="Aucun site finance rattache a la ligne : verifier si la ligne doit etre imputee a un site.",
+    )
+
+
+def _control_invoice_type(invoice: CpeFinanceInvoice, anchor: CpeFinanceLine) -> CpeFinanceControl:
+    code = (invoice.invoice_type or "").strip().upper()
+    if code in INVOICE_TYPE_LABELS:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_type",
+            status="ok",
+            severity="info",
+            message=f"Type de facture reconnu : {INVOICE_TYPE_LABELS[code]} ({code}).",
+        )
+    if not code:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_type",
+            status="error",
+            severity="error",
+            message="Type de facture absent : impossible de qualifier acompte, avoir, regularisation ou definitive.",
+        )
+    return _make_basic_control(
+        anchor,
+        control_type="invoice_type",
+        status="error",
+        severity="error",
+        message=f"Type de facture inconnu ({code}) : codification comptable a verifier avant validation.",
+    )
+
+
+def _control_invoice_total(invoice: CpeFinanceInvoice, lines: list[CpeFinanceLine], anchor: CpeFinanceLine) -> CpeFinanceControl:
+    line_total = round(sum(line.amount_ht or 0.0 for line in lines), 2)
+    invoice_total = round(invoice.total_ht or 0.0, 2)
+    delta = round(invoice_total - line_total, 2)
+    if abs(delta) <= 0.01:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_total_ht",
+            status="ok",
+            severity="info",
+            message=f"Total HT coherent : {invoice_total:.2f} EUR pour {len(lines)} ligne(s).",
+            formula="Total facture HT = somme des lignes HT importees",
+            delta_abs=delta,
+        )
+    return _make_basic_control(
+        anchor,
+        control_type="invoice_total_ht",
+        status="error",
+        severity="error",
+        message=f"Total HT incoherent : facture {invoice_total:.2f} EUR, lignes {line_total:.2f} EUR, ecart {delta:.2f} EUR.",
+        formula="Total facture HT = somme des lignes HT importees",
+        delta_abs=delta,
+        delta_pct=round(delta / line_total, 6) if line_total else None,
+    )
+
+
+def _control_invoice_period(invoice: CpeFinanceInvoice, lines: list[CpeFinanceLine], anchor: CpeFinanceLine) -> CpeFinanceControl:
+    inverted = [line for line in lines if line.period_start and line.period_end and line.period_start > line.period_end]
+    missing = [line for line in lines if not line.period_start or not line.period_end]
+    if inverted:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_period",
+            status="error",
+            severity="error",
+            message=f"{len(inverted)} ligne(s) avec periode inversee : debut posterieur a la fin.",
+        )
+    if missing:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_period",
+            status="blocked",
+            severity="warning",
+            message=f"{len(missing)} ligne(s) sans periode complete : verification de la frequence facture impossible.",
+        )
+    starts = [line.period_start for line in lines if line.period_start]
+    ends = [line.period_end for line in lines if line.period_end]
+    if starts and ends:
+        expected_start = min(starts)
+        expected_end = max(ends)
+        if invoice.period_start != expected_start or invoice.period_end != expected_end:
+            return _make_basic_control(
+                anchor,
+                control_type="invoice_period",
+                status="blocked",
+                severity="warning",
+                message=(
+                    f"Periode facture {invoice.period_start or '-'} au {invoice.period_end or '-'} differente "
+                    f"de l'enveloppe des lignes {expected_start} au {expected_end}."
+                ),
+            )
+    return _make_basic_control(
+        anchor,
+        control_type="invoice_period",
+        status="ok",
+        severity="info",
+        message=f"Periode facture coherente : {invoice.period_start or '-'} au {invoice.period_end or '-'}.",
+    )
+
+
 def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
@@ -909,7 +1079,7 @@ def recompute_finance_invoice_controls(
     revision_lines = [line for line in lines if (line.market or "").upper() in {"P2", "P3"}]
     p2_4_lines = [line for line in lines if _is_p2_4_line(line)]
     db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id))
-    if not revision_lines and not p2_4_lines:
+    if not lines:
         db.commit()
         return []
 
@@ -928,6 +1098,11 @@ def recompute_finance_invoice_controls(
         for line in revision_lines
     ]
     controls.extend(_control_p2_4_objectives(db, line) for line in p2_4_lines)
+    controls.extend(_control_accounting_nature(line) for line in lines)
+    controls.extend(_control_accounting_site(line) for line in lines)
+    controls.append(_control_invoice_type(invoice, lines[0]))
+    controls.append(_control_invoice_total(invoice, lines, lines[0]))
+    controls.append(_control_invoice_period(invoice, lines, lines[0]))
     db.add_all(controls)
     db.commit()
     for control in controls:
