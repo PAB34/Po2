@@ -98,13 +98,14 @@ Pré-requis :
 
 ## Prochain chantier recommandé
 
-### 1. P2.4 livrables et preuves
+### 1. P2.4
 
 Objectif :
 
-- compléter le contrôle déjà branché (`p2_4_objectives`) avec les livrables attendus ;
-- stocker la preuve attendue avant validation ;
-- afficher dans le détail facture la décision P2.4 100% / 50%.
+- contrôler que le P2.4 est facturé annuellement ;
+- appliquer 100% si objectifs atteints ;
+- appliquer 50% si objectifs non atteints ;
+- rattacher la décision aux résultats de performance énergétique déjà calculés.
 
 À clarifier dans les pièces :
 
@@ -131,3 +132,4 @@ Objectif :
 - corriger les rattachements ;
 - saisir une justification ;
 - valider/refuser proprement.
+
