@@ -6,6 +6,10 @@ type BuildingPortfolioMapProps = {
   buildings: Building[];
   activeBuildingId: number | null;
   onSelectBuildingId: (buildingId: number) => void;
+  /** ID des batiments mis en valeur (ex: tous les batiments du site selectionne). */
+  highlightedBuildingIds?: number[];
+  /** Si fourni, la carte se centre/zoome sur ce point (sinon fitBounds sur tous les batiments). */
+  focusLatLon?: { lat: number; lon: number } | null;
 };
 
 type RuntimeLayer = {
@@ -119,7 +123,14 @@ function ensureLeafletRuntime(): Promise<LeafletRuntime> {
   return runtimeWindow.__po2LeafletLoader__;
 }
 
-export function BuildingPortfolioMap({ buildings, activeBuildingId, onSelectBuildingId }: BuildingPortfolioMapProps) {
+export function BuildingPortfolioMap({
+  buildings,
+  activeBuildingId,
+  onSelectBuildingId,
+  highlightedBuildingIds,
+  focusLatLon,
+}: BuildingPortfolioMapProps) {
+  const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<LeafletRuntime | null>(null);
   const mapRef = useRef<RuntimeMap | null>(null);
@@ -209,14 +220,34 @@ export function BuildingPortfolioMap({ buildings, activeBuildingId, onSelectBuil
     const layerGroup = runtime.featureGroup();
     for (const building of mappableBuildings) {
       const isActive = building.id === (activeBuildingId ?? selectedBuilding?.id ?? null);
+      const isHighlighted = highlightedSet.has(building.id);
+      const hasIgn = building.statut_geocodage === "IGN_VALIDE";
+
+      // Palette : actif > highlight+ign > highlight > ign > default
+      let color = "#38bdf8";       // bleu clair (par defaut)
+      let fillColor = "#0ea5e9";   // bleu
+      if (isActive) {
+        color = "#f97316";          // orange vif (actif)
+        fillColor = "#fb923c";
+      } else if (isHighlighted && hasIgn) {
+        color = "#15803d";          // vert tres fonce (highlight + IGN attache)
+        fillColor = "#16a34a";
+      } else if (isHighlighted) {
+        color = "#ea580c";          // orange fonce (highlight site sans IGN)
+        fillColor = "#f97316";
+      } else if (hasIgn) {
+        color = "#1d4ed8";          // bleu fonce (IGN attache mais hors selection)
+        fillColor = "#2563eb";
+      }
+
       const marker = runtime.circleMarker([building.latitude, building.longitude], {
-        radius: isActive ? 9 : 7,
-        color: isActive ? "#f97316" : "#38bdf8",
-        fillColor: isActive ? "#fb923c" : "#0ea5e9",
+        radius: isActive ? 10 : isHighlighted ? 8 : 7,
+        color,
+        fillColor,
         fillOpacity: 0.92,
         weight: isActive ? 3 : 2,
       });
-      marker.bindPopup?.(`<strong>${building.nom_batiment || `Bâtiment #${building.id}`}</strong><br/>${buildAddressLine(building)}`);
+      marker.bindPopup?.(`<strong>${building.nom_batiment || `Bâtiment #${building.id}`}</strong><br/>${buildAddressLine(building)}${hasIgn ? "<br/><em>IGN attaché</em>" : ""}`);
       marker.on?.("click", () => onSelectBuildingId(building.id));
       layerGroup.addLayer(marker);
     }
@@ -224,11 +255,33 @@ export function BuildingPortfolioMap({ buildings, activeBuildingId, onSelectBuil
     layerGroup.addTo(map);
     buildingsLayerRef.current = layerGroup;
 
-    const bounds = layerGroup.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds.pad(0.18));
-    } else if (selectedBuilding) {
-      map.setView([selectedBuilding.latitude, selectedBuilding.longitude], 17);
+    // Strategie de cadrage :
+    // 1. focusLatLon explicite (un batiment/local selectionne) -> setView zoom rapproche
+    // 2. highlightedBuildingIds non vide (un site selectionne) -> fitBounds sur ses batiments
+    // 3. Sinon -> fitBounds sur tous les batiments
+    if (focusLatLon) {
+      map.setView([focusLatLon.lat, focusLatLon.lon], 18);
+    } else if (highlightedSet.size > 0) {
+      const highlightedGroup = runtime.featureGroup();
+      for (const building of mappableBuildings) {
+        if (highlightedSet.has(building.id)) {
+          highlightedGroup.addLayer(runtime.circleMarker([building.latitude, building.longitude], { radius: 1, opacity: 0 }));
+        }
+      }
+      const highlightedBounds = highlightedGroup.getBounds();
+      if (highlightedBounds.isValid()) {
+        map.fitBounds(highlightedBounds.pad(0.3));
+      } else {
+        const bounds = layerGroup.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
+      }
+    } else {
+      const bounds = layerGroup.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.18));
+      } else if (selectedBuilding) {
+        map.setView([selectedBuilding.latitude, selectedBuilding.longitude], 17);
+      }
     }
     map.invalidateSize?.();
     window.setTimeout(() => map.invalidateSize?.(), 50);
@@ -236,7 +289,7 @@ export function BuildingPortfolioMap({ buildings, activeBuildingId, onSelectBuil
     return () => {
       layerGroup.clearLayers();
     };
-  }, [activeBuildingId, mapReady, mappableBuildings, onSelectBuildingId, selectedBuilding]);
+  }, [activeBuildingId, mapReady, mappableBuildings, onSelectBuildingId, selectedBuilding, highlightedSet, focusLatLon]);
 
   if (mappableBuildings.length === 0) {
     return (

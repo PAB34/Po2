@@ -48,6 +48,7 @@ from app.services.buildings import (
     get_local_or_404,
     get_building_meter_link_or_404,
     get_site_or_404,
+    list_all_locals,
     list_building_locals,
     list_building_meter_links,
     list_buildings,
@@ -205,6 +206,15 @@ def get_sites(
     current_user: User = Depends(get_current_user),
 ) -> list[SiteRead]:
     return [SiteRead.model_validate(site) for site in list_sites(db, current_user)]
+
+
+@router.get("/locals", response_model=list[LocalRead])
+def get_all_locals(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[LocalRead]:
+    """Bulk endpoint : tous les locaux visibles par l'utilisateur (filtres par city via building)."""
+    return [LocalRead.model_validate(local) for local in list_all_locals(db, current_user)]
 
 
 @router.post("/sites", response_model=SiteRead, status_code=status.HTTP_201_CREATED)

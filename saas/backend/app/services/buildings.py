@@ -394,6 +394,14 @@ def list_building_locals(db: Session, building: Building) -> list[Local]:
     return list(db.scalars(statement))
 
 
+def list_all_locals(db: Session, current_user: User) -> list[Local]:
+    """Liste tous les locaux visibles par l'utilisateur (filtres par city_id via building.city_id)."""
+    statement = select(Local).join(Building, Local.building_id == Building.id).order_by(Local.created_at.asc())
+    if current_user.city_id is not None:
+        statement = statement.where(Building.city_id == current_user.city_id)
+    return list(db.scalars(statement))
+
+
 def get_local_or_404(db: Session, building: Building, local_id: int) -> Local:
     statement = select(Local).where(Local.id == local_id, Local.building_id == building.id)
     local = db.scalar(statement)

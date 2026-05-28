@@ -321,19 +321,19 @@ export type CreateSitePayload = {
 };
 
 export type UpdateBuildingPayload = {
-  nom_batiment?: string;
+  nom_batiment?: string | null;
   nom_commune?: string;
-  code_postal?: string;
-  numero_voirie?: string;
-  indice_repetition?: string;
-  nature_voie?: string;
-  nom_voie?: string;
-  prefixe?: string;
-  section?: string;
-  numero_plan?: string;
-  adresse_reconstituee?: string;
-  latitude?: number;
-  longitude?: number;
+  code_postal?: string | null;
+  numero_voirie?: string | null;
+  indice_repetition?: string | null;
+  nature_voie?: string | null;
+  nom_voie?: string | null;
+  prefixe?: string | null;
+  section?: string | null;
+  numero_plan?: string | null;
+  adresse_reconstituee?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type Local = {
@@ -363,11 +363,11 @@ export type CreateLocalPayload = {
 export type UpdateLocalPayload = {
   nom_local?: string;
   type_local?: string;
-  niveau?: string;
-  surface_m2?: number;
-  usage?: string;
-  statut_occupation?: string;
-  commentaire?: string;
+  niveau?: string | null;
+  surface_m2?: number | null;
+  usage?: string | null;
+  statut_occupation?: string | null;
+  commentaire?: string | null;
 };
 
 export type BuildingMeterLink = {
@@ -515,6 +515,14 @@ export async function fetchSites(token: string): Promise<Site[]> {
   });
 
   return parseResponse<Site[]>(response);
+}
+
+export async function fetchAllLocals(token: string): Promise<Local[]> {
+  const response = await fetch(`${apiBaseUrl}/buildings/locals`, {
+    headers: buildHeaders(token),
+  });
+
+  return parseResponse<Local[]>(response);
 }
 
 export async function fetchBuildingNamingDataset(token: string): Promise<BuildingNamingDataset> {
@@ -672,6 +680,21 @@ export async function createBuildingRequest(token: string, payload: CreateBuildi
 export async function createSiteRequest(token: string, payload: CreateSitePayload): Promise<Site> {
   const response = await fetch(`${apiBaseUrl}/buildings/sites`, {
     method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<Site>(response);
+}
+
+export type UpdateSitePayload = {
+  nom_site?: string;
+  adresse?: string | null;
+};
+
+export async function updateSiteRequest(token: string, siteId: number, payload: UpdateSitePayload): Promise<Site> {
+  const response = await fetch(`${apiBaseUrl}/buildings/sites/${siteId}`, {
+    method: "PUT",
     headers: buildHeaders(token),
     body: JSON.stringify(payload),
   });
