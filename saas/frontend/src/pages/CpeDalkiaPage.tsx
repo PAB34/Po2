@@ -1275,7 +1275,7 @@ function CpeFinanceReference({
                       disabled={controlsPending}
                       onClick={() => onRecalculateControls(invoice.id)}
                     >
-                      Controle revisions
+                      Controle facture
                     </button>
                   </td>
                 </tr>
@@ -1291,7 +1291,7 @@ function CpeFinanceReference({
           </table>
           {controlsSummary && (
             <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
-              Dernier controle revisions : <strong>{controlsSummary.ok}</strong> OK,{" "}
+              Dernier controle facture : <strong>{controlsSummary.ok}</strong> OK,{" "}
               <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
               <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
               {lastControls?.slice(0, 3).map((control) => (

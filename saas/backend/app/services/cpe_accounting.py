@@ -22,7 +22,9 @@ from app.models.cpe import (
     CpeFinanceImportBatch,
     CpeFinanceInvoice,
     CpeFinanceLine,
+    CpeResultatAnnuel,
     CpeRevisionIndex,
+    CpeSite,
 )
 from app.schemas.cpe import (
     CpeAccountingImportResult,
@@ -40,6 +42,7 @@ FSD2_BASE = 169.8
 BT40_BASE = 128.4
 P2_REVISION_FORMULA = "P2 = P20 x (0,15 + 0,70 x ICHT-IME/ICHT-IME0 + 0,15 x FSD2/FSD20)"
 P3_REVISION_FORMULA = "P3 = P30 x (0,15 + 0,30 x ICHT-IME/ICHT-IME0 + 0,55 x BT40/BT400)"
+P2_4_OBJECTIVE_RULE = "P2.4 annuel : 100% si objectifs atteints, 50% si objectifs non atteints"
 
 
 def _norm_header(value: Any) -> str:
@@ -490,6 +493,65 @@ def _line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
     return _float(raw.get(key))
 
 
+def _norm_text(value: Any) -> str:
+    text = _clean(value) or ""
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_value = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", ascii_value.upper()).strip()
+
+
+def _is_p2_4_line(line: CpeFinanceLine) -> bool:
+    """Repere les lignes P2.4 malgre les variantes de libelles DALKIA."""
+    if (line.market or "").upper() != "P2":
+        return False
+    haystack = " ".join(
+        _norm_text(value)
+        for value in (line.service_sold, line.billed_item, line.detail)
+        if value not in (None, "")
+    )
+    return any(token in haystack for token in ("P2.4", "P2-4", "P2 4")) or (
+        "MAITRISE" in haystack and "ENERG" in haystack
+    )
+
+
+def _line_duration_days(line: CpeFinanceLine) -> int | None:
+    if not line.period_start or not line.period_end:
+        return None
+    return (line.period_end - line.period_start).days + 1
+
+
+def _line_control_year(line: CpeFinanceLine) -> int | None:
+    period_date = line.period_end or line.period_start
+    return period_date.year if period_date else None
+
+
+def _expected_p2_4_taux(
+    db: Session,
+    city_id: int | None,
+    year: int,
+) -> tuple[float | None, str]:
+    query = (
+        select(CpeResultatAnnuel)
+        .join(CpeSite, CpeSite.id == CpeResultatAnnuel.cpe_site_id)
+        .where(CpeResultatAnnuel.annee == year)
+    )
+    if city_id is None:
+        query = query.where(CpeSite.city_id.is_(None))
+    else:
+        query = query.where(CpeSite.city_id == city_id)
+    results = list(db.scalars(query).all())
+    if not results:
+        return None, f"Aucun resultat annuel CPE calcule pour {year} : impossible de valider le taux P2.4."
+
+    incomplete = [item for item in results if item.statut == "partiel" or item.type_resultat in (None, "insuffisant")]
+    penalties = [item for item in results if item.type_resultat == "penalite" or item.p2_4_taux == 0.5]
+    if penalties:
+        return 0.5, f"Objectifs non atteints sur {len(penalties)} site(s) en {year} : P2.4 attendu a 50%."
+    if incomplete:
+        return None, f"Resultats annuels CPE incomplets pour {year} ({len(incomplete)} site(s)) : validation P2.4 a confirmer."
+    return 1.0, f"Objectifs atteints sur les resultats CPE calcules pour {year} : P2.4 attendu a 100%."
+
+
 def _control_revision_p3(
     line: CpeFinanceLine,
     indices: dict[tuple[str, int, int], float],
@@ -624,14 +686,75 @@ def _control_revision_p2(
     )
 
 
+def _control_p2_4_objectives(
+    db: Session,
+    line: CpeFinanceLine,
+) -> CpeFinanceControl:
+    year = _line_control_year(line)
+    duration_days = _line_duration_days(line)
+    expected_taux = None
+    status = "blocked"
+    severity = "warning"
+    message_parts: list[str] = []
+
+    if year is None:
+        message_parts.append("Periode de ligne absente : impossible de rattacher P2.4 a un exercice.")
+    else:
+        expected_taux, objective_message = _expected_p2_4_taux(db, line.city_id, year)
+        message_parts.append(objective_message)
+
+    if duration_days is None:
+        message_parts.append("Periode de facturation absente : P2.4 doit etre controle comme poste annuel.")
+    elif duration_days < 300:
+        status = "error"
+        severity = "error"
+        message_parts.append(
+            f"Periode P2.4 de {duration_days} jours : le marche prevoit une facturation annuelle apres validation."
+        )
+    else:
+        message_parts.append(f"Periode P2.4 annuelle detectee ({duration_days} jours).")
+
+    if status != "error":
+        if expected_taux is None:
+            status = "blocked"
+            severity = "warning"
+        else:
+            status = "ok"
+            severity = "info"
+
+    return CpeFinanceControl(
+        city_id=line.city_id,
+        batch_id=line.batch_id,
+        invoice_id=line.invoice_id,
+        line_id=line.id,
+        control_type="p2_4_objectives",
+        status=status,
+        severity=severity,
+        message=" ".join(message_parts),
+        formula=P2_4_OBJECTIVE_RULE,
+        index_year=year,
+        index_quarter=None,
+        icht_ime_value=None,
+        bt40_value=None,
+        fsd2_value=None,
+        expected_factor=expected_taux,
+        base_price=line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base"),
+        expected_revised_price=None,
+        actual_revised_price=line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise"),
+        delta_abs=None,
+        delta_pct=None,
+    )
+
+
 def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
 ) -> list[CpeFinanceControl]:
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
     revision_lines = [line for line in lines if (line.market or "").upper() in {"P2", "P3"}]
+    p2_4_lines = [line for line in lines if _is_p2_4_line(line)]
     db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id))
-    if not revision_lines:
+    if not revision_lines and not p2_4_lines:
         db.commit()
         return []
 
@@ -649,6 +772,7 @@ def recompute_finance_invoice_controls(
         _control_revision_p2(line, indices) if (line.market or "").upper() == "P2" else _control_revision_p3(line, indices)
         for line in revision_lines
     ]
+    controls.extend(_control_p2_4_objectives(db, line) for line in p2_4_lines)
     db.add_all(controls)
     db.commit()
     for control in controls:
@@ -717,15 +841,19 @@ def update_finance_invoice(
     return invoice
 
 
+def _controls_status_label(controls: list[CpeFinanceControl]) -> str | None:
+    if not controls:
+        return None
+    priority = {"error": 3, "blocked": 2, "ok": 1}
+    return max((control.status for control in controls), key=lambda status: priority.get(status, 0))
+
+
 def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
     """Construit une fiche de liaison finances XLSX pour une facture."""
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
-    controls_by_line = {
-        control.line_id: control
-        for control in db.scalars(
-            select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id)
-        ).all()
-    }
+    controls_by_line: dict[int, list[CpeFinanceControl]] = defaultdict(list)
+    for control in db.scalars(select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id)).all():
+        controls_by_line[control.line_id].append(control)
     sites = {
         mapping.id: mapping
         for mapping in db.scalars(
@@ -786,6 +914,7 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
 
     for row_index, line in enumerate(lines, start=start_row + 1):
         site = sites.get(line.accounting_site_id or 0)
+        line_controls = controls_by_line.get(line.id, [])
         values = [
             line.row_number,
             line.market,
@@ -801,9 +930,9 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
             line.accounting_label,
             line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base"),
             line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise"),
-            controls_by_line.get(line.id).status if controls_by_line.get(line.id) else None,
-            controls_by_line.get(line.id).formula if controls_by_line.get(line.id) else None,
-            controls_by_line.get(line.id).message if controls_by_line.get(line.id) else None,
+            _controls_status_label(line_controls),
+            " | ".join(control.formula for control in line_controls if control.formula) or None,
+            " | ".join(control.message for control in line_controls) or None,
             line.amount_ht,
             line.consumption,
             line.unit,
