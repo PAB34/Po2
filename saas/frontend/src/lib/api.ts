@@ -3004,6 +3004,39 @@ export async function fetchCpeAccountingNatureRules(token: string): Promise<CpeA
   return parseResponse<CpeAccountingNatureRule[]>(response);
 }
 
+export async function createCpeAccountingNatureRule(
+  token: string,
+  payload: Partial<CpeAccountingNatureRule> & { market: string; billed_item: string; accounting_nature: string },
+): Promise<CpeAccountingNatureRule> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeAccountingNatureRule>(response);
+}
+
+export async function updateCpeAccountingNatureRule(
+  token: string,
+  id: number,
+  payload: Partial<CpeAccountingNatureRule>,
+): Promise<CpeAccountingNatureRule> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules/${id}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeAccountingNatureRule>(response);
+}
+
+export async function deleteCpeAccountingNatureRule(token: string, id: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
 export async function fetchCpeAccountingSiteMappings(token: string): Promise<CpeAccountingSiteMapping[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/accounting/site-mappings`, { headers: buildHeaders(token) });
   return parseResponse<CpeAccountingSiteMapping[]>(response);

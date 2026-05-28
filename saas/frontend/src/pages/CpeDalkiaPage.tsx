@@ -14,7 +14,9 @@ import {
   CpeRevisionIndex,
   CpeSiteBilanItem,
   calculerCpeBilan,
+  createCpeAccountingNatureRule,
   createCpeAccountingSiteMapping,
+  deleteCpeAccountingNatureRule,
   fetchCpeBilan,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
@@ -29,6 +31,7 @@ import {
   recalculateCpeFinanceControls,
   deleteCpeAccountingSiteMapping,
   downloadCpeFinanceInvoiceLiaison,
+  updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateCpeFinanceInvoice,
   upsertCpeRevisionIndex,
@@ -229,6 +232,26 @@ export default function CpeDalkiaPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-site-mappings"] }),
   });
 
+  const saveNatureRuleM = useMutation({
+    mutationFn: (
+      payload: Partial<CpeAccountingNatureRule> & {
+        id?: number;
+        market: string;
+        billed_item: string;
+        accounting_nature: string;
+      },
+    ) =>
+      payload.id
+        ? updateCpeAccountingNatureRule(token!, payload.id, payload)
+        : createCpeAccountingNatureRule(token!, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-nature-rules"] }),
+  });
+
+  const deleteNatureRuleM = useMutation({
+    mutationFn: (id: number) => deleteCpeAccountingNatureRule(token!, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-nature-rules"] }),
+  });
+
   const updateFinanceInvoiceM = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateCpeFinanceInvoice(token!, id, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
@@ -342,6 +365,8 @@ export default function CpeDalkiaPage() {
           financeImportError={financeImportM.error instanceof Error ? financeImportM.error.message : null}
           saveSiteMappingPending={saveSiteMappingM.isPending}
           deleteSiteMappingPending={deleteSiteMappingM.isPending}
+          saveNatureRulePending={saveNatureRuleM.isPending}
+          deleteNatureRulePending={deleteNatureRuleM.isPending}
           invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending}
           indexSavePending={upsertRevisionIndexM.isPending}
           controlsPending={recalculateControlsM.isPending}
@@ -349,6 +374,8 @@ export default function CpeDalkiaPage() {
           onFinanceImportFile={(file) => financeImportM.mutate(file)}
           onSaveSiteMapping={(payload) => saveSiteMappingM.mutate(payload)}
           onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
+          onSaveNatureRule={(payload) => saveNatureRuleM.mutate(payload)}
+          onDeleteNatureRule={(id) => deleteNatureRuleM.mutate(id)}
           onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
           onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
@@ -883,6 +910,18 @@ const EMPTY_SITE_MAPPING = {
   active: true,
 };
 
+const EMPTY_NATURE_RULE = {
+  contract_code: "",
+  market: "P2",
+  service_sold: "",
+  billed_item: "",
+  frequency: "",
+  accounting_nature: "",
+  accounting_label: "",
+  notes: "",
+  active: true,
+};
+
 function CpeFinanceReference({
   annee,
   codificationFileRef,
@@ -902,6 +941,8 @@ function CpeFinanceReference({
   financeImportError,
   saveSiteMappingPending,
   deleteSiteMappingPending,
+  saveNatureRulePending,
+  deleteNatureRulePending,
   invoiceActionPending,
   indexSavePending,
   controlsPending,
@@ -909,6 +950,8 @@ function CpeFinanceReference({
   onFinanceImportFile,
   onSaveSiteMapping,
   onDeleteSiteMapping,
+  onSaveNatureRule,
+  onDeleteNatureRule,
   onInvoiceStatus,
   onExportLiaison,
   onSaveIndex,
@@ -932,6 +975,8 @@ function CpeFinanceReference({
   financeImportError: string | null;
   saveSiteMappingPending: boolean;
   deleteSiteMappingPending: boolean;
+  saveNatureRulePending: boolean;
+  deleteNatureRulePending: boolean;
   invoiceActionPending: boolean;
   indexSavePending: boolean;
   controlsPending: boolean;
@@ -939,6 +984,10 @@ function CpeFinanceReference({
   onFinanceImportFile: (file: File) => void;
   onSaveSiteMapping: (payload: Partial<CpeAccountingSiteMapping> & { id?: number; code_site: string; site_name: string }) => void;
   onDeleteSiteMapping: (id: number) => void;
+  onSaveNatureRule: (
+    payload: Partial<CpeAccountingNatureRule> & { id?: number; market: string; billed_item: string; accounting_nature: string },
+  ) => void;
+  onDeleteNatureRule: (id: number) => void;
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) => void;
@@ -946,8 +995,28 @@ function CpeFinanceReference({
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [ruleDraft, setRuleDraft] = useState(EMPTY_NATURE_RULE);
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [ruleFilter, setRuleFilter] = useState("");
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
   const recentInvoices = invoices.slice(0, 8);
+  const visibleRules = natureRules
+    .filter((rule) => {
+      const haystack = [
+        rule.contract_code,
+        rule.market,
+        rule.service_sold,
+        rule.billed_item,
+        rule.accounting_nature,
+        rule.accounting_label,
+        rule.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(ruleFilter.trim().toLowerCase());
+    })
+    .slice(0, 120);
   const controlsSummary = lastControls
     ? {
         ok: lastControls.filter((item) => item.status === "ok").length,
@@ -980,6 +1049,26 @@ function CpeFinanceReference({
     setDraft(EMPTY_SITE_MAPPING);
   };
 
+  const startRuleEdit = (rule: CpeAccountingNatureRule) => {
+    setEditingRuleId(rule.id);
+    setRuleDraft({
+      contract_code: rule.contract_code ?? "",
+      market: rule.market,
+      service_sold: rule.service_sold ?? "",
+      billed_item: rule.billed_item,
+      frequency: rule.frequency ?? "",
+      accounting_nature: rule.accounting_nature,
+      accounting_label: rule.accounting_label ?? "",
+      notes: rule.notes ?? "",
+      active: rule.active,
+    });
+  };
+
+  const resetRuleDraft = () => {
+    setEditingRuleId(null);
+    setRuleDraft(EMPTY_NATURE_RULE);
+  };
+
   const submitDraft = () => {
     if (!draft.code_site.trim() || !draft.site_name.trim()) return;
     onSaveSiteMapping({
@@ -999,6 +1088,23 @@ function CpeFinanceReference({
       active: draft.active,
     });
     resetDraft();
+  };
+
+  const submitRuleDraft = () => {
+    if (!ruleDraft.market.trim() || !ruleDraft.billed_item.trim() || !ruleDraft.accounting_nature.trim()) return;
+    onSaveNatureRule({
+      ...(editingRuleId ? { id: editingRuleId } : {}),
+      contract_code: ruleDraft.contract_code.trim().toUpperCase() || null,
+      market: ruleDraft.market.trim().toUpperCase(),
+      service_sold: ruleDraft.service_sold.trim().toUpperCase() || null,
+      billed_item: ruleDraft.billed_item.trim().toUpperCase(),
+      frequency: ruleDraft.frequency || null,
+      accounting_nature: ruleDraft.accounting_nature.trim(),
+      accounting_label: ruleDraft.accounting_label || null,
+      notes: ruleDraft.notes || null,
+      active: ruleDraft.active,
+    });
+    resetRuleDraft();
   };
 
   return (
@@ -1217,13 +1323,113 @@ function CpeFinanceReference({
         </div>
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <FinanceMarketTable title="Regles nature comptable" rows={natureRules.map((rule) => ({
-          code: `${rule.contract_code ?? "Tous contrats"} / ${rule.market} / ${rule.billed_item}`,
-          nb_lignes: Number(rule.frequency ?? 0) || 0,
-          nb_factures: 0,
-          montant_ht: 0,
-        }))} />
+      <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Matrice de codification DALKIA</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Rattachement par code contrat, poste facture et nature comptable pour les exports finances.
+            </p>
+          </div>
+          <input
+            value={ruleFilter}
+            onChange={(event) => setRuleFilter(event.target.value)}
+            placeholder="Filtrer contrat, poste, nature..."
+            style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 260 }}
+          />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 0.7fr) minmax(520px, 1.6fr)", gap: 16 }}>
+          <div>
+            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>{editingRuleId ? "Modifier une regle" : "Ajouter une regle"}</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <FinanceInput label="Code contrat" value={ruleDraft.contract_code} onChange={(value) => setRuleDraft({ ...ruleDraft, contract_code: value })} />
+              <FinanceInput label="Marche" value={ruleDraft.market} onChange={(value) => setRuleDraft({ ...ruleDraft, market: value })} />
+              <FinanceInput label="Poste facture" value={ruleDraft.billed_item} onChange={(value) => setRuleDraft({ ...ruleDraft, billed_item: value })} />
+              <FinanceInput label="Service vendu" value={ruleDraft.service_sold} onChange={(value) => setRuleDraft({ ...ruleDraft, service_sold: value })} />
+              <FinanceInput label="Nature" value={ruleDraft.accounting_nature} onChange={(value) => setRuleDraft({ ...ruleDraft, accounting_nature: value })} />
+              <FinanceInput label="Libelle nature" value={ruleDraft.accounting_label} onChange={(value) => setRuleDraft({ ...ruleDraft, accounting_label: value })} />
+              <FinanceInput label="Nb lignes / frequence" value={ruleDraft.frequency} onChange={(value) => setRuleDraft({ ...ruleDraft, frequency: value })} />
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#6b7280", alignSelf: "end" }}>
+                <input
+                  type="checkbox"
+                  checked={ruleDraft.active}
+                  onChange={(event) => setRuleDraft({ ...ruleDraft, active: event.target.checked })}
+                />
+                Active
+              </label>
+              <FinanceInput label="Notes / statut DALKIA" value={ruleDraft.notes} onChange={(value) => setRuleDraft({ ...ruleDraft, notes: value })} wide />
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={saveNatureRulePending || !ruleDraft.market || !ruleDraft.billed_item || !ruleDraft.accounting_nature}
+                onClick={submitRuleDraft}
+              >
+                {editingRuleId ? "Enregistrer" : "Ajouter"}
+              </button>
+              {editingRuleId && (
+                <button type="button" className="secondary-button" onClick={resetRuleDraft}>
+                  Annuler
+                </button>
+              )}
+            </div>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                  <th style={thStyle}>Contrat</th>
+                  <th style={thStyle}>Marche</th>
+                  <th style={thStyle}>Poste</th>
+                  <th style={thStyle}>Nature</th>
+                  <th style={thStyle}>Statut / notes</th>
+                  <th style={thStyle}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRules.map((rule) => (
+                  <tr key={rule.id} style={{ borderBottom: "1px solid #f3f4f6", opacity: rule.active ? 1 : 0.55 }}>
+                    <td style={tdStyle}><code>{rule.contract_code ?? "*"}</code></td>
+                    <td style={tdStyle}>{rule.market}<div style={{ color: "#6b7280" }}>{rule.service_sold}</div></td>
+                    <td style={tdStyle}>{rule.billed_item}<div style={{ color: "#6b7280" }}>{rule.frequency ? `${rule.frequency} ligne(s)` : ""}</div></td>
+                    <td style={tdStyle}>{rule.accounting_nature}<div style={{ color: "#6b7280" }}>{rule.accounting_label}</div></td>
+                    <td style={{ ...tdStyle, minWidth: 240 }}>{rule.notes ?? "-"}</td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startRuleEdit(rule)}>
+                        Modifier
+                      </button>{" "}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: 12, padding: "4px 8px", color: "#b91c1c" }}
+                        disabled={deleteNatureRulePending}
+                        onClick={() => onDeleteNatureRule(rule.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {visibleRules.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                      Aucune regle de codification.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {natureRules.length > visibleRules.length && (
+              <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 12 }}>
+                {visibleRules.length} regle(s) affichee(s) sur {natureRules.length}. Utilise le filtre pour cibler une ligne.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
         <div style={{ overflowX: "auto" }}>
           <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Factures archivees recentes</h4>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
