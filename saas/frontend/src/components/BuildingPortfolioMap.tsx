@@ -69,6 +69,8 @@ type BuildingPortfolioMapProps = {
   onSelectBuildingId: (buildingId: number) => void;
   highlightedBuildingIds?: number[];
   focusLatLon?: { lat: number; lon: number } | null;
+  /** Polygones IGN déjà attachés à afficher en mode portfolio (bleu translucide). */
+  portfolioIgnFeatures?: GeoJsonFeatureCollection | null;
   // --- Mode attachement IGN ---
   // Quand attachMode === "ign" :
   //   - La carte se centre sur attachLat/Lon
@@ -204,6 +206,7 @@ export function BuildingPortfolioMap({
   onSelectBuildingId,
   highlightedBuildingIds,
   focusLatLon,
+  portfolioIgnFeatures,
   attachMode = "none",
   attachLat,
   attachLon,
@@ -219,6 +222,7 @@ export function BuildingPortfolioMap({
   const runtimeRef = useRef<LeafletRuntime | null>(null);
   const mapRef = useRef<RuntimeMap | null>(null);
   const buildingsLayerRef = useRef<RuntimeFeatureGroup | null>(null);
+  const portfolioIgnLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const attachLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const centerMarkerRef = useRef<RuntimeLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -284,6 +288,7 @@ export function BuildingPortfolioMap({
       mapRef.current?.remove();
       mapRef.current = null;
       buildingsLayerRef.current = null;
+      portfolioIgnLayerRef.current = null;
       attachLayerRef.current = null;
       centerMarkerRef.current = null;
     };
@@ -370,6 +375,36 @@ export function BuildingPortfolioMap({
     window.setTimeout(() => map.invalidateSize?.(), 50);
     return () => { layerGroup.clearLayers(); };
   }, [activeBuildingId, mapReady, mappableBuildings, onSelectBuildingId, selectedBuilding, highlightedSet, focusLatLon, attachMode]);
+
+  // ------------------------------------------------------------------
+  // Couche polygones IGN déjà attachés (mode portfolio, bleu translucide)
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    const map = mapRef.current;
+    if (!runtime || !map || !mapReady) return;
+
+    portfolioIgnLayerRef.current?.remove?.();
+    portfolioIgnLayerRef.current = null;
+
+    // N'afficher que hors mode attachement
+    if (attachMode === "ign") return;
+    const features = portfolioIgnFeatures?.features ?? [];
+    if (!features.length) return;
+
+    const geoLayer = runtime.geoJSON(undefined, {
+      style: () => ({
+        color: "#1d4ed8",
+        weight: 2,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.18,
+        interactive: false,
+      }),
+    });
+    geoLayer.addData({ type: "FeatureCollection", features });
+    geoLayer.addTo(map);
+    portfolioIgnLayerRef.current = geoLayer;
+  }, [portfolioIgnFeatures, attachMode, mapReady]);
 
   // ------------------------------------------------------------------
   // Couche attachement IGN : centre + polygones WFS sélectionnables

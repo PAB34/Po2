@@ -492,6 +492,18 @@ def delete_local(db: Session, local: Local) -> None:
     db.commit()
 
 
+def delete_building(db: Session, building: Building) -> None:
+    """Supprime un batiment et ses locaux (CASCADE DB)."""
+    db.delete(building)
+    db.commit()
+
+
+def delete_site(db: Session, site: Site) -> None:
+    """Supprime un site. Les batiments rattaches sont detaches (SET NULL, pas supprimes)."""
+    db.delete(site)
+    db.commit()
+
+
 def list_building_meter_links(db: Session, building: Building) -> list[BuildingMeterLink]:
     statement = (
         select(BuildingMeterLink)

@@ -758,6 +758,22 @@ export async function deleteAllBuildingsRequest(token: string): Promise<{ delete
   return parseResponse<{ deleted: number }>(response);
 }
 
+export async function deleteSiteRequest(token: string, siteId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/buildings/sites/${siteId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function deleteBuildingRequest(token: string, buildingId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
 export async function deleteLocalRequest(token: string, buildingId: number, localId: number): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/locals/${localId}`, {
     method: "DELETE",

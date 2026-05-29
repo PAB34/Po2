@@ -18,6 +18,9 @@ import {
   createLocalRequest,
   createSiteRequest,
   deleteAllBuildingsRequest,
+  deleteBuildingRequest,
+  deleteLocalRequest,
+  deleteSiteRequest,
   fetchAllLocals,
   fetchBuildingMeterLinks,
   fetchBuildings,
@@ -35,6 +38,7 @@ import {
   type CreateSitePayload,
   type FreeAddressLookup,
   type GeoJsonFeature,
+  type GeoJsonFeatureCollection,
   type Local,
   type NearbyDgfipResult,
   type NearbyDgfipRow,
@@ -230,6 +234,25 @@ export function BuildingsListPage() {
 
   const activeMapBuildingId = attachMode === "none" ? (selectedBuilding?.id ?? selectedLocalParent?.id ?? null) : null;
 
+  // Polygones IGN déjà attachés à afficher sur la carte (mode portfolio)
+  const portfolioIgnFeatures = useMemo<GeoJsonFeatureCollection | null>(() => {
+    const targetBuildings: Building[] =
+      selectedSite
+        ? (buildingsBySiteId.get(selectedSite.id) ?? [])
+        : selectedBuilding
+          ? [selectedBuilding]
+          : [];
+    const features = targetBuildings.flatMap((b) => {
+      if (!b.ign_features_json) return [];
+      try {
+        const parsed = JSON.parse(b.ign_features_json) as unknown;
+        if (Array.isArray(parsed)) return parsed as GeoJsonFeature[];
+      } catch { /* empty */ }
+      return [];
+    });
+    return features.length > 0 ? { type: "FeatureCollection", features } : null;
+  }, [selectedSite, selectedBuilding, buildingsBySiteId]);
+
   // Attachement : adresse du bâtiment sélectionné
   const attachBuilding = attachMode !== "none" ? selectedBuilding : null;
   const attachAddress = attachBuilding ? buildAttachmentAddress(attachBuilding) : null;
@@ -302,6 +325,33 @@ export function BuildingsListPage() {
       queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
       setShowCreateLocal(false);
       selectAndExpand({ type: "local", id: local.id });
+    },
+  });
+
+  const deleteSiteMutation = useMutation({
+    mutationFn: (siteId: number) => deleteSiteRequest(token as string, siteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] });
+      queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+      setSelectedNode(null);
+    },
+  });
+
+  const deleteBuildingMutation = useMutation({
+    mutationFn: (buildingId: number) => deleteBuildingRequest(token as string, buildingId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+      queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
+      setSelectedNode(null);
+    },
+  });
+
+  const deleteLocalMutation = useMutation({
+    mutationFn: ({ buildingId, localId }: { buildingId: number; localId: number }) =>
+      deleteLocalRequest(token as string, buildingId, localId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
+      setSelectedNode(null);
     },
   });
 
@@ -576,6 +626,7 @@ export function BuildingsListPage() {
                 onSelectBuildingId={(id) => { if (attachMode === "none") selectAndExpand({ type: "building", id }); }}
                 highlightedBuildingIds={highlightedBuildingIds}
                 focusLatLon={attachMode === "none" ? focusLatLon : null}
+                portfolioIgnFeatures={attachMode === "none" ? portfolioIgnFeatures : null}
                 attachMode={attachMode === "ign" ? "ign" : "none"}
                 attachLat={freeAddressLookupQuery.data?.lat ?? null}
                 attachLon={freeAddressLookupQuery.data?.lon ?? null}
@@ -608,6 +659,10 @@ export function BuildingsListPage() {
               onSaveBuilding={(payload) => selectedBuilding && updateBuildingMutation.mutate({ buildingId: selectedBuilding.id, payload })}
               onSaveLocal={(payload) => selectedLocal && updateLocalMutation.mutate({ buildingId: selectedLocal.building_id, localId: selectedLocal.id, payload })}
               savePending={updateSiteMutation.isPending || updateBuildingMutation.isPending || updateLocalMutation.isPending}
+              onDeleteSite={(id) => { if (window.confirm("Supprimer ce site ? Les bâtiments rattachés seront détachés (non supprimés).")) deleteSiteMutation.mutate(id); }}
+              onDeleteBuilding={(id) => { if (window.confirm("Supprimer ce bâtiment et tous ses locaux ?")) deleteBuildingMutation.mutate(id); }}
+              onDeleteLocal={(buildingId, localId) => { if (window.confirm("Supprimer ce local ?")) deleteLocalMutation.mutate({ buildingId, localId }); }}
+              deletePending={deleteSiteMutation.isPending || deleteBuildingMutation.isPending || deleteLocalMutation.isPending}
               // Attachement
               attachMode={attachMode}
               attachSelectedFeatures={attachSelectedFeatures}
@@ -691,16 +746,20 @@ function CreateSection({
       </div>
 
       {showCreateSite && (
-        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onCreateSite({ nom_site: nomSite, adresse: adresseSite || null }); setNomSite(""); setAdresseSite(""); }}>
-          <label className="field"><span>Nom du site *</span><input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required placeholder="Ex : Groupe scolaire Jean Jaurès" /></label>
-          <label className="field"><span>Adresse</span><input type="text" value={adresseSite} onChange={(e) => setAdresseSite(e.target.value)} placeholder="Adresse du site" /></label>
+        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onCreateSite({ nom_site: nomSite }); setNomSite(""); }}>
+          <label className="field"><span>Nom du site *</span><input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required placeholder="Ex : Groupe scolaire Jean Jaurès" autoFocus /></label>
           <div className="form-actions"><button type="submit" disabled={createSitePending}>{createSitePending ? "Création..." : "Créer le site"}</button></div>
         </form>
       )}
 
       {showCreateBuilding && (
-        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onCreateBuilding({ nom_batiment: nomBat, nom_commune: communeBat, site_id: siteIdBat ?? activeSiteId ?? undefined }); setNomBat(""); setCommuneBat(""); setSiteIdBat(null); }}>
-          <label className="field"><span>Nom du bâtiment *</span><input type="text" value={nomBat} onChange={(e) => setNomBat(e.target.value)} required placeholder="Ex : Bâtiment principal" /></label>
+        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          onCreateBuilding({ nom_batiment: nomBat, nom_commune: communeBat, adresse_reconstituee: adresseSite || undefined, site_id: siteIdBat ?? activeSiteId ?? undefined, create_default_local: false });
+          setNomBat(""); setCommuneBat(""); setAdresseSite(""); setSiteIdBat(null);
+        }}>
+          <label className="field"><span>Nom du bâtiment *</span><input type="text" value={nomBat} onChange={(e) => setNomBat(e.target.value)} required placeholder="Ex : Gymnase Victor Hugo" autoFocus /></label>
+          <label className="field"><span>Adresse *</span><input type="text" value={adresseSite} onChange={(e) => setAdresseSite(e.target.value)} required placeholder="Ex : 12 RUE DU PORT SÈTE" /></label>
           <label className="field"><span>Commune *</span><input type="text" value={communeBat} onChange={(e) => setCommuneBat(e.target.value)} required placeholder="Ex : Sète" /></label>
           <label className="field">
             <span>Site parent</span>
@@ -758,6 +817,10 @@ type DetailPanelProps = {
   onSaveBuilding: (p: UpdateBuildingPayload) => void;
   onSaveLocal: (p: UpdateLocalPayload) => void;
   savePending: boolean;
+  onDeleteSite: (id: number) => void;
+  onDeleteBuilding: (id: number) => void;
+  onDeleteLocal: (buildingId: number, localId: number) => void;
+  deletePending: boolean;
   // Attachement
   attachMode: AttachMode;
   attachSelectedFeatures: GeoJsonFeature[];
@@ -770,7 +833,7 @@ type DetailPanelProps = {
 };
 
 function PatrimonyDetailPanel(props: DetailPanelProps) {
-  const { selectedSite, selectedBuilding, selectedLocal, selectedLocalParent } = props;
+  const { selectedSite, selectedBuilding, selectedLocal, selectedLocalParent, onDeleteSite, onDeleteBuilding, onDeleteLocal, deletePending } = props;
 
   if (!selectedSite && !selectedBuilding && !selectedLocal) {
     return (
@@ -792,6 +855,8 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveSite}
         savePending={props.savePending}
+        onDelete={() => onDeleteSite(selectedSite.id)}
+        deletePending={deletePending}
       />
     );
   }
@@ -806,6 +871,8 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveBuilding}
         savePending={props.savePending}
+        onDelete={() => onDeleteBuilding(selectedBuilding.id)}
+        deletePending={deletePending}
         attachMode={props.attachMode}
         attachSelectedFeatures={props.attachSelectedFeatures}
         onEnterAttach={props.onEnterAttach}
@@ -828,6 +895,8 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveLocal}
         savePending={props.savePending}
+        onDelete={() => onDeleteLocal(selectedLocal.building_id, selectedLocal.id)}
+        deletePending={deletePending}
       />
     );
   }
@@ -839,23 +908,25 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
 // Détail Site
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, savePending }: {
+function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending }: {
   site: Site; childBuildings: Building[]; editMode: boolean;
   onToggleEdit: () => void; onSave: (p: UpdateSitePayload) => void; savePending: boolean;
+  onDelete: () => void; deletePending: boolean;
 }) {
   const [nomSite, setNomSite] = useState(site.nom_site);
-  const [adresse, setAdresse] = useState(site.adresse ?? "");
   return (
     <div className="section-block">
       <div className="panel-header">
         <div className="section-heading"><h3>📍 Site sélectionné</h3><p>{childBuildings.length} bâtiment(s) rattaché(s)</p></div>
-        <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
+          <button type="button" className="danger-button" onClick={onDelete} disabled={deletePending}>Supprimer</button>
+        </div>
       </div>
       {editMode ? (
-        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_site: nomSite, adresse: adresse || null }); }}>
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_site: nomSite }); }}>
           <div className="form-grid">
             <label className="field"><span>Nom du site</span><input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required /></label>
-            <label className="field"><span>Adresse</span><input type="text" value={adresse} onChange={(e) => setAdresse(e.target.value)} /></label>
           </div>
           <div className="form-actions"><button type="submit" disabled={savePending}>{savePending ? "Enregistrement..." : "Enregistrer"}</button></div>
         </form>
@@ -863,8 +934,7 @@ function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, save
         <>
           <div className="detail-grid">
             <div className="detail-card"><span>Nom</span><strong>{site.nom_site}</strong></div>
-            <div className="detail-card"><span>Adresse</span><strong>{site.adresse || "Non renseignée"}</strong></div>
-            <div className="detail-card"><span>Bâtiments</span><strong>{childBuildings.length}</strong></div>
+            <div className="detail-card"><span>Bâtiments rattachés</span><strong>{childBuildings.length}</strong></div>
             <div className="detail-card"><span>Source</span><strong>{site.source_file || "Saisie manuelle"}</strong></div>
           </div>
           {childBuildings.length > 0 && (
@@ -892,13 +962,14 @@ function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, save
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BuildingDetail({
-  building, childLocals, editMode, onToggleEdit, onSave, savePending,
+  building, childLocals, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending,
   attachMode, attachSelectedFeatures, onEnterAttach, onExitAttach, onAttachSuccess,
   nearbyDgfipData, nearbyDgfipLoading, freeAddressLookupData,
 }: {
   building: Building; childLocals: Local[];
   editMode: boolean; onToggleEdit: () => void;
   onSave: (p: UpdateBuildingPayload) => void; savePending: boolean;
+  onDelete: () => void; deletePending: boolean;
   attachMode: AttachMode;
   attachSelectedFeatures: GeoJsonFeature[];
   onEnterAttach: (mode: "ign" | "dgfip") => void;
@@ -1007,6 +1078,7 @@ function BuildingDetail({
           >
             {attachMode === "dgfip" ? "✕ Fermer DGFIP" : "Attacher DGFIP"}
           </button>
+          <button type="button" className="danger-button" onClick={onDelete} disabled={deletePending}>Supprimer</button>
         </div>
       </div>
 
@@ -1196,12 +1268,6 @@ function BuildingDetail({
             </div>
           )}
 
-          {/* Lien fiche complète (pour compteurs / ajout locaux) */}
-          <div style={{ marginTop: 8 }}>
-            <Link to={`/buildings/${building.id}`} className="secondary-link" style={{ fontSize: 13 }}>
-              Fiche complète (ajout locaux, compteurs, édition avancée) →
-            </Link>
-          </div>
         </>
       )}
     </div>
@@ -1212,9 +1278,10 @@ function BuildingDetail({
 // Détail Local
 // ─────────────────────────────────────────────────────────────────────────────
 
-function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePending }: {
+function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending }: {
   local: Local; parent: Building; editMode: boolean;
   onToggleEdit: () => void; onSave: (p: UpdateLocalPayload) => void; savePending: boolean;
+  onDelete: () => void; deletePending: boolean;
 }) {
   const [nomLocal, setNomLocal] = useState(local.nom_local);
   const [typeLocal, setTypeLocal] = useState(local.type_local);
@@ -1230,7 +1297,10 @@ function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePendin
           <h3>◇ Local sélectionné</h3>
           <p>Bâtiment parent : <strong>{parent.nom_batiment || `#${parent.id}`}</strong></p>
         </div>
-        <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
+          <button type="button" className="danger-button" onClick={onDelete} disabled={deletePending}>Supprimer</button>
+        </div>
       </div>
       {editMode ? (
         <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); const s = surfaceM2.trim() ? Number(surfaceM2.replace(",", ".")) : null; onSave({ nom_local: nomLocal, type_local: typeLocal, niveau: niveau || null, surface_m2: Number.isFinite(s as number) ? (s as number) : null, usage: usage || null, statut_occupation: statutOccupation || null }); }}>

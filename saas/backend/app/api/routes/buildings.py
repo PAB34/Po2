@@ -42,7 +42,9 @@ from app.services.buildings import (
     create_building_meter_link,
     create_site,
     delete_all_buildings,
+    delete_building,
     delete_local,
+    delete_site,
     delete_building_meter_link,
     get_building_or_404,
     get_local_or_404,
@@ -240,6 +242,17 @@ def put_site(
     return SiteRead.model_validate(updated)
 
 
+@router.delete("/sites/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_site(
+    site_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    site = get_site_or_404(db, site_id, current_user)
+    delete_site(db, site)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("", response_model=BuildingRead, status_code=status.HTTP_201_CREATED)
 def post_building(
     payload: BuildingCreate,
@@ -270,6 +283,17 @@ def put_building(
     building = get_building_or_404(db, building_id, current_user)
     updated_building = update_building(db, building, payload)
     return BuildingRead.model_validate(updated_building)
+
+
+@router.delete("/{building_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_building(
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    building = get_building_or_404(db, building_id, current_user)
+    delete_building(db, building)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{building_id}/geo-attachment", response_model=BuildingRead)
