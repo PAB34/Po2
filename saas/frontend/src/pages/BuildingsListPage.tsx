@@ -236,7 +236,7 @@ export function BuildingsListPage() {
 
   const freeAddressLookupQuery = useQuery({
     queryKey: ["buildings", "attach-geocode", attachBuilding?.id, token],
-    queryFn: () => fetchFreeAddressLookup(token as string, attachAddress as string, { skip_ign_buildings: true }),
+    queryFn: () => fetchFreeAddressLookup(token as string, attachAddress as string),
     enabled: Boolean(token) && Boolean(attachAddress) && attachMode === "ign",
     retry: false,
   });
@@ -580,6 +580,7 @@ export function BuildingsListPage() {
                 attachLat={freeAddressLookupQuery.data?.lat ?? null}
                 attachLon={freeAddressLookupQuery.data?.lon ?? null}
                 attachAddress={attachAddress ?? undefined}
+                attachFeatureCollection={freeAddressLookupQuery.data?.feature_collection ?? null}
                 attachSelectedIds={attachSelectedFeatures.map((f) => String(f.properties?.ign_id ?? ""))}
                 onSelectAttachFeature={(f) =>
                   setAttachSelectedFeatures((prev) => {

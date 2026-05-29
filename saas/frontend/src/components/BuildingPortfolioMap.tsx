@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Building, GeoJsonFeature } from "../lib/api";
+import type { Building, GeoJsonFeature, GeoJsonFeatureCollection } from "../lib/api";
 
 // ---------------------------------------------------------------------------
 // Types Leaflet runtime (injectés via CDN)
@@ -72,12 +72,13 @@ type BuildingPortfolioMapProps = {
   // --- Mode attachement IGN ---
   // Quand attachMode === "ign" :
   //   - La carte se centre sur attachLat/Lon
-  //   - Les polygones WFS BDTOPO sont chargés directement depuis le navigateur
-  //   - Clic sur un polygone → onToggleAttachFeature
+  //   - Les polygones de attachFeatureCollection sont rendus sur la carte
+  //   - Clic sur un polygone → onSelectAttachFeature / onDeselectAttachFeatureId
   attachMode?: "none" | "ign";
   attachLat?: number | null;
   attachLon?: number | null;
   attachAddress?: string | null;
+  attachFeatureCollection?: GeoJsonFeatureCollection | null; // polygones WFS depuis le serveur
   attachSelectedIds?: string[];
   onSelectAttachFeature?: (feature: GeoJsonFeature) => void;
   onDeselectAttachFeatureId?: (featureId: string) => void;
@@ -143,13 +144,6 @@ function ensureLeafletRuntime(): Promise<LeafletRuntime> {
   return runtimeWindow.__po2LeafletLoader__;
 }
 
-/** Bounding box (minx, miny, maxx, maxy) autour d'un point, rayon en mètres. */
-function bboxAround(lat: number, lon: number, radiusM: number): [number, number, number, number] {
-  const deltaLat = radiusM / 111320;
-  const deltaLon = radiusM / Math.max(111320 * Math.cos((lat * Math.PI) / 180), 1e-6);
-  return [lon - deltaLon, lat - deltaLat, lon + deltaLon, lat + deltaLat];
-}
-
 /** ID d'un feature WFS brut. */
 function wfsFeatureId(feature: RuntimeFeature): string {
   return String(
@@ -207,6 +201,7 @@ export function BuildingPortfolioMap({
   attachLat,
   attachLon,
   attachAddress,
+  attachFeatureCollection,
   attachSelectedIds,
   onSelectAttachFeature,
   onDeselectAttachFeatureId,
@@ -220,11 +215,6 @@ export function BuildingPortfolioMap({
   const attachLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const centerMarkerRef = useRef<RuntimeLayer | null>(null);
   const [mapReady, setMapReady] = useState(false);
-
-  // WFS data fetched client-side (mode attachement IGN)
-  const [wfsData, setWfsData] = useState<{ features: RuntimeFeature[] } | null>(null);
-  const [wfsLoading, setWfsLoading] = useState(false);
-  const [wfsError, setWfsError] = useState<string | null>(null);
 
   const mappableBuildings = useMemo(
     () =>
@@ -375,37 +365,8 @@ export function BuildingPortfolioMap({
   }, [activeBuildingId, mapReady, mappableBuildings, onSelectBuildingId, selectedBuilding, highlightedSet, focusLatLon, attachMode]);
 
   // ------------------------------------------------------------------
-  // Fetch WFS client-side quand on entre en mode attachement IGN
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    if (attachMode !== "ign" || attachLat == null || attachLon == null) {
-      setWfsData(null);
-      setWfsError(null);
-      return;
-    }
-    setWfsLoading(true);
-    setWfsError(null);
-    setWfsData(null);
-    const [minx, miny, maxx, maxy] = bboxAround(attachLat, attachLon, 200);
-    const url =
-      `https://data.geopf.fr/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature` +
-      `&typeNames=BDTOPO_V3:batiment` +
-      `&bbox=${minx},${miny},${maxx},${maxy},EPSG:4326` +
-      `&srsName=EPSG:4326&outputFormat=application/json&count=150`;
-    fetch(url)
-      .then((r) => r.json())
-      .then((data: { features?: RuntimeFeature[] }) => {
-        setWfsData({ features: data.features ?? [] });
-        setWfsLoading(false);
-      })
-      .catch(() => {
-        setWfsError("Impossible de charger les polygones IGN depuis le navigateur.");
-        setWfsLoading(false);
-      });
-  }, [attachMode, attachLat, attachLon]);
-
-  // ------------------------------------------------------------------
   // Couche attachement IGN : centre + polygones WFS sélectionnables
+  // Les polygones viennent du serveur (lookup/free-address avec feature_collection)
   // ------------------------------------------------------------------
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -439,8 +400,9 @@ export function BuildingPortfolioMap({
     centerMarker.addTo(map);
     centerMarkerRef.current = centerMarker;
 
-    // Polygones WFS BDTOPO (si chargés)
-    if (!wfsData?.features?.length) return;
+    // Polygones WFS BDTOPO depuis la feature_collection serveur
+    const features = attachFeatureCollection?.features ?? [];
+    if (!features.length) return;
 
     const selectedIdsSet = new Set(attachSelectedIds ?? []);
     const geoLayer = runtime.geoJSON(undefined, {
@@ -467,15 +429,26 @@ export function BuildingPortfolioMap({
           if (selectedIdsSet.has(fid)) {
             onDeselectAttachFeatureId?.(fid);
           } else {
-            onSelectAttachFeature?.(normalizeWfsFeature(feature, fid));
+            // Construire un GeoJsonFeature normalisé depuis le feature serveur
+            const props = (feature.properties ?? {}) as Record<string, unknown>;
+            const normalized: GeoJsonFeature = {
+              type: "Feature",
+              geometry: (feature.geometry ?? null) as GeoJsonFeature["geometry"],
+              properties: {
+                ...props,
+                // S'assurer que ign_id est présent pour la sélection
+                ign_id: props.ign_id ?? fid,
+              },
+            };
+            onSelectAttachFeature?.(normalized);
           }
         });
       },
     });
-    geoLayer.addData({ type: "FeatureCollection", features: wfsData.features });
+    geoLayer.addData({ type: "FeatureCollection", features });
     geoLayer.addTo(map);
     attachLayerRef.current = geoLayer;
-  }, [attachMode, attachLat, attachLon, attachAddress, attachSelectedIds, wfsData, mapReady, onSelectAttachFeature, onDeselectAttachFeatureId]);
+  }, [attachMode, attachLat, attachLon, attachAddress, attachSelectedIds, attachFeatureCollection, mapReady, onSelectAttachFeature, onDeselectAttachFeatureId]);
 
   // ------------------------------------------------------------------
   // Rendu
@@ -490,13 +463,8 @@ export function BuildingPortfolioMap({
     );
   }
 
-  const showOverlay = isAttachLoading || wfsLoading;
-  const overlayText =
-    isAttachLoading
-      ? "Géocodage en cours..."
-      : wfsLoading
-        ? "Chargement des polygones IGN..."
-        : null;
+  const showOverlay = isAttachLoading;
+  const overlayText = isAttachLoading ? "Chargement des polygones IGN..." : null;
 
   return (
     <div className="map-shell">
@@ -505,13 +473,13 @@ export function BuildingPortfolioMap({
           {attachMode === "ign" ? (
             <>
               Mode attachement IGN ·{" "}
-              {wfsData ? (
-                <strong>
-                  {wfsData.features.length} polygone(s) BDTOPO ·{" "}
-                  {(attachSelectedIds?.length ?? 0)} sélectionné(s)
-                </strong>
+              {isAttachLoading ? (
+                <em>Chargement des polygones...</em>
               ) : (
-                <em>{wfsError ?? "Chargement..."}</em>
+                <strong>
+                  {attachFeatureCollection?.features.length ?? 0} polygone(s) BDTOPO ·{" "}
+                  {attachSelectedIds?.length ?? 0} sélectionné(s)
+                </strong>
               )}
             </>
           ) : (
@@ -536,9 +504,9 @@ export function BuildingPortfolioMap({
             <span>{overlayText}</span>
           </div>
         ) : null}
-        {wfsError && attachMode === "ign" ? (
+        {!isAttachLoading && attachMode === "ign" && (attachFeatureCollection?.features.length ?? 0) === 0 && !isAttachLoading ? (
           <div className="map-loading-overlay map-loading-overlay--error">
-            <span>⚠ {wfsError}</span>
+            <span>Aucun polygone IGN détecté dans ce secteur.</span>
           </div>
         ) : null}
       </div>
