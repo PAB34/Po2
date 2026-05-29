@@ -144,25 +144,32 @@ function ensureLeafletRuntime(): Promise<LeafletRuntime> {
   return runtimeWindow.__po2LeafletLoader__;
 }
 
-/** ID d'un feature WFS brut. */
+/** ID d'un feature IGN (serveur ou brut WFS). */
 function wfsFeatureId(feature: RuntimeFeature): string {
-  return String(
+  // Les features serveur ont ign_id dans properties (priorité absolue).
+  // Les features bruts WFS ont l'id dans feature.id ou properties.cleabs.
+  const val =
+    feature.properties?.ign_id ??
     feature.id ??
-      feature.properties?.cleabs ??
-      feature.properties?.id_local ??
-      feature.properties?.id ??
-      "",
-  );
+    feature.properties?.cleabs ??
+    feature.properties?.id_local ??
+    feature.properties?.id ??
+    "";
+  return String(val);
 }
 
-/** Label d'un feature WFS brut. */
+/** Label d'un feature IGN (serveur ou brut WFS). */
 function wfsFeatureLabel(feature: RuntimeFeature): string {
-  return String(
+  // Les features serveur ont resolved_name / label / name.
+  const val =
+    feature.properties?.resolved_name ??
+    feature.properties?.label ??
+    feature.properties?.name ??
     feature.properties?.nom_usuel ??
-      feature.properties?.nature ??
-      feature.properties?.usage_1 ??
-      "Bâtiment IGN",
-  );
+    feature.properties?.nature ??
+    feature.properties?.usage_1 ??
+    "Bâtiment IGN";
+  return String(val);
 }
 
 /**

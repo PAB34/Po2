@@ -1027,9 +1027,11 @@ function BuildingDetail({
             </ul>
           )}
           <div className="form-actions" style={{ marginTop: 8 }}>
-            <button type="button" onClick={() => void handleConfirmIgnAttach()} disabled={attachmentPending}>
-              {attachmentPending ? "Attachement en cours..." : `Valider l'attachement IGN${attachSelectedFeatures.length > 0 ? ` (${attachSelectedFeatures.length} polygone(s))` : " (sans polygone)"}`}
-            </button>
+            {attachSelectedFeatures.length > 0 && (
+              <button type="button" onClick={() => void handleConfirmIgnAttach()} disabled={attachmentPending}>
+                {attachmentPending ? "Attachement en cours..." : `Valider l'attachement IGN (${attachSelectedFeatures.length} polygone(s))`}
+              </button>
+            )}
             <button type="button" className="secondary-button" onClick={onExitAttach}>Annuler</button>
           </div>
         </div>
