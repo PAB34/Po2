@@ -350,7 +350,7 @@ def list_finance_invoices(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CpeFinanceInvoiceOut]:
-    invoices = accounting_svc.list_finance_invoices(db, current_user.city_id, batch_id=batch_id)
+    invoices = accounting_svc.list_finance_invoices_enriched(db, current_user.city_id, batch_id=batch_id)
     return [CpeFinanceInvoiceOut.model_validate(item) for item in invoices]
 
 

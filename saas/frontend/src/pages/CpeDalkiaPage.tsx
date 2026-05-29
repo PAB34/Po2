@@ -76,6 +76,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
 
 type CpeView = "cockpit" | "finance" | "performance";
 type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices";
+type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "total_ht" | "status";
 
 const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
   { id: "imports", label: "Imports", detail: "Codification et exports finance" },
@@ -1104,24 +1105,53 @@ function CpeFinanceReference({
   const [ruleFilter, setRuleFilter] = useState("");
   const [referenceFilter, setReferenceFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
+  const [invoiceSort, setInvoiceSort] = useState<{ field: InvoiceSortField; direction: "asc" | "desc" }>({
+    field: "invoice_number",
+    direction: "asc",
+  });
   const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
-  const visibleInvoices = invoices.filter((invoice) => {
-    const haystack = [
-      invoice.invoice_number,
-      invoice.contract_code,
-      invoice.contract_label,
-      invoice.invoice_type,
-      invoice.status,
-      invoice.period_start,
-      invoice.period_end,
-      invoice.total_ht,
-    ]
-      .filter((value) => value != null)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(invoiceFilter.trim().toLowerCase());
-  });
+  const invoiceSortValue = (invoice: CpeFinanceInvoice, field: InvoiceSortField): string | number => {
+    if (field === "total_ht") return invoice.total_ht ?? 0;
+    if (field === "contract_label") return (invoice.contract_label ?? invoice.contract_code ?? "").toLowerCase();
+    if (field === "markets") return (invoice.markets ?? "").toLowerCase();
+    if (field === "billed_items") return (invoice.billed_items ?? "").toLowerCase();
+    if (field === "recipient_reference_1") return (invoice.recipient_reference_1 ?? "").toLowerCase();
+    if (field === "status") return (invoice.status ?? "").toLowerCase();
+    return (invoice.invoice_number ?? "").toLowerCase();
+  };
+  const visibleInvoices = invoices
+    .filter((invoice) => {
+      const haystack = [
+        invoice.invoice_number,
+        invoice.contract_code,
+        invoice.contract_label,
+        invoice.invoice_type,
+        invoice.status,
+        invoice.period_start,
+        invoice.period_end,
+        invoice.total_ht,
+        invoice.markets,
+        invoice.billed_items,
+        invoice.recipient_reference_1,
+      ]
+        .filter((value) => value != null)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(invoiceFilter.trim().toLowerCase());
+    })
+    .slice()
+    .sort((left, right) => {
+      const a = invoiceSortValue(left, invoiceSort.field);
+      const b = invoiceSortValue(right, invoiceSort.field);
+      let result = 0;
+      if (typeof a === "number" && typeof b === "number") {
+        result = a - b;
+      } else {
+        result = String(a).localeCompare(String(b), "fr", { sensitivity: "base", numeric: true });
+      }
+      return invoiceSort.direction === "asc" ? result : -result;
+    });
   const visibleSiteMappings = siteMappings
     .filter((mapping) => {
       const haystack = [
@@ -1323,6 +1353,18 @@ function CpeFinanceReference({
       active: referenceDraft.active,
     });
     resetReferenceDraft();
+  };
+  const toggleInvoiceSort = (field: InvoiceSortField) => {
+    setInvoiceSort((previous) => {
+      if (previous.field === field) {
+        return { field, direction: previous.direction === "asc" ? "desc" : "asc" };
+      }
+      return { field, direction: "asc" };
+    });
+  };
+  const sortIndicator = (field: InvoiceSortField) => {
+    if (invoiceSort.field !== field) return "";
+    return invoiceSort.direction === "asc" ? " ▲" : " ▼";
   };
 
   return (
@@ -1883,14 +1925,45 @@ function CpeFinanceReference({
             </p>
           )}
           {deleteHistoryError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{deleteHistoryError}</p>}
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <table style={{ width: "100%", minWidth: 1700, borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                <th style={thStyle}>Facture</th>
-                <th style={thStyle}>Contrat</th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("invoice_number")} style={tableSortButtonStyle}>
+                    Facture{sortIndicator("invoice_number")}
+                  </button>
+                </th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("contract_label")} style={tableSortButtonStyle}>
+                    Libelle contrat{sortIndicator("contract_label")}
+                  </button>
+                </th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("markets")} style={tableSortButtonStyle}>
+                    MARCHE{sortIndicator("markets")}
+                  </button>
+                </th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("billed_items")} style={tableSortButtonStyle}>
+                    Postes factures{sortIndicator("billed_items")}
+                  </button>
+                </th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("recipient_reference_1")} style={tableSortButtonStyle}>
+                    REF DESTINATAIRE 1{sortIndicator("recipient_reference_1")}
+                  </button>
+                </th>
                 <th style={thStyle}>Periode</th>
-                <th style={thStyle}>HT</th>
-                  <th style={thStyle}>Statut</th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("total_ht")} style={tableSortButtonStyle}>
+                    HT{sortIndicator("total_ht")}
+                  </button>
+                </th>
+                  <th style={thStyle}>
+                    <button type="button" onClick={() => toggleInvoiceSort("status")} style={tableSortButtonStyle}>
+                      Statut{sortIndicator("status")}
+                    </button>
+                  </th>
                   <th style={thStyle}>Actions</th>
               </tr>
             </thead>
@@ -1898,7 +1971,13 @@ function CpeFinanceReference({
               {visibleInvoices.map((invoice) => (
                 <tr key={invoice.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={tdStyle}>{invoice.invoice_number}</td>
-                  <td style={tdStyle}>{invoice.contract_code ?? "-"}</td>
+                  <td style={{ ...tdStyle, minWidth: 240 }}>
+                    <div>{invoice.contract_label ?? "-"}</div>
+                    <div style={{ color: "#6b7280" }}>{invoice.contract_code ?? "-"}</div>
+                  </td>
+                  <td style={tdStyle}>{invoice.markets ?? "-"}</td>
+                  <td style={{ ...tdStyle, minWidth: 320 }}>{invoice.billed_items ?? "-"}</td>
+                  <td style={tdStyle}>{invoice.recipient_reference_1 ?? "-"}</td>
                   <td style={tdStyle}>{invoice.period_start ?? "-"} au {invoice.period_end ?? "-"}</td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
                   <td style={tdStyle}>
@@ -1942,7 +2021,7 @@ function CpeFinanceReference({
               ))}
               {visibleInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                  <td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
                     Aucune facture ne correspond au filtre.
                   </td>
                 </tr>
@@ -2149,6 +2228,18 @@ const thStyle: React.CSSProperties = {
   color: "#6b7280",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
+};
+
+const tableSortButtonStyle: React.CSSProperties = {
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  color: "inherit",
+  cursor: "pointer",
+  font: "inherit",
+  letterSpacing: "inherit",
+  padding: 0,
+  textTransform: "inherit",
 };
 
 const tdStyle: React.CSSProperties = {

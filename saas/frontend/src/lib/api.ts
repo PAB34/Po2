@@ -2872,6 +2872,9 @@ export type CpeFinanceInvoice = {
   due_date: string | null;
   period_start: string | null;
   period_end: string | null;
+  markets: string | null;
+  billed_items: string | null;
+  recipient_reference_1: string | null;
   total_ht: number;
   status: string;
   notes: string | null;

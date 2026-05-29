@@ -387,6 +387,9 @@ class CpeFinanceInvoiceOut(BaseModel):
     due_date: date | None
     period_start: date | None
     period_end: date | None
+    markets: str | None = None
+    billed_items: str | None = None
+    recipient_reference_1: str | None = None
     total_ht: float
     status: str
     notes: str | None

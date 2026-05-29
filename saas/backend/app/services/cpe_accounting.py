@@ -718,6 +718,16 @@ def _line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
     return _float(raw.get(key))
 
 
+def _line_raw_str(line: CpeFinanceLine, key: str) -> str | None:
+    if not line.raw_json:
+        return None
+    try:
+        raw = json.loads(line.raw_json)
+    except json.JSONDecodeError:
+        return None
+    return _clean(raw.get(key))
+
+
 def _invoice_type_label(value: str | None) -> str | None:
     code = (value or "").strip().upper()
     if not code:
@@ -1409,6 +1419,66 @@ def list_finance_invoices(
         query = query.where(CpeFinanceInvoice.batch_id == batch_id)
     query = query.order_by(CpeFinanceInvoice.invoice_date.desc().nullslast(), CpeFinanceInvoice.invoice_number)
     return list(db.scalars(query).all())
+
+
+def list_finance_invoices_enriched(
+    db: Session,
+    city_id: int | None = None,
+    batch_id: int | None = None,
+) -> list[dict[str, Any]]:
+    invoices = list_finance_invoices(db, city_id=city_id, batch_id=batch_id)
+    if not invoices:
+        return []
+
+    invoice_ids = [item.id for item in invoices]
+    line_query = select(CpeFinanceLine).where(CpeFinanceLine.invoice_id.in_(invoice_ids))
+    if city_id is not None:
+        line_query = line_query.where(CpeFinanceLine.city_id == city_id)
+    lines = list(db.scalars(line_query).all())
+
+    markets_by_invoice: dict[int, set[str]] = defaultdict(set)
+    billed_items_by_invoice: dict[int, set[str]] = defaultdict(set)
+    dest_ref1_by_invoice: dict[int, set[str]] = defaultdict(set)
+
+    for line in lines:
+        if line.market:
+            markets_by_invoice[line.invoice_id].add(line.market.strip().upper())
+        if line.billed_item:
+            billed_items_by_invoice[line.invoice_id].add(line.billed_item.strip().upper())
+        for key in ("ref_destinataire_1", "ref_destinataire1", "reference_destinataire_1"):
+            value = _line_raw_str(line, key)
+            if value:
+                dest_ref1_by_invoice[line.invoice_id].add(value)
+                break
+
+    rows: list[dict[str, Any]] = []
+    for invoice in invoices:
+        row = {
+            "id": invoice.id,
+            "batch_id": invoice.batch_id,
+            "city_id": invoice.city_id,
+            "invoice_number": invoice.invoice_number,
+            "contract_code": invoice.contract_code,
+            "contract_label": invoice.contract_label,
+            "invoice_type": invoice.invoice_type,
+            "supplier": invoice.supplier,
+            "customer_code": invoice.customer_code,
+            "customer_name": invoice.customer_name,
+            "invoice_date": invoice.invoice_date,
+            "due_date": invoice.due_date,
+            "period_start": invoice.period_start,
+            "period_end": invoice.period_end,
+            "markets": ", ".join(sorted(markets_by_invoice.get(invoice.id, set()))) or None,
+            "billed_items": ", ".join(sorted(billed_items_by_invoice.get(invoice.id, set()))) or None,
+            "recipient_reference_1": ", ".join(sorted(dest_ref1_by_invoice.get(invoice.id, set()))) or None,
+            "total_ht": invoice.total_ht,
+            "status": invoice.status,
+            "notes": invoice.notes,
+            "created_at": invoice.created_at,
+            "updated_at": invoice.updated_at,
+        }
+        rows.append(row)
+    return rows
 
 
 def get_finance_invoice(db: Session, invoice_id: int, city_id: int | None = None) -> CpeFinanceInvoice | None:
