@@ -1,6 +1,20 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
   CpeAccountingSiteMapping,
   CpeAccountingNatureRule,
@@ -47,6 +61,20 @@ import { useAuth } from "../providers/AuthProvider";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MOIS_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+const TARGET_CPE_CONTRACT_CODES = new Set(["C00190116O", "C00190155J"]);
+const MARKET_COLORS: Record<string, string> = {
+  P1: "#2563eb",
+  P2: "#0f766e",
+  P3: "#7c3aed",
+  AUTRE: "#6b7280",
+};
+const STATUS_COLORS: Record<string, string> = {
+  a_controler: "#f59e0b",
+  valide: "#16a34a",
+  refuse: "#dc2626",
+  conteste: "#2563eb",
+  autre: "#6b7280",
+};
 
 const TYPE_LABEL: Record<string, string> = {
   interessement: "Intéressement",
@@ -77,6 +105,14 @@ const CATEGORIE_LABEL: Record<string, string> = {
 type CpeView = "cockpit" | "finance" | "performance";
 type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices";
 type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "total_ht" | "status";
+
+function splitList(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
   { id: "imports", label: "Imports", detail: "Codification et exports finance" },
@@ -1109,8 +1145,41 @@ function CpeFinanceReference({
     field: "invoice_number",
     direction: "asc",
   });
+  const [marketFilters, setMarketFilters] = useState<Record<string, boolean>>({ P1: true, P2: true, P3: true, AUTRE: true });
+  const [statusFilters, setStatusFilters] = useState<Record<string, boolean>>({
+    a_controler: true,
+    valide: true,
+    refuse: true,
+    conteste: true,
+    autre: true,
+  });
+  const [typeFilters, setTypeFilters] = useState<Record<string, boolean>>({});
+  const [includeOutOfScopeContracts, setIncludeOutOfScopeContracts] = useState(true);
+  const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
+  const [showInvoiceCountLine, setShowInvoiceCountLine] = useState(true);
   const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
+  const invoiceTypeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          invoices.map((invoice) => (invoice.invoice_type || "VIDE").toUpperCase()),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "fr")),
+    [invoices],
+  );
+  const knownMarkets = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          invoices.flatMap((invoice) => {
+            const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
+            return markets.length ? markets : ["AUTRE"];
+          }),
+        ),
+      ).sort((left, right) => left.localeCompare(right, "fr")),
+    [invoices],
+  );
   const invoiceSortValue = (invoice: CpeFinanceInvoice, field: InvoiceSortField): string | number => {
     if (field === "total_ht") return invoice.total_ht ?? 0;
     if (field === "contract_label") return (invoice.contract_label ?? invoice.contract_code ?? "").toLowerCase();
@@ -1122,6 +1191,20 @@ function CpeFinanceReference({
   };
   const visibleInvoices = invoices
     .filter((invoice) => {
+      const contractCode = (invoice.contract_code ?? "").trim().toUpperCase();
+      if (!includeOutOfScopeContracts && !TARGET_CPE_CONTRACT_CODES.has(contractCode)) return false;
+      if (showOnlyAlerts && (invoice.status ?? "") === "valide") return false;
+
+      const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
+      const invoiceMarkets = markets.length ? markets : ["AUTRE"];
+      if (!invoiceMarkets.some((market) => marketFilters[market] !== false)) return false;
+
+      const statusKey = (invoice.status ?? "autre").trim().toLowerCase() || "autre";
+      if (statusFilters[statusKey] === false) return false;
+
+      const typeKey = (invoice.invoice_type || "VIDE").toUpperCase();
+      if (typeFilters[typeKey] === false) return false;
+
       const haystack = [
         invoice.invoice_number,
         invoice.contract_code,
@@ -1152,6 +1235,75 @@ function CpeFinanceReference({
       }
       return invoiceSort.direction === "asc" ? result : -result;
     });
+  const monthlyChartData = useMemo(() => {
+    const rows = Array.from({ length: 12 }, (_, monthIndex) => ({
+      month: MOIS_LABELS[monthIndex],
+      P1: 0,
+      P2: 0,
+      P3: 0,
+      AUTRE: 0,
+      invoices: 0,
+      total_ht: 0,
+    }));
+    for (const invoice of visibleInvoices) {
+      const monthSource = invoice.period_end || invoice.invoice_date;
+      if (!monthSource) continue;
+      const date = new Date(monthSource);
+      if (Number.isNaN(date.getTime())) continue;
+      const monthIndex = date.getMonth();
+      if (monthIndex < 0 || monthIndex > 11) continue;
+      const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
+      const normalizedMarkets = markets.length
+        ? markets.map((market) => (market === "P1" || market === "P2" || market === "P3" ? market : "AUTRE"))
+        : ["AUTRE"];
+      const share = (invoice.total_ht || 0) / normalizedMarkets.length;
+      for (const market of normalizedMarkets) {
+        rows[monthIndex][market as "P1" | "P2" | "P3" | "AUTRE"] += share;
+      }
+      rows[monthIndex].invoices += 1;
+      rows[monthIndex].total_ht += invoice.total_ht || 0;
+    }
+    return rows.map((row) => ({
+      ...row,
+      P1: Number(row.P1.toFixed(2)),
+      P2: Number(row.P2.toFixed(2)),
+      P3: Number(row.P3.toFixed(2)),
+      AUTRE: Number(row.AUTRE.toFixed(2)),
+      total_ht: Number(row.total_ht.toFixed(2)),
+    }));
+  }, [visibleInvoices]);
+  const statusChartData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const invoice of visibleInvoices) {
+      const key = (invoice.status || "autre").toLowerCase();
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    const labels: Record<string, string> = {
+      a_controler: "A controler",
+      valide: "Valide",
+      refuse: "Refuse",
+      conteste: "Conteste",
+      autre: "Autre",
+    };
+    return Object.entries(counts).map(([key, count]) => ({ status: key, label: labels[key] ?? key, count }));
+  }, [visibleInvoices]);
+  const topBilledItemsData = useMemo(() => {
+    const metrics: Record<string, { item: string; amount: number; invoices: number }> = {};
+    for (const invoice of visibleInvoices) {
+      const items = splitList(invoice.billed_items).map((item) => item.toUpperCase());
+      const normalizedItems = items.length ? items : ["SANS_POSTE"];
+      const share = (invoice.total_ht || 0) / normalizedItems.length;
+      for (const item of normalizedItems) {
+        if (!metrics[item]) metrics[item] = { item, amount: 0, invoices: 0 };
+        metrics[item].amount += share;
+        metrics[item].invoices += 1;
+      }
+    }
+    return Object.values(metrics)
+      .sort((left, right) => right.amount - left.amount)
+      .slice(0, 10)
+      .map((row) => ({ ...row, amount: Number(row.amount.toFixed(2)) }));
+  }, [visibleInvoices]);
   const visibleSiteMappings = siteMappings
     .filter((mapping) => {
       const haystack = [
@@ -1361,6 +1513,15 @@ function CpeFinanceReference({
       }
       return { field, direction: "asc" };
     });
+  };
+  const toggleMarketFilter = (market: string) => {
+    setMarketFilters((previous) => ({ ...previous, [market]: previous[market] === false }));
+  };
+  const toggleStatusFilter = (status: string) => {
+    setStatusFilters((previous) => ({ ...previous, [status]: previous[status] === false }));
+  };
+  const toggleTypeFilter = (invoiceType: string) => {
+    setTypeFilters((previous) => ({ ...previous, [invoiceType]: previous[invoiceType] === false }));
   };
   const sortIndicator = (field: InvoiceSortField) => {
     if (invoiceSort.field !== field) return "";
@@ -1925,6 +2086,122 @@ function CpeFinanceReference({
             </p>
           )}
           {deleteHistoryError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{deleteHistoryError}</p>}
+          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Analyse interactive</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }}>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
+                <input type="checkbox" checked={includeOutOfScopeContracts} onChange={(event) => setIncludeOutOfScopeContracts(event.target.checked)} />
+                Inclure contrats hors perimetre CPE Ville
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
+                <input type="checkbox" checked={showOnlyAlerts} onChange={(event) => setShowOnlyAlerts(event.target.checked)} />
+                Afficher seulement les factures en alerte
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
+                <input type="checkbox" checked={showInvoiceCountLine} onChange={(event) => setShowInvoiceCountLine(event.target.checked)} />
+                Afficher la courbe du nombre de factures
+              </label>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Marches</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {knownMarkets.map((market) => (
+                    <label key={market} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
+                      <input type="checkbox" checked={marketFilters[market] !== false} onChange={() => toggleMarketFilter(market)} />
+                      {market}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Statuts</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { key: "a_controler", label: "A controler" },
+                    { key: "valide", label: "Valide" },
+                    { key: "refuse", label: "Refuse" },
+                    { key: "conteste", label: "Conteste" },
+                    { key: "autre", label: "Autre" },
+                  ].map((item) => (
+                    <label key={item.key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
+                      <input type="checkbox" checked={statusFilters[item.key] !== false} onChange={() => toggleStatusFilter(item.key)} />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Types de facture</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {invoiceTypeOptions.map((invoiceType) => (
+                    <label key={invoiceType} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
+                      <input type="checkbox" checked={typeFilters[invoiceType] !== false} onChange={() => toggleTypeFilter(invoiceType)} />
+                      {invoiceType === "VIDE" ? "Non renseigne" : invoiceType}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+              {visibleInvoices.length.toLocaleString("fr-FR")} facture(s) dans l'analyse.
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(420px, 2fr) minmax(300px, 1fr)", gap: 12, marginBottom: 12 }}>
+            <div className="card" style={{ padding: 12 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Montants mensuels par marche</h4>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis yAxisId="left" tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
+                    <YAxis yAxisId="right" orientation="right" allowDecimals={false} />
+                    <Tooltip formatter={(value, name) => (name === "invoices" ? [value, "Factures"] : [fmtEur(Number(value)), name])} />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="P1" stackId="ht" fill={MARKET_COLORS.P1} />
+                    <Bar yAxisId="left" dataKey="P2" stackId="ht" fill={MARKET_COLORS.P2} />
+                    <Bar yAxisId="left" dataKey="P3" stackId="ht" fill={MARKET_COLORS.P3} />
+                    <Bar yAxisId="left" dataKey="AUTRE" stackId="ht" fill={MARKET_COLORS.AUTRE} />
+                    {showInvoiceCountLine && <Line yAxisId="right" type="monotone" dataKey="invoices" stroke="#111827" strokeWidth={2} dot={false} />}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="card" style={{ padding: 12 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Repartition par statut</h4>
+              <div style={{ height: 280 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip formatter={(value) => `${Number(value).toLocaleString("fr-FR")} facture(s)`} />
+                    <Legend />
+                    <Pie data={statusChartData} dataKey="count" nameKey="label" outerRadius={90} label>
+                      {statusChartData.map((entry) => (
+                        <Cell key={`${entry.status}-${entry.count}`} fill={STATUS_COLORS[entry.status] ?? STATUS_COLORS.autre} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Top 10 postes factures (montant estime)</h4>
+            <div style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topBilledItemsData} layout="vertical" margin={{ left: 18, right: 14 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
+                  <YAxis type="category" dataKey="item" width={160} />
+                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
+                  <Bar dataKey="amount" fill="#1d4ed8" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           <table style={{ width: "100%", minWidth: 1700, borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
