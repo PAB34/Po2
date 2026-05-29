@@ -137,6 +137,8 @@ class FreeAddressLookupPayload(BaseModel):
     address: str = Field(min_length=3, max_length=255)
     citycode: str | None = Field(default=None, max_length=5)
     parcel_reference: str | None = Field(default=None, max_length=64)
+    # Si True : geocodage seul, sans appel WFS BDTOPO (polygones charges cote client).
+    skip_ign_buildings: bool = False
 
 
 class FreeAddressLookupRead(BaseModel):

@@ -1,16 +1,25 @@
+// BuildingsListPage — vue cascade Site > Bâtiment > Local
+// Features :
+//   - Arborescence drag&drop (reparentage Site>Bâtiment, Bâtiment>Local)
+//   - Carte principale unifiée avec mode attachement IGN (WFS client-side)
+//   - Panneau détail complet (fiche bâtiment sans "Ouvrir la fiche complète")
+//   - Création inline de sites, bâtiments et locaux
+
 import { useMemo, useState } from "react";
 import type { ChangeEvent, DragEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { BuildingPortfolioMap } from "../components/BuildingPortfolioMap";
-import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorkspace";
 import {
   attachBuildingGeoRequest,
   attachBuildingIgnRequest,
+  createBuildingRequest,
+  createLocalRequest,
+  createSiteRequest,
   deleteAllBuildingsRequest,
   fetchAllLocals,
-  fetchBuildingNamingLookup,
+  fetchBuildingMeterLinks,
   fetchBuildings,
   fetchFreeAddressLookup,
   fetchNearbyDgfip,
@@ -20,10 +29,14 @@ import {
   updateSiteRequest,
   type Building,
   type BuildingIgnAttachmentPayload,
-  type BuildingNamingLookup,
+  type BuildingMeterLink,
+  type CreateBuildingPayload,
+  type CreateLocalPayload,
+  type CreateSitePayload,
   type FreeAddressLookup,
   type GeoJsonFeature,
   type Local,
+  type NearbyDgfipResult,
   type NearbyDgfipRow,
   type Site,
   type UpdateBuildingPayload,
@@ -32,9 +45,9 @@ import {
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
-// =====================================================================
-// Types & helpers
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// Types helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 type SelectedNode =
   | { type: "site"; id: number }
@@ -42,16 +55,18 @@ type SelectedNode =
   | { type: "local"; id: number }
   | null;
 
-function buildAddressLine(b: Pick<Building, "numero_voirie" | "nature_voie" | "nom_voie" | "adresse_reconstituee" | "nom_commune">) {
+type AttachMode = "none" | "ign" | "dgfip";
+
+function buildAddressLine(
+  b: Pick<Building, "numero_voirie" | "nature_voie" | "nom_voie" | "adresse_reconstituee" | "nom_commune">,
+) {
   if (b.adresse_reconstituee) return b.adresse_reconstituee;
   const parts = [b.numero_voirie, b.nature_voie, b.nom_voie].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" ")}, ${b.nom_commune}` : b.nom_commune;
 }
 
 function buildAttachmentAddress(building: Building): string | null {
-  if (building.adresse_reconstituee?.trim()) {
-    return building.adresse_reconstituee.trim();
-  }
+  if (building.adresse_reconstituee?.trim()) return building.adresse_reconstituee.trim();
   const parts = [building.numero_voirie, building.nature_voie, building.nom_voie, building.nom_commune].filter(
     (p): p is string => Boolean(p?.trim()),
   );
@@ -59,59 +74,100 @@ function buildAttachmentAddress(building: Building): string | null {
 }
 
 function siteCentroid(buildings: Building[]): { lat: number; lon: number } | null {
-  const geocoded = buildings.filter((b) => b.latitude != null && b.longitude != null);
-  if (geocoded.length === 0) return null;
-  const lat = geocoded.reduce((acc, b) => acc + (b.latitude as number), 0) / geocoded.length;
-  const lon = geocoded.reduce((acc, b) => acc + (b.longitude as number), 0) / geocoded.length;
-  return { lat, lon };
+  const geo = buildings.filter((b) => b.latitude != null && b.longitude != null);
+  if (!geo.length) return null;
+  return {
+    lat: geo.reduce((a, b) => a + (b.latitude as number), 0) / geo.length,
+    lon: geo.reduce((a, b) => a + (b.longitude as number), 0) / geo.length,
+  };
 }
 
-// =====================================================================
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const p = JSON.parse(value) as unknown;
+    return Array.isArray(p) ? p.map(String) : [];
+  } catch { return []; }
+}
+
+type IgnFeatureSummary = {
+  ign_id: string; ign_layer: string; ign_typename: string;
+  name: string; label: string; resolved_name: string;
+  attributes: [string, string][];
+};
+
+function parseIgnFeatures(value: string | null | undefined): IgnFeatureSummary[] {
+  if (!value) return [];
+  try {
+    const p = JSON.parse(value) as unknown;
+    if (!Array.isArray(p)) return [];
+    return p.map((f) => {
+      if (!f || typeof f !== "object") return null;
+      const props = ((f as Record<string, unknown>).properties ?? {}) as Record<string, unknown>;
+      const attrs = (props.attributes && typeof props.attributes === "object" && !Array.isArray(props.attributes))
+        ? Object.entries(props.attributes as Record<string, unknown>)
+            .map(([k, v]) => [k, v == null ? "" : String(v)] as [string, string])
+            .filter(([k, v]) => v !== "" && !k.startsWith("_"))
+            .sort(([a], [b]) => a.localeCompare(b, "fr"))
+        : [];
+      return {
+        ign_id: String(props.ign_id ?? ""),
+        ign_layer: String(props.ign_layer ?? ""),
+        ign_typename: String(props.ign_typename ?? ""),
+        name: String(props.name ?? ""),
+        label: String(props.label ?? ""),
+        resolved_name: String(props.resolved_name ?? props.resolved_label ?? ""),
+        attributes: attrs,
+      };
+    }).filter((e): e is IgnFeatureSummary => e !== null && Boolean(e.ign_id));
+  } catch { return []; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Composant principal
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function BuildingsListPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
 
+  // Arborescence
   const [search, setSearch] = useState("");
   const [selectedNode, setSelectedNode] = useState<SelectedNode>(null);
   const [expandedSites, setExpandedSites] = useState<Set<number>>(new Set());
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
   const [editMode, setEditMode] = useState(false);
-  // Drag&drop : reparentage Site>Batiment et Batiment>Local depuis l'arborescence.
+
+  // Drag & drop
   const [dragItem, setDragItem] = useState<{ type: "building" | "local"; id: number; sourceParentId: number | null } | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
+  // Mode attachement IGN/DGFIP (piloté par la carte principale)
+  const [attachMode, setAttachMode] = useState<AttachMode>("none");
+  const [attachSelectedFeatures, setAttachSelectedFeatures] = useState<GeoJsonFeature[]>([]);
+
+  // Formulaires de création
+  const [showCreateSite, setShowCreateSite] = useState(false);
+  const [showCreateBuilding, setShowCreateBuilding] = useState(false);
+  const [showCreateLocal, setShowCreateLocal] = useState(false);
+
+  // ── Données ──────────────────────────────────────────────────────────────
   const sitesQuery = useQuery({
     queryKey: ["buildings", "sites", token],
     queryFn: () => fetchSites(token as string),
     enabled: Boolean(token),
   });
-
   const buildingsQuery = useQuery({
     queryKey: ["buildings", token],
     queryFn: () => fetchBuildings(token as string),
     enabled: Boolean(token),
   });
-
   const localsQuery = useQuery({
     queryKey: ["buildings", "locals", token],
     queryFn: () => fetchAllLocals(token as string),
     enabled: Boolean(token),
   });
 
-  const deleteAllMutation = useMutation({
-    mutationFn: () => deleteAllBuildingsRequest(token as string),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["buildings"] });
-      alert(`${data.deleted} bâtiment(s) supprimé(s).`);
-    },
-  });
-
-  // ---------------------------------------------------------------------
-  // Donnees derivees
-  // ---------------------------------------------------------------------
   const sites = sitesQuery.data ?? [];
   const buildings = buildingsQuery.data ?? [];
   const locals = localsQuery.data ?? [];
@@ -120,33 +176,25 @@ export function BuildingsListPage() {
     const map = new Map<number | null, Building[]>();
     for (const b of buildings) {
       const key = b.site_id ?? null;
-      const list = map.get(key) ?? [];
-      list.push(b);
-      map.set(key, list);
+      map.set(key, [...(map.get(key) ?? []), b]);
     }
     return map;
   }, [buildings]);
 
   const localsByBuildingId = useMemo(() => {
     const map = new Map<number, Local[]>();
-    for (const l of locals) {
-      const list = map.get(l.building_id) ?? [];
-      list.push(l);
-      map.set(l.building_id, list);
-    }
+    for (const l of locals) map.set(l.building_id, [...(map.get(l.building_id) ?? []), l]);
     return map;
   }, [locals]);
 
-  // Filtre de recherche
+  // Recherche
   const lowerSearch = search.trim().toLowerCase();
-  const matchesSearch = (text: string | null | undefined) => !lowerSearch || (text ?? "").toLowerCase().includes(lowerSearch);
-
+  const matchesSearch = (t: string | null | undefined) => !lowerSearch || (t ?? "").toLowerCase().includes(lowerSearch);
   const visibleSites = useMemo(() => {
     if (!lowerSearch) return sites;
     return sites.filter((s) => {
       if (matchesSearch(s.nom_site) || matchesSearch(s.adresse)) return true;
-      const childBuildings = buildingsBySiteId.get(s.id) ?? [];
-      return childBuildings.some(
+      return (buildingsBySiteId.get(s.id) ?? []).some(
         (b) =>
           matchesSearch(b.nom_batiment) ||
           matchesSearch(buildAddressLine(b)) ||
@@ -161,255 +209,232 @@ export function BuildingsListPage() {
     [buildingsBySiteId, lowerSearch],
   );
 
-  // Resolution de la selection
-  const selectedSite = selectedNode?.type === "site" ? sites.find((s) => s.id === selectedNode.id) ?? null : null;
-  const selectedBuilding = selectedNode?.type === "building" ? buildings.find((b) => b.id === selectedNode.id) ?? null : null;
-  const selectedLocal = selectedNode?.type === "local" ? locals.find((l) => l.id === selectedNode.id) ?? null : null;
-  const selectedLocalParent = selectedLocal ? buildings.find((b) => b.id === selectedLocal.building_id) ?? null : null;
+  // Sélection
+  const selectedSite = selectedNode?.type === "site" ? (sites.find((s) => s.id === selectedNode.id) ?? null) : null;
+  const selectedBuilding = selectedNode?.type === "building" ? (buildings.find((b) => b.id === selectedNode.id) ?? null) : null;
+  const selectedLocal = selectedNode?.type === "local" ? (locals.find((l) => l.id === selectedNode.id) ?? null) : null;
+  const selectedLocalParent = selectedLocal ? (buildings.find((b) => b.id === selectedLocal.building_id) ?? null) : null;
 
-  // Mise en valeur sur la carte
-  const highlightedBuildingIds = useMemo(() => {
-    if (selectedSite) {
-      return (buildingsBySiteId.get(selectedSite.id) ?? []).map((b) => b.id);
-    }
-    return [];
-  }, [selectedSite, buildingsBySiteId]);
-
+  // Carte
+  const highlightedBuildingIds = useMemo(
+    () => (selectedSite ? (buildingsBySiteId.get(selectedSite.id) ?? []).map((b) => b.id) : []),
+    [selectedSite, buildingsBySiteId],
+  );
   const focusBuilding = selectedBuilding ?? selectedLocalParent;
   const focusLatLon =
-    focusBuilding && focusBuilding.latitude != null && focusBuilding.longitude != null
+    focusBuilding?.latitude != null && focusBuilding.longitude != null
       ? { lat: focusBuilding.latitude, lon: focusBuilding.longitude }
       : selectedSite
         ? siteCentroid(buildingsBySiteId.get(selectedSite.id) ?? [])
         : null;
 
-  const activeMapBuildingId = selectedBuilding?.id ?? selectedLocalParent?.id ?? null;
+  const activeMapBuildingId = attachMode === "none" ? (selectedBuilding?.id ?? selectedLocalParent?.id ?? null) : null;
+
+  // Attachement : adresse du bâtiment sélectionné
+  const attachBuilding = attachMode !== "none" ? selectedBuilding : null;
+  const attachAddress = attachBuilding ? buildAttachmentAddress(attachBuilding) : null;
+
+  const freeAddressLookupQuery = useQuery({
+    queryKey: ["buildings", "attach-geocode", attachBuilding?.id, token],
+    queryFn: () => fetchFreeAddressLookup(token as string, attachAddress as string, { skip_ign_buildings: true }),
+    enabled: Boolean(token) && Boolean(attachAddress) && attachMode === "ign",
+    retry: false,
+  });
+
+  const nearbyDgfipQuery = useQuery({
+    queryKey: ["buildings", "attach-dgfip", attachBuilding?.id, token],
+    queryFn: () => fetchNearbyDgfip(token as string, attachBuilding!.id),
+    enabled: Boolean(token) && attachBuilding !== null && attachMode === "dgfip",
+    retry: false,
+  });
 
   // Compteurs
   const geocodedCount = buildings.filter((b) => b.latitude != null && b.longitude != null).length;
   const ignAttachedCount = buildings.filter((b) => b.statut_geocodage === "IGN_VALIDE").length;
+  const totalCount = sites.length + buildings.length + locals.length;
 
-  // ---------------------------------------------------------------------
-  // Mutations d'edition inline
-  // ---------------------------------------------------------------------
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const deleteAllMutation = useMutation({
+    mutationFn: () => deleteAllBuildingsRequest(token as string),
+    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["buildings"] }); alert(`${data.deleted} bâtiment(s) supprimé(s).`); },
+  });
+
   const updateSiteMutation = useMutation({
     mutationFn: ({ siteId, payload }: { siteId: number; payload: UpdateSitePayload }) =>
       updateSiteRequest(token as string, siteId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] });
-      setEditMode(false);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] }); setEditMode(false); },
   });
 
   const updateBuildingMutation = useMutation({
     mutationFn: ({ buildingId, payload }: { buildingId: number; payload: UpdateBuildingPayload }) =>
       updateBuildingRequest(token as string, buildingId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["buildings", token] });
-      setEditMode(false);
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["buildings", token] }); setEditMode(false); },
   });
 
   const updateLocalMutation = useMutation({
     mutationFn: ({ buildingId, localId, payload }: { buildingId: number; localId: number; payload: UpdateLocalPayload }) =>
       updateLocalRequest(token as string, buildingId, localId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
-      setEditMode(false);
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] }); setEditMode(false); },
+  });
+
+  const createSiteMutation = useMutation({
+    mutationFn: (payload: CreateSitePayload) => createSiteRequest(token as string, payload),
+    onSuccess: (site) => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] });
+      setShowCreateSite(false);
+      selectAndExpand({ type: "site", id: site.id });
     },
   });
 
-  // ---------------------------------------------------------------------
-  // Handlers
-  // ---------------------------------------------------------------------
-  function toggleSiteExpand(siteId: number) {
-    setExpandedSites((current) => {
-      const next = new Set(current);
-      if (next.has(siteId)) next.delete(siteId);
-      else next.add(siteId);
-      return next;
-    });
-  }
+  const createBuildingMutation = useMutation({
+    mutationFn: (payload: CreateBuildingPayload) => createBuildingRequest(token as string, payload),
+    onSuccess: (building) => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+      setShowCreateBuilding(false);
+      selectAndExpand({ type: "building", id: building.id });
+    },
+  });
 
-  function toggleBuildingExpand(buildingId: number) {
-    setExpandedBuildings((current) => {
-      const next = new Set(current);
-      if (next.has(buildingId)) next.delete(buildingId);
-      else next.add(buildingId);
-      return next;
-    });
-  }
+  const createLocalMutation = useMutation({
+    mutationFn: ({ buildingId, payload }: { buildingId: number; payload: CreateLocalPayload }) =>
+      createLocalRequest(token as string, buildingId, payload),
+    onSuccess: (local) => {
+      queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
+      setShowCreateLocal(false);
+      selectAndExpand({ type: "local", id: local.id });
+    },
+  });
 
+  // ── Handlers arborescence ─────────────────────────────────────────────────
+  function toggleSiteExpand(id: number) {
+    setExpandedSites((c) => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleBuildingExpand(id: number) {
+    setExpandedBuildings((c) => { const n = new Set(c); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
   function selectAndExpand(node: SelectedNode) {
     setSelectedNode(node);
     setEditMode(false);
     if (!node) return;
     if (node.type === "site") {
-      setExpandedSites((current) => new Set(current).add(node.id));
+      setExpandedSites((c) => new Set(c).add(node.id));
     } else if (node.type === "building") {
       const b = buildings.find((x) => x.id === node.id);
-      if (b?.site_id) setExpandedSites((current) => new Set(current).add(b.site_id as number));
-      setExpandedBuildings((current) => new Set(current).add(node.id));
+      if (b?.site_id) setExpandedSites((c) => new Set(c).add(b.site_id as number));
+      setExpandedBuildings((c) => new Set(c).add(node.id));
     } else if (node.type === "local") {
       const l = locals.find((x) => x.id === node.id);
       if (l) {
-        const parent = buildings.find((b) => b.id === l.building_id);
-        if (parent?.site_id) setExpandedSites((current) => new Set(current).add(parent.site_id as number));
-        if (parent) setExpandedBuildings((current) => new Set(current).add(parent.id));
+        const p = buildings.find((b) => b.id === l.building_id);
+        if (p?.site_id) setExpandedSites((c) => new Set(c).add(p.site_id as number));
+        if (p) setExpandedBuildings((c) => new Set(c).add(p.id));
       }
     }
+    // Quitter le mode attachement si on change de sélection
+    setAttachMode("none");
+    setAttachSelectedFeatures([]);
   }
 
-  function handleDeleteAll() {
-    const count = buildings.length;
-    if (!window.confirm(`Supprimer les ${count} bâtiment(s) de ta ville ? Cette action est irréversible.`)) return;
-    deleteAllMutation.mutate();
-  }
-
-  // ---------------------------------------------------------------------
-  // Drag & drop : reparentage dans l'arborescence
-  // ---------------------------------------------------------------------
+  // ── Drag & drop ───────────────────────────────────────────────────────────
   function handleDragStartBuilding(e: DragEvent, building: Building) {
     e.stopPropagation();
     setDragItem({ type: "building", id: building.id, sourceParentId: building.site_id ?? null });
   }
-
   function handleDragStartLocal(e: DragEvent, local: Local) {
     e.stopPropagation();
     setDragItem({ type: "local", id: local.id, sourceParentId: local.building_id });
   }
-
-  function handleDragEnd() {
-    setDragItem(null);
-    setDropTargetKey(null);
-  }
-
-  function allowDrop(e: DragEvent, targetKey: string, accepts: "building" | "local") {
+  function handleDragEnd() { setDragItem(null); setDropTargetKey(null); }
+  function allowDrop(e: DragEvent, key: string, accepts: "building" | "local") {
     if (dragItem?.type !== accepts) return;
     e.preventDefault();
-    if (dropTargetKey !== targetKey) setDropTargetKey(targetKey);
+    if (dropTargetKey !== key) setDropTargetKey(key);
   }
-
   function handleDropOnSite(e: DragEvent, siteId: number) {
     e.preventDefault();
-    if (dragItem?.type === "building" && dragItem.sourceParentId !== siteId) {
+    if (dragItem?.type === "building" && dragItem.sourceParentId !== siteId)
       updateBuildingMutation.mutate({ buildingId: dragItem.id, payload: { site_id: siteId } });
-    }
     handleDragEnd();
   }
-
   function handleDropOnBuilding(e: DragEvent, buildingId: number) {
     e.preventDefault();
-    if (dragItem?.type === "local" && dragItem.sourceParentId !== buildingId) {
-      updateLocalMutation.mutate({
-        buildingId: dragItem.sourceParentId as number,
-        localId: dragItem.id,
-        payload: { building_id: buildingId },
-      });
-    }
+    if (dragItem?.type === "local" && dragItem.sourceParentId !== buildingId)
+      updateLocalMutation.mutate({ buildingId: dragItem.sourceParentId as number, localId: dragItem.id, payload: { building_id: buildingId } });
     handleDragEnd();
   }
 
-  // ---------------------------------------------------------------------
-  // Garde-fous auth & loading
-  // ---------------------------------------------------------------------
+  // ── Attachement IGN/DGFIP ─────────────────────────────────────────────────
+  function enterAttach(mode: "ign" | "dgfip") {
+    setAttachMode(mode);
+    setAttachSelectedFeatures([]);
+  }
+  function exitAttach() { setAttachMode("none"); setAttachSelectedFeatures([]); }
+  function onAttachSuccess() { setAttachMode("none"); setAttachSelectedFeatures([]); }
+
+  // ── Auth guard ────────────────────────────────────────────────────────────
   if (!token) {
     return (
       <section className="panel stack-lg">
-        <div>
-          <h2>Patrimoine</h2>
-          <p>Connecte-toi pour consulter ton patrimoine.</p>
-        </div>
+        <h2>Patrimoine</h2>
+        <p>Connecte-toi pour consulter ton patrimoine.</p>
       </section>
     );
   }
 
-  const totalCount = sites.length + buildings.length + locals.length;
-
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <section className="panel stack-lg buildings-workspace-panel">
       <div className="panel-header">
         <div>
           <p className="eyebrow">Patrimoine</p>
           <h2>Mon patrimoine — vue cascade</h2>
-          <p>
-            Explore l'arborescence Site &gt; Bâtiment &gt; Local. Clique un élément pour voir ses détails et le centrer
-            sur la carte. Les bâtiments avec un attachement IGN apparaissent dans une couleur plus foncée.
-          </p>
+          <p>Arborescence Site › Bâtiment › Local. Clique pour voir les détails. Glisse pour réorganiser.</p>
         </div>
         <div className="buildings-header-actions">
-          <Link className="secondary-link" to="/buildings">
-            Retour aux entrées bâtiments
-          </Link>
-          <Link className="secondary-link" to="/buildings/create-edit">
-            Importer / éditer
-          </Link>
-          <div className="header-badge">
-            <strong>{sites.length}</strong>
-            <span>site(s)</span>
-          </div>
-          <div className="header-badge">
-            <strong>{buildings.length}</strong>
-            <span>bâtiment(s)</span>
-          </div>
-          <div className="header-badge">
-            <strong>{locals.length}</strong>
-            <span>local(aux)</span>
-          </div>
-          {buildings.length > 0 ? (
-            <button type="button" className="danger-button" onClick={handleDeleteAll} disabled={deleteAllMutation.isPending}>
+          <Link className="secondary-link" to="/buildings/create-edit">Importer / éditer</Link>
+          <div className="header-badge"><strong>{sites.length}</strong><span>site(s)</span></div>
+          <div className="header-badge"><strong>{buildings.length}</strong><span>bâtiment(s)</span></div>
+          <div className="header-badge"><strong>{locals.length}</strong><span>local(aux)</span></div>
+          {buildings.length > 0 && (
+            <button type="button" className="danger-button" onClick={() => { if (window.confirm(`Supprimer les ${buildings.length} bâtiment(s) ?`)) deleteAllMutation.mutate(); }} disabled={deleteAllMutation.isPending}>
               {deleteAllMutation.isPending ? "Suppression..." : "Supprimer tout"}
             </button>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {sitesQuery.isLoading || buildingsQuery.isLoading || localsQuery.isLoading ? <p>Chargement...</p> : null}
+      {(sitesQuery.isLoading || buildingsQuery.isLoading || localsQuery.isLoading) && <p>Chargement...</p>}
 
       {totalCount === 0 && !sitesQuery.isLoading ? (
         <div className="empty-state">
-          <strong>Aucun patrimoine importé pour le moment.</strong>
-          <span>Importe ton fichier patrimonial pour commencer.</span>
-          <div className="form-actions">
-            <Link className="secondary-link" to="/buildings/create-edit">
-              Importer le patrimoine
-            </Link>
-          </div>
+          <strong>Aucun patrimoine importé.</strong>
+          <Link className="secondary-link" to="/buildings/create-edit">Importer le patrimoine</Link>
         </div>
       ) : null}
 
-      {totalCount > 0 ? (
+      {totalCount > 0 && (
         <div className="detail-grid">
-          <div className="detail-card">
-            <span>Bâtiments géolocalisés</span>
-            <strong>{geocodedCount}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Avec attachement IGN</span>
-            <strong>{ignAttachedCount}</strong>
-          </div>
+          <div className="detail-card"><span>Géolocalisés</span><strong>{geocodedCount}</strong></div>
+          <div className="detail-card"><span>Attachement IGN</span><strong>{ignAttachedCount}</strong></div>
         </div>
-      ) : null}
+      )}
 
-      {totalCount > 0 ? (
+      {totalCount > 0 && (
         <div className="buildings-workspace">
-          {/* COLONNE GAUCHE - arborescence cascade */}
+          {/* ── COLONNE GAUCHE : arborescence ── */}
           <aside className="buildings-sidebar">
             <div className="section-block buildings-addresses-section">
               <div className="section-heading">
                 <h3>Arborescence patrimoine</h3>
-                <p>Site &gt; Bâtiment &gt; Local. Clique pour voir le détail. Glisse un bâtiment vers un site, ou un local vers un bâtiment, pour le rattacher.</p>
+                <p>Clique pour voir le détail · Glisse pour réorganiser</p>
               </div>
               <label className="field">
                 <span>Recherche</span>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                  placeholder="Nom, adresse, parcelle..."
-                />
+                <input type="text" value={search} onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} placeholder="Nom, adresse, parcelle..." />
               </label>
+
               <div className="buildings-address-list patrimony-tree">
+                {/* Sites */}
                 {visibleSites.map((site) => {
                   const isSiteSelected = selectedNode?.type === "site" && selectedNode.id === site.id;
                   const isSiteExpanded = expandedSites.has(site.id);
@@ -417,28 +442,19 @@ export function BuildingsListPage() {
                   return (
                     <div key={`site-${site.id}`}>
                       <div
-                        className={`patrimony-tree-node patrimony-tree-site${isSiteSelected ? " is-active" : ""}${
-                          dropTargetKey === `site-${site.id}` ? " is-drop-target" : ""
-                        }`}
+                        className={`patrimony-tree-node patrimony-tree-site${isSiteSelected ? " is-active" : ""}${dropTargetKey === `site-${site.id}` ? " is-drop-target" : ""}`}
                         onDragOver={(e) => allowDrop(e, `site-${site.id}`, "building")}
                         onDragLeave={() => dropTargetKey === `site-${site.id}` && setDropTargetKey(null)}
                         onDrop={(e) => handleDropOnSite(e, site.id)}
                       >
-                        <span
-                          className="patrimony-tree-toggle"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSiteExpand(site.id);
-                          }}
-                        >
+                        <span className="patrimony-tree-toggle" onClick={(e) => { e.stopPropagation(); toggleSiteExpand(site.id); }}>
                           {isSiteExpanded ? "▼" : "▶"}
                         </span>
                         <span className="patrimony-tree-label" onClick={() => selectAndExpand({ type: "site", id: site.id })}>
-                          {site.nom_site}
-                          <span className="patrimony-tree-count">({siteBuildings.length})</span>
+                          {site.nom_site}<span className="patrimony-tree-count">({siteBuildings.length})</span>
                         </span>
                       </div>
-                      {isSiteExpanded ? (
+                      {isSiteExpanded && (
                         <div className="patrimony-tree-children-site">
                           {siteBuildings.map((building) => {
                             const isBuildingSelected = selectedNode?.type === "building" && selectedNode.id === building.id;
@@ -448,9 +464,7 @@ export function BuildingsListPage() {
                             return (
                               <div key={`building-${building.id}`}>
                                 <div
-                                  className={`patrimony-tree-node patrimony-tree-building${isBuildingSelected ? " is-active" : ""}${
-                                    dropTargetKey === `building-${building.id}` ? " is-drop-target" : ""
-                                  }${dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""}`}
+                                  className={`patrimony-tree-node patrimony-tree-building${isBuildingSelected ? " is-active" : ""}${dropTargetKey === `building-${building.id}` ? " is-drop-target" : ""}${dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""}`}
                                   draggable
                                   onDragStart={(e) => handleDragStartBuilding(e, building)}
                                   onDragEnd={handleDragEnd}
@@ -458,65 +472,55 @@ export function BuildingsListPage() {
                                   onDragLeave={() => dropTargetKey === `building-${building.id}` && setDropTargetKey(null)}
                                   onDrop={(e) => handleDropOnBuilding(e, building.id)}
                                 >
-                                  <span
-                                    className="patrimony-tree-toggle"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (buildingLocals.length > 0) toggleBuildingExpand(building.id);
-                                    }}
-                                  >
+                                  <span className="patrimony-tree-toggle" onClick={(e) => { e.stopPropagation(); if (buildingLocals.length > 0) toggleBuildingExpand(building.id); }}>
                                     {buildingLocals.length > 0 ? (isBuildingExpanded ? "▼" : "▶") : "·"}
                                   </span>
                                   <span className="patrimony-tree-label" onClick={() => selectAndExpand({ type: "building", id: building.id })}>
                                     <span className={`patrimony-tree-ign-dot${hasIgn ? "" : " is-empty"}`}>{hasIgn ? "●" : "○"}</span>
                                     {building.nom_batiment || `Bâtiment #${building.id}`}
-                                    {buildingLocals.length > 0 ? (
-                                      <span className="patrimony-tree-count">({buildingLocals.length})</span>
-                                    ) : null}
+                                    {buildingLocals.length > 0 && <span className="patrimony-tree-count">({buildingLocals.length})</span>}
                                   </span>
                                 </div>
-                                {isBuildingExpanded ? (
+                                {isBuildingExpanded && (
                                   <div className="patrimony-tree-children-building">
                                     {buildingLocals.map((local) => {
                                       const isLocalSelected = selectedNode?.type === "local" && selectedNode.id === local.id;
                                       return (
                                         <div
                                           key={`local-${local.id}`}
-                                          className={`patrimony-tree-local${isLocalSelected ? " is-active" : ""}${
-                                            dragItem?.type === "local" && dragItem.id === local.id ? " is-dragging" : ""
-                                          }`}
+                                          className={`patrimony-tree-local${isLocalSelected ? " is-active" : ""}${dragItem?.type === "local" && dragItem.id === local.id ? " is-dragging" : ""}`}
                                           draggable
                                           onDragStart={(e) => handleDragStartLocal(e, local)}
                                           onDragEnd={handleDragEnd}
                                           onClick={() => selectAndExpand({ type: "local", id: local.id })}
                                         >
                                           ◇ {local.nom_local}
-                                          {local.niveau ? <span className="patrimony-tree-count">· niv. {local.niveau}</span> : null}
+                                          {local.niveau && <span className="patrimony-tree-count">· niv. {local.niveau}</span>}
                                         </div>
                                       );
                                     })}
                                   </div>
-                                ) : null}
+                                )}
                               </div>
                             );
                           })}
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   );
                 })}
-                {orphanBuildings.length > 0 ? (
+
+                {/* Bâtiments orphelins */}
+                {orphanBuildings.length > 0 && (
                   <>
-                    <div className="patrimony-tree-orphan-header">Bâtiments sans site rattaché ({orphanBuildings.length})</div>
+                    <div className="patrimony-tree-orphan-header">Sans site ({orphanBuildings.length})</div>
                     {orphanBuildings.map((building) => {
                       const isSelected = selectedNode?.type === "building" && selectedNode.id === building.id;
                       const hasIgn = building.statut_geocodage === "IGN_VALIDE";
                       return (
                         <div
                           key={`orphan-${building.id}`}
-                          className={`patrimony-tree-node patrimony-tree-building${isSelected ? " is-active" : ""}${
-                            dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""
-                          }`}
+                          className={`patrimony-tree-node patrimony-tree-building${isSelected ? " is-active" : ""}${dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""}`}
                           draggable
                           onDragStart={(e) => handleDragStartBuilding(e, building)}
                           onDragEnd={handleDragEnd}
@@ -531,26 +535,62 @@ export function BuildingsListPage() {
                       );
                     })}
                   </>
-                ) : null}
+                )}
               </div>
+
+              {/* ── Section création ── */}
+              <CreateSection
+                selectedNode={selectedNode}
+                buildings={buildings}
+                sites={sites}
+                showCreateSite={showCreateSite}
+                showCreateBuilding={showCreateBuilding}
+                showCreateLocal={showCreateLocal}
+                onToggleSite={() => { setShowCreateSite((v) => !v); setShowCreateBuilding(false); setShowCreateLocal(false); }}
+                onToggleBuilding={() => { setShowCreateBuilding((v) => !v); setShowCreateSite(false); setShowCreateLocal(false); }}
+                onToggleLocal={() => { setShowCreateLocal((v) => !v); setShowCreateSite(false); setShowCreateBuilding(false); }}
+                onCreateSite={(payload) => createSiteMutation.mutate(payload)}
+                onCreateBuilding={(payload) => createBuildingMutation.mutate(payload)}
+                onCreateLocal={(buildingId, payload) => createLocalMutation.mutate({ buildingId, payload })}
+                createSitePending={createSiteMutation.isPending}
+                createBuildingPending={createBuildingMutation.isPending}
+                createLocalPending={createLocalMutation.isPending}
+              />
             </div>
           </aside>
 
-          {/* COLONNE DROITE - carte + panneau detail */}
+          {/* ── COLONNE DROITE : carte + panneau détail ── */}
           <div className="buildings-main-content">
             <div className="section-block">
               <div className="section-heading">
                 <h3>Carte</h3>
-                <p>
-                  ● vert foncé = IGN attaché · ○ bleu clair = non attaché · Orange = sélection courante · Vert foncé épais = bâtiment d'un site sélectionné AVEC IGN
-                </p>
+                {attachMode === "ign" && (
+                  <p style={{ color: "#f97316" }}>
+                    Mode attachement IGN actif · Cliquez les polygones jaunes sur la carte pour les sélectionner
+                  </p>
+                )}
               </div>
               <BuildingPortfolioMap
                 buildings={buildings}
                 activeBuildingId={activeMapBuildingId}
-                onSelectBuildingId={(id) => selectAndExpand({ type: "building", id })}
+                onSelectBuildingId={(id) => { if (attachMode === "none") selectAndExpand({ type: "building", id }); }}
                 highlightedBuildingIds={highlightedBuildingIds}
-                focusLatLon={focusLatLon}
+                focusLatLon={attachMode === "none" ? focusLatLon : null}
+                attachMode={attachMode === "ign" ? "ign" : "none"}
+                attachLat={freeAddressLookupQuery.data?.lat ?? null}
+                attachLon={freeAddressLookupQuery.data?.lon ?? null}
+                attachAddress={attachAddress ?? undefined}
+                attachSelectedIds={attachSelectedFeatures.map((f) => String(f.properties?.ign_id ?? ""))}
+                onSelectAttachFeature={(f) =>
+                  setAttachSelectedFeatures((prev) => {
+                    const id = String(f.properties?.ign_id ?? "");
+                    return [...prev.filter((x) => String(x.properties?.ign_id ?? "") !== id), f];
+                  })
+                }
+                onDeselectAttachFeatureId={(id) =>
+                  setAttachSelectedFeatures((prev) => prev.filter((f) => String(f.properties?.ign_id ?? "") !== id))
+                }
+                isAttachLoading={freeAddressLookupQuery.isLoading}
               />
             </div>
 
@@ -559,32 +599,150 @@ export function BuildingsListPage() {
               selectedBuilding={selectedBuilding}
               selectedLocal={selectedLocal}
               selectedLocalParent={selectedLocalParent}
-              siteBuildings={selectedSite ? buildingsBySiteId.get(selectedSite.id) ?? [] : []}
-              buildingLocals={selectedBuilding ? localsByBuildingId.get(selectedBuilding.id) ?? [] : []}
+              siteBuildings={selectedSite ? (buildingsBySiteId.get(selectedSite.id) ?? []) : []}
+              buildingLocals={selectedBuilding ? (localsByBuildingId.get(selectedBuilding.id) ?? []) : []}
               editMode={editMode}
               onToggleEdit={() => setEditMode((v) => !v)}
               onSaveSite={(payload) => selectedSite && updateSiteMutation.mutate({ siteId: selectedSite.id, payload })}
-              onSaveBuilding={(payload) =>
-                selectedBuilding && updateBuildingMutation.mutate({ buildingId: selectedBuilding.id, payload })
-              }
-              onSaveLocal={(payload) =>
-                selectedLocal &&
-                updateLocalMutation.mutate({ buildingId: selectedLocal.building_id, localId: selectedLocal.id, payload })
-              }
-              savePending={
-                updateSiteMutation.isPending || updateBuildingMutation.isPending || updateLocalMutation.isPending
-              }
+              onSaveBuilding={(payload) => selectedBuilding && updateBuildingMutation.mutate({ buildingId: selectedBuilding.id, payload })}
+              onSaveLocal={(payload) => selectedLocal && updateLocalMutation.mutate({ buildingId: selectedLocal.building_id, localId: selectedLocal.id, payload })}
+              savePending={updateSiteMutation.isPending || updateBuildingMutation.isPending || updateLocalMutation.isPending}
+              // Attachement
+              attachMode={attachMode}
+              attachSelectedFeatures={attachSelectedFeatures}
+              onEnterAttach={enterAttach}
+              onExitAttach={exitAttach}
+              onAttachSuccess={onAttachSuccess}
+              nearbyDgfipData={nearbyDgfipQuery.data ?? null}
+              nearbyDgfipLoading={nearbyDgfipQuery.isLoading}
+              freeAddressLookupData={freeAddressLookupQuery.data ?? null}
             />
           </div>
         </div>
-      ) : null}
+      )}
     </section>
   );
 }
 
-// =====================================================================
-// Composant : panneau detail inline
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// Section création (bas de l'arborescence)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CreateSection({
+  selectedNode, buildings, sites,
+  showCreateSite, showCreateBuilding, showCreateLocal,
+  onToggleSite, onToggleBuilding, onToggleLocal,
+  onCreateSite, onCreateBuilding, onCreateLocal,
+  createSitePending, createBuildingPending, createLocalPending,
+}: {
+  selectedNode: SelectedNode;
+  buildings: Building[];
+  sites: Site[];
+  showCreateSite: boolean;
+  showCreateBuilding: boolean;
+  showCreateLocal: boolean;
+  onToggleSite: () => void;
+  onToggleBuilding: () => void;
+  onToggleLocal: () => void;
+  onCreateSite: (p: CreateSitePayload) => void;
+  onCreateBuilding: (p: CreateBuildingPayload) => void;
+  onCreateLocal: (buildingId: number, p: CreateLocalPayload) => void;
+  createSitePending: boolean;
+  createBuildingPending: boolean;
+  createLocalPending: boolean;
+}) {
+  const [nomSite, setNomSite] = useState("");
+  const [adresseSite, setAdresseSite] = useState("");
+  const [nomBat, setNomBat] = useState("");
+  const [communeBat, setCommuneBat] = useState("");
+  const [siteIdBat, setSiteIdBat] = useState<number | null>(null);
+  const [nomLocal, setNomLocal] = useState("");
+  const [typeLocal, setTypeLocal] = useState("BUREAU");
+  const [niveauLocal, setNiveauLocal] = useState("");
+
+  // Contexte : site actuel sélectionné → préselection
+  const activeSiteId =
+    selectedNode?.type === "site"
+      ? selectedNode.id
+      : selectedNode?.type === "building"
+        ? (buildings.find((b) => b.id === selectedNode.id)?.site_id ?? null)
+        : null;
+
+  const activeBuildingId =
+    selectedNode?.type === "building"
+      ? selectedNode.id
+      : selectedNode?.type === "local"
+        ? (buildings.find((b) => b.id === (buildings.find((bb) => bb.id === selectedNode.id)?.id ?? 0))?.id ?? null)
+        : null;
+
+  const [localBuildingId, setLocalBuildingId] = useState<number | null>(null);
+  const targetBuildingId = localBuildingId ?? activeBuildingId ?? (buildings[0]?.id ?? null);
+
+  return (
+    <div className="patrimony-create-section">
+      <div className="patrimony-create-header">
+        <span className="patrimony-create-title">Ajouter</span>
+        <div className="patrimony-create-buttons">
+          <button type="button" className={`patrimony-create-btn${showCreateSite ? " is-active" : ""}`} onClick={onToggleSite}>+ Site</button>
+          <button type="button" className={`patrimony-create-btn${showCreateBuilding ? " is-active" : ""}`} onClick={onToggleBuilding}>+ Bâtiment</button>
+          <button type="button" className={`patrimony-create-btn${showCreateLocal ? " is-active" : ""}`} onClick={onToggleLocal} disabled={buildings.length === 0}>+ Local</button>
+        </div>
+      </div>
+
+      {showCreateSite && (
+        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onCreateSite({ nom_site: nomSite, adresse: adresseSite || null }); setNomSite(""); setAdresseSite(""); }}>
+          <label className="field"><span>Nom du site *</span><input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required placeholder="Ex : Groupe scolaire Jean Jaurès" /></label>
+          <label className="field"><span>Adresse</span><input type="text" value={adresseSite} onChange={(e) => setAdresseSite(e.target.value)} placeholder="Adresse du site" /></label>
+          <div className="form-actions"><button type="submit" disabled={createSitePending}>{createSitePending ? "Création..." : "Créer le site"}</button></div>
+        </form>
+      )}
+
+      {showCreateBuilding && (
+        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); onCreateBuilding({ nom_batiment: nomBat, nom_commune: communeBat, site_id: siteIdBat ?? activeSiteId ?? undefined }); setNomBat(""); setCommuneBat(""); setSiteIdBat(null); }}>
+          <label className="field"><span>Nom du bâtiment *</span><input type="text" value={nomBat} onChange={(e) => setNomBat(e.target.value)} required placeholder="Ex : Bâtiment principal" /></label>
+          <label className="field"><span>Commune *</span><input type="text" value={communeBat} onChange={(e) => setCommuneBat(e.target.value)} required placeholder="Ex : Sète" /></label>
+          <label className="field">
+            <span>Site parent</span>
+            <select value={siteIdBat ?? activeSiteId ?? ""} onChange={(e) => setSiteIdBat(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">— Aucun site —</option>
+              {sites.map((s) => <option key={s.id} value={s.id}>{s.nom_site}</option>)}
+            </select>
+          </label>
+          <div className="form-actions"><button type="submit" disabled={createBuildingPending}>{createBuildingPending ? "Création..." : "Créer le bâtiment"}</button></div>
+        </form>
+      )}
+
+      {showCreateLocal && buildings.length > 0 && (
+        <form className="patrimony-create-form" onSubmit={(e: FormEvent) => { e.preventDefault(); if (!targetBuildingId) return; onCreateLocal(targetBuildingId, { nom_local: nomLocal, type_local: typeLocal, niveau: niveauLocal || undefined }); setNomLocal(""); setNiveauLocal(""); }}>
+          <label className="field">
+            <span>Bâtiment parent *</span>
+            <select value={targetBuildingId ?? ""} onChange={(e) => setLocalBuildingId(Number(e.target.value))}>
+              {buildings.map((b) => <option key={b.id} value={b.id}>{b.nom_batiment || `Bâtiment #${b.id}`}</option>)}
+            </select>
+          </label>
+          <label className="field"><span>Nom du local *</span><input type="text" value={nomLocal} onChange={(e) => setNomLocal(e.target.value)} required placeholder="Ex : Salle de classe 101" /></label>
+          <label className="field">
+            <span>Type</span>
+            <select value={typeLocal} onChange={(e) => setTypeLocal(e.target.value)}>
+              <option value="PRINCIPAL">Principal</option>
+              <option value="BUREAU">Bureau</option>
+              <option value="LOGEMENT">Logement</option>
+              <option value="COMMERCE">Commerce</option>
+              <option value="TECHNIQUE">Technique</option>
+              <option value="ANNEXE">Annexe</option>
+            </select>
+          </label>
+          <label className="field"><span>Niveau</span><input type="text" value={niveauLocal} onChange={(e) => setNiveauLocal(e.target.value)} placeholder="RDC, 1, 2…" /></label>
+          <div className="form-actions"><button type="submit" disabled={createLocalPending || !targetBuildingId}>{createLocalPending ? "Création..." : "Créer le local"}</button></div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panneau détail (dispatch)
+// ─────────────────────────────────────────────────────────────────────────────
 
 type DetailPanelProps = {
   selectedSite: Site | null;
@@ -595,27 +753,23 @@ type DetailPanelProps = {
   buildingLocals: Local[];
   editMode: boolean;
   onToggleEdit: () => void;
-  onSaveSite: (payload: UpdateSitePayload) => void;
-  onSaveBuilding: (payload: UpdateBuildingPayload) => void;
-  onSaveLocal: (payload: UpdateLocalPayload) => void;
+  onSaveSite: (p: UpdateSitePayload) => void;
+  onSaveBuilding: (p: UpdateBuildingPayload) => void;
+  onSaveLocal: (p: UpdateLocalPayload) => void;
   savePending: boolean;
+  // Attachement
+  attachMode: AttachMode;
+  attachSelectedFeatures: GeoJsonFeature[];
+  onEnterAttach: (mode: "ign" | "dgfip") => void;
+  onExitAttach: () => void;
+  onAttachSuccess: () => void;
+  nearbyDgfipData: NearbyDgfipResult | null;
+  nearbyDgfipLoading: boolean;
+  freeAddressLookupData: FreeAddressLookup | null;
 };
 
 function PatrimonyDetailPanel(props: DetailPanelProps) {
-  const {
-    selectedSite,
-    selectedBuilding,
-    selectedLocal,
-    selectedLocalParent,
-    siteBuildings,
-    buildingLocals,
-    editMode,
-    onToggleEdit,
-    onSaveSite,
-    onSaveBuilding,
-    onSaveLocal,
-    savePending,
-  } = props;
+  const { selectedSite, selectedBuilding, selectedLocal, selectedLocalParent } = props;
 
   if (!selectedSite && !selectedBuilding && !selectedLocal) {
     return (
@@ -632,11 +786,11 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
       <SiteDetail
         key={`site-${selectedSite.id}`}
         site={selectedSite}
-        childBuildings={siteBuildings}
-        editMode={editMode}
-        onToggleEdit={onToggleEdit}
-        onSave={onSaveSite}
-        savePending={savePending}
+        childBuildings={props.siteBuildings}
+        editMode={props.editMode}
+        onToggleEdit={props.onToggleEdit}
+        onSave={props.onSaveSite}
+        savePending={props.savePending}
       />
     );
   }
@@ -646,11 +800,19 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
       <BuildingDetail
         key={`building-${selectedBuilding.id}`}
         building={selectedBuilding}
-        childLocals={buildingLocals}
-        editMode={editMode}
-        onToggleEdit={onToggleEdit}
-        onSave={onSaveBuilding}
-        savePending={savePending}
+        childLocals={props.buildingLocals}
+        editMode={props.editMode}
+        onToggleEdit={props.onToggleEdit}
+        onSave={props.onSaveBuilding}
+        savePending={props.savePending}
+        attachMode={props.attachMode}
+        attachSelectedFeatures={props.attachSelectedFeatures}
+        onEnterAttach={props.onEnterAttach}
+        onExitAttach={props.onExitAttach}
+        onAttachSuccess={props.onAttachSuccess}
+        nearbyDgfipData={props.nearbyDgfipData}
+        nearbyDgfipLoading={props.nearbyDgfipLoading}
+        freeAddressLookupData={props.freeAddressLookupData}
       />
     );
   }
@@ -661,10 +823,10 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         key={`local-${selectedLocal.id}`}
         local={selectedLocal}
         parent={selectedLocalParent}
-        editMode={editMode}
-        onToggleEdit={onToggleEdit}
-        onSave={onSaveLocal}
-        savePending={savePending}
+        editMode={props.editMode}
+        onToggleEdit={props.onToggleEdit}
+        onSave={props.onSaveLocal}
+        savePending={props.savePending}
       />
     );
   }
@@ -672,122 +834,78 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
   return null;
 }
 
-// =====================================================================
-// Detail Site
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// Détail Site
+// ─────────────────────────────────────────────────────────────────────────────
 
-function SiteDetail({
-  site,
-  childBuildings,
-  editMode,
-  onToggleEdit,
-  onSave,
-  savePending,
-}: {
-  site: Site;
-  childBuildings: Building[];
-  editMode: boolean;
-  onToggleEdit: () => void;
-  onSave: (payload: UpdateSitePayload) => void;
-  savePending: boolean;
+function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, savePending }: {
+  site: Site; childBuildings: Building[]; editMode: boolean;
+  onToggleEdit: () => void; onSave: (p: UpdateSitePayload) => void; savePending: boolean;
 }) {
   const [nomSite, setNomSite] = useState(site.nom_site);
   const [adresse, setAdresse] = useState(site.adresse ?? "");
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    onSave({ nom_site: nomSite, adresse: adresse || null });
-  }
-
   return (
     <div className="section-block">
       <div className="panel-header">
-        <div className="section-heading">
-          <h3>📍 Site sélectionné</h3>
-          <p>{childBuildings.length} bâtiment(s) rattaché(s)</p>
-        </div>
-        <button type="button" className="secondary-button" onClick={onToggleEdit}>
-          {editMode ? "Annuler l'édition" : "Modifier"}
-        </button>
+        <div className="section-heading"><h3>📍 Site sélectionné</h3><p>{childBuildings.length} bâtiment(s) rattaché(s)</p></div>
+        <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
       </div>
       {editMode ? (
-        <form className="form" onSubmit={handleSubmit}>
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_site: nomSite, adresse: adresse || null }); }}>
           <div className="form-grid">
-            <label className="field">
-              <span>Nom du site</span>
-              <input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required />
-            </label>
-            <label className="field">
-              <span>Adresse</span>
-              <input type="text" value={adresse} onChange={(e) => setAdresse(e.target.value)} />
-            </label>
+            <label className="field"><span>Nom du site</span><input type="text" value={nomSite} onChange={(e) => setNomSite(e.target.value)} required /></label>
+            <label className="field"><span>Adresse</span><input type="text" value={adresse} onChange={(e) => setAdresse(e.target.value)} /></label>
           </div>
-          <div className="form-actions">
-            <button type="submit" disabled={savePending}>
-              {savePending ? "Enregistrement..." : "Enregistrer le site"}
-            </button>
-          </div>
+          <div className="form-actions"><button type="submit" disabled={savePending}>{savePending ? "Enregistrement..." : "Enregistrer"}</button></div>
         </form>
       ) : (
         <>
           <div className="detail-grid">
-            <div className="detail-card">
-              <span>Nom du site</span>
-              <strong>{site.nom_site}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Adresse</span>
-              <strong>{site.adresse || "Non renseignée"}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Bâtiments rattachés</span>
-              <strong>{childBuildings.length}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Source</span>
-              <strong>{site.source_file || "Saisie manuelle"}</strong>
-            </div>
+            <div className="detail-card"><span>Nom</span><strong>{site.nom_site}</strong></div>
+            <div className="detail-card"><span>Adresse</span><strong>{site.adresse || "Non renseignée"}</strong></div>
+            <div className="detail-card"><span>Bâtiments</span><strong>{childBuildings.length}</strong></div>
+            <div className="detail-card"><span>Source</span><strong>{site.source_file || "Saisie manuelle"}</strong></div>
           </div>
-          {childBuildings.length > 0 ? (
+          {childBuildings.length > 0 && (
             <div className="section-block">
-              <div className="section-heading">
-                <h4>Bâtiments rattachés à ce site</h4>
-              </div>
+              <div className="section-heading"><h4>Bâtiments rattachés</h4></div>
               <ul style={{ paddingLeft: 20 }}>
                 {childBuildings.map((b) => (
                   <li key={b.id}>
                     {b.nom_batiment || `Bâtiment #${b.id}`}
-                    {b.statut_geocodage === "IGN_VALIDE" ? <span style={{ color: "#15803d", marginLeft: 6 }}>● IGN</span> : null}
+                    {b.statut_geocodage === "IGN_VALIDE" && <span style={{ color: "#15803d", marginLeft: 6 }}>● IGN</span>}
                     <span style={{ color: "#6b7280", marginLeft: 6, fontSize: 12 }}>{buildAddressLine(b)}</span>
                   </li>
                 ))}
               </ul>
             </div>
-          ) : null}
+          )}
         </>
       )}
     </div>
   );
 }
 
-// =====================================================================
-// Detail Bâtiment
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// Détail Bâtiment — fiche complète + attachement IGN/DGFIP inline
+// ─────────────────────────────────────────────────────────────────────────────
 
 function BuildingDetail({
-  building,
-  childLocals,
-  editMode,
-  onToggleEdit,
-  onSave,
-  savePending,
+  building, childLocals, editMode, onToggleEdit, onSave, savePending,
+  attachMode, attachSelectedFeatures, onEnterAttach, onExitAttach, onAttachSuccess,
+  nearbyDgfipData, nearbyDgfipLoading, freeAddressLookupData,
 }: {
-  building: Building;
-  childLocals: Local[];
-  editMode: boolean;
-  onToggleEdit: () => void;
-  onSave: (payload: UpdateBuildingPayload) => void;
-  savePending: boolean;
+  building: Building; childLocals: Local[];
+  editMode: boolean; onToggleEdit: () => void;
+  onSave: (p: UpdateBuildingPayload) => void; savePending: boolean;
+  attachMode: AttachMode;
+  attachSelectedFeatures: GeoJsonFeature[];
+  onEnterAttach: (mode: "ign" | "dgfip") => void;
+  onExitAttach: () => void;
+  onAttachSuccess: () => void;
+  nearbyDgfipData: NearbyDgfipResult | null;
+  nearbyDgfipLoading: boolean;
+  freeAddressLookupData: FreeAddressLookup | null;
 }) {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -795,364 +913,305 @@ function BuildingDetail({
   const [nomBatiment, setNomBatiment] = useState(building.nom_batiment ?? "");
   const [adresseReconstituee, setAdresseReconstituee] = useState(building.adresse_reconstituee ?? "");
   const [nomCommune, setNomCommune] = useState(building.nom_commune);
+  const [codePostal, setCodePostal] = useState(building.code_postal ?? "");
 
-  // Attachement inline (IGN + DGFIP) directement depuis le panneau, sans ouvrir la fiche complete.
-  const [showIgnAttachment, setShowIgnAttachment] = useState(false);
-  const [showDgfipAttachment, setShowDgfipAttachment] = useState(false);
+  // Compteurs rattachés
+  const meterLinksQuery = useQuery({
+    queryKey: ["building-meters", building.id, token],
+    queryFn: () => fetchBuildingMeterLinks(token as string, building.id),
+    enabled: Boolean(token),
+    retry: false,
+  });
+
+  // Mutations attachement
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachSuccess, setAttachSuccess] = useState<string | null>(null);
   const [selectedDgfipKey, setSelectedDgfipKey] = useState<string | null>(null);
-  const [geoAttachError, setGeoAttachError] = useState<string | null>(null);
-  const [geoAttachSuccess, setGeoAttachSuccess] = useState<string | null>(null);
-
-  const attachmentAddress = buildAttachmentAddress(building);
-
-  const freeAddressLookupQuery = useQuery({
-    queryKey: ["buildings", "free-address-lookup", attachmentAddress, token],
-    queryFn: () => fetchFreeAddressLookup(token as string, attachmentAddress as string),
-    enabled: Boolean(token) && Boolean(attachmentAddress) && showIgnAttachment && !selectedDgfipKey,
-    retry: false,
-  });
-
-  const dgfipNamingLookupQuery = useQuery({
-    queryKey: ["buildings", "naming-lookup", selectedDgfipKey, token],
-    queryFn: () => fetchBuildingNamingLookup(token as string, selectedDgfipKey as string),
-    enabled: Boolean(token) && Boolean(selectedDgfipKey) && showIgnAttachment,
-    retry: false,
-  });
-
-  const nearbyDgfipQuery = useQuery({
-    queryKey: ["buildings", "nearby-dgfip", building.id, token],
-    queryFn: () => fetchNearbyDgfip(token as string, building.id),
-    enabled: Boolean(token) && showDgfipAttachment,
-    retry: false,
-  });
-
-  const activeLookupQuery = selectedDgfipKey ? dgfipNamingLookupQuery : freeAddressLookupQuery;
-
-  async function invalidateAfterAttach() {
-    await queryClient.invalidateQueries({ queryKey: ["buildings", token] });
-    await queryClient.invalidateQueries({ queryKey: ["building", building.id] });
-  }
-
-  const attachGeoMutation = useMutation({
-    mutationFn: (payload: {
-      unique_key: string;
-      validated_name?: string;
-      selected_feature?: GeoJsonFeature | null;
-      selected_features?: GeoJsonFeature[];
-    }) => attachBuildingGeoRequest(token as string, building.id, payload),
-    onSuccess: async (updated: Building) => {
-      setGeoAttachSuccess(`Attachement DGFIP + IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
-      setGeoAttachError(null);
-      setShowIgnAttachment(false);
-      setShowDgfipAttachment(false);
-      setSelectedDgfipKey(null);
-      await invalidateAfterAttach();
-    },
-    onError: (err: unknown) => {
-      setGeoAttachSuccess(null);
-      setGeoAttachError(err instanceof Error ? err.message : "Attachement GEO impossible.");
-    },
-  });
 
   const attachIgnMutation = useMutation({
     mutationFn: (payload: BuildingIgnAttachmentPayload) => attachBuildingIgnRequest(token as string, building.id, payload),
-    onSuccess: async (updated: Building) => {
-      setGeoAttachSuccess(`Attachement IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
-      setGeoAttachError(null);
-      setShowIgnAttachment(false);
-      setSelectedDgfipKey(null);
-      await invalidateAfterAttach();
+    onSuccess: async (updated) => {
+      setAttachSuccess(`Attachement IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
+      setAttachError(null);
+      onAttachSuccess();
+      await queryClient.invalidateQueries({ queryKey: ["buildings", token] });
     },
-    onError: (err: unknown) => {
-      setGeoAttachSuccess(null);
-      setGeoAttachError(err instanceof Error ? err.message : "Attachement IGN impossible.");
-    },
+    onError: (err: unknown) => { setAttachError(err instanceof Error ? err.message : "Attachement IGN impossible."); },
   });
 
-  async function handleGeoAttach(payload: {
-    validatedName?: string;
-    selectedFeature?: GeoJsonFeature | null;
-    selectedFeatures?: GeoJsonFeature[];
-  }) {
-    setGeoAttachError(null);
-    setGeoAttachSuccess(null);
-    if (selectedDgfipKey) {
-      await attachGeoMutation.mutateAsync({
-        unique_key: selectedDgfipKey,
-        validated_name: payload.validatedName,
-        selected_feature: payload.selectedFeature,
-        selected_features: payload.selectedFeatures,
-      });
-    } else {
-      const lookupData = activeLookupQuery.data;
-      await attachIgnMutation.mutateAsync({
-        validated_name: payload.validatedName,
-        selected_feature: payload.selectedFeature,
-        selected_features: payload.selectedFeatures,
-        lat: lookupData?.lat ?? null,
-        lon: lookupData?.lon ?? null,
-      });
-    }
-  }
+  const attachGeoMutation = useMutation({
+    mutationFn: (payload: { unique_key: string; validated_name?: string; selected_feature?: GeoJsonFeature | null; selected_features?: GeoJsonFeature[] }) =>
+      attachBuildingGeoRequest(token as string, building.id, payload),
+    onSuccess: async (updated) => {
+      setAttachSuccess(`Attachement DGFIP + IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
+      setAttachError(null);
+      setSelectedDgfipKey(null);
+      onAttachSuccess();
+      await queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+    },
+    onError: (err: unknown) => { setAttachError(err instanceof Error ? err.message : "Attachement impossible."); },
+  });
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    onSave({
-      nom_batiment: nomBatiment || null,
-      adresse_reconstituee: adresseReconstituee || null,
-      nom_commune: nomCommune,
+  async function handleConfirmIgnAttach() {
+    setAttachError(null);
+    setAttachSuccess(null);
+    const lat = freeAddressLookupData?.lat ?? building.latitude ?? null;
+    const lon = freeAddressLookupData?.lon ?? building.longitude ?? null;
+    await attachIgnMutation.mutateAsync({
+      selected_features: attachSelectedFeatures.length > 0 ? attachSelectedFeatures : undefined,
+      lat,
+      lon,
     });
   }
 
+  async function handleConfirmDgfipAttach() {
+    if (!selectedDgfipKey) return;
+    setAttachError(null);
+    setAttachSuccess(null);
+    await attachGeoMutation.mutateAsync({ unique_key: selectedDgfipKey });
+  }
+
+  const ignFeatures = parseIgnFeatures(building.ign_features_json);
+  const majicBuilding = parseJsonArray(building.majic_building_values_json);
+  const majicEntry = parseJsonArray(building.majic_entry_values_json);
+  const majicLevel = parseJsonArray(building.majic_level_values_json);
+  const majicDoor = parseJsonArray(building.majic_door_values_json);
+  const parcelLabels = parseJsonArray(building.parcel_labels_json);
+  const attachmentPending = attachIgnMutation.isPending || attachGeoMutation.isPending;
+
   return (
     <div className="section-block">
+      {/* ── En-tête avec statut + boutons ── */}
       <div className="panel-header">
         <div className="section-heading">
           <h3>🏢 Bâtiment sélectionné</h3>
           <p>
-            {building.statut_geocodage === "IGN_VALIDE" ? "Attachement IGN validé · " : "IGN non attaché · "}
-            {childLocals.length} local(aux) rattaché(s)
+            {building.statut_geocodage === "IGN_VALIDE" ? "✓ IGN attaché · " : "○ IGN non attaché · "}
+            {childLocals.length} local(aux)
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="secondary-button" onClick={onToggleEdit}>
-            {editMode ? "Annuler l'édition" : "Modifier"}
+          <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
+          <button
+            type="button"
+            className={`secondary-button${attachMode === "ign" ? " is-active-attach" : ""}`}
+            onClick={() => attachMode === "ign" ? onExitAttach() : onEnterAttach("ign")}
+          >
+            {attachMode === "ign" ? "✕ Fermer IGN" : "Attacher IGN"}
           </button>
           <button
             type="button"
-            className="secondary-button"
-            onClick={() => {
-              setShowIgnAttachment((v) => !v);
-              setShowDgfipAttachment(false);
-              setGeoAttachError(null);
-              setGeoAttachSuccess(null);
-            }}
+            className={`secondary-button${attachMode === "dgfip" ? " is-active-attach" : ""}`}
+            onClick={() => attachMode === "dgfip" ? onExitAttach() : onEnterAttach("dgfip")}
           >
-            {showIgnAttachment ? "Fermer l'attachement IGN" : "Attachement IGN"}
+            {attachMode === "dgfip" ? "✕ Fermer DGFIP" : "Attacher DGFIP"}
           </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => {
-              setShowDgfipAttachment((v) => !v);
-              setSelectedDgfipKey(null);
-              setGeoAttachError(null);
-              setGeoAttachSuccess(null);
-            }}
-          >
-            {showDgfipAttachment ? "Fermer l'attachement DGFIP" : "Attachement DGFIP"}
-          </button>
-          <Link className="secondary-link" to={`/buildings/${building.id}`}>
-            Ouvrir la fiche complète →
-          </Link>
         </div>
       </div>
-      {editMode ? (
-        <form className="form" onSubmit={handleSubmit}>
-          <div className="form-grid">
-            <label className="field">
-              <span>Nom du bâtiment</span>
-              <input type="text" value={nomBatiment} onChange={(e) => setNomBatiment(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Adresse reconstituée</span>
-              <input type="text" value={adresseReconstituee} onChange={(e) => setAdresseReconstituee(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Commune</span>
-              <input type="text" value={nomCommune} onChange={(e) => setNomCommune(e.target.value)} required />
-            </label>
-          </div>
-          <p style={{ color: "#6b7280", fontSize: 12 }}>
-            Pour modifier l'attachement IGN/DGFIP, les compteurs, les détails parcellaires : ouvre la fiche complète.
-          </p>
-          <div className="form-actions">
-            <button type="submit" disabled={savePending}>
-              {savePending ? "Enregistrement..." : "Enregistrer le bâtiment"}
+
+      {/* ── Messages ── */}
+      {attachError && <p className="error-text">{attachError}</p>}
+      {attachSuccess && <p className="success-text">{attachSuccess}</p>}
+
+      {/* ── Confirmation IGN ── */}
+      {attachMode === "ign" && (
+        <div className="info-banner" style={{ borderColor: "#f97316" }}>
+          <strong>Attachement IGN en cours sur la carte.</strong>
+          <p>Cliquez les polygones jaunes sur la carte pour les sélectionner ({attachSelectedFeatures.length} sélectionné(s)).</p>
+          {attachSelectedFeatures.length > 0 && (
+            <ul style={{ paddingLeft: 16, marginTop: 8 }}>
+              {attachSelectedFeatures.map((f, i) => (
+                <li key={i}>{String(f.properties?.label ?? f.properties?.ign_id ?? `Polygone #${i + 1}`)}</li>
+              ))}
+            </ul>
+          )}
+          <div className="form-actions" style={{ marginTop: 8 }}>
+            <button type="button" onClick={() => void handleConfirmIgnAttach()} disabled={attachmentPending}>
+              {attachmentPending ? "Attachement en cours..." : `Valider l'attachement IGN${attachSelectedFeatures.length > 0 ? ` (${attachSelectedFeatures.length} polygone(s))` : " (sans polygone)"}`}
             </button>
+            <button type="button" className="secondary-button" onClick={onExitAttach}>Annuler</button>
           </div>
-        </form>
-      ) : (
-        <>
-          <div className="detail-grid">
-            <div className="detail-card">
-              <span>Nom</span>
-              <strong>{building.nom_batiment || "—"}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Adresse</span>
-              <strong>{buildAddressLine(building)}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Commune</span>
-              <strong>{building.nom_commune}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Statut géocodage</span>
-              <strong>{building.statut_geocodage}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Coordonnées</span>
-              <strong>
-                {building.latitude != null && building.longitude != null
-                  ? `${building.latitude.toFixed(6)}, ${building.longitude.toFixed(6)}`
-                  : "Non géolocalisé"}
-              </strong>
-            </div>
-            <div className="detail-card">
-              <span>Référence DGFIP</span>
-              <strong>{building.dgfip_reference_norm ?? "Non renseignée"}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Source de création</span>
-              <strong>{building.source_creation}</strong>
-            </div>
-            <div className="detail-card">
-              <span>Nom IGN retenu</span>
-              <strong>{building.ign_name_proposed || building.ign_name || "—"}</strong>
-            </div>
-          </div>
-          {childLocals.length > 0 ? (
-            <div className="section-block">
-              <div className="section-heading">
-                <h4>Locaux rattachés à ce bâtiment</h4>
-              </div>
-              <ul style={{ paddingLeft: 20 }}>
-                {childLocals.map((l) => (
-                  <li key={l.id}>
-                    {l.nom_local}
-                    {l.niveau ? <span style={{ color: "#9ca3af", marginLeft: 6 }}>· niv. {l.niveau}</span> : null}
-                    <span style={{ color: "#6b7280", marginLeft: 6, fontSize: 12 }}>{l.type_local}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </>
+        </div>
       )}
 
-      {geoAttachError ? <p className="error-text">{geoAttachError}</p> : null}
-      {geoAttachSuccess ? <p className="success-text">{geoAttachSuccess}</p> : null}
-
-      {showIgnAttachment ? (
+      {/* ── Sélection DGFIP ── */}
+      {attachMode === "dgfip" && (
         <div className="section-block">
-          <div className="section-heading">
-            <h4>Attachement IGN</h4>
-            <p>
-              {attachmentAddress
-                ? `Carte IGN centrée sur « ${attachmentAddress} ». Sélectionne le ou les bâtiments IGN qui correspondent.`
-                : "Aucune adresse renseignée — complète la fiche (adresse) avant de lancer l'attachement."}
-            </p>
-          </div>
-          {activeLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
-          {activeLookupQuery.error instanceof Error ? <p className="error-text">{activeLookupQuery.error.message}</p> : null}
-          <BuildingSelectionWorkspace
-            lookupData={(activeLookupQuery.data ?? null) as BuildingNamingLookup | FreeAddressLookup | null}
-            emptyTitle={attachmentAddress ? "Chargement de la carte IGN..." : "Adresse manquante."}
-            emptyDescription={
-              attachmentAddress
-                ? "La carte IGN se charge à partir de l'adresse du bâtiment."
-                : "Renseigne l'adresse reconstituée ou les champs de voirie via « Modifier »."
-            }
-            createPending={attachGeoMutation.isPending || attachIgnMutation.isPending}
-            error={geoAttachError}
-            success={geoAttachSuccess}
-            createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
-            createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
-            onCreate={handleGeoAttach}
-            nearbyDgfipMarkers={nearbyDgfipQuery.data?.rows}
-          />
-        </div>
-      ) : null}
-
-      {showDgfipAttachment ? (
-        <div className="section-block">
-          <div className="section-heading">
-            <h4>Attachement DGFIP / MAJIC</h4>
-            <p>
-              Adresses DGFIP / MAJIC dans un rayon de 200 m. Sélectionner une adresse recadre la carte IGN sur sa parcelle
-              cadastrale (ouvre l'attachement IGN).
-            </p>
-          </div>
-          {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
-          {nearbyDgfipQuery.error instanceof Error ? (
-            <p className="error-text">Impossible de charger les adresses DGFIP : {nearbyDgfipQuery.error.message}</p>
-          ) : null}
-          {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured === false ? (
+          <div className="section-heading"><h4>Adresses DGFIP / MAJIC proches (200 m)</h4></div>
+          {nearbyDgfipLoading && <p>Recherche des adresses proches...</p>}
+          {nearbyDgfipData?.majic_configured === false && (
             <div className="info-banner" style={{ background: "#fff4e6", borderColor: "#e07a5f" }}>
-              <strong>Source MAJIC non disponible sur ce serveur.</strong>
-              <p style={{ marginTop: 8 }}>
-                Le fichier DGFIP / MAJIC n'est pas configuré côté backend (
-                {nearbyDgfipQuery.data.majic_unavailable_reason ?? "fichier introuvable"}). L'attachement DGFIP automatique
-                n'est donc pas disponible pour l'instant.
-              </p>
+              <strong>Source MAJIC non disponible.</strong>
+              <p>Le fichier DGFIP / MAJIC n'est pas configuré côté backend.</p>
             </div>
-          ) : null}
-          {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured && nearbyDgfipQuery.data.rows.length === 0 ? (
+          )}
+          {nearbyDgfipData?.rows.length === 0 && nearbyDgfipData.majic_configured && (
             <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 200 m.</p>
-          ) : null}
-          <div className="resource-list buildings-address-list">
-            {(nearbyDgfipQuery.data?.rows ?? []).map((row: NearbyDgfipRow) => {
+          )}
+          <div className="resource-list">
+            {(nearbyDgfipData?.rows ?? []).map((row: NearbyDgfipRow) => {
               const isActive = selectedDgfipKey === row.unique_key;
               return (
-                <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                <article key={row.unique_key} className={`resource-card${isActive ? " resource-card-active" : ""}`}>
                   <div className="resource-card-header">
-                    <div>
-                      <h3>{row.address_display}</h3>
-                      <p>{row.nom_commune}</p>
-                    </div>
+                    <div><h3>{row.address_display}</h3><p>{row.nom_commune}</p></div>
                     <span className="resource-badge">{row.distance_m} m</span>
                   </div>
                   <dl className="resource-metadata">
-                    <div>
-                      <dt>Indices MAJIC</dt>
-                      <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
-                    </div>
+                    <div><dt>Indices MAJIC</dt><dd>{row.majic_building_values.join(", ") || "Aucun"}</dd></div>
                   </dl>
                   <div className="resource-card-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        const nextKey = isActive ? null : row.unique_key;
-                        setSelectedDgfipKey(nextKey);
-                        setGeoAttachError(null);
-                        if (nextKey && !showIgnAttachment) {
-                          setShowIgnAttachment(true);
-                        }
-                      }}
-                    >
-                      {isActive ? "Désélectionner" : "Sélectionner cette adresse DGFIP"}
+                    <button type="button" className="secondary-button" onClick={() => setSelectedDgfipKey(isActive ? null : row.unique_key)}>
+                      {isActive ? "Désélectionner" : "Sélectionner"}
                     </button>
+                    {isActive && (
+                      <button type="button" onClick={() => void handleConfirmDgfipAttach()} disabled={attachmentPending}>
+                        {attachmentPending ? "En cours..." : "Valider l'attachement DGFIP"}
+                      </button>
+                    )}
                   </div>
                 </article>
               );
             })}
           </div>
+          <div className="form-actions"><button type="button" className="secondary-button" onClick={onExitAttach}>Annuler</button></div>
         </div>
-      ) : null}
+      )}
+
+      {/* ── Formulaire d'édition ── */}
+      {editMode ? (
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_batiment: nomBatiment || null, adresse_reconstituee: adresseReconstituee || null, nom_commune: nomCommune, code_postal: codePostal || null }); }}>
+          <div className="form-grid">
+            <label className="field"><span>Nom du bâtiment</span><input type="text" value={nomBatiment} onChange={(e) => setNomBatiment(e.target.value)} /></label>
+            <label className="field"><span>Commune</span><input type="text" value={nomCommune} onChange={(e) => setNomCommune(e.target.value)} required /></label>
+            <label className="field"><span>Code postal</span><input type="text" value={codePostal} onChange={(e) => setCodePostal(e.target.value)} maxLength={10} /></label>
+            <label className="field"><span>Adresse reconstituée</span><input type="text" value={adresseReconstituee} onChange={(e) => setAdresseReconstituee(e.target.value)} /></label>
+          </div>
+          <div className="form-actions"><button type="submit" disabled={savePending}>{savePending ? "Enregistrement..." : "Enregistrer"}</button></div>
+        </form>
+      ) : (
+        <>
+          {/* ── Fiche complète ── */}
+          <div className="detail-grid">
+            <div className="detail-card"><span>Nom</span><strong>{building.nom_batiment || "—"}</strong></div>
+            <div className="detail-card"><span>Adresse</span><strong>{buildAddressLine(building)}</strong></div>
+            <div className="detail-card"><span>Commune</span><strong>{building.nom_commune}</strong></div>
+            <div className="detail-card"><span>Code postal</span><strong>{building.code_postal || "—"}</strong></div>
+            <div className="detail-card"><span>Statut géocodage</span><strong>{building.statut_geocodage}</strong></div>
+            <div className="detail-card"><span>Source de création</span><strong>{building.source_creation}</strong></div>
+            <div className="detail-card">
+              <span>Coordonnées</span>
+              <strong>{building.latitude != null && building.longitude != null ? `${building.latitude.toFixed(5)}, ${building.longitude.toFixed(5)}` : "Non géolocalisé"}</strong>
+            </div>
+            <div className="detail-card"><span>Référence DGFIP</span><strong>{building.dgfip_reference_norm ?? "—"}</strong></div>
+            <div className="detail-card">
+              <span>Référence cadastrale</span>
+              <strong>{[building.prefixe, building.section, building.numero_plan].filter(Boolean).join(" ") || "—"}</strong>
+            </div>
+            {parcelLabels.length > 0 && (
+              <div className="detail-card"><span>Parcelles</span><strong>{parcelLabels.join(", ")}</strong></div>
+            )}
+            {building.ign_id && (
+              <>
+                <div className="detail-card"><span>Nom IGN retenu</span><strong>{building.ign_name_proposed || building.ign_name || "—"}</strong></div>
+                <div className="detail-card"><span>ID IGN</span><strong>{building.ign_id}</strong></div>
+              </>
+            )}
+          </div>
+
+          {/* Attributs IGN multi-polygones */}
+          {ignFeatures.length > 0 && (
+            <div className="section-block">
+              <div className="section-heading">
+                <h4>Attributs IGN ({ignFeatures.length} polygone(s))</h4>
+                <p>{ignFeatures.length > 1 ? "★ = polygone principal." : "Attributs BD TOPO."}</p>
+              </div>
+              {ignFeatures.map((feat, idx) => (
+                <div key={feat.ign_id || idx} className="section-block" style={{ marginTop: 8 }}>
+                  <div className="section-heading">
+                    <h4>{idx === 0 ? "★ " : `#${idx + 1} `}{feat.resolved_name || feat.label || feat.ign_id}{idx === 0 ? " (principal)" : ""}</h4>
+                    <p>{feat.ign_layer} · {feat.ign_id}</p>
+                  </div>
+                  {feat.attributes.length > 0 && (
+                    <div className="attribute-table">
+                      {feat.attributes.map(([k, v]) => <div key={k} className="attribute-row"><dt>{k}</dt><dd>{v}</dd></div>)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Indices MAJIC */}
+          {(majicBuilding.length > 0 || majicEntry.length > 0) && (
+            <div className="section-block">
+              <div className="section-heading"><h4>Indices MAJIC</h4></div>
+              <div className="detail-grid">
+                <div className="detail-card"><span>Bâtiment</span><strong>{majicBuilding.join(", ") || "—"}</strong></div>
+                <div className="detail-card"><span>Entrée</span><strong>{majicEntry.join(", ") || "—"}</strong></div>
+                {majicLevel.length > 0 && <div className="detail-card"><span>Niveau</span><strong>{majicLevel.join(", ")}</strong></div>}
+                {majicDoor.length > 0 && <div className="detail-card"><span>Porte</span><strong>{majicDoor.join(", ")}</strong></div>}
+              </div>
+            </div>
+          )}
+
+          {/* Compteurs rattachés */}
+          <div className="section-block">
+            <div className="section-heading"><h4>Compteurs rattachés</h4></div>
+            {meterLinksQuery.isLoading && <p style={{ color: "#94a3b8" }}>Chargement compteurs...</p>}
+            {!meterLinksQuery.isLoading && (meterLinksQuery.data?.length ?? 0) === 0 && (
+              <p style={{ color: "#94a3b8", fontSize: 13 }}>Aucun compteur rattaché. <Link to={`/buildings/${building.id}`} className="secondary-link">Ajouter sur la fiche complète.</Link></p>
+            )}
+            {(meterLinksQuery.data ?? []).map((m: BuildingMeterLink) => (
+              <div key={m.id} className="resource-card" style={{ marginTop: 8 }}>
+                <div className="resource-card-header">
+                  <div><h3>{m.meter_label || m.meter_identifier}</h3><p>{m.meter_identifier}</p></div>
+                  <span className="resource-badge">{m.fluid}</span>
+                </div>
+                <dl className="resource-metadata">
+                  <div><dt>Fournisseur</dt><dd>{m.supplier_name || "—"}</dd></div>
+                  <div><dt>Contexte</dt><dd>{m.contract_context || "—"}</dd></div>
+                </dl>
+              </div>
+            ))}
+          </div>
+
+          {/* Locaux */}
+          {childLocals.length > 0 && (
+            <div className="section-block">
+              <div className="section-heading"><h4>Locaux ({childLocals.length})</h4></div>
+              <ul style={{ paddingLeft: 20 }}>
+                {childLocals.map((l) => (
+                  <li key={l.id}>
+                    {l.nom_local}
+                    {l.niveau && <span style={{ color: "#9ca3af", marginLeft: 6 }}>· niv. {l.niveau}</span>}
+                    <span style={{ color: "#6b7280", marginLeft: 6, fontSize: 12 }}>{l.type_local}</span>
+                    {l.surface_m2 && <span style={{ color: "#6b7280", marginLeft: 6, fontSize: 12 }}>{l.surface_m2} m²</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Lien fiche complète (pour compteurs / ajout locaux) */}
+          <div style={{ marginTop: 8 }}>
+            <Link to={`/buildings/${building.id}`} className="secondary-link" style={{ fontSize: 13 }}>
+              Fiche complète (ajout locaux, compteurs, édition avancée) →
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-// =====================================================================
-// Detail Local
-// =====================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// Détail Local
+// ─────────────────────────────────────────────────────────────────────────────
 
-function LocalDetail({
-  local,
-  parent,
-  editMode,
-  onToggleEdit,
-  onSave,
-  savePending,
-}: {
-  local: Local;
-  parent: Building;
-  editMode: boolean;
-  onToggleEdit: () => void;
-  onSave: (payload: UpdateLocalPayload) => void;
-  savePending: boolean;
+function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePending }: {
+  local: Local; parent: Building; editMode: boolean;
+  onToggleEdit: () => void; onSave: (p: UpdateLocalPayload) => void; savePending: boolean;
 }) {
   const [nomLocal, setNomLocal] = useState(local.nom_local);
   const [typeLocal, setTypeLocal] = useState(local.type_local);
@@ -1161,98 +1220,36 @@ function LocalDetail({
   const [usage, setUsage] = useState(local.usage ?? "");
   const [statutOccupation, setStatutOccupation] = useState(local.statut_occupation ?? "");
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const surface = surfaceM2.trim() ? Number(surfaceM2.replace(",", ".")) : null;
-    onSave({
-      nom_local: nomLocal,
-      type_local: typeLocal,
-      niveau: niveau || null,
-      surface_m2: Number.isFinite(surface as number) ? (surface as number) : null,
-      usage: usage || null,
-      statut_occupation: statutOccupation || null,
-    });
-  }
-
   return (
     <div className="section-block">
       <div className="panel-header">
         <div className="section-heading">
           <h3>◇ Local sélectionné</h3>
-          <p>
-            Bâtiment parent : <strong>{parent.nom_batiment || `#${parent.id}`}</strong>
-          </p>
+          <p>Bâtiment parent : <strong>{parent.nom_batiment || `#${parent.id}`}</strong></p>
         </div>
-        <button type="button" className="secondary-button" onClick={onToggleEdit}>
-          {editMode ? "Annuler l'édition" : "Modifier"}
-        </button>
+        <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
       </div>
       {editMode ? (
-        <form className="form" onSubmit={handleSubmit}>
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); const s = surfaceM2.trim() ? Number(surfaceM2.replace(",", ".")) : null; onSave({ nom_local: nomLocal, type_local: typeLocal, niveau: niveau || null, surface_m2: Number.isFinite(s as number) ? (s as number) : null, usage: usage || null, statut_occupation: statutOccupation || null }); }}>
           <div className="form-grid">
-            <label className="field">
-              <span>Nom du local</span>
-              <input type="text" value={nomLocal} onChange={(e) => setNomLocal(e.target.value)} required />
-            </label>
-            <label className="field">
-              <span>Type</span>
-              <input type="text" value={typeLocal} onChange={(e) => setTypeLocal(e.target.value)} required />
-            </label>
-            <label className="field">
-              <span>Niveau</span>
-              <input type="text" value={niveau} onChange={(e) => setNiveau(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Surface (m²)</span>
-              <input type="number" step="0.01" value={surfaceM2} onChange={(e) => setSurfaceM2(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Usage</span>
-              <input type="text" value={usage} onChange={(e) => setUsage(e.target.value)} />
-            </label>
-            <label className="field">
-              <span>Statut d'occupation</span>
-              <input type="text" value={statutOccupation} onChange={(e) => setStatutOccupation(e.target.value)} />
-            </label>
+            <label className="field"><span>Nom</span><input type="text" value={nomLocal} onChange={(e) => setNomLocal(e.target.value)} required /></label>
+            <label className="field"><span>Type</span><input type="text" value={typeLocal} onChange={(e) => setTypeLocal(e.target.value)} required /></label>
+            <label className="field"><span>Niveau</span><input type="text" value={niveau} onChange={(e) => setNiveau(e.target.value)} /></label>
+            <label className="field"><span>Surface (m²)</span><input type="number" step="0.01" value={surfaceM2} onChange={(e) => setSurfaceM2(e.target.value)} /></label>
+            <label className="field"><span>Usage</span><input type="text" value={usage} onChange={(e) => setUsage(e.target.value)} /></label>
+            <label className="field"><span>Statut occupation</span><input type="text" value={statutOccupation} onChange={(e) => setStatutOccupation(e.target.value)} /></label>
           </div>
-          <div className="form-actions">
-            <button type="submit" disabled={savePending}>
-              {savePending ? "Enregistrement..." : "Enregistrer le local"}
-            </button>
-          </div>
+          <div className="form-actions"><button type="submit" disabled={savePending}>{savePending ? "Enregistrement..." : "Enregistrer"}</button></div>
         </form>
       ) : (
         <div className="detail-grid">
-          <div className="detail-card">
-            <span>Nom</span>
-            <strong>{local.nom_local}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Type</span>
-            <strong>{local.type_local}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Niveau</span>
-            <strong>{local.niveau || "—"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Surface (m²)</span>
-            <strong>{local.surface_m2 ?? "—"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Usage</span>
-            <strong>{local.usage || "—"}</strong>
-          </div>
-          <div className="detail-card">
-            <span>Statut d'occupation</span>
-            <strong>{local.statut_occupation || "—"}</strong>
-          </div>
-          {local.commentaire ? (
-            <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
-              <span>Commentaire</span>
-              <strong>{local.commentaire}</strong>
-            </div>
-          ) : null}
+          <div className="detail-card"><span>Nom</span><strong>{local.nom_local}</strong></div>
+          <div className="detail-card"><span>Type</span><strong>{local.type_local}</strong></div>
+          <div className="detail-card"><span>Niveau</span><strong>{local.niveau || "—"}</strong></div>
+          <div className="detail-card"><span>Surface</span><strong>{local.surface_m2 ? `${local.surface_m2} m²` : "—"}</strong></div>
+          <div className="detail-card"><span>Usage</span><strong>{local.usage || "—"}</strong></div>
+          <div className="detail-card"><span>Statut occupation</span><strong>{local.statut_occupation || "—"}</strong></div>
+          {local.commentaire && <div className="detail-card" style={{ gridColumn: "1/-1" }}><span>Commentaire</span><strong>{local.commentaire}</strong></div>}
         </div>
       )}
     </div>

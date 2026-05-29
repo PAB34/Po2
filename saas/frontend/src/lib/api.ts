@@ -546,11 +546,12 @@ export async function fetchBuildingNamingLookup(token: string, uniqueKey: string
 export async function fetchFreeAddressLookup(
   token: string,
   address: string,
-  options?: { citycode?: string | null; parcel_reference?: string | null },
+  options?: { citycode?: string | null; parcel_reference?: string | null; skip_ign_buildings?: boolean },
 ): Promise<FreeAddressLookup> {
-  const payload: Record<string, string> = { address };
+  const payload: Record<string, unknown> = { address };
   if (options?.citycode) payload.citycode = options.citycode;
   if (options?.parcel_reference) payload.parcel_reference = options.parcel_reference;
+  if (options?.skip_ign_buildings) payload.skip_ign_buildings = true;
   const response = await fetch(`${apiBaseUrl}/buildings/lookup/free-address`, {
     method: "POST",
     headers: buildHeaders(token),

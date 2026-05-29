@@ -137,6 +137,7 @@ def post_free_address_lookup(
                 city_name=city_name,
                 citycode=payload.citycode,
                 parcel_reference=payload.parcel_reference,
+                skip_ign_buildings=payload.skip_ign_buildings,
             )
         )
     except ValueError as error:

@@ -390,7 +390,7 @@ def _wfs_layer_features(type_name: str, bbox: tuple[float, float, float, float],
             "count": count,
         },
         host_key=f"wfs_{type_name}",
-        timeout=45,
+        timeout=12,
     )
     return response.json()
 

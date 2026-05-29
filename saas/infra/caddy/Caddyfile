@@ -1,6 +1,13 @@
 {$SITE_ADDRESS} {
     handle /api/* {
-        reverse_proxy backend:8000
+        reverse_proxy backend:8000 {
+            transport http {
+                # Les endpoints IGN/MAJIC font des appels WFS exterieurs qui
+                # peuvent prendre jusqu'a 60s. On passe le timeout a 120s
+                # pour eviter les 502 dus a un proxy timeout trop court.
+                response_header_timeout 120s
+            }
+        }
     }
 
     handle {

@@ -408,6 +408,80 @@ select.form-input {
   cursor: grab;
 }
 
+/* Section "Ajouter" en bas de l'arborescence */
+.patrimony-create-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.patrimony-create-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.patrimony-create-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.patrimony-create-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.patrimony-create-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.patrimony-create-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.patrimony-create-btn.is-active {
+  background: rgba(249, 115, 22, 0.18);
+  border-color: #f97316;
+  color: #f97316;
+}
+
+.patrimony-create-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.patrimony-create-form {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Bouton "Attacher IGN/DGFIP" actif */
+.secondary-button.is-active-attach {
+  border-color: #f97316;
+  color: #f97316;
+  background: rgba(249, 115, 22, 0.1);
+}
+
 .patrimony-tree-toggle {
   cursor: pointer;
   user-select: none;
@@ -522,6 +596,41 @@ select.form-input {
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Overlay de chargement sur la carte (mode attachement IGN / DGFIP) */
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.68);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.map-loading-overlay--error {
+  background: rgba(127, 29, 29, 0.72);
+  pointer-events: none;
+}
+
+.map-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: map-spin 0.9s linear infinite;
+}
+
+@keyframes map-spin {
+  to { transform: rotate(360deg); }
 }
 
 .map-legend {
