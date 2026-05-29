@@ -179,7 +179,7 @@ function normalizeWfsFeature(feature: RuntimeFeature, featureId: string): GeoJso
   const props = feature.properties ?? {};
   return {
     type: "Feature",
-    geometry: feature.geometry,
+    geometry: (feature.geometry ?? null) as GeoJsonFeature["geometry"],
     properties: {
       ign_id: featureId,
       ign_layer: "batiment",
