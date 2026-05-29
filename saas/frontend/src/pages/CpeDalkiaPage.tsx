@@ -82,6 +82,36 @@ const TYPE_LABEL: Record<string, string> = {
   equilibre: "Équilibre",
   insuffisant: "—",
 };
+const CONTROL_TYPE_LABELS: Record<string, string> = {
+  revision_p2: "Revision P2",
+  revision_p3: "Revision P3/P3.4",
+  p2_4_objectives: "Objectif P2.4",
+  accounting_nature: "Nature comptable",
+  accounting_site: "Rattachement site finance",
+  invoice_type: "Type de facture",
+  invoice_total_ht: "Total HT facture",
+  invoice_period: "Periode facture",
+  p1_gaz_acompte_dpgf: "Acompte P1 vs DPGF",
+};
+const REVISION_INDEX_CODE_OPTIONS: Array<{ code: string; label: string }> = [
+  { code: "ICHT_IME", label: "ICHT-IME (trimestriel)" },
+  { code: "FSD2", label: "FSD2 (trimestriel)" },
+  { code: "BT40", label: "BT40 (trimestriel)" },
+  { code: "ICHT_IME0", label: "ICHT-IME0 (base contrat)" },
+  { code: "FSD20", label: "FSD20 (base contrat)" },
+  { code: "BT400", label: "BT400 (base contrat)" },
+  { code: "P1_CPB0_T1", label: "P1 CPB0 T1 (reference)" },
+  { code: "P1_CPB0_T2", label: "P1 CPB0 T2 (reference)" },
+  { code: "P1_CPB0_T3", label: "P1 CPB0 T3 (reference)" },
+  { code: "P1_TVD0_T1", label: "P1 TVD0 T1 (reference)" },
+  { code: "P1_TVD0_T2", label: "P1 TVD0 T2 (reference)" },
+  { code: "P1_TVD0_T3", label: "P1 TVD0 T3 (reference)" },
+  { code: "P1_CEE0", label: "P1 CEE0 (reference)" },
+  { code: "P1_TICGN0", label: "P1 TICGN0 (reference)" },
+  { code: "P1_PEG0", label: "P1 PEG0 (reference a renseigner)" },
+  { code: "P1_PUGAZ0", label: "P1 PUGAZ0 (reference a renseigner)" },
+];
+
 const TYPE_CLASS: Record<string, string> = {
   interessement: "badge-green",
   penalite: "badge-red",
@@ -167,6 +197,67 @@ function fmtEur(val: number | null | undefined): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
 }
 
+function fmtControlNumber(val: number | null | undefined, digits = 4): string | null {
+  if (val == null) return null;
+  return val.toFixed(digits).replace(".", ",");
+}
+function fmtControlPercent(val: number | null | undefined, digits = 2): string | null {
+  if (val == null) return null;
+  return `${(val * 100).toFixed(digits).replace(".", ",")}%`;
+}
+function controlStatusLabel(status: string): string {
+  if (status === "error") return "Ecart";
+  if (status === "blocked") return "Bloque";
+  if (status === "ok") return "OK";
+  return status;
+}
+function controlStatusColor(status: string): string {
+  if (status === "error") return "#dc2626";
+  if (status === "blocked") return "#b45309";
+  if (status === "ok") return "#166534";
+  return "#6b7280";
+}
+function controlDiagnostic(control: CpeFinanceControl): string {
+  if (control.status === "ok") return control.message;
+  if (control.control_type === "revision_p2" || control.control_type === "revision_p3") {
+    if (control.index_year == null || control.index_quarter == null) {
+      return "Periode absente: trimestre d'indices introuvable.";
+    }
+    const missing: string[] = [];
+    if (control.icht_ime_value == null) missing.push("ICHT-IME");
+    if (control.control_type === "revision_p2" && control.fsd2_value == null) missing.push("FSD2");
+    if (control.control_type === "revision_p3" && control.bt40_value == null) missing.push("BT40");
+    if (missing.length > 0) return `Indice(s) manquant(s): ${missing.join(", ")}.`;
+    if (control.base_price == null || control.actual_revised_price == null) {
+      return "Prix de base/revise absent dans les donnees source.";
+    }
+    return "Ecart entre prix revise facture et prix revise calcule.";
+  }
+  return control.message;
+}
+function controlCalculationTrace(control: CpeFinanceControl): string | null {
+  const chunks: string[] = [];
+  if (control.index_year != null && control.index_quarter != null) {
+    chunks.push(`Periode indices ${control.index_year} T${control.index_quarter}`);
+  }
+  if (control.expected_factor != null) {
+    chunks.push(`Facteur attendu ${fmtControlNumber(control.expected_factor, 6)}`);
+  }
+  if (control.expected_revised_price != null) {
+    chunks.push(`Attendu ${fmtControlNumber(control.expected_revised_price)}`);
+  }
+  if (control.actual_revised_price != null) {
+    chunks.push(`Facture ${fmtControlNumber(control.actual_revised_price)}`);
+  }
+  if (control.delta_abs != null) {
+    chunks.push(`Ecart ${fmtControlNumber(control.delta_abs)}`);
+  }
+  if (control.delta_pct != null) {
+    chunks.push(`Ecart % ${fmtControlPercent(control.delta_pct)}`);
+  }
+  return chunks.length > 0 ? chunks.join(" | ") : null;
+}
+
 export default function CpeDalkiaPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
@@ -226,8 +317,8 @@ export default function CpeDalkiaPage() {
   });
 
   const revisionIndicesQ = useQuery({
-    queryKey: ["cpe-revision-indices", annee],
-    queryFn: () => fetchCpeRevisionIndices(token!, annee),
+    queryKey: ["cpe-revision-indices"],
+    queryFn: () => fetchCpeRevisionIndices(token!),
     enabled: !!token && view === "finance",
   });
 
@@ -347,9 +438,9 @@ export default function CpeDalkiaPage() {
   });
 
   const upsertRevisionIndexM = useMutation({
-    mutationFn: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) =>
+    mutationFn: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null }) =>
       upsertCpeRevisionIndex(token!, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-revision-indices", annee] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] }),
   });
 
   const recalculateControlsM = useMutation({
@@ -392,15 +483,6 @@ export default function CpeDalkiaPage() {
             Pilotage contractuel, consommations et performance energetique du Lot 1
           </p>
         </div>
-        <select
-          value={annee}
-          onChange={(e) => setAnnee(Number(e.target.value))}
-          style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #d1d5db" }}
-        >
-          {[2026, 2027, 2028, 2029, 2030].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
       </div>
 
       <div
@@ -1127,7 +1209,7 @@ function CpeFinanceReference({
   onDeleteContractReference: (id: number) => void;
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
-  onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) => void;
+  onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null }) => void;
   onRecalculateControls: (invoiceId: number) => void;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
@@ -1158,7 +1240,14 @@ function CpeFinanceReference({
   const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
   const [showInvoiceCountLine, setShowInvoiceCountLine] = useState(true);
   const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
-  const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
+  const [indexDraft, setIndexDraft] = useState({
+    index_code: "ICHT_IME",
+    year: annee,
+    quarter: 1,
+    value: "",
+    source: "Saisie Po2",
+    notes: "",
+  });
   const invoiceTypeOptions = useMemo(
     () =>
       Array.from(
@@ -1368,6 +1457,29 @@ function CpeFinanceReference({
         blocked: lastControls.filter((item) => item.status === "blocked").length,
       }
     : null;
+  const controlHighlights = useMemo(() => {
+    if (!lastControls) return [];
+    const priority: Record<string, number> = { error: 3, blocked: 2, ok: 1 };
+    return [...lastControls]
+      .sort((a, b) => {
+        const statusDelta = (priority[b.status] ?? 0) - (priority[a.status] ?? 0);
+        if (statusDelta !== 0) return statusDelta;
+        const absA = Math.abs(a.delta_abs ?? 0);
+        const absB = Math.abs(b.delta_abs ?? 0);
+        if (absB !== absA) return absB - absA;
+        return b.id - a.id;
+      })
+      .slice(0, 5);
+  }, [lastControls]);
+  const sortedIndices = useMemo(
+    () =>
+      [...indices].sort((left, right) => {
+        if (left.year !== right.year) return right.year - left.year;
+        if (left.quarter !== right.quarter) return right.quarter - left.quarter;
+        return left.index_code.localeCompare(right.index_code, "fr");
+      }),
+    [indices],
+  );
 
   const startEdit = (mapping: CpeAccountingSiteMapping) => {
     setEditingId(mapping.id);
@@ -1535,7 +1647,7 @@ function CpeFinanceReference({
           <KpiCard label="Sites codifies" value={String(siteMappings.length)} sub="Lignes du referentiel finance" color="#2563eb" />
           <KpiCard label="Regles nature" value={String(natureRules.length)} sub="Poste facture vers nature" color="#0f766e" />
           <KpiCard label="References contrat" value={String(contractReferences.length)} sub="DPGF, formules et tolerances" color="#7c3aed" />
-          <KpiCard label="Indices revision" value={String(indices.length)} sub={`Exercice ${annee}, ICHT-IME / BT40`} color="#b45309" />
+          <KpiCard label="Indices revision" value={String(indices.length)} sub="References de base + valeurs trimestrielles (toutes annees)" color="#b45309" />
           <KpiCard label="Lots importes" value={String(batches.length)} sub={`${invoices.length} facture(s) archivees`} color="#9333ea" />
           <KpiCard
             label="Dernier lot"
@@ -1634,26 +1746,36 @@ function CpeFinanceReference({
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
-            <h3 style={{ margin: "0 0 4px" }}>Indices de revision P2 / P3</h3>
+            <h3 style={{ margin: "0 0 4px" }}>Indices et references de base (P1 / P2 / P3)</h3>
             <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
-              P2 utilise ICHT-IME + FSD2. P3/P3.4 utilise ICHT-IME + BT40.
+              Saisie unique de toutes les valeurs de revision: bases contractuelles et indices trimestriels multi-annees.
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
             <select
               value={indexDraft.index_code}
               onChange={(event) => setIndexDraft({ ...indexDraft, index_code: event.target.value })}
               style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
             >
-              <option value="ICHT_IME">ICHT-IME</option>
-              <option value="BT40">BT40</option>
-              <option value="FSD2">FSD2</option>
+              {REVISION_INDEX_CODE_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>{option.label}</option>
+              ))}
             </select>
+            <input
+              type="number"
+              step="1"
+              value={indexDraft.year}
+              onChange={(event) => setIndexDraft({ ...indexDraft, year: Number(event.target.value) || CURRENT_YEAR })}
+              placeholder="Annee"
+              style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", width: 90 }}
+            />
             <select
               value={indexDraft.quarter}
               onChange={(event) => setIndexDraft({ ...indexDraft, quarter: Number(event.target.value) })}
               style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
             >
+              <option value={0}>Base / ref</option>
               {[1, 2, 3, 4].map((quarter) => (
                 <option key={quarter} value={quarter}>T{quarter}</option>
               ))}
@@ -1673,27 +1795,82 @@ function CpeFinanceReference({
               onClick={() => {
                 onSaveIndex({
                   index_code: indexDraft.index_code,
-                  year: annee,
+                  year: Number(indexDraft.year),
                   quarter: indexDraft.quarter,
                   value: Number(indexDraft.value),
                   source: indexDraft.source,
+                  notes: indexDraft.notes || null,
                 });
-                setIndexDraft({ ...indexDraft, value: "" });
+                setIndexDraft({ ...indexDraft, value: "", notes: "" });
               }}
             >
               Enregistrer indice
             </button>
           </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <input
+                value={indexDraft.source}
+                onChange={(event) => setIndexDraft({ ...indexDraft, source: event.target.value })}
+                placeholder="Source"
+                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", width: 210 }}
+              />
+              <input
+                value={indexDraft.notes}
+                onChange={(event) => setIndexDraft({ ...indexDraft, notes: event.target.value })}
+                placeholder="Notes (optionnel)"
+                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", width: 320 }}
+              />
+            </div>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {indices.length === 0 ? (
-            <span style={{ color: "#9ca3af", fontSize: 13 }}>Aucun indice saisi pour {annee}.</span>
+        <div style={{ overflowX: "auto" }}>
+          {sortedIndices.length === 0 ? (
+            <span style={{ color: "#9ca3af", fontSize: 13 }}>Aucun indice saisi.</span>
           ) : (
-            indices.map((item) => (
-              <span key={item.id} className="badge badge-blue">
-                {item.index_code} T{item.quarter} : {fmt(item.value, 2)}
-              </span>
-            ))
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                  <th style={thStyle}>Code</th>
+                  <th style={thStyle}>Annee</th>
+                  <th style={thStyle}>Periode</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Valeur</th>
+                  <th style={thStyle}>Source</th>
+                  <th style={thStyle}>Notes</th>
+                  <th style={thStyle}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedIndices.map((item) => (
+                  <tr key={item.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{item.index_code}</td>
+                    <td style={tdStyle}>{item.year}</td>
+                    <td style={tdStyle}>{item.quarter === 0 ? "Base / ref" : `T${item.quarter}`}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.value, 4)}</td>
+                    <td style={tdStyle}>{item.source ?? "-"}</td>
+                    <td style={tdStyle}>{item.notes ?? "-"}</td>
+                    <td style={tdStyle}>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: 12, padding: "3px 8px" }}
+                        onClick={() =>
+                          setIndexDraft({
+                            index_code: item.index_code,
+                            year: item.year,
+                            quarter: item.quarter,
+                            value: String(item.value),
+                            source: item.source ?? "Saisie Po2",
+                            notes: item.notes ?? "",
+                          })
+                        }
+                      >
+                        Editer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </section>
@@ -2310,11 +2487,27 @@ function CpeFinanceReference({
               Dernier controle facture{lastControlledInvoice ? ` ${lastControlledInvoice}` : ""} : <strong>{controlsSummary.ok}</strong> OK,{" "}
               <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
               <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
-              {lastControls?.slice(0, 3).map((control) => (
-                <p key={control.id} style={{ margin: "6px 0 0", color: control.status === "error" ? "#dc2626" : "#6b7280" }}>
-                  {control.message}
-                </p>
-              ))}
+              {controlHighlights.map((control) => {
+                const calcTrace = controlCalculationTrace(control);
+                return (
+                  <div key={control.id} style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #e5e7eb" }}>
+                    <p style={{ margin: 0, fontWeight: 600, color: controlStatusColor(control.status) }}>
+                      {CONTROL_TYPE_LABELS[control.control_type] ?? control.control_type} - {controlStatusLabel(control.status)}
+                    </p>
+                    <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{controlDiagnostic(control)}</p>
+                    {control.formula && (
+                      <p style={{ margin: "4px 0 0", color: "#4b5563" }}>
+                        <strong>Formule:</strong> {control.formula}
+                      </p>
+                    )}
+                    {calcTrace && (
+                      <p style={{ margin: "4px 0 0", color: "#1f2937" }}>
+                        <strong>Resultat:</strong> {calcTrace}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

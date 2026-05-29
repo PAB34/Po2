@@ -50,6 +50,97 @@ BT40_BASE = 128.4
 P2_REVISION_FORMULA = "P2 = P20 x (0,15 + 0,70 x ICHT-IME/ICHT-IME0 + 0,15 x FSD2/FSD20)"
 P3_REVISION_FORMULA = "P3 = P30 x (0,15 + 0,30 x ICHT-IME/ICHT-IME0 + 0,55 x BT40/BT400)"
 P2_4_OBJECTIVE_RULE = "P2.4 annuel : 100% si objectifs atteints, 50% si objectifs non atteints"
+REFERENCE_INDEX_CODES = ("ICHT_IME0", "FSD20", "BT400")
+REFERENCE_INDEX_DEFAULTS: tuple[dict[str, Any], ...] = (
+    {
+        "index_code": "ICHT_IME0",
+        "year": 2025,
+        "quarter": 0,
+        "value": 141.4,
+        "source": "CPE DALKIA - Facturation et indices",
+        "notes": "Base contractuelle P2/P3 (01/01/2025).",
+    },
+    {
+        "index_code": "FSD20",
+        "year": 2025,
+        "quarter": 0,
+        "value": 169.8,
+        "source": "CPE DALKIA - Facturation et indices",
+        "notes": "Base contractuelle P2 (01/01/2025).",
+    },
+    {
+        "index_code": "BT400",
+        "year": 2025,
+        "quarter": 0,
+        "value": 128.4,
+        "source": "CPE DALKIA - Facturation et indices",
+        "notes": "Base contractuelle P3/P3.4 (01/01/2025).",
+    },
+    {
+        "index_code": "P1_CPB0_T1",
+        "year": 2026,
+        "quarter": 0,
+        "value": 38.62,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante CPB T1.",
+    },
+    {
+        "index_code": "P1_CPB0_T2",
+        "year": 2026,
+        "quarter": 0,
+        "value": 38.62,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante CPB T2.",
+    },
+    {
+        "index_code": "P1_CPB0_T3",
+        "year": 2026,
+        "quarter": 0,
+        "value": 38.62,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante CPB T3.",
+    },
+    {
+        "index_code": "P1_TVD0_T1",
+        "year": 2026,
+        "quarter": 0,
+        "value": 44.94,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante TVD T1.",
+    },
+    {
+        "index_code": "P1_TVD0_T2",
+        "year": 2026,
+        "quarter": 0,
+        "value": 12.08,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante TVD T2.",
+    },
+    {
+        "index_code": "P1_TVD0_T3",
+        "year": 2026,
+        "quarter": 0,
+        "value": 8.69,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante TVD T3.",
+    },
+    {
+        "index_code": "P1_CEE0",
+        "year": 2026,
+        "quarter": 0,
+        "value": 7.63,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante CEE.",
+    },
+    {
+        "index_code": "P1_TICGN0",
+        "year": 2026,
+        "quarter": 0,
+        "value": 15.43,
+        "source": "OS3 - Prix fixe gaz 5 ans",
+        "notes": "Reference P1 gaz composante TICGN.",
+    },
+)
 INVOICE_TYPE_LABELS = {
     "AC": "Acompte",
     "AJ": "Ajustement / avoir",
@@ -656,6 +747,7 @@ def list_revision_indices(
     city_id: int | None = None,
     year: int | None = None,
 ) -> list[CpeRevisionIndex]:
+    _ensure_revision_reference_defaults(db, city_id)
     query = select(CpeRevisionIndex)
     if city_id is not None:
         query = query.where(CpeRevisionIndex.city_id == city_id)
@@ -689,6 +781,53 @@ def upsert_revision_index(db: Session, payload: CpeRevisionIndexCreate) -> CpeRe
     return item
 
 
+def _ensure_revision_reference_defaults(db: Session, city_id: int | None) -> None:
+    created = False
+    for default in REFERENCE_INDEX_DEFAULTS:
+        existing = db.scalars(
+            select(CpeRevisionIndex).where(
+                CpeRevisionIndex.city_id == city_id,
+                CpeRevisionIndex.index_code == default["index_code"],
+                CpeRevisionIndex.year == default["year"],
+                CpeRevisionIndex.quarter == default["quarter"],
+            )
+        ).first()
+        if existing is not None:
+            continue
+        db.add(
+            CpeRevisionIndex(
+                city_id=city_id,
+                index_code=default["index_code"],
+                year=default["year"],
+                quarter=default["quarter"],
+                value=float(default["value"]),
+                source=default["source"],
+                notes=default["notes"],
+            )
+        )
+        created = True
+    if created:
+        db.commit()
+
+
+def _reference_index_map(db: Session, city_id: int | None) -> dict[str, float]:
+    _ensure_revision_reference_defaults(db, city_id)
+    rows = list(
+        db.scalars(
+            select(CpeRevisionIndex).where(
+                CpeRevisionIndex.city_id == city_id,
+                CpeRevisionIndex.quarter == 0,
+            )
+        ).all()
+    )
+    reference_by_code: dict[str, tuple[int, float]] = {}
+    for row in rows:
+        current = reference_by_code.get(row.index_code)
+        if current is None or row.year > current[0]:
+            reference_by_code[row.index_code] = (row.year, row.value)
+    return {code: value for code, (_year, value) in reference_by_code.items()}
+
+
 def _line_index_period(line: CpeFinanceLine) -> tuple[int | None, int | None]:
     period_date = line.period_end or line.period_start
     if period_date is None:
@@ -700,12 +839,12 @@ def _index_value(indices: dict[tuple[str, int, int], float], code: str, year: in
     return indices.get((code, year, quarter))
 
 
-def _p3_factor(icht_ime: float, bt40: float) -> float:
-    return 0.15 + 0.30 * (icht_ime / ICHT_IME_BASE) + 0.55 * (bt40 / BT40_BASE)
+def _p3_factor(icht_ime: float, bt40: float, *, icht_ime_base: float, bt40_base: float) -> float:
+    return 0.15 + 0.30 * (icht_ime / icht_ime_base) + 0.55 * (bt40 / bt40_base)
 
 
-def _p2_factor(icht_ime: float, fsd2: float) -> float:
-    return 0.15 + 0.70 * (icht_ime / ICHT_IME_BASE) + 0.15 * (fsd2 / FSD2_BASE)
+def _p2_factor(icht_ime: float, fsd2: float, *, icht_ime_base: float, fsd2_base: float) -> float:
+    return 0.15 + 0.70 * (icht_ime / icht_ime_base) + 0.15 * (fsd2 / fsd2_base)
 
 
 def _line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
@@ -797,6 +936,9 @@ def _expected_p2_4_taux(
 def _control_revision_p3(
     line: CpeFinanceLine,
     indices: dict[tuple[str, int, int], float],
+    *,
+    icht_ime_base: float,
+    bt40_base: float,
 ) -> CpeFinanceControl:
     year, quarter = _line_index_period(line)
     base_price = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
@@ -821,7 +963,7 @@ def _control_revision_p3(
                 missing.append("BT40")
             message = f"Indice(s) manquant(s) pour {year} T{quarter} : {', '.join(missing)}."
         else:
-            factor = _p3_factor(icht, bt40)
+            factor = _p3_factor(icht, bt40, icht_ime_base=icht_ime_base, bt40_base=bt40_base)
             expected = round(base_price * factor, 4)
             delta = round(actual - expected, 4)
             delta_pct = round(delta / expected, 6) if expected else None
@@ -864,6 +1006,9 @@ def _control_revision_p3(
 def _control_revision_p2(
     line: CpeFinanceLine,
     indices: dict[tuple[str, int, int], float],
+    *,
+    icht_ime_base: float,
+    fsd2_base: float,
 ) -> CpeFinanceControl:
     year, quarter = _line_index_period(line)
     base_price = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
@@ -888,7 +1033,7 @@ def _control_revision_p2(
                 missing.append("FSD2")
             message = f"Indice(s) manquant(s) pour {year} T{quarter} : {', '.join(missing)}."
         else:
-            factor = _p2_factor(icht, fsd2)
+            factor = _p2_factor(icht, fsd2, icht_ime_base=icht_ime_base, fsd2_base=fsd2_base)
             expected = round(base_price * factor, 4)
             delta = round(actual - expected, 4)
             delta_pct = round(delta / expected, 6) if expected else None
@@ -1353,6 +1498,10 @@ def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
 ) -> list[CpeFinanceControl]:
+    reference_values = _reference_index_map(db, invoice.city_id)
+    icht_ime_base = reference_values.get("ICHT_IME0", ICHT_IME_BASE)
+    fsd2_base = reference_values.get("FSD20", FSD2_BASE)
+    bt40_base = reference_values.get("BT400", BT40_BASE)
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
     revision_lines = [line for line in lines if (line.market or "").upper() in {"P2", "P3"}]
     p2_4_lines = [line for line in lines if _is_p2_4_line(line)]
@@ -1372,7 +1521,9 @@ def recompute_finance_invoice_controls(
         ).all()
     indices = {(item.index_code, item.year, item.quarter): item.value for item in index_rows}
     controls = [
-        _control_revision_p2(line, indices) if (line.market or "").upper() == "P2" else _control_revision_p3(line, indices)
+        _control_revision_p2(line, indices, icht_ime_base=icht_ime_base, fsd2_base=fsd2_base)
+        if (line.market or "").upper() == "P2"
+        else _control_revision_p3(line, indices, icht_ime_base=icht_ime_base, bt40_base=bt40_base)
         for line in revision_lines
     ]
     controls.extend(_control_p2_4_objectives(db, line) for line in p2_4_lines)
@@ -1519,6 +1670,185 @@ def _controls_status_label(controls: list[CpeFinanceControl]) -> str | None:
     return max((control.status for control in controls), key=lambda status: priority.get(status, 0))
 
 
+def _control_type_label(control_type: str | None) -> str:
+    mapping = {
+        "revision_p2": "Revision P2",
+        "revision_p3": "Revision P3/P3.4",
+        "p2_4_objectives": "Objectif P2.4",
+        "accounting_nature": "Codification nature comptable",
+        "accounting_site": "Rattachement site finance",
+        "invoice_type": "Qualification type de facture",
+        "invoice_total_ht": "Coherence total HT",
+        "invoice_period": "Coherence periode facture",
+        "p1_gaz_acompte_dpgf": "Acompte P1 vs reference DPGF",
+    }
+    return mapping.get(control_type or "", control_type or "Controle")
+
+
+def _fmt_number(value: float | None, digits: int = 4) -> str | None:
+    if value is None:
+        return None
+    return f"{value:.{digits}f}"
+
+
+def _fmt_percent(value: float | None, digits: int = 2) -> str | None:
+    if value is None:
+        return None
+    return f"{value * 100:.{digits}f}%"
+
+
+def _control_probable_cause(control: CpeFinanceControl) -> str:
+    if control.status == "ok":
+        return "Aucun ecart detecte sur ce controle."
+
+    if control.control_type in {"revision_p2", "revision_p3"}:
+        if control.index_year is None or control.index_quarter is None:
+            return "Periode de ligne absente ou incomplete : impossible de choisir le trimestre d'indices."
+        if control.base_price is None or control.actual_revised_price is None:
+            return "Prix de base ou prix revise absent dans l'export facture."
+        missing_indices: list[str] = []
+        if control.icht_ime_value is None:
+            missing_indices.append("ICHT-IME")
+        if control.control_type == "revision_p2" and control.fsd2_value is None:
+            missing_indices.append("FSD2")
+        if control.control_type == "revision_p3" and control.bt40_value is None:
+            missing_indices.append("BT40")
+        if missing_indices:
+            return f"Indice(s) manquant(s) pour la periode: {', '.join(missing_indices)}."
+        if control.expected_revised_price is None:
+            return "Prix revise attendu non calcule (donnees incompletes)."
+        return "Ecart entre prix revise facture et prix revise calcule selon la formule contractuelle."
+
+    if control.control_type == "p1_gaz_acompte_dpgf":
+        if control.expected_revised_price is None:
+            return "Reference DPGF incomplete ou non disponible pour calculer l'acompte attendu."
+        if control.actual_revised_price is None:
+            return "Montant facture introuvable sur les lignes incluses dans le controle."
+        return "Ecart entre l'acompte facture et le montant attendu selon reference contractuelle."
+
+    if control.control_type == "accounting_nature":
+        return "La ligne n'a pas de nature comptable rattachee (matrice de codification a completer)."
+
+    if control.control_type == "accounting_site":
+        return "Le site de destination finance n'est pas rattache (mapping site a completer)."
+
+    if control.control_type == "invoice_type":
+        return "Type de facture absent ou inconnu (acompte/avoir/regularisation/definitive)."
+
+    if control.control_type == "invoice_total_ht":
+        return "Le total HT facture n'est pas egal a la somme des lignes importees."
+
+    if control.control_type == "invoice_period":
+        return "Periode facture/lignes incoherente ou incomplete."
+
+    return control.message or "Controle non conforme."
+
+
+def _control_recommended_action(control: CpeFinanceControl) -> str:
+    if control.status == "ok":
+        return "Aucune action requise."
+
+    if control.control_type in {"revision_p2", "revision_p3"}:
+        if control.icht_ime_value is None or (
+            control.control_type == "revision_p2" and control.fsd2_value is None
+        ) or (control.control_type == "revision_p3" and control.bt40_value is None):
+            return "Completer les indices du trimestre puis relancer le controle."
+        if control.base_price is None or control.actual_revised_price is None:
+            return "Verifier les colonnes prix de base/prix revise dans le fichier source."
+        return "Verifier formule, base contractuelle et prix revise facture avec DALKIA."
+
+    if control.control_type == "p1_gaz_acompte_dpgf":
+        return "Verifier la reference contractuelle P1 (montant, postes inclus, tolerances)."
+
+    if control.control_type == "accounting_nature":
+        return "Mettre a jour la matrice contrat/poste -> nature comptable."
+
+    if control.control_type == "accounting_site":
+        return "Mettre a jour la matrice site pour rattacher la ligne au bon code finance."
+
+    if control.control_type == "invoice_type":
+        return "Verifier le code type facture transmis par DALKIA."
+
+    if control.control_type == "invoice_total_ht":
+        return "Comparer total facture et total des lignes importees."
+
+    if control.control_type == "invoice_period":
+        return "Verifier les dates debut/fin sur facture et lignes."
+
+    return "Verifier la ligne et les donnees source."
+
+
+def _control_calculation_trace(control: CpeFinanceControl) -> str | None:
+    parts: list[str] = []
+    if control.formula:
+        parts.append(f"Formule: {control.formula}")
+    if control.index_year is not None and control.index_quarter is not None:
+        parts.append(f"Periode indices: {control.index_year} T{control.index_quarter}")
+    index_parts: list[str] = []
+    if control.icht_ime_value is not None:
+        index_parts.append(f"ICHT-IME={_fmt_number(control.icht_ime_value, 3)}")
+    if control.bt40_value is not None:
+        index_parts.append(f"BT40={_fmt_number(control.bt40_value, 3)}")
+    if control.fsd2_value is not None:
+        index_parts.append(f"FSD2={_fmt_number(control.fsd2_value, 3)}")
+    if index_parts:
+        parts.append("Indices: " + ", ".join(index_parts))
+    if control.expected_factor is not None:
+        parts.append(f"Facteur attendu={_fmt_number(control.expected_factor, 6)}")
+    if control.base_price is not None:
+        parts.append(f"Prix base={_fmt_number(control.base_price, 4)}")
+    if control.expected_revised_price is not None:
+        parts.append(f"Prix revise calcule={_fmt_number(control.expected_revised_price, 4)}")
+    if control.actual_revised_price is not None:
+        parts.append(f"Prix revise facture={_fmt_number(control.actual_revised_price, 4)}")
+    if control.delta_abs is not None:
+        parts.append(f"Ecart={_fmt_number(control.delta_abs, 4)}")
+    if control.delta_pct is not None:
+        parts.append(f"Ecart %={_fmt_percent(control.delta_pct, 2)}")
+    return " | ".join(parts) or None
+
+
+def _line_primary_control(controls: list[CpeFinanceControl]) -> CpeFinanceControl | None:
+    if not controls:
+        return None
+    priority = {"error": 3, "blocked": 2, "ok": 1}
+    return sorted(
+        controls,
+        key=lambda control: (
+            priority.get(control.status, 0),
+            1 if control.delta_abs not in (None, 0) else 0,
+            control.id,
+        ),
+        reverse=True,
+    )[0]
+
+
+def _reference_base_value(reference_values: dict[str, float], code: str, fallback: float | None = None) -> float | None:
+    value = reference_values.get(code)
+    if value is not None:
+        return value
+    return fallback
+
+
+def _p1_reference_snapshot(reference_values: dict[str, float]) -> str:
+    tokens: list[str] = []
+    for code in (
+        "P1_CPB0_T1",
+        "P1_CPB0_T2",
+        "P1_CPB0_T3",
+        "P1_TVD0_T1",
+        "P1_TVD0_T2",
+        "P1_TVD0_T3",
+        "P1_CEE0",
+        "P1_TICGN0",
+        "P1_PEG0",
+        "P1_PUGAZ0",
+    ):
+        if code in reference_values:
+            tokens.append(f"{code}={_fmt_number(reference_values[code], 4)}")
+    return " | ".join(tokens)
+
+
 def _style_header(cells: Any, fill: str = "1F4E78") -> None:
     for cell in cells:
         cell.font = Font(bold=True, color="FFFFFF")
@@ -1645,6 +1975,11 @@ def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> b
 
 def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:
     """Construit une fiche de liaison finances complete pour audit et transmission."""
+    reference_values = _reference_index_map(db, invoice.city_id)
+    icht_ime_base = _reference_base_value(reference_values, "ICHT_IME0", ICHT_IME_BASE)
+    fsd2_base = _reference_base_value(reference_values, "FSD20", FSD2_BASE)
+    bt40_base = _reference_base_value(reference_values, "BT400", BT40_BASE)
+    p1_reference_snapshot = _p1_reference_snapshot(reference_values)
     lines = list_finance_lines(db, invoice.id, invoice.city_id)
     controls_by_line: dict[int, list[CpeFinanceControl]] = defaultdict(list)
     for control in db.scalars(select(CpeFinanceControl).where(CpeFinanceControl.invoice_id == invoice.id)).all():
@@ -1680,12 +2015,19 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         ("Lignes facture", len(lines)),
         ("Lignes avec nature comptable", sum(1 for line in lines if line.accounting_nature)),
         ("Lignes avec site rattache", sum(1 for line in lines if line.accounting_site_id)),
+        ("Base ICHT-IME0", icht_ime_base),
+        ("Base FSD20", fsd2_base),
+        ("Base BT400", bt40_base),
+        ("References P1 (OS3)", p1_reference_snapshot or None),
         ("Notes", invoice.notes),
     ]
     for row_index, (label, value) in enumerate(summary_rows, start=3):
         summary.cell(row=row_index, column=1, value=label).font = Font(bold=True)
         summary.cell(row=row_index, column=2, value=value)
     summary["B14"].number_format = '#,##0.00 "EUR"'
+    summary["B17"].number_format = "#,##0.0000"
+    summary["B18"].number_format = "#,##0.0000"
+    summary["B19"].number_format = "#,##0.0000"
     summary["A21"] = "Synthese des controles"
     summary["A21"].font = Font(bold=True, size=13)
     for offset, (label, value) in enumerate(
@@ -1730,6 +2072,9 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         "Controle",
         "Formule",
         "Message controle",
+        "Diagnostic probable",
+        "Action recommandee",
+        "Lecture calcul",
         "Montant HT",
         "Conso",
         "Unite",
@@ -1744,6 +2089,12 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
     for row_index, line in enumerate(lines, start=2):
         site = sites.get(line.accounting_site_id or 0)
         line_controls = controls_by_line.get(line.id, [])
+        primary_control = _line_primary_control(line_controls)
+        calculation_trace = " || ".join(
+            trace
+            for trace in [_control_calculation_trace(control) for control in line_controls[:3]]
+            if trace
+        ) or None
         values = [
             line.row_number,
             _invoice_type_label(invoice.invoice_type),
@@ -1773,6 +2124,9 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             _controls_status_label(line_controls),
             " | ".join(control.formula for control in line_controls if control.formula) or None,
             " | ".join(control.message for control in line_controls) or None,
+            _control_probable_cause(primary_control) if primary_control else None,
+            _control_recommended_action(primary_control) if primary_control else None,
+            calculation_trace,
             line.amount_ht,
             line.consumption,
             line.unit,
@@ -1785,23 +2139,69 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         detail.cell(row=row_index, column=23).number_format = "0.00%"
         detail.cell(row=row_index, column=24).number_format = '#,##0.0000'
         detail.cell(row=row_index, column=25).number_format = '#,##0.0000'
-        detail.cell(row=row_index, column=29).number_format = '#,##0.00 "EUR"'
+        detail.cell(row=row_index, column=32).number_format = '#,##0.00 "EUR"'
     _set_widths(
         detail,
-        [9, 22, 10, 14, 12, 16, 20, 18, 16, 32, 14, 20, 14, 28, 14, 28, 14, 28, 14, 28, 12, 28, 10, 12, 12, 12, 34, 55, 14, 12, 10, 48, 14, 14],
+        [
+            9,
+            22,
+            10,
+            14,
+            12,
+            16,
+            20,
+            18,
+            16,
+            32,
+            14,
+            20,
+            14,
+            28,
+            14,
+            28,
+            14,
+            28,
+            14,
+            28,
+            12,
+            28,
+            10,
+            12,
+            12,
+            12,
+            34,
+            55,
+            36,
+            36,
+            58,
+            14,
+            12,
+            10,
+            48,
+            14,
+            14,
+        ],
     )
     detail.freeze_panes = "A2"
-    detail.auto_filter.ref = f"A1:AH{max(2, len(lines) + 1)}"
+    detail.auto_filter.ref = f"A1:AK{max(2, len(lines) + 1)}"
 
     if controls:
         controls_sheet = wb.create_sheet("Controles")
         control_headers = [
             "Ligne",
             "Type controle",
+            "Libelle controle",
             "Statut",
             "Severite",
             "Message",
+            "Cause probable",
+            "Action recommandee",
             "Formule",
+            "Lecture calcul",
+            "ICHT-IME0 (base)",
+            "FSD20 (base)",
+            "BT400 (base)",
+            "References P1 (OS3)",
             "Annee indice",
             "Trimestre indice",
             "ICHT-IME",
@@ -1823,10 +2223,18 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             values = [
                 line.row_number if line else None,
                 control.control_type,
+                _control_type_label(control.control_type),
                 control.status,
                 control.severity,
                 control.message,
+                _control_probable_cause(control),
+                _control_recommended_action(control),
                 control.formula,
+                _control_calculation_trace(control),
+                icht_ime_base if control.control_type in {"revision_p2", "revision_p3"} else None,
+                fsd2_base if control.control_type == "revision_p2" else None,
+                bt40_base if control.control_type == "revision_p3" else None,
+                p1_reference_snapshot or None,
                 control.index_year,
                 control.index_quarter,
                 control.icht_ime_value,
@@ -1841,9 +2249,40 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             ]
             for col, value in enumerate(values, start=1):
                 controls_sheet.cell(row=row_index, column=col, value=value)
-        _set_widths(controls_sheet, [9, 18, 12, 12, 55, 40, 12, 12, 12, 12, 12, 14, 12, 16, 16, 12, 12])
+            controls_sheet.cell(row=row_index, column=10).number_format = "#,##0.0000"
+            controls_sheet.cell(row=row_index, column=11).number_format = "#,##0.0000"
+            controls_sheet.cell(row=row_index, column=12).number_format = "#,##0.0000"
+        _set_widths(
+            controls_sheet,
+            [
+                9,
+                18,
+                24,
+                12,
+                12,
+                55,
+                44,
+                40,
+                64,
+                16,
+                16,
+                16,
+                48,
+                12,
+                12,
+                12,
+                12,
+                12,
+                14,
+                12,
+                16,
+                16,
+                12,
+                12,
+            ],
+        )
         controls_sheet.freeze_panes = "A2"
-        controls_sheet.auto_filter.ref = f"A1:Q{max(2, len(controls) + 1)}"
+        controls_sheet.auto_filter.ref = f"A1:X{max(2, len(controls) + 1)}"
 
     raw_sheet = wb.create_sheet("Donnees source")
     raw_keys = sorted(
