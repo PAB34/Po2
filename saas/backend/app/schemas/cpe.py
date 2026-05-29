@@ -305,6 +305,56 @@ class CpeAccountingImportResult(BaseModel):
     errors: list[str]
 
 
+class CpeContractReferenceBase(BaseModel):
+    contract_code: str
+    contract_label: str | None = None
+    reference_kind: str = "p1_gaz_acompte"
+    year: int
+    market: str
+    billed_item: str
+    annual_amount_ht: float | None = None
+    expected_amount_ht: float | None = None
+    installment_count: int | None = None
+    expected_period_months: str | None = None
+    included_billed_items: str | None = None
+    formula: str | None = None
+    tolerance_pct: float | None = None
+    tolerance_eur: float | None = None
+    active: bool = True
+    notes: str | None = None
+
+
+class CpeContractReferenceCreate(CpeContractReferenceBase):
+    city_id: int | None = None
+
+
+class CpeContractReferenceUpdate(BaseModel):
+    contract_code: str | None = None
+    contract_label: str | None = None
+    reference_kind: str | None = None
+    year: int | None = None
+    market: str | None = None
+    billed_item: str | None = None
+    annual_amount_ht: float | None = None
+    expected_amount_ht: float | None = None
+    installment_count: int | None = None
+    expected_period_months: str | None = None
+    included_billed_items: str | None = None
+    formula: str | None = None
+    tolerance_pct: float | None = None
+    tolerance_eur: float | None = None
+    active: bool | None = None
+    notes: str | None = None
+
+
+class CpeContractReferenceOut(CpeContractReferenceBase):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
 # ── Registre factures finances DALKIA ────────────────────────────────────────
 
 class CpeFinanceImportBatchOut(BaseModel):

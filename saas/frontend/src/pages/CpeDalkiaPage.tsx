@@ -5,6 +5,7 @@ import {
   CpeAccountingSiteMapping,
   CpeAccountingNatureRule,
   CpeBilanAnnuel,
+  CpeContractReference,
   CpeFinanceControl,
   CpeFinanceImportBatch,
   CpeFinanceImportResult,
@@ -16,11 +17,14 @@ import {
   calculerCpeBilan,
   createCpeAccountingNatureRule,
   createCpeAccountingSiteMapping,
+  createCpeContractReference,
+  deleteCpeContractReference,
   deleteCpeFinanceHistory,
   deleteCpeAccountingNatureRule,
   fetchCpeBilan,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
+  fetchCpeContractReferences,
   fetchCpeDju,
   fetchCpeFinanceBatches,
   fetchCpeRevisionIndices,
@@ -34,6 +38,7 @@ import {
   downloadCpeFinanceInvoiceLiaison,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
+  updateCpeContractReference,
   updateCpeFinanceInvoice,
   upsertCpeRevisionIndex,
   upsertCpePrixGaz,
@@ -70,12 +75,13 @@ const CATEGORIE_LABEL: Record<string, string> = {
 };
 
 type CpeView = "cockpit" | "finance" | "performance";
-type CpeFinanceSection = "imports" | "sites" | "rules" | "indices" | "invoices";
+type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices";
 
 const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
   { id: "imports", label: "Imports", detail: "Codification et exports finance" },
   { id: "sites", label: "Sites", detail: "VDS, CCAS et rattachements" },
   { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
+  { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
   { id: "indices", label: "Indices", detail: "ICHT-IME, BT40, FSD2" },
   { id: "invoices", label: "Factures", detail: "Archives et fiches liaison" },
 ];
@@ -155,6 +161,12 @@ export default function CpeDalkiaPage() {
   const accountingRulesQ = useQuery({
     queryKey: ["cpe-accounting-nature-rules"],
     queryFn: () => fetchCpeAccountingNatureRules(token!),
+    enabled: !!token && view === "finance",
+  });
+
+  const contractReferencesQ = useQuery({
+    queryKey: ["cpe-contract-references"],
+    queryFn: () => fetchCpeContractReferences(token!),
     enabled: !!token && view === "finance",
   });
 
@@ -270,6 +282,28 @@ export default function CpeDalkiaPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-accounting-nature-rules"] }),
   });
 
+  const saveContractReferenceM = useMutation({
+    mutationFn: (
+      payload: Partial<CpeContractReference> & {
+        id?: number;
+        contract_code: string;
+        reference_kind: string;
+        year: number;
+        market: string;
+        billed_item: string;
+      },
+    ) =>
+      payload.id
+        ? updateCpeContractReference(token!, payload.id, payload)
+        : createCpeContractReference(token!, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-contract-references"] }),
+  });
+
+  const deleteContractReferenceM = useMutation({
+    mutationFn: (id: number) => deleteCpeContractReference(token!, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-contract-references"] }),
+  });
+
   const updateFinanceInvoiceM = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateCpeFinanceInvoice(token!, id, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
@@ -370,11 +404,12 @@ export default function CpeDalkiaPage() {
           financeImportFileRef={financeImportFileRef}
           siteMappings={siteMappingsQ.data ?? []}
           natureRules={accountingRulesQ.data ?? []}
+          contractReferences={contractReferencesQ.data ?? []}
           batches={financeBatchesQ.data ?? []}
           invoices={financeInvoicesQ.data ?? []}
           indices={revisionIndicesQ.data ?? []}
           lastControls={recalculateControlsM.data ?? null}
-          loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || financeBatchesQ.isLoading}
+          loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || contractReferencesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
           codificationImportResult={codificationImportM.data ?? null}
           codificationImportError={codificationImportM.error instanceof Error ? codificationImportM.error.message : null}
@@ -388,6 +423,8 @@ export default function CpeDalkiaPage() {
           deleteSiteMappingPending={deleteSiteMappingM.isPending}
           saveNatureRulePending={saveNatureRuleM.isPending}
           deleteNatureRulePending={deleteNatureRuleM.isPending}
+          saveContractReferencePending={saveContractReferenceM.isPending}
+          deleteContractReferencePending={deleteContractReferenceM.isPending}
           invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending}
           indexSavePending={upsertRevisionIndexM.isPending}
           controlsPending={recalculateControlsM.isPending}
@@ -398,6 +435,8 @@ export default function CpeDalkiaPage() {
           onDeleteSiteMapping={(id) => deleteSiteMappingM.mutate(id)}
           onSaveNatureRule={(payload) => saveNatureRuleM.mutate(payload)}
           onDeleteNatureRule={(id) => deleteNatureRuleM.mutate(id)}
+          onSaveContractReference={(payload) => saveContractReferenceM.mutate(payload)}
+          onDeleteContractReference={(id) => deleteContractReferenceM.mutate(id)}
           onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
           onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
@@ -944,12 +983,32 @@ const EMPTY_NATURE_RULE = {
   active: true,
 };
 
+const EMPTY_CONTRACT_REFERENCE = {
+  contract_code: "C00190116O",
+  contract_label: "SETE (34) - BATIMENTS COMMUNAUX LOT 1",
+  reference_kind: "p1_gaz_acompte",
+  year: CURRENT_YEAR,
+  market: "P1",
+  billed_item: "P1_GAZ_LOT1",
+  annual_amount_ht: "341293.06",
+  expected_amount_ht: "",
+  installment_count: "4",
+  expected_period_months: "3,6,9",
+  included_billed_items: '["P1","ABT","CTA","CPB","LOCATION","STOCKAGE","TERME FIXE"]',
+  formula: "Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+  tolerance_pct: "0.01",
+  tolerance_eur: "100",
+  notes: "",
+  active: true,
+};
+
 function CpeFinanceReference({
   annee,
   codificationFileRef,
   financeImportFileRef,
   siteMappings,
   natureRules,
+  contractReferences,
   batches,
   invoices,
   indices,
@@ -968,6 +1027,8 @@ function CpeFinanceReference({
   deleteSiteMappingPending,
   saveNatureRulePending,
   deleteNatureRulePending,
+  saveContractReferencePending,
+  deleteContractReferencePending,
   invoiceActionPending,
   indexSavePending,
   controlsPending,
@@ -978,6 +1039,8 @@ function CpeFinanceReference({
   onDeleteSiteMapping,
   onSaveNatureRule,
   onDeleteNatureRule,
+  onSaveContractReference,
+  onDeleteContractReference,
   onInvoiceStatus,
   onExportLiaison,
   onSaveIndex,
@@ -988,6 +1051,7 @@ function CpeFinanceReference({
   financeImportFileRef: React.RefObject<HTMLInputElement>;
   siteMappings: CpeAccountingSiteMapping[];
   natureRules: CpeAccountingNatureRule[];
+  contractReferences: CpeContractReference[];
   batches: CpeFinanceImportBatch[];
   invoices: CpeFinanceInvoice[];
   indices: CpeRevisionIndex[];
@@ -1006,6 +1070,8 @@ function CpeFinanceReference({
   deleteSiteMappingPending: boolean;
   saveNatureRulePending: boolean;
   deleteNatureRulePending: boolean;
+  saveContractReferencePending: boolean;
+  deleteContractReferencePending: boolean;
   invoiceActionPending: boolean;
   indexSavePending: boolean;
   controlsPending: boolean;
@@ -1018,6 +1084,10 @@ function CpeFinanceReference({
     payload: Partial<CpeAccountingNatureRule> & { id?: number; market: string; billed_item: string; accounting_nature: string },
   ) => void;
   onDeleteNatureRule: (id: number) => void;
+  onSaveContractReference: (
+    payload: Partial<CpeContractReference> & { id?: number; contract_code: string; reference_kind: string; year: number; market: string; billed_item: string },
+  ) => void;
+  onDeleteContractReference: (id: number) => void;
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null }) => void;
@@ -1027,9 +1097,12 @@ function CpeFinanceReference({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [ruleDraft, setRuleDraft] = useState(EMPTY_NATURE_RULE);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [referenceDraft, setReferenceDraft] = useState(EMPTY_CONTRACT_REFERENCE);
+  const [editingReferenceId, setEditingReferenceId] = useState<number | null>(null);
   const [section, setSection] = useState<CpeFinanceSection>("imports");
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
+  const [referenceFilter, setReferenceFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
   const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
   const [indexDraft, setIndexDraft] = useState({ index_code: "ICHT_IME", quarter: 1, value: "", source: "Saisie Po2" });
@@ -1088,6 +1161,24 @@ function CpeFinanceReference({
       return haystack.includes(ruleFilter.trim().toLowerCase());
     })
     .slice(0, 120);
+  const visibleReferences = contractReferences
+    .filter((reference) => {
+      const haystack = [
+        reference.contract_code,
+        reference.contract_label,
+        reference.reference_kind,
+        reference.year,
+        reference.market,
+        reference.billed_item,
+        reference.included_billed_items,
+        reference.notes,
+      ]
+        .filter((value) => value != null)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(referenceFilter.trim().toLowerCase());
+    })
+    .slice(0, 120);
   const controlsSummary = lastControls
     ? {
         ok: lastControls.filter((item) => item.status === "ok").length,
@@ -1140,6 +1231,33 @@ function CpeFinanceReference({
     setRuleDraft(EMPTY_NATURE_RULE);
   };
 
+  const startReferenceEdit = (reference: CpeContractReference) => {
+    setEditingReferenceId(reference.id);
+    setReferenceDraft({
+      contract_code: reference.contract_code,
+      contract_label: reference.contract_label ?? "",
+      reference_kind: reference.reference_kind,
+      year: reference.year,
+      market: reference.market,
+      billed_item: reference.billed_item,
+      annual_amount_ht: reference.annual_amount_ht?.toString() ?? "",
+      expected_amount_ht: reference.expected_amount_ht?.toString() ?? "",
+      installment_count: reference.installment_count?.toString() ?? "",
+      expected_period_months: reference.expected_period_months ?? "",
+      included_billed_items: reference.included_billed_items ?? "",
+      formula: reference.formula ?? "",
+      tolerance_pct: reference.tolerance_pct?.toString() ?? "",
+      tolerance_eur: reference.tolerance_eur?.toString() ?? "",
+      notes: reference.notes ?? "",
+      active: reference.active,
+    });
+  };
+
+  const resetReferenceDraft = () => {
+    setEditingReferenceId(null);
+    setReferenceDraft(EMPTY_CONTRACT_REFERENCE);
+  };
+
   const submitDraft = () => {
     if (!draft.code_site.trim() || !draft.site_name.trim()) return;
     onSaveSiteMapping({
@@ -1178,12 +1296,42 @@ function CpeFinanceReference({
     resetRuleDraft();
   };
 
+  const submitReferenceDraft = () => {
+    if (!referenceDraft.contract_code.trim() || !referenceDraft.reference_kind.trim() || !referenceDraft.year || !referenceDraft.market.trim() || !referenceDraft.billed_item.trim()) return;
+    const numberOrNull = (value: string | number | null | undefined) => {
+      if (value === null || value === undefined || value === "") return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    onSaveContractReference({
+      ...(editingReferenceId ? { id: editingReferenceId } : {}),
+      contract_code: referenceDraft.contract_code.trim().toUpperCase(),
+      contract_label: referenceDraft.contract_label.trim() || null,
+      reference_kind: referenceDraft.reference_kind.trim().toLowerCase(),
+      year: Number(referenceDraft.year),
+      market: referenceDraft.market.trim().toUpperCase(),
+      billed_item: referenceDraft.billed_item.trim().toUpperCase(),
+      annual_amount_ht: numberOrNull(referenceDraft.annual_amount_ht),
+      expected_amount_ht: numberOrNull(referenceDraft.expected_amount_ht),
+      installment_count: numberOrNull(referenceDraft.installment_count),
+      expected_period_months: referenceDraft.expected_period_months.trim() || null,
+      included_billed_items: referenceDraft.included_billed_items.trim() || null,
+      formula: referenceDraft.formula.trim() || null,
+      tolerance_pct: numberOrNull(referenceDraft.tolerance_pct),
+      tolerance_eur: numberOrNull(referenceDraft.tolerance_eur),
+      notes: referenceDraft.notes.trim() || null,
+      active: referenceDraft.active,
+    });
+    resetReferenceDraft();
+  };
+
   return (
     <>
       <section style={{ marginBottom: 24 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
           <KpiCard label="Sites codifies" value={String(siteMappings.length)} sub="Lignes du referentiel finance" color="#2563eb" />
           <KpiCard label="Regles nature" value={String(natureRules.length)} sub="Poste facture vers nature" color="#0f766e" />
+          <KpiCard label="References contrat" value={String(contractReferences.length)} sub="DPGF, formules et tolerances" color="#7c3aed" />
           <KpiCard label="Indices revision" value={String(indices.length)} sub={`Exercice ${annee}, ICHT-IME / BT40`} color="#b45309" />
           <KpiCard label="Lots importes" value={String(batches.length)} sub={`${invoices.length} facture(s) archivees`} color="#9333ea" />
           <KpiCard
@@ -1344,6 +1492,132 @@ function CpeFinanceReference({
               </span>
             ))
           )}
+        </div>
+      </section>
+      )}
+
+      {section === "references" && (
+      <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>References contractuelles de controle</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>
+              Montants DPGF, formules, postes inclus et tolerances utilises par les controles de factures.
+            </p>
+          </div>
+          <input
+            value={referenceFilter}
+            onChange={(event) => setReferenceFilter(event.target.value)}
+            placeholder="Filtrer contrat, annee, poste..."
+            style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 260 }}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 0.8fr) minmax(620px, 1.6fr)", gap: 16 }}>
+          <div>
+            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>{editingReferenceId ? "Modifier une reference" : "Ajouter une reference"}</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <FinanceInput label="Code contrat" value={referenceDraft.contract_code} onChange={(value) => setReferenceDraft({ ...referenceDraft, contract_code: value })} />
+              <FinanceInput label="Annee" value={String(referenceDraft.year)} onChange={(value) => setReferenceDraft({ ...referenceDraft, year: Number(value) || CURRENT_YEAR })} />
+              <FinanceInput label="Libelle contrat" value={referenceDraft.contract_label} onChange={(value) => setReferenceDraft({ ...referenceDraft, contract_label: value })} wide />
+              <FinanceInput label="Type reference" value={referenceDraft.reference_kind} onChange={(value) => setReferenceDraft({ ...referenceDraft, reference_kind: value })} />
+              <FinanceInput label="Marche" value={referenceDraft.market} onChange={(value) => setReferenceDraft({ ...referenceDraft, market: value })} />
+              <FinanceInput label="Poste reference" value={referenceDraft.billed_item} onChange={(value) => setReferenceDraft({ ...referenceDraft, billed_item: value })} />
+              <FinanceInput label="Montant annuel HT" value={referenceDraft.annual_amount_ht} onChange={(value) => setReferenceDraft({ ...referenceDraft, annual_amount_ht: value })} />
+              <FinanceInput label="Montant attendu HT" value={referenceDraft.expected_amount_ht} onChange={(value) => setReferenceDraft({ ...referenceDraft, expected_amount_ht: value })} />
+              <FinanceInput label="Nb acomptes" value={referenceDraft.installment_count} onChange={(value) => setReferenceDraft({ ...referenceDraft, installment_count: value })} />
+              <FinanceInput label="Mois attendus" value={referenceDraft.expected_period_months} onChange={(value) => setReferenceDraft({ ...referenceDraft, expected_period_months: value })} />
+              <FinanceInput label="Tolerance %" value={referenceDraft.tolerance_pct} onChange={(value) => setReferenceDraft({ ...referenceDraft, tolerance_pct: value })} />
+              <FinanceInput label="Tolerance EUR" value={referenceDraft.tolerance_eur} onChange={(value) => setReferenceDraft({ ...referenceDraft, tolerance_eur: value })} />
+              <FinanceInput label="Postes inclus JSON ou CSV" value={referenceDraft.included_billed_items} onChange={(value) => setReferenceDraft({ ...referenceDraft, included_billed_items: value })} wide />
+              <FinanceInput label="Formule" value={referenceDraft.formula} onChange={(value) => setReferenceDraft({ ...referenceDraft, formula: value })} wide />
+              <FinanceInput label="Notes" value={referenceDraft.notes} onChange={(value) => setReferenceDraft({ ...referenceDraft, notes: value })} wide />
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#6b7280" }}>
+                <input
+                  type="checkbox"
+                  checked={referenceDraft.active}
+                  onChange={(event) => setReferenceDraft({ ...referenceDraft, active: event.target.checked })}
+                />
+                Active
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={saveContractReferencePending || !referenceDraft.contract_code || !referenceDraft.reference_kind || !referenceDraft.market || !referenceDraft.billed_item}
+                onClick={submitReferenceDraft}
+              >
+                {editingReferenceId ? "Enregistrer" : "Ajouter"}
+              </button>
+              {editingReferenceId && (
+                <button type="button" className="secondary-button" onClick={resetReferenceDraft}>
+                  Annuler
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                  <th style={thStyle}>Contrat</th>
+                  <th style={thStyle}>Controle</th>
+                  <th style={thStyle}>Montants</th>
+                  <th style={thStyle}>Postes inclus</th>
+                  <th style={thStyle}>Tolerance</th>
+                  <th style={thStyle}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleReferences.map((reference) => (
+                  <tr key={reference.id} style={{ borderBottom: "1px solid #f3f4f6", opacity: reference.active ? 1 : 0.55 }}>
+                    <td style={tdStyle}>
+                      <code>{reference.contract_code}</code>
+                      <div style={{ color: "#6b7280" }}>{reference.contract_label}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      {reference.reference_kind}
+                      <div style={{ color: "#6b7280" }}>{reference.year} / {reference.market} / {reference.billed_item}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      Annuel : {fmtEur(reference.annual_amount_ht)}
+                      <div style={{ color: "#6b7280" }}>
+                        Attendu : {fmtEur(reference.expected_amount_ht ?? (reference.annual_amount_ht != null && reference.installment_count ? reference.annual_amount_ht / reference.installment_count : null))}
+                      </div>
+                    </td>
+                    <td style={{ ...tdStyle, minWidth: 230 }}>{reference.included_billed_items ?? "-"}</td>
+                    <td style={tdStyle}>
+                      {reference.tolerance_pct != null ? `${(reference.tolerance_pct * 100).toLocaleString("fr-FR")} %` : "-"}
+                      <div style={{ color: "#6b7280" }}>{fmtEur(reference.tolerance_eur)}</div>
+                    </td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => startReferenceEdit(reference)}>
+                        Modifier
+                      </button>{" "}
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: 12, padding: "4px 8px", color: "#b91c1c" }}
+                        disabled={deleteContractReferencePending}
+                        onClick={() => onDeleteContractReference(reference.id)}
+                      >
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {visibleReferences.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                      Aucune reference contractuelle.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
       )}

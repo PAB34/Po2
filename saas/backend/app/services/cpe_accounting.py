@@ -5,6 +5,7 @@ import io
 import json
 import re
 import unicodedata
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,
+    CpeContractReference,
     CpeFinanceControl,
     CpeFinanceImportBatch,
     CpeFinanceInvoice,
@@ -32,20 +34,16 @@ from app.schemas.cpe import (
     CpeAccountingNatureRuleUpdate,
     CpeAccountingSiteMappingCreate,
     CpeAccountingSiteMappingUpdate,
+    CpeContractReferenceCreate,
+    CpeContractReferenceUpdate,
     CpeFinanceImportResult,
     CpeRevisionIndexCreate,
 )
 
 _SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
-CURRENT_CPE_CONTRACT_CODES = {"C00190116O", "C00190155J"}
-P1_GAZ_LOT1_CONTRACT_CODE = "C00190116O"
+NEW_CPE_CONTRACT_CODES = {"C00190116O", "C00190155J"}
+P1_GAZ_ACOMPTE_KIND = "p1_gaz_acompte"
 P1_GAZ_ACOMPTE_ITEMS = {"P1", "ABT", "CTA", "CPB", "LOCATION", "STOCKAGE", "TERME FIXE"}
-P1_GAZ_DPGF_REVISED_TOTALS = {
-    # DPGF Lot 1 2026, synthese "P1 gaz Rev Temp", periode 01/01/2026-31/12/2026.
-    2026: 341293.06,
-}
-P1_GAZ_ACOMPTE_TOLERANCE_PCT = 0.01
-P1_GAZ_ACOMPTE_TOLERANCE_EUR = 100.0
 ICHT_IME_BASE = 141.4
 FSD2_BASE = 169.8
 BT40_BASE = 128.4
@@ -175,6 +173,53 @@ def delete_accounting_nature_rule(db: Session, rule: CpeAccountingNatureRule) ->
     db.commit()
 
 
+def list_contract_references(db: Session, city_id: int | None = None) -> list[CpeContractReference]:
+    query = select(CpeContractReference)
+    if city_id is not None:
+        query = query.where(CpeContractReference.city_id == city_id)
+    query = query.order_by(
+        CpeContractReference.contract_code,
+        CpeContractReference.year.desc(),
+        CpeContractReference.reference_kind,
+        CpeContractReference.market,
+        CpeContractReference.billed_item,
+    )
+    return list(db.scalars(query).all())
+
+
+def create_contract_reference(db: Session, payload: CpeContractReferenceCreate) -> CpeContractReference:
+    reference = CpeContractReference(**payload.model_dump())
+    reference.contract_code = reference.contract_code.strip().upper()
+    reference.reference_kind = reference.reference_kind.strip().lower()
+    reference.market = reference.market.strip().upper()
+    reference.billed_item = reference.billed_item.strip().upper()
+    db.add(reference)
+    db.commit()
+    db.refresh(reference)
+    return reference
+
+
+def update_contract_reference(
+    db: Session,
+    reference: CpeContractReference,
+    payload: CpeContractReferenceUpdate,
+) -> CpeContractReference:
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        if isinstance(value, str) and field in {"contract_code", "market", "billed_item"}:
+            value = value.strip().upper()
+        elif isinstance(value, str) and field == "reference_kind":
+            value = value.strip().lower()
+        setattr(reference, field, value)
+    db.commit()
+    db.refresh(reference)
+    return reference
+
+
+def delete_contract_reference(db: Session, reference: CpeContractReference) -> None:
+    db.delete(reference)
+    db.commit()
+
+
 def list_accounting_site_mappings(db: Session, city_id: int | None = None) -> list[CpeAccountingSiteMapping]:
     query = select(CpeAccountingSiteMapping)
     if city_id is not None:
@@ -217,15 +262,26 @@ def _market_from_billed_item(billed_item: str | None) -> str:
 
 
 def _is_current_cpe_contract(contract_code: str | None) -> bool:
-    return (contract_code or "").strip().upper() in CURRENT_CPE_CONTRACT_CODES
+    return (contract_code or "").strip().upper() in NEW_CPE_CONTRACT_CODES
 
 
-def _is_p1_gaz_lot1_line(line: CpeFinanceLine) -> bool:
-    return (
-        (line.contract_code or "").strip().upper() == P1_GAZ_LOT1_CONTRACT_CODE
-        and (line.market or "").strip().upper() == "P1"
-        and (line.billed_item or "").strip().upper() in P1_GAZ_ACOMPTE_ITEMS
-    )
+def _split_csv_tokens(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    return {part.strip().upper() for part in value.split(",") if part.strip()}
+
+
+def _reference_included_items(reference: CpeContractReference) -> set[str]:
+    raw = reference.included_billed_items
+    if not raw:
+        return set()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return _split_csv_tokens(raw)
+    if isinstance(parsed, list):
+        return {str(item).strip().upper() for item in parsed if str(item).strip()}
+    return _split_csv_tokens(raw)
 
 
 def _rule_notes_from_contract_row(row: dict[str, Any]) -> str | None:
@@ -1103,16 +1159,51 @@ def _control_invoice_period(invoice: CpeFinanceInvoice, lines: list[CpeFinanceLi
     )
 
 
+def _find_contract_reference(
+    db: Session,
+    *,
+    city_id: int | None,
+    contract_code: str | None,
+    reference_kind: str,
+    year: int,
+) -> CpeContractReference | None:
+    if not contract_code:
+        return None
+    normalized_contract = contract_code.strip().upper()
+    for ref_city_id in (city_id, None):
+        query = select(CpeContractReference).where(
+            CpeContractReference.contract_code == normalized_contract,
+            CpeContractReference.reference_kind == reference_kind,
+            CpeContractReference.year == year,
+            CpeContractReference.active.is_(True),
+        )
+        if ref_city_id is None:
+            query = query.where(CpeContractReference.city_id.is_(None))
+        else:
+            query = query.where(CpeContractReference.city_id == ref_city_id)
+        reference = db.scalars(query.order_by(CpeContractReference.id)).first()
+        if reference is not None:
+            return reference
+    return None
+
+
 def _control_p1_gaz_acompte_against_dpgf(
     db: Session,
     invoice: CpeFinanceInvoice,
     lines: list[CpeFinanceLine],
 ) -> CpeFinanceControl | None:
-    p1_lines = [line for line in lines if _is_p1_gaz_lot1_line(line)]
-    if not p1_lines:
+    invoice_contract = (invoice.contract_code or "").strip().upper()
+    p1_market_lines = [
+        line
+        for line in lines
+        if (line.contract_code or invoice_contract or "").strip().upper() == invoice_contract
+        and (line.market or "").strip().upper() == "P1"
+        and (line.billed_item or "").strip().upper() in P1_GAZ_ACOMPTE_ITEMS
+    ]
+    if not p1_market_lines:
         return None
 
-    anchor = p1_lines[0]
+    anchor = p1_market_lines[0]
     if not invoice.period_start or not invoice.period_end:
         return _make_basic_control(
             anchor,
@@ -1123,7 +1214,35 @@ def _control_p1_gaz_acompte_against_dpgf(
             formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
         )
 
-    if (invoice.period_end.month, invoice.period_end.day) not in {(3, 31), (6, 30), (9, 30)}:
+    reference = _find_contract_reference(
+        db,
+        city_id=invoice.city_id,
+        contract_code=invoice.contract_code,
+        reference_kind=P1_GAZ_ACOMPTE_KIND,
+        year=invoice.period_end.year,
+    )
+    if reference is None:
+        if _is_current_cpe_contract(invoice.contract_code):
+            return _make_basic_control(
+                anchor,
+                control_type="p1_gaz_acompte_dpgf",
+                status="blocked",
+                severity="warning",
+                message=(
+                    "Controle acompte P1 gaz impossible : reference contractuelle absente "
+                    f"pour {invoice.contract_code} / {invoice.period_end.year}."
+                ),
+                formula="Reference attendue : contrat, exercice, postes inclus, montant annuel et tolerance",
+            )
+        return None
+
+    expected_months = _split_csv_tokens(reference.expected_period_months)
+    expected_month_numbers = {int(month) for month in expected_months if month.isdigit()} or {3, 6, 9}
+    is_expected_acompte_date = (
+        invoice.period_end.month in expected_month_numbers
+        and invoice.period_end.day == monthrange(invoice.period_end.year, invoice.period_end.month)[1]
+    )
+    if not is_expected_acompte_date:
         return _make_basic_control(
             anchor,
             control_type="p1_gaz_acompte_dpgf",
@@ -1133,38 +1252,54 @@ def _control_p1_gaz_acompte_against_dpgf(
                 "Controle acompte P1 gaz non applique : la periode ne correspond pas "
                 "a une echeance trimestrielle d'acompte contractuelle."
             ),
-            formula="Acomptes P1 attendus aux 31/03, 30/06 et 30/09 ; decompte definitif au 15/02/N+1",
+            formula=reference.formula or "Acomptes P1 attendus aux 31/03, 30/06 et 30/09 ; decompte definitif au 15/02/N+1",
         )
 
-    annual_expected = P1_GAZ_DPGF_REVISED_TOTALS.get(invoice.period_end.year)
-    if annual_expected is None:
+    if reference.expected_amount_ht is not None:
+        expected = round(reference.expected_amount_ht, 2)
+    elif reference.annual_amount_ht is not None and reference.installment_count:
+        expected = round(reference.annual_amount_ht / reference.installment_count, 2)
+    else:
         return _make_basic_control(
             anchor,
             control_type="p1_gaz_acompte_dpgf",
             status="blocked",
             severity="warning",
-            message=f"Controle acompte P1 gaz impossible : total DPGF annuel absent pour {invoice.period_end.year}.",
-            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+            message=(
+                "Controle acompte P1 gaz impossible : la reference contractuelle ne contient "
+                "ni montant attendu, ni montant annuel avec nombre d'acomptes."
+            ),
+            formula=reference.formula,
         )
 
-    scope_lines = list(
-        db.scalars(
-            select(CpeFinanceLine).where(
-                CpeFinanceLine.batch_id == invoice.batch_id,
-                CpeFinanceLine.city_id == invoice.city_id,
-                CpeFinanceLine.contract_code == P1_GAZ_LOT1_CONTRACT_CODE,
-                CpeFinanceLine.market == "P1",
-                CpeFinanceLine.period_start == invoice.period_start,
-                CpeFinanceLine.period_end == invoice.period_end,
-                CpeFinanceLine.billed_item.in_(P1_GAZ_ACOMPTE_ITEMS),
-            )
-        ).all()
+    included_items = _reference_included_items(reference)
+    scope_query = select(CpeFinanceLine).where(
+        CpeFinanceLine.batch_id == invoice.batch_id,
+        CpeFinanceLine.city_id == invoice.city_id,
+        CpeFinanceLine.contract_code == reference.contract_code,
+        CpeFinanceLine.market == reference.market,
+        CpeFinanceLine.period_start == invoice.period_start,
+        CpeFinanceLine.period_end == invoice.period_end,
     )
+    if included_items:
+        scope_query = scope_query.where(func.upper(CpeFinanceLine.billed_item).in_(included_items))
+    scope_lines = list(db.scalars(scope_query).all())
+    if not scope_lines:
+        return _make_basic_control(
+            anchor,
+            control_type="p1_gaz_acompte_dpgf",
+            status="blocked",
+            severity="warning",
+            message="Controle acompte P1 gaz impossible : aucune ligne importee ne correspond aux postes inclus dans la reference.",
+            formula=reference.formula,
+        )
+
     actual = round(sum(line.amount_ht or 0.0 for line in scope_lines), 2)
-    expected = round(annual_expected / 4, 2)
     delta = round(actual - expected, 2)
     delta_pct = round(delta / expected, 6) if expected else None
-    tolerance = max(P1_GAZ_ACOMPTE_TOLERANCE_EUR, expected * P1_GAZ_ACOMPTE_TOLERANCE_PCT)
+    tolerance_pct = reference.tolerance_pct if reference.tolerance_pct is not None else 0.01
+    tolerance_eur = reference.tolerance_eur if reference.tolerance_eur is not None else 100.0
+    tolerance = max(tolerance_eur, expected * tolerance_pct)
     if abs(delta) <= tolerance:
         return CpeFinanceControl(
             city_id=anchor.city_id,
@@ -1178,7 +1313,7 @@ def _control_p1_gaz_acompte_against_dpgf(
                 f"Acompte P1 gaz coherent sur le lot importe : {actual:.2f} EUR HT "
                 f"pour {invoice.period_start} - {invoice.period_end}, attendu {expected:.2f} EUR HT."
             ),
-            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+            formula=reference.formula,
             expected_revised_price=expected,
             actual_revised_price=actual,
             delta_abs=delta,
@@ -1196,7 +1331,7 @@ def _control_p1_gaz_acompte_against_dpgf(
             f"Ecart acompte P1 gaz sur le lot importe : facture {actual:.2f} EUR HT, "
             f"attendu {expected:.2f} EUR HT selon DPGF revise, ecart {delta:.2f} EUR."
         ),
-        formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+        formula=reference.formula,
         expected_revised_price=expected,
         actual_revised_price=actual,
         delta_abs=delta,

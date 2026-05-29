@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine
+from app.models.cpe import CpeAccountingSiteMapping, CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine
 from app.services.cpe_accounting import import_codification_workbook, import_finance_workbook, recompute_finance_invoice_controls
 
 
@@ -66,6 +66,24 @@ def test_recompute_finance_invoice_controls_adds_global_and_accounting_checks(db
     site = CpeAccountingSiteMapping(city_id=1, code_site="VDS-ENS 01", site_name="Ecole test")
     db_session.add(site)
     db_session.flush()
+    db_session.add(
+        CpeContractReference(
+            city_id=1,
+            contract_code="C00190116O",
+            contract_label="SETE LOT 1",
+            reference_kind="p1_gaz_acompte",
+            year=2026,
+            market="P1",
+            billed_item="P1_GAZ_LOT1",
+            annual_amount_ht=341293.06,
+            installment_count=4,
+            expected_period_months="3,6,9",
+            included_billed_items='["P1","CTA"]',
+            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+            tolerance_pct=0.01,
+            tolerance_eur=100.0,
+        )
+    )
     db_session.add_all(
         [
             CpeFinanceLine(

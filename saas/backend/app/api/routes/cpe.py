@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping, CpeContractReference
 from app.models.user import User
 from app.schemas.cpe import (
     CpeAccountingImportResult,
@@ -16,6 +16,9 @@ from app.schemas.cpe import (
     CpeAccountingSiteMappingOut,
     CpeAccountingSiteMappingUpdate,
     CpeBilanAnnuel,
+    CpeContractReferenceCreate,
+    CpeContractReferenceOut,
+    CpeContractReferenceUpdate,
     CpeDjuAnnuel,
     CpeFinanceImportBatchOut,
     CpeFinanceControlOut,
@@ -216,6 +219,53 @@ def delete_accounting_nature_rule(
     if rule is None or rule.city_id != current_user.city_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle comptable introuvable")
     accounting_svc.delete_accounting_nature_rule(db, rule)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/contract-references", response_model=list[CpeContractReferenceOut])
+def list_contract_references(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeContractReferenceOut]:
+    references = accounting_svc.list_contract_references(db, current_user.city_id)
+    return [CpeContractReferenceOut.model_validate(item) for item in references]
+
+
+@router.post("/contract-references", response_model=CpeContractReferenceOut, status_code=status.HTTP_201_CREATED)
+def create_contract_reference(
+    payload: CpeContractReferenceCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeContractReferenceOut:
+    payload = payload.model_copy(update={"city_id": current_user.city_id})
+    reference = accounting_svc.create_contract_reference(db, payload)
+    return CpeContractReferenceOut.model_validate(reference)
+
+
+@router.patch("/contract-references/{reference_id}", response_model=CpeContractReferenceOut)
+def update_contract_reference(
+    reference_id: int,
+    payload: CpeContractReferenceUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeContractReferenceOut:
+    reference = db.get(CpeContractReference, reference_id)
+    if reference is None or reference.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference contractuelle introuvable")
+    updated = accounting_svc.update_contract_reference(db, reference, payload)
+    return CpeContractReferenceOut.model_validate(updated)
+
+
+@router.delete("/contract-references/{reference_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contract_reference(
+    reference_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    reference = db.get(CpeContractReference, reference_id)
+    if reference is None or reference.city_id != current_user.city_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference contractuelle introuvable")
+    accounting_svc.delete_contract_reference(db, reference)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

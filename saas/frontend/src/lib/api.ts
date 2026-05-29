@@ -2799,6 +2799,29 @@ export type CpeAccountingNatureRule = {
   updated_at: string;
 };
 
+export type CpeContractReference = {
+  id: number;
+  city_id: number | null;
+  contract_code: string;
+  contract_label: string | null;
+  reference_kind: string;
+  year: number;
+  market: string;
+  billed_item: string;
+  annual_amount_ht: number | null;
+  expected_amount_ht: number | null;
+  installment_count: number | null;
+  expected_period_months: string | null;
+  included_billed_items: string | null;
+  formula: string | null;
+  tolerance_pct: number | null;
+  tolerance_eur: number | null;
+  active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CpeAccountingSiteMapping = {
   id: number;
   city_id: number | null;
@@ -3063,6 +3086,44 @@ export async function updateCpeAccountingNatureRule(
 
 export async function deleteCpeAccountingNatureRule(token: string, id: number): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<void>(response);
+}
+
+export async function fetchCpeContractReferences(token: string): Promise<CpeContractReference[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/contract-references`, { headers: buildHeaders(token) });
+  return parseResponse<CpeContractReference[]>(response);
+}
+
+export async function createCpeContractReference(
+  token: string,
+  payload: Partial<CpeContractReference> & { contract_code: string; reference_kind: string; year: number; market: string; billed_item: string },
+): Promise<CpeContractReference> {
+  const response = await fetch(`${apiBaseUrl}/cpe/contract-references`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeContractReference>(response);
+}
+
+export async function updateCpeContractReference(
+  token: string,
+  id: number,
+  payload: Partial<CpeContractReference>,
+): Promise<CpeContractReference> {
+  const response = await fetch(`${apiBaseUrl}/cpe/contract-references/${id}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CpeContractReference>(response);
+}
+
+export async function deleteCpeContractReference(token: string, id: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/cpe/contract-references/${id}`, {
     method: "DELETE",
     headers: buildHeaders(token),
   });
