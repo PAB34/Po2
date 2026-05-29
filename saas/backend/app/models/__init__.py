@@ -29,6 +29,7 @@ from app.models.site import Site
 from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,
+    CpeContractReference,
     CpeFinanceImportBatch,
     CpeFinanceControl,
     CpeFinanceInvoice,

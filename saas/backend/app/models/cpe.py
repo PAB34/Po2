@@ -256,6 +256,49 @@ class CpeAccountingSiteMapping(Base):
     )
 
 
+class CpeContractReference(Base):
+    """Reference contractuelle editable pour les controles de factures CPE."""
+
+    __tablename__ = "cpe_contract_references"
+    __table_args__ = (
+        UniqueConstraint(
+            "city_id",
+            "contract_code",
+            "reference_kind",
+            "year",
+            "market",
+            "billed_item",
+            name="uq_cpe_contract_reference_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    contract_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    contract_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reference_kind: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    market: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    billed_item: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+
+    annual_amount_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    expected_amount_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    installment_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expected_period_months: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    included_billed_items: Mapped[str | None] = mapped_column(Text, nullable=True)
+    formula: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tolerance_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class CpeFinanceImportBatch(Base):
     """Lot d'import d'un export finances DALKIA."""
 
