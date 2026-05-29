@@ -235,6 +235,9 @@ class BuildingCreate(BaseModel):
 
 
 class BuildingUpdate(BaseModel):
+    # site_id : permet le drag&drop d'un batiment vers un autre site dans l'UI cascade.
+    # `unset` (champ absent du payload) = ne touche pas, None = detache du site.
+    site_id: int | None = None
     nom_batiment: str | None = Field(default=None, max_length=255)
     nom_commune: str | None = Field(default=None, max_length=255)
     code_postal: str | None = Field(default=None, max_length=10)
@@ -306,6 +309,9 @@ class LocalCreate(BaseModel):
 
 
 class LocalUpdate(BaseModel):
+    # building_id : permet le drag&drop d'un local vers un autre batiment dans l'UI cascade.
+    # Champ absent du payload = ne touche pas ; entier fourni = deplace.
+    building_id: int | None = None
     nom_local: str | None = Field(default=None, min_length=1, max_length=255)
     type_local: str | None = Field(default=None, min_length=1, max_length=80)
     niveau: str | None = Field(default=None, max_length=40)

@@ -369,6 +369,7 @@ def attach_building_ign(
 
 
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
+    fields_set = payload.model_fields_set
     building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
     if payload.nom_commune:
         building.nom_commune = payload.nom_commune.strip()
@@ -383,6 +384,19 @@ def update_building(db: Session, building: Building, payload: BuildingUpdate) ->
     building.adresse_reconstituee = payload.adresse_reconstituee.strip() if payload.adresse_reconstituee else None
     building.latitude = payload.latitude
     building.longitude = payload.longitude
+    # site_id : patch semantic. Si le frontend envoie site_id explicitement (meme None),
+    # on l'applique. Sinon (champ absent du payload), on ne touche pas. Sert au drag&drop
+    # Site>Batiment dans la vue cascade ET evite que les autres updates (rename, etc.)
+    # ecrasent le rattachement existant.
+    if "site_id" in fields_set:
+        if payload.site_id is not None:
+            # Valide que le site existe et appartient a la meme ville.
+            site = db.scalar(select(Site).where(Site.id == payload.site_id))
+            if site is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site cible introuvable.")
+            if building.city_id is not None and site.city_id is not None and site.city_id != building.city_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le site cible n'appartient pas a la meme ville.")
+        building.site_id = payload.site_id
     db.add(building)
     db.commit()
     db.refresh(building)
@@ -428,6 +442,7 @@ def create_local(db: Session, building: Building, payload: LocalCreate) -> Local
 
 
 def update_local(db: Session, local: Local, payload: LocalUpdate) -> Local:
+    fields_set = payload.model_fields_set
     if payload.nom_local is not None:
         local.nom_local = payload.nom_local.strip()
     if payload.type_local is not None:
@@ -437,6 +452,24 @@ def update_local(db: Session, local: Local, payload: LocalUpdate) -> Local:
     local.usage = payload.usage.strip() if payload.usage else None
     local.statut_occupation = payload.statut_occupation.strip() if payload.statut_occupation else None
     local.commentaire = payload.commentaire.strip() if payload.commentaire else None
+    # building_id : drag&drop d'un local vers un autre batiment dans la vue cascade.
+    # Champ absent du payload = ne touche pas ; entier fourni = deplace (apres validation ville).
+    if "building_id" in fields_set and payload.building_id is not None:
+        target = db.scalar(select(Building).where(Building.id == payload.building_id))
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment cible introuvable.")
+        current_building = db.scalar(select(Building).where(Building.id == local.building_id))
+        if (
+            current_building is not None
+            and current_building.city_id is not None
+            and target.city_id is not None
+            and target.city_id != current_building.city_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Le batiment cible n'appartient pas a la meme ville.",
+            )
+        local.building_id = payload.building_id
     db.add(local)
     db.commit()
     db.refresh(local)

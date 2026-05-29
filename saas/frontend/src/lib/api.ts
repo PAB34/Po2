@@ -321,6 +321,7 @@ export type CreateSitePayload = {
 };
 
 export type UpdateBuildingPayload = {
+  site_id?: number | null;
   nom_batiment?: string | null;
   nom_commune?: string;
   code_postal?: string | null;
@@ -361,6 +362,7 @@ export type CreateLocalPayload = {
 };
 
 export type UpdateLocalPayload = {
+  building_id?: number;
   nom_local?: string;
   type_local?: string;
   niveau?: string | null;

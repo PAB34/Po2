@@ -1,19 +1,30 @@
 import { useMemo, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
+import type { ChangeEvent, DragEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { BuildingPortfolioMap } from "../components/BuildingPortfolioMap";
+import { BuildingSelectionWorkspace } from "../components/BuildingSelectionWorkspace";
 import {
+  attachBuildingGeoRequest,
+  attachBuildingIgnRequest,
   deleteAllBuildingsRequest,
   fetchAllLocals,
+  fetchBuildingNamingLookup,
   fetchBuildings,
+  fetchFreeAddressLookup,
+  fetchNearbyDgfip,
   fetchSites,
   updateBuildingRequest,
   updateLocalRequest,
   updateSiteRequest,
   type Building,
+  type BuildingIgnAttachmentPayload,
+  type BuildingNamingLookup,
+  type FreeAddressLookup,
+  type GeoJsonFeature,
   type Local,
+  type NearbyDgfipRow,
   type Site,
   type UpdateBuildingPayload,
   type UpdateLocalPayload,
@@ -37,6 +48,16 @@ function buildAddressLine(b: Pick<Building, "numero_voirie" | "nature_voie" | "n
   return parts.length > 0 ? `${parts.join(" ")}, ${b.nom_commune}` : b.nom_commune;
 }
 
+function buildAttachmentAddress(building: Building): string | null {
+  if (building.adresse_reconstituee?.trim()) {
+    return building.adresse_reconstituee.trim();
+  }
+  const parts = [building.numero_voirie, building.nature_voie, building.nom_voie, building.nom_commune].filter(
+    (p): p is string => Boolean(p?.trim()),
+  );
+  return parts.length >= 2 ? parts.join(" ") : null;
+}
+
 function siteCentroid(buildings: Building[]): { lat: number; lon: number } | null {
   const geocoded = buildings.filter((b) => b.latitude != null && b.longitude != null);
   if (geocoded.length === 0) return null;
@@ -58,6 +79,9 @@ export function BuildingsListPage() {
   const [expandedSites, setExpandedSites] = useState<Set<number>>(new Set());
   const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(new Set());
   const [editMode, setEditMode] = useState(false);
+  // Drag&drop : reparentage Site>Batiment et Batiment>Local depuis l'arborescence.
+  const [dragItem, setDragItem] = useState<{ type: "building" | "local"; id: number; sourceParentId: number | null } | null>(null);
+  const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
 
   const sitesQuery = useQuery({
     queryKey: ["buildings", "sites", token],
@@ -243,6 +267,50 @@ export function BuildingsListPage() {
   }
 
   // ---------------------------------------------------------------------
+  // Drag & drop : reparentage dans l'arborescence
+  // ---------------------------------------------------------------------
+  function handleDragStartBuilding(e: DragEvent, building: Building) {
+    e.stopPropagation();
+    setDragItem({ type: "building", id: building.id, sourceParentId: building.site_id ?? null });
+  }
+
+  function handleDragStartLocal(e: DragEvent, local: Local) {
+    e.stopPropagation();
+    setDragItem({ type: "local", id: local.id, sourceParentId: local.building_id });
+  }
+
+  function handleDragEnd() {
+    setDragItem(null);
+    setDropTargetKey(null);
+  }
+
+  function allowDrop(e: DragEvent, targetKey: string, accepts: "building" | "local") {
+    if (dragItem?.type !== accepts) return;
+    e.preventDefault();
+    if (dropTargetKey !== targetKey) setDropTargetKey(targetKey);
+  }
+
+  function handleDropOnSite(e: DragEvent, siteId: number) {
+    e.preventDefault();
+    if (dragItem?.type === "building" && dragItem.sourceParentId !== siteId) {
+      updateBuildingMutation.mutate({ buildingId: dragItem.id, payload: { site_id: siteId } });
+    }
+    handleDragEnd();
+  }
+
+  function handleDropOnBuilding(e: DragEvent, buildingId: number) {
+    e.preventDefault();
+    if (dragItem?.type === "local" && dragItem.sourceParentId !== buildingId) {
+      updateLocalMutation.mutate({
+        buildingId: dragItem.sourceParentId as number,
+        localId: dragItem.id,
+        payload: { building_id: buildingId },
+      });
+    }
+    handleDragEnd();
+  }
+
+  // ---------------------------------------------------------------------
   // Garde-fous auth & loading
   // ---------------------------------------------------------------------
   if (!token) {
@@ -330,7 +398,7 @@ export function BuildingsListPage() {
             <div className="section-block buildings-addresses-section">
               <div className="section-heading">
                 <h3>Arborescence patrimoine</h3>
-                <p>Site &gt; Bâtiment &gt; Local. Clique pour voir le détail.</p>
+                <p>Site &gt; Bâtiment &gt; Local. Clique pour voir le détail. Glisse un bâtiment vers un site, ou un local vers un bâtiment, pour le rattacher.</p>
               </div>
               <label className="field">
                 <span>Recherche</span>
@@ -348,7 +416,14 @@ export function BuildingsListPage() {
                   const siteBuildings = buildingsBySiteId.get(site.id) ?? [];
                   return (
                     <div key={`site-${site.id}`}>
-                      <div className={`patrimony-tree-node patrimony-tree-site${isSiteSelected ? " is-active" : ""}`}>
+                      <div
+                        className={`patrimony-tree-node patrimony-tree-site${isSiteSelected ? " is-active" : ""}${
+                          dropTargetKey === `site-${site.id}` ? " is-drop-target" : ""
+                        }`}
+                        onDragOver={(e) => allowDrop(e, `site-${site.id}`, "building")}
+                        onDragLeave={() => dropTargetKey === `site-${site.id}` && setDropTargetKey(null)}
+                        onDrop={(e) => handleDropOnSite(e, site.id)}
+                      >
                         <span
                           className="patrimony-tree-toggle"
                           onClick={(e) => {
@@ -372,7 +447,17 @@ export function BuildingsListPage() {
                             const hasIgn = building.statut_geocodage === "IGN_VALIDE";
                             return (
                               <div key={`building-${building.id}`}>
-                                <div className={`patrimony-tree-node patrimony-tree-building${isBuildingSelected ? " is-active" : ""}`}>
+                                <div
+                                  className={`patrimony-tree-node patrimony-tree-building${isBuildingSelected ? " is-active" : ""}${
+                                    dropTargetKey === `building-${building.id}` ? " is-drop-target" : ""
+                                  }${dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""}`}
+                                  draggable
+                                  onDragStart={(e) => handleDragStartBuilding(e, building)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => allowDrop(e, `building-${building.id}`, "local")}
+                                  onDragLeave={() => dropTargetKey === `building-${building.id}` && setDropTargetKey(null)}
+                                  onDrop={(e) => handleDropOnBuilding(e, building.id)}
+                                >
                                   <span
                                     className="patrimony-tree-toggle"
                                     onClick={(e) => {
@@ -397,7 +482,12 @@ export function BuildingsListPage() {
                                       return (
                                         <div
                                           key={`local-${local.id}`}
-                                          className={`patrimony-tree-local${isLocalSelected ? " is-active" : ""}`}
+                                          className={`patrimony-tree-local${isLocalSelected ? " is-active" : ""}${
+                                            dragItem?.type === "local" && dragItem.id === local.id ? " is-dragging" : ""
+                                          }`}
+                                          draggable
+                                          onDragStart={(e) => handleDragStartLocal(e, local)}
+                                          onDragEnd={handleDragEnd}
                                           onClick={() => selectAndExpand({ type: "local", id: local.id })}
                                         >
                                           ◇ {local.nom_local}
@@ -424,7 +514,12 @@ export function BuildingsListPage() {
                       return (
                         <div
                           key={`orphan-${building.id}`}
-                          className={`patrimony-tree-node patrimony-tree-building${isSelected ? " is-active" : ""}`}
+                          className={`patrimony-tree-node patrimony-tree-building${isSelected ? " is-active" : ""}${
+                            dragItem?.type === "building" && dragItem.id === building.id ? " is-dragging" : ""
+                          }`}
+                          draggable
+                          onDragStart={(e) => handleDragStartBuilding(e, building)}
+                          onDragEnd={handleDragEnd}
                           onClick={() => selectAndExpand({ type: "building", id: building.id })}
                         >
                           <span className="patrimony-tree-toggle">·</span>
@@ -535,6 +630,7 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
   if (selectedSite) {
     return (
       <SiteDetail
+        key={`site-${selectedSite.id}`}
         site={selectedSite}
         childBuildings={siteBuildings}
         editMode={editMode}
@@ -548,6 +644,7 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
   if (selectedBuilding) {
     return (
       <BuildingDetail
+        key={`building-${selectedBuilding.id}`}
         building={selectedBuilding}
         childLocals={buildingLocals}
         editMode={editMode}
@@ -561,6 +658,7 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
   if (selectedLocal && selectedLocalParent) {
     return (
       <LocalDetail
+        key={`local-${selectedLocal.id}`}
         local={selectedLocal}
         parent={selectedLocalParent}
         editMode={editMode}
@@ -691,9 +789,111 @@ function BuildingDetail({
   onSave: (payload: UpdateBuildingPayload) => void;
   savePending: boolean;
 }) {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+
   const [nomBatiment, setNomBatiment] = useState(building.nom_batiment ?? "");
   const [adresseReconstituee, setAdresseReconstituee] = useState(building.adresse_reconstituee ?? "");
   const [nomCommune, setNomCommune] = useState(building.nom_commune);
+
+  // Attachement inline (IGN + DGFIP) directement depuis le panneau, sans ouvrir la fiche complete.
+  const [showIgnAttachment, setShowIgnAttachment] = useState(false);
+  const [showDgfipAttachment, setShowDgfipAttachment] = useState(false);
+  const [selectedDgfipKey, setSelectedDgfipKey] = useState<string | null>(null);
+  const [geoAttachError, setGeoAttachError] = useState<string | null>(null);
+  const [geoAttachSuccess, setGeoAttachSuccess] = useState<string | null>(null);
+
+  const attachmentAddress = buildAttachmentAddress(building);
+
+  const freeAddressLookupQuery = useQuery({
+    queryKey: ["buildings", "free-address-lookup", attachmentAddress, token],
+    queryFn: () => fetchFreeAddressLookup(token as string, attachmentAddress as string),
+    enabled: Boolean(token) && Boolean(attachmentAddress) && showIgnAttachment && !selectedDgfipKey,
+    retry: false,
+  });
+
+  const dgfipNamingLookupQuery = useQuery({
+    queryKey: ["buildings", "naming-lookup", selectedDgfipKey, token],
+    queryFn: () => fetchBuildingNamingLookup(token as string, selectedDgfipKey as string),
+    enabled: Boolean(token) && Boolean(selectedDgfipKey) && showIgnAttachment,
+    retry: false,
+  });
+
+  const nearbyDgfipQuery = useQuery({
+    queryKey: ["buildings", "nearby-dgfip", building.id, token],
+    queryFn: () => fetchNearbyDgfip(token as string, building.id),
+    enabled: Boolean(token) && showDgfipAttachment,
+    retry: false,
+  });
+
+  const activeLookupQuery = selectedDgfipKey ? dgfipNamingLookupQuery : freeAddressLookupQuery;
+
+  async function invalidateAfterAttach() {
+    await queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+    await queryClient.invalidateQueries({ queryKey: ["building", building.id] });
+  }
+
+  const attachGeoMutation = useMutation({
+    mutationFn: (payload: {
+      unique_key: string;
+      validated_name?: string;
+      selected_feature?: GeoJsonFeature | null;
+      selected_features?: GeoJsonFeature[];
+    }) => attachBuildingGeoRequest(token as string, building.id, payload),
+    onSuccess: async (updated: Building) => {
+      setGeoAttachSuccess(`Attachement DGFIP + IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
+      setGeoAttachError(null);
+      setShowIgnAttachment(false);
+      setShowDgfipAttachment(false);
+      setSelectedDgfipKey(null);
+      await invalidateAfterAttach();
+    },
+    onError: (err: unknown) => {
+      setGeoAttachSuccess(null);
+      setGeoAttachError(err instanceof Error ? err.message : "Attachement GEO impossible.");
+    },
+  });
+
+  const attachIgnMutation = useMutation({
+    mutationFn: (payload: BuildingIgnAttachmentPayload) => attachBuildingIgnRequest(token as string, building.id, payload),
+    onSuccess: async (updated: Building) => {
+      setGeoAttachSuccess(`Attachement IGN réalisé : « ${updated.nom_batiment || `#${updated.id}`} ».`);
+      setGeoAttachError(null);
+      setShowIgnAttachment(false);
+      setSelectedDgfipKey(null);
+      await invalidateAfterAttach();
+    },
+    onError: (err: unknown) => {
+      setGeoAttachSuccess(null);
+      setGeoAttachError(err instanceof Error ? err.message : "Attachement IGN impossible.");
+    },
+  });
+
+  async function handleGeoAttach(payload: {
+    validatedName?: string;
+    selectedFeature?: GeoJsonFeature | null;
+    selectedFeatures?: GeoJsonFeature[];
+  }) {
+    setGeoAttachError(null);
+    setGeoAttachSuccess(null);
+    if (selectedDgfipKey) {
+      await attachGeoMutation.mutateAsync({
+        unique_key: selectedDgfipKey,
+        validated_name: payload.validatedName,
+        selected_feature: payload.selectedFeature,
+        selected_features: payload.selectedFeatures,
+      });
+    } else {
+      const lookupData = activeLookupQuery.data;
+      await attachIgnMutation.mutateAsync({
+        validated_name: payload.validatedName,
+        selected_feature: payload.selectedFeature,
+        selected_features: payload.selectedFeatures,
+        lat: lookupData?.lat ?? null,
+        lon: lookupData?.lon ?? null,
+      });
+    }
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -714,9 +914,33 @@ function BuildingDetail({
             {childLocals.length} local(aux) rattaché(s)
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button type="button" className="secondary-button" onClick={onToggleEdit}>
             {editMode ? "Annuler l'édition" : "Modifier"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setShowIgnAttachment((v) => !v);
+              setShowDgfipAttachment(false);
+              setGeoAttachError(null);
+              setGeoAttachSuccess(null);
+            }}
+          >
+            {showIgnAttachment ? "Fermer l'attachement IGN" : "Attachement IGN"}
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setShowDgfipAttachment((v) => !v);
+              setSelectedDgfipKey(null);
+              setGeoAttachError(null);
+              setGeoAttachSuccess(null);
+            }}
+          >
+            {showDgfipAttachment ? "Fermer l'attachement DGFIP" : "Attachement DGFIP"}
           </button>
           <Link className="secondary-link" to={`/buildings/${building.id}`}>
             Ouvrir la fiche complète →
@@ -806,6 +1030,107 @@ function BuildingDetail({
           ) : null}
         </>
       )}
+
+      {geoAttachError ? <p className="error-text">{geoAttachError}</p> : null}
+      {geoAttachSuccess ? <p className="success-text">{geoAttachSuccess}</p> : null}
+
+      {showIgnAttachment ? (
+        <div className="section-block">
+          <div className="section-heading">
+            <h4>Attachement IGN</h4>
+            <p>
+              {attachmentAddress
+                ? `Carte IGN centrée sur « ${attachmentAddress} ». Sélectionne le ou les bâtiments IGN qui correspondent.`
+                : "Aucune adresse renseignée — complète la fiche (adresse) avant de lancer l'attachement."}
+            </p>
+          </div>
+          {activeLookupQuery.isLoading ? <p>Chargement des candidats IGN...</p> : null}
+          {activeLookupQuery.error instanceof Error ? <p className="error-text">{activeLookupQuery.error.message}</p> : null}
+          <BuildingSelectionWorkspace
+            lookupData={(activeLookupQuery.data ?? null) as BuildingNamingLookup | FreeAddressLookup | null}
+            emptyTitle={attachmentAddress ? "Chargement de la carte IGN..." : "Adresse manquante."}
+            emptyDescription={
+              attachmentAddress
+                ? "La carte IGN se charge à partir de l'adresse du bâtiment."
+                : "Renseigne l'adresse reconstituée ou les champs de voirie via « Modifier »."
+            }
+            createPending={attachGeoMutation.isPending || attachIgnMutation.isPending}
+            error={geoAttachError}
+            success={geoAttachSuccess}
+            createLabelWithSelection={selectedDgfipKey ? "Rattacher DGFIP + IGN sélectionné" : "Rattacher les données IGN"}
+            createLabelWithoutSelection={selectedDgfipKey ? "Rattacher DGFIP sans sélection IGN" : "Rattacher sans sélection IGN"}
+            onCreate={handleGeoAttach}
+            nearbyDgfipMarkers={nearbyDgfipQuery.data?.rows}
+          />
+        </div>
+      ) : null}
+
+      {showDgfipAttachment ? (
+        <div className="section-block">
+          <div className="section-heading">
+            <h4>Attachement DGFIP / MAJIC</h4>
+            <p>
+              Adresses DGFIP / MAJIC dans un rayon de 200 m. Sélectionner une adresse recadre la carte IGN sur sa parcelle
+              cadastrale (ouvre l'attachement IGN).
+            </p>
+          </div>
+          {nearbyDgfipQuery.isLoading ? <p>Recherche des adresses proches...</p> : null}
+          {nearbyDgfipQuery.error instanceof Error ? (
+            <p className="error-text">Impossible de charger les adresses DGFIP : {nearbyDgfipQuery.error.message}</p>
+          ) : null}
+          {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured === false ? (
+            <div className="info-banner" style={{ background: "#fff4e6", borderColor: "#e07a5f" }}>
+              <strong>Source MAJIC non disponible sur ce serveur.</strong>
+              <p style={{ marginTop: 8 }}>
+                Le fichier DGFIP / MAJIC n'est pas configuré côté backend (
+                {nearbyDgfipQuery.data.majic_unavailable_reason ?? "fichier introuvable"}). L'attachement DGFIP automatique
+                n'est donc pas disponible pour l'instant.
+              </p>
+            </div>
+          ) : null}
+          {nearbyDgfipQuery.data && nearbyDgfipQuery.data.majic_configured && nearbyDgfipQuery.data.rows.length === 0 ? (
+            <p className="empty-state-text">Aucune adresse DGFIP trouvée dans un rayon de 200 m.</p>
+          ) : null}
+          <div className="resource-list buildings-address-list">
+            {(nearbyDgfipQuery.data?.rows ?? []).map((row: NearbyDgfipRow) => {
+              const isActive = selectedDgfipKey === row.unique_key;
+              return (
+                <article key={row.unique_key} className={`resource-card ${isActive ? "resource-card-active" : ""}`}>
+                  <div className="resource-card-header">
+                    <div>
+                      <h3>{row.address_display}</h3>
+                      <p>{row.nom_commune}</p>
+                    </div>
+                    <span className="resource-badge">{row.distance_m} m</span>
+                  </div>
+                  <dl className="resource-metadata">
+                    <div>
+                      <dt>Indices MAJIC</dt>
+                      <dd>{row.majic_building_values.join(", ") || "Aucun"}</dd>
+                    </div>
+                  </dl>
+                  <div className="resource-card-actions">
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        const nextKey = isActive ? null : row.unique_key;
+                        setSelectedDgfipKey(nextKey);
+                        setGeoAttachError(null);
+                        if (nextKey && !showIgnAttachment) {
+                          setShowIgnAttachment(true);
+                        }
+                      }}
+                    >
+                      {isActive ? "Désélectionner" : "Sélectionner cette adresse DGFIP"}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

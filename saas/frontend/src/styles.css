@@ -391,6 +391,23 @@ select.form-input {
   border-left-color: #f97316;
 }
 
+.patrimony-tree-node.is-drop-target,
+.patrimony-tree-local.is-drop-target {
+  background-color: rgba(21, 128, 61, 0.18);
+  border-left-color: #15803d;
+  outline: 1px dashed #15803d;
+}
+
+.patrimony-tree-node.is-dragging,
+.patrimony-tree-local.is-dragging {
+  opacity: 0.45;
+}
+
+.patrimony-tree-node[draggable="true"],
+.patrimony-tree-local[draggable="true"] {
+  cursor: grab;
+}
+
 .patrimony-tree-toggle {
   cursor: pointer;
   user-select: none;
