@@ -12,6 +12,13 @@ on:
       - "saas/infra/**"
       - ".github/workflows/deploy.yml"
 
+# Empeche deux deploys concurrents de se marcher dessus sur le VPS
+# (git reset --hard + docker compose up --build simultanes = build casse).
+# On serialise : un nouveau push attend la fin du deploy en cours.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
