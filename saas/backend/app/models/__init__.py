@@ -26,6 +26,14 @@ from app.models.cvc import CvcInventoryItem
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
 from app.models.site import Site
+from app.models.cpe_dalkia import (
+    CpeDalkiaRefApe,
+    CpeDalkiaRefCible,
+    CpeDalkiaRefImport,
+    CpeDalkiaRefP1Gaz,
+    CpeDalkiaRefP2P3,
+    CpeDalkiaRefSite,
+)
 from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,

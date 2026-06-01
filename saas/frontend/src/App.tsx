@@ -10,6 +10,7 @@ import { BuildingTechniquePage } from "./pages/BuildingTechniquePage";
 import { CvcImportPage } from "./pages/CvcImportPage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import CpeDalkiaPage from "./pages/CpeDalkiaPage";
+import { CpeDalkiaImportPage } from "./pages/CpeDalkiaImportPage";
 import CpeSiteDetailPage from "./pages/CpeSiteDetailPage";
 import EnergieBpuPage from "./pages/EnergieBpuPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
@@ -51,6 +52,7 @@ export default function App() {
           <Link to="/energie/facturation">Facturation</Link>
           <Link to="/energie/bpu">Historique BPU</Link>
           <Link to="/cpe">CPE DALKIA</Link>
+          <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
           <Link to="/login">Connexion</Link>
           <Link to="/register">Inscription</Link>
           <Link to="/account">Compte</Link>
@@ -74,6 +76,7 @@ export default function App() {
           <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
           <Route path="/cpe" element={<CpeDalkiaPage />} />
           <Route path="/cpe/sites/:siteId" element={<CpeSiteDetailPage />} />
+          <Route path="/cpe/dalkia-import" element={<CpeDalkiaImportPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/account" element={<AccountPage />} />
