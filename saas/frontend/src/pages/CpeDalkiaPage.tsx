@@ -2568,7 +2568,7 @@ function CpeFinanceReference({
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(420px, 2fr) minmax(300px, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 12, marginBottom: 12 }}>
             <div className="card" style={{ padding: 12 }}>
               <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Montants mensuels par marché - exercice {annee}</h4>
               <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Du 01/01/{annee} au 31/12/{annee}, ventilés entre P1, P2, P3 et autres postes.</p>
@@ -2803,7 +2803,7 @@ function CpeFinanceReference({
               <KpiCard label="Factures bloquées" value={String(controlReport.invoices_blocked)} sub={`${controlReport.controls_blocked} donnée(s) manquante(s)`} color="#b45309" />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(420px, 2fr)", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 12 }}>
               <div className="card" style={{ padding: 12 }}>
                 <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Qualité du portefeuille contrôlé</h4>
                 <div style={{ height: 280 }}>
