@@ -263,6 +263,49 @@ Ce rapprochement est documenté dans [[008-referentiel-patrimoine-et-rapprocheme
 
 ---
 
+## 7bis. Audit de couverture du parsing (2026-06-01)
+
+Audit complet des 13 feuilles du fichier DALKIA. État après ajout du parsing RECAP MARCHE (commit `4136225`).
+
+| Feuille | Lignes | Parsing | Table cible |
+|---|---|---|---|
+| Annexe 3.1 - P2 - A | 81 | ✅ complet | `cpe_dalkia_ref_p2p3` |
+| Annexe 4 - P3 | 87 | ✅ complet | `cpe_dalkia_ref_p2p3` |
+| Annexe 2bis - Travaux APE | 329 | ✅ complet | `cpe_dalkia_ref_ape` |
+| Annexe 5.1 - Cibles GAZ | 78 | ⚠️ partiel | `cpe_dalkia_ref_cibles` |
+| Annexe 5.2 - Cibles ELEC | 87 | ⚠️ partiel | `cpe_dalkia_ref_cibles` |
+| Annexe 6 - P1 GAZ | 84 | ⚠️ partiel | `cpe_dalkia_ref_p1_gaz` |
+| **RECAP MARCHE** | 52 | ✅ **complet (ajouté)** | `cpe_dalkia_ref_recap` |
+| Annexe 1 - Coefficients | 21 | ❌ non parsé | — |
+| Annexe 2 - Travaux obligatoires P3.4 | 193 | ❌ non parsé | — |
+| Annexe 3.2 - P2 - B (sensibilisation) | 7 | ❌ non parsé | partiellement dans recap |
+| Annexe 7 - B.P.U - D.Q.E | 184 | ❌ non parsé | — |
+| Annexe 8 - Moyens opérationnels | 9 | ❌ non parsé (peu de données) | — |
+| Annexe 9 - Plan de progrès | 6 | ❌ non parsé (quasi vide) | — |
+
+### Données RECAP MARCHE désormais capturées
+
+`cpe_dalkia_ref_recap` (format long, métrique × période) — validé :
+- **L1** : 227 lignes — P1 2026 = 317 775 € HT, **bilan total marché = 9 756 895 € HT** (P1 1,9M / P2 2,2M / P3 5,5M / sensibilisation 99k)
+- **L2** : 156 lignes — bilan 1 252 054 € HT (piscines, sans P1 gaz)
+
+Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), `redevance_p1`, `redevance_p2p3`, `sensibilisation`, `travaux`, `bilan`.
+
+> **Impact direct** : la constante hardcodée 317 774 € (contrôle acompte P1) peut maintenant être remplacée par une lecture de `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année). Voir Phase C section 5.
+
+### Gaps de couverture restants (non parsés)
+
+| Feuille / colonne | Donnée | Priorité |
+|---|---|---|
+| Annexe 2 - Travaux obligatoires P3.4 | 193 travaux obligatoires détaillés (montant, dates, devis, CEE) par site | 🟠 Moyenne |
+| Annexe 7 - BPU/DQE | Bordereau prix unitaires opérations (codes ENT-xxx) | 🟡 Basse (structure très hétérogène) |
+| Annexe 1 - Coefficients | Taux horaires main d'œuvre + coefficients entreprise | 🟡 Basse |
+| Annexe 6 (en-tête) | Prix unitaires gaz T1-T4 + coefficients formule révision Pu (a,b,c,d,e) | 🟠 Moyenne (contrôle révision prix gaz) |
+| Annexe 5.x (colonnes) | Référence consommation ECS m3, identifiants compteurs | 🟡 Basse |
+| Annexe 3.2 - P2 - B | Détail actions sensibilisation (totaux déjà dans recap) | 🟢 Couvert partiellement |
+
+---
+
 ## 8. Liens
 
 - [[10-Roadmap-Po2]] — phases et priorités
