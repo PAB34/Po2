@@ -1618,6 +1618,90 @@ def _control_invoice_period(invoice: CpeFinanceInvoice, lines: list[CpeFinanceLi
     )
 
 
+def _invoice_timeline_metrics(invoice: CpeFinanceInvoice, today: date | None = None) -> dict[str, Any]:
+    today = today or date.today()
+    billing_days = (
+        (invoice.period_end - invoice.period_start).days + 1
+        if invoice.period_start and invoice.period_end
+        else None
+    )
+    issue_delay_days = (
+        (invoice.invoice_date - invoice.period_end).days
+        if invoice.invoice_date and invoice.period_end
+        else None
+    )
+    due_in_days = (invoice.due_date - today).days if invoice.due_date else None
+    if invoice.finance_exported_at is not None:
+        deadline_status = "transmis_finances"
+    elif due_in_days is None:
+        deadline_status = "echeance_absente"
+    elif due_in_days < 0:
+        deadline_status = "echeance_depassee"
+    elif due_in_days <= 7:
+        deadline_status = "urgent"
+    elif due_in_days <= 30:
+        deadline_status = "a_anticiper"
+    else:
+        deadline_status = "dans_les_temps"
+    return {
+        "billing_days": billing_days,
+        "issue_delay_days": issue_delay_days,
+        "due_in_days": due_in_days,
+        "deadline_status": deadline_status,
+    }
+
+
+def _control_invoice_timeline(invoice: CpeFinanceInvoice, anchor: CpeFinanceLine) -> CpeFinanceControl:
+    if not invoice.invoice_date or not invoice.due_date or not invoice.period_start or not invoice.period_end:
+        missing = [
+            label
+            for label, value in (
+                ("date edition", invoice.invoice_date),
+                ("date echeance", invoice.due_date),
+                ("debut periode", invoice.period_start),
+                ("fin periode", invoice.period_end),
+            )
+            if value is None
+        ]
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_timeline",
+            status="blocked",
+            severity="warning",
+            message=f"Calendrier facture incomplet : {', '.join(missing)} manquante(s).",
+        )
+    if invoice.period_start > invoice.period_end:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_timeline",
+            status="error",
+            severity="error",
+            message="Calendrier facture incoherent : debut de periode posterieur a la fin.",
+        )
+    if invoice.due_date < invoice.invoice_date:
+        return _make_basic_control(
+            anchor,
+            control_type="invoice_timeline",
+            status="error",
+            severity="error",
+            message="Calendrier facture incoherent : echeance anterieure a la date d'edition.",
+        )
+    metrics = _invoice_timeline_metrics(invoice)
+    message = (
+        f"Calendrier facture coherent : periode {invoice.period_start} au {invoice.period_end}, "
+        f"edition {invoice.invoice_date}, echeance {invoice.due_date}."
+    )
+    if metrics["issue_delay_days"] is not None:
+        message += f" Edition {metrics['issue_delay_days']} jour(s) apres la fin de periode."
+    return _make_basic_control(
+        anchor,
+        control_type="invoice_timeline",
+        status="ok",
+        severity="info",
+        message=message,
+    )
+
+
 def _find_contract_reference(
     db: Session,
     *,
@@ -1836,6 +1920,7 @@ def recompute_finance_invoice_controls(
     controls.append(_control_invoice_type(invoice, lines[0]))
     controls.append(_control_invoice_total(invoice, lines, lines[0]))
     controls.append(_control_invoice_period(invoice, lines, lines[0]))
+    controls.append(_control_invoice_timeline(invoice, lines[0]))
     p1_gaz_control = _control_p1_gaz_acompte_against_dpgf(db, invoice, lines)
     if p1_gaz_control is not None:
         controls.append(p1_gaz_control)
@@ -1897,6 +1982,10 @@ def build_finance_control_report(
                 "invoice_type": invoice.invoice_type,
                 "total_ht": invoice.total_ht,
                 "invoice_status": invoice.status,
+                "finance_exported_at": invoice.finance_exported_at,
+                "due_date": invoice.due_date,
+                "due_in_days": _invoice_timeline_metrics(invoice)["due_in_days"],
+                "deadline_status": _invoice_timeline_metrics(invoice)["deadline_status"],
                 **status_counts,
                 "controls_total": len(controls),
                 "control_types": sorted({control.control_type for control in controls if control.status != "ok"}),
@@ -2013,12 +2102,22 @@ def list_finance_invoices_enriched(
             "evidence_declared_bt40": evidence.declared_bt40 if evidence else None,
             "total_ht": invoice.total_ht,
             "status": invoice.status,
+            "finance_exported_at": invoice.finance_exported_at,
+            **_invoice_timeline_metrics(invoice),
             "notes": invoice.notes,
             "created_at": invoice.created_at,
             "updated_at": invoice.updated_at,
         }
         rows.append(row)
     return rows
+
+
+def mark_finance_liaison_exported(db: Session, invoice: CpeFinanceInvoice) -> CpeFinanceInvoice:
+    invoice.finance_exported_at = datetime.utcnow()
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+    return invoice
 
 
 def get_finance_invoice(db: Session, invoice_id: int, city_id: int | None = None) -> CpeFinanceInvoice | None:
@@ -2076,6 +2175,7 @@ def _control_type_label(control_type: str | None) -> str:
         "invoice_type": "Qualification type de facture",
         "invoice_total_ht": "Coherence total HT",
         "invoice_period": "Coherence periode facture",
+        "invoice_timeline": "Calendrier edition et echeance",
         "p1_gaz_acompte_dpgf": "Acompte P1 vs reference DPGF",
     }
     return mapping.get(control_type or "", control_type or "Controle")
@@ -2137,6 +2237,9 @@ def _control_probable_cause(control: CpeFinanceControl) -> str:
     if control.control_type == "invoice_period":
         return "Periode facture/lignes incoherente ou incomplete."
 
+    if control.control_type == "invoice_timeline":
+        return "Dates d'edition, d'echeance ou de periode absentes ou incoherentes."
+
     return control.message or "Controle non conforme."
 
 
@@ -2170,6 +2273,9 @@ def _control_recommended_action(control: CpeFinanceControl) -> str:
 
     if control.control_type == "invoice_period":
         return "Verifier les dates debut/fin sur facture et lignes."
+
+    if control.control_type == "invoice_timeline":
+        return "Verifier le calendrier facture avant emission de la fiche de liaison finances."
 
     return "Verifier la ligne et les donnees source."
 

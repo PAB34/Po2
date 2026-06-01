@@ -99,6 +99,7 @@ const CONTROL_TYPE_LABELS: Record<string, string> = {
   invoice_type: "Type de facture",
   invoice_total_ht: "Total HT facture",
   invoice_period: "Periode facture",
+  invoice_timeline: "Calendrier edition et echeance",
   p1_gaz_acompte_dpgf: "Acompte P1 vs DPGF",
 };
 const REVISION_INDEX_CODE_OPTIONS: Array<{ code: string; label: string }> = [
@@ -142,7 +143,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
 
 type CpeView = "cockpit" | "finance" | "performance";
 type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "controls";
-type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "total_ht" | "status";
+type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "invoice_date" | "due_date" | "total_ht" | "status";
 
 function splitList(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -204,6 +205,25 @@ function fmt(val: number | null | undefined, decimals = 1): string {
 function fmtEur(val: number | null | undefined): string {
   if (val == null) return "—";
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
+}
+function fmtDate(val: string | null | undefined): string {
+  if (!val) return "—";
+  const parsed = new Date(val);
+  return Number.isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString("fr-FR");
+}
+function deadlineLabel(status: string | null | undefined): string {
+  if (status === "transmis_finances") return "Transmise finances";
+  if (status === "echeance_depassee") return "Échéance dépassée";
+  if (status === "urgent") return "À valider sous 7 j";
+  if (status === "a_anticiper") return "À anticiper";
+  if (status === "echeance_absente") return "Échéance absente";
+  return "Dans les temps";
+}
+function deadlineClass(status: string | null | undefined): string {
+  if (status === "transmis_finances") return "badge-green";
+  if (status === "echeance_depassee") return "badge-red";
+  if (status === "urgent" || status === "a_anticiper" || status === "echeance_absente") return "badge-orange";
+  return "badge-blue";
 }
 
 export default function CpeDalkiaPage() {
@@ -402,7 +422,10 @@ export default function CpeDalkiaPage() {
 
   const updateFinanceInvoiceM = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => updateCpeFinanceInvoice(token!, id, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
+    },
   });
 
   const upsertRevisionIndexM = useMutation({
@@ -433,6 +456,10 @@ export default function CpeDalkiaPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
     },
   });
 
@@ -1294,6 +1321,8 @@ function CpeFinanceReference({
     if (field === "markets") return (invoice.markets ?? "").toLowerCase();
     if (field === "billed_items") return (invoice.billed_items ?? "").toLowerCase();
     if (field === "recipient_reference_1") return (invoice.recipient_reference_1 ?? "").toLowerCase();
+    if (field === "invoice_date") return invoice.invoice_date ?? "";
+    if (field === "due_date") return invoice.due_date ?? "";
     if (field === "status") return (invoice.status ?? "").toLowerCase();
     return (invoice.invoice_number ?? "").toLowerCase();
   };
@@ -1451,6 +1480,34 @@ function CpeFinanceReference({
     }
     return Object.values(metrics).sort((left, right) => right.amount - left.amount);
   }, [annualInvoices]);
+  const dueTimelineData = useMemo(() => {
+    const rows = Array.from({ length: 12 }, (_, monthIndex) => ({
+      month: MOIS_LABELS[monthIndex],
+      issued: 0,
+      due: 0,
+    }));
+    for (const invoice of annualInvoices) {
+      if (invoice.invoice_date) {
+        const issued = new Date(invoice.invoice_date);
+        if (!Number.isNaN(issued.getTime()) && issued.getFullYear() === annee) rows[issued.getMonth()].issued += invoice.total_ht || 0;
+      }
+      if (invoice.due_date) {
+        const due = new Date(invoice.due_date);
+        if (!Number.isNaN(due.getTime()) && due.getFullYear() === annee) rows[due.getMonth()].due += invoice.total_ht || 0;
+      }
+    }
+    return rows;
+  }, [annualInvoices, annee]);
+  const dueKpis = useMemo(
+    () => ({
+      transmitted: annualInvoices.filter((invoice) => invoice.deadline_status === "transmis_finances").length,
+      overdue: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_depassee").length,
+      upcoming: annualInvoices.filter((invoice) => invoice.deadline_status === "urgent" || invoice.deadline_status === "a_anticiper").length,
+      missing: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_absente").length,
+    }),
+    [annualInvoices],
+  );
+  const invoiceById = useMemo(() => new Map(invoices.map((invoice) => [invoice.id, invoice])), [invoices]);
   const controlStatusChartData = useMemo(
     () =>
       controlReport
@@ -2505,6 +2562,12 @@ function CpeFinanceReference({
               <KpiCard label="Montant moyen par facture" value={fmtEur(annualInvoices.length ? annualTotalHt / annualInvoices.length : 0)} sub="Sur le périmètre affiché" color="#7c3aed" />
               <KpiCard label="Périmètre" value={includeOutOfScopeContracts ? "Étendu" : "CPE Ville"} sub={includeOutOfScopeContracts ? "Contrats hors marché inclus" : "Contrats Ville uniquement"} color="#b45309" />
             </div>
+            <div className="kpi-grid" style={{ marginTop: 10 }}>
+              <KpiCard label="Transmises aux finances" value={String(dueKpis.transmitted)} sub="Fiche de liaison XLSX déjà émise" color="#16a34a" />
+              <KpiCard label="Échéances dépassées" value={String(dueKpis.overdue)} sub="Fiche de liaison non émise" color="#dc2626" />
+              <KpiCard label="À traiter sous 30 jours" value={String(dueKpis.upcoming)} sub="Échéances proches à anticiper" color="#f59e0b" />
+              <KpiCard label="Échéances absentes" value={String(dueKpis.missing)} sub="Donnée DALKIA à vérifier" color="#6b7280" />
+            </div>
           </div>
           <div className="card" style={{ padding: 14, marginBottom: 12 }}>
             <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Analyse interactive</h4>
@@ -2639,18 +2702,25 @@ function CpeFinanceReference({
             </div>
           </div>
 
-          <input
-            ref={evidencePdfRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            style={{ display: "none" }}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file && evidenceInvoiceId != null) onUploadEvidencePdf(evidenceInvoiceId, file);
-              event.target.value = "";
-            }}
-          />
-          <table style={{ width: "100%", minWidth: 1700, borderCollapse: "collapse", fontSize: 12 }}>
+          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+            <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Émission et échéances - exercice {annee}</h4>
+            <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Lecture financière des montants selon la date d'édition DALKIA et la date limite de traitement comptable.</p>
+            <div style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dueTimelineData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
+                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
+                  <Legend />
+                  <Bar dataKey="issued" name="Édité par DALKIA" fill="#2563eb" />
+                  <Bar dataKey="due" name="À échéance" fill="#f59e0b" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <table style={{ width: "100%", minWidth: 2100, borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                 <th style={thStyle}>
@@ -2680,16 +2750,22 @@ function CpeFinanceReference({
                 </th>
                 <th style={thStyle}>Periode</th>
                 <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("invoice_date")} style={tableSortButtonStyle}>
+                    Edition{sortIndicator("invoice_date")}
+                  </button>
+                </th>
+                <th style={thStyle}>
+                  <button type="button" onClick={() => toggleInvoiceSort("due_date")} style={tableSortButtonStyle}>
+                    Echeance{sortIndicator("due_date")}
+                  </button>
+                </th>
+                <th style={thStyle}>Suivi echeance</th>
+                <th style={thStyle}>
                   <button type="button" onClick={() => toggleInvoiceSort("total_ht")} style={tableSortButtonStyle}>
                     HT{sortIndicator("total_ht")}
                   </button>
                 </th>
-                  <th style={thStyle}>
-                    <button type="button" onClick={() => toggleInvoiceSort("status")} style={tableSortButtonStyle}>
-                      Statut{sortIndicator("status")}
-                    </button>
-                  </th>
-                  <th style={thStyle}>Actions</th>
+                <th style={thStyle}>Statut controle</th>
               </tr>
             </thead>
             <tbody>
@@ -2704,72 +2780,25 @@ function CpeFinanceReference({
                   <td style={{ ...tdStyle, minWidth: 320 }}>{invoice.billed_items ?? "-"}</td>
                   <td style={tdStyle}>{invoice.recipient_reference_1 ?? "-"}</td>
                   <td style={tdStyle}>{invoice.period_start ?? "-"} au {invoice.period_end ?? "-"}</td>
+                  <td style={tdStyle}>{fmtDate(invoice.invoice_date)}</td>
+                  <td style={tdStyle}>{fmtDate(invoice.due_date)}</td>
+                  <td style={tdStyle}>
+                    <span className={`badge ${deadlineClass(invoice.deadline_status)}`}>{deadlineLabel(invoice.deadline_status)}</span>
+                    {invoice.due_in_days != null && invoice.deadline_status !== "transmis_finances" && (
+                      <div style={{ marginTop: 4, color: "#6b7280", fontSize: 11 }}>{invoice.due_in_days} jour(s)</div>
+                    )}
+                  </td>
                   <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
                   <td style={tdStyle}>
-                    <select
-                      value={invoice.status}
-                      disabled={invoiceActionPending}
-                      onChange={(event) => onInvoiceStatus(invoice.id, event.target.value)}
-                      style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 12 }}
-                    >
-                      <option value="a_controler">A controler</option>
-                      <option value="valide">Valide</option>
-                      <option value="refuse">Refuse</option>
-                      <option value="conteste">Conteste</option>
-                    </select>
-                  </td>
-                  <td style={tdStyle}>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ fontSize: 12, padding: "4px 8px" }}
-                      disabled={invoiceActionPending}
-                      onClick={() => onExportLiaison(invoice)}
-                    >
-                      Export XLSX
-                    </button>
-                    {" "}
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ fontSize: 12, padding: "4px 8px" }}
-                      disabled={invoiceActionPending}
-                      onClick={() => {
-                        setEvidenceInvoiceId(invoice.id);
-                        evidencePdfRef.current?.click();
-                      }}
-                    >
-                      {invoice.evidence_id ? "Remplacer PDF" : "Importer PDF"}
-                    </button>
-                    {invoice.evidence_id && (
-                      <>
-                        {" "}
-                        <button
-                          type="button"
-                          className="secondary-button"
-                          style={{ fontSize: 12, padding: "4px 8px" }}
-                          disabled={invoiceActionPending}
-                          title="Reporte les indices extraits comme valeurs declarees par DALKIA a verifier."
-                          onClick={() => onApplyEvidenceIndices(invoice.evidence_id!)}
-                        >
-                          Reporter indices
-                        </button>
-                        <div style={{ marginTop: 4, color: "#9a3412", fontSize: 11 }}>
-                          PDF rattache
-                          {invoice.evidence_revision_date ? ` - revision ${invoice.evidence_revision_date}` : ""}
-                          {invoice.evidence_declared_factor != null ? ` - facteur ${fmt(invoice.evidence_declared_factor, 6)}` : ""}
-                          {invoice.evidence_declared_icht_ime != null ? ` - ICHT-IME ${fmt(invoice.evidence_declared_icht_ime, 4)}` : ""}
-                          {invoice.evidence_declared_fsd2 != null ? ` - FSD2 ${fmt(invoice.evidence_declared_fsd2, 4)}` : ""}
-                          {invoice.evidence_declared_bt40 != null ? ` - BT40 ${fmt(invoice.evidence_declared_bt40, 4)}` : ""}
-                        </div>
-                      </>
-                    )}
+                    <span className={`badge ${invoice.status === "valide" ? "badge-green" : invoice.status === "refuse" ? "badge-red" : invoice.status === "conteste" ? "badge-blue" : "badge-orange"}`}>
+                      {invoice.status.replace("_", " ")}
+                    </span>
                   </td>
                 </tr>
               ))}
               {visibleInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
+                  <td colSpan={11} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
                     Aucune facture ne correspond au filtre.
                   </td>
                 </tr>
@@ -2838,7 +2867,18 @@ function CpeFinanceReference({
 
             <div className="card" style={{ padding: 12, overflowX: "auto" }}>
               <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>File de traitement priorisée</h4>
-              <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse", fontSize: 12 }}>
+              <input
+                ref={evidencePdfRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                style={{ display: "none" }}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file && evidenceInvoiceId != null) onUploadEvidencePdf(evidenceInvoiceId, file);
+                  event.target.value = "";
+                }}
+              />
+              <table style={{ width: "100%", minWidth: 1600, borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                     <th style={thStyle}>Facture</th>
@@ -2849,10 +2889,16 @@ function CpeFinanceReference({
                     <th style={{ ...thStyle, textAlign: "right" }}>Écarts</th>
                     <th style={{ ...thStyle, textAlign: "right" }}>Bloqués</th>
                     <th style={thStyle}>Familles à traiter</th>
+                    <th style={thStyle}>Échéance</th>
+                    <th style={thStyle}>Transmission finances</th>
+                    <th style={thStyle}>Décision</th>
+                    <th style={thStyle}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {controlReport.invoices.map((invoice) => (
+                  {controlReport.invoices.map((invoice) => {
+                    const fullInvoice = invoiceById.get(invoice.invoice_id);
+                    return (
                     <tr key={invoice.invoice_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                       <td style={tdStyle}>{invoice.invoice_number}</td>
                       <td style={tdStyle}>{invoice.contract_label ?? invoice.contract_code ?? "-"}</td>
@@ -2862,8 +2908,55 @@ function CpeFinanceReference({
                       <td style={{ ...tdStyle, textAlign: "right", color: "#b91c1c", fontWeight: invoice.error ? 700 : 400 }}>{invoice.error}</td>
                       <td style={{ ...tdStyle, textAlign: "right", color: "#b45309", fontWeight: invoice.blocked ? 700 : 400 }}>{invoice.blocked}</td>
                       <td style={tdStyle}>{invoice.control_types.map((type) => CONTROL_TYPE_LABELS[type] ?? type).join(", ") || "Aucune anomalie"}</td>
+                      <td style={tdStyle}>
+                        <div>{fmtDate(invoice.due_date)}</div>
+                        <span className={`badge ${deadlineClass(invoice.deadline_status)}`}>{deadlineLabel(invoice.deadline_status)}</span>
+                      </td>
+                      <td style={tdStyle}>
+                        {invoice.finance_exported_at ? (
+                          <span className="badge badge-green">Émise le {fmtDate(invoice.finance_exported_at)}</span>
+                        ) : (
+                          <span className="badge badge-gray">Non émise</span>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        {fullInvoice && (
+                          <select
+                            value={fullInvoice.status}
+                            disabled={invoiceActionPending}
+                            onChange={(event) => onInvoiceStatus(fullInvoice.id, event.target.value)}
+                            style={{ padding: "4px 6px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 12 }}
+                          >
+                            <option value="a_controler">A controler</option>
+                            <option value="valide">Valide</option>
+                            <option value="refuse">Refuse</option>
+                            <option value="conteste">Conteste</option>
+                          </select>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        {fullInvoice && (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 220 }}>
+                            <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 8px" }} disabled={invoiceActionPending} onClick={() => onExportLiaison(fullInvoice)}>
+                              Exporter XLSX finance
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              style={{ fontSize: 12, padding: "4px 8px" }}
+                              disabled={invoiceActionPending}
+                              onClick={() => {
+                                setEvidenceInvoiceId(fullInvoice.id);
+                                evidencePdfRef.current?.click();
+                              }}
+                            >
+                              {fullInvoice.evidence_id ? "Remplacer PDF" : "Importer PDF"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

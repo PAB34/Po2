@@ -339,6 +339,7 @@ class CpeFinanceInvoice(Base):
     period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     total_ht: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="a_controler")
+    finance_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

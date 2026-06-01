@@ -2901,6 +2901,11 @@ export type CpeFinanceInvoice = {
   evidence_declared_bt40: number | null;
   total_ht: number;
   status: string;
+  finance_exported_at: string | null;
+  billing_days: number | null;
+  issue_delay_days: number | null;
+  due_in_days: number | null;
+  deadline_status: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -2975,6 +2980,10 @@ export type CpeFinanceControlReport = {
     invoice_type: string | null;
     total_ht: number;
     invoice_status: string;
+    finance_exported_at: string | null;
+    due_date: string | null;
+    due_in_days: number | null;
+    deadline_status: string;
     ok: number;
     error: number;
     blocked: number;

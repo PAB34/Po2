@@ -52,3 +52,33 @@ Il faut parser et versionner les enveloppes DPGF des annexes du lot 1 et du lot 
 5. suivi du compte P3 : acomptes, engagements reserves, travaux realises et solde.
 
 Cette etape est complementaire du chantier `Travaux P3 / BPU`.
+
+## Increment calendrier et transmission finances
+
+Les quatre dates de l'export DALKIA sont exploitees :
+
+| Colonne DALKIA | Usage Po2 |
+|---|---|
+| `DATE D'ÉDITION` | date d'emission DALKIA et delai apres fin de periode |
+| `DATE D'ÉCHÉANCE DE LA FACTURE` | priorisation comptable avant echeance |
+| `DÉBUT PÉRIODE DE FACTURATION` | debut du rattachement contractuel |
+| `FIN PÉRIODE DE FACTURATION` | fin du rattachement contractuel et exercice de suivi |
+
+Decision de perimetre :
+
+- Po2 ne suit pas le paiement comptable ;
+- Po2 suit l'emission de la fiche de liaison vers le service finance ;
+- l'horodatage `finance_exported_at` est renseigne automatiquement au telechargement XLSX depuis
+  `Controle factures`.
+
+Evolution UX :
+
+- `Factures` devient une vue analytique en lecture seule ;
+- ajout KPI transmission, echeances depassees, echeances proches et echeances absentes ;
+- ajout graphique mensuel montants edites / montants a echeance ;
+- ajout des dates et badges d'echeance dans l'archive ;
+- les actions decision, PDF et export XLSX sont deplacees dans `Controle factures`.
+
+Controle ajoute :
+
+- `invoice_timeline` verifie dates manquantes, periode inversee et echeance anterieure a l'edition.

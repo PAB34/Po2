@@ -399,6 +399,11 @@ class CpeFinanceInvoiceOut(BaseModel):
     evidence_declared_bt40: float | None = None
     total_ht: float
     status: str
+    finance_exported_at: datetime | None
+    billing_days: int | None = None
+    issue_delay_days: int | None = None
+    due_in_days: int | None = None
+    deadline_status: str | None = None
     notes: str | None
     created_at: datetime
     updated_at: datetime
@@ -542,6 +547,10 @@ class CpeFinanceControlInvoiceSummary(BaseModel):
     invoice_type: str | None
     total_ht: float
     invoice_status: str
+    finance_exported_at: datetime | None
+    due_date: date | None
+    due_in_days: int | None
+    deadline_status: str
     ok: int
     error: int
     blocked: int

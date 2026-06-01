@@ -21,3 +21,11 @@ Transformer `/cpe` en outil de travail quotidien pour le suivi financier du marc
 
 Parser les enveloppes DPGF des annexes DALKIA Lot 1 et Lot 2 afin de comparer le realise facture
 au prevu contractuel par famille, poste et site.
+
+## Complement calendrier et emission finances
+
+- dates edition, echeance, debut et fin de periode exploitees dans le cockpit ;
+- `Factures` reservee a l'analyse financiere en lecture seule ;
+- actions de controle et export XLSX deplacees dans `Controle factures` ;
+- l'export XLSX horodate la transmission vers le service finance ;
+- le paiement comptable reste volontairement hors perimetre Po2.

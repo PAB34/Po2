@@ -327,3 +327,13 @@ Reste a faire :
 Note detaillee :
 
 - `docs/energie/CPE-DALKIA/16-Pilotage-financier-et-controle-global.md`
+
+Increment calendrier et transmission finances :
+
+- exploitation des dates edition, echeance, debut et fin de periode de l'export DALKIA ;
+- `/cpe` > `Factures` devient une vue analytique en lecture seule ;
+- KPI et graphique emission / echeance ;
+- actions decision, justificatif PDF et export XLSX deplacees dans `Controle factures` ;
+- migration `0032_add_cpe_finance_exported_at.py` ;
+- horodatage de la remise au service finance lors de l'export XLSX ;
+- controle `invoice_timeline` pour les dates absentes ou incoherentes.
