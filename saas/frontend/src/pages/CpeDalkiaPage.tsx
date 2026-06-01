@@ -607,6 +607,8 @@ export default function CpeDalkiaPage() {
           onApplyEvidenceIndices={(evidenceId) => applyEvidenceIndicesM.mutate(evidenceId)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
           onRecalculateAllControls={() => recalculateAllControlsM.mutate()}
+          onExportGlobalControlReport={() => exportGlobalControlReportM.mutate()}
+          exportGlobalControlReportPending={exportGlobalControlReportM.isPending}
         />
       )}
 
@@ -1216,6 +1218,8 @@ function CpeFinanceReference({
   onApplyEvidenceIndices,
   onSaveIndex,
   onRecalculateAllControls,
+  onExportGlobalControlReport,
+  exportGlobalControlReportPending,
 }: {
   annee: number;
   codificationFileRef: React.RefObject<HTMLInputElement>;
@@ -1268,6 +1272,8 @@ function CpeFinanceReference({
   onApplyEvidenceIndices: (evidenceId: number) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) => void;
   onRecalculateAllControls: () => void;
+  onExportGlobalControlReport: () => void;
+  exportGlobalControlReportPending: boolean;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -2840,10 +2846,10 @@ function CpeFinanceReference({
             <button
               type="button"
               className="secondary-button"
-              onClick={() => exportGlobalControlReportM.mutate()}
-              disabled={controlsPending || exportGlobalControlReportM.isPending}
+              onClick={onExportGlobalControlReport}
+              disabled={controlsPending || exportGlobalControlReportPending}
             >
-              {exportGlobalControlReportM.isPending ? "Préparation du rapport..." : "Éditer le rapport"}
+              {exportGlobalControlReportPending ? "Préparation du rapport..." : "Éditer le rapport"}
             </button>
           </div>
         </div>
