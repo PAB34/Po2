@@ -276,3 +276,22 @@ Prochaines etapes recommandees :
 5. Remplacer progressivement les constantes P1 DPGF par un referentiel editable en base : contrat, annee, poste, formule, total annuel, tolerance.
 6. Ajouter le rapprochement automatique fin vers site quand une facture contient plusieurs sites : code VDS/CCAS explicite, puis mapping detail DALKIA -> site, puis ecran de reconciliation des lignes non rattachees.
 7. Etendre P1 au decompte definitif : volumes GRDF/DALKIA, prix gaz fournisseur, ecart entre acompte et definitif, pieces justificatives.
+
+## Cadrage CPE DALKIA - Formules, indices et travaux P3 - 2026-06-01
+
+Le workflow PDF livre par la migration `0030_add_cpe_invoice_evidences.py` constitue une premiere
+preuve utile, mais il est trop lie a la facture : `cpe_invoice_evidences.invoice_id` est obligatoire.
+
+Decision :
+
+- conserver `0030` intacte car elle peut deja etre deployee ;
+- creer une migration additive pour generaliser les preuves documentaires ;
+- renommer `/cpe` > `Referentiel finance` > `Indices` en `Formules et indices` ;
+- centraliser dans cet ecran les formules P1/P2/P3, indices, bases contractuelles, coefficients observes,
+  preuves PDF, valeurs DALKIA declarees et valeurs officielles verifiees ;
+- brancher les alertes de nouveau coefficient detecte pendant l'import XLSX vers l'import PDF centralise ;
+- developper ensuite le module `Travaux P3` et son catalogue BPU versionne.
+
+Note detaillee :
+
+- `docs/energie/CPE-DALKIA/15-Formules-indices-et-travaux-P3.md`

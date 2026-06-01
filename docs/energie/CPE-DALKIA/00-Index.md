@@ -25,6 +25,7 @@
 | [[12-OS3-Prix-gaz]] | OS N°3 — prix fixe gaz 5 ans (2026-2030), tarifs T1/T2/T3, PCE, sites CCAS |
 | [[13-Export-finances-DALKIA]] | Analyse du CSV finances DALKIA, potentiel P1/P2/P3 et stratégie d'import |
 | [[14-Checkpoint-dev-2026-05-27]] | Checkpoint technique : état déployé, tests, limites et prochain chantier |
+| [[15-Formules-indices-et-travaux-P3]] | Refonte Formules et indices, généralisation des preuves PDF et workflow Travaux P3 / BPU |
 
 ---
 
