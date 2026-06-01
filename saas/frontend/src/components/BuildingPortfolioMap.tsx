@@ -240,10 +240,14 @@ export function BuildingPortfolioMap({
     [activeBuildingId, mappableBuildings],
   );
 
+  // Priorité : focusLatLon (bâtiment sélectionné ou centroïde du site sélectionné),
+  // sinon le bâtiment actif, sinon le premier bâtiment mappable.
   const streetViewUrl = useMemo(() => {
-    if (!selectedBuilding) return null;
-    return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedBuilding.latitude},${selectedBuilding.longitude}`;
-  }, [selectedBuilding]);
+    const lat = focusLatLon?.lat ?? selectedBuilding?.latitude ?? null;
+    const lon = focusLatLon?.lon ?? selectedBuilding?.longitude ?? null;
+    if (lat == null || lon == null) return null;
+    return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}`;
+  }, [focusLatLon, selectedBuilding]);
 
   // ------------------------------------------------------------------
   // Init Leaflet
