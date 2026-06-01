@@ -13,6 +13,7 @@ from app.services.cpe_dalkia_db import (
     get_cibles_for_import,
     get_import_by_id,
     get_p2p3_for_import,
+    get_recap_for_import,
     get_sites_for_import,
     persist_dalkia_import,
 )
@@ -32,6 +33,8 @@ class ImportPreviewResponse(BaseModel):
     nb_cibles_rows: int
     nb_p1_gaz_rows: int
     nb_ape_rows: int
+    nb_recap_rows: int
+    recap_summary: dict
     period_labels: list[str]
     sample_sites: list[dict]
     warnings: list[str]
@@ -47,8 +50,20 @@ class ImportBatchResponse(BaseModel):
     nb_cibles_rows: int
     nb_p1_gaz_rows: int
     nb_ape_rows: int
+    nb_recap_rows: int
     is_active: bool
     notes: str | None
+
+
+class RecapRow(BaseModel):
+    section: str
+    category: str
+    metric: str
+    metric_label: str | None
+    period_year: int | None
+    period_label: str | None
+    value: float | None
+    unit: str | None
 
 
 class SiteResponse(BaseModel):
@@ -138,6 +153,8 @@ async def preview_import(
         nb_cibles_rows=preview.nb_cibles_rows,
         nb_p1_gaz_rows=preview.nb_p1_gaz_rows,
         nb_ape_rows=preview.nb_ape_rows,
+        nb_recap_rows=preview.nb_recap_rows,
+        recap_summary=preview.recap_summary,
         period_labels=preview.period_labels,
         sample_sites=preview.sample_sites,
         warnings=preview.warnings,
@@ -174,6 +191,7 @@ async def confirm_import(
         nb_cibles_rows=batch.nb_cibles_rows,
         nb_p1_gaz_rows=batch.nb_p1_gaz_rows,
         nb_ape_rows=batch.nb_ape_rows,
+        nb_recap_rows=batch.nb_recap_rows,
         is_active=batch.is_active,
         notes=batch.notes,
     )
@@ -197,6 +215,7 @@ def list_imports(
             nb_cibles_rows=b.nb_cibles_rows,
             nb_p1_gaz_rows=b.nb_p1_gaz_rows,
             nb_ape_rows=b.nb_ape_rows,
+            nb_recap_rows=b.nb_recap_rows,
             is_active=b.is_active,
             notes=b.notes,
         )
@@ -265,3 +284,17 @@ def get_ape(
         raise HTTPException(status_code=404, detail="Import introuvable.")
     rows = get_ape_for_import(db, import_id)
     return [ApeRow(**{k: getattr(r, k) for k in ApeRow.model_fields}) for r in rows]
+
+
+@router.get("/imports/{import_id}/recap", response_model=list[RecapRow])
+def get_recap(
+    import_id: int,
+    section: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[RecapRow]:
+    batch = get_import_by_id(db, import_id, current_user)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Import introuvable.")
+    rows = get_recap_for_import(db, import_id, section)
+    return [RecapRow(**{k: getattr(r, k) for k in RecapRow.model_fields}) for r in rows]

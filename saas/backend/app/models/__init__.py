@@ -32,6 +32,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,
     CpeDalkiaRefP2P3,
+    CpeDalkiaRefRecap,
     CpeDalkiaRefSite,
 )
 from app.models.cpe import (

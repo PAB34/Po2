@@ -38,6 +38,7 @@ class CpeDalkiaRefImport(Base):
     nb_cibles_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     nb_p1_gaz_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     nb_ape_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    nb_recap_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -175,3 +176,27 @@ class CpeDalkiaRefApe(Base):
     recette_vente_energie_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
     ratio_ht_mwhpci: Mapped[float | None] = mapped_column(Float, nullable=True)
     commentaires: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class CpeDalkiaRefRecap(Base):
+    """Recapitulatif financier global du marche (feuille RECAP MARCHE), format long.
+
+    Stocke chaque metrique financiere par periode : engagements de consommation
+    GAZ/ELEC/PV, redevances P1/P2/P3, sensibilisation, travaux, bilan marche.
+    """
+
+    __tablename__ = "cpe_dalkia_ref_recap"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_dalkia_ref_imports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    section: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    metric: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    metric_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    period_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    period_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)

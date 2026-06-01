@@ -25,6 +25,13 @@ const apiBaseUrl = import.meta.env.VITE_API_URL ?? "/api";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+type RecapSummary = {
+  bilan_marche_ht: Record<string, number | null>;
+  by_year: Record<string, { p1_total_ht: number | null; p2_total_ht: number | null; p3_total_ht: number | null }>;
+  facteur_co2_gaz: number | null;
+  facteur_co2_elec: number | null;
+};
+
 type ImportPreview = {
   lot: number;
   filename: string;
@@ -33,6 +40,8 @@ type ImportPreview = {
   nb_cibles_rows: number;
   nb_p1_gaz_rows: number;
   nb_ape_rows: number;
+  nb_recap_rows: number;
+  recap_summary: RecapSummary;
   period_labels: string[];
   sample_sites: {
     code_site: string;
@@ -55,6 +64,7 @@ type ImportBatch = {
   nb_cibles_rows: number;
   nb_p1_gaz_rows: number;
   nb_ape_rows: number;
+  nb_recap_rows: number;
   is_active: boolean;
   notes: string | null;
 };
@@ -320,10 +330,62 @@ export function CpeDalkiaImportPage() {
               <strong>{preview.nb_ape_rows}</strong>
             </div>
             <div className="detail-card">
+              <span>Lignes RECAP financier</span>
+              <strong>{preview.nb_recap_rows}</strong>
+            </div>
+            <div className="detail-card">
               <span>Périodes détectées</span>
               <strong>{preview.period_labels.length} ({preview.period_labels[0]} → {preview.period_labels[preview.period_labels.length - 1]})</strong>
             </div>
           </div>
+
+          {/* Récapitulatif financier global (RECAP MARCHE) */}
+          {preview.recap_summary && Object.keys(preview.recap_summary.bilan_marche_ht ?? {}).length > 0 ? (
+            <>
+              <div className="section-heading" style={{ marginTop: 16 }}>
+                <h4>Bilan financier du marché (RECAP MARCHE) — sur toute la durée</h4>
+              </div>
+              <div className="detail-grid">
+                {Object.entries(preview.recap_summary.bilan_marche_ht).map(([cat, val]) => (
+                  <div className="detail-card" key={cat}>
+                    <span>{cat}</span>
+                    <strong style={cat === "TOTAL" ? { color: "#1d4ed8" } : undefined}>{formatEur(val)} HT</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="section-heading" style={{ marginTop: 16 }}>
+                <h4>Redevances annuelles P1 / P2 / P3 (€ HT)</h4>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.3)" }}>
+                      <th style={{ textAlign: "left", padding: "6px 12px" }}>Année</th>
+                      <th style={{ textAlign: "right", padding: "6px 12px" }}>P1 gaz</th>
+                      <th style={{ textAlign: "right", padding: "6px 12px" }}>P2 maintenance</th>
+                      <th style={{ textAlign: "right", padding: "6px 12px" }}>P3 travaux</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(preview.recap_summary.by_year).map(([year, d]) => (
+                      <tr key={year} style={{ borderBottom: "1px solid rgba(148,163,184,0.1)" }}>
+                        <td style={{ padding: "5px 12px", fontWeight: 600 }}>{year}</td>
+                        <td style={{ padding: "5px 12px", textAlign: "right" }}>{formatEur(d.p1_total_ht)}</td>
+                        <td style={{ padding: "5px 12px", textAlign: "right" }}>{formatEur(d.p2_total_ht)}</td>
+                        <td style={{ padding: "5px 12px", textAlign: "right" }}>{formatEur(d.p3_total_ht)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {preview.recap_summary.facteur_co2_gaz != null ? (
+                <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>
+                  Facteurs CO₂ contractuels — gaz : {preview.recap_summary.facteur_co2_gaz} T/MWh · élec : {preview.recap_summary.facteur_co2_elec} T/MWh
+                </p>
+              ) : null}
+            </>
+          ) : null}
 
           {/* Avertissements */}
           {preview.warnings.length > 0 ? (

@@ -130,6 +130,26 @@ class DalkiaApeRow:
 
 
 @dataclass
+class DalkiaRecapRow:
+    """Ligne du recapitulatif financier (RECAP MARCHE), format long.
+
+    section : engagement | redevance_p1 | redevance_p2p3 | sensibilisation | travaux | bilan
+    category: GAZ | ELEC | PV | GLOBAL | P1 | P2 | P3 | P2_SENS | "Travaux APE" | "Conformite"...
+    metric  : qt_reference | qt_cible | pct_economie | p1_total_ht | bilan_ht | montant_hors_cee_ht...
+    period_year : annee (None pour les totaux "duree du marche" ou montants globaux)
+    """
+
+    section: str
+    category: str
+    metric: str
+    metric_label: str
+    period_year: int | None
+    period_label: str | None
+    value: float | None
+    unit: str | None
+
+
+@dataclass
 class DalkiaParseResult:
     lot: int
     filename: str
@@ -140,6 +160,7 @@ class DalkiaParseResult:
     cibles_elec: list[DalkiaCibleRow] = field(default_factory=list)
     p1_gaz: list[DalkiaP1GazRow] = field(default_factory=list)
     ape_rows: list[DalkiaApeRow] = field(default_factory=list)
+    recap_rows: list[DalkiaRecapRow] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -153,6 +174,8 @@ class DalkiaImportPreview:
     nb_cibles_rows: int
     nb_p1_gaz_rows: int
     nb_ape_rows: int
+    nb_recap_rows: int
+    recap_summary: dict[str, Any]
     period_labels: list[str]
     sample_sites: list[dict[str, Any]]
     warnings: list[str]
@@ -526,6 +549,198 @@ def _parse_ape(rows: list[tuple], lot: int) -> tuple[list[DalkiaApeRow], list[st
     return ape_rows, warnings
 
 
+def _recap_period_map(header_row: tuple, start_col: int = 1) -> list[tuple[int, int | None, str]]:
+    """Construit la liste (col_0based, annee|None, label) depuis une ligne d'en-tete de periodes.
+
+    - Colonne periode : contient une annee + "janvier"/"octobre" -> (col, annee, label)
+    - Colonne resume  : contient "total"/"economie"/"engagement"/"duree" -> (col, None, label)
+    - Autres colonnes texte (ex "Prestation") : ignorees
+    """
+    out: list[tuple[int, int | None, str]] = []
+    for c in range(start_col, len(header_row)):
+        v = header_row[c]
+        if v is None or not str(v).strip():
+            continue
+        s = str(v).strip().replace("\n", " ")
+        low = s.lower()
+        years = re.findall(r"\d{4}", s)
+        is_period = bool(years) and ("janvier" in low or "octobre" in low)
+        is_summary = any(k in low for k in ["total", "economie", "économie", "engagement", "durée", "duree"])
+        if is_period:
+            out.append((c, int(years[0]), s[:70]))
+        elif is_summary:
+            out.append((c, None, s[:70]))
+    return out
+
+
+def _parse_recap(rows: list[tuple]) -> tuple[list[DalkiaRecapRow], list[str]]:
+    """Parse la feuille RECAP MARCHE (recapitulatif financier global).
+
+    6 sections :
+      2.6 Engagement consommations (GAZ/ELEC/PV/GLOBAL)
+      2.7 Redevances P1 gaz
+      2.8 Redevances P2/P3 + sensibilisation
+      2.9 Montant travaux APE + obligatoires
+      2.10 Bilan sur la duree du marche
+    """
+    out: list[DalkiaRecapRow] = []
+    warnings: list[str] = []
+
+    # Definition des metriques par libelle (substring, insensible casse/accents partiels)
+    # (label_match, section, category, metric, unit)
+    METRIC_DEFS = [
+        ("qt « reference »", "engagement", None, "qt_reference", "MWhPCI"),
+        ("qt «reference»", "engagement", None, "qt_reference", "MWhPCI"),
+        ("qt « cible »", "engagement", None, "qt_cible", "MWhPCI"),
+        ("production pv", "engagement", "PV", "production_pv", "MWhPCI"),
+        ("autoconsommation", "engagement", "PV", "autoconsommation", "MWhPCI"),
+        ("p1 – parties fixes", "redevance_p1", "P1", "p1_parties_fixes_ht", "EUR_HT"),
+        ("p1 – part proportionnelle", "redevance_p1", "P1", "p1_part_proportionnelle_ht", "EUR_HT"),
+        ("p1 – total (€ht)", "redevance_p1", "P1", "p1_total_ht", "EUR_HT"),
+        ("p1 – total (€ttc)", "redevance_p1", "P1", "p1_total_ttc", "EUR_TTC"),
+        ("prestation p2.1 a p2.4 (€ht)", "redevance_p2p3", "P2", "p2_total_ht", "EUR_HT"),
+        ("prestation p2.1 a p2.4 (€ttc)", "redevance_p2p3", "P2", "p2_total_ttc", "EUR_TTC"),
+        ("prestation p3.1 a p3.4 (€ht)", "redevance_p2p3", "P3", "p3_total_ht", "EUR_HT"),
+        ("prestation p3.1 a p3.4 (€ttc)", "redevance_p2p3", "P3", "p3_total_ttc", "EUR_TTC"),
+    ]
+
+    current_period_map: list[tuple[int, int | None, str]] = []
+    current_section: str | None = None
+    current_category: str | None = None
+    sensibilisation_seen = 0
+
+    for row in rows:
+        if not row:
+            continue
+        c1 = (_clean_str(row[0]) or "")
+        c1_low = c1.lower()
+
+        # --- Marqueurs de section (par prefixe numerote OU mot-cle, robuste L1/L2) ---
+        if c1.startswith("2.6") or "engagement de consomm" in c1_low:
+            current_section = "engagement"
+            continue
+        if c1.startswith("2.7") or ("redevances" in c1_low and "p1" in c1_low):
+            current_section = "redevance_p1"
+            continue
+        if c1.startswith("2.8") or ("redevances" in c1_low and ("p2" in c1_low or "p3" in c1_low)):
+            current_section = "redevance_p2p3"
+            continue
+        if c1.startswith("2.9") or "montant travaux" in c1_low or "travaux ape" in c1_low:
+            current_section = "travaux"
+            continue
+        if c1.startswith("2.10") or "bilan sur la dur" in c1_low:
+            current_section = "bilan"
+            continue
+
+        # --- Marqueurs de categorie (engagement) + facteur CO2 ---
+        if c1_low.startswith("pour le gaz"):
+            current_category = "GAZ"
+            co2 = _to_float(row[1] if len(row) > 1 else None)
+            if co2 is not None:
+                out.append(DalkiaRecapRow("engagement", "GAZ", "facteur_co2", "Facteur CO2 gaz",
+                                          None, "T CO2/MWh", co2, "T_CO2_MWh"))
+            continue
+        if c1_low.startswith("pour l'electricite") or c1_low.startswith("pour l'électricité"):
+            current_category = "ELEC"
+            co2 = _to_float(row[1] if len(row) > 1 else None)
+            if co2 is not None:
+                out.append(DalkiaRecapRow("engagement", "ELEC", "facteur_co2", "Facteur CO2 elec",
+                                          None, "T CO2/MWh", co2, "T_CO2_MWh"))
+            continue
+        if c1_low.startswith("pour le pv"):
+            current_category = "PV"
+            continue
+
+        # --- Lignes d'en-tete de periodes ---
+        if c1.startswith("Paramètre") or c1.startswith("Parametre"):
+            current_period_map = _recap_period_map(row, start_col=1)
+            continue
+        if c1_low == "energie":  # en-tete section P1
+            current_period_map = _recap_period_map(row, start_col=1)
+            continue
+
+        # --- Section travaux (2.9) : layout categories x montants ---
+        if current_section == "travaux":
+            if c1_low in ("travaux ape", "amélioration", "amelioration", "conformité", "conformite", "total"):
+                # cols: 2=imputation, 3=hors_cee_ht, 4=hors_cee_ttc, 5=cee, 6=subv, 7=apres_deduction
+                def _v(idx: int) -> float | None:
+                    return _to_float(row[idx] if len(row) > idx else None)
+                cat = c1
+                pairs = [
+                    ("montant_hors_cee_ht", _v(2), "EUR_HT"),
+                    ("montant_hors_cee_ttc", _v(3), "EUR_TTC"),
+                    ("cee_eur", _v(4), "EUR"),
+                    ("subventions_eur", _v(5), "EUR"),
+                    ("montant_apres_deduction_ttc", _v(6), "EUR_TTC"),
+                ]
+                for metric, val, unit in pairs:
+                    if val is not None:
+                        out.append(DalkiaRecapRow("travaux", cat, metric, c1, None, "Total marche", val, unit))
+            continue
+
+        # --- Section bilan (2.10) : col2=HT, col3=TTC ---
+        if current_section == "bilan":
+            if c1 and not c1.startswith("Paramètre") and len(row) > 2:
+                ht = _to_float(row[1] if len(row) > 1 else None)
+                ttc = _to_float(row[2] if len(row) > 2 else None)
+                if ht is not None:
+                    out.append(DalkiaRecapRow("bilan", c1, "bilan_ht", c1, None, "Total marche", ht, "EUR_HT"))
+                if ttc is not None:
+                    out.append(DalkiaRecapRow("bilan", c1, "bilan_ttc", c1, None, "Total marche", ttc, "EUR_TTC"))
+            continue
+
+        # --- Lignes de metrique par periode ---
+        if not current_period_map:
+            continue
+
+        # Le libelle de metrique peut etre en col 1 (engagement, P2/P3) ou col 2 (P1 gaz).
+        c2 = _clean_str(row[1]) if len(row) > 1 else None
+        label_search = c1_low
+        if c2:
+            label_search = (label_search + " " + c2.lower()).strip()
+        metric_label = c1 if c1 else (c2 or "")
+
+        def _emit(section: str, category: str, metric: str, unit: str) -> None:
+            for col, year, label in current_period_map:
+                val = _to_float(row[col] if len(row) > col else None)
+                if val is not None:
+                    out.append(DalkiaRecapRow(section, category, metric, metric_label, year, label, val, unit))
+
+        # Sensibilisation P2 (2 lignes : 1ere = HT, 2eme = TTC)
+        if "sensibilisation" in label_search:
+            sensibilisation_seen += 1
+            metric = "p2_sensibilisation_ht" if sensibilisation_seen == 1 else "p2_sensibilisation_ttc"
+            unit = "EUR_HT" if sensibilisation_seen == 1 else "EUR_TTC"
+            _emit("sensibilisation", "P2_SENS", metric, unit)
+            continue
+
+        # Pourcentage d'economie total Global (R18/R19) -> category GLOBAL
+        if ("pourcentage" in label_search and "economie" in label_search.replace("é", "e") and "total" in label_search):
+            _emit("engagement", "GLOBAL", "pct_economie_global", "pct")
+            continue
+
+        # Pourcentage d'economie (par fluide)
+        if "pourcentage" in label_search and "economie" in label_search.replace("é", "e"):
+            _emit("engagement", current_category or "GAZ", "pct_economie", "pct")
+            continue
+
+        # Pourcentage d'autoconsommation
+        if "pourcentage" in label_search and "autoconsomma" in label_search:
+            _emit("engagement", "PV", "pct_autoconsommation", "pct")
+            continue
+
+        # Metriques definies par libelle
+        for label_match, section, forced_cat, metric, unit in METRIC_DEFS:
+            if label_match in label_search:
+                cat = forced_cat or current_category or "GAZ"
+                _emit(section, cat, metric, unit)
+                break
+
+    if not out:
+        warnings.append("RECAP MARCHE : aucune donnee financiere extraite")
+    return out, warnings
+
+
 # ---------------------------------------------------------------------------
 # Point d'entree principal
 # ---------------------------------------------------------------------------
@@ -579,6 +794,11 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
     ape_rows, w = _parse_ape(ape_raw, lot)
     all_warnings.extend(w)
 
+    # --- RECAP MARCHE (recapitulatif financier global) ---
+    recap_raw = _get_rows("RECAP MARCHE")
+    recap_rows, w = _parse_recap(recap_raw)
+    all_warnings.extend(w)
+
     # Extraire les labels de periodes (depuis P2 si disponible)
     period_labels: list[str] = []
     if p2p3_rows:
@@ -598,6 +818,7 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
         cibles_elec=cibles_elec,
         p1_gaz=p1_gaz,
         ape_rows=ape_rows,
+        recap_rows=recap_rows,
         warnings=all_warnings,
     )
 
@@ -624,6 +845,35 @@ def build_import_preview(result: DalkiaParseResult) -> DalkiaImportPreview:
             "qt_gaz_cible_2026": cible_gaz_2026.qt_global_mwhpci if cible_gaz_2026 else None,
         })
 
+    # --- Resume financier depuis RECAP MARCHE ---
+    def _recap_value(metric: str, year: int | None = None, category: str | None = None) -> float | None:
+        for r in result.recap_rows:
+            if r.metric == metric and (year is None or r.period_year == year) and (category is None or r.category == category):
+                return r.value
+        return None
+
+    # Bilan total sur la duree du marche (period_year None, section bilan)
+    bilan = {}
+    for r in result.recap_rows:
+        if r.section == "bilan" and r.metric == "bilan_ht":
+            bilan[r.category] = r.value
+
+    # P1/P2/P3 par annee (totaux HT)
+    by_year: dict[int, dict[str, float | None]] = {}
+    for year in PERIOD_YEARS:
+        by_year[year] = {
+            "p1_total_ht": _recap_value("p1_total_ht", year),
+            "p2_total_ht": _recap_value("p2_total_ht", year),
+            "p3_total_ht": _recap_value("p3_total_ht", year),
+        }
+
+    recap_summary = {
+        "bilan_marche_ht": bilan,
+        "by_year": by_year,
+        "facteur_co2_gaz": _recap_value("facteur_co2", category="GAZ"),
+        "facteur_co2_elec": _recap_value("facteur_co2", category="ELEC"),
+    }
+
     return DalkiaImportPreview(
         lot=result.lot,
         filename=result.filename,
@@ -632,6 +882,8 @@ def build_import_preview(result: DalkiaParseResult) -> DalkiaImportPreview:
         nb_cibles_rows=len(result.cibles_gaz) + len(result.cibles_elec),
         nb_p1_gaz_rows=len(result.p1_gaz),
         nb_ape_rows=len(result.ape_rows),
+        nb_recap_rows=len(result.recap_rows),
+        recap_summary=recap_summary,
         period_labels=result.period_labels,
         sample_sites=sample_sites,
         warnings=result.warnings,

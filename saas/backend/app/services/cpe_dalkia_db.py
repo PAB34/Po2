@@ -10,6 +10,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,
     CpeDalkiaRefP2P3,
+    CpeDalkiaRefRecap,
     CpeDalkiaRefSite,
 )
 from app.models.user import User
@@ -66,6 +67,18 @@ def get_ape_for_import(db: Session, import_id: int) -> list[CpeDalkiaRefApe]:
     ))
 
 
+def get_recap_for_import(
+    db: Session, import_id: int, section: str | None = None
+) -> list[CpeDalkiaRefRecap]:
+    stmt = select(CpeDalkiaRefRecap).where(CpeDalkiaRefRecap.import_id == import_id)
+    if section is not None:
+        stmt = stmt.where(CpeDalkiaRefRecap.section == section)
+    return list(db.scalars(stmt.order_by(
+        CpeDalkiaRefRecap.section, CpeDalkiaRefRecap.category,
+        CpeDalkiaRefRecap.metric, CpeDalkiaRefRecap.period_year,
+    )))
+
+
 def persist_dalkia_import(
     db: Session,
     result: DalkiaParseResult,
@@ -103,6 +116,7 @@ def persist_dalkia_import(
         nb_cibles_rows=len(result.cibles_gaz) + len(result.cibles_elec),
         nb_p1_gaz_rows=len(result.p1_gaz),
         nb_ape_rows=len(result.ape_rows),
+        nb_recap_rows=len(result.recap_rows),
         is_active=True,
         notes=f"Warnings: {len(result.warnings)}" if result.warnings else None,
     )
@@ -198,6 +212,21 @@ def persist_dalkia_import(
             recette_vente_energie_ht=row.recette_vente_energie_ht,
             ratio_ht_mwhpci=row.ratio_ht_mwhpci,
             commentaires=row.commentaires,
+        ))
+
+    # RECAP MARCHE (recapitulatif financier global)
+    for row in result.recap_rows:
+        db.add(CpeDalkiaRefRecap(
+            import_id=batch.id,
+            city_id=city_id,
+            section=row.section,
+            category=row.category,
+            metric=row.metric,
+            metric_label=row.metric_label,
+            period_year=row.period_year,
+            period_label=row.period_label,
+            value=row.value,
+            unit=row.unit,
         ))
 
     db.commit()
