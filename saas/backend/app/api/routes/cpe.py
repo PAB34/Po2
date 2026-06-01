@@ -1,6 +1,8 @@
 """Routes API CPE DALKIA — Contrat de Performance Énergétique."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -494,6 +496,20 @@ def recalculate_finance_controls(
 ) -> CpeFinanceControlReportOut:
     return CpeFinanceControlReportOut.model_validate(
         accounting_svc.build_finance_control_report(db, current_user.city_id, recalculate=True)
+    )
+
+
+@router.get("/finances/controls/report.xlsx")
+def export_finance_control_report(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content = accounting_svc.build_finance_control_report_workbook(db, current_user.city_id)
+    filename = f"rapport-controle-global-cpe-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

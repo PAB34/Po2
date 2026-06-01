@@ -2012,6 +2012,138 @@ def build_finance_control_report(
     }
 
 
+def build_finance_control_report_workbook(
+    db: Session,
+    city_id: int | None = None,
+) -> bytes:
+    report = build_finance_control_report(db, city_id, recalculate=False)
+    invoice_ids = [item["invoice_id"] for item in report["invoices"]]
+    controls_by_invoice: dict[int, list[CpeFinanceControl]] = defaultdict(list)
+    if invoice_ids:
+        for control in db.scalars(
+            select(CpeFinanceControl)
+            .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
+            .order_by(CpeFinanceControl.invoice_id, CpeFinanceControl.status.desc(), CpeFinanceControl.id)
+        ).all():
+            controls_by_invoice[control.invoice_id].append(control)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthese"
+    ws["A1"] = "Rapport controle global factures CPE"
+    ws["A1"].font = Font(bold=True, size=15)
+    ws["A3"] = "Genere le"
+    ws["B3"] = report["generated_at"].strftime("%Y-%m-%d %H:%M:%S")
+    ws["A4"] = "Perimetre"
+    ws["B4"] = report["scope"]
+    ws["A5"] = "Factures analysees"
+    ws["B5"] = report["invoice_count"]
+    ws["A6"] = "Montant total HT controle"
+    ws["B6"] = report["total_ht"]
+    ws["B6"].number_format = '#,##0.00 "EUR"'
+    ws["A7"] = "Factures conformes"
+    ws["B7"] = report["invoices_ok"]
+    ws["A8"] = "Factures avec ecarts"
+    ws["B8"] = report["invoices_with_errors"]
+    ws["A9"] = "Factures bloquees"
+    ws["B9"] = report["invoices_blocked"]
+
+    ws["A11"] = "Repartition des controles"
+    ws["A11"].font = Font(bold=True)
+    headers = ["Type de controle", "OK", "Ecarts", "Bloques", "Total"]
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=12, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F4E78")
+    row = 13
+    for item in report["control_types"]:
+        ws.cell(row=row, column=1, value=_control_type_label(item["control_type"]))
+        ws.cell(row=row, column=2, value=item["ok"])
+        ws.cell(row=row, column=3, value=item["error"])
+        ws.cell(row=row, column=4, value=item["blocked"])
+        ws.cell(row=row, column=5, value=item["total"])
+        row += 1
+    _set_widths(ws, [42, 12, 12, 12, 12])
+
+    ws_queue = wb.create_sheet("File priorisee")
+    queue_headers = [
+        "Facture",
+        "Contrat",
+        "Type",
+        "HT",
+        "Decision",
+        "Echeance",
+        "Jours avant echeance",
+        "Statut echeance",
+        "Transmis finances",
+        "OK",
+        "Ecarts",
+        "Bloques",
+        "Familles a traiter",
+    ]
+    for col, header in enumerate(queue_headers, start=1):
+        cell = ws_queue.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F4E78")
+    row = 2
+    for item in report["invoices"]:
+        ws_queue.cell(row=row, column=1, value=item["invoice_number"])
+        ws_queue.cell(row=row, column=2, value=item["contract_label"] or item["contract_code"])
+        ws_queue.cell(row=row, column=3, value=item["invoice_type"])
+        ws_queue.cell(row=row, column=4, value=item["total_ht"]).number_format = '#,##0.00 "EUR"'
+        ws_queue.cell(row=row, column=5, value=item["invoice_status"])
+        ws_queue.cell(row=row, column=6, value=str(item["due_date"]) if item["due_date"] else None)
+        ws_queue.cell(row=row, column=7, value=item["due_in_days"])
+        ws_queue.cell(row=row, column=8, value=item["deadline_status"])
+        ws_queue.cell(row=row, column=9, value=str(item["finance_exported_at"]) if item["finance_exported_at"] else "Non")
+        ws_queue.cell(row=row, column=10, value=item["ok"])
+        ws_queue.cell(row=row, column=11, value=item["error"])
+        ws_queue.cell(row=row, column=12, value=item["blocked"])
+        ws_queue.cell(
+            row=row,
+            column=13,
+            value=", ".join(_control_type_label(control_type) for control_type in item["control_types"]) or "Aucune anomalie",
+        )
+        row += 1
+    _set_widths(ws_queue, [18, 34, 12, 14, 14, 14, 18, 20, 22, 8, 8, 8, 46])
+    ws_queue.auto_filter.ref = f"A1:M{max(2, row - 1)}"
+
+    ws_detail = wb.create_sheet("Detail controles")
+    detail_headers = [
+        "Facture",
+        "Type controle",
+        "Statut",
+        "Message",
+        "Cause probable",
+        "Action recommandee",
+        "Formule",
+        "Trace calcul",
+    ]
+    for col, header in enumerate(detail_headers, start=1):
+        cell = ws_detail.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="1F4E78")
+    row = 2
+    for invoice in report["invoices"]:
+        for control in controls_by_invoice.get(invoice["invoice_id"], []):
+            ws_detail.cell(row=row, column=1, value=invoice["invoice_number"])
+            ws_detail.cell(row=row, column=2, value=_control_type_label(control.control_type))
+            ws_detail.cell(row=row, column=3, value=control.status)
+            ws_detail.cell(row=row, column=4, value=control.message)
+            ws_detail.cell(row=row, column=5, value=_control_probable_cause(control))
+            ws_detail.cell(row=row, column=6, value=_control_recommended_action(control))
+            ws_detail.cell(row=row, column=7, value=control.formula)
+            ws_detail.cell(row=row, column=8, value=_control_calculation_trace(control))
+            row += 1
+    _set_widths(ws_detail, [18, 28, 12, 56, 52, 52, 44, 64])
+    ws_detail.auto_filter.ref = f"A1:H{max(2, row - 1)}"
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def list_finance_batches(db: Session, city_id: int | None = None) -> list[CpeFinanceImportBatch]:
     query = select(CpeFinanceImportBatch)
     if city_id is not None:

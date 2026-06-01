@@ -56,6 +56,7 @@ import {
   recalculateAllCpeFinanceControls,
   deleteCpeAccountingSiteMapping,
   downloadCpeFinanceInvoiceLiaison,
+  downloadCpeFinanceControlReport,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateCpeContractReference,
@@ -460,6 +461,20 @@ export default function CpeDalkiaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
       qc.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
+    },
+  });
+
+  const exportGlobalControlReportM = useMutation({
+    mutationFn: async () => {
+      const blob = await downloadCpeFinanceControlReport(token!);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `rapport-controle-global-cpe-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
     },
   });
 
@@ -2818,9 +2833,19 @@ function CpeFinanceReference({
               Recalcule les contrôles contractuels, comptables et documentaires sur toutes les factures des contrats actifs CPE Ville.
             </p>
           </div>
-          <button type="button" className="primary-button" onClick={onRecalculateAllControls} disabled={controlsPending}>
-            {controlsPending ? "Contrôle en cours..." : "Lancer le contrôle global"}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="primary-button" onClick={onRecalculateAllControls} disabled={controlsPending}>
+              {controlsPending ? "Contrôle en cours..." : "Lancer le contrôle global"}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => exportGlobalControlReportM.mutate()}
+              disabled={controlsPending || exportGlobalControlReportM.isPending}
+            >
+              {exportGlobalControlReportM.isPending ? "Préparation du rapport..." : "Éditer le rapport"}
+            </button>
+          </div>
         </div>
 
         {controlReport ? (

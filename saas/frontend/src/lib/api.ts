@@ -3398,6 +3398,17 @@ export async function recalculateAllCpeFinanceControls(token: string): Promise<C
   return parseResponse<CpeFinanceControlReport>(response);
 }
 
+export async function downloadCpeFinanceControlReport(token: string): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/controls/report.xlsx`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur ${response.status}`);
+  }
+  return response.blob();
+}
+
 export async function updateCpeFinanceInvoice(
   token: string,
   invoiceId: number,
