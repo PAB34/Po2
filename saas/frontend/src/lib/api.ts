@@ -2981,12 +2981,18 @@ export type CpeRevisionObservation = {
 export type CpeInvoiceEvidence = {
   id: number;
   city_id: number | null;
-  invoice_id: number;
+  invoice_id: number | null;
   uploaded_by_user_id: number;
   original_filename: string;
   sha256: string;
   extraction_status: string;
   validation_status: string;
+  evidence_kind: string;
+  market: string | null;
+  contract_code: string | null;
+  year: number | null;
+  quarter: number | null;
+  effective_date: string | null;
   declared_invoice_number: string | null;
   revision_date: string | null;
   declared_factor: number | null;
@@ -3274,6 +3280,22 @@ export async function fetchCpeRevisionIndices(token: string, year?: number): Pro
 export async function fetchCpeRevisionObservations(token: string): Promise<CpeRevisionObservation[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/revision-observations`, { headers: buildHeaders(token) });
   return parseResponse<CpeRevisionObservation[]>(response);
+}
+
+export async function fetchCpeRevisionEvidences(token: string): Promise<CpeInvoiceEvidence[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-evidences`, { headers: buildHeaders(token) });
+  return parseResponse<CpeInvoiceEvidence[]>(response);
+}
+
+export async function uploadCpeRevisionEvidencePdf(token: string, file: File): Promise<CpeInvoiceEvidence> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-evidences`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeInvoiceEvidence>(response);
 }
 
 export async function uploadCpeInvoiceEvidencePdf(token: string, invoiceId: number, file: File): Promise<CpeInvoiceEvidence> {

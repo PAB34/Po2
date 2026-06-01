@@ -29,6 +29,7 @@ from app.models.cpe import (
     CpeFinanceInvoice,
     CpeFinanceLine,
     CpeInvoiceEvidence,
+    CpeInvoiceEvidenceLink,
     CpeResultatAnnuel,
     CpeRevisionIndex,
     CpeSite,
@@ -899,6 +900,89 @@ def extract_invoice_evidence_pdf(raw_bytes: bytes) -> dict[str, Any]:
     }
 
 
+def _link_evidence_to_invoice(db: Session, evidence: CpeInvoiceEvidence, invoice: CpeFinanceInvoice) -> None:
+    existing = db.scalars(
+        select(CpeInvoiceEvidenceLink).where(
+            CpeInvoiceEvidenceLink.evidence_id == evidence.id,
+            CpeInvoiceEvidenceLink.invoice_id == invoice.id,
+        )
+    ).first()
+    if existing is None:
+        db.add(CpeInvoiceEvidenceLink(evidence_id=evidence.id, invoice_id=invoice.id))
+    if evidence.invoice_id is None:
+        evidence.invoice_id = invoice.id
+
+
+def add_revision_evidence_pdf(
+    db: Session,
+    raw_bytes: bytes,
+    *,
+    filename: str,
+    uploaded_by_user_id: int,
+    city_id: int | None,
+    invoice: CpeFinanceInvoice | None = None,
+) -> CpeInvoiceEvidence:
+    if not filename.lower().endswith(".pdf"):
+        raise ValueError("Le justificatif doit etre une facture PDF DALKIA.")
+    extracted = extract_invoice_evidence_pdf(raw_bytes)
+    declared_number = extracted["declared_invoice_number"]
+    if invoice is not None and declared_number and declared_number != invoice.invoice_number:
+        raise ValueError(
+            f"Le PDF concerne la facture {declared_number}, pas la facture {invoice.invoice_number}."
+        )
+
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    existing = db.scalars(
+        select(CpeInvoiceEvidence).where(
+            CpeInvoiceEvidence.city_id == city_id,
+            CpeInvoiceEvidence.sha256 == sha256,
+        )
+    ).first()
+    if existing:
+        if invoice is not None:
+            _link_evidence_to_invoice(db, existing, invoice)
+            db.commit()
+            db.refresh(existing)
+        return existing
+
+    if invoice is None and declared_number:
+        invoice = db.scalars(
+            select(CpeFinanceInvoice).where(
+                CpeFinanceInvoice.city_id == city_id,
+                CpeFinanceInvoice.invoice_number == declared_number,
+            )
+        ).first()
+
+    target_dir = Path(settings.invoice_storage_dir) / "cpe" / str(city_id or "global")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    document_ref = declared_number or (invoice.invoice_number if invoice else "revision")
+    storage_path = target_dir / f"{document_ref}-{sha256[:12]}.pdf"
+    storage_path.write_bytes(raw_bytes)
+    revision_date = extracted.get("revision_date")
+    evidence = CpeInvoiceEvidence(
+        city_id=city_id,
+        invoice_id=invoice.id if invoice else None,
+        uploaded_by_user_id=uploaded_by_user_id,
+        original_filename=filename,
+        storage_path=str(storage_path),
+        sha256=sha256,
+        extraction_status="parsed",
+        validation_status="declared_to_verify",
+        evidence_kind="invoice_pdf",
+        year=revision_date.year if revision_date else None,
+        quarter=((revision_date.month - 1) // 3) + 1 if revision_date else None,
+        effective_date=revision_date,
+        **extracted,
+    )
+    db.add(evidence)
+    db.flush()
+    if invoice is not None:
+        _link_evidence_to_invoice(db, evidence, invoice)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
 def add_invoice_evidence_pdf(
     db: Session,
     invoice: CpeFinanceInvoice,
@@ -907,44 +991,22 @@ def add_invoice_evidence_pdf(
     filename: str,
     uploaded_by_user_id: int,
 ) -> CpeInvoiceEvidence:
-    if not filename.lower().endswith(".pdf"):
-        raise ValueError("Le justificatif doit etre une facture PDF DALKIA.")
-    extracted = extract_invoice_evidence_pdf(raw_bytes)
-    declared_number = extracted["declared_invoice_number"]
-    if declared_number and declared_number != invoice.invoice_number:
-        raise ValueError(
-            f"Le PDF concerne la facture {declared_number}, pas la facture {invoice.invoice_number}."
-        )
-
-    sha256 = hashlib.sha256(raw_bytes).hexdigest()
-    existing = db.scalars(
-        select(CpeInvoiceEvidence).where(
-            CpeInvoiceEvidence.invoice_id == invoice.id,
-            CpeInvoiceEvidence.sha256 == sha256,
-        )
-    ).first()
-    if existing:
-        return existing
-
-    target_dir = Path(settings.invoice_storage_dir) / "cpe" / str(invoice.city_id or "global")
-    target_dir.mkdir(parents=True, exist_ok=True)
-    storage_path = target_dir / f"{invoice.invoice_number}-{sha256[:12]}.pdf"
-    storage_path.write_bytes(raw_bytes)
-    evidence = CpeInvoiceEvidence(
-        city_id=invoice.city_id,
-        invoice_id=invoice.id,
+    return add_revision_evidence_pdf(
+        db,
+        raw_bytes,
+        filename=filename,
         uploaded_by_user_id=uploaded_by_user_id,
-        original_filename=filename,
-        storage_path=str(storage_path),
-        sha256=sha256,
-        extraction_status="parsed",
-        validation_status="declared_to_verify",
-        **extracted,
+        city_id=invoice.city_id,
+        invoice=invoice,
     )
-    db.add(evidence)
-    db.commit()
-    db.refresh(evidence)
-    return evidence
+
+
+def list_revision_evidences(db: Session, city_id: int | None = None) -> list[CpeInvoiceEvidence]:
+    query = select(CpeInvoiceEvidence)
+    if city_id is not None:
+        query = query.where(CpeInvoiceEvidence.city_id == city_id)
+    query = query.order_by(CpeInvoiceEvidence.created_at.desc(), CpeInvoiceEvidence.id.desc())
+    return list(db.scalars(query).all())
 
 
 def apply_invoice_evidence_declared_indices(db: Session, evidence: CpeInvoiceEvidence) -> list[CpeRevisionIndex]:
@@ -986,7 +1048,7 @@ def apply_invoice_evidence_declared_indices(db: Session, evidence: CpeInvoiceEvi
             )
             db.add(existing)
         existing.value = value
-        existing.source = f"Facture DALKIA {evidence.declared_invoice_number or evidence.invoice_id}"
+        existing.source = f"Facture DALKIA {evidence.declared_invoice_number or evidence.invoice_id or evidence.id}"
         existing.verification_status = "declared_to_verify"
         existing.evidence_id = evidence.id
         existing.notes = "Valeur declaree dans le PDF DALKIA ; verification externe requise."
@@ -2578,10 +2640,12 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
 def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:
     invoice_ids = list(db.scalars(select(CpeFinanceInvoice.id).where(CpeFinanceInvoice.batch_id == batch.id)).all())
     if invoice_ids:
-        db.execute(delete(CpeRevisionIndex).where(CpeRevisionIndex.evidence_id.in_(
-            select(CpeInvoiceEvidence.id).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
-        )))
-        db.execute(delete(CpeInvoiceEvidence).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids)))
+        db.execute(delete(CpeInvoiceEvidenceLink).where(CpeInvoiceEvidenceLink.invoice_id.in_(invoice_ids)))
+        db.execute(
+            CpeInvoiceEvidence.__table__.update()
+            .where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
+            .values(invoice_id=None)
+        )
     db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id == batch.id))
     db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id == batch.id))
     db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id == batch.id))
@@ -2600,9 +2664,12 @@ def delete_finance_history(db: Session, city_id: int | None = None) -> dict[str,
 
     invoice_ids = list(db.scalars(select(CpeFinanceInvoice.id).where(CpeFinanceInvoice.batch_id.in_(batch_ids))).all())
     if invoice_ids:
-        evidence_ids = select(CpeInvoiceEvidence.id).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
-        db.execute(delete(CpeRevisionIndex).where(CpeRevisionIndex.evidence_id.in_(evidence_ids)))
-        db.execute(delete(CpeInvoiceEvidence).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids)))
+        db.execute(delete(CpeInvoiceEvidenceLink).where(CpeInvoiceEvidenceLink.invoice_id.in_(invoice_ids)))
+        db.execute(
+            CpeInvoiceEvidence.__table__.update()
+            .where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
+            .values(invoice_id=None)
+        )
     controls_deleted = db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id.in_(batch_ids))).rowcount or 0
     lines_deleted = db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id.in_(batch_ids))).rowcount or 0
     invoices_deleted = db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id.in_(batch_ids))).rowcount or 0

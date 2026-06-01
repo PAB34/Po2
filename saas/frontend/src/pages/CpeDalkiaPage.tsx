@@ -24,6 +24,7 @@ import {
   CpeFinanceImportBatch,
   CpeFinanceImportResult,
   CpeFinanceInvoice,
+  CpeInvoiceEvidence,
   CpeFinancePreview,
   CpeAccountingImportResult,
   CpeRevisionIndex,
@@ -44,6 +45,7 @@ import {
   fetchCpeFinanceBatches,
   fetchCpeRevisionIndices,
   fetchCpeRevisionObservations,
+  fetchCpeRevisionEvidences,
   fetchCpeFinanceInvoices,
   importCpeCsv,
   importCpeAccountingCodification,
@@ -59,6 +61,7 @@ import {
   updateCpeFinanceInvoice,
   upsertCpeRevisionIndex,
   uploadCpeInvoiceEvidencePdf,
+  uploadCpeRevisionEvidencePdf,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -153,7 +156,7 @@ const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail
   { id: "sites", label: "Sites", detail: "VDS, CCAS et rattachements" },
   { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
   { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
-  { id: "indices", label: "Indices", detail: "ICHT-IME, BT40, FSD2" },
+  { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources" },
   { id: "invoices", label: "Factures", detail: "Archives et fiches liaison" },
 ];
 
@@ -332,6 +335,12 @@ export default function CpeDalkiaPage() {
     enabled: !!token && view === "finance",
   });
 
+  const revisionEvidencesQ = useQuery({
+    queryKey: ["cpe-revision-evidences"],
+    queryFn: () => fetchCpeRevisionEvidences(token!),
+    enabled: !!token && view === "finance",
+  });
+
   const calculerM = useMutation({
     mutationFn: () => calculerCpeBilan(token!, annee),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] }),
@@ -478,7 +487,18 @@ export default function CpeDalkiaPage() {
 
   const uploadEvidencePdfM = useMutation({
     mutationFn: ({ invoiceId, file }: { invoiceId: number; file: File }) => uploadCpeInvoiceEvidencePdf(token!, invoiceId, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-evidences"] });
+    },
+  });
+
+  const uploadRevisionEvidencePdfM = useMutation({
+    mutationFn: (file: File) => uploadCpeRevisionEvidencePdf(token!, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-evidences"] });
+    },
   });
 
   const applyEvidenceIndicesM = useMutation({
@@ -486,6 +506,7 @@ export default function CpeDalkiaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
       qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-evidences"] });
     },
   });
 
@@ -556,6 +577,7 @@ export default function CpeDalkiaPage() {
           invoices={financeInvoicesQ.data ?? []}
           indices={revisionIndicesQ.data ?? []}
           revisionObservations={revisionObservationsQ.data ?? []}
+          revisionEvidences={revisionEvidencesQ.data ?? []}
           lastControls={recalculateControlsM.data ?? null}
           loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || contractReferencesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
@@ -573,7 +595,7 @@ export default function CpeDalkiaPage() {
           deleteNatureRulePending={deleteNatureRuleM.isPending}
           saveContractReferencePending={saveContractReferenceM.isPending}
           deleteContractReferencePending={deleteContractReferenceM.isPending}
-          invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending || uploadEvidencePdfM.isPending || applyEvidenceIndicesM.isPending}
+          invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending || uploadEvidencePdfM.isPending || uploadRevisionEvidencePdfM.isPending || applyEvidenceIndicesM.isPending}
           indexSavePending={upsertRevisionIndexM.isPending}
           controlsPending={recalculateControlsM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
@@ -588,6 +610,7 @@ export default function CpeDalkiaPage() {
           onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
           onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
           onUploadEvidencePdf={(invoiceId, file) => uploadEvidencePdfM.mutate({ invoiceId, file })}
+          onUploadRevisionEvidencePdf={(file) => uploadRevisionEvidencePdfM.mutate(file)}
           onApplyEvidenceIndices={(evidenceId) => applyEvidenceIndicesM.mutate(evidenceId)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
           onRecalculateControls={(invoiceId) => recalculateControlsM.mutate(invoiceId)}
@@ -1163,6 +1186,7 @@ function CpeFinanceReference({
   invoices,
   indices,
   revisionObservations,
+  revisionEvidences,
   lastControls,
   loading,
   codificationImportPending,
@@ -1195,6 +1219,7 @@ function CpeFinanceReference({
   onInvoiceStatus,
   onExportLiaison,
   onUploadEvidencePdf,
+  onUploadRevisionEvidencePdf,
   onApplyEvidenceIndices,
   onSaveIndex,
   onRecalculateControls,
@@ -1209,6 +1234,7 @@ function CpeFinanceReference({
   invoices: CpeFinanceInvoice[];
   indices: CpeRevisionIndex[];
   revisionObservations: CpeRevisionObservation[];
+  revisionEvidences: CpeInvoiceEvidence[];
   lastControls: CpeFinanceControl[] | null;
   loading: boolean;
   codificationImportPending: boolean;
@@ -1245,6 +1271,7 @@ function CpeFinanceReference({
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
   onUploadEvidencePdf: (invoiceId: number, file: File) => void;
+  onUploadRevisionEvidencePdf: (file: File) => void;
   onApplyEvidenceIndices: (evidenceId: number) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) => void;
   onRecalculateControls: (invoiceId: number) => void;
@@ -1258,6 +1285,7 @@ function CpeFinanceReference({
   const [section, setSection] = useState<CpeFinanceSection>("imports");
   const [evidenceInvoiceId, setEvidenceInvoiceId] = useState<number | null>(null);
   const evidencePdfRef = useRef<HTMLInputElement>(null);
+  const revisionEvidencePdfRef = useRef<HTMLInputElement>(null);
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [referenceFilter, setReferenceFilter] = useState("");
@@ -1785,6 +1813,44 @@ function CpeFinanceReference({
 
       {section === "indices" && (
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px" }}>Formules contractuelles et indices de revision</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+              Centralise les regles P1, P2, P3, les coefficients observes et les preuves PDF DALKIA.
+            </p>
+          </div>
+          <button type="button" className="primary-button" onClick={() => revisionEvidencePdfRef.current?.click()} disabled={invoiceActionPending}>
+            Importer PDF justificatif
+          </button>
+          <input
+            ref={revisionEvidencePdfRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: "none" }}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUploadRevisionEvidencePdf(file);
+              event.target.value = "";
+            }}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 18 }}>
+          {[
+            ["P1 gaz", "P1 = QT x Pugaz", "PEG, TVD, CEE, TICGN et OS gaz applicables."],
+            ["P2", "P2 = P20 x (0,15 + 0,70 x ICHT-IME / ICHT-IME0 + 0,15 x FSD2 / FSD20)", "Formule commune P2. Taux horaires BPU revises comme le P2."],
+            ["P3", "P3 = P30 x (0,15 + 0,30 x ICHT-IME / ICHT-IME0 + 0,55 x BT40 / BT400)", "Formule commune P3.1 a P3.4 confirmee apres mise au point."],
+            ["Regles associees", "P2.4, BPU et compte P3", "P2.4 annuel a 100% ou 50%. Coefficients materiels et sous-traitance BPU fixes."],
+          ].map(([title, formula, detail]) => (
+            <div key={title} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 12, background: "#f9fafb" }}>
+              <strong style={{ display: "block", marginBottom: 6 }}>{title}</strong>
+              <div style={{ color: "#1f2937", fontSize: 12, marginBottom: 6 }}>{formula}</div>
+              <div style={{ color: "#6b7280", fontSize: 12 }}>{detail}</div>
+            </div>
+          ))}
+        </div>
+
         {revisionObservations.length > 0 && (
           <div style={{ marginBottom: 18 }}>
             <h3 style={{ margin: "0 0 4px" }}>Coefficients observes dans les factures DALKIA</h3>
@@ -1845,6 +1911,54 @@ function CpeFinanceReference({
             </div>
           </div>
         )}
+        <div style={{ marginBottom: 18 }}>
+          <h3 style={{ margin: "0 0 4px" }}>Pieces justificatives de revision</h3>
+          <p style={{ margin: "0 0 10px", color: "#6b7280", fontSize: 13 }}>
+            Les valeurs extraites restent declarees par DALKIA jusqu'a verification explicite depuis une source officielle.
+          </p>
+          {revisionEvidences.length === 0 ? (
+            <span style={{ color: "#9ca3af", fontSize: 13 }}>Aucun justificatif importe.</span>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <th style={thStyle}>Document</th>
+                    <th style={thStyle}>Facture detectee</th>
+                    <th style={thStyle}>Revision</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Coefficient</th>
+                    <th style={thStyle}>Indices declares</th>
+                    <th style={thStyle}>Statut</th>
+                    <th style={thStyle}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revisionEvidences.map((evidence) => (
+                    <tr key={evidence.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={tdStyle}>{evidence.original_filename}</td>
+                      <td style={tdStyle}>{evidence.declared_invoice_number ?? "-"}</td>
+                      <td style={tdStyle}>{evidence.revision_date ?? "-"}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>{evidence.declared_factor == null ? "-" : fmt(evidence.declared_factor, 6)}</td>
+                      <td style={tdStyle}>
+                        {[
+                          evidence.declared_icht_ime == null ? null : `ICHT-IME ${fmt(evidence.declared_icht_ime, 3)}`,
+                          evidence.declared_fsd2 == null ? null : `FSD2 ${fmt(evidence.declared_fsd2, 3)}`,
+                          evidence.declared_bt40 == null ? null : `BT40 ${fmt(evidence.declared_bt40, 3)}`,
+                        ].filter(Boolean).join(" / ") || "-"}
+                      </td>
+                      <td style={tdStyle}><span className="badge-orange">Declare DALKIA - a verifier</span></td>
+                      <td style={tdStyle}>
+                        <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "3px 8px" }} onClick={() => onApplyEvidenceIndices(evidence.id)} disabled={invoiceActionPending}>
+                          Appliquer les indices declares
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
             <h3 style={{ margin: "0 0 4px" }}>Indices et references de base (P1 / P2 / P3)</h3>

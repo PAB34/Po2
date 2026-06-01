@@ -195,3 +195,27 @@ L'entree `/cpe` devra egalement recevoir un module principal `Travaux P3` avec :
 4. Recalculer automatiquement les factures affectees.
 5. Developper ensuite le referentiel BPU P3 puis le workflow de demandes de travaux.
 
+## Increment livre le 2026-06-01
+
+Premier increment de la refonte :
+
+- migration additive `0031_generalize_cpe_revision_evidences.py` ;
+- `0030` conservee intacte ;
+- preuve PDF autorisee sans facture preselectionnee ;
+- table `cpe_invoice_evidence_links` pour rattacher une preuve a plusieurs factures ;
+- auto-rattachement a une facture archivee lorsque son numero est extrait du PDF ;
+- conservation des preuves et indices lorsqu'un historique de factures est supprime ;
+- endpoints `GET/POST /api/cpe/revision-evidences` ;
+- entree frontend renommee `Formules et indices` ;
+- affichage des fiches P1, P2, P3 et regles associees ;
+- import PDF centralise et registre des justificatifs ;
+- application explicite des indices declares depuis le registre.
+
+Reste a faire :
+
+1. ajouter un historique detaille des changements de statut d'une preuve ;
+2. afficher les liaisons multiples preuve vers factures ;
+3. permettre le rattachement manuel d'une preuve a une formule/version contractuelle ;
+4. recalculer automatiquement toutes les factures affectees apres application d'indices ;
+5. ajouter les sources officielles et le passage explicite au statut `official_verified` ;
+6. poursuivre avec le catalogue BPU et le workflow `Travaux P3`.

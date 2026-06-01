@@ -295,3 +295,12 @@ Decision :
 Note detaillee :
 
 - `docs/energie/CPE-DALKIA/15-Formules-indices-et-travaux-P3.md`
+
+Increment 1 implemente :
+
+- migration `0031_generalize_cpe_revision_evidences.py` ;
+- preuves PDF de revision importables depuis `Formules et indices`, meme sans facture preselectionnee ;
+- rattachement multi-factures par `cpe_invoice_evidence_links` ;
+- auto-rattachement lorsque le numero de facture est extrait du PDF ;
+- preservation des preuves lors de la suppression d'un historique de factures ;
+- affichage des formules P1/P2/P3 et registre central des justificatifs dans `/cpe`.

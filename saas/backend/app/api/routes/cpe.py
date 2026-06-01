@@ -409,6 +409,34 @@ def list_revision_observations(
     return [CpeRevisionObservationOut.model_validate(item) for item in observations]
 
 
+@router.get("/revision-evidences", response_model=list[CpeInvoiceEvidenceOut])
+def list_revision_evidences(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeInvoiceEvidenceOut]:
+    evidences = accounting_svc.list_revision_evidences(db, current_user.city_id)
+    return [CpeInvoiceEvidenceOut.model_validate(item) for item in evidences]
+
+
+@router.post("/revision-evidences", response_model=CpeInvoiceEvidenceOut)
+async def upload_revision_evidence_pdf(
+    file: UploadFile = File(..., description="Facture PDF DALKIA justificative"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeInvoiceEvidenceOut:
+    try:
+        evidence = accounting_svc.add_revision_evidence_pdf(
+            db,
+            await file.read(),
+            filename=file.filename or "facture-dalkia.pdf",
+            uploaded_by_user_id=current_user.id,
+            city_id=current_user.city_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return CpeInvoiceEvidenceOut.model_validate(evidence)
+
+
 @router.post("/finances/invoices/{invoice_id}/evidence-pdf", response_model=CpeInvoiceEvidenceOut)
 async def upload_invoice_evidence_pdf(
     invoice_id: int,

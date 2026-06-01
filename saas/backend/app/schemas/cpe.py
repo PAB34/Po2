@@ -450,12 +450,18 @@ class CpeInvoiceEvidenceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     city_id: int | None
-    invoice_id: int
+    invoice_id: int | None
     uploaded_by_user_id: int
     original_filename: str
     sha256: str
     extraction_status: str
     validation_status: str
+    evidence_kind: str
+    market: str | None
+    contract_code: str | None
+    year: int | None
+    quarter: int | None
+    effective_date: date | None
     declared_invoice_number: str | None
     revision_date: date | None
     declared_factor: float | None
