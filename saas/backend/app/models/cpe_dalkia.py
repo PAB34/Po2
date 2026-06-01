@@ -92,12 +92,13 @@ class CpeDalkiaRefP2P3(Base):
 
 
 class CpeDalkiaRefCible(Base):
-    """Cibles de consommation par site x periode x fluide."""
+    """Cibles de consommation par site x periode x fluide.
+
+    Pas de contrainte unique sur (code_site, fluid, period_idx) : un meme site peut avoir
+    plusieurs lignes par periode (sous-compteurs, PV...).
+    """
 
     __tablename__ = "cpe_dalkia_ref_cibles"
-    __table_args__ = (
-        UniqueConstraint("import_id", "code_site", "fluid", "period_idx", name="uq_dalkia_cible"),
-    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     import_id: Mapped[int] = mapped_column(
