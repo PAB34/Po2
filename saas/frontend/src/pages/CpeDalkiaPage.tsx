@@ -27,6 +27,7 @@ import {
   CpeFinancePreview,
   CpeAccountingImportResult,
   CpeRevisionIndex,
+  CpeRevisionObservation,
   CpeSiteBilanItem,
   calculerCpeBilan,
   createCpeAccountingNatureRule,
@@ -42,10 +43,12 @@ import {
   fetchCpeDju,
   fetchCpeFinanceBatches,
   fetchCpeRevisionIndices,
+  fetchCpeRevisionObservations,
   fetchCpeFinanceInvoices,
   importCpeCsv,
   importCpeAccountingCodification,
   importCpeFinanceExport,
+  applyCpeInvoiceEvidenceDeclaredIndices,
   previewCpeFinanceExport,
   recalculateCpeFinanceControls,
   deleteCpeAccountingSiteMapping,
@@ -55,6 +58,7 @@ import {
   updateCpeContractReference,
   updateCpeFinanceInvoice,
   upsertCpeRevisionIndex,
+  uploadCpeInvoiceEvidencePdf,
   upsertCpePrixGaz,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -322,6 +326,12 @@ export default function CpeDalkiaPage() {
     enabled: !!token && view === "finance",
   });
 
+  const revisionObservationsQ = useQuery({
+    queryKey: ["cpe-revision-observations"],
+    queryFn: () => fetchCpeRevisionObservations(token!),
+    enabled: !!token && view === "finance",
+  });
+
   const calculerM = useMutation({
     mutationFn: () => calculerCpeBilan(token!, annee),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] }),
@@ -366,6 +376,7 @@ export default function CpeDalkiaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpe-finance-batches"] });
       qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
     },
   });
 
@@ -374,6 +385,7 @@ export default function CpeDalkiaPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpe-finance-batches"] });
       qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
     },
   });
 
@@ -438,9 +450,12 @@ export default function CpeDalkiaPage() {
   });
 
   const upsertRevisionIndexM = useMutation({
-    mutationFn: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null }) =>
+    mutationFn: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) =>
       upsertCpeRevisionIndex(token!, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
+    },
   });
 
   const recalculateControlsM = useMutation({
@@ -458,6 +473,19 @@ export default function CpeDalkiaPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
+    },
+  });
+
+  const uploadEvidencePdfM = useMutation({
+    mutationFn: ({ invoiceId, file }: { invoiceId: number; file: File }) => uploadCpeInvoiceEvidencePdf(token!, invoiceId, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] }),
+  });
+
+  const applyEvidenceIndicesM = useMutation({
+    mutationFn: (evidenceId: number) => applyCpeInvoiceEvidenceDeclaredIndices(token!, evidenceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
     },
   });
 
@@ -527,6 +555,7 @@ export default function CpeDalkiaPage() {
           batches={financeBatchesQ.data ?? []}
           invoices={financeInvoicesQ.data ?? []}
           indices={revisionIndicesQ.data ?? []}
+          revisionObservations={revisionObservationsQ.data ?? []}
           lastControls={recalculateControlsM.data ?? null}
           loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || contractReferencesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
@@ -544,7 +573,7 @@ export default function CpeDalkiaPage() {
           deleteNatureRulePending={deleteNatureRuleM.isPending}
           saveContractReferencePending={saveContractReferenceM.isPending}
           deleteContractReferencePending={deleteContractReferenceM.isPending}
-          invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending}
+          invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending || uploadEvidencePdfM.isPending || applyEvidenceIndicesM.isPending}
           indexSavePending={upsertRevisionIndexM.isPending}
           controlsPending={recalculateControlsM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
@@ -558,6 +587,8 @@ export default function CpeDalkiaPage() {
           onDeleteContractReference={(id) => deleteContractReferenceM.mutate(id)}
           onInvoiceStatus={(id, nextStatus) => updateFinanceInvoiceM.mutate({ id, status: nextStatus })}
           onExportLiaison={(invoice) => exportLiaisonM.mutate(invoice)}
+          onUploadEvidencePdf={(invoiceId, file) => uploadEvidencePdfM.mutate({ invoiceId, file })}
+          onApplyEvidenceIndices={(evidenceId) => applyEvidenceIndicesM.mutate(evidenceId)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
           onRecalculateControls={(invoiceId) => recalculateControlsM.mutate(invoiceId)}
         />
@@ -1131,6 +1162,7 @@ function CpeFinanceReference({
   batches,
   invoices,
   indices,
+  revisionObservations,
   lastControls,
   loading,
   codificationImportPending,
@@ -1162,6 +1194,8 @@ function CpeFinanceReference({
   onDeleteContractReference,
   onInvoiceStatus,
   onExportLiaison,
+  onUploadEvidencePdf,
+  onApplyEvidenceIndices,
   onSaveIndex,
   onRecalculateControls,
 }: {
@@ -1174,6 +1208,7 @@ function CpeFinanceReference({
   batches: CpeFinanceImportBatch[];
   invoices: CpeFinanceInvoice[];
   indices: CpeRevisionIndex[];
+  revisionObservations: CpeRevisionObservation[];
   lastControls: CpeFinanceControl[] | null;
   loading: boolean;
   codificationImportPending: boolean;
@@ -1209,7 +1244,9 @@ function CpeFinanceReference({
   onDeleteContractReference: (id: number) => void;
   onInvoiceStatus: (id: number, nextStatus: string) => void;
   onExportLiaison: (invoice: CpeFinanceInvoice) => void;
-  onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null }) => void;
+  onUploadEvidencePdf: (invoiceId: number, file: File) => void;
+  onApplyEvidenceIndices: (evidenceId: number) => void;
+  onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) => void;
   onRecalculateControls: (invoiceId: number) => void;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
@@ -1219,6 +1256,8 @@ function CpeFinanceReference({
   const [referenceDraft, setReferenceDraft] = useState(EMPTY_CONTRACT_REFERENCE);
   const [editingReferenceId, setEditingReferenceId] = useState<number | null>(null);
   const [section, setSection] = useState<CpeFinanceSection>("imports");
+  const [evidenceInvoiceId, setEvidenceInvoiceId] = useState<number | null>(null);
+  const evidencePdfRef = useRef<HTMLInputElement>(null);
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [referenceFilter, setReferenceFilter] = useState("");
@@ -1246,6 +1285,8 @@ function CpeFinanceReference({
     quarter: 1,
     value: "",
     source: "Saisie Po2",
+    verification_status: "to_verify",
+    evidence_id: null as number | null,
     notes: "",
   });
   const invoiceTypeOptions = useMemo(
@@ -1744,6 +1785,66 @@ function CpeFinanceReference({
 
       {section === "indices" && (
       <section className="card" style={{ padding: 16, marginBottom: 24 }}>
+        {revisionObservations.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <h3 style={{ margin: "0 0 4px" }}>Coefficients observes dans les factures DALKIA</h3>
+            <p style={{ margin: "0 0 10px", color: "#6b7280", fontSize: 13 }}>
+              Ces coefficients sont deduits des prix de base et revises importes. Ils servent d'alerte et de preuve de rapprochement,
+              mais ne remplacent pas la validation des indices depuis une source officielle ou la facture PDF.
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <th style={thStyle}>Poste</th>
+                    <th style={thStyle}>Periode</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Facteur DALKIA</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Facteur indices valides</th>
+                    <th style={thStyle}>Statut</th>
+                    <th style={thStyle}>Factures sources</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {revisionObservations.map((observation) => (
+                    <tr
+                      key={`${observation.market}-${observation.year}-${observation.quarter}-${observation.observed_factor}`}
+                      style={{ borderBottom: "1px solid #f3f4f6" }}
+                    >
+                      <td style={tdStyle}>{observation.market}</td>
+                      <td style={tdStyle}>{observation.year} T{observation.quarter}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(observation.observed_factor, 6)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
+                        {observation.expected_factor == null ? "-" : fmt(observation.expected_factor, 6)}
+                      </td>
+                      <td style={tdStyle}>
+                        <span
+                          className={
+                            observation.status === "matches_validated"
+                              ? "badge-green"
+                              : observation.status === "conflict"
+                                ? "badge-red"
+                                : "badge-orange"
+                          }
+                          title={observation.message}
+                        >
+                          {observation.status === "matches_validated"
+                            ? "Rapproche"
+                            : observation.status === "conflict"
+                              ? "A verifier"
+                              : "Nouveau"}
+                        </span>
+                      </td>
+                      <td style={tdStyle} title={observation.invoice_numbers.join(", ")}>
+                        {observation.invoice_numbers.slice(0, 3).join(", ")}
+                        {observation.invoice_numbers.length > 3 ? ` +${observation.invoice_numbers.length - 3}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
           <div>
             <h3 style={{ margin: "0 0 4px" }}>Indices et references de base (P1 / P2 / P3)</h3>
@@ -1799,9 +1900,11 @@ function CpeFinanceReference({
                   quarter: indexDraft.quarter,
                   value: Number(indexDraft.value),
                   source: indexDraft.source,
+                  verification_status: indexDraft.verification_status,
+                  evidence_id: indexDraft.evidence_id,
                   notes: indexDraft.notes || null,
                 });
-                setIndexDraft({ ...indexDraft, value: "", notes: "" });
+                setIndexDraft({ ...indexDraft, value: "", evidence_id: null, notes: "" });
               }}
             >
               Enregistrer indice
@@ -1814,6 +1917,15 @@ function CpeFinanceReference({
                 placeholder="Source"
                 style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", width: 210 }}
               />
+              <select
+                value={indexDraft.verification_status}
+                onChange={(event) => setIndexDraft({ ...indexDraft, verification_status: event.target.value })}
+                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db" }}
+              >
+                <option value="to_verify">A verifier</option>
+                <option value="declared_to_verify">Declare DALKIA - a verifier</option>
+                <option value="official_verified">Officiel verifie</option>
+              </select>
               <input
                 value={indexDraft.notes}
                 onChange={(event) => setIndexDraft({ ...indexDraft, notes: event.target.value })}
@@ -1835,6 +1947,7 @@ function CpeFinanceReference({
                   <th style={thStyle}>Periode</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>Valeur</th>
                   <th style={thStyle}>Source</th>
+                  <th style={thStyle}>Verification</th>
                   <th style={thStyle}>Notes</th>
                   <th style={thStyle}>Action</th>
                 </tr>
@@ -1847,6 +1960,15 @@ function CpeFinanceReference({
                     <td style={tdStyle}>{item.quarter === 0 ? "Base / ref" : `T${item.quarter}`}</td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.value, 4)}</td>
                     <td style={tdStyle}>{item.source ?? "-"}</td>
+                    <td style={tdStyle}>
+                      <span className={item.verification_status === "official_verified" ? "badge-green" : "badge-orange"}>
+                        {item.verification_status === "official_verified"
+                          ? "Officiel verifie"
+                          : item.verification_status === "declared_to_verify"
+                            ? "Declare DALKIA - a verifier"
+                            : "A verifier"}
+                      </span>
+                    </td>
                     <td style={tdStyle}>{item.notes ?? "-"}</td>
                     <td style={tdStyle}>
                       <button
@@ -1860,6 +1982,8 @@ function CpeFinanceReference({
                             quarter: item.quarter,
                             value: String(item.value),
                             source: item.source ?? "Saisie Po2",
+                            verification_status: item.verification_status,
+                            evidence_id: item.evidence_id,
                             notes: item.notes ?? "",
                           })
                         }
@@ -2379,6 +2503,17 @@ function CpeFinanceReference({
             </div>
           </div>
 
+          <input
+            ref={evidencePdfRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: "none" }}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file && evidenceInvoiceId != null) onUploadEvidencePdf(evidenceInvoiceId, file);
+              event.target.value = "";
+            }}
+          />
           <table style={{ width: "100%", minWidth: 1700, borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
@@ -2470,6 +2605,42 @@ function CpeFinanceReference({
                     >
                       Controle facture
                     </button>
+                    {" "}
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ fontSize: 12, padding: "4px 8px" }}
+                      disabled={invoiceActionPending}
+                      onClick={() => {
+                        setEvidenceInvoiceId(invoice.id);
+                        evidencePdfRef.current?.click();
+                      }}
+                    >
+                      {invoice.evidence_id ? "Remplacer PDF" : "Importer PDF"}
+                    </button>
+                    {invoice.evidence_id && (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          style={{ fontSize: 12, padding: "4px 8px" }}
+                          disabled={invoiceActionPending}
+                          title="Reporte les indices extraits comme valeurs declarees par DALKIA a verifier."
+                          onClick={() => onApplyEvidenceIndices(invoice.evidence_id!)}
+                        >
+                          Reporter indices
+                        </button>
+                        <div style={{ marginTop: 4, color: "#9a3412", fontSize: 11 }}>
+                          PDF rattache
+                          {invoice.evidence_revision_date ? ` - revision ${invoice.evidence_revision_date}` : ""}
+                          {invoice.evidence_declared_factor != null ? ` - facteur ${fmt(invoice.evidence_declared_factor, 6)}` : ""}
+                          {invoice.evidence_declared_icht_ime != null ? ` - ICHT-IME ${fmt(invoice.evidence_declared_icht_ime, 4)}` : ""}
+                          {invoice.evidence_declared_fsd2 != null ? ` - FSD2 ${fmt(invoice.evidence_declared_fsd2, 4)}` : ""}
+                          {invoice.evidence_declared_bt40 != null ? ` - BT40 ${fmt(invoice.evidence_declared_bt40, 4)}` : ""}
+                        </div>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

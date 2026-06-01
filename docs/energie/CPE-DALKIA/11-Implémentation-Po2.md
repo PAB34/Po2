@@ -310,6 +310,33 @@ P3 = P30 × (0,15 + 0,30 × ICHT-IME/141,4 + 0,55 × BT40/128,4)
 Le contrôle compare le prix révisé DALKIA au prix attendu et classe chaque ligne :
 - `ok` : prix cohérent
 - `error` : écart de révision
+
+### Workflow justificatif PDF et indices déclarés
+
+L'export finances DALKIA permet de calculer un **coefficient de révision observé** :
+
+```text
+coefficient observé = prix ou forfait révisé / prix de base
+```
+
+Ce coefficient est utile pour détecter une nouvelle révision et rapprocher les montants, mais il ne suffit pas à
+reconstituer les indices officiels : la formule P2 contient deux inconnues (`ICHT-IME`, `FSD2`) et la formule P3
+contient également deux inconnues (`ICHT-IME`, `BT40`).
+
+Le workflow retenu est donc volontairement traçable :
+
+1. l'import XLSX détecte les coefficients DALKIA observés ;
+2. Po2 signale les nouveaux coefficients ou les conflits avec les indices déjà enregistrés ;
+3. l'utilisateur rattache le PDF DALKIA à la facture concernée ;
+4. Po2 extrait la date de révision, le coefficient et les indices déclarés dans le PDF ;
+5. l'utilisateur reporte explicitement ces valeurs avec le statut `déclaré DALKIA - à vérifier` ;
+6. après contrôle externe (INSEE ou abonnement spécialisé), il passe chaque valeur au statut `officiel vérifié`.
+
+Les valeurs PDF ne sont jamais promues silencieusement au rang d'indices officiels. Elles servent à démontrer que
+le moteur de calcul Po2 retombe sur la facture DALKIA et à identifier les indices qui nécessitent un contrôle externe.
+
+Cas de référence vérifié manuellement : facture `0001E2604AYR3`, révision au `31/03/2026`, coefficient `1,022722`,
+`ICHT-IME = 146,9`, `FSD2 = 164,7`.
 - `blocked` : indice ou prix source manquant
 
 Les résultats sont stockés dans `cpe_finance_controls` et repris dans l'export XLSX de fiche liaison.

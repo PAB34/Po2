@@ -26,6 +26,7 @@ from app.schemas.cpe import (
     CpeFinanceInvoiceOut,
     CpeFinanceInvoiceUpdate,
     CpeFinanceLineOut,
+    CpeInvoiceEvidenceOut,
     CpeFinancePreview,
     CpeGazReleve,
     CpeGazReleveCreate,
@@ -36,6 +37,7 @@ from app.schemas.cpe import (
     CpeResultatAnnuelOut,
     CpeRevisionIndexCreate,
     CpeRevisionIndexOut,
+    CpeRevisionObservationOut,
     CpeSiteCreate,
     CpeSiteOut,
     CpeSiteUpdate,
@@ -396,6 +398,54 @@ def upsert_revision_index(
         payload = payload.model_copy(update={"city_id": current_user.city_id})
     index = accounting_svc.upsert_revision_index(db, payload)
     return CpeRevisionIndexOut.model_validate(index)
+
+
+@router.get("/revision-observations", response_model=list[CpeRevisionObservationOut])
+def list_revision_observations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeRevisionObservationOut]:
+    observations = accounting_svc.list_revision_observations(db, current_user.city_id)
+    return [CpeRevisionObservationOut.model_validate(item) for item in observations]
+
+
+@router.post("/finances/invoices/{invoice_id}/evidence-pdf", response_model=CpeInvoiceEvidenceOut)
+async def upload_invoice_evidence_pdf(
+    invoice_id: int,
+    file: UploadFile = File(..., description="Facture PDF DALKIA justificative"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeInvoiceEvidenceOut:
+    invoice = accounting_svc.get_finance_invoice(db, invoice_id, current_user.city_id)
+    if invoice is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
+    try:
+        evidence = accounting_svc.add_invoice_evidence_pdf(
+            db,
+            invoice,
+            await file.read(),
+            filename=file.filename or "facture-dalkia.pdf",
+            uploaded_by_user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return CpeInvoiceEvidenceOut.model_validate(evidence)
+
+
+@router.post("/finances/evidences/{evidence_id}/apply-declared-indices", response_model=list[CpeRevisionIndexOut])
+def apply_invoice_evidence_declared_indices(
+    evidence_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeRevisionIndexOut]:
+    evidence = accounting_svc.get_invoice_evidence(db, evidence_id, current_user.city_id)
+    if evidence is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Justificatif PDF DALKIA introuvable")
+    try:
+        indices = accounting_svc.apply_invoice_evidence_declared_indices(db, evidence)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [CpeRevisionIndexOut.model_validate(item) for item in indices]
 
 
 @router.get("/finances/invoices/{invoice_id}/controls", response_model=list[CpeFinanceControlOut])

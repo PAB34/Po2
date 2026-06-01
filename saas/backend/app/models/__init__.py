@@ -34,6 +34,7 @@ from app.models.cpe import (
     CpeFinanceControl,
     CpeFinanceInvoice,
     CpeFinanceLine,
+    CpeInvoiceEvidence,
     CpeGazReleve,
     CpePrixGaz,
     CpeResultatAnnuel,

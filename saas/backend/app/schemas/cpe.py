@@ -390,6 +390,13 @@ class CpeFinanceInvoiceOut(BaseModel):
     markets: str | None = None
     billed_items: str | None = None
     recipient_reference_1: str | None = None
+    evidence_id: int | None = None
+    evidence_status: str | None = None
+    evidence_revision_date: date | None = None
+    evidence_declared_factor: float | None = None
+    evidence_declared_icht_ime: float | None = None
+    evidence_declared_fsd2: float | None = None
+    evidence_declared_bt40: float | None = None
     total_ht: float
     status: str
     notes: str | None
@@ -408,6 +415,8 @@ class CpeRevisionIndexBase(BaseModel):
     quarter: int
     value: float
     source: str | None = None
+    verification_status: str = "to_verify"
+    evidence_id: int | None = None
     notes: str | None = None
 
 
@@ -421,6 +430,40 @@ class CpeRevisionIndexOut(CpeRevisionIndexBase):
     city_id: int | None
     created_at: datetime
     updated_at: datetime
+
+
+class CpeRevisionObservationOut(BaseModel):
+    market: str
+    year: int
+    quarter: int
+    observed_factor: float
+    expected_factor: float | None
+    delta_factor: float | None
+    status: str
+    line_count: int
+    invoice_numbers: list[str]
+    required_indices: list[str]
+    message: str
+
+
+class CpeInvoiceEvidenceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    city_id: int | None
+    invoice_id: int
+    uploaded_by_user_id: int
+    original_filename: str
+    sha256: str
+    extraction_status: str
+    validation_status: str
+    declared_invoice_number: str | None
+    revision_date: date | None
+    declared_factor: float | None
+    declared_icht_ime: float | None
+    declared_fsd2: float | None
+    declared_bt40: float | None
+    notes: str | None
+    created_at: datetime
 
 
 class CpeFinanceLineOut(BaseModel):

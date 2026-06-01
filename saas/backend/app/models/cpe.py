@@ -397,11 +397,38 @@ class CpeRevisionIndex(Base):
     quarter: Mapped[int] = mapped_column(Integer, nullable=False)
     value: Mapped[float] = mapped_column(Float, nullable=False)
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="to_verify")
+    evidence_id: Mapped[int | None] = mapped_column(ForeignKey("cpe_invoice_evidences.id"), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class CpeInvoiceEvidence(Base):
+    """Facture PDF DALKIA justificative et indices declares extraits."""
+
+    __tablename__ = "cpe_invoice_evidences"
+    __table_args__ = (UniqueConstraint("invoice_id", "sha256", name="uq_cpe_invoice_evidence_sha"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("cpe_finance_invoices.id"), nullable=False, index=True)
+    uploaded_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(600), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    extraction_status: Mapped[str] = mapped_column(String(30), nullable=False, default="parsed")
+    validation_status: Mapped[str] = mapped_column(String(30), nullable=False, default="declared_to_verify")
+    declared_invoice_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    revision_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    declared_factor: Mapped[float | None] = mapped_column(Float, nullable=True)
+    declared_icht_ime: Mapped[float | None] = mapped_column(Float, nullable=True)
+    declared_fsd2: Mapped[float | None] = mapped_column(Float, nullable=True)
+    declared_bt40: Mapped[float | None] = mapped_column(Float, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class CpeFinanceControl(Base):

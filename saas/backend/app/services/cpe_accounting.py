@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import re
 import unicodedata
@@ -9,13 +10,16 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill
+from pypdf import PdfReader
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.cpe import (
     CpeAccountingNatureRule,
     CpeAccountingSiteMapping,
@@ -24,6 +28,7 @@ from app.models.cpe import (
     CpeFinanceImportBatch,
     CpeFinanceInvoice,
     CpeFinanceLine,
+    CpeInvoiceEvidence,
     CpeResultatAnnuel,
     CpeRevisionIndex,
     CpeSite,
@@ -757,6 +762,241 @@ def list_revision_indices(
     return list(db.scalars(query).all())
 
 
+def list_revision_observations(db: Session, city_id: int | None = None) -> list[dict[str, Any]]:
+    """Liste les coefficients appliques par DALKIA, sans les assimiler a des indices officiels."""
+    indices = {
+        (item.index_code, item.year, item.quarter): item.value
+        for item in list_revision_indices(db, city_id)
+        if item.quarter > 0
+    }
+    reference_values = _reference_index_map(db, city_id)
+    icht_ime_base = reference_values.get("ICHT_IME0", ICHT_IME_BASE)
+    fsd2_base = reference_values.get("FSD20", FSD2_BASE)
+    bt40_base = reference_values.get("BT400", BT40_BASE)
+
+    query = select(CpeFinanceLine).where(
+        CpeFinanceLine.contract_code.in_(NEW_CPE_CONTRACT_CODES),
+        CpeFinanceLine.market.in_(("P2", "P3")),
+        CpeFinanceLine.base_price.is_not(None),
+        CpeFinanceLine.revised_price.is_not(None),
+    )
+    if city_id is not None:
+        query = query.where(CpeFinanceLine.city_id == city_id)
+
+    grouped: dict[tuple[str, int, int, float], dict[str, Any]] = {}
+    for line in db.scalars(query).all():
+        year, quarter = _line_index_period(line)
+        if year is None or quarter is None or not line.base_price:
+            continue
+        observed_factor = round(line.revised_price / line.base_price, 6)
+        key = (line.market, year, quarter, observed_factor)
+        item = grouped.setdefault(
+            key,
+            {
+                "market": line.market,
+                "year": year,
+                "quarter": quarter,
+                "observed_factor": observed_factor,
+                "invoice_numbers": set(),
+                "line_count": 0,
+            },
+        )
+        item["line_count"] += 1
+        if line.invoice_number:
+            item["invoice_numbers"].add(line.invoice_number)
+
+    observations: list[dict[str, Any]] = []
+    for item in grouped.values():
+        market = item["market"]
+        year = item["year"]
+        quarter = item["quarter"]
+        icht = _index_value(indices, "ICHT_IME", year, quarter)
+        if market == "P2":
+            other = _index_value(indices, "FSD2", year, quarter)
+            required_indices = ["ICHT-IME", "FSD2"]
+            expected_factor = (
+                _p2_factor(icht, other, icht_ime_base=icht_ime_base, fsd2_base=fsd2_base)
+                if icht is not None and other is not None
+                else None
+            )
+        else:
+            other = _index_value(indices, "BT40", year, quarter)
+            required_indices = ["ICHT-IME", "BT40"]
+            expected_factor = (
+                _p3_factor(icht, other, icht_ime_base=icht_ime_base, bt40_base=bt40_base)
+                if icht is not None and other is not None
+                else None
+            )
+
+        delta_factor = round(item["observed_factor"] - expected_factor, 6) if expected_factor is not None else None
+        if expected_factor is None:
+            status = "to_verify"
+            message = (
+                f"Nouveau coefficient DALKIA detecte pour {market} {year} T{quarter}. "
+                f"Verifier les indices {', '.join(required_indices)} dans une source officielle ou la facture PDF."
+            )
+        elif abs(delta_factor or 0.0) <= 0.0001:
+            status = "matches_validated"
+            message = f"Coefficient DALKIA coherent avec les indices valides pour {market} {year} T{quarter}."
+        else:
+            status = "conflict"
+            message = (
+                f"Coefficient DALKIA different du calcul avec les indices valides pour {market} {year} T{quarter}. "
+                "Verifier la date d'effet et les valeurs saisies."
+            )
+        observations.append(
+            {
+                **item,
+                "invoice_numbers": sorted(item["invoice_numbers"]),
+                "expected_factor": round(expected_factor, 6) if expected_factor is not None else None,
+                "delta_factor": delta_factor,
+                "status": status,
+                "required_indices": required_indices,
+                "message": message,
+            }
+        )
+
+    return sorted(
+        observations,
+        key=lambda item: (item["year"], item["quarter"], item["market"], item["observed_factor"]),
+        reverse=True,
+    )
+
+
+def _pdf_decimal(line: str) -> float | None:
+    matches = re.findall(r"\d{2,4},\d{2,6}", line)
+    return _float(matches[0]) if matches else None
+
+
+def extract_invoice_evidence_pdf(raw_bytes: bytes) -> dict[str, Any]:
+    """Extrait les indices declares dans la section revision d'une facture DALKIA."""
+    try:
+        reader = PdfReader(io.BytesIO(raw_bytes))
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception as exc:
+        raise ValueError("PDF DALKIA illisible.") from exc
+    if not text.strip():
+        raise ValueError("Le PDF DALKIA ne contient aucun texte exploitable.")
+
+    invoice_match = re.search(r"Facture\s*n[°o]\s*([A-Z0-9]+)", text, flags=re.IGNORECASE)
+    revision_match = re.search(r"R[ée]vision\s+au\s+(\d{2}/\d{2}/\d{4})", text, flags=re.IGNORECASE)
+    factor_match = re.search(r"Coefficient\s+de\s+r[ée]vision\s+(\d+[,.]\d+)", text, flags=re.IGNORECASE)
+    values: dict[str, float | None] = {"declared_icht_ime": None, "declared_fsd2": None, "declared_bt40": None}
+    for line in text.splitlines():
+        normalized = _norm_text(line)
+        if "ICHT" in normalized and values["declared_icht_ime"] is None:
+            values["declared_icht_ime"] = _pdf_decimal(line)
+        elif "FSD2" in normalized and values["declared_fsd2"] is None:
+            values["declared_fsd2"] = _pdf_decimal(line)
+        elif "BT40" in normalized and values["declared_bt40"] is None:
+            values["declared_bt40"] = _pdf_decimal(line)
+
+    return {
+        "declared_invoice_number": invoice_match.group(1) if invoice_match else None,
+        "revision_date": datetime.strptime(revision_match.group(1), "%d/%m/%Y").date() if revision_match else None,
+        "declared_factor": _float(factor_match.group(1)) if factor_match else None,
+        **values,
+    }
+
+
+def add_invoice_evidence_pdf(
+    db: Session,
+    invoice: CpeFinanceInvoice,
+    raw_bytes: bytes,
+    *,
+    filename: str,
+    uploaded_by_user_id: int,
+) -> CpeInvoiceEvidence:
+    if not filename.lower().endswith(".pdf"):
+        raise ValueError("Le justificatif doit etre une facture PDF DALKIA.")
+    extracted = extract_invoice_evidence_pdf(raw_bytes)
+    declared_number = extracted["declared_invoice_number"]
+    if declared_number and declared_number != invoice.invoice_number:
+        raise ValueError(
+            f"Le PDF concerne la facture {declared_number}, pas la facture {invoice.invoice_number}."
+        )
+
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    existing = db.scalars(
+        select(CpeInvoiceEvidence).where(
+            CpeInvoiceEvidence.invoice_id == invoice.id,
+            CpeInvoiceEvidence.sha256 == sha256,
+        )
+    ).first()
+    if existing:
+        return existing
+
+    target_dir = Path(settings.invoice_storage_dir) / "cpe" / str(invoice.city_id or "global")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    storage_path = target_dir / f"{invoice.invoice_number}-{sha256[:12]}.pdf"
+    storage_path.write_bytes(raw_bytes)
+    evidence = CpeInvoiceEvidence(
+        city_id=invoice.city_id,
+        invoice_id=invoice.id,
+        uploaded_by_user_id=uploaded_by_user_id,
+        original_filename=filename,
+        storage_path=str(storage_path),
+        sha256=sha256,
+        extraction_status="parsed",
+        validation_status="declared_to_verify",
+        **extracted,
+    )
+    db.add(evidence)
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+def apply_invoice_evidence_declared_indices(db: Session, evidence: CpeInvoiceEvidence) -> list[CpeRevisionIndex]:
+    """Reporte les valeurs du PDF comme declarations DALKIA a verifier, jamais comme indices officiels."""
+    if evidence.revision_date is None:
+        raise ValueError("Date de revision absente du PDF : impossible de positionner les indices.")
+    year = evidence.revision_date.year
+    quarter = ((evidence.revision_date.month - 1) // 3) + 1
+    declared_values = {
+        "ICHT_IME": evidence.declared_icht_ime,
+        "FSD2": evidence.declared_fsd2,
+        "BT40": evidence.declared_bt40,
+    }
+    if not any(value is not None for value in declared_values.values()):
+        raise ValueError("Aucun indice de revision exploitable n'a ete extrait du PDF.")
+
+    rows: list[CpeRevisionIndex] = []
+    for index_code, value in declared_values.items():
+        if value is None:
+            continue
+        existing = db.scalars(
+            select(CpeRevisionIndex).where(
+                CpeRevisionIndex.city_id == evidence.city_id,
+                CpeRevisionIndex.index_code == index_code,
+                CpeRevisionIndex.year == year,
+                CpeRevisionIndex.quarter == quarter,
+            )
+        ).first()
+        if existing and existing.verification_status == "official_verified":
+            rows.append(existing)
+            continue
+        if existing is None:
+            existing = CpeRevisionIndex(
+                city_id=evidence.city_id,
+                index_code=index_code,
+                year=year,
+                quarter=quarter,
+                value=value,
+            )
+            db.add(existing)
+        existing.value = value
+        existing.source = f"Facture DALKIA {evidence.declared_invoice_number or evidence.invoice_id}"
+        existing.verification_status = "declared_to_verify"
+        existing.evidence_id = evidence.id
+        existing.notes = "Valeur declaree dans le PDF DALKIA ; verification externe requise."
+        rows.append(existing)
+    db.commit()
+    for row in rows:
+        db.refresh(row)
+    return rows
+
+
 def upsert_revision_index(db: Session, payload: CpeRevisionIndexCreate) -> CpeRevisionIndex:
     index_code = payload.index_code.strip().upper().replace("-", "_")
     existing = db.scalars(
@@ -770,6 +1010,8 @@ def upsert_revision_index(db: Session, payload: CpeRevisionIndexCreate) -> CpeRe
     if existing:
         existing.value = payload.value
         existing.source = payload.source
+        existing.verification_status = payload.verification_status
+        existing.evidence_id = payload.evidence_id
         existing.notes = payload.notes
         db.commit()
         db.refresh(existing)
@@ -1590,6 +1832,14 @@ def list_finance_invoices_enriched(
     markets_by_invoice: dict[int, set[str]] = defaultdict(set)
     billed_items_by_invoice: dict[int, set[str]] = defaultdict(set)
     dest_ref1_by_invoice: dict[int, set[str]] = defaultdict(set)
+    evidence_by_invoice: dict[int, CpeInvoiceEvidence] = {}
+    evidence_query = (
+        select(CpeInvoiceEvidence)
+        .where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
+        .order_by(CpeInvoiceEvidence.created_at.desc(), CpeInvoiceEvidence.id.desc())
+    )
+    for evidence in db.scalars(evidence_query).all():
+        evidence_by_invoice.setdefault(evidence.invoice_id, evidence)
 
     for line in lines:
         if line.market:
@@ -1604,6 +1854,7 @@ def list_finance_invoices_enriched(
 
     rows: list[dict[str, Any]] = []
     for invoice in invoices:
+        evidence = evidence_by_invoice.get(invoice.id)
         row = {
             "id": invoice.id,
             "batch_id": invoice.batch_id,
@@ -1622,6 +1873,13 @@ def list_finance_invoices_enriched(
             "markets": ", ".join(sorted(markets_by_invoice.get(invoice.id, set()))) or None,
             "billed_items": ", ".join(sorted(billed_items_by_invoice.get(invoice.id, set()))) or None,
             "recipient_reference_1": ", ".join(sorted(dest_ref1_by_invoice.get(invoice.id, set()))) or None,
+            "evidence_id": evidence.id if evidence else None,
+            "evidence_status": evidence.validation_status if evidence else None,
+            "evidence_revision_date": evidence.revision_date if evidence else None,
+            "evidence_declared_factor": evidence.declared_factor if evidence else None,
+            "evidence_declared_icht_ime": evidence.declared_icht_ime if evidence else None,
+            "evidence_declared_fsd2": evidence.declared_fsd2 if evidence else None,
+            "evidence_declared_bt40": evidence.declared_bt40 if evidence else None,
             "total_ht": invoice.total_ht,
             "status": invoice.status,
             "notes": invoice.notes,
@@ -1636,6 +1894,13 @@ def get_finance_invoice(db: Session, invoice_id: int, city_id: int | None = None
     query = select(CpeFinanceInvoice).where(CpeFinanceInvoice.id == invoice_id)
     if city_id is not None:
         query = query.where(CpeFinanceInvoice.city_id == city_id)
+    return db.scalars(query).first()
+
+
+def get_invoice_evidence(db: Session, evidence_id: int, city_id: int | None = None) -> CpeInvoiceEvidence | None:
+    query = select(CpeInvoiceEvidence).where(CpeInvoiceEvidence.id == evidence_id)
+    if city_id is not None:
+        query = query.where(CpeInvoiceEvidence.city_id == city_id)
     return db.scalars(query).first()
 
 
@@ -2311,6 +2576,12 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
 
 
 def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:
+    invoice_ids = list(db.scalars(select(CpeFinanceInvoice.id).where(CpeFinanceInvoice.batch_id == batch.id)).all())
+    if invoice_ids:
+        db.execute(delete(CpeRevisionIndex).where(CpeRevisionIndex.evidence_id.in_(
+            select(CpeInvoiceEvidence.id).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
+        )))
+        db.execute(delete(CpeInvoiceEvidence).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids)))
     db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id == batch.id))
     db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id == batch.id))
     db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id == batch.id))
@@ -2327,6 +2598,11 @@ def delete_finance_history(db: Session, city_id: int | None = None) -> dict[str,
     if not batch_ids:
         return {"batches_deleted": 0, "invoices_deleted": 0, "lines_deleted": 0, "controls_deleted": 0}
 
+    invoice_ids = list(db.scalars(select(CpeFinanceInvoice.id).where(CpeFinanceInvoice.batch_id.in_(batch_ids))).all())
+    if invoice_ids:
+        evidence_ids = select(CpeInvoiceEvidence.id).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids))
+        db.execute(delete(CpeRevisionIndex).where(CpeRevisionIndex.evidence_id.in_(evidence_ids)))
+        db.execute(delete(CpeInvoiceEvidence).where(CpeInvoiceEvidence.invoice_id.in_(invoice_ids)))
     controls_deleted = db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.batch_id.in_(batch_ids))).rowcount or 0
     lines_deleted = db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.batch_id.in_(batch_ids))).rowcount or 0
     invoices_deleted = db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id.in_(batch_ids))).rowcount or 0

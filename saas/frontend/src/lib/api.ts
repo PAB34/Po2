@@ -2892,6 +2892,13 @@ export type CpeFinanceInvoice = {
   markets: string | null;
   billed_items: string | null;
   recipient_reference_1: string | null;
+  evidence_id: number | null;
+  evidence_status: string | null;
+  evidence_revision_date: string | null;
+  evidence_declared_factor: number | null;
+  evidence_declared_icht_ime: number | null;
+  evidence_declared_fsd2: number | null;
+  evidence_declared_bt40: number | null;
   total_ht: number;
   status: string;
   notes: string | null;
@@ -2950,9 +2957,44 @@ export type CpeRevisionIndex = {
   quarter: number;
   value: number;
   source: string | null;
+  verification_status: string;
+  evidence_id: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type CpeRevisionObservation = {
+  market: string;
+  year: number;
+  quarter: number;
+  observed_factor: number;
+  expected_factor: number | null;
+  delta_factor: number | null;
+  status: "to_verify" | "matches_validated" | "conflict";
+  line_count: number;
+  invoice_numbers: string[];
+  required_indices: string[];
+  message: string;
+};
+
+export type CpeInvoiceEvidence = {
+  id: number;
+  city_id: number | null;
+  invoice_id: number;
+  uploaded_by_user_id: number;
+  original_filename: string;
+  sha256: string;
+  extraction_status: string;
+  validation_status: string;
+  declared_invoice_number: string | null;
+  revision_date: string | null;
+  declared_factor: number | null;
+  declared_icht_ime: number | null;
+  declared_fsd2: number | null;
+  declared_bt40: number | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export type CpeFinanceControl = {
@@ -3229,9 +3271,33 @@ export async function fetchCpeRevisionIndices(token: string, year?: number): Pro
   return parseResponse<CpeRevisionIndex[]>(response);
 }
 
+export async function fetchCpeRevisionObservations(token: string): Promise<CpeRevisionObservation[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-observations`, { headers: buildHeaders(token) });
+  return parseResponse<CpeRevisionObservation[]>(response);
+}
+
+export async function uploadCpeInvoiceEvidencePdf(token: string, invoiceId: number, file: File): Promise<CpeInvoiceEvidence> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/evidence-pdf`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeInvoiceEvidence>(response);
+}
+
+export async function applyCpeInvoiceEvidenceDeclaredIndices(token: string, evidenceId: number): Promise<CpeRevisionIndex[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/evidences/${evidenceId}/apply-declared-indices`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeRevisionIndex[]>(response);
+}
+
 export async function upsertCpeRevisionIndex(
   token: string,
-  payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; notes?: string | null },
+  payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null },
 ): Promise<CpeRevisionIndex> {
   const response = await fetch(`${apiBaseUrl}/cpe/revision-indices`, {
     method: "POST",

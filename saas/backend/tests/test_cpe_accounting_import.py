@@ -2,13 +2,14 @@ from pathlib import Path
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeAccountingSiteMapping, CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine
-from app.services.cpe_accounting import import_codification_workbook, import_finance_workbook, recompute_finance_invoice_controls
+from app.models.cpe import CpeAccountingSiteMapping, CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine, CpeRevisionIndex
+from app.services import cpe_accounting
+from app.services.cpe_accounting import extract_invoice_evidence_pdf, import_codification_workbook, import_finance_workbook, list_revision_observations, recompute_finance_invoice_controls
 
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "energie" / "DALKIA" / "COMPTABILITE"
@@ -241,3 +242,98 @@ def test_recompute_finance_invoice_controls_checks_p1_gaz_acompte_against_dpgf(d
 
     assert p1_control.status == "ok"
     assert p1_control.expected_revised_price == 85323.27
+
+
+def test_revision_observations_detect_dalkia_factor_and_compare_validated_indices(db_session: Session):
+    batch = CpeFinanceImportBatch(city_id=1, filename="finance.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    invoice = CpeFinanceInvoice(
+        batch_id=batch.id,
+        city_id=1,
+        invoice_number="0001E2604AYR3",
+        contract_code="C00190155J",
+        invoice_type="EC",
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        total_ht=23821.76,
+    )
+    db_session.add(invoice)
+    db_session.flush()
+    db_session.add_all(
+        [
+            CpeFinanceLine(
+                batch_id=batch.id,
+                invoice_id=invoice.id,
+                city_id=1,
+                row_number=2,
+                contract_code="C00190155J",
+                invoice_number=invoice.invoice_number,
+                market="P2",
+                amount_ht=11485.17,
+                base_price=44920.0,
+                revised_price=45940.67,
+                period_start=invoice.period_start,
+                period_end=invoice.period_end,
+            ),
+            CpeFinanceLine(
+                batch_id=batch.id,
+                invoice_id=invoice.id,
+                city_id=1,
+                row_number=3,
+                contract_code="C00190155J",
+                invoice_number=invoice.invoice_number,
+                market="P2",
+                amount_ht=12336.59,
+                base_price=48250.0,
+                revised_price=49346.34,
+                period_start=invoice.period_start,
+                period_end=invoice.period_end,
+            ),
+            CpeRevisionIndex(city_id=1, index_code="ICHT_IME", year=2026, quarter=1, value=138.5),
+            CpeRevisionIndex(city_id=1, index_code="FSD2", year=2026, quarter=1, value=163.9),
+        ]
+    )
+    db_session.commit()
+
+    observations = list_revision_observations(db_session, 1)
+    assert len(observations) == 1
+    assert observations[0]["observed_factor"] == 1.022722
+    assert observations[0]["expected_factor"] == 0.980432
+    assert observations[0]["status"] == "conflict"
+    assert observations[0]["line_count"] == 2
+
+    for index in db_session.scalars(select(CpeRevisionIndex).where(CpeRevisionIndex.quarter == 1)).all():
+        index.value = 146.9 if index.index_code == "ICHT_IME" else 164.7
+    db_session.commit()
+
+    observations = list_revision_observations(db_session, 1)
+    assert observations[0]["expected_factor"] == 1.022722
+    assert observations[0]["status"] == "matches_validated"
+
+
+def test_extract_invoice_evidence_pdf_reads_declared_dalkia_indices(monkeypatch):
+    text = """
+    Facture n°0001E2604AYR3 du 31/03/2026
+    Révision A - Révision au 31/03/2026
+    ICHT SIME 146,90000 / 141,40000
+    FSD2 FRAIS ET SERVICES DIVERS 2 164,70000 / 169,80000
+    Coefficient de révision 1,022722
+    """
+
+    class FakePage:
+        def extract_text(self):
+            return text
+
+    class FakeReader:
+        def __init__(self, _stream):
+            self.pages = [FakePage()]
+
+    monkeypatch.setattr(cpe_accounting, "PdfReader", FakeReader)
+    extracted = extract_invoice_evidence_pdf(b"fake-pdf")
+
+    assert extracted["declared_invoice_number"] == "0001E2604AYR3"
+    assert extracted["revision_date"] == date(2026, 3, 31)
+    assert extracted["declared_factor"] == 1.022722
+    assert extracted["declared_icht_ime"] == 146.9
+    assert extracted["declared_fsd2"] == 164.7
