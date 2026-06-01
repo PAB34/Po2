@@ -526,6 +526,44 @@ class CpeFinanceControlOut(BaseModel):
     computed_at: datetime
 
 
+class CpeFinanceControlTypeSummary(BaseModel):
+    control_type: str
+    ok: int
+    error: int
+    blocked: int
+    total: int
+
+
+class CpeFinanceControlInvoiceSummary(BaseModel):
+    invoice_id: int
+    invoice_number: str
+    contract_code: str | None
+    contract_label: str | None
+    invoice_type: str | None
+    total_ht: float
+    invoice_status: str
+    ok: int
+    error: int
+    blocked: int
+    controls_total: int
+    control_types: list[str]
+
+
+class CpeFinanceControlReportOut(BaseModel):
+    generated_at: datetime
+    scope: str
+    invoice_count: int
+    total_ht: float
+    invoices_ok: int
+    invoices_with_errors: int
+    invoices_blocked: int
+    controls_ok: int
+    controls_error: int
+    controls_blocked: int
+    control_types: list[CpeFinanceControlTypeSummary]
+    invoices: list[CpeFinanceControlInvoiceSummary]
+
+
 class CpeFinanceImportResult(BaseModel):
     batch: CpeFinanceImportBatchOut
     invoices: list[CpeFinanceInvoiceOut]

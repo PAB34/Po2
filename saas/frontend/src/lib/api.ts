@@ -2949,6 +2949,40 @@ export type CpeFinanceLine = {
   period_end: string | null;
 };
 
+export type CpeFinanceControlReport = {
+  generated_at: string;
+  scope: string;
+  invoice_count: number;
+  total_ht: number;
+  invoices_ok: number;
+  invoices_with_errors: number;
+  invoices_blocked: number;
+  controls_ok: number;
+  controls_error: number;
+  controls_blocked: number;
+  control_types: Array<{
+    control_type: string;
+    ok: number;
+    error: number;
+    blocked: number;
+    total: number;
+  }>;
+  invoices: Array<{
+    invoice_id: number;
+    invoice_number: string;
+    contract_code: string | null;
+    contract_label: string | null;
+    invoice_type: string | null;
+    total_ht: number;
+    invoice_status: string;
+    ok: number;
+    error: number;
+    blocked: number;
+    controls_total: number;
+    control_types: string[];
+  }>;
+};
+
 export type CpeRevisionIndex = {
   id: number;
   city_id: number | null;
@@ -3340,6 +3374,19 @@ export async function recalculateCpeFinanceControls(token: string, invoiceId: nu
     headers: buildHeaders(token),
   });
   return parseResponse<CpeFinanceControl[]>(response);
+}
+
+export async function fetchCpeFinanceControlReport(token: string): Promise<CpeFinanceControlReport> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/controls/report`, { headers: buildHeaders(token) });
+  return parseResponse<CpeFinanceControlReport>(response);
+}
+
+export async function recalculateAllCpeFinanceControls(token: string): Promise<CpeFinanceControlReport> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/controls/recalculate`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeFinanceControlReport>(response);
 }
 
 export async function updateCpeFinanceInvoice(

@@ -1854,6 +1854,75 @@ def list_finance_controls(db: Session, invoice_id: int, city_id: int | None = No
     return list(db.scalars(query).all())
 
 
+def build_finance_control_report(
+    db: Session,
+    city_id: int | None = None,
+    *,
+    recalculate: bool = False,
+) -> dict[str, Any]:
+    invoices = [
+        invoice
+        for invoice in list_finance_invoices(db, city_id=city_id)
+        if _is_current_cpe_contract(invoice.contract_code)
+    ]
+    summaries: list[dict[str, Any]] = []
+    type_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"ok": 0, "error": 0, "blocked": 0})
+    controls_ok = 0
+    controls_error = 0
+    controls_blocked = 0
+
+    for invoice in invoices:
+        controls = (
+            recompute_finance_invoice_controls(db, invoice)
+            if recalculate
+            else list_finance_controls(db, invoice.id, city_id)
+        )
+        status_counts = {
+            "ok": sum(1 for control in controls if control.status == "ok"),
+            "error": sum(1 for control in controls if control.status == "error"),
+            "blocked": sum(1 for control in controls if control.status == "blocked"),
+        }
+        controls_ok += status_counts["ok"]
+        controls_error += status_counts["error"]
+        controls_blocked += status_counts["blocked"]
+        for control in controls:
+            if control.status in type_counts[control.control_type]:
+                type_counts[control.control_type][control.status] += 1
+        summaries.append(
+            {
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "contract_code": invoice.contract_code,
+                "contract_label": invoice.contract_label,
+                "invoice_type": invoice.invoice_type,
+                "total_ht": invoice.total_ht,
+                "invoice_status": invoice.status,
+                **status_counts,
+                "controls_total": len(controls),
+                "control_types": sorted({control.control_type for control in controls if control.status != "ok"}),
+            }
+        )
+
+    summaries.sort(key=lambda item: (-item["error"], -item["blocked"], item["invoice_number"]))
+    return {
+        "generated_at": datetime.utcnow(),
+        "scope": "Contrats CPE Ville actifs",
+        "invoice_count": len(invoices),
+        "total_ht": round(sum(invoice.total_ht or 0.0 for invoice in invoices), 2),
+        "invoices_ok": sum(1 for item in summaries if item["error"] == 0 and item["blocked"] == 0),
+        "invoices_with_errors": sum(1 for item in summaries if item["error"] > 0),
+        "invoices_blocked": sum(1 for item in summaries if item["error"] == 0 and item["blocked"] > 0),
+        "controls_ok": controls_ok,
+        "controls_error": controls_error,
+        "controls_blocked": controls_blocked,
+        "control_types": [
+            {"control_type": control_type, **counts, "total": sum(counts.values())}
+            for control_type, counts in sorted(type_counts.items())
+        ],
+        "invoices": summaries,
+    }
+
+
 def list_finance_batches(db: Session, city_id: int | None = None) -> list[CpeFinanceImportBatch]:
     query = select(CpeFinanceImportBatch)
     if city_id is not None:

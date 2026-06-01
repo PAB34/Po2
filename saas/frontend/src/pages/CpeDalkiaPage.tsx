@@ -20,7 +20,7 @@ import {
   CpeAccountingNatureRule,
   CpeBilanAnnuel,
   CpeContractReference,
-  CpeFinanceControl,
+  CpeFinanceControlReport,
   CpeFinanceImportBatch,
   CpeFinanceImportResult,
   CpeFinanceInvoice,
@@ -47,12 +47,13 @@ import {
   fetchCpeRevisionObservations,
   fetchCpeRevisionEvidences,
   fetchCpeFinanceInvoices,
+  fetchCpeFinanceControlReport,
   importCpeCsv,
   importCpeAccountingCodification,
   importCpeFinanceExport,
   applyCpeInvoiceEvidenceDeclaredIndices,
   previewCpeFinanceExport,
-  recalculateCpeFinanceControls,
+  recalculateAllCpeFinanceControls,
   deleteCpeAccountingSiteMapping,
   downloadCpeFinanceInvoiceLiaison,
   updateCpeAccountingNatureRule,
@@ -140,7 +141,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
 };
 
 type CpeView = "cockpit" | "finance" | "performance";
-type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices";
+type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "controls";
 type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "total_ht" | "status";
 
 function splitList(value: string | null | undefined): string[] {
@@ -157,7 +158,8 @@ const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail
   { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
   { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
   { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources" },
-  { id: "invoices", label: "Factures", detail: "Archives et fiches liaison" },
+  { id: "invoices", label: "Factures", detail: "Suivi financier annuel" },
+  { id: "controls", label: "Contrôle factures", detail: "Audit global et anomalies" },
 ];
 
 const CPE_WORKSTREAMS = [
@@ -202,67 +204,6 @@ function fmt(val: number | null | undefined, decimals = 1): string {
 function fmtEur(val: number | null | undefined): string {
   if (val == null) return "—";
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(val);
-}
-
-function fmtControlNumber(val: number | null | undefined, digits = 4): string | null {
-  if (val == null) return null;
-  return val.toFixed(digits).replace(".", ",");
-}
-function fmtControlPercent(val: number | null | undefined, digits = 2): string | null {
-  if (val == null) return null;
-  return `${(val * 100).toFixed(digits).replace(".", ",")}%`;
-}
-function controlStatusLabel(status: string): string {
-  if (status === "error") return "Ecart";
-  if (status === "blocked") return "Bloque";
-  if (status === "ok") return "OK";
-  return status;
-}
-function controlStatusColor(status: string): string {
-  if (status === "error") return "#dc2626";
-  if (status === "blocked") return "#b45309";
-  if (status === "ok") return "#166534";
-  return "#6b7280";
-}
-function controlDiagnostic(control: CpeFinanceControl): string {
-  if (control.status === "ok") return control.message;
-  if (control.control_type === "revision_p2" || control.control_type === "revision_p3") {
-    if (control.index_year == null || control.index_quarter == null) {
-      return "Periode absente: trimestre d'indices introuvable.";
-    }
-    const missing: string[] = [];
-    if (control.icht_ime_value == null) missing.push("ICHT-IME");
-    if (control.control_type === "revision_p2" && control.fsd2_value == null) missing.push("FSD2");
-    if (control.control_type === "revision_p3" && control.bt40_value == null) missing.push("BT40");
-    if (missing.length > 0) return `Indice(s) manquant(s): ${missing.join(", ")}.`;
-    if (control.base_price == null || control.actual_revised_price == null) {
-      return "Prix de base/revise absent dans les donnees source.";
-    }
-    return "Ecart entre prix revise facture et prix revise calcule.";
-  }
-  return control.message;
-}
-function controlCalculationTrace(control: CpeFinanceControl): string | null {
-  const chunks: string[] = [];
-  if (control.index_year != null && control.index_quarter != null) {
-    chunks.push(`Periode indices ${control.index_year} T${control.index_quarter}`);
-  }
-  if (control.expected_factor != null) {
-    chunks.push(`Facteur attendu ${fmtControlNumber(control.expected_factor, 6)}`);
-  }
-  if (control.expected_revised_price != null) {
-    chunks.push(`Attendu ${fmtControlNumber(control.expected_revised_price)}`);
-  }
-  if (control.actual_revised_price != null) {
-    chunks.push(`Facture ${fmtControlNumber(control.actual_revised_price)}`);
-  }
-  if (control.delta_abs != null) {
-    chunks.push(`Ecart ${fmtControlNumber(control.delta_abs)}`);
-  }
-  if (control.delta_pct != null) {
-    chunks.push(`Ecart % ${fmtControlPercent(control.delta_pct)}`);
-  }
-  return chunks.length > 0 ? chunks.join(" | ") : null;
 }
 
 export default function CpeDalkiaPage() {
@@ -326,6 +267,12 @@ export default function CpeDalkiaPage() {
   const revisionIndicesQ = useQuery({
     queryKey: ["cpe-revision-indices"],
     queryFn: () => fetchCpeRevisionIndices(token!),
+    enabled: !!token && view === "finance",
+  });
+
+  const financeControlReportQ = useQuery({
+    queryKey: ["cpe-finance-control-report"],
+    queryFn: () => fetchCpeFinanceControlReport(token!),
     enabled: !!token && view === "finance",
   });
 
@@ -467,8 +414,12 @@ export default function CpeDalkiaPage() {
     },
   });
 
-  const recalculateControlsM = useMutation({
-    mutationFn: (invoiceId: number) => recalculateCpeFinanceControls(token!, invoiceId),
+  const recalculateAllControlsM = useMutation({
+    mutationFn: () => recalculateAllCpeFinanceControls(token!),
+    onSuccess: (report) => {
+      qc.setQueryData(["cpe-finance-control-report"], report);
+      qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    },
   });
 
   const exportLiaisonM = useMutation({
@@ -578,7 +529,7 @@ export default function CpeDalkiaPage() {
           indices={revisionIndicesQ.data ?? []}
           revisionObservations={revisionObservationsQ.data ?? []}
           revisionEvidences={revisionEvidencesQ.data ?? []}
-          lastControls={recalculateControlsM.data ?? null}
+          controlReport={recalculateAllControlsM.data ?? financeControlReportQ.data ?? null}
           loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || contractReferencesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
           codificationImportResult={codificationImportM.data ?? null}
@@ -597,7 +548,7 @@ export default function CpeDalkiaPage() {
           deleteContractReferencePending={deleteContractReferenceM.isPending}
           invoiceActionPending={updateFinanceInvoiceM.isPending || exportLiaisonM.isPending || uploadEvidencePdfM.isPending || uploadRevisionEvidencePdfM.isPending || applyEvidenceIndicesM.isPending}
           indexSavePending={upsertRevisionIndexM.isPending}
-          controlsPending={recalculateControlsM.isPending}
+          controlsPending={recalculateAllControlsM.isPending}
           onCodificationFile={(file) => codificationImportM.mutate(file)}
           onFinanceImportFile={(file) => financeImportM.mutate(file)}
           onDeleteHistory={() => deleteFinanceHistoryM.mutate()}
@@ -613,7 +564,7 @@ export default function CpeDalkiaPage() {
           onUploadRevisionEvidencePdf={(file) => uploadRevisionEvidencePdfM.mutate(file)}
           onApplyEvidenceIndices={(evidenceId) => applyEvidenceIndicesM.mutate(evidenceId)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
-          onRecalculateControls={(invoiceId) => recalculateControlsM.mutate(invoiceId)}
+          onRecalculateAllControls={() => recalculateAllControlsM.mutate()}
         />
       )}
 
@@ -1187,7 +1138,7 @@ function CpeFinanceReference({
   indices,
   revisionObservations,
   revisionEvidences,
-  lastControls,
+  controlReport,
   loading,
   codificationImportPending,
   codificationImportResult,
@@ -1222,7 +1173,7 @@ function CpeFinanceReference({
   onUploadRevisionEvidencePdf,
   onApplyEvidenceIndices,
   onSaveIndex,
-  onRecalculateControls,
+  onRecalculateAllControls,
 }: {
   annee: number;
   codificationFileRef: React.RefObject<HTMLInputElement>;
@@ -1235,7 +1186,7 @@ function CpeFinanceReference({
   indices: CpeRevisionIndex[];
   revisionObservations: CpeRevisionObservation[];
   revisionEvidences: CpeInvoiceEvidence[];
-  lastControls: CpeFinanceControl[] | null;
+  controlReport: CpeFinanceControlReport | null;
   loading: boolean;
   codificationImportPending: boolean;
   codificationImportResult: CpeAccountingImportResult | null;
@@ -1274,7 +1225,7 @@ function CpeFinanceReference({
   onUploadRevisionEvidencePdf: (file: File) => void;
   onApplyEvidenceIndices: (evidenceId: number) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) => void;
-  onRecalculateControls: (invoiceId: number) => void;
+  onRecalculateAllControls: () => void;
 }) {
   const [draft, setDraft] = useState(EMPTY_SITE_MAPPING);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1303,10 +1254,9 @@ function CpeFinanceReference({
     autre: true,
   });
   const [typeFilters, setTypeFilters] = useState<Record<string, boolean>>({});
-  const [includeOutOfScopeContracts, setIncludeOutOfScopeContracts] = useState(true);
+  const [includeOutOfScopeContracts, setIncludeOutOfScopeContracts] = useState(false);
   const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
   const [showInvoiceCountLine, setShowInvoiceCountLine] = useState(true);
-  const [lastControlledInvoice, setLastControlledInvoice] = useState<string | null>(null);
   const [indexDraft, setIndexDraft] = useState({
     index_code: "ICHT_IME",
     year: annee,
@@ -1393,6 +1343,27 @@ function CpeFinanceReference({
       }
       return invoiceSort.direction === "asc" ? result : -result;
     });
+  const annualInvoices = useMemo(
+    () =>
+      visibleInvoices.filter((invoice) => {
+        const dateValue = invoice.period_end || invoice.invoice_date;
+        if (!dateValue) return false;
+        const parsed = new Date(dateValue);
+        return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === annee;
+      }),
+    [visibleInvoices, annee],
+  );
+  const annualTotalHt = useMemo(
+    () => annualInvoices.reduce((sum, invoice) => sum + (invoice.total_ht || 0), 0),
+    [annualInvoices],
+  );
+  const annualContractReferenceHt = useMemo(
+    () =>
+      contractReferences
+        .filter((reference) => reference.active && reference.year === annee && TARGET_CPE_CONTRACT_CODES.has(reference.contract_code.toUpperCase()))
+        .reduce((sum, reference) => sum + (reference.annual_amount_ht || 0), 0),
+    [contractReferences, annee],
+  );
   const monthlyChartData = useMemo(() => {
     const rows = Array.from({ length: 12 }, (_, monthIndex) => ({
       month: MOIS_LABELS[monthIndex],
@@ -1403,7 +1374,7 @@ function CpeFinanceReference({
       invoices: 0,
       total_ht: 0,
     }));
-    for (const invoice of visibleInvoices) {
+    for (const invoice of annualInvoices) {
       const monthSource = invoice.period_end || invoice.invoice_date;
       if (!monthSource) continue;
       const date = new Date(monthSource);
@@ -1429,10 +1400,10 @@ function CpeFinanceReference({
       AUTRE: Number(row.AUTRE.toFixed(2)),
       total_ht: Number(row.total_ht.toFixed(2)),
     }));
-  }, [visibleInvoices]);
+  }, [annualInvoices]);
   const statusChartData = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const invoice of visibleInvoices) {
+    for (const invoice of annualInvoices) {
       const key = (invoice.status || "autre").toLowerCase();
       counts[key] = (counts[key] ?? 0) + 1;
     }
@@ -1444,10 +1415,10 @@ function CpeFinanceReference({
       autre: "Autre",
     };
     return Object.entries(counts).map(([key, count]) => ({ status: key, label: labels[key] ?? key, count }));
-  }, [visibleInvoices]);
+  }, [annualInvoices]);
   const topBilledItemsData = useMemo(() => {
     const metrics: Record<string, { item: string; amount: number; invoices: number }> = {};
-    for (const invoice of visibleInvoices) {
+    for (const invoice of annualInvoices) {
       const items = splitList(invoice.billed_items).map((item) => item.toUpperCase());
       const normalizedItems = items.length ? items : ["SANS_POSTE"];
       const share = (invoice.total_ht || 0) / normalizedItems.length;
@@ -1461,7 +1432,48 @@ function CpeFinanceReference({
       .sort((left, right) => right.amount - left.amount)
       .slice(0, 10)
       .map((row) => ({ ...row, amount: Number(row.amount.toFixed(2)) }));
-  }, [visibleInvoices]);
+  }, [annualInvoices]);
+  const invoiceTypeChartData = useMemo(() => {
+    const labels: Record<string, string> = {
+      AC: "Acomptes",
+      AJ: "Ajustements",
+      DE: "Définitives",
+      EC: "Échéances",
+      RE: "Régularisations",
+      VIDE: "Non renseigné",
+    };
+    const metrics: Record<string, { type: string; label: string; amount: number; invoices: number }> = {};
+    for (const invoice of annualInvoices) {
+      const type = (invoice.invoice_type || "VIDE").toUpperCase();
+      if (!metrics[type]) metrics[type] = { type, label: labels[type] ?? type, amount: 0, invoices: 0 };
+      metrics[type].amount += invoice.total_ht || 0;
+      metrics[type].invoices += 1;
+    }
+    return Object.values(metrics).sort((left, right) => right.amount - left.amount);
+  }, [annualInvoices]);
+  const controlStatusChartData = useMemo(
+    () =>
+      controlReport
+        ? [
+            { label: "Factures conformes", value: controlReport.invoices_ok, color: "#16a34a" },
+            { label: "Avec écarts", value: controlReport.invoices_with_errors, color: "#dc2626" },
+            { label: "Bloquées", value: controlReport.invoices_blocked, color: "#f59e0b" },
+          ]
+        : [],
+    [controlReport],
+  );
+  const controlTypeChartData = useMemo(
+    () =>
+      (controlReport?.control_types ?? [])
+        .filter((item) => item.error > 0 || item.blocked > 0)
+        .map((item) => ({
+          type: CONTROL_TYPE_LABELS[item.control_type] ?? item.control_type,
+          error: item.error,
+          blocked: item.blocked,
+        }))
+        .sort((left, right) => right.error + right.blocked - (left.error + left.blocked)),
+    [controlReport],
+  );
   const visibleSiteMappings = siteMappings
     .filter((mapping) => {
       const haystack = [
@@ -1519,27 +1531,6 @@ function CpeFinanceReference({
       return haystack.includes(referenceFilter.trim().toLowerCase());
     })
     .slice(0, 120);
-  const controlsSummary = lastControls
-    ? {
-        ok: lastControls.filter((item) => item.status === "ok").length,
-        error: lastControls.filter((item) => item.status === "error").length,
-        blocked: lastControls.filter((item) => item.status === "blocked").length,
-      }
-    : null;
-  const controlHighlights = useMemo(() => {
-    if (!lastControls) return [];
-    const priority: Record<string, number> = { error: 3, blocked: 2, ok: 1 };
-    return [...lastControls]
-      .sort((a, b) => {
-        const statusDelta = (priority[b.status] ?? 0) - (priority[a.status] ?? 0);
-        if (statusDelta !== 0) return statusDelta;
-        const absA = Math.abs(a.delta_abs ?? 0);
-        const absB = Math.abs(b.delta_abs ?? 0);
-        if (absB !== absA) return absB - absA;
-        return b.id - a.id;
-      })
-      .slice(0, 5);
-  }, [lastControls]);
   const sortedIndices = useMemo(
     () =>
       [...indices].sort((left, right) => {
@@ -2501,6 +2492,20 @@ function CpeFinanceReference({
             </p>
           )}
           {deleteHistoryError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{deleteHistoryError}</p>}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap", marginBottom: 8 }}>
+              <div>
+                <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Suivi financier annuel {annee}</h4>
+                <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>Période analysée : 01/01/{annee} au 31/12/{annee}. Les graphiques suivent les filtres ci-dessous.</p>
+              </div>
+            </div>
+            <div className="kpi-grid">
+              <KpiCard label={`Facturé ${annee}`} value={fmtEur(annualTotalHt)} sub={`${annualInvoices.length} facture(s) dans l'exercice`} color="#1d4ed8" />
+              <KpiCard label="Références contractuelles saisies" value={fmtEur(annualContractReferenceHt)} sub="Montants annuels disponibles dans le référentiel" color="#0f766e" />
+              <KpiCard label="Montant moyen par facture" value={fmtEur(annualInvoices.length ? annualTotalHt / annualInvoices.length : 0)} sub="Sur le périmètre affiché" color="#7c3aed" />
+              <KpiCard label="Périmètre" value={includeOutOfScopeContracts ? "Étendu" : "CPE Ville"} sub={includeOutOfScopeContracts ? "Contrats hors marché inclus" : "Contrats Ville uniquement"} color="#b45309" />
+            </div>
+          </div>
           <div className="card" style={{ padding: 14, marginBottom: 12 }}>
             <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Analyse interactive</h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }}>
@@ -2559,13 +2564,14 @@ function CpeFinanceReference({
               </div>
             </div>
             <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-              {visibleInvoices.length.toLocaleString("fr-FR")} facture(s) dans l'analyse.
+              {annualInvoices.length.toLocaleString("fr-FR")} facture(s) dans l'analyse annuelle, {visibleInvoices.length.toLocaleString("fr-FR")} dans l'archive filtrée.
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(420px, 2fr) minmax(300px, 1fr)", gap: 12, marginBottom: 12 }}>
             <div className="card" style={{ padding: 12 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Montants mensuels par marche</h4>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Montants mensuels par marché - exercice {annee}</h4>
+              <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Du 01/01/{annee} au 31/12/{annee}, ventilés entre P1, P2, P3 et autres postes.</p>
               <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyChartData}>
@@ -2585,7 +2591,7 @@ function CpeFinanceReference({
               </div>
             </div>
             <div className="card" style={{ padding: 12 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Repartition par statut</h4>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Répartition par statut - {annee}</h4>
               <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -2603,7 +2609,23 @@ function CpeFinanceReference({
           </div>
 
           <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Top 10 postes factures (montant estime)</h4>
+            <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Montants par type de facture - exercice {annee}</h4>
+            <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>AC, AJ, DE, EC et RE permettent de distinguer acomptes, ajustements, factures définitives, échéances et régularisations.</p>
+            <div style={{ height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={invoiceTypeChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" />
+                  <YAxis tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
+                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
+                  <Bar dataKey="amount" name="Montant HT" fill="#0f766e" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Top 10 postes facturés - exercice {annee} (montant estimé)</h4>
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topBilledItemsData} layout="vertical" margin={{ left: 18, right: 14 }}>
@@ -2711,19 +2733,6 @@ function CpeFinanceReference({
                       type="button"
                       className="secondary-button"
                       style={{ fontSize: 12, padding: "4px 8px" }}
-                      disabled={controlsPending}
-                      onClick={() => {
-                        setLastControlledInvoice(invoice.invoice_number);
-                        onRecalculateControls(invoice.id);
-                      }}
-                    >
-                      Controle facture
-                    </button>
-                    {" "}
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      style={{ fontSize: 12, padding: "4px 8px" }}
                       disabled={invoiceActionPending}
                       onClick={() => {
                         setEvidenceInvoiceId(invoice.id);
@@ -2767,35 +2776,103 @@ function CpeFinanceReference({
               )}
             </tbody>
           </table>
-          {controlsSummary && (
-            <div style={{ marginTop: 10, padding: 10, borderRadius: 6, background: "#f9fafb", fontSize: 13 }}>
-              Dernier controle facture{lastControlledInvoice ? ` ${lastControlledInvoice}` : ""} : <strong>{controlsSummary.ok}</strong> OK,{" "}
-              <strong style={{ color: "#dc2626" }}>{controlsSummary.error}</strong> ecart(s),{" "}
-              <strong style={{ color: "#b45309" }}>{controlsSummary.blocked}</strong> bloque(s).
-              {controlHighlights.map((control) => {
-                const calcTrace = controlCalculationTrace(control);
-                return (
-                  <div key={control.id} style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #e5e7eb" }}>
-                    <p style={{ margin: 0, fontWeight: 600, color: controlStatusColor(control.status) }}>
-                      {CONTROL_TYPE_LABELS[control.control_type] ?? control.control_type} - {controlStatusLabel(control.status)}
-                    </p>
-                    <p style={{ margin: "4px 0 0", color: "#4b5563" }}>{controlDiagnostic(control)}</p>
-                    {control.formula && (
-                      <p style={{ margin: "4px 0 0", color: "#4b5563" }}>
-                        <strong>Formule:</strong> {control.formula}
-                      </p>
-                    )}
-                    {calcTrace && (
-                      <p style={{ margin: "4px 0 0", color: "#1f2937" }}>
-                        <strong>Resultat:</strong> {calcTrace}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
+      </section>
+      )}
+
+      {section === "controls" && (
+      <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div>
+            <h4 style={{ margin: "0 0 4px", fontSize: 15 }}>Contrôle global des factures CPE Ville</h4>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+              Recalcule les contrôles contractuels, comptables et documentaires sur toutes les factures des contrats actifs CPE Ville.
+            </p>
+          </div>
+          <button type="button" className="primary-button" onClick={onRecalculateAllControls} disabled={controlsPending}>
+            {controlsPending ? "Contrôle en cours..." : "Lancer le contrôle global"}
+          </button>
+        </div>
+
+        {controlReport ? (
+          <>
+            <div className="kpi-grid">
+              <KpiCard label="Factures analysées" value={String(controlReport.invoice_count)} sub={`${fmtEur(controlReport.total_ht)} HT contrôlés`} color="#1d4ed8" />
+              <KpiCard label="Factures conformes" value={String(controlReport.invoices_ok)} sub={`${controlReport.controls_ok} contrôle(s) OK`} color="#16a34a" />
+              <KpiCard label="Factures avec écarts" value={String(controlReport.invoices_with_errors)} sub={`${controlReport.controls_error} écart(s) à examiner`} color="#dc2626" />
+              <KpiCard label="Factures bloquées" value={String(controlReport.invoices_blocked)} sub={`${controlReport.controls_blocked} donnée(s) manquante(s)`} color="#b45309" />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(420px, 2fr)", gap: 12 }}>
+              <div className="card" style={{ padding: 12 }}>
+                <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Qualité du portefeuille contrôlé</h4>
+                <div style={{ height: 280 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip formatter={(value) => `${Number(value).toLocaleString("fr-FR")} facture(s)`} />
+                      <Legend />
+                      <Pie data={controlStatusChartData} dataKey="value" nameKey="label" outerRadius={90} label>
+                        {controlStatusChartData.map((entry) => <Cell key={entry.label} fill={entry.color} />)}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="card" style={{ padding: 12 }}>
+                <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Anomalies par famille de contrôle</h4>
+                <div style={{ height: 280 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={controlTypeChartData} layout="vertical" margin={{ left: 28, right: 14 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" allowDecimals={false} />
+                      <YAxis type="category" dataKey="type" width={170} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="error" name="Écarts" stackId="issues" fill="#dc2626" />
+                      <Bar dataKey="blocked" name="Bloqués" stackId="issues" fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>File de traitement priorisée</h4>
+              <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <th style={thStyle}>Facture</th>
+                    <th style={thStyle}>Contrat</th>
+                    <th style={thStyle}>Type</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>HT</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>OK</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Écarts</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Bloqués</th>
+                    <th style={thStyle}>Familles à traiter</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {controlReport.invoices.map((invoice) => (
+                    <tr key={invoice.invoice_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={tdStyle}>{invoice.invoice_number}</td>
+                      <td style={tdStyle}>{invoice.contract_label ?? invoice.contract_code ?? "-"}</td>
+                      <td style={tdStyle}>{invoice.invoice_type ?? "-"}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "#166534" }}>{invoice.ok}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "#b91c1c", fontWeight: invoice.error ? 700 : 400 }}>{invoice.error}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: "#b45309", fontWeight: invoice.blocked ? 700 : 400 }}>{invoice.blocked}</td>
+                      <td style={tdStyle}>{invoice.control_types.map((type) => CONTROL_TYPE_LABELS[type] ?? type).join(", ") || "Aucune anomalie"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="card" style={{ padding: 18, color: "#6b7280", fontSize: 13 }}>
+            Aucun rapport consolidé disponible. Lance le contrôle global pour créer l’état de référence du portefeuille CPE Ville.
+          </div>
+        )}
       </section>
       )}
     </>

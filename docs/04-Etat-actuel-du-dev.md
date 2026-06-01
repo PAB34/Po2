@@ -304,3 +304,26 @@ Increment 1 implemente :
 - auto-rattachement lorsque le numero de facture est extrait du PDF ;
 - preservation des preuves lors de la suppression d'un historique de factures ;
 - affichage des formules P1/P2/P3 et registre central des justificatifs dans `/cpe`.
+
+## Mise a jour CPE DALKIA - pilotage financier annuel et controle global - 2026-06-01
+
+Travaux livres :
+
+- `/cpe` > `Factures` recentre sur le suivi financier de l'exercice courant du 01/01 au 31/12 ;
+- contrats hors perimetre CPE Ville decoches par defaut ;
+- KPI annuel, graphique mensuel P1/P2/P3, repartition par statut, top postes et graphique par type de
+  facture `AC`, `AJ`, `DE`, `EC`, `RE` ;
+- nouvelle entree `/cpe` > `Controle factures` ;
+- endpoint de recalcul global des controles sur les contrats actifs Ville ;
+- reporting consolide : conformes, ecarts, blocages, montant controle, familles d'anomalies et file
+  priorisee par facture.
+
+Reste a faire :
+
+1. parser et versionner les enveloppes DPGF Lot 1 / Lot 2 pour alimenter un vrai suivi realise / prevu ;
+2. afficher l'ecart budgetaire par famille, poste et site ;
+3. completer le suivi du compte P3 avec engagements reserves et travaux realises.
+
+Note detaillee :
+
+- `docs/energie/CPE-DALKIA/16-Pilotage-financier-et-controle-global.md`

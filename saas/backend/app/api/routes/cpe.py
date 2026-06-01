@@ -22,6 +22,7 @@ from app.schemas.cpe import (
     CpeDjuAnnuel,
     CpeFinanceImportBatchOut,
     CpeFinanceControlOut,
+    CpeFinanceControlReportOut,
     CpeFinanceImportResult,
     CpeFinanceInvoiceOut,
     CpeFinanceInvoiceUpdate,
@@ -474,6 +475,26 @@ def apply_invoice_evidence_declared_indices(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return [CpeRevisionIndexOut.model_validate(item) for item in indices]
+
+
+@router.get("/finances/controls/report", response_model=CpeFinanceControlReportOut)
+def get_finance_control_report(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeFinanceControlReportOut:
+    return CpeFinanceControlReportOut.model_validate(
+        accounting_svc.build_finance_control_report(db, current_user.city_id)
+    )
+
+
+@router.post("/finances/controls/recalculate", response_model=CpeFinanceControlReportOut)
+def recalculate_finance_controls(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeFinanceControlReportOut:
+    return CpeFinanceControlReportOut.model_validate(
+        accounting_svc.build_finance_control_report(db, current_user.city_id, recalculate=True)
+    )
 
 
 @router.get("/finances/invoices/{invoice_id}/controls", response_model=list[CpeFinanceControlOut])
