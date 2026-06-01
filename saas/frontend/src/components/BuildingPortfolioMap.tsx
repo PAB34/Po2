@@ -240,9 +240,9 @@ export function BuildingPortfolioMap({
     [activeBuildingId, mappableBuildings],
   );
 
-  const osmUrl = useMemo(() => {
+  const streetViewUrl = useMemo(() => {
     if (!selectedBuilding) return null;
-    return `https://www.openstreetmap.org/?mlat=${selectedBuilding.latitude}&mlon=${selectedBuilding.longitude}#map=18/${selectedBuilding.latitude}/${selectedBuilding.longitude}`;
+    return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${selectedBuilding.latitude},${selectedBuilding.longitude}`;
   }, [selectedBuilding]);
 
   // ------------------------------------------------------------------
@@ -529,9 +529,9 @@ export function BuildingPortfolioMap({
           )}
         </span>
         <div className="map-toolbar-actions">
-          {osmUrl && attachMode === "none" ? (
-            <a className="secondary-link" href={osmUrl} target="_blank" rel="noreferrer">
-              Ouvrir dans OSM
+          {streetViewUrl && attachMode === "none" ? (
+            <a className="secondary-link" href={streetViewUrl} target="_blank" rel="noreferrer">
+              Google Street View
             </a>
           ) : null}
         </div>
