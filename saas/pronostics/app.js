@@ -37,6 +37,7 @@ async function authenticate(event) {
   try {
     const data = await request(`/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     localStorage.setItem(TOKEN_KEY, data.access_token);
+    $("password").value = "";
     player = data.player;
     await showGame();
   } catch (error) { setMessage("auth-message", error.message); }
@@ -59,6 +60,7 @@ function logout() {
   localStorage.removeItem(TOKEN_KEY);
   player = null;
   matches = [];
+  $("password").value = "";
   $("game-screen").classList.add("hidden");
   $("auth-screen").classList.remove("hidden");
 }
