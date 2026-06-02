@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.cpe import CpeContractReference
+from app.models.cpe import CpeContractReference, CpeSite
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,
     CpeDalkiaRefBpu,
@@ -332,6 +332,80 @@ def resolve_dalkia_p2p3_forfait(
         return None if row.p2_total_ht is None else round(row.p2_total_ht - (row.p2_4_ht or 0.0), 2)
     # item == "P3"
     return None if row.p3_total_ht is None else round(row.p3_total_ht - (row.p3_4_ht or 0.0), 2)
+
+
+def _derive_categorie(code_site: str) -> str:
+    """Catégorie d'un site CPE déduite de son code (ENS/SPORT/BAM/CULT/PSC/CCAS)."""
+    c = (code_site or "").upper()
+    for key in ("SPORT", "ENS", "BAM", "CULT", "PSC", "CCAS"):
+        if key in c:
+            return key
+    return "AUTRE"
+
+
+def sync_cpe_sites_from_dalkia(db: Session, *, city_id: int | None, ref_year: int = 2026) -> dict:
+    """Crée / met à jour `cpe_sites` (volet performance) depuis le référentiel DALKIA actif.
+
+    Source unique = imports DALKIA actifs : `cpe_dalkia_ref_sites` (code, nom, lot),
+    `cpe_dalkia_ref_cibles` (NB gaz/élec, DJU, qECS de `ref_year`), `cpe_dalkia_ref_p1_gaz`
+    (tarif, PCE). Upsert idempotent par `code_site` — réexécutable après chaque avenant.
+
+    Comme `cpe_sites.code_site` provient du même référentiel que `cpe_dalkia_ref_cibles`,
+    le NB par année (`resolve_nb_for_year`) sera systématiquement aligné (badge DLK).
+    """
+    imp_stmt = select(CpeDalkiaRefImport).where(CpeDalkiaRefImport.is_active.is_(True))
+    if city_id is not None:
+        imp_stmt = imp_stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    imports = list(db.scalars(imp_stmt))
+
+    created: list[str] = []
+    updated: list[str] = []
+
+    for imp in imports:
+        for rs in db.scalars(select(CpeDalkiaRefSite).where(CpeDalkiaRefSite.import_id == imp.id)):
+            def _cible(fluid: str):
+                return db.scalars(select(CpeDalkiaRefCible).where(
+                    CpeDalkiaRefCible.import_id == imp.id,
+                    CpeDalkiaRefCible.code_site == rs.code_site,
+                    CpeDalkiaRefCible.fluid == fluid,
+                    CpeDalkiaRefCible.period_year == ref_year,
+                )).first()
+
+            cible_gaz = _cible("GAZ")
+            cible_elec = _cible("ELEC")
+            p1 = db.scalars(select(CpeDalkiaRefP1Gaz).where(
+                CpeDalkiaRefP1Gaz.import_id == imp.id,
+                CpeDalkiaRefP1Gaz.code_site == rs.code_site,
+            )).first()
+            pce = (p1.pce if p1 else None)
+            if pce in ("-", ""):
+                pce = None
+
+            fields = dict(
+                city_id=rs.city_id if rs.city_id is not None else city_id,
+                nom_site=rs.nom_batiment or rs.code_site,
+                categorie=_derive_categorie(rs.code_site),
+                nb_mwh_pci=(cible_gaz.nb_mwhpci if cible_gaz and cible_gaz.nb_mwhpci is not None else 0.0),
+                cible_elec_mwh=(cible_elec.nb_mwhpci if cible_elec else None),
+                tarif=(p1.type_tarif if p1 else None),
+                pce=pce,
+                dju_reference=(cible_gaz.dju_reference if cible_gaz and cible_gaz.dju_reference else 1426.0),
+                q_ecs_mwh_pci_per_m3=(cible_gaz.q_ecs if cible_gaz else None),
+                actif=True,
+            )
+
+            existing = db.scalars(select(CpeSite).where(CpeSite.code_site == rs.code_site)).first()
+            if existing is not None:
+                for k, v in fields.items():
+                    setattr(existing, k, v)
+                db.add(existing)
+                updated.append(rs.code_site)
+            else:
+                db.add(CpeSite(code_site=rs.code_site, **fields))
+                created.append(rs.code_site)
+
+    db.commit()
+    return {"created": len(created), "updated": len(updated), "total": len(created) + len(updated)}
 
 
 def resolve_p1_gaz_tarif(db: Session, *, code_site: str, city_id: int | None) -> str | None:

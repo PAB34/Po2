@@ -17,6 +17,7 @@ from app.services.cpe_dalkia_db import (
     get_recap_for_import,
     get_sites_for_import,
     persist_dalkia_import,
+    sync_cpe_sites_from_dalkia,
     sync_p1_reference_from_recap,
 )
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
@@ -331,6 +332,18 @@ def get_bpu(
         raise HTTPException(status_code=404, detail="Import introuvable.")
     rows = get_bpu_for_import(db, import_id, categorie)
     return [BpuRow(**{k: getattr(r, k) for k in BpuRow.model_fields}) for r in rows]
+
+
+@router.post("/sync-cpe-sites")
+def sync_cpe_sites(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Initialise / met à jour les sites CPE (cpe_sites) depuis le référentiel DALKIA actif.
+
+    Alimente le volet performance/intéressement (bilan, NB par année). Réexécutable après avenant.
+    """
+    return sync_cpe_sites_from_dalkia(db, city_id=current_user.city_id)
 
 
 @router.post("/imports/{import_id}/sync-p1-reference")
