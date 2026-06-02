@@ -172,6 +172,18 @@ type SyncP1Result = {
   amounts_by_year?: Record<string, number>;
 };
 
+async function syncCpeSites(token: string): Promise<{ created: number; updated: number; total: number }> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/sync-cpe-sites`, {
+    method: "POST",
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Erreur ${resp.status}`);
+  }
+  return resp.json() as Promise<{ created: number; updated: number; total: number }>;
+}
+
 async function syncP1Reference(token: string, importId: number): Promise<SyncP1Result> {
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/sync-p1-reference`, {
     method: "POST",
@@ -209,6 +221,13 @@ export function CpeDalkiaImportPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [viewImportId, setViewImportId] = useState<number | null>(null);
   const [syncP1Result, setSyncP1Result] = useState<{ id: number; res: SyncP1Result } | null>(null);
+  const [sitesMsg, setSitesMsg] = useState<string | null>(null);
+
+  const syncSitesMutation = useMutation({
+    mutationFn: () => syncCpeSites(token as string),
+    onSuccess: (r) => setSitesMsg(`✓ ${r.total} sites CPE synchronisés (${r.created} créés, ${r.updated} mis à jour).`),
+    onError: (err: unknown) => setSitesMsg(`⚠ ${err instanceof Error ? err.message : "Erreur"}`),
+  });
 
   const syncP1Mutation = useMutation({
     mutationFn: (importId: number) => syncP1Reference(token as string, importId),
@@ -306,6 +325,22 @@ export function CpeDalkiaImportPage() {
               : "Aucun import"}
           </strong>
         </div>
+      </div>
+
+      {/* ── Action : initialiser les sites CPE depuis le référentiel ── */}
+      <div className="section-block" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={syncSitesMutation.isPending}
+          onClick={() => syncSitesMutation.mutate()}
+          title="Crée/met à jour les sites CPE (bilan, NB par année) depuis le référentiel DALKIA actif"
+        >
+          {syncSitesMutation.isPending ? "Synchronisation..." : "Initialiser / mettre à jour les sites CPE"}
+        </button>
+        <span style={{ fontSize: 12, color: sitesMsg?.startsWith("✓") ? "#15803d" : "#b45309" }}>
+          {sitesMsg ?? "Alimente le volet performance (bilan /cpe) à partir de l'import DALKIA actif."}
+        </span>
       </div>
 
       {/* ── Formulaire d'import ── */}
