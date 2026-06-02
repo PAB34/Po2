@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./providers/AuthProvider";
 
@@ -37,6 +38,15 @@ function RequireAuth() {
   return <Outlet />;
 }
 
+const navSectionStyle: CSSProperties = {
+  fontSize: 11,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "#94a3b8",
+  fontWeight: 700,
+  margin: "16px 0 4px",
+};
+
 export default function App() {
   const { logout, user } = useAuth();
 
@@ -56,17 +66,30 @@ export default function App() {
             </button>
           </div>
           <nav>
-            <Link to="/">Accueil</Link>
-            <Link to="/buildings">Bâtiments</Link>
-            <Link to="/buildings/technique">Gestion Technique</Link>
-            <Link to="/buildings/cvc-import">Import CVC terrain</Link>
-            <Link to="/energie">Énergie</Link>
-            <Link to="/energie/preconisations">Preconisations</Link>
-            <Link to="/energie/factures">Factures</Link>
-            <Link to="/energie/facturation">Facturation</Link>
-            <Link to="/energie/bpu">Historique BPU</Link>
+            <Link to="/">Tableau de bord</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Patrimoine</p>
+            <Link to="/buildings/list">Sites et bâtiments</Link>
+            <Link to="/buildings">Carte du patrimoine</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Énergie</p>
+            <Link to="/energie">Vue d'ensemble</Link>
+            <Link to="/energie/factures">Factures fournisseurs</Link>
+            <Link to="/energie/preconisations">Préconisations</Link>
+            <Link to="/energie/bpu">Prix et TURPE</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Marchés et contrats</p>
             <Link to="/cpe">CPE DALKIA</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Technique</p>
+            <Link to="/buildings/technique">Inventaire &amp; CVC</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Administration</p>
             <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
+            <Link to="/buildings/cvc-import">Import CVC terrain</Link>
+            <Link to="/energie/facturation">Configuration tarifaire</Link>
+
+            <p className="nav-section" style={navSectionStyle}>Mon compte</p>
             <Link to="/account">Compte</Link>
           </nav>
         </aside>
