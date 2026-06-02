@@ -12,7 +12,7 @@
  * - P1 fourniture gaz par site × période
  * - Travaux APE par site
  */
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,6 +42,7 @@ type ImportPreview = {
   nb_ape_rows: number;
   nb_recap_rows: number;
   recap_summary: RecapSummary;
+  classified: ClassifiedData;
   period_labels: string[];
   sample_sites: {
     code_site: string;
@@ -52,6 +53,23 @@ type ImportPreview = {
     qt_gaz_cible_2026: number | null;
   }[];
   warnings: string[];
+};
+
+type ClassifiedData = {
+  years: string[];
+  p2p3: { code_site: string; nom_batiment: string; by_year: Record<string, { p2: number | null; p3: number | null }> }[];
+  cibles_gaz: { code_site: string; ref_globale: number | null; dju: number | null; by_year: Record<string, number | null> }[];
+  cibles_elec: { code_site: string; ref_globale: number | null; dju: number | null; by_year: Record<string, number | null> }[];
+  p1_gaz: { code_site: string; pce: string | null; type_tarif: string | null; prix_unitaire_ht: number | null; by_year: Record<string, number | null> }[];
+  ape: {
+    code_site: string; nom_batiment: string | null; description_ape: string | null;
+    annee_achevement: number | null; montant_ape_ht: number | null; cee_eur: number | null;
+    gain_energetique_mwhpci: number | null; annee_engagement_nouvelle_cible: number | null; emission_co2_evitee: number | null;
+  }[];
+  recap_engagement: Record<string, Record<string, number | null>>;
+  recap_redevances: Record<string, Record<string, number | null>>;
+  recap_travaux: { categorie: string; metric: string; value: number | null; unit: string | null }[];
+  recap_bilan: { poste: string; metric: string; value: number | null; unit: string | null }[];
 };
 
 type ImportBatch = {
@@ -433,6 +451,9 @@ export function CpeDalkiaImportPage() {
             </table>
           </div>
 
+          {/* Aperçu complet classifié */}
+          {preview.classified ? <ClassifiedPreview data={preview.classified} /> : null}
+
           {/* Boutons de confirmation */}
           <div className="form-actions" style={{ marginTop: 16 }}>
             <button
@@ -533,5 +554,203 @@ export function CpeDalkiaImportPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aperçu complet classifié (onglets par catégorie)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ClassifiedTab = "p2p3" | "cibles_gaz" | "cibles_elec" | "p1_gaz" | "ape" | "recap";
+
+function ClassifiedPreview({ data }: { data: ClassifiedData }) {
+  const [tab, setTab] = useState<ClassifiedTab>("p2p3");
+  const years = data.years;
+
+  const tabs: { key: ClassifiedTab; label: string; count: number }[] = [
+    { key: "p2p3", label: "P2 / P3", count: data.p2p3.length },
+    { key: "cibles_gaz", label: "Cibles GAZ", count: data.cibles_gaz.length },
+    { key: "cibles_elec", label: "Cibles ELEC", count: data.cibles_elec.length },
+    { key: "p1_gaz", label: "P1 gaz", count: data.p1_gaz.length },
+    { key: "ape", label: "Travaux APE", count: data.ape.length },
+    { key: "recap", label: "RECAP financier", count: data.recap_bilan.length },
+  ];
+
+  const th: React.CSSProperties = { textAlign: "right", padding: "5px 8px", whiteSpace: "nowrap", background: "#0f172a" };
+  const thL: React.CSSProperties = { textAlign: "left", padding: "5px 8px", whiteSpace: "nowrap", background: "#0f172a" };
+  const td: React.CSSProperties = { textAlign: "right", padding: "4px 8px", whiteSpace: "nowrap" };
+  const tdL: React.CSSProperties = { textAlign: "left", padding: "4px 8px" };
+  const trB = { borderBottom: "1px solid rgba(148,163,184,0.1)" };
+
+  return (
+    <div className="section-block" style={{ marginTop: 20 }}>
+      <div className="section-heading">
+        <h4>Aperçu complet — toutes les données parsées</h4>
+        <p style={{ fontSize: 12, color: "#94a3b8" }}>Vérifier l'exhaustivité avant de confirmer l'import.</p>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={`secondary-button${tab === t.key ? "" : ""}`}
+            style={tab === t.key ? { background: "rgba(59,130,246,0.2)", borderColor: "#3b82f6" } : {}}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label} <span style={{ opacity: 0.6, fontSize: 11 }}>({t.count})</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ overflowX: "auto", maxHeight: 460, overflowY: "auto", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 8 }}>
+        {/* ── P2 / P3 ── */}
+        {tab === "p2p3" && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ position: "sticky", top: 0 }}>
+              <tr style={trB}>
+                <th style={thL}>Site</th>
+                {years.map((y) => <th key={"p2" + y} style={th}>P2 {y}</th>)}
+                {years.map((y) => <th key={"p3" + y} style={th}>P3 {y}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {data.p2p3.map((s) => (
+                <tr key={s.code_site} style={trB}>
+                  <td style={tdL}><strong>{s.code_site}</strong> <span style={{ color: "#94a3b8" }}>{s.nom_batiment}</span></td>
+                  {years.map((y) => <td key={"p2" + y} style={td}>{formatEur(s.by_year[y]?.p2)}</td>)}
+                  {years.map((y) => <td key={"p3" + y} style={td}>{formatEur(s.by_year[y]?.p3)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* ── Cibles GAZ / ELEC ── */}
+        {(tab === "cibles_gaz" || tab === "cibles_elec") && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ position: "sticky", top: 0 }}>
+              <tr style={trB}>
+                <th style={thL}>Site</th>
+                <th style={th}>Réf. globale</th>
+                <th style={th}>DJU</th>
+                {years.map((y) => <th key={y} style={th}>{y}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {(tab === "cibles_gaz" ? data.cibles_gaz : data.cibles_elec).map((s) => (
+                <tr key={s.code_site} style={trB}>
+                  <td style={tdL}><strong>{s.code_site}</strong></td>
+                  <td style={td}>{formatMwh(s.ref_globale)}</td>
+                  <td style={td}>{s.dju ?? "—"}</td>
+                  {years.map((y) => <td key={y} style={td}>{formatMwh(s.by_year[y])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* ── P1 gaz ── */}
+        {tab === "p1_gaz" && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ position: "sticky", top: 0 }}>
+              <tr style={trB}>
+                <th style={thL}>Site</th>
+                <th style={thL}>PCE</th>
+                <th style={th}>Tarif</th>
+                <th style={th}>Pu (€/MWh)</th>
+                {years.map((y) => <th key={y} style={th}>P10 {y}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {data.p1_gaz.map((s) => (
+                <tr key={s.code_site} style={trB}>
+                  <td style={tdL}><strong>{s.code_site}</strong></td>
+                  <td style={{ ...tdL, fontFamily: "monospace", fontSize: 11 }}>{s.pce ?? "—"}</td>
+                  <td style={td}>{s.type_tarif ?? "—"}</td>
+                  <td style={td}>{s.prix_unitaire_ht ?? "—"}</td>
+                  {years.map((y) => <td key={y} style={td}>{formatEur(s.by_year[y])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* ── Travaux APE ── */}
+        {tab === "ape" && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ position: "sticky", top: 0 }}>
+              <tr style={trB}>
+                <th style={thL}>Site</th>
+                <th style={thL}>Description</th>
+                <th style={th}>Année</th>
+                <th style={th}>Montant HT</th>
+                <th style={th}>CEE €</th>
+                <th style={th}>Gain MWh</th>
+                <th style={th}>CO₂ t/an</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.ape.map((r, i) => (
+                <tr key={i} style={trB}>
+                  <td style={tdL}><strong>{r.code_site}</strong></td>
+                  <td style={{ ...tdL, maxWidth: 280, whiteSpace: "normal", color: "#cbd5e1" }}>{r.description_ape ?? "—"}</td>
+                  <td style={td}>{r.annee_achevement ?? "—"}</td>
+                  <td style={td}>{formatEur(r.montant_ape_ht)}</td>
+                  <td style={td}>{formatEur(r.cee_eur)}</td>
+                  <td style={td}>{r.gain_energetique_mwhpci != null ? r.gain_energetique_mwhpci.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : "—"}</td>
+                  <td style={td}>{r.emission_co2_evitee ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {/* ── RECAP financier ── */}
+        {tab === "recap" && (
+          <div style={{ padding: 12 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#e2e8f0" }}>Engagements de consommation (MWh PCI)</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 16 }}>
+              <thead><tr style={trB}><th style={thL}>Métrique</th>{years.map((y) => <th key={y} style={th}>{y}</th>)}</tr></thead>
+              <tbody>
+                {Object.entries(data.recap_engagement).map(([metric, byYear]) => (
+                  <tr key={metric} style={trB}>
+                    <td style={tdL}>{metric}</td>
+                    {years.map((y) => <td key={y} style={td}>{(byYear as Record<string, number | null>)[y] != null ? Number((byYear as Record<string, number | null>)[y]).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : "—"}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#e2e8f0" }}>Redevances annuelles (€ HT)</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 16 }}>
+              <thead><tr style={trB}><th style={thL}>Poste</th>{years.map((y) => <th key={y} style={th}>{y}</th>)}</tr></thead>
+              <tbody>
+                {Object.entries(data.recap_redevances).map(([metric, byYear]) => (
+                  <tr key={metric} style={trB}>
+                    <td style={tdL}>{metric}</td>
+                    {years.map((y) => <td key={y} style={td}>{formatEur((byYear as Record<string, number | null>)[y])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#e2e8f0" }}>Bilan sur la durée du marché</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead><tr style={trB}><th style={thL}>Poste</th><th style={th}>Montant HT</th><th style={thL}>Unité</th></tr></thead>
+              <tbody>
+                {data.recap_bilan.map((r, i) => (
+                  <tr key={i} style={trB}>
+                    <td style={tdL}>{r.poste}</td>
+                    <td style={td}>{formatEur(r.value)}</td>
+                    <td style={tdL}>{r.unit ?? "€ HT"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

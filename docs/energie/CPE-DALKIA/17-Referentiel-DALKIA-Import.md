@@ -2,8 +2,9 @@
 
 tags: #CPE #DALKIA #référentiel #import #architecture #données
 
-> Statut : ✅ Import opérationnel (commit `1428f4f` + fix `d10ea95`)  
-> Date : 2026-06-01  
+> Statut : ✅ Import opérationnel + preview classifiée complète  
+> Date : 2026-06-02  
+> Commits : `1428f4f` (base) · `d10ea95` (fix cibles) · `4136225` (RECAP MARCHE) · dernier commit (preview classifiée)  
 > Lien implementation : [[11-Implémentation-Po2]]
 
 ---
@@ -306,7 +307,92 @@ Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), 
 
 ---
 
-## 8. Liens
+## 8. Architecture du parseur — points de modification
+
+### Fichiers à modifier pour étendre le parsing
+
+| Fichier | Rôle | Modifier pour… |
+|---------|------|----------------|
+| `saas/backend/app/services/cpe_dalkia_import.py` | **Parseur principal** — lit l'Excel, produit `DalkiaParseResult` | Ajouter une feuille, corriger un décalage de colonne, modifier la logique de détection de section |
+| `saas/backend/app/services/cpe_dalkia_db.py` | Persistance — écrit `DalkiaParseResult` en base | Ajouter la persistance d'une nouvelle table de référence |
+| `saas/backend/app/models/cpe_dalkia.py` | Modèles ORM SQLAlchemy | Ajouter une table `cpe_dalkia_ref_*` (+ migration Alembic) |
+| `saas/backend/app/api/routes/cpe_dalkia.py` | Routes FastAPI | Ajouter un endpoint (ex. `/recap`, `/sync-*`) ou enrichir les réponses |
+| `saas/frontend/src/pages/CpeDalkiaImportPage.tsx` | UI d'import et preview | Modifier l'affichage de la preview, ajouter un onglet dans `ClassifiedPreview` |
+
+### Structure interne du parseur (`cpe_dalkia_import.py`)
+
+```
+parse_dalkia_file(content: bytes, lot: int) → DalkiaParseResult
+│
+├── _parse_p2p3(ws) → list[DalkiaP2P3Row]
+│     Annexes 3.1 (P2) et 4 (P3) — 57 colonnes, 9 périodes, offset 6
+│
+├── _parse_cibles(ws, fluid) → list[DalkiaCibleRow]
+│     Annexes 5.1 (GAZ) et 5.2 (ELEC) — 54 colonnes, 9 périodes, offset 5
+│
+├── _parse_p1_gaz(ws, lot) → list[DalkiaP1GazRow]
+│     Annexe 6 — 38 colonnes, 9 périodes, offset 3
+│
+├── _parse_ape(ws, lot) → list[DalkiaApeRow]
+│     Annexe 2bis — row 5 = headers, 18 colonnes
+│
+└── _parse_recap(ws, lot) → list[DalkiaRecapRow]
+      RECAP MARCHE — format long clé/valeur, 6 sections hétérogènes
+      Sections : engagement, redevance_p1, redevance_p2p3, sensibilisation, travaux, bilan
+
+build_import_preview(result, lot, filename) → dict
+│
+├── Comptages (nb_sites, nb_p2p3_rows, …)
+├── recap_summary : bilan_marche_ht, by_year {p1/p2/p3_total_ht}, facteurs CO2
+├── period_labels, sample_sites (5 premiers sites avec données 2026)
+└── classified : _build_classified(result) → données pivotées par catégorie
+      ├── p2p3 : [{code_site, nom_batiment, by_year: {2025…2033: {p2, p3}}}]
+      ├── cibles_gaz / cibles_elec : [{code_site, ref_globale, dju, by_year}]
+      ├── p1_gaz : [{code_site, pce, type_tarif, prix_unitaire_ht, by_year}]
+      ├── ape : [{code_site, description_ape, annee_achevement, montant_ape_ht, …}]
+      └── recap_engagement / recap_redevances / recap_bilan
+```
+
+### Constantes et invariants à connaître
+
+- `PERIOD_YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]` — 9 périodes fixes
+- La détection d'une ligne de site se fait sur `code_site` regex `r"[A-Z]{2,4}-[A-Z]{3,}[\s\d.]+"`
+- Le RECAP MARCHE change de structure selon la section — la fonction `_detect_recap_section` identifie la section par le texte de la première cellule non vide de la ligne
+- Les identifiants de feuilles sont lus par nom exact (`wb[sheet_name]`) — en cas de renommage à l'avenant, mettre à jour les constantes `SHEET_*` en début de fichier
+
+### Ajouter une nouvelle feuille non parsée (ex. Annexe 2 — Travaux P3.4)
+
+1. Créer `_parse_travaux_p3(ws, lot) → list[DalkiaTrvauxP3Row]` dans `cpe_dalkia_import.py`
+2. Ajouter le champ `travaux_p3: list[DalkiaTrvauxP3Row]` à `DalkiaParseResult`
+3. Appeler la fonction dans `parse_dalkia_file` : `result.travaux_p3 = _parse_travaux_p3(...)`
+4. Créer le modèle ORM dans `models/cpe_dalkia.py` + migration `alembic revision --autogenerate`
+5. Ajouter la persistance dans `cpe_dalkia_db.py` (pattern identique aux autres tables)
+6. Ajouter un onglet dans `ClassifiedPreview` (frontend) pour vérifier les données
+7. Documenter les gaps couverts dans la section 7bis de ce fichier
+
+---
+
+## 9. Connexions opérationnelles actives aujourd'hui
+
+Contrairement aux connexions *à implémenter* (sections 2.1–2.5), ces connexions sont **actives** :
+
+| Source | → | Destination | Mécanisme |
+|--------|---|-------------|-----------|
+| `cpe_dalkia_ref_imports` (lot, filename, is_active) | → | Page `/cpe/dalkia-import` | GET `/cpe/dalkia-ref/imports` |
+| `cpe_dalkia_ref_sites` | → | Page `/cpe/dalkia-import` → "Voir les sites" | GET `/cpe/dalkia-ref/imports/{id}/sites` |
+| `cpe_dalkia_ref_recap` | → | Page import → résumé financier + ClassifiedPreview onglet "RECAP" | Inclus dans `/preview` et `/confirm` |
+| `cpe_dalkia_ref_p2p3` | → | ClassifiedPreview onglet "P2/P3" (preview uniquement) | `classified.p2p3` dans `/preview` |
+| `cpe_dalkia_ref_cibles` | → | ClassifiedPreview onglets "Cibles GAZ/ELEC" | `classified.cibles_gaz/elec` |
+| `cpe_dalkia_ref_p1_gaz` | → | ClassifiedPreview onglet "P1 gaz" | `classified.p1_gaz` |
+| `cpe_dalkia_ref_ape` | → | ClassifiedPreview onglet "Travaux APE" | `classified.ape` |
+| `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, seed manuel) | → | `_control_p1_gaz_acompte_against_dpgf()` dans `cpe_accounting.py:1733` | Contrôle automatique à chaque import facture |
+| `cpe_contract_references.annual_amount_ht / installment_count` | → | Montant attendu acompte = `annual_amount_ht / installment_count` | `cpe_accounting.py:1791` |
+
+**Connexion cruciale à activer (Phase C)** : remplacer la référence seed manuelle `p1_gaz_acompte` par un endpoint qui lit `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année, lot=lot) et crée/met à jour `cpe_contract_references`. Cela rend le contrôle auto-adaptatif aux avenants.
+
+---
+
+## 10. Liens
 
 - [[10-Roadmap-Po2]] — phases et priorités
 - [[11-Implémentation-Po2]] — état des tables CPE existantes
@@ -315,3 +401,10 @@ Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), 
 - [[16-Pilotage-financier-et-controle-global]] — vue d'ensemble des contrôles
 - [[03-Cibles-et-intéressement]] — formule NB/N'B/NC
 - [[04-Cibles-par-site]] — NB et qECS par site (données historiques seed)
+
+**Fichiers sources** :
+- `saas/backend/app/services/cpe_dalkia_import.py` — parseur + preview builder
+- `saas/backend/app/services/cpe_dalkia_db.py` — persistance
+- `saas/backend/app/models/cpe_dalkia.py` — modèles ORM
+- `saas/backend/app/api/routes/cpe_dalkia.py` — routes FastAPI
+- `saas/frontend/src/pages/CpeDalkiaImportPage.tsx` — UI import + ClassifiedPreview

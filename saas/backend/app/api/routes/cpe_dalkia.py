@@ -35,6 +35,7 @@ class ImportPreviewResponse(BaseModel):
     nb_ape_rows: int
     nb_recap_rows: int
     recap_summary: dict
+    classified: dict
     period_labels: list[str]
     sample_sites: list[dict]
     warnings: list[str]
@@ -155,6 +156,7 @@ async def preview_import(
         nb_ape_rows=preview.nb_ape_rows,
         nb_recap_rows=preview.nb_recap_rows,
         recap_summary=preview.recap_summary,
+        classified=preview.classified,
         period_labels=preview.period_labels,
         sample_sites=preview.sample_sites,
         warnings=preview.warnings,

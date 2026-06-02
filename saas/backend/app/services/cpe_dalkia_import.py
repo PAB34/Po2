@@ -178,6 +178,7 @@ class DalkiaImportPreview:
     recap_summary: dict[str, Any]
     period_labels: list[str]
     sample_sites: list[dict[str, Any]]
+    classified: dict[str, Any]
     warnings: list[str]
 
 
@@ -823,6 +824,120 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
     )
 
 
+def _build_classified(result: DalkiaParseResult) -> dict[str, Any]:
+    """Construit la vue complete classifiee de toutes les donnees parsees.
+
+    Format pivote (1 ligne par site, colonnes par annee) pour les donnees
+    periodiques (P2/P3, cibles, P1), liste detaillee pour APE et RECAP.
+    """
+    years = PERIOD_YEARS
+
+    # --- P2/P3 : 1 ligne/site, by_year {p2_total, p3_total} ---
+    p2p3_by_site: dict[str, dict[str, Any]] = {}
+    for site in result.sites:
+        p2p3_by_site[site.code_site] = {
+            "code_site": site.code_site,
+            "nom_batiment": site.nom_batiment,
+            "by_year": {str(y): {"p2": None, "p3": None} for y in years},
+        }
+    for r in result.p2p3_rows:
+        entry = p2p3_by_site.get(r.code_site)
+        if entry is not None:
+            entry["by_year"][str(r.period_year)] = {"p2": r.p2_total_ht, "p3": r.p3_total_ht}
+
+    # --- Cibles : 1 ligne/site/fluide, by_year qt_global + nb + dju ---
+    def _pivot_cibles(rows: list[DalkiaCibleRow]) -> list[dict[str, Any]]:
+        by_site: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            entry = by_site.setdefault(r.code_site, {
+                "code_site": r.code_site,
+                "ref_globale": r.ref_globale_mwhpci,
+                "dju": r.dju_reference,
+                "by_year": {},
+            })
+            # Si plusieurs lignes meme annee (sous-compteurs PV), on somme
+            key = str(r.period_year)
+            prev = entry["by_year"].get(key)
+            val = r.qt_global_mwhpci or 0.0
+            entry["by_year"][key] = (prev or 0.0) + val if prev is not None else val
+        return list(by_site.values())
+
+    # --- P1 gaz : 1 ligne/site, tarif/pce/prix + by_year p10_total ---
+    p1_by_site: dict[str, dict[str, Any]] = {}
+    for r in result.p1_gaz:
+        entry = p1_by_site.setdefault(r.code_site, {
+            "code_site": r.code_site,
+            "pce": r.pce,
+            "type_tarif": r.type_tarif,
+            "prix_unitaire_ht": r.prix_unitaire_ht,
+            "by_year": {},
+        })
+        entry["by_year"][str(r.period_year)] = r.p10_total_ht
+
+    # --- APE : detail complet ---
+    ape_rows = [
+        {
+            "code_site": r.code_site,
+            "nom_batiment": r.nom_batiment,
+            "description_ape": r.description_ape,
+            "annee_achevement": r.annee_achevement,
+            "montant_ape_ht": r.montant_ape_ht,
+            "cee_eur": r.cee_eur,
+            "gain_energetique_mwhpci": r.gain_energetique_mwhpci,
+            "annee_engagement_nouvelle_cible": r.annee_engagement_nouvelle_cible,
+            "emission_co2_evitee": r.emission_co2_evitee,
+        }
+        for r in result.ape_rows
+    ]
+
+    # --- RECAP : engagement (conso) + redevances + bilan + travaux ---
+    def _recap_pivot(section: str, metric: str, category: str | None = None) -> dict[str, float | None]:
+        out: dict[str, float | None] = {}
+        for r in result.recap_rows:
+            if r.section == section and r.metric == metric and (category is None or r.category == category):
+                key = str(r.period_year) if r.period_year is not None else (r.period_label or "total")
+                out[key] = r.value
+        return out
+
+    recap_engagement = {
+        "gaz_qt_reference": _recap_pivot("engagement", "qt_reference", "GAZ"),
+        "gaz_qt_cible": _recap_pivot("engagement", "qt_cible", "GAZ"),
+        "gaz_pct_economie": _recap_pivot("engagement", "pct_economie", "GAZ"),
+        "elec_qt_reference": _recap_pivot("engagement", "qt_reference", "ELEC"),
+        "elec_qt_cible": _recap_pivot("engagement", "qt_cible", "ELEC"),
+        "elec_pct_economie": _recap_pivot("engagement", "pct_economie", "ELEC"),
+        "pv_production": _recap_pivot("engagement", "production_pv", "PV"),
+        "pv_autoconsommation": _recap_pivot("engagement", "autoconsommation", "PV"),
+    }
+    recap_redevances = {
+        "p1_total_ht": _recap_pivot("redevance_p1", "p1_total_ht"),
+        "p2_total_ht": _recap_pivot("redevance_p2p3", "p2_total_ht"),
+        "p3_total_ht": _recap_pivot("redevance_p2p3", "p3_total_ht"),
+        "p2_sensibilisation_ht": _recap_pivot("sensibilisation", "p2_sensibilisation_ht"),
+    }
+    recap_travaux = [
+        {"categorie": r.category, "metric": r.metric, "value": r.value, "unit": r.unit}
+        for r in result.recap_rows if r.section == "travaux"
+    ]
+    recap_bilan = [
+        {"poste": r.category, "metric": r.metric, "value": r.value, "unit": r.unit}
+        for r in result.recap_rows if r.section == "bilan"
+    ]
+
+    return {
+        "years": [str(y) for y in years],
+        "p2p3": list(p2p3_by_site.values()),
+        "cibles_gaz": _pivot_cibles(result.cibles_gaz),
+        "cibles_elec": _pivot_cibles(result.cibles_elec),
+        "p1_gaz": list(p1_by_site.values()),
+        "ape": ape_rows,
+        "recap_engagement": recap_engagement,
+        "recap_redevances": recap_redevances,
+        "recap_travaux": recap_travaux,
+        "recap_bilan": recap_bilan,
+    }
+
+
 def build_import_preview(result: DalkiaParseResult) -> DalkiaImportPreview:
     """Construit un apercu de l'import avant confirmation."""
     sample_sites = []
@@ -886,5 +1001,6 @@ def build_import_preview(result: DalkiaParseResult) -> DalkiaImportPreview:
         recap_summary=recap_summary,
         period_labels=result.period_labels,
         sample_sites=sample_sites,
+        classified=_build_classified(result),
         warnings=result.warnings,
     )
