@@ -22,6 +22,20 @@ class PronosticsPlayerRead(BaseModel):
     service: str
 
 
+class PronosticsPlayerUpdate(BaseModel):
+    pseudo: str = Field(min_length=2, max_length=60)
+    service: str = Field(min_length=2, max_length=120)
+
+
+class PronosticsParticipantRead(BaseModel):
+    pseudo: str
+    service: str
+    predictions_count: int
+    points: int
+    exact_scores: int
+    good_results: int
+
+
 class PronosticsTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -50,6 +64,8 @@ class PronosticsMatchRead(BaseModel):
     real_score2: int | None
     prediction_score1: int | None
     prediction_score2: int | None
+    fifa_rank1: int | None
+    fifa_rank2: int | None
 
 
 class PronosticsRankingRead(BaseModel):

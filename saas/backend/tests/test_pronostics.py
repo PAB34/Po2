@@ -10,8 +10,10 @@ from app.services.pronostics import (
     calculate_ranking,
     create_player,
     ensure_matches,
+    fifa_rank,
     save_predictions,
     sync_scores,
+    update_player,
 )
 
 
@@ -26,6 +28,29 @@ def test_team_aliases_cover_api_english_names():
     assert _normalize_team("South Korea") == _normalize_team("Corée du Sud")
     assert _normalize_team("United States") == _normalize_team("Etats-Unis")
     assert _normalize_team("Ivory Coast") == _normalize_team("Côte d'Ivoire")
+
+
+def test_fifa_ranking_is_exposed_for_known_teams():
+    assert fifa_rank("France") == 1
+    assert fifa_rank("Coree du Sud") == 25
+    assert fifa_rank("Equipe inconnue") is None
+
+
+def test_profile_update_rejects_an_existing_pseudo():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        first = create_player(db, email="premier@example.com", password="motdepasse123", pseudo="Premier", service="CTM")
+        create_player(db, email="second@example.com", password="motdepasse123", pseudo="Second", service="Voirie")
+        updated = update_player(db, first, pseudo="Premier bis", service="Batiments")
+        assert (updated.pseudo, updated.service) == ("Premier bis", "Batiments")
+
+        try:
+            update_player(db, updated, pseudo="Second", service="Batiments")
+        except ValueError as exc:
+            assert str(exc) == "PSEUDO_ALREADY_EXISTS"
+        else:
+            raise AssertionError("Le pseudo existant aurait du etre refuse.")
 
 
 def test_sync_scores_updates_finished_match(monkeypatch):

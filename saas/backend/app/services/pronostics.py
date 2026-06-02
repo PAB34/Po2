@@ -67,6 +67,19 @@ TEAM_ALIASES = {
     "usa": "etats unis",
     "uzbekistan": "ouzbekistan",
 }
+FIFA_RANKINGS = {
+    "france": 1, "espagne": 2, "argentine": 3, "angleterre": 4, "portugal": 5,
+    "bresil": 6, "pays bas": 7, "maroc": 8, "belgique": 9, "allemagne": 10,
+    "croatie": 11, "colombie": 13, "senegal": 14, "mexique": 15, "etats unis": 16,
+    "uruguay": 17, "japon": 18, "suisse": 19, "iran": 21, "turquie": 22,
+    "equateur": 23, "autriche": 24, "coree du sud": 25, "australie": 27,
+    "algerie": 28, "egypte": 29, "canada": 30, "norvege": 31, "panama": 33,
+    "cote d ivoire": 34, "suede": 38, "paraguay": 40, "tchequie": 41,
+    "ecosse": 43, "tunisie": 44, "rd congo": 46, "ouzbekistan": 50, "qatar": 55,
+    "irak": 57, "afrique du sud": 60, "arabie saoudite": 61, "jordanie": 63,
+    "bosnie herzegovine": 65, "cap vert": 69, "ghana": 74, "curacao": 82,
+    "haiti": 83, "nouvelle zelande": 85,
+}
 
 
 def ensure_matches(db: Session) -> None:
@@ -113,6 +126,27 @@ def create_player_token(player: PronosticsPlayer) -> str:
 
 def get_player_by_id(db: Session, player_id: int) -> PronosticsPlayer | None:
     return db.get(PronosticsPlayer, player_id)
+
+
+def update_player(db: Session, player: PronosticsPlayer, *, pseudo: str, service: str) -> PronosticsPlayer:
+    normalized_pseudo = pseudo.strip()
+    other = db.scalar(
+        select(PronosticsPlayer).where(
+            PronosticsPlayer.pseudo == normalized_pseudo,
+            PronosticsPlayer.id != player.id,
+        )
+    )
+    if other is not None:
+        raise ValueError("PSEUDO_ALREADY_EXISTS")
+    player.pseudo = normalized_pseudo
+    player.service = service.strip()
+    db.commit()
+    db.refresh(player)
+    return player
+
+
+def fifa_rank(team: str) -> int | None:
+    return FIFA_RANKINGS.get(_normalize_team(team))
 
 
 def save_predictions(db: Session, player: PronosticsPlayer, rows: list[PronosticsPredictionWrite]) -> None:

@@ -11,7 +11,9 @@ from app.models.user import User
 from app.schemas.pronostics import (
     PronosticsLoginRequest,
     PronosticsMatchRead,
+    PronosticsParticipantRead,
     PronosticsPlayerRead,
+    PronosticsPlayerUpdate,
     PronosticsPredictionsWrite,
     PronosticsRankingRead,
     PronosticsRegisterRequest,
@@ -23,9 +25,11 @@ from app.services.pronostics import (
     create_player,
     create_player_token,
     ensure_matches,
+    fifa_rank,
     get_player_by_id,
     save_predictions,
     sync_scores,
+    update_player,
 )
 from app.api.deps import get_current_user
 
@@ -82,6 +86,18 @@ def me(player: PronosticsPlayer = Depends(get_current_player)) -> PronosticsPlay
     return _player_read(player)
 
 
+@router.patch("/me", response_model=PronosticsPlayerRead)
+def update_me(
+    payload: PronosticsPlayerUpdate,
+    db: Session = Depends(get_db),
+    player: PronosticsPlayer = Depends(get_current_player),
+) -> PronosticsPlayerRead:
+    try:
+        return _player_read(update_player(db, player, **payload.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce pseudo est déjà utilisé.") from exc
+
+
 @router.get("/matches", response_model=list[PronosticsMatchRead])
 def matches(
     db: Session = Depends(get_db),
@@ -107,6 +123,8 @@ def matches(
             real_score2=match.real_score2,
             prediction_score1=predictions[match.id].score1 if match.id in predictions else None,
             prediction_score2=predictions[match.id].score2 if match.id in predictions else None,
+            fifa_rank1=fifa_rank(match.team1),
+            fifa_rank2=fifa_rank(match.team2),
         )
         for match in db.scalars(select(PronosticsMatch).order_by(PronosticsMatch.id)).all()
     ]
@@ -125,6 +143,12 @@ def update_predictions(
 def ranking(db: Session = Depends(get_db)) -> list[PronosticsRankingRead]:
     ensure_matches(db)
     return calculate_ranking(db)
+
+
+@router.get("/participants", response_model=list[PronosticsParticipantRead])
+def participants(db: Session = Depends(get_db)) -> list[PronosticsParticipantRead]:
+    ensure_matches(db)
+    return [PronosticsParticipantRead(**row.model_dump(exclude={"rank"})) for row in calculate_ranking(db)]
 
 
 @router.post("/admin/sync-scores")

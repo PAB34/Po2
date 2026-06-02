@@ -1,57 +1,250 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#06281d" />
-    <title>Pronostics CTM Sète</title>
-    <link rel="stylesheet" href="/pronostics/styles.css" />
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <span class="kicker">Coupe du Monde 2026</span>
-        <h1>Pronostics CTM Sète</h1>
-        <p>Inscris-toi, saisis tes scores et suis le classement entre collègues.</p>
-      </header>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#06281d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pronostics CTM Sète">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Centre Technique Municipal de Sète</title>
 
-      <section id="auth-screen" class="card auth-card">
-        <div class="tabs">
-          <button id="login-tab" class="tab active" type="button">Connexion</button>
-          <button id="register-tab" class="tab" type="button">Inscription</button>
+  <script>
+  (function(){
+    function fixVP(){
+      try{
+        var sw=(window.screen&&window.screen.width)||0, iw=window.innerWidth||0;
+        var de=document.documentElement;
+        if(!sw||!iw||!de) return;
+        de.style.zoom = iw > sw*1.15 ? (iw/sw).toFixed(4) : '';
+      }catch(e){}
+    }
+    window.__fixVP=fixVP;
+    try{
+      var ov=localStorage.getItem('cdm_layout'), mode;
+      if(ov==='mobile'||ov==='desktop'){ mode=ov; }
+      else{
+        var ss=Math.min(window.screen.width||9999, window.screen.height||9999);
+        var vw=window.innerWidth||ss;
+        var phone=/Mobi|Android|iPhone|iPod/i.test(navigator.userAgent);
+        mode=(phone||ss<768||vw<900)?'mobile':'desktop';
+      }
+      document.documentElement.classList.add(mode==='desktop'?'mode-desktop':'mode-mobile');
+      if(mode==='mobile') fixVP();
+    }catch(e){ document.documentElement.classList.add('mode-mobile'); }
+  })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/pronostics/styles.css">
+</head>
+<body>
+
+<!-- ===================== ÉCRAN CONNEXION ===================== -->
+<div id="screen-login" class="wrap">
+  <header class="hero">
+    <span class="kicker">⚽ Coupe du Monde 2026 · Pronostics</span>
+    <h1>Centre Technique Municipal de Sète</h1>
+    <p>Quel collègue et quel service finiront champions ? Pronostique chaque match de poule, gagne des points, grimpe au classement.</p>
+    <div class="heroBtns">
+      <button class="btn lime sm" onclick="openGuest('classement')">🏆 Classement</button>
+      <button class="btn ghost sm" onclick="openGuest('joueurs')">👥 Les joueurs</button>
+      <button class="btn ghost sm" onclick="installApp()">📲 Installer</button>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div id="resumeBox" class="resume hidden">
+      <div><b id="resumeName">Reprendre ma session</b><small id="resumeEmail"></small></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn sm" onclick="resumeSession()">Reprendre</button>
+        <button class="btn ghost sm" style="color:#0c241b;border-color:#cfe7da" onclick="forgetSession()">Oublier</button>
+      </div>
+    </div>
+
+    <div class="seg">
+      <button id="segLogin" class="active" onclick="authTab('login')">Déjà inscrit</button>
+      <button id="segReg" onclick="authTab('register')">Nouveau joueur</button>
+    </div>
+
+    <div id="paneLogin">
+      <h2>Retrouver mes pronostics</h2>
+      <div class="formGrid">
+        <div class="field">
+          <label for="loginEmail">Adresse email personnelle</label>
+          <input id="loginEmail" type="email" autocomplete="email" placeholder="prenom@gmail.com">
         </div>
-        <form id="auth-form">
-          <div id="register-fields" class="hidden">
-            <label>Pseudo<input id="pseudo" autocomplete="nickname" /></label>
-            <label>Service<input id="service" autocomplete="organization-title" /></label>
+        <div class="field">
+          <label for="loginPassword">Mot de passe</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" minlength="8" placeholder="Ton mot de passe">
+        </div>
+        <div class="hint">Saisis l'email personnel utilisé à l'inscription pour rouvrir ton espace.</div>
+      </div>
+      <div class="formActions">
+        <button class="btn block" onclick="doLogin()">Entrer dans mon espace</button>
+      </div>
+    </div>
+
+    <div id="paneReg" class="hidden">
+      <h2>Créer mon espace joueur</h2>
+      <div class="formGrid">
+        <div class="field">
+          <label for="regPseudo">Pseudo affiché au classement</label>
+          <input id="regPseudo" autocomplete="nickname" placeholder="Ex : Pierrot" maxlength="30">
+        </div>
+        <div class="field">
+          <label for="regService">Service</label>
+          <input id="regService" autocomplete="organization" placeholder="Ex : Bâtiments, Voirie, CVC" maxlength="50">
+        </div>
+        <div class="field">
+          <label for="regEmail">Adresse email personnelle</label>
+          <input id="regEmail" type="email" autocomplete="email" placeholder="prenom@gmail.com">
+        </div>
+        <div class="field">
+          <label for="regPassword">Mot de passe</label>
+          <input id="regPassword" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum">
+        </div>
+        <div class="hint">Indique de préférence une adresse mail personnelle. Elle sert uniquement à retrouver tes pronostics.</div>
+      </div>
+      <div class="formActions">
+        <button class="btn block" onclick="doRegister()">Créer mon espace</button>
+      </div>
+    </div>
+
+    <div id="loginMsg" class="msg"></div>
+  </section>
+</div>
+
+<!-- ===================== ÉCRAN APPLICATION ===================== -->
+<div id="screen-app" class="hidden">
+
+  <!-- NAV HAUTE FIXE (mobile) -->
+  <div id="topnav">
+    <div class="topProg"><i class="js-progBar"></i></div>
+    <nav class="topTabs">
+      <button data-nav="pronos" class="active" onclick="go('pronos')"><span class="tabInner"><span class="ico">⚽</span><span class="lbl">Pronos</span></span></button>
+      <button data-nav="classement" onclick="go('classement')"><span class="tabInner"><span class="ico">🏆</span><span class="lbl">Classement</span></span></button>
+      <button data-nav="joueurs" onclick="go('joueurs')"><span class="tabInner"><span class="ico">👥</span><span class="lbl">Joueurs</span></span></button>
+      <button data-nav="profil" onclick="go('profil')"><span class="tabInner"><span class="ico">👤</span><span class="lbl">Profil</span></span></button>
+    </nav>
+  </div>
+
+  <div class="appLayout">
+
+    <!-- sidebar desktop -->
+    <aside class="sidebar">
+      <div class="brand"><small>Pronostics CDM 2026</small>Centre Technique Municipal de Sète</div>
+      <div class="playerCard">
+        <div class="avatar js-avatar">J</div>
+        <div class="who"><b class="js-pseudo">Joueur</b><small class="js-service">Service</small></div>
+      </div>
+      <nav class="sideNav">
+        <button data-nav="pronos" class="active" onclick="go('pronos')"><span class="ico">⚽</span> Mes pronostics</button>
+        <button data-nav="classement" onclick="go('classement')"><span class="ico">🏆</span> Classement</button>
+        <button data-nav="joueurs" onclick="go('joueurs')"><span class="ico">👥</span> Les joueurs</button>
+        <button data-nav="profil" onclick="go('profil')"><span class="ico">👤</span> Mon profil</button>
+      </nav>
+      <div class="sideProg">
+        <div class="top"><span>Progression</span><span><span class="js-done">0</span>/<span class="js-total">0</span></span></div>
+        <div class="bar"><i class="js-progBar"></i></div>
+      </div>
+      <button class="btn danger block sm" onclick="logout()">Se déconnecter</button>
+    </aside>
+
+    <!-- contenu -->
+    <div class="appBody">
+      <main class="content">
+
+        <!-- VUE PRONOSTICS -->
+        <section data-view="pronos">
+          <div class="playerCard" style="display:none" id="mobilePlayer">
+            <div class="avatar js-avatar">J</div>
+            <div class="who"><b class="js-pseudo">Joueur</b><small class="js-service">Service</small></div>
           </div>
-          <label>Adresse email<input id="email" type="email" autocomplete="email" required /></label>
-          <label>Mot de passe<input id="password" type="password" autocomplete="current-password" minlength="8" required /></label>
-          <p id="auth-message" class="message"></p>
-          <button class="primary" type="submit">Continuer</button>
-        </form>
-      </section>
+          <div class="viewHead"><h2>Mes pronostics</h2><span class="meta"><span class="js-done">0</span> / <span class="js-total">0</span> remplis</span></div>
+          <div id="pronosMsg" class="msg"></div>
+          <div class="filters">
+            <div id="groupChips" class="chips"></div>
+          </div>
+          <div class="toolRow">
+            <button class="btn ghost sm" onclick="randomFill()" title="Remplit les matchs visibles avec un modèle probabiliste : FIFA, style, attaque, défense, pressing, transition, expérience.">🎲 Tirage expert</button>
+          </div>
+          <div id="matchGrid" class="matchGrid"></div>
+        </section>
 
-      <section id="game-screen" class="hidden">
-        <div class="player-bar card">
-          <div><strong id="player-name"></strong><small id="player-service"></small></div>
-          <button id="logout" class="ghost" type="button">Déconnexion</button>
-        </div>
-        <nav class="game-tabs">
-          <button class="game-tab active" data-view="matches" type="button">Mes pronostics</button>
-          <button class="game-tab" data-view="ranking" type="button">Classement</button>
-        </nav>
-        <section id="matches-view">
-          <div class="section-head"><h2>Matchs de poules</h2><button id="save" class="primary" type="button">Enregistrer</button></div>
-          <p id="save-message" class="message"></p>
-          <div id="matches"></div>
+        <!-- VUE CLASSEMENT -->
+        <section data-view="classement" class="hidden">
+          <div class="viewHead"><h2>Classement</h2><span class="meta" id="rankMeta"></span></div>
+          <div id="rankList" class="rankList"></div>
         </section>
-        <section id="ranking-view" class="hidden">
-          <div class="section-head"><h2>Classement</h2><button id="refresh-ranking" class="ghost" type="button">Actualiser</button></div>
-          <div id="ranking"></div>
+
+        <!-- VUE JOUEURS -->
+        <section data-view="joueurs" class="hidden">
+          <div class="viewHead"><h2>Les joueurs</h2><span class="meta" id="joueursMeta"></span></div>
+          <div id="joueursList" class="rankList"></div>
         </section>
-      </section>
-    </main>
-    <script src="/pronostics/app.js"></script>
-  </body>
+
+        <!-- VUE PROFIL -->
+        <section data-view="profil" class="hidden">
+          <div class="viewHead"><h2>Mon profil</h2></div>
+          <div class="panel">
+            <div class="formGrid">
+              <div class="field"><label for="profilePseudo">Pseudo</label><input id="profilePseudo" maxlength="30"></div>
+              <div class="field"><label for="profileService">Service</label><input id="profileService" maxlength="50"></div>
+              <div class="hint">L'adresse email n'est pas modifiable : elle sert d'identifiant pour retrouver tes pronostics.</div>
+            </div>
+            <div class="formActions"><button class="btn block" onclick="saveProfile()">Enregistrer mon profil</button></div>
+            <div id="profileMsg" class="msg"></div>
+          </div>
+
+          <div class="viewHead"><h2 style="font-size:20px">Affichage</h2></div>
+          <div class="panel">
+            <div class="modeToggle" id="modeToggle">
+              <button data-mode="auto" onclick="setLayout('auto')">Auto</button>
+              <button data-mode="mobile" onclick="setLayout('mobile')">📱 Mobile</button>
+              <button data-mode="desktop" onclick="setLayout('desktop')">💻 Ordinateur</button>
+            </div>
+            <div class="hint">« Auto » choisit selon ton appareil. Tu peux forcer un affichage si besoin.</div>
+            <p id="diag" style="margin-top:10px;font-size:12px;font-weight:700;color:#3c5a4c;background:var(--soft);border:1px dashed #bcd5c8;border-radius:12px;padding:9px 11px;line-height:1.5;word-break:break-word">Diagnostic…</p>
+          </div>
+
+          <div class="viewHead"><h2 style="font-size:20px">Barème des points</h2></div>
+          <div class="panel">
+            <div class="scoring">
+              <div class="row"><b>Score exact</b><em>10</em></div>
+              <div class="row"><b>Bon résultat (vainqueur / nul)</b><em>5</em></div>
+              <div class="row"><b>Bon écart de buts</b><em>+2</em></div>
+              <div class="row"><b>Score d'une équipe trouvé</b><em>+1</em></div>
+            </div>
+          </div>
+
+          <div class="panel" id="guestNote" style="display:none">
+            <p style="color:var(--muted);font-weight:700">Tu es en mode invité. Connecte-toi pour saisir tes pronostics.</p>
+            <div class="formActions"><button class="btn block" onclick="quitGuest()">Se connecter</button></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <div class="savebar" id="savebar">
+    <span>Pronostics non enregistrés</span>
+    <button class="btn lime sm" onclick="saveAll()">💾 Enregistrer</button>
+  </div>
+</div>
+
+<!-- ===================== MODALE INSTALLATION ===================== -->
+<div id="installModal" class="modal" onclick="if(event.target.id==='installModal')hideInstall()">
+  <div class="modalBox">
+    <div class="modalHead"><h2>Installer sur le téléphone</h2><button class="btn ghost sm" style="color:#0c241b;border-color:#cfe7da" onclick="hideInstall()">Fermer</button></div>
+    <div id="installContent"></div>
+  </div>
+</div>
+
+
+<script src="/pronostics/native-adapter.js"></script>
+<script src="/pronostics/app.js"></script>
+</body>
 </html>
