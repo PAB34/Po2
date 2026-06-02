@@ -166,6 +166,7 @@ function forgetSession(){
   localStorage.removeItem('pronostics_access_token');
   $('loginPassword').value=''; $('regPassword').value='';
   $('resumeBox').classList.add('hidden');
+  clearMsg('loginMsg');
 }
 function openForgot(){
   $('forgotEmail').value=$('loginEmail').value.trim();
@@ -470,7 +471,7 @@ function randomFill(){
     var badge=c.querySelector('.badge'); if(badge){ badge.className='badge '+(done?'done':'todo'); badge.textContent=done?'Complet':'À compléter'; }
     count++;
   });
-  if(count){ dirty=true; $('savebar').classList.add('show'); updateProgress();
+  if(count){ dirty=true; $('savebar').classList.add('show'); renderMatches(); updateProgress();
     msg('pronosMsg', count+' match(s) remplis par le tirage expert probabiliste. Pense à enregistrer.','info'); }
 }
 function findMatch(id){ return (state.matches||[]).find(function(x){return String(x.id)===String(id);}); }
