@@ -66,6 +66,12 @@ type ClassifiedData = {
     obligation_cee: number | null; ticgn: number | null; marge_exploitant_pct: number | null; prix_unitaire_ht: number | null;
     coef_a: number | null; coef_b: number | null; coef_c: number | null; coef_d: number | null; coef_e: number | null;
   }[];
+  bpu: {
+    categorie: string; famille: string | null; code: string | null; libelle: string | null;
+    specificite: string | null; unite: string | null; cout_unitaire: number | null;
+    cout_nuit: number | null; cout_samedi: number | null; cout_dimanche: number | null;
+    coefficient: number | null; coefficient_max: number | null;
+  }[];
   ape: {
     code_site: string; nom_batiment: string | null; description_ape: string | null;
     annee_achevement: number | null; montant_ape_ht: number | null; cee_eur: number | null;
@@ -630,7 +636,7 @@ export function CpeDalkiaImportPage() {
 // Aperçu complet classifié (onglets par catégorie)
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ClassifiedTab = "p2p3" | "cibles_gaz" | "cibles_elec" | "p1_gaz" | "ape" | "recap";
+type ClassifiedTab = "p2p3" | "cibles_gaz" | "cibles_elec" | "p1_gaz" | "bpu" | "ape" | "recap";
 
 function ClassifiedPreview({ data }: { data: ClassifiedData }) {
   const [tab, setTab] = useState<ClassifiedTab>("p2p3");
@@ -641,6 +647,7 @@ function ClassifiedPreview({ data }: { data: ClassifiedData }) {
     { key: "cibles_gaz", label: "Cibles GAZ", count: data.cibles_gaz.length },
     { key: "cibles_elec", label: "Cibles ELEC", count: data.cibles_elec.length },
     { key: "p1_gaz", label: "P1 gaz", count: data.p1_gaz.length },
+    { key: "bpu", label: "BPU travaux", count: data.bpu?.length ?? 0 },
     { key: "ape", label: "Travaux APE", count: data.ape.length },
     { key: "recap", label: "RECAP financier", count: data.recap_bilan.length },
   ];
@@ -783,6 +790,44 @@ function ClassifiedPreview({ data }: { data: ClassifiedData }) {
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* ── BPU travaux P3 (Annexe 7) ── */}
+        {tab === "bpu" && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ position: "sticky", top: 0 }}>
+              <tr style={trB}>
+                <th style={thL}>Catégorie</th>
+                <th style={thL}>Code</th>
+                <th style={thL}>Libellé</th>
+                <th style={thL}>Spécificité / famille</th>
+                <th style={th}>Coût unitaire</th>
+                <th style={thL}>Unité</th>
+                <th style={th}>Nuit</th>
+                <th style={th}>Sam/Dim</th>
+                <th style={th}>Coef (max)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.bpu ?? []).map((r, i) => (
+                <tr key={i} style={trB}>
+                  <td style={tdL}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: r.categorie === "prestation" ? "#16a34a" : r.categorie === "taux_horaire" ? "#2563eb" : "#b45309" }}>
+                      {r.categorie === "prestation" ? "PRESTA" : r.categorie === "taux_horaire" ? "TAUX/h" : "COEF"}
+                    </span>
+                  </td>
+                  <td style={{ ...tdL, fontFamily: "monospace", fontSize: 11 }}>{r.code ?? "—"}</td>
+                  <td style={{ ...tdL, maxWidth: 240, whiteSpace: "normal", color: "#cbd5e1" }}>{r.libelle ?? "—"}</td>
+                  <td style={{ ...tdL, maxWidth: 180, whiteSpace: "normal", color: "#94a3b8", fontSize: 11 }}>{r.specificite ?? r.famille ?? "—"}</td>
+                  <td style={td}>{r.cout_unitaire != null ? r.cout_unitaire.toLocaleString("fr-FR") : "—"}</td>
+                  <td style={{ ...tdL, fontSize: 11 }}>{r.unite ?? "—"}</td>
+                  <td style={td}>{r.cout_nuit ?? "—"}</td>
+                  <td style={td}>{r.cout_samedi != null ? `${r.cout_samedi}/${r.cout_dimanche ?? "—"}` : "—"}</td>
+                  <td style={td}>{r.coefficient != null ? `${r.coefficient}${r.coefficient_max != null ? ` (${r.coefficient_max})` : ""}` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
 
         {/* ── Travaux APE ── */}

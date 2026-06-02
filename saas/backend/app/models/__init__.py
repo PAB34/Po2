@@ -29,6 +29,7 @@ from app.models.site import Site
 from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,
+    CpeDalkiaRefBpu,
     CpeDalkiaRefCible,
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.cpe import CpeContractReference
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,
+    CpeDalkiaRefBpu,
     CpeDalkiaRefCible,
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,
@@ -83,6 +84,15 @@ def get_recap_for_import(
         CpeDalkiaRefRecap.section, CpeDalkiaRefRecap.category,
         CpeDalkiaRefRecap.metric, CpeDalkiaRefRecap.period_year,
     )))
+
+
+def get_bpu_for_import(
+    db: Session, import_id: int, categorie: str | None = None
+) -> list[CpeDalkiaRefBpu]:
+    stmt = select(CpeDalkiaRefBpu).where(CpeDalkiaRefBpu.import_id == import_id)
+    if categorie is not None:
+        stmt = stmt.where(CpeDalkiaRefBpu.categorie == categorie)
+    return list(db.scalars(stmt.order_by(CpeDalkiaRefBpu.categorie, CpeDalkiaRefBpu.code)))
 
 
 def persist_dalkia_import(
@@ -235,6 +245,25 @@ def persist_dalkia_import(
             prix_unitaire_ht=trf.prix_unitaire_ht,
             coef_a=trf.coef_a, coef_b=trf.coef_b, coef_c=trf.coef_c,
             coef_d=trf.coef_d, coef_e=trf.coef_e,
+        ))
+
+    # BPU travaux P3 (Annexe 7) — catalogue
+    for b in result.bpu_rows:
+        db.add(CpeDalkiaRefBpu(
+            import_id=batch.id,
+            city_id=city_id,
+            categorie=b.categorie,
+            famille=b.famille,
+            code=b.code,
+            libelle=b.libelle,
+            specificite=b.specificite,
+            unite=b.unite,
+            cout_unitaire=b.cout_unitaire,
+            cout_nuit=b.cout_nuit,
+            cout_samedi=b.cout_samedi,
+            cout_dimanche=b.cout_dimanche,
+            coefficient=b.coefficient,
+            coefficient_max=b.coefficient_max,
         ))
 
     # RECAP MARCHE (recapitulatif financier global)

@@ -232,3 +232,31 @@ class CpeDalkiaRefP1Tarif(Base):
     coef_c: Mapped[float | None] = mapped_column(Float, nullable=True)
     coef_d: Mapped[float | None] = mapped_column(Float, nullable=True)
     coef_e: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class CpeDalkiaRefBpu(Base):
+    """Bordereau de prix unitaires travaux P3 (Annexe 7) — catalogue de reference.
+
+    categorie : prestation (ENT/ENR/T/C/AM) | taux_horaire | coefficient (CF/CST).
+    Sert de base au controle des devis P3 (codes, prix unitaires, taux, coefficients).
+    """
+
+    __tablename__ = "cpe_dalkia_ref_bpu"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_dalkia_ref_imports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    categorie: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    famille: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    libelle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    specificite: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    unite: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    cout_unitaire: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cout_nuit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cout_samedi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cout_dimanche: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coefficient: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coefficient_max: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -310,7 +310,7 @@ Audit complet des 13 feuilles du fichier DALKIA. État après ajout du parsing R
 | Annexe 1 - Coefficients | 21 | ❌ non parsé | — |
 | Annexe 2 - Travaux obligatoires P3.4 | 193 | ❌ non parsé | — |
 | Annexe 3.2 - P2 - B (sensibilisation) | 7 | ❌ non parsé | partiellement dans recap |
-| Annexe 7 - B.P.U - D.Q.E | 184 | ❌ non parsé | — |
+| Annexe 7 - B.P.U - D.Q.E | 184 | ✅ **complet (ajouté)** | `cpe_dalkia_ref_bpu` |
 | Annexe 8 - Moyens opérationnels | 9 | ❌ non parsé (peu de données) | — |
 | Annexe 9 - Plan de progrès | 6 | ❌ non parsé (quasi vide) | — |
 
@@ -329,7 +329,7 @@ Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), 
 | Feuille / colonne | Donnée | Priorité |
 |---|---|---|
 | Annexe 2 - Travaux obligatoires P3.4 | 193 travaux obligatoires détaillés (montant, dates, devis, CEE) par site | 🟠 Moyenne |
-| Annexe 7 - BPU/DQE | Bordereau prix unitaires opérations (codes ENT-xxx) | 🟡 Basse (structure très hétérogène) |
+| ~~Annexe 7 - BPU/DQE~~ | ✅ FAIT — 132 prestations + 7 taux horaires + 4 coefficients dans `cpe_dalkia_ref_bpu` | — |
 | Annexe 1 - Coefficients | Taux horaires main d'œuvre + coefficients entreprise | 🟡 Basse |
 | ~~Annexe 6 (en-tête)~~ | ✅ FAIT — prix T1-T4 + coefficients Pu parsés dans `cpe_dalkia_ref_p1_tarifs` | — |
 | Annexe 5.x (colonnes) | Référence consommation ECS m3, identifiants compteurs | 🟡 Basse |

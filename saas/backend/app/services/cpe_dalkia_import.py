@@ -131,6 +131,29 @@ class DalkiaP1TarifRow:
 
 
 @dataclass
+class DalkiaBpuRow:
+    """Ligne du bordereau de prix unitaires travaux (Annexe 7), catalogue de reference P3/BPU.
+
+    categorie :
+      - prestation   : operation standard a prix unitaire (codes ENT/ENR/T/C/AM)
+      - taux_horaire : intervention au temps passe (jour/nuit/samedi/dimanche)
+      - coefficient  : coefficient d'entreprise sur fournitures/sous-traitance (CF/CST)
+    """
+    categorie: str
+    famille: str | None
+    code: str | None
+    libelle: str | None
+    specificite: str | None
+    unite: str | None
+    cout_unitaire: float | None       # prestation : cout ; taux_horaire : taux jour
+    cout_nuit: float | None
+    cout_samedi: float | None
+    cout_dimanche: float | None
+    coefficient: float | None
+    coefficient_max: float | None
+
+
+@dataclass
 class DalkiaApeRow:
     code_site: str
     nom_batiment: str | None
@@ -183,6 +206,7 @@ class DalkiaParseResult:
     cibles_elec: list[DalkiaCibleRow] = field(default_factory=list)
     p1_gaz: list[DalkiaP1GazRow] = field(default_factory=list)
     p1_tarifs: list[DalkiaP1TarifRow] = field(default_factory=list)
+    bpu_rows: list[DalkiaBpuRow] = field(default_factory=list)
     ape_rows: list[DalkiaApeRow] = field(default_factory=list)
     recap_rows: list[DalkiaRecapRow] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -648,6 +672,122 @@ def _parse_ape(rows: list[tuple], lot: int) -> tuple[list[DalkiaApeRow], list[st
     return ape_rows, warnings
 
 
+_BPU_CODE_RE = re.compile(r"^[A-Z]{1,4}-\d", re.IGNORECASE)
+
+
+def _parse_bpu(rows: list[tuple]) -> tuple[list[DalkiaBpuRow], list[str]]:
+    """Parse l'Annexe 7 (B.P.U - D.Q.E) : catalogue de prix unitaires travaux P3.
+
+    Feuille heterogene, sectionnee. On suit :
+      - `famille` : titre de section (col 1, texte long sans code) ;
+      - le mapping de colonnes depuis la derniere ligne d'en-tete ("Code" en col 2) :
+        colonne du cout unitaire (cellule contenant "HT" en col 3-5) + unite extraite du libelle ;
+      - le mode courant : prestation / taux_horaire / coefficient.
+    Les lignes de donnees sont reperees par un code en col 2 (ENT/ENR/T/C/AM/CF/CST...),
+    ou, en mode taux horaire, par une designation en col 1 + un taux numerique en col 2.
+    """
+    out: list[DalkiaBpuRow] = []
+    warnings: list[str] = []
+
+    famille: str | None = None
+    mode = "prestation"
+    unit_cost_col = 4   # 0-indexed, defaut col 5
+    unite: str | None = None
+    last_libelle: str | None = None
+
+    def _unit_from_header(text: str) -> str | None:
+        m = re.search(r"co[uû]t\s*\(([^)]*)\)", text, re.IGNORECASE)
+        if m:
+            return m.group(1).replace("\n", " ").strip()
+        return None
+
+    for row in rows:
+        if not row:
+            continue
+        c1 = _clean_str(row[0] if len(row) > 0 else None)
+        c2 = _clean_str(row[1] if len(row) > 1 else None)
+        c1_up = (c1 or "").upper()
+
+        # --- Bascule de mode sur titres de section (col 2 vide : vraie ligne de titre) ---
+        if c1 and not c2:
+            if "TAUX HORAIRE" in c1_up or "AUTRES INTERVENTIONS" in c1_up:
+                mode = "taux_horaire"
+                famille = "Taux horaires"
+                continue
+            if "COEFFICIENT" in c1_up:
+                mode = "coefficient"
+                famille = "Coefficients d'entreprise"
+                continue
+            _skip = ("LES ", "POUR ", "IL ", "DANS ")
+            if len(c1) > 6 and not any(c1_up.startswith(p) for p in _skip):
+                mode = "prestation"
+                famille = c1
+
+        # --- Ligne d'en-tete ("Code" en col 2) : etablit la colonne de cout + l'unite ---
+        if c2 and c2.lower() == "code":
+            unit_cost_col = 4
+            unite = None
+            for idx in (2, 3, 4):
+                cell = str(row[idx]) if len(row) > idx and row[idx] is not None else ""
+                if "HT" in cell.upper():
+                    unit_cost_col = idx
+                    unite = _unit_from_header(cell)
+            if "coefficient" in " ".join(str(v).lower() for v in row if v is not None):
+                mode = "coefficient"
+            continue
+
+        # --- Mode coefficient (CF-/CST- ou en-tete coefficient) ---
+        if mode == "coefficient" and c2 and (_BPU_CODE_RE.match(c2) or "coefficient" in (c1 or "").lower()):
+            coef = _to_float(row[2] if len(row) > 2 else None)
+            coef_max = _to_float(row[3] if len(row) > 3 else None)
+            if coef is None:  # layout alternatif (Type | tranche+code | _ | coef | coef_max)
+                coef = _to_float(row[3] if len(row) > 3 else None)
+                coef_max = _to_float(row[4] if len(row) > 4 else None)
+            if coef is not None:
+                out.append(DalkiaBpuRow(
+                    categorie="coefficient", famille=famille, code=c2 if _BPU_CODE_RE.match(c2) else None,
+                    libelle=c1 or last_libelle, specificite=None, unite=None,
+                    cout_unitaire=None, cout_nuit=None, cout_samedi=None, cout_dimanche=None,
+                    coefficient=coef, coefficient_max=coef_max,
+                ))
+            continue
+
+        # --- Mode taux horaire : designation en col 1 + taux numerique en col 2 ---
+        if mode == "taux_horaire" and c1 and _to_float(row[1] if len(row) > 1 else None) is not None:
+            out.append(DalkiaBpuRow(
+                categorie="taux_horaire", famille=famille, code=None, libelle=c1,
+                specificite=None, unite="€HT/h",
+                cout_unitaire=_to_float(row[1] if len(row) > 1 else None),
+                cout_nuit=_to_float(row[2] if len(row) > 2 else None),
+                cout_samedi=_to_float(row[3] if len(row) > 3 else None),
+                cout_dimanche=_to_float(row[4] if len(row) > 4 else None),
+                coefficient=None, coefficient_max=None,
+            ))
+            continue
+
+        # --- Mode prestation : code en col 2 ---
+        if c2 and _BPU_CODE_RE.match(c2):
+            if c1:
+                last_libelle = c1
+            spec_parts = []
+            for idx in (2, 3):
+                if idx != unit_cost_col and len(row) > idx and row[idx] is not None:
+                    spec_parts.append(str(row[idx]).replace("\n", " ").strip())
+            cout = _to_float(row[unit_cost_col] if len(row) > unit_cost_col else None)
+            out.append(DalkiaBpuRow(
+                categorie="prestation", famille=famille, code=c2,
+                libelle=c1 or last_libelle,
+                specificite=" | ".join(p for p in spec_parts if p) or None,
+                unite=unite, cout_unitaire=cout,
+                cout_nuit=None, cout_samedi=None, cout_dimanche=None,
+                coefficient=None, coefficient_max=None,
+            ))
+
+    if not out:
+        warnings.append("Annexe 7 BPU : aucune prestation extraite")
+    return out, warnings
+
+
 def _recap_period_map(header_row: tuple, start_col: int = 1) -> list[tuple[int, int | None, str]]:
     """Construit la liste (col_0based, annee|None, label) depuis une ligne d'en-tete de periodes.
 
@@ -897,6 +1037,11 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
     ape_rows, w = _parse_ape(ape_raw, lot)
     all_warnings.extend(w)
 
+    # --- BPU travaux P3 (Annexe 7) ---
+    bpu_raw = _get_rows("Annexe 7 - B.P.U - D.Q.E")
+    bpu_rows, w = _parse_bpu(bpu_raw)
+    all_warnings.extend(w)
+
     # --- RECAP MARCHE (recapitulatif financier global) ---
     recap_raw = _get_rows("RECAP MARCHE")
     recap_rows, w = _parse_recap(recap_raw)
@@ -921,6 +1066,7 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
         cibles_elec=cibles_elec,
         p1_gaz=p1_gaz,
         p1_tarifs=p1_tarifs,
+        bpu_rows=bpu_rows,
         ape_rows=ape_rows,
         recap_rows=recap_rows,
         warnings=all_warnings,
@@ -1043,6 +1189,16 @@ def _build_classified(result: DalkiaParseResult) -> dict[str, Any]:
         for t in result.p1_tarifs
     ]
 
+    bpu = [
+        {
+            "categorie": b.categorie, "famille": b.famille, "code": b.code, "libelle": b.libelle,
+            "specificite": b.specificite, "unite": b.unite, "cout_unitaire": b.cout_unitaire,
+            "cout_nuit": b.cout_nuit, "cout_samedi": b.cout_samedi, "cout_dimanche": b.cout_dimanche,
+            "coefficient": b.coefficient, "coefficient_max": b.coefficient_max,
+        }
+        for b in result.bpu_rows
+    ]
+
     return {
         "years": [str(y) for y in years],
         "p2p3": list(p2p3_by_site.values()),
@@ -1050,6 +1206,7 @@ def _build_classified(result: DalkiaParseResult) -> dict[str, Any]:
         "cibles_elec": _pivot_cibles(result.cibles_elec),
         "p1_gaz": list(p1_by_site.values()),
         "p1_tarifs": p1_tarifs,
+        "bpu": bpu,
         "ape": ape_rows,
         "recap_engagement": recap_engagement,
         "recap_redevances": recap_redevances,

@@ -10,6 +10,7 @@ from app.models.user import User
 from app.services.cpe_dalkia_db import (
     get_active_imports,
     get_ape_for_import,
+    get_bpu_for_import,
     get_cibles_for_import,
     get_import_by_id,
     get_p2p3_for_import,
@@ -301,6 +302,35 @@ def get_recap(
         raise HTTPException(status_code=404, detail="Import introuvable.")
     rows = get_recap_for_import(db, import_id, section)
     return [RecapRow(**{k: getattr(r, k) for k in RecapRow.model_fields}) for r in rows]
+
+
+class BpuRow(BaseModel):
+    categorie: str
+    famille: str | None
+    code: str | None
+    libelle: str | None
+    specificite: str | None
+    unite: str | None
+    cout_unitaire: float | None
+    cout_nuit: float | None
+    cout_samedi: float | None
+    cout_dimanche: float | None
+    coefficient: float | None
+    coefficient_max: float | None
+
+
+@router.get("/imports/{import_id}/bpu", response_model=list[BpuRow])
+def get_bpu(
+    import_id: int,
+    categorie: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[BpuRow]:
+    batch = get_import_by_id(db, import_id, current_user)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Import introuvable.")
+    rows = get_bpu_for_import(db, import_id, categorie)
+    return [BpuRow(**{k: getattr(r, k) for k in BpuRow.model_fields}) for r in rows]
 
 
 @router.post("/imports/{import_id}/sync-p1-reference")
