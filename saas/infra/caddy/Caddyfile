@@ -3,13 +3,6 @@
         redir {$PRONOSTICS_URL:https://script.google.com/macros/s/AKfycbw7hAKTCLS_Ew5cpRsQ6i7q26LWYSZ9EZ3PO-NM1_UOWjhaczphv6aiGaXRD1uyvufkpQ/exec} 302
     }
 
-    handle /api/auth/register {
-        basic_auth {
-            {$ADMIN_BASIC_AUTH_USER:disabled} {$ADMIN_BASIC_AUTH_PASSWORD_HASH:$2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IjWJPDhjvH}
-        }
-        reverse_proxy backend:8000
-    }
-
     handle /api/* {
         reverse_proxy backend:8000 {
             transport http {
@@ -22,9 +15,6 @@
     }
 
     handle {
-        basic_auth {
-            {$ADMIN_BASIC_AUTH_USER:disabled} {$ADMIN_BASIC_AUTH_PASSWORD_HASH:$2a$14$Zkx19XLiW6VYouLHR5NmfOFU0z2GTNmpkT/5qqR7hx4IjWJPDhjvH}
-        }
         reverse_proxy frontend:80
     }
 }
