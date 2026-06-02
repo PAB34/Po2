@@ -182,6 +182,7 @@ function enterApp(data){
   showApp();
   paintPlayer();
   $('mobilePlayer').style.display='';
+  $('guestBack').classList.add('hidden');
   document.body.classList.remove('guest-mode');
   $('guestNote').style.display='none';
   buildGroups(); renderMatches(); updateProgress();
@@ -203,6 +204,7 @@ function openGuest(view){
   showApp();
   setAll('js-pseudo','Invité'); setAll('js-service','Mode lecture'); setAll('js-avatar','?');
   $('mobilePlayer').style.display='none';
+  $('guestBack').classList.remove('hidden');
   $('guestNote').style.display='';
   // masque pronos + profil dans les deux navs
   toggleNav('pronos', false); toggleNav('profil', false);
@@ -211,6 +213,7 @@ function openGuest(view){
 function quitGuest(){
   state.guest=false;
   toggleNav('pronos', true); toggleNav('profil', true);
+  $('guestBack').classList.add('hidden');
   $('screen-app').classList.add('hidden'); $('screen-login').classList.remove('hidden');
   window.scrollTo({top:0,behavior:'smooth'});
 }
