@@ -97,17 +97,17 @@ Le contrôle finance P2/P3 (`cpe_finance_controls`) compare chaque ligne factur�
 | `prix_unitaire_ht` | 92,46 €/MWhPCS | `cpe_prix_gaz.pu_eur_mwh_pci` | ⚠️ Conversion PCS→PCI à vérifier |
 | `p10_total_ht` | 11 697 € (pour ENS02, 2026) | — | ❌ Non utilisé |
 | `p10_fixe_ht` | 1 064 € (ATRD+CTA) | — | ❌ Non utilisé |
-| SUM p10_total_ht Lot 1 2026 | ~341 293 € HT | Constante hardcodée dans service | ⚠️ Hardcodé |
+| SUM p10_total_ht Lot 1 2026 (Annexe 6) | ≈ 317 775 € HT | `cpe_contract_references` (en base) | ⚠️ Écart avec le seed |
 
-**Situation actuelle** : le contrôle P1 acompte compare le total des lignes P1 importées au montant de référence **317 774 € HT** (NB : voir le doc, le montant est issu du RECAP MARCHE). Cette référence est actuellement une constante dans le code service. Cela fonctionnait pour une seule année mais ne s'adapte pas aux révisions annuelles.
+**Situation actuelle** (vérifiée contre le code, voir §9.3) : le contrôle P1 acompte ne lit **aucune constante hardcodée**. Il lit sa référence en base dans `cpe_contract_references` (kind=`p1_gaz_acompte`), valeur semée par la migration `0029` : **`annual_amount_ht = 341 293,06 € HT`**, `installment_count = 4`. Cette ligne est **éditable** depuis le module CPE — elle n'est juste pas encore alimentée automatiquement depuis l'import DALKIA. ⚠️ Cette valeur seed (341 293 €, issue de la DPGF) **diffère** de la somme P1 2026 parsée depuis l'Annexe 6 / RECAP MARCHE (≈ 317 775 €) : écart à réconcilier (voir §9.4).
 
 **Vérification prix** : `cpe_prix_gaz` stocke T2 = 82,13 €/MWhPCI pour 2026-2030 (OS N°3). L'import indique `prix_unitaire_ht = 92,46 €/MWhPCS`. Conversion : 92,46 / 1,1068 = 83,50 €/MWhPCI. L'écart (~1,37 €) s'explique par la marge d'exploitation (10,3%) incluse dans le prix DALKIA. Ces deux valeurs servent des usages différents :
 - `cpe_prix_gaz.pu_eur_mwh_pci` → calcul intéressement (Pu net de fourniture)
 - `cpe_dalkia_ref_p1_gaz.prix_unitaire_ht` → contrôle des factures P1 DALKIA
 
 **Actions à implémenter** :
-- Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-p1-contract-reference` qui remplace la constante hardcodée par :
-  - `SUM(p10_total_ht)` par lot et par année → `cpe_contract_references` (reference_kind=`P1_gaz_lot`, year, annual_amount_ht)
+- Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-p1-contract-reference` qui alimente (upsert) la référence en base avec :
+  - `SUM(p10_total_ht)` par lot et par année → `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, year, annual_amount_ht)
   - Règle d'acompte : 1/4 aux échéances 31/03, 30/06, 30/09 (règle = `1/4 du P1 annuel révisé`)
 - Validation PCE : `cpe_dalkia_ref_p1_gaz.pce` vs `cpe_sites.pce` — signaler les divergences.
 
@@ -216,12 +216,13 @@ Les données sont **stockées** dans `cpe_dalkia_ref_*` et **consultables** via 
 2. Adapter les contrôles finance pour utiliser ces références par site (au lieu d'un seul total lot)
 3. **Impact** : le contrôle P2/P3 peut signaler non plus "montant global incorrect" mais "site ENS02 : P3 facturé 21 200€ vs contractuel 18 429€"
 
-### Phase C — Sync P1 gaz (remplacement hardcoded)
+### Phase C — Sync P1 gaz (alimentation auto de la référence en base)
 1. Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-p1-reference` :
-   - Calcule `SUM(p10_total_ht)` par lot × année depuis `cpe_dalkia_ref_p1_gaz`
-   - Upsert `cpe_contract_references` (reference_kind=`P1_gaz_lot`, billed_item=lot_code, annual_amount_ht=total)
-2. Modifier le service de contrôle P1 pour lire la référence en base au lieu de la constante
-3. **Impact** : le montant de référence P1 s'adapte automatiquement aux avenants (nouveaux sites, révisions tarifaires)
+   - Calcule `SUM(p10_total_ht)` par lot × année depuis `cpe_dalkia_ref_p1_gaz` (ou lit `cpe_dalkia_ref_recap` metric `p1_total_ht`)
+   - Upsert `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, billed_item=`P1_GAZ_LOT{n}`, annual_amount_ht=total)
+2. Le service de contrôle P1 lit **déjà** la référence en base (`_find_contract_reference`) — **aucune modification** du contrôle nécessaire (cf. §9.3, il n'y a pas de constante à remplacer)
+3. ⚠️ Trancher au préalable l'écart seed DPGF (341 293 €) vs RECAP parsé (≈ 317 775 €) — cf. §9.4
+4. **Impact** : le montant de référence P1 s'adapte automatiquement aux avenants (nouveaux sites, révisions tarifaires)
 
 ### Phase D — Suivi travaux APE
 1. Créer `cpe_ape_suivi` avec les colonnes de `cpe_dalkia_ref_ape` + statut/date_réelle
@@ -292,7 +293,7 @@ Audit complet des 13 feuilles du fichier DALKIA. État après ajout du parsing R
 
 Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), `redevance_p1`, `redevance_p2p3`, `sensibilisation`, `travaux`, `bilan`.
 
-> **Impact direct** : la constante hardcodée 317 774 € (contrôle acompte P1) peut maintenant être remplacée par une lecture de `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année). Voir Phase C section 5.
+> **Impact direct** : la référence P1 du contrôle d'acompte (en base, `cpe_contract_references` — **pas** une constante de code, cf. §9.3) pourra être alimentée automatiquement depuis `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année), sous réserve de réconcilier l'écart avec la valeur seed DPGF (cf. §9.4). Voir Phase C.
 
 ### Gaps de couverture restants (non parsés)
 
@@ -390,23 +391,77 @@ build_import_preview(result: DalkiaParseResult) → DalkiaImportPreview   [datac
 
 ---
 
-## 9. Connexions opérationnelles actives aujourd'hui
+## 9. Connexions opérationnelles — état réel (vérifié contre le code 2026-06-02)
 
-Contrairement aux connexions *à implémenter* (sections 2.1–2.5), ces connexions sont **actives** :
+> ⚠️ Section re-vérifiée ligne par ligne contre `cpe_dalkia.py`, `cpe_dalkia_db.py`,
+> `cpe_accounting.py` et la migration `0029`. Distinction nette entre *câblé* (consommé par
+> un frontend) et *disponible* (endpoint existe mais aucun appelant).
 
-| Source | → | Destination | Mécanisme |
-|--------|---|-------------|-----------|
-| `cpe_dalkia_ref_imports` (lot, filename, is_active) | → | Page `/cpe/dalkia-import` | GET `/cpe/dalkia-ref/imports` |
-| `cpe_dalkia_ref_sites` | → | Page `/cpe/dalkia-import` → "Voir les sites" | GET `/cpe/dalkia-ref/imports/{id}/sites` |
-| `cpe_dalkia_ref_recap` | → | Page import → résumé financier + ClassifiedPreview onglet "RECAP" | Inclus dans `/preview` et `/confirm` |
-| `cpe_dalkia_ref_p2p3` | → | ClassifiedPreview onglet "P2/P3" (preview uniquement) | `classified.p2p3` dans `/preview` |
-| `cpe_dalkia_ref_cibles` | → | ClassifiedPreview onglets "Cibles GAZ/ELEC" | `classified.cibles_gaz/elec` |
-| `cpe_dalkia_ref_p1_gaz` | → | ClassifiedPreview onglet "P1 gaz" | `classified.p1_gaz` |
-| `cpe_dalkia_ref_ape` | → | ClassifiedPreview onglet "Travaux APE" | `classified.ape` |
-| `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, seed manuel) | → | `_control_p1_gaz_acompte_against_dpgf()` dans `cpe_accounting.py:1733` | Contrôle automatique à chaque import facture |
-| `cpe_contract_references.annual_amount_ht / installment_count` | → | Montant attendu acompte = `annual_amount_ht / installment_count` | `cpe_accounting.py:1804` |
+### 9.1 Connexions réellement câblées (frontend ↔ API ↔ base)
 
-**Connexion cruciale à activer (Phase C)** : remplacer la référence seed manuelle `p1_gaz_acompte` par un endpoint qui lit `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année, lot=lot) et crée/met à jour `cpe_contract_references`. Cela rend le contrôle auto-adaptatif aux avenants.
+Seuls 4 endpoints sont consommés par `CpeDalkiaImportPage.tsx` :
+
+| Source (table) | → | Destination (UI) | Endpoint / champ | Persisté ? |
+|---|---|---|---|---|
+| `cpe_dalkia_ref_imports` | → | Historique des imports | GET `/cpe/dalkia-ref/imports` | ✅ |
+| `cpe_dalkia_ref_sites` | → | Bouton « Voir les sites » | GET `/cpe/dalkia-ref/imports/{id}/sites` | ✅ |
+| Données **parsées** (pas encore en base) | → | Résumé financier + `ClassifiedPreview` (6 onglets) | POST `/cpe/dalkia-ref/preview` → `recap_summary` + `classified.{p2p3,cibles_gaz,cibles_elec,p1_gaz,ape,recap_*}` | ❌ preview seul |
+| `DalkiaParseResult` complet | → | Écriture en base à la validation | POST `/cpe/dalkia-ref/confirm` → `persist_dalkia_import()` | ✅ écrit les 6 tables |
+
+**Précisions importantes** :
+- `recap_summary` et `classified` ne sont renvoyés **que par `/preview`**. La réponse de `/confirm` (`ImportBatchResponse`) ne contient **que des comptages** (`nb_*_rows`), pas le détail. La preview classifiée travaille donc sur les données *parsées en mémoire*, avant toute écriture en base.
+- `/confirm` persiste bien les 6 tables (`cpe_dalkia_db.py:127-230`), y compris `cpe_dalkia_ref_recap` (lignes 218-230).
+- Après confirmation, **aucune UI ne ré-affiche** le détail P2P3 / cibles / P1 / APE / recap depuis la base : seuls les sites sont consultables.
+
+### 9.2 Endpoints disponibles mais NON câblés (API prête, aucun appelant frontend)
+
+| Endpoint | Service | Statut |
+|---|---|---|
+| GET `/cpe/dalkia-ref/imports/{id}/p2p3` (`?period_year=`) | `get_p2p3_for_import` | ⚠️ jamais appelé par le frontend |
+| GET `/cpe/dalkia-ref/imports/{id}/cibles` (`?fluid=&period_year=`) | `get_cibles_for_import` | ⚠️ jamais appelé |
+| GET `/cpe/dalkia-ref/imports/{id}/ape` | `get_ape_for_import` | ⚠️ jamais appelé |
+| GET `/cpe/dalkia-ref/imports/{id}/recap` (`?section=`) | `get_recap_for_import` | ⚠️ jamais appelé |
+
+Ces endpoints permettront de rebrancher la preview classifiée sur les données **persistées** (relecture d'un import actif sans re-uploader le fichier) — câblage frontend à faire.
+
+### 9.3 Contrôle de facture P1 — connexion existante (et le mythe de la « constante hardcodée »)
+
+| Source | → | Destination | Emplacement |
+|---|---|---|---|
+| `cpe_contract_references` (kind=`p1_gaz_acompte`) | → | `_control_p1_gaz_acompte_against_dpgf()` | `cpe_accounting.py:1733` |
+| `.annual_amount_ht / .installment_count` | → | Acompte attendu = `annual / installments` | `cpe_accounting.py:1804` |
+| `.expected_amount_ht` (si fourni, prioritaire) | → | Acompte attendu direct | `cpe_accounting.py:1802` |
+
+> ❗ **Correction d'une affirmation erronée** : il n'existe **aucune constante hardcodée**
+> (`317774`, `341293`…) dans `cpe_accounting.py` ni ailleurs dans le backend (`grep` → vide).
+> Le contrôle P1 lit **déjà** sa référence en base via `_find_contract_reference()`.
+> La valeur de référence provient de la **migration seed `0029`** :
+> `contract_code='C00190116O'`, `year=2026`, `billed_item='P1_GAZ_LOT1'`,
+> **`annual_amount_ht = 341293.06`**, `installment_count = 4` → acompte attendu **85 323,27 € / trimestre**
+> aux échéances 31/03, 30/06, 30/09 (`expected_period_months='3,6,9'`), tolérance 1 % ou 100 €.
+
+### 9.4 Connexion à activer (Phase C) — réconciliation, pas remplacement
+
+L'objectif n'est donc **pas** de « remplacer une constante » mais d'**alimenter automatiquement**
+`cpe_contract_references` depuis l'import DALKIA, et de **réconcilier un écart réel** :
+
+| Origine | Valeur P1 Lot 1 2026 |
+|---|---|
+| Seed `0029` (DPGF, en base aujourd'hui) | **341 293,06 € HT** |
+| RECAP MARCHE parsé (`cpe_dalkia_ref_recap`, metric `p1_total_ht`, période 2026) | **≈ 317 775 € HT** |
+| Somme `p10_total_ht` Annexe 6 (`cpe_dalkia_ref_p1_gaz`) | à recouper (≈ même ordre) |
+
+> Ces deux sources **diffèrent d'environ 23 500 €** : avant tout branchement automatique, il faut
+> trancher laquelle fait foi (DPGF contractuelle vs RECAP) — c'est un point à clarifier avec DALKIA,
+> pas une simple substitution de code.
+
+**Travail Phase C** :
+1. Endpoint `POST /cpe/dalkia-ref/imports/{id}/sync-p1-reference` qui lit `cpe_dalkia_ref_recap`
+   (ou la somme `cpe_dalkia_ref_p1_gaz.p10_total_ht`) par lot × année.
+2. Upsert `cpe_contract_references` (kind=`p1_gaz_acompte`, year, `annual_amount_ht`).
+3. Le contrôle existant `_control_p1_gaz_acompte_against_dpgf` consomme **sans modification** la
+   nouvelle valeur (il lit déjà la base) → auto-adaptatif aux avenants.
+4. Conserver une trace de la source (`notes`) pour l'audit de la valeur retenue.
 
 ---
 
