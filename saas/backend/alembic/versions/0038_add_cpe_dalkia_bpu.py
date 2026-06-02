@@ -1,7 +1,7 @@
 """add cpe_dalkia_ref_bpu (catalogue BPU travaux P3 - Annexe 7)
 
-Revision ID: 0037
-Revises: 0036
+Revision ID: 0038
+Revises: 0037
 Create Date: 2026-06-02
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0037"
-down_revision = "0036"
+revision = "0038"
+down_revision = "0037"
 branch_labels = None
 depends_on = None
 
