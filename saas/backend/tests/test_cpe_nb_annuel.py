@@ -11,7 +11,7 @@ from app.core.db import Base
 from app.models.city import City
 from app.models.cpe import CpeSite
 from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport
-from app.services.cpe import resolve_nb_for_year
+from app.services.cpe import resolve_nb_for_year, resolve_nb_for_year_detailed
 
 
 @pytest.fixture()
@@ -117,6 +117,22 @@ def test_city_scoping_excludes_other_city(db_session: Session):
     db_session.commit()
 
     assert resolve_nb_for_year(db_session, site, 2028) == pytest.approx(56.1)
+
+
+def test_detailed_reports_source(db_session: Session):
+    """La variante _detailed expose la source utilisée (dalkia vs site) pour l'affichage UI."""
+    site = _make_site(db_session, nb=56.1)
+    imp = _add_import(db_session)
+    _add_cible(db_session, import_id=imp.id, code=site.code_site, annee=2028, nb=18.0)
+    db_session.commit()
+
+    nb_2028, src_2028 = resolve_nb_for_year_detailed(db_session, site, 2028)
+    assert nb_2028 == pytest.approx(18.0)
+    assert src_2028 == "dalkia"
+
+    nb_2099, src_2099 = resolve_nb_for_year_detailed(db_session, site, 2099)
+    assert nb_2099 == pytest.approx(56.1)
+    assert src_2099 == "site"
 
 
 def test_zero_or_null_cible_falls_back(db_session: Session):

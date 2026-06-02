@@ -295,16 +295,21 @@ def upsert_prix_gaz(db: Session, payload: CpePrixGazCreate) -> CpePrixGaz:
 
 # ── Calcul du résultat annuel ─────────────────────────────────────────────────
 
-def resolve_nb_for_year(db: Session, site: CpeSite, annee: int) -> float:
-    """NB contractuel de l'exercice demandé.
+def resolve_nb_for_year_detailed(db: Session, site: CpeSite, annee: int) -> tuple[float, str]:
+    """NB contractuel de l'exercice + sa source.
 
     Lit la cible GAZ « NB » de l'import DALKIA actif pour (code_site, annee).
     Le contrat révise le NB chaque année (les travaux APE réduisent la cible à partir
     de leur année de réalisation), alors que `CpeSite.nb_mwh_pci` est un scalaire unique.
 
-    Fallback sur `site.nb_mwh_pci` si aucune cible DALKIA n'existe pour cette année
-    (aucun import actif, site hors périmètre DALKIA, ou code_site non aligné) — le
-    comportement est alors strictement identique à l'historique.
+    Retourne (nb, source) avec source :
+      - "dalkia" : NB issu de la cible importée de l'année demandée ;
+      - "site"   : fallback sur `site.nb_mwh_pci` (aucun import actif, site hors périmètre
+                   DALKIA, code_site non aligné, ou NB DALKIA nul/0). Comportement alors
+                   strictement identique à l'historique.
+
+    La source permet de détecter à l'écran un éventuel décalage de `code_site` entre
+    `cpe_sites` (seed) et `cpe_dalkia_ref_cibles` (import).
     """
     stmt = (
         select(CpeDalkiaRefCible.nb_mwhpci)
@@ -321,8 +326,13 @@ def resolve_nb_for_year(db: Session, site: CpeSite, annee: int) -> float:
         stmt = stmt.where(CpeDalkiaRefImport.city_id == site.city_id)
     nb = db.scalars(stmt).first()
     if nb is not None and nb > 0:
-        return nb
-    return site.nb_mwh_pci
+        return nb, "dalkia"
+    return site.nb_mwh_pci, "site"
+
+
+def resolve_nb_for_year(db: Session, site: CpeSite, annee: int) -> float:
+    """NB contractuel de l'exercice (cf. resolve_nb_for_year_detailed)."""
+    return resolve_nb_for_year_detailed(db, site, annee)[0]
 
 
 def calculer_resultat_site(
@@ -481,7 +491,7 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
         if m_ecs == 0 and site.ecs_ref_m3_an > 0:
             m_ecs = site.ecs_ref_m3_an
 
-        nb_exercice = resolve_nb_for_year(db, site, annee)
+        nb_exercice, nb_source = resolve_nb_for_year_detailed(db, site, annee)
         nc_cumul = calcul_nc(qt_cumul, m_ecs, site.q_ecs_mwh_pci_per_m3) if qt_cumul else None
         n_prime_b = calcul_n_prime_b(nb_exercice, dju_reels, site.dju_reference) if dju_reels else None
 
@@ -506,6 +516,8 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
             site=CpeSiteOut.model_validate(site),
             resultat=resultat_out,
             nb_mois_releves=nb_mois,
+            nb_exercice=nb_exercice,
+            nb_source=nb_source,
             qt_cumul=qt_cumul,
             nc_cumul=nc_cumul,
             n_prime_b=n_prime_b,

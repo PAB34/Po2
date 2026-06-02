@@ -90,8 +90,12 @@ Le contrôle finance P2/P3 (`cpe_finance_controls`) compare chaque ligne factur�
 
 > ⚠️ **À vérifier sur données réelles** : la jointure se fait sur `code_site`. Si les codes de
 > `cpe_sites` (seed) et de `cpe_dalkia_ref_cibles` (import) ne sont pas strictement identiques,
-> le fallback s'active silencieusement (résultat = ancien comportement, pas d'erreur). Contrôler
-> après le premier import qu'un échantillon de sites résout bien le NB DALKIA et non le fallback.
+> le fallback s'active silencieusement (résultat = ancien comportement, pas d'erreur).
+> **Rendu visible dans l'UI** : la colonne « NB année » du bilan (`/cpe`) affiche un badge
+> `DLK` (vert, NB issu de la cible DALKIA) ou `SITE` (orange, fallback scalaire). Après le premier
+> import, contrôler qu'aucun site censé être couvert ne reste en `SITE` — sinon corriger
+> l'alignement du `code_site`. La source est portée par `CpeSiteBilanItem.nb_source`
+> (`resolve_nb_for_year_detailed`).
 
 ---
 

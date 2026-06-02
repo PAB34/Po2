@@ -2711,6 +2711,8 @@ export type CpeSiteBilanItem = {
   site: CpeSite;
   resultat: CpeResultatAnnuel | null;
   nb_mois_releves: number;
+  nb_exercice: number;          // NB utilisé pour le calcul de l'exercice
+  nb_source: "dalkia" | "site"; // origine du NB : cible importée de l'année | scalaire de secours
   qt_cumul: number | null;
   nc_cumul: number | null;
   n_prime_b: number | null;

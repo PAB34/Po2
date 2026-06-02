@@ -817,7 +817,7 @@ VDS-BAM 02;2026-01-31;6.1;;N`}
                 <th style={thStyle}>Code</th>
                 <th style={thStyle}>Site</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Tarif</th>
-                <th style={thStyle}>NB (MWhPCI)</th>
+                <th style={thStyle}>NB année (MWhPCI)</th>
                 <th style={thStyle}>N'B corrigé</th>
                 <th style={thStyle}>NC réel</th>
                 <th style={thStyle}>Écart</th>
@@ -3133,7 +3133,24 @@ function SiteRow({ item }: { item: CpeSiteBilanItem }) {
           <span style={{ color: "#9ca3af", fontSize: 11 }}>—</span>
         )}
       </td>
-      <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.site.nb_mwh_pci)}</td>
+      <td style={{ ...tdStyle, textAlign: "right" }}>
+        {fmt(item.nb_exercice)}
+        {item.nb_source === "dalkia" ? (
+          <span
+            title="NB issu de la cible DALKIA importée pour cette année (révisée après travaux APE)"
+            style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, color: "#16a34a", cursor: "help" }}
+          >
+            DLK
+          </span>
+        ) : (
+          <span
+            title="Valeur de secours du site (aucune cible DALKIA pour cette année). Vérifier l'alignement du code site entre cpe_sites et l'import DALKIA."
+            style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, color: "#f97316", cursor: "help" }}
+          >
+            SITE
+          </span>
+        )}
+      </td>
       <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.n_prime_b)}</td>
       <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(item.nc_cumul)}</td>
       <td style={{ ...tdStyle, textAlign: "right" }}>

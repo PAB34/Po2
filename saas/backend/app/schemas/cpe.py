@@ -132,6 +132,8 @@ class CpeSiteBilanItem(BaseModel):
     site: CpeSiteOut
     resultat: CpeResultatAnnuelOut | None
     nb_mois_releves: int
+    nb_exercice: float            # NB effectivement utilisé pour le calcul de l'exercice
+    nb_source: str                # "dalkia" (cible importée de l'année) | "site" (scalaire de secours)
     qt_cumul: float | None
     nc_cumul: float | None
     n_prime_b: float | None
