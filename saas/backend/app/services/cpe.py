@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.cpe import CpeGazReleve, CpePrixGaz, CpeResultatAnnuel, CpeSite
+from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport
 from app.schemas.cpe import (
     CpeBilanAnnuel,
     CpeDjuAnnuel,
@@ -294,6 +295,36 @@ def upsert_prix_gaz(db: Session, payload: CpePrixGazCreate) -> CpePrixGaz:
 
 # ── Calcul du résultat annuel ─────────────────────────────────────────────────
 
+def resolve_nb_for_year(db: Session, site: CpeSite, annee: int) -> float:
+    """NB contractuel de l'exercice demandé.
+
+    Lit la cible GAZ « NB » de l'import DALKIA actif pour (code_site, annee).
+    Le contrat révise le NB chaque année (les travaux APE réduisent la cible à partir
+    de leur année de réalisation), alors que `CpeSite.nb_mwh_pci` est un scalaire unique.
+
+    Fallback sur `site.nb_mwh_pci` si aucune cible DALKIA n'existe pour cette année
+    (aucun import actif, site hors périmètre DALKIA, ou code_site non aligné) — le
+    comportement est alors strictement identique à l'historique.
+    """
+    stmt = (
+        select(CpeDalkiaRefCible.nb_mwhpci)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefCible.import_id == CpeDalkiaRefImport.id)
+        .where(
+            CpeDalkiaRefImport.is_active.is_(True),
+            CpeDalkiaRefCible.fluid == "GAZ",
+            CpeDalkiaRefCible.code_site == site.code_site,
+            CpeDalkiaRefCible.period_year == annee,
+            CpeDalkiaRefCible.nb_mwhpci.is_not(None),
+        )
+    )
+    if site.city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == site.city_id)
+    nb = db.scalars(stmt).first()
+    if nb is not None and nb > 0:
+        return nb
+    return site.nb_mwh_pci
+
+
 def calculer_resultat_site(
     db: Session,
     site_id: int,
@@ -330,8 +361,11 @@ def calculer_resultat_site(
     if m_ecs_total == 0 and site.ecs_ref_m3_an > 0:
         m_ecs_total = site.ecs_ref_m3_an
 
+    # NB contractuel de l'exercice (cible DALKIA par année, fallback scalaire site)
+    nb_exercice = resolve_nb_for_year(db, site, annee)
+
     # Calculs
-    n_prime_b = calcul_n_prime_b(site.nb_mwh_pci, dju_reels, site.dju_reference) if dju_reels else None
+    n_prime_b = calcul_n_prime_b(nb_exercice, dju_reels, site.dju_reference) if dju_reels else None
     nc = calcul_nc(qt_total, m_ecs_total, site.q_ecs_mwh_pci_per_m3) if qt_total else None
 
     # Intéressement / pénalité
@@ -344,8 +378,8 @@ def calculer_resultat_site(
     # Écart relatif pour détection révision NB
     ecart_pct = None
     alerte = False
-    if site.nb_mwh_pci > 0 and nc is not None:
-        ecart_pct = (nc - site.nb_mwh_pci) / site.nb_mwh_pci
+    if nb_exercice > 0 and nc is not None:
+        ecart_pct = (nc - nb_exercice) / nb_exercice
         alerte = abs(ecart_pct) >= SEUIL_REVISION_2  # 1 saison suffit pour 12%
 
     # Statut
@@ -371,7 +405,7 @@ def calculer_resultat_site(
         "annee": annee,
         "dju_reels": dju_reels,
         "dju_reference": site.dju_reference,
-        "nb": site.nb_mwh_pci,
+        "nb": nb_exercice,
         "n_prime_b": n_prime_b,
         "qt_total": qt_total if qt_total else None,
         "m_ecs_total": m_ecs_total if m_ecs_total else None,
@@ -447,8 +481,9 @@ def get_bilan_annuel(db: Session, annee: int, city_id: int | None = None) -> Cpe
         if m_ecs == 0 and site.ecs_ref_m3_an > 0:
             m_ecs = site.ecs_ref_m3_an
 
+        nb_exercice = resolve_nb_for_year(db, site, annee)
         nc_cumul = calcul_nc(qt_cumul, m_ecs, site.q_ecs_mwh_pci_per_m3) if qt_cumul else None
-        n_prime_b = calcul_n_prime_b(site.nb_mwh_pci, dju_reels, site.dju_reference) if dju_reels else None
+        n_prime_b = calcul_n_prime_b(nb_exercice, dju_reels, site.dju_reference) if dju_reels else None
 
         fin: dict[str, Any] = {}
         if n_prime_b is not None and nc_cumul is not None and pu_site is not None:

@@ -76,15 +76,22 @@ Le contrôle finance P2/P3 (`cpe_finance_controls`) compare chaque ligne factur�
 
 **Situation actuelle** : `cpe_sites.nb_mwh_pci` est un **scalaire unique** (le NB contractuel). Or le contrat prévoit des NB différents chaque année : les travaux APE réduisent les cibles à partir de l'année de leur réalisation (ex. ENS08 : NB 2026 = 56,1 MWh → NB 2028 = ~18 MWh après PAC). Le moteur d'intéressement utilise toujours le NB de `cpe_sites`, donc il calcule mal les exercices post-APE si ce champ n'est pas mis à jour manuellement.
 
-**Action critique à implémenter** :
-- **Nouveau modèle** `CpeSiteNbAnnuel` (ou colonne JSON dans `cpe_sites`) pour stocker le NB contractuel **par année** :
-  ```
-  (cpe_site_id, annee) → nb_mwh_pci, q_ecs_mwh_pci_per_m3, cible_elec_mwh
-  ```
-- Alimenté automatiquement depuis `cpe_dalkia_ref_cibles` lors du sync.
-- La fonction `calculer_resultat_site()` lit d'abord `CpeSiteNbAnnuel` pour l'année demandée, puis `cpe_sites.nb_mwh_pci` en fallback.
+**✅ Implémenté (Phase A, 2026-06-02)** — approche retenue, plus simple que le plan initial :
+- **Aucune nouvelle table.** La fonction `resolve_nb_for_year(db, site, annee)` (`services/cpe.py`)
+  lit directement le NB de la cible GAZ dans `cpe_dalkia_ref_cibles` de l'**import DALKIA actif**
+  pour `(code_site, period_year=annee)`, scopé par `city_id`.
+- **Fallback** sur `cpe_sites.nb_mwh_pci` si aucune cible (pas d'import actif, site hors périmètre,
+  ou NB nul/0) → comportement strictement identique à l'historique en l'absence de données DALKIA.
+- Branchée dans `calculer_resultat_site()` (N'B, écart_pct, et `nb` persisté dans `cpe_resultats_annuels`)
+  **et** dans `get_bilan_annuel()`. La colonne `cpe_resultats_annuels.nb` reflète désormais le NB
+  réellement utilisé pour l'exercice (traçabilité).
+- Couverte par `tests/test_cpe_nb_annuel.py` (6 cas : cible prioritaire, fallback année absente,
+  import inactif ignoré, hors périmètre, scoping commune, NB nul/0). **6/6 verts.**
 
-**Intérim acceptable** : jusqu'à cette implémentation, mettre à jour `cpe_sites.nb_mwh_pci` = NB de l'année en cours via le sync (valeur 2026 ou 2027 selon l'exercice calculé).
+> ⚠️ **À vérifier sur données réelles** : la jointure se fait sur `code_site`. Si les codes de
+> `cpe_sites` (seed) et de `cpe_dalkia_ref_cibles` (import) ne sont pas strictement identiques,
+> le fallback s'active silencieusement (résultat = ancien comportement, pas d'erreur). Contrôler
+> après le premier import qu'un échantillon de sites résout bien le NB DALKIA et non le fallback.
 
 ---
 
@@ -200,14 +207,15 @@ cpe_dalkia_ref_imports  (1 import actif par lot)
 ### Phase immédiate (fonctionnel maintenant)
 Les données sont **stockées** dans `cpe_dalkia_ref_*` et **consultables** via l'API. La page import montre les comptages et les 5 premiers sites. Il n'y a pas encore de synchronisation automatique vers les tables CPE opérationnelles.
 
-### Phase A — Sync sites + NB (priorité haute)
-1. Créer `cpe_site_nb_annuels` : `(cpe_site_id, annee) → nb_mwh_pci, q_ecs, cible_elec_mwh`
-2. Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-cibles` :
-   - Lit `cpe_dalkia_ref_cibles` (fluid=GAZ) pour l'import actif
-   - Crée/met à jour `cpe_site_nb_annuels` par site × année
-   - Met aussi à jour `cpe_sites.nb_mwh_pci` avec la valeur de l'année courante (fallback)
-3. Modifier `calculer_resultat_site()` pour lire `cpe_site_nb_annuels` en priorité
-4. **Impact immédiat** : les calculs d'intéressement 2027, 2028, etc. utiliseront les bonnes cibles contractuelles (réduites après APE) au lieu d'une valeur fixe
+### Phase A — Sync NB par année ✅ FAIT (2026-06-02)
+Implémentée par lecture directe (pas de table intermédiaire ni de sync à déclencher) :
+`resolve_nb_for_year()` lit `cpe_dalkia_ref_cibles` (fluid=GAZ, import actif) avec fallback
+`cpe_sites.nb_mwh_pci`, branchée dans `calculer_resultat_site()` et `get_bilan_annuel()`.
+Tests : `tests/test_cpe_nb_annuel.py` (6/6). Détail : §2.3.
+- **Impact** : les calculs d'intéressement 2027, 2028… utilisent désormais les cibles contractuelles
+  réduites après APE, dès qu'un import DALKIA actif couvre le site (sinon fallback inchangé).
+- **Reste à faire** : vérifier l'alignement des `code_site` (seed vs import) sur données réelles ;
+  exposer le NB de l'année dans l'UI bilan pour rendre visible la valeur retenue.
 
 ### Phase B — Sync références P2/P3
 1. Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-contract-references` :
@@ -407,6 +415,7 @@ Seuls 4 endpoints sont consommés par `CpeDalkiaImportPage.tsx` :
 | `cpe_dalkia_ref_sites` | → | Bouton « Voir les sites » | GET `/cpe/dalkia-ref/imports/{id}/sites` | ✅ |
 | Données **parsées** (pas encore en base) | → | Résumé financier + `ClassifiedPreview` (6 onglets) | POST `/cpe/dalkia-ref/preview` → `recap_summary` + `classified.{p2p3,cibles_gaz,cibles_elec,p1_gaz,ape,recap_*}` | ❌ preview seul |
 | `DalkiaParseResult` complet | → | Écriture en base à la validation | POST `/cpe/dalkia-ref/confirm` → `persist_dalkia_import()` | ✅ écrit les 6 tables |
+| `cpe_dalkia_ref_cibles` (NB GAZ, import actif) | → | **Moteur d'intéressement** (N'B, écart, bilan) | `resolve_nb_for_year()` dans `services/cpe.py` → `calculer_resultat_site` / `get_bilan_annuel` | ✅ lit la base (fallback scalaire) |
 
 **Précisions importantes** :
 - `recap_summary` et `classified` ne sont renvoyés **que par `/preview`**. La réponse de `/confirm` (`ImportBatchResponse`) ne contient **que des comptages** (`nb_*_rows`), pas le détail. La preview classifiée travaille donc sur les données *parsées en mémoire*, avant toute écriture en base.
