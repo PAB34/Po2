@@ -19,6 +19,18 @@ async function nativeRequest(path, options = {}) {
   return body;
 }
 
+async function nativeForgotPassword(email) {
+  return nativeRequest("/forgot-password", {
+    method: "POST", headers: nativeHeaders(false), body: JSON.stringify({ email }),
+  });
+}
+
+async function nativeResetPassword(token, password) {
+  return nativeRequest("/reset-password", {
+    method: "POST", headers: nativeHeaders(false), body: JSON.stringify({ token, password }),
+  });
+}
+
 function nativeMatch(match) {
   return {
     id: match.id, group: match.group, team1: match.team1, team2: match.team2,

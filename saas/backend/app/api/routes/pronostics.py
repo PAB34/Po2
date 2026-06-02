@@ -11,12 +11,15 @@ from app.models.user import User
 from app.schemas.pronostics import (
     PronosticsLoginRequest,
     PronosticsMatchRead,
+    PronosticsForgotPasswordRequest,
+    PronosticsMessageRead,
     PronosticsParticipantRead,
     PronosticsPlayerRead,
     PronosticsPlayerUpdate,
     PronosticsPredictionsWrite,
     PronosticsRankingRead,
     PronosticsRegisterRequest,
+    PronosticsResetPasswordRequest,
     PronosticsTokenResponse,
 )
 from app.services.pronostics import (
@@ -28,6 +31,8 @@ from app.services.pronostics import (
     fifa_rank,
     get_player_by_id,
     save_predictions,
+    request_password_reset,
+    reset_password,
     sync_scores,
     update_player,
 )
@@ -79,6 +84,30 @@ def login(payload: PronosticsLoginRequest, db: Session = Depends(get_db)) -> Pro
     if player is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants invalides.")
     return PronosticsTokenResponse(access_token=create_player_token(player), player=_player_read(player))
+
+
+@router.post("/forgot-password", response_model=PronosticsMessageRead)
+def forgot_password(payload: PronosticsForgotPasswordRequest, db: Session = Depends(get_db)) -> PronosticsMessageRead:
+    try:
+        request_password_reset(db, str(payload.email))
+    except RuntimeError as exc:
+        if str(exc) == "SMTP_NOT_CONFIGURED":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="L'envoi d'email n'est pas encore configuré. Contacte l'organisateur.",
+            ) from exc
+        raise
+    return PronosticsMessageRead(message="Si cette adresse est inscrite, un email vient d'être envoyé.")
+
+
+@router.post("/reset-password", response_model=PronosticsMessageRead)
+def apply_password_reset(
+    payload: PronosticsResetPasswordRequest,
+    db: Session = Depends(get_db),
+) -> PronosticsMessageRead:
+    if not reset_password(db, payload.token, payload.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce lien est invalide ou expiré.")
+    return PronosticsMessageRead(message="Ton mot de passe a été modifié. Tu peux maintenant te connecter.")
 
 
 @router.get("/me", response_model=PronosticsPlayerRead)

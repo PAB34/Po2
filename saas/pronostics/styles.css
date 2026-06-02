@@ -66,6 +66,8 @@
   .btn.danger{background:transparent;color:#fecaca;border:1px solid rgba(239,68,68,.5);box-shadow:none}
   .btn.block{width:100%}
   .btn.sm{min-height:42px;padding:9px 14px;border-radius:11px;font-size:14px}
+  .linkBtn{display:block;margin:14px auto 0;background:transparent;color:#166534;
+    font-weight:800;text-decoration:underline;text-underline-offset:3px;padding:5px}
 
   /* champs */
   label{display:block;font-size:13px;font-weight:800;color:#173b2c;margin:0 0 6px}

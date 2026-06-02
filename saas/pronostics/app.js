@@ -120,6 +120,8 @@ window.addEventListener('load',function(){
     $('resumeEmail').textContent = email;
     $('loginEmail').value = email;
   }
+  var resetToken=new URLSearchParams(window.location.search).get('reset_token');
+  if(resetToken) $('resetModal').classList.add('show');
 });
 
 /* ===================================================================
@@ -164,6 +166,34 @@ function forgetSession(){
   localStorage.removeItem('pronostics_access_token');
   $('loginPassword').value=''; $('regPassword').value='';
   $('resumeBox').classList.add('hidden');
+}
+function openForgot(){
+  $('forgotEmail').value=$('loginEmail').value.trim();
+  clearMsg('forgotMsg'); $('forgotModal').classList.add('show');
+}
+function closeForgot(){ $('forgotModal').classList.remove('show'); }
+function sendForgot(){
+  var email=$('forgotEmail').value.trim().toLowerCase();
+  if(!email){ msg('forgotMsg','Saisis ton adresse email personnelle.','err'); return; }
+  msg('forgotMsg','Envoi en cours…','info');
+  nativeForgotPassword(email)
+    .then(function(res){ msg('forgotMsg',res.message,'ok'); })
+    .catch(function(e){ msg('forgotMsg',fmtError(e),'err'); });
+}
+function applyReset(){
+  var password=$('resetPassword').value, confirm=$('resetPasswordConfirm').value;
+  var token=new URLSearchParams(window.location.search).get('reset_token')||'';
+  if(password.length<8){ msg('resetMsg','Le mot de passe doit contenir au moins 8 caractères.','err'); return; }
+  if(password!==confirm){ msg('resetMsg','Les deux mots de passe ne correspondent pas.','err'); return; }
+  msg('resetMsg','Mise à jour en cours…','info');
+  nativeResetPassword(token,password)
+    .then(function(res){
+      history.replaceState({},document.title,window.location.pathname);
+      $('resetModal').classList.remove('show');
+      $('resetPassword').value=''; $('resetPasswordConfirm').value='';
+      msg('loginMsg',res.message,'ok');
+    })
+    .catch(function(e){ msg('resetMsg',fmtError(e),'err'); });
 }
 
 /* ===================================================================

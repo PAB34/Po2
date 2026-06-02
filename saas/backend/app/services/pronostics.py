@@ -1,8 +1,13 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
+import hashlib
 from pathlib import Path
 import re
+import secrets
+import smtplib
 import unicodedata
+from urllib.parse import urlencode
 
 import requests
 from sqlalchemy import select
@@ -10,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
-from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
+from app.models.pronostics import PronosticsMatch, PronosticsPasswordReset, PronosticsPlayer, PronosticsPrediction
 from app.schemas.pronostics import PronosticsPredictionWrite, PronosticsRankingRead
 
 MATCHES_FILE = Path(__file__).resolve().parent.parent / "data" / "pronostics_matches.json"
@@ -126,6 +131,71 @@ def create_player_token(player: PronosticsPlayer) -> str:
 
 def get_player_by_id(db: Session, player_id: int) -> PronosticsPlayer | None:
     return db.get(PronosticsPlayer, player_id)
+
+
+def request_password_reset(db: Session, email: str) -> None:
+    if not settings.smtp_host or not settings.smtp_from_email:
+        raise RuntimeError("SMTP_NOT_CONFIGURED")
+    player = db.scalar(select(PronosticsPlayer).where(PronosticsPlayer.email == email.strip().lower()))
+    if player is None or not player.is_active:
+        return
+    token = secrets.token_urlsafe(32)
+    reset = PronosticsPasswordReset(
+        player_id=player.id,
+        token_hash=_hash_reset_token(token),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.pronostics_reset_expire_minutes),
+    )
+    db.add(reset)
+    db.commit()
+    _send_password_reset_email(player.email, player.pseudo, token)
+
+
+def reset_password(db: Session, token: str, password: str) -> bool:
+    now = datetime.now(timezone.utc)
+    reset = db.scalar(
+        select(PronosticsPasswordReset).where(
+            PronosticsPasswordReset.token_hash == _hash_reset_token(token),
+            PronosticsPasswordReset.used_at.is_(None),
+        )
+    )
+    if reset is None:
+        return False
+    expires_at = reset.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        return False
+    player = db.get(PronosticsPlayer, reset.player_id)
+    if player is None or not player.is_active:
+        return False
+    player.password_hash = get_password_hash(password)
+    reset.used_at = now
+    db.commit()
+    return True
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _send_password_reset_email(email: str, pseudo: str, token: str) -> None:
+    reset_url = f"{settings.pronostics_app_url}?{urlencode({'reset_token': token})}"
+    message = EmailMessage()
+    message["Subject"] = "Réinitialiser ton mot de passe Pronostics CTM"
+    message["From"] = settings.smtp_from_email
+    message["To"] = email
+    message.set_content(
+        f"Bonjour {pseudo},\n\n"
+        "Utilise ce lien dans les 30 prochaines minutes pour choisir un nouveau mot de passe :\n"
+        f"{reset_url}\n\n"
+        "Si tu n'as rien demandé, ignore simplement cet email.\n"
+    )
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+        if settings.smtp_starttls:
+            smtp.starttls()
+        if settings.smtp_username:
+            smtp.login(settings.smtp_username, settings.smtp_password)
+        smtp.send_message(message)
 
 
 def update_player(db: Session, player: PronosticsPlayer, *, pseudo: str, service: str) -> PronosticsPlayer:

@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     football_data_season: int = 2026
     pronostics_score_sync_enabled: bool = True
     pronostics_score_sync_interval_hours: int = 6
+    pronostics_app_url: str = "https://patrimoineaucarre.com/pronostics"
+    pronostics_reset_expire_minutes: int = 30
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_starttls: bool = True
 
     # ENEDIS API
     enedis_auth_url: str = "https://ext.prod.api.enedis.fr/oauth2/v3/token"

@@ -15,6 +15,19 @@ class PronosticsLoginRequest(BaseModel):
     password: str
 
 
+class PronosticsForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class PronosticsResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PronosticsMessageRead(BaseModel):
+    message: str
+
+
 class PronosticsPlayerRead(BaseModel):
     id: int
     email: str

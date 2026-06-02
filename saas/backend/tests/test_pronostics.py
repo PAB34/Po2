@@ -2,16 +2,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.core.db import Base
-from app.models.pronostics import PronosticsMatch
+from app.models.pronostics import PronosticsMatch, PronosticsPasswordReset
 from app.schemas.pronostics import PronosticsPredictionWrite
 from app.services.pronostics import (
     _normalize_team,
     _score_prediction,
+    authenticate_player,
     calculate_ranking,
     create_player,
     ensure_matches,
     fifa_rank,
     save_predictions,
+    request_password_reset,
+    reset_password,
     sync_scores,
     update_player,
 )
@@ -51,6 +54,30 @@ def test_profile_update_rejects_an_existing_pseudo():
             assert str(exc) == "PSEUDO_ALREADY_EXISTS"
         else:
             raise AssertionError("Le pseudo existant aurait du etre refuse.")
+
+
+def test_password_reset_token_is_single_use(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    captured = {}
+    monkeypatch.setattr("app.services.pronostics.settings.smtp_host", "smtp.example.com")
+    monkeypatch.setattr("app.services.pronostics.settings.smtp_from_email", "pronostics@example.com")
+    monkeypatch.setattr(
+        "app.services.pronostics._send_password_reset_email",
+        lambda email, pseudo, token: captured.update(email=email, pseudo=pseudo, token=token),
+    )
+    with Session(engine) as db:
+        player = create_player(db, email="joueur@example.com", password="ancienmotdepasse", pseudo="Joueur", service="CTM")
+        request_password_reset(db, player.email)
+        assert captured["email"] == player.email
+        assert captured["token"]
+        assert db.query(PronosticsPasswordReset).count() == 1
+        assert reset_password(db, captured["token"], "nouveaumotdepasse")
+        assert not reset_password(db, captured["token"], "encoreunnouveau")
+
+    with Session(engine) as db:
+        assert authenticate_player(db, email="joueur@example.com", password="nouveaumotdepasse")
+        assert not authenticate_player(db, email="joueur@example.com", password="ancienmotdepasse")
 
 
 def test_sync_scores_updates_finished_match(monkeypatch):
