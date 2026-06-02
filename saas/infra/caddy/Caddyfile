@@ -1,6 +1,19 @@
 {$SITE_ADDRESS} {
-    handle /pronostics* {
-        redir {$PRONOSTICS_URL:https://script.google.com/macros/s/AKfycbw7hAKTCLS_Ew5cpRsQ6i7q26LWYSZ9EZ3PO-NM1_UOWjhaczphv6aiGaXRD1uyvufkpQ/exec} 302
+    handle_path /pronostics* {
+        reverse_proxy pronostics:80
+    }
+
+    handle /api/auth/register {
+        route {
+            forward_auth backend:8000 {
+                uri /api/internal/basic-auth
+            }
+            reverse_proxy backend:8000
+        }
+    }
+
+    handle /api/internal/* {
+        respond 404
     }
 
     handle /api/* {
@@ -15,6 +28,11 @@
     }
 
     handle {
-        reverse_proxy frontend:80
+        route {
+            forward_auth backend:8000 {
+                uri /api/internal/basic-auth
+            }
+            reverse_proxy frontend:80
+        }
     }
 }

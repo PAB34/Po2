@@ -14,9 +14,13 @@ from app.api.routes.engie import router as engie_router
 from app.api.routes.energie import router as energie_router
 from app.api.routes.enedis_sync import router as enedis_sync_router
 from app.api.routes.health import router as health_router
+from app.api.routes.internal_auth import router as internal_auth_router
+from app.api.routes.pronostics import router as pronostics_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api")
+api_router.include_router(internal_auth_router, prefix="/api")
+api_router.include_router(pronostics_router, prefix="/api")
 api_router.include_router(billing_router, prefix="/api")
 api_router.include_router(bpu_router, prefix="/api")
 api_router.include_router(buildings_router, prefix="/api")

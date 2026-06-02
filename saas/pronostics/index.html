@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#06281d" />
+    <title>Pronostics CTM Sète</title>
+    <link rel="stylesheet" href="/pronostics/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <span class="kicker">Coupe du Monde 2026</span>
+        <h1>Pronostics CTM Sète</h1>
+        <p>Inscris-toi, saisis tes scores et suis le classement entre collègues.</p>
+      </header>
+
+      <section id="auth-screen" class="card auth-card">
+        <div class="tabs">
+          <button id="login-tab" class="tab active" type="button">Connexion</button>
+          <button id="register-tab" class="tab" type="button">Inscription</button>
+        </div>
+        <form id="auth-form">
+          <div id="register-fields" class="hidden">
+            <label>Pseudo<input id="pseudo" autocomplete="nickname" /></label>
+            <label>Service<input id="service" autocomplete="organization-title" /></label>
+          </div>
+          <label>Adresse email<input id="email" type="email" autocomplete="email" required /></label>
+          <label>Mot de passe<input id="password" type="password" autocomplete="current-password" minlength="8" required /></label>
+          <p id="auth-message" class="message"></p>
+          <button class="primary" type="submit">Continuer</button>
+        </form>
+      </section>
+
+      <section id="game-screen" class="hidden">
+        <div class="player-bar card">
+          <div><strong id="player-name"></strong><small id="player-service"></small></div>
+          <button id="logout" class="ghost" type="button">Déconnexion</button>
+        </div>
+        <nav class="game-tabs">
+          <button class="game-tab active" data-view="matches" type="button">Mes pronostics</button>
+          <button class="game-tab" data-view="ranking" type="button">Classement</button>
+        </nav>
+        <section id="matches-view">
+          <div class="section-head"><h2>Matchs de poules</h2><button id="save" class="primary" type="button">Enregistrer</button></div>
+          <p id="save-message" class="message"></p>
+          <div id="matches"></div>
+        </section>
+        <section id="ranking-view" class="hidden">
+          <div class="section-head"><h2>Classement</h2><button id="refresh-ranking" class="ghost" type="button">Actualiser</button></div>
+          <div id="ranking"></div>
+        </section>
+      </section>
+    </main>
+    <script src="/pronostics/app.js"></script>
+  </body>
+</html>

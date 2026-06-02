@@ -31,6 +31,13 @@ services:
     depends_on:
       - backend
 
+  pronostics:
+    build:
+      context: ../pronostics
+    restart: unless-stopped
+    depends_on:
+      - backend
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
@@ -38,6 +45,7 @@ services:
       - ../.env
     depends_on:
       - frontend
+      - pronostics
       - backend
     ports:
       - "80:80"

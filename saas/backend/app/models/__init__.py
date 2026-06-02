@@ -26,6 +26,7 @@ from app.models.cvc import CvcInventoryItem
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
 from app.models.site import Site
+from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,
     CpeDalkiaRefCible,
