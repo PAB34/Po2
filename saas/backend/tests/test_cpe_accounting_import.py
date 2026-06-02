@@ -197,6 +197,26 @@ def test_recompute_finance_invoice_controls_checks_p1_gaz_acompte_against_dpgf(d
     site = CpeAccountingSiteMapping(city_id=1, code_site="VDS-ENS 01", site_name="Ecole test")
     db_session.add(site)
     db_session.flush()
+    # Le controle P1 lit sa reference en base (pas de constante hardcodee) : on la cree.
+    db_session.add(
+        CpeContractReference(
+            city_id=1,
+            contract_code="C00190116O",
+            contract_label="SETE LOT 1",
+            reference_kind="p1_gaz_acompte",
+            year=2026,
+            market="P1",
+            billed_item="P1_GAZ_LOT1",
+            annual_amount_ht=341293.06,
+            installment_count=4,
+            expected_period_months="3,6,9",
+            included_billed_items='["P1","CTA"]',
+            formula="Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
+            tolerance_pct=0.01,
+            tolerance_eur=100.0,
+        )
+    )
+    db_session.flush()
     db_session.add_all(
         [
             CpeFinanceLine(
@@ -241,7 +261,8 @@ def test_recompute_finance_invoice_controls_checks_p1_gaz_acompte_against_dpgf(d
     p1_control = next(control for control in controls if control.control_type == "p1_gaz_acompte_dpgf")
 
     assert p1_control.status == "ok"
-    assert p1_control.expected_revised_price == 85323.27
+    # acompte attendu = 1/4 du P1 annuel (341293.06 / 4) ; tolérant à l'arrondi flottant
+    assert p1_control.expected_revised_price == pytest.approx(341293.06 / 4, abs=0.01)
 
 
 def test_revision_observations_detect_dalkia_factor_and_compare_validated_indices(db_session: Session):

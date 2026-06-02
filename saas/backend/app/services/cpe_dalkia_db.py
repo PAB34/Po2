@@ -239,6 +239,41 @@ def persist_dalkia_import(
     return batch
 
 
+def resolve_dalkia_p2p3_forfait(
+    db: Session, *, code_site: str, year: int, billed_item: str, city_id: int | None
+) -> float | None:
+    """Forfait contractuel annuel (base) P2/P3 du référentiel DALKIA actif, ou None.
+
+    Correspondance billed_item ↔ colonne, validée sur données réelles (CCAS 01 2026 :
+    p3_total_ht 7214 = ligne P3 base 1615 + ligne P3.4 base 5599) :
+      - P2         → p2_total_ht
+      - P3.4       → p3_4_ht
+      - P3 (autre) → p3_total_ht − p3_4_ht  (part hors travaux obligatoires)
+    """
+    stmt = (
+        select(CpeDalkiaRefP2P3)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefP2P3.import_id == CpeDalkiaRefImport.id)
+        .where(
+            CpeDalkiaRefImport.is_active.is_(True),
+            CpeDalkiaRefP2P3.code_site == code_site,
+            CpeDalkiaRefP2P3.period_year == year,
+        )
+    )
+    if city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    row = db.scalars(stmt).first()
+    if row is None:
+        return None
+    item = (billed_item or "").strip().upper()
+    if item == "P2":
+        return row.p2_total_ht
+    if item == "P3.4":
+        return row.p3_4_ht
+    if row.p3_total_ht is None:
+        return None
+    return round(row.p3_total_ht - (row.p3_4_ht or 0.0), 2)
+
+
 def sync_p1_reference_from_recap(db: Session, import_batch: CpeDalkiaRefImport) -> dict:
     """Met a jour la reference contractuelle d'acompte P1 gaz depuis le RECAP MARCHE.
 

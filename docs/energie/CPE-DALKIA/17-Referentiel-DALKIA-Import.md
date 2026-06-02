@@ -221,12 +221,21 @@ Tests : `tests/test_cpe_nb_annuel.py` (6/6). Détail : §2.3.
 - **Reste à faire** : vérifier l'alignement des `code_site` (seed vs import) sur données réelles ;
   exposer le NB de l'année dans l'UI bilan pour rendre visible la valeur retenue.
 
-### Phase B — Sync références P2/P3
-1. Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-contract-references` :
-   - Pour chaque site × année de `cpe_dalkia_ref_p2p3` : upsert `cpe_contract_references`
-   - reference_kind = `P2_site` / `P3_site`, billed_item = code_site, annual_amount_ht = total
-2. Adapter les contrôles finance pour utiliser ces références par site (au lieu d'un seul total lot)
-3. **Impact** : le contrôle P2/P3 peut signaler non plus "montant global incorrect" mais "site ENS02 : P3 facturé 21 200€ vs contractuel 18 429€"
+### Phase B — Contrôle base P2/P3 vs forfait contractuel ✅ FAIT (2026-06-02)
+Approche revue après inspection des **vraies données prod** (pas de sync de références intermédiaires —
+lecture directe du référentiel) :
+- Les contrôles `revision_p2/p3` vérifiaient `revised = base × facteur`, mais **rien** ne vérifiait que
+  la **base** facturée (`base_price`, forfait en euros base) est conforme au contrat. Nouveau contrôle
+  `_control_p2p3_base_against_dalkia` (control_type `p2p3_base_dpgf`) comble ce trou.
+- **Sémantique validée sur prod (CCAS 01)** : `base_price` (stable d'un trimestre à l'autre) doit égaler
+  le forfait DALKIA — `p3_total_ht (7214) = ligne P3 (1615) + ligne P3.4 (5599)`. Mapping poste :
+  `P2 → p2_total_ht` · `P3.4 → p3_4_ht` · `P3 → p3_total_ht − p3_4_ht` (`resolve_dalkia_p2p3_forfait`).
+- Statuts : `ok` si conforme (tol. 1 € / 0,5 %), `error` si écart, `blocked` si aucun forfait pour le
+  couple (site, année) → **détecteur de désalignement `code_site`** (même logique que le badge NB).
+- Branché dans `recompute_finance_invoice_controls` pour les lignes P2/P3 du contrat CPE courant.
+- Tests : `tests/test_cpe_p2p3_base_control.py` (P2, P3.4, P3, écart, désalignement, hors contrat) — 6/6.
+- **Impact** : le contrôle signale désormais "site CCAS 01 2026 : base P3 facturée 1700 € vs forfait
+  contractuel DALKIA 1615 €" — par site et par poste, en plus du contrôle de révision.
 
 ### Phase C — Sync P1 gaz ✅ FAIT (2026-06-02)
 - `sync_p1_reference_from_recap()` (`services/cpe_dalkia_db.py`) lit `cpe_dalkia_ref_recap`
@@ -427,6 +436,8 @@ Seuls 4 endpoints sont consommés par `CpeDalkiaImportPage.tsx` :
 | Données **parsées** (pas encore en base) | → | Résumé financier + `ClassifiedPreview` (6 onglets) | POST `/cpe/dalkia-ref/preview` → `recap_summary` + `classified.{p2p3,cibles_gaz,cibles_elec,p1_gaz,ape,recap_*}` | ❌ preview seul |
 | `DalkiaParseResult` complet | → | Écriture en base à la validation | POST `/cpe/dalkia-ref/confirm` → `persist_dalkia_import()` | ✅ écrit les 6 tables |
 | `cpe_dalkia_ref_cibles` (NB GAZ, import actif) | → | **Moteur d'intéressement** (N'B, écart, bilan) | `resolve_nb_for_year()` dans `services/cpe.py` → `calculer_resultat_site` / `get_bilan_annuel` | ✅ lit la base (fallback scalaire) |
+| `cpe_dalkia_ref_p2p3` (forfaits, import actif) | → | **Contrôle de facture** base P2/P3 par site | `resolve_dalkia_p2p3_forfait()` → `_control_p2p3_base_against_dalkia` (control_type `p2p3_base_dpgf`) | ✅ lit la base à chaque recompute |
+| `cpe_dalkia_ref_recap` (`p1_total_ht`) | → | **Réf. contractuelle P1** (consommée par le contrôle d'acompte) | `sync_p1_reference_from_recap()` via bouton « Synchroniser la réf. P1 » | ✅ upsert `cpe_contract_references` |
 
 **Précisions importantes** :
 - `recap_summary` et `classified` ne sont renvoyés **que par `/preview`**. La réponse de `/confirm` (`ImportBatchResponse`) ne contient **que des comptages** (`nb_*_rows`), pas le détail. La preview classifiée travaille donc sur les données *parsées en mémoire*, avant toute écriture en base.

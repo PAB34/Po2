@@ -34,6 +34,7 @@ from app.models.cpe import (
     CpeRevisionIndex,
     CpeSite,
 )
+from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait
 from app.schemas.cpe import (
     CpeAccountingImportResult,
     CpeAccountingNatureRuleCreate,
@@ -1882,6 +1883,88 @@ def _control_p1_gaz_acompte_against_dpgf(
     )
 
 
+def _control_p2p3_base_against_dalkia(
+    db: Session,
+    line: CpeFinanceLine,
+    invoice: CpeFinanceInvoice,
+) -> CpeFinanceControl | None:
+    """Verifie que la base (forfait) P2/P3 facturee correspond au forfait contractuel DALKIA.
+
+    Les controles de revision verifient que `revised_price = base_price x facteur`, mais rien
+    ne verifiait que `base_price` lui-meme est conforme au contrat. Ce controle comble ce trou :
+    `base_price` (euros base, stable d'un trimestre a l'autre) doit egaler le forfait du
+    referentiel DALKIA actif pour (site, annee, poste). Semantique validee sur donnees reelles.
+    """
+    if (line.market or "").upper() not in {"P2", "P3"}:
+        return None
+    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+        return None
+    base = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
+    if base is None:
+        return None
+    code_site = (line.site_code_detected or "").strip()
+    if not code_site:
+        return None
+    year, _quarter = _line_index_period(line)
+    if year is None:
+        return None
+
+    poste = line.billed_item or line.market or ""
+    expected = resolve_dalkia_p2p3_forfait(
+        db, code_site=code_site, year=year, billed_item=poste, city_id=invoice.city_id
+    )
+    formula = "Base P2/P3 facturee = forfait contractuel DALKIA (Annexe 3.1 P2 / Annexe 4 P3)"
+
+    if expected is None:
+        return _make_basic_control(
+            line,
+            control_type="p2p3_base_dpgf",
+            status="blocked",
+            severity="warning",
+            message=(
+                f"Pas de forfait DALKIA pour {code_site} / {year} ({poste}) : verifier l'alignement "
+                "du code site avec le referentiel importe (sinon controle base impossible)."
+            ),
+            formula=formula,
+        )
+
+    base_r = round(base, 2)
+    exp_r = round(expected, 2)
+    delta = round(base_r - exp_r, 2)
+    delta_pct = round(delta / exp_r, 6) if exp_r else None
+    tolerance = max(1.0, abs(exp_r) * 0.005)
+
+    if abs(delta) <= tolerance:
+        status, severity = "ok", "info"
+        message = (
+            f"Base {poste} conforme au contrat pour {code_site} {year} : "
+            f"{base_r:.2f} EUR (forfait DALKIA {exp_r:.2f})."
+        )
+    else:
+        status, severity = "error", "error"
+        message = (
+            f"Base {poste} non conforme pour {code_site} {year} : facturee {base_r:.2f} EUR "
+            f"vs forfait contractuel DALKIA {exp_r:.2f} (ecart {delta:+.2f})."
+        )
+
+    return CpeFinanceControl(
+        city_id=line.city_id,
+        batch_id=line.batch_id,
+        invoice_id=line.invoice_id,
+        line_id=line.id,
+        control_type="p2p3_base_dpgf",
+        status=status,
+        severity=severity,
+        message=message,
+        formula=formula,
+        base_price=base_r,
+        expected_revised_price=exp_r,
+        actual_revised_price=base_r,
+        delta_abs=delta,
+        delta_pct=delta_pct,
+    )
+
+
 def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
@@ -1924,6 +2007,10 @@ def recompute_finance_invoice_controls(
     p1_gaz_control = _control_p1_gaz_acompte_against_dpgf(db, invoice, lines)
     if p1_gaz_control is not None:
         controls.append(p1_gaz_control)
+    for line in revision_lines:
+        p2p3_base_control = _control_p2p3_base_against_dalkia(db, line, invoice)
+        if p2p3_base_control is not None:
+            controls.append(p2p3_base_control)
     db.add_all(controls)
     db.commit()
     for control in controls:
@@ -2309,6 +2396,7 @@ def _control_type_label(control_type: str | None) -> str:
         "invoice_period": "Coherence periode facture",
         "invoice_timeline": "Calendrier edition et echeance",
         "p1_gaz_acompte_dpgf": "Acompte P1 vs reference DPGF",
+        "p2p3_base_dpgf": "Base P2/P3 vs forfait DALKIA",
     }
     return mapping.get(control_type or "", control_type or "Controle")
 
