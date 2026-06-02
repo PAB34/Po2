@@ -108,6 +108,29 @@ class DalkiaP1GazRow:
 
 
 @dataclass
+class DalkiaP1TarifRow:
+    """En-tete Annexe 6 : composants de prix + coefficients de revision Pu par tarif (T1-T4).
+
+    Formule contractuelle : Pu_GAZ = Pu_0 x (a + b x PEG/PEG0 + c x TVD/TVD0
+                                              + d x CEE/CEE0 + e x TICGN/TICGN0)
+    Les composants ci-dessous sont les valeurs de base (periode 0, 13/10/2025).
+    """
+    type_tarif: str
+    p0_fournisseur: float | None        # molecule fournisseur (EUR HT/MWhPCS)
+    ref_peg: float | None               # reference PEG
+    terme_acheminement: float | None    # terme variable d'acheminement (TVD)
+    obligation_cee: float | None
+    ticgn: float | None
+    marge_exploitant_pct: float | None
+    prix_unitaire_ht: float | None      # Pu_0 (EUR HT/MWhPCS)
+    coef_a: float | None
+    coef_b: float | None
+    coef_c: float | None
+    coef_d: float | None
+    coef_e: float | None
+
+
+@dataclass
 class DalkiaApeRow:
     code_site: str
     nom_batiment: str | None
@@ -159,6 +182,7 @@ class DalkiaParseResult:
     cibles_gaz: list[DalkiaCibleRow] = field(default_factory=list)
     cibles_elec: list[DalkiaCibleRow] = field(default_factory=list)
     p1_gaz: list[DalkiaP1GazRow] = field(default_factory=list)
+    p1_tarifs: list[DalkiaP1TarifRow] = field(default_factory=list)
     ape_rows: list[DalkiaApeRow] = field(default_factory=list)
     recap_rows: list[DalkiaRecapRow] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -490,6 +514,80 @@ def _parse_p1_gaz(rows: list[tuple], lot: int) -> tuple[list[DalkiaP1GazRow], li
     return p1_rows, warnings
 
 
+def _parse_p1_gaz_tarifs(rows: list[tuple]) -> tuple[list[DalkiaP1TarifRow], list[str]]:
+    """Parse l'en-tete de l'Annexe 6 : composants de prix + coefficients de revision par tarif.
+
+    Deux blocs :
+      - tableau prix (header contenant "P0 FOURNISSEUR") : 1 ligne par tarif en col 7 (T1..T4),
+        cols 8..14 = p0, peg, acheminement, cee, ticgn, marge, prix_unitaire.
+      - bloc coefficients (apres la ligne "Formule") : 5 lignes a,b,c,d,e ; chaque ligne porte
+        les 4 tarifs aux triplets (label, nom_coef, valeur) en cols (1-3), (5-7), (9-11), (13-15).
+    """
+    warnings: list[str] = []
+    by_tarif: dict[str, DalkiaP1TarifRow] = {}
+
+    # --- Bloc prix ---
+    price_header_idx = None
+    for i, row in enumerate(rows[:30]):
+        if any("P0 FOURNISSEUR" in str(v).upper() for v in row if v is not None):
+            price_header_idx = i
+            break
+    if price_header_idx is None:
+        return [], ["Annexe 6 : tableau de prix par tarif (P0 FOURNISSEUR) non trouve"]
+
+    for row in rows[price_header_idx + 1:price_header_idx + 8]:
+        tarif = _clean_str(row[6] if len(row) > 6 else None)
+        if not tarif or not re.fullmatch(r"T\d", tarif):
+            continue
+        by_tarif[tarif] = DalkiaP1TarifRow(
+            type_tarif=tarif,
+            p0_fournisseur=_to_float(row[7] if len(row) > 7 else None),
+            ref_peg=_to_float(row[8] if len(row) > 8 else None),
+            terme_acheminement=_to_float(row[9] if len(row) > 9 else None),
+            obligation_cee=_to_float(row[10] if len(row) > 10 else None),
+            ticgn=_to_float(row[11] if len(row) > 11 else None),
+            marge_exploitant_pct=_to_float(row[12] if len(row) > 12 else None),
+            prix_unitaire_ht=_to_float(row[13] if len(row) > 13 else None),
+            coef_a=None, coef_b=None, coef_c=None, coef_d=None, coef_e=None,
+        )
+
+    # --- Bloc coefficients : groupes de 3 cols (label tarif, nom coef, valeur) par tarif ---
+    # Seule la ligne "a" porte les libelles tarif ; b,c,d,e n'ont que (nom, valeur).
+    # On etablit donc le mapping colonne -> tarif depuis la ligne "a", applique par position.
+    GROUPS = [0, 4, 8, 12]  # colonne 0-indexed du libelle tarif de chaque groupe
+    coef_start = None
+    for i, row in enumerate(rows[:40]):
+        name = _clean_str(row[1] if len(row) > 1 else None)
+        if name and name.lower() == "a" and _to_float(row[2] if len(row) > 2 else None) is not None:
+            coef_start = i
+            break
+    if coef_start is None:
+        warnings.append("Annexe 6 : bloc des coefficients de revision (a,b,c,d,e) non trouve")
+    else:
+        start_row = rows[coef_start]
+        group_tarif: dict[int, str] = {}
+        for g in GROUPS:
+            t = _clean_str(start_row[g] if len(start_row) > g else None)
+            if t and re.fullmatch(r"T\d", t):
+                group_tarif[g] = t
+        coef_attr = {"a": "coef_a", "b": "coef_b", "c": "coef_c", "d": "coef_d", "e": "coef_e"}
+        for row in rows[coef_start:coef_start + 5]:
+            for g in GROUPS:
+                tarif = group_tarif.get(g)
+                if not tarif or tarif not in by_tarif:
+                    continue
+                name = _clean_str(row[g + 1] if len(row) > g + 1 else None)
+                value = _to_float(row[g + 2] if len(row) > g + 2 else None)
+                attr = coef_attr.get((name or "").lower())
+                if attr:
+                    setattr(by_tarif[tarif], attr, value)
+
+    tarifs = [by_tarif[t] for t in sorted(by_tarif)]
+    if not tarifs:
+        warnings.append("Annexe 6 : aucun tarif de prix gaz extrait")
+    return tarifs, warnings
+
+
 def _parse_ape(rows: list[tuple], lot: int) -> tuple[list[DalkiaApeRow], list[str]]:
     """
     Parse Annexe 2bis - Travaux APE.
@@ -790,6 +888,10 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
     p1_gaz, w = _parse_p1_gaz(p1_raw, lot)
     all_warnings.extend(w)
 
+    # --- P1 GAZ : composants de prix + coefficients de revision (en-tete Annexe 6) ---
+    p1_tarifs, w = _parse_p1_gaz_tarifs(p1_raw)
+    all_warnings.extend(w)
+
     # --- APE ---
     ape_raw = _get_rows("Annexe 2bis - Travaux APE")
     ape_rows, w = _parse_ape(ape_raw, lot)
@@ -818,6 +920,7 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
         cibles_gaz=cibles_gaz,
         cibles_elec=cibles_elec,
         p1_gaz=p1_gaz,
+        p1_tarifs=p1_tarifs,
         ape_rows=ape_rows,
         recap_rows=recap_rows,
         warnings=all_warnings,
@@ -924,12 +1027,29 @@ def _build_classified(result: DalkiaParseResult) -> dict[str, Any]:
         for r in result.recap_rows if r.section == "bilan"
     ]
 
+    p1_tarifs = [
+        {
+            "type_tarif": t.type_tarif,
+            "p0_fournisseur": t.p0_fournisseur,
+            "ref_peg": t.ref_peg,
+            "terme_acheminement": t.terme_acheminement,
+            "obligation_cee": t.obligation_cee,
+            "ticgn": t.ticgn,
+            "marge_exploitant_pct": t.marge_exploitant_pct,
+            "prix_unitaire_ht": t.prix_unitaire_ht,
+            "coef_a": t.coef_a, "coef_b": t.coef_b, "coef_c": t.coef_c,
+            "coef_d": t.coef_d, "coef_e": t.coef_e,
+        }
+        for t in result.p1_tarifs
+    ]
+
     return {
         "years": [str(y) for y in years],
         "p2p3": list(p2p3_by_site.values()),
         "cibles_gaz": _pivot_cibles(result.cibles_gaz),
         "cibles_elec": _pivot_cibles(result.cibles_elec),
         "p1_gaz": list(p1_by_site.values()),
+        "p1_tarifs": p1_tarifs,
         "ape": ape_rows,
         "recap_engagement": recap_engagement,
         "recap_redevances": recap_redevances,

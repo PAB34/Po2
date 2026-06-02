@@ -61,6 +61,11 @@ type ClassifiedData = {
   cibles_gaz: { code_site: string; ref_globale: number | null; dju: number | null; by_year: Record<string, number | null> }[];
   cibles_elec: { code_site: string; ref_globale: number | null; dju: number | null; by_year: Record<string, number | null> }[];
   p1_gaz: { code_site: string; pce: string | null; type_tarif: string | null; prix_unitaire_ht: number | null; by_year: Record<string, number | null> }[];
+  p1_tarifs: {
+    type_tarif: string; p0_fournisseur: number | null; ref_peg: number | null; terme_acheminement: number | null;
+    obligation_cee: number | null; ticgn: number | null; marge_exploitant_pct: number | null; prix_unitaire_ht: number | null;
+    coef_a: number | null; coef_b: number | null; coef_c: number | null; coef_d: number | null; coef_e: number | null;
+  }[];
   ape: {
     code_site: string; nom_batiment: string | null; description_ape: string | null;
     annee_achevement: number | null; montant_ape_ht: number | null; cee_eur: number | null;
@@ -716,28 +721,68 @@ function ClassifiedPreview({ data }: { data: ClassifiedData }) {
 
         {/* ── P1 gaz ── */}
         {tab === "p1_gaz" && (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead style={{ position: "sticky", top: 0 }}>
-              <tr style={trB}>
-                <th style={thL}>Site</th>
-                <th style={thL}>PCE</th>
-                <th style={th}>Tarif</th>
-                <th style={th}>Pu (€/MWh)</th>
-                {years.map((y) => <th key={y} style={th}>P10 {y}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {data.p1_gaz.map((s) => (
-                <tr key={s.code_site} style={trB}>
-                  <td style={tdL}><strong>{s.code_site}</strong></td>
-                  <td style={{ ...tdL, fontFamily: "monospace", fontSize: 11 }}>{s.pce ?? "—"}</td>
-                  <td style={td}>{s.type_tarif ?? "—"}</td>
-                  <td style={td}>{s.prix_unitaire_ht ?? "—"}</td>
-                  {years.map((y) => <td key={y} style={td}>{formatEur(s.by_year[y])}</td>)}
+          <div>
+            {data.p1_tarifs && data.p1_tarifs.length > 0 ? (
+              <div style={{ padding: 12 }}>
+                <h4 style={{ margin: "0 0 8px", fontSize: 13, color: "#e2e8f0" }}>
+                  Composants de prix & coefficients de révision Pu (Annexe 6)
+                </h4>
+                <p style={{ fontSize: 11, color: "#94a3b8", margin: "0 0 8px" }}>
+                  Pu_GAZ = Pu₀ × (a + b·PEG/PEG₀ + c·TVD/TVD₀ + d·CEE/CEE₀ + e·TICGN/TICGN₀) — somme a+b+c+d+e = 1.
+                </p>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginBottom: 12 }}>
+                  <thead><tr style={trB}>
+                    <th style={thL}>Tarif</th>
+                    <th style={th}>P0 fourn.</th><th style={th}>PEG</th><th style={th}>Achemin.</th>
+                    <th style={th}>CEE</th><th style={th}>TICGN</th><th style={th}>Marge %</th>
+                    <th style={th}>Pu₀ (€/MWhPCS)</th>
+                    <th style={th}>a</th><th style={th}>b</th><th style={th}>c</th><th style={th}>d</th><th style={th}>e</th>
+                  </tr></thead>
+                  <tbody>
+                    {data.p1_tarifs.map((t) => (
+                      <tr key={t.type_tarif} style={trB}>
+                        <td style={tdL}><strong>{t.type_tarif}</strong></td>
+                        <td style={td}>{t.p0_fournisseur ?? "—"}</td>
+                        <td style={td}>{t.ref_peg ?? "—"}</td>
+                        <td style={td}>{t.terme_acheminement ?? "—"}</td>
+                        <td style={td}>{t.obligation_cee ?? "—"}</td>
+                        <td style={td}>{t.ticgn ?? "—"}</td>
+                        <td style={td}>{t.marge_exploitant_pct != null ? (t.marge_exploitant_pct * 100).toFixed(2) : "—"}</td>
+                        <td style={td}><strong>{t.prix_unitaire_ht ?? "—"}</strong></td>
+                        <td style={td}>{t.coef_a?.toFixed(5) ?? "—"}</td>
+                        <td style={td}>{t.coef_b?.toFixed(5) ?? "—"}</td>
+                        <td style={td}>{t.coef_c?.toFixed(5) ?? "—"}</td>
+                        <td style={td}>{t.coef_d?.toFixed(5) ?? "—"}</td>
+                        <td style={td}>{t.coef_e?.toFixed(5) ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead style={{ position: "sticky", top: 0 }}>
+                <tr style={trB}>
+                  <th style={thL}>Site</th>
+                  <th style={thL}>PCE</th>
+                  <th style={th}>Tarif</th>
+                  <th style={th}>Pu (€/MWh)</th>
+                  {years.map((y) => <th key={y} style={th}>P10 {y}</th>)}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.p1_gaz.map((s) => (
+                  <tr key={s.code_site} style={trB}>
+                    <td style={tdL}><strong>{s.code_site}</strong></td>
+                    <td style={{ ...tdL, fontFamily: "monospace", fontSize: 11 }}>{s.pce ?? "—"}</td>
+                    <td style={td}>{s.type_tarif ?? "—"}</td>
+                    <td style={td}>{s.prix_unitaire_ht ?? "—"}</td>
+                    {years.map((y) => <td key={y} style={td}>{formatEur(s.by_year[y])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* ── Travaux APE ── */}

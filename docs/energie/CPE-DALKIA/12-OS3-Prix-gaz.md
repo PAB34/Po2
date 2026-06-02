@@ -54,13 +54,25 @@ Pu_GAZ = Pu_0 × (a + b×CPB/CPB0 + c×TVD/TVD0 + d×CEE/CEE0 + e×TICGN/TICGN0)
 
 ### Coefficients par tarif
 
-| Coef | T1 | T2 | T3 |
-|------|-----|-----|-----|
-| a | 0,36083 | 0,52070 | 0,54563 |
-| b (CPB) | 0,00383 | 0,00553 | 0,00579 |
-| c (TVD) | 0,41988 | 0,16287 | 0,12277 |
-| d (CEE) | 0,07128 | 0,10287 | 0,10780 |
-| e (TICGN) | 0,14417 | 0,20804 | 0,21800 |
+> ⚠️ **Corrigé 2026-06-02** — valeurs **parsées depuis l'Annexe 6 (offre finale)**, désormais en base
+> dans `cpe_dalkia_ref_p1_tarifs`. Les valeurs précédemment notées ici (a=0,36083…) étaient erronées
+> (brouillon ou transcription). Invariant vérifié : **a+b+c+d+e = 1** par tarif.
+
+| Coef | T1 | T2 | T3 | T4 |
+|------|-----|-----|-----|-----|
+| a | 0,03272 | 0,04782 | 0,05112 | 0,08037 |
+| b | 0,39065 | 0,53384 | 0,55422 | 0,59183 |
+| c | 0,36996 | 0,13591 | 0,10145 | 0,01468 |
+| d | 0,05684 | 0,07768 | 0,08064 | 0,08612 |
+| e | 0,14983 | 0,20475 | 0,21257 | 0,22700 |
+
+Composants de base (période 0, 13/10/2025), par tarif (€HT/MWhPCS) — aussi parsés :
+PEG₀ = 44,74 (tous tarifs) · CEE₀ = 6,51 · TICGN₀ = 17,16 · acheminement (TVD₀) = 42,37 (T1) / 11,39 (T2) /
+8,19 (T3) / 1,11 (T4) · Pu₀ = 126,35 (T1) / 92,46 (T2) / 89,06 (T3) / 83,40 (T4).
+
+> **Reste pour le contrôle de révision** : il faut les **valeurs de période** de PEG/TVD/CEE/TICGN
+> (bulletins DALKIA) pour calculer le Pu révisé attendu et le comparer au Pu facturé. Source de ces
+> indices à brancher (cf. `cpe_revision_indices`, aujourd'hui limité à ICHT-IME/BT40/FSD2 pour P2/P3).
 
 ---
 

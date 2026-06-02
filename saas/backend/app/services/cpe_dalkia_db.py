@@ -12,6 +12,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefCible,
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,
+    CpeDalkiaRefP1Tarif,
     CpeDalkiaRefP2P3,
     CpeDalkiaRefRecap,
     CpeDalkiaRefSite,
@@ -217,6 +218,23 @@ def persist_dalkia_import(
             recette_vente_energie_ht=row.recette_vente_energie_ht,
             ratio_ht_mwhpci=row.ratio_ht_mwhpci,
             commentaires=row.commentaires,
+        ))
+
+    # P1 gaz : composants de prix + coefficients de revision par tarif (en-tete Annexe 6)
+    for trf in result.p1_tarifs:
+        db.add(CpeDalkiaRefP1Tarif(
+            import_id=batch.id,
+            city_id=city_id,
+            type_tarif=trf.type_tarif,
+            p0_fournisseur=trf.p0_fournisseur,
+            ref_peg=trf.ref_peg,
+            terme_acheminement=trf.terme_acheminement,
+            obligation_cee=trf.obligation_cee,
+            ticgn=trf.ticgn,
+            marge_exploitant_pct=trf.marge_exploitant_pct,
+            prix_unitaire_ht=trf.prix_unitaire_ht,
+            coef_a=trf.coef_a, coef_b=trf.coef_b, coef_c=trf.coef_c,
+            coef_d=trf.coef_d, coef_e=trf.coef_e,
         ))
 
     # RECAP MARCHE (recapitulatif financier global)

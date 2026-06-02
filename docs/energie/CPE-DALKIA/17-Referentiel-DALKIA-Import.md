@@ -304,7 +304,8 @@ Audit complet des 13 feuilles du fichier DALKIA. État après ajout du parsing R
 | Annexe 2bis - Travaux APE | 329 | ✅ complet | `cpe_dalkia_ref_ape` |
 | Annexe 5.1 - Cibles GAZ | 78 | ⚠️ partiel | `cpe_dalkia_ref_cibles` |
 | Annexe 5.2 - Cibles ELEC | 87 | ⚠️ partiel | `cpe_dalkia_ref_cibles` |
-| Annexe 6 - P1 GAZ | 84 | ⚠️ partiel | `cpe_dalkia_ref_p1_gaz` |
+| Annexe 6 - P1 GAZ (table par site) | 84 | ✅ complet | `cpe_dalkia_ref_p1_gaz` |
+| Annexe 6 - P1 GAZ (en-tête : prix + coef. Pu) | — | ✅ **complet (ajouté)** | `cpe_dalkia_ref_p1_tarifs` |
 | **RECAP MARCHE** | 52 | ✅ **complet (ajouté)** | `cpe_dalkia_ref_recap` |
 | Annexe 1 - Coefficients | 21 | ❌ non parsé | — |
 | Annexe 2 - Travaux obligatoires P3.4 | 193 | ❌ non parsé | — |
@@ -330,7 +331,7 @@ Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), 
 | Annexe 2 - Travaux obligatoires P3.4 | 193 travaux obligatoires détaillés (montant, dates, devis, CEE) par site | 🟠 Moyenne |
 | Annexe 7 - BPU/DQE | Bordereau prix unitaires opérations (codes ENT-xxx) | 🟡 Basse (structure très hétérogène) |
 | Annexe 1 - Coefficients | Taux horaires main d'œuvre + coefficients entreprise | 🟡 Basse |
-| Annexe 6 (en-tête) | Prix unitaires gaz T1-T4 + coefficients formule révision Pu (a,b,c,d,e) | 🟠 Moyenne (contrôle révision prix gaz) |
+| ~~Annexe 6 (en-tête)~~ | ✅ FAIT — prix T1-T4 + coefficients Pu parsés dans `cpe_dalkia_ref_p1_tarifs` | — |
 | Annexe 5.x (colonnes) | Référence consommation ECS m3, identifiants compteurs | 🟡 Basse |
 | Annexe 3.2 - P2 - B | Détail actions sensibilisation (totaux déjà dans recap) | 🟢 Couvert partiellement |
 

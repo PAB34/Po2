@@ -200,3 +200,35 @@ class CpeDalkiaRefRecap(Base):
     period_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
+
+class CpeDalkiaRefP1Tarif(Base):
+    """Composants de prix gaz + coefficients de revision Pu par tarif (en-tete Annexe 6).
+
+    Formule : Pu_GAZ = Pu_0 x (a + b x PEG/PEG0 + c x TVD/TVD0 + d x CEE/CEE0 + e x TICGN/TICGN0).
+    Les composants sont les valeurs de base (periode 0) ; a+b+c+d+e = 1 par construction.
+    """
+
+    __tablename__ = "cpe_dalkia_ref_p1_tarifs"
+    __table_args__ = (
+        UniqueConstraint("import_id", "type_tarif", name="uq_dalkia_p1_tarif"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_dalkia_ref_imports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    type_tarif: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    p0_fournisseur: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ref_peg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    terme_acheminement: Mapped[float | None] = mapped_column(Float, nullable=True)
+    obligation_cee: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ticgn: Mapped[float | None] = mapped_column(Float, nullable=True)
+    marge_exploitant_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prix_unitaire_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coef_a: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coef_b: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coef_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coef_d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coef_e: Mapped[float | None] = mapped_column(Float, nullable=True)

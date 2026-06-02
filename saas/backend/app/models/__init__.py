@@ -31,6 +31,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefCible,
     CpeDalkiaRefImport,
     CpeDalkiaRefP1Gaz,
+    CpeDalkiaRefP1Tarif,
     CpeDalkiaRefP2P3,
     CpeDalkiaRefRecap,
     CpeDalkiaRefSite,
