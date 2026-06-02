@@ -228,13 +228,20 @@ Tests : `tests/test_cpe_nb_annuel.py` (6/6). Détail : §2.3.
 2. Adapter les contrôles finance pour utiliser ces références par site (au lieu d'un seul total lot)
 3. **Impact** : le contrôle P2/P3 peut signaler non plus "montant global incorrect" mais "site ENS02 : P3 facturé 21 200€ vs contractuel 18 429€"
 
-### Phase C — Sync P1 gaz (alimentation auto de la référence en base)
-1. Endpoint `POST /api/cpe/dalkia-ref/imports/{id}/sync-p1-reference` :
-   - Calcule `SUM(p10_total_ht)` par lot × année depuis `cpe_dalkia_ref_p1_gaz` (ou lit `cpe_dalkia_ref_recap` metric `p1_total_ht`)
-   - Upsert `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, billed_item=`P1_GAZ_LOT{n}`, annual_amount_ht=total)
-2. Le service de contrôle P1 lit **déjà** la référence en base (`_find_contract_reference`) — **aucune modification** du contrôle nécessaire (cf. §9.3, il n'y a pas de constante à remplacer)
-3. ⚠️ Trancher au préalable l'écart seed DPGF (341 293 €) vs RECAP parsé (≈ 317 775 €) — cf. §9.4
-4. **Impact** : le montant de référence P1 s'adapte automatiquement aux avenants (nouveaux sites, révisions tarifaires)
+### Phase C — Sync P1 gaz ✅ FAIT (2026-06-02)
+- `sync_p1_reference_from_recap()` (`services/cpe_dalkia_db.py`) lit `cpe_dalkia_ref_recap`
+  (metric `p1_total_ht`) par année et upsert `cpe_contract_references` (kind `p1_gaz_acompte`).
+- **Décision appliquée** : le RECAP fait foi → `annual_amount_ht` est écrasé par la valeur RECAP
+  (2026 : 341 293 € seed → 317 775 €). Les années manquantes sont créées en **clonant** les
+  métadonnées d'une référence existante (`contract_code`, `billed_item`, `installment_count`,
+  tolérances, formule) — on n'invente jamais de `contract_code`. Sans référence modèle : refus
+  explicite (`reason=no_template`). Lot 2 sans P1 : no-op (`reason=no_recap_p1`).
+- Endpoint `POST /cpe/dalkia-ref/imports/{id}/sync-p1-reference` + bouton « Synchroniser la réf. P1 »
+  sur la carte d'import actif (page `/cpe/dalkia-import`).
+- Le contrôle `_control_p1_gaz_acompte_against_dpgf` lit **déjà** cette référence → **aucune
+  modification** du contrôle (cf. §9.3). Auto-adaptatif aux avenants.
+- Tests : `tests/test_cpe_sync_p1_reference.py` (écrasement, création clonée, refus sans modèle,
+  no-op Lot 2) — 4/4 verts.
 
 ### Phase D — Suivi travaux APE
 1. Créer `cpe_ape_suivi` avec les colonnes de `cpe_dalkia_ref_ape` + statut/date_réelle

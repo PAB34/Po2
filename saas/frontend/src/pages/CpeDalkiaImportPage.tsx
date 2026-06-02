@@ -151,6 +151,28 @@ async function fetchImportSites(token: string, importId: number): Promise<SiteRo
   return resp.json() as Promise<SiteRow[]>;
 }
 
+type SyncP1Result = {
+  ok: boolean;
+  reason?: string;
+  message: string;
+  contract_code?: string;
+  updated?: number[];
+  created?: number[];
+  amounts_by_year?: Record<string, number>;
+};
+
+async function syncP1Reference(token: string, importId: number): Promise<SyncP1Result> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/sync-p1-reference`, {
+    method: "POST",
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Erreur ${resp.status}`);
+  }
+  return resp.json() as Promise<SyncP1Result>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Composant principal
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,6 +197,17 @@ export function CpeDalkiaImportPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [viewImportId, setViewImportId] = useState<number | null>(null);
+  const [syncP1Result, setSyncP1Result] = useState<{ id: number; res: SyncP1Result } | null>(null);
+
+  const syncP1Mutation = useMutation({
+    mutationFn: (importId: number) => syncP1Reference(token as string, importId),
+    onSuccess: (res, importId) => setSyncP1Result({ id: importId, res }),
+    onError: (err: unknown, importId) =>
+      setSyncP1Result({
+        id: importId,
+        res: { ok: false, message: err instanceof Error ? err.message : "Erreur de synchronisation" },
+      }),
+  });
 
   const importsQuery = useQuery({
     queryKey: ["cpe-dalkia-imports", token],
@@ -520,7 +553,38 @@ export function CpeDalkiaImportPage() {
                   >
                     {viewImportId === imp.id ? "Masquer les sites" : "Voir les sites"}
                   </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={syncP1Mutation.isPending}
+                    onClick={() => syncP1Mutation.mutate(imp.id)}
+                    title="Met à jour la référence d'acompte P1 gaz (contrôle de factures) depuis le RECAP de cet import"
+                  >
+                    {syncP1Mutation.isPending && syncP1Mutation.variables === imp.id
+                      ? "Synchronisation..."
+                      : "Synchroniser la réf. P1"}
+                  </button>
                 </div>
+              ) : null}
+              {syncP1Result && syncP1Result.id === imp.id ? (
+                <p
+                  style={{
+                    fontSize: 12,
+                    marginTop: 8,
+                    color: syncP1Result.res.ok ? "#15803d" : "#b45309",
+                  }}
+                >
+                  {syncP1Result.res.ok ? "✓ " : "⚠ "}
+                  {syncP1Result.res.message}
+                  {syncP1Result.res.ok && syncP1Result.res.amounts_by_year ? (
+                    <>
+                      {" "}
+                      ({Object.entries(syncP1Result.res.amounts_by_year)
+                        .map(([y, v]) => `${y}: ${Number(v).toLocaleString("fr-FR")} €`)
+                        .join(" · ")})
+                    </>
+                  ) : null}
+                </p>
               ) : null}
               {viewImportId === imp.id ? (
                 <div style={{ marginTop: 12 }}>

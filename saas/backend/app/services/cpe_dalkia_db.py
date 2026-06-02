@@ -1,9 +1,12 @@
 """Persistance en base des donnees d'import DALKIA."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.cpe import CpeContractReference
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,
     CpeDalkiaRefCible,
@@ -15,6 +18,8 @@ from app.models.cpe_dalkia import (
 )
 from app.models.user import User
 from app.services.cpe_dalkia_import import DalkiaParseResult
+
+P1_GAZ_ACOMPTE_KIND = "p1_gaz_acompte"
 
 
 def get_active_imports(db: Session, current_user: User) -> list[CpeDalkiaRefImport]:
@@ -232,3 +237,116 @@ def persist_dalkia_import(
     db.commit()
     db.refresh(batch)
     return batch
+
+
+def sync_p1_reference_from_recap(db: Session, import_batch: CpeDalkiaRefImport) -> dict:
+    """Met a jour la reference contractuelle d'acompte P1 gaz depuis le RECAP MARCHE.
+
+    Lit `cpe_dalkia_ref_recap` (metric `p1_total_ht`) par annee pour l'import donne et
+    upsert `cpe_contract_references` (kind `p1_gaz_acompte`) consommee par le controle
+    `_control_p1_gaz_acompte_against_dpgf`. Decision : le RECAP fait foi (le fichier DALKIA
+    sera maintenu a jour), donc l'annual_amount_ht est ecrase par la valeur RECAP.
+
+    Les metadonnees (contract_code, billed_item, installment_count, tolerances, formule)
+    sont clonees depuis une reference P1 existante de la commune : on ne devine jamais le
+    contract_code. Sans reference modele, on n'ecrit rien et on retourne une erreur explicite.
+    """
+    city_id = import_batch.city_id
+
+    # 1. Montants P1 par annee depuis le RECAP de cet import
+    recap_stmt = select(CpeDalkiaRefRecap).where(
+        CpeDalkiaRefRecap.import_id == import_batch.id,
+        CpeDalkiaRefRecap.metric == "p1_total_ht",
+        CpeDalkiaRefRecap.period_year.is_not(None),
+        CpeDalkiaRefRecap.value.is_not(None),
+    )
+    amounts_by_year: dict[int, float] = {}
+    for row in db.scalars(recap_stmt):
+        # Defensif : si plusieurs lignes pour une annee, on garde la plus grande valeur.
+        prev = amounts_by_year.get(row.period_year)
+        if prev is None or row.value > prev:
+            amounts_by_year[row.period_year] = row.value
+
+    if not amounts_by_year:
+        return {
+            "ok": False,
+            "reason": "no_recap_p1",
+            "message": "Aucun montant P1 (p1_total_ht) dans le RECAP de cet import (normal pour le Lot 2 sans gaz).",
+            "updated": [], "created": [],
+        }
+
+    # 2. Reference modele existante (ne jamais inventer le contract_code)
+    tmpl_stmt = select(CpeContractReference).where(
+        CpeContractReference.reference_kind == P1_GAZ_ACOMPTE_KIND,
+        CpeContractReference.market == "P1",
+    )
+    if city_id is not None:
+        tmpl_stmt = tmpl_stmt.where(CpeContractReference.city_id == city_id)
+    template = db.scalars(
+        tmpl_stmt.order_by(CpeContractReference.active.desc(), CpeContractReference.year.desc())
+    ).first()
+
+    if template is None:
+        return {
+            "ok": False,
+            "reason": "no_template",
+            "message": (
+                "Aucune reference P1 (p1_gaz_acompte) existante pour cette commune : "
+                "creer d'abord la reference contractuelle (contract_code, postes inclus) "
+                "depuis le module CPE, puis relancer la synchronisation."
+            ),
+            "updated": [], "created": [],
+        }
+
+    note = f"Synchronise depuis RECAP MARCHE (import #{import_batch.id}) le {datetime.utcnow():%Y-%m-%d}"
+    updated: list[int] = []
+    created: list[int] = []
+
+    for year, amount in sorted(amounts_by_year.items()):
+        existing = db.scalars(
+            select(CpeContractReference).where(
+                CpeContractReference.city_id == city_id,
+                CpeContractReference.contract_code == template.contract_code,
+                CpeContractReference.reference_kind == P1_GAZ_ACOMPTE_KIND,
+                CpeContractReference.year == year,
+                CpeContractReference.market == "P1",
+                CpeContractReference.billed_item == template.billed_item,
+            )
+        ).first()
+        if existing is not None:
+            existing.annual_amount_ht = round(amount, 2)
+            existing.notes = note
+            db.add(existing)
+            updated.append(year)
+        else:
+            db.add(CpeContractReference(
+                city_id=city_id,
+                contract_code=template.contract_code,
+                contract_label=template.contract_label,
+                reference_kind=P1_GAZ_ACOMPTE_KIND,
+                year=year,
+                market="P1",
+                billed_item=template.billed_item,
+                annual_amount_ht=round(amount, 2),
+                expected_amount_ht=None,
+                installment_count=template.installment_count or 4,
+                expected_period_months=template.expected_period_months or "3,6,9",
+                included_billed_items=template.included_billed_items,
+                formula=template.formula,
+                tolerance_pct=template.tolerance_pct,
+                tolerance_eur=template.tolerance_eur,
+                active=True,
+                notes=note,
+            ))
+            created.append(year)
+
+    db.commit()
+    return {
+        "ok": True,
+        "contract_code": template.contract_code,
+        "billed_item": template.billed_item,
+        "updated": updated,
+        "created": created,
+        "amounts_by_year": {str(y): round(a, 2) for y, a in sorted(amounts_by_year.items())},
+        "message": f"{len(updated)} reference(s) mise(s) a jour, {len(created)} creee(s) depuis le RECAP.",
+    }

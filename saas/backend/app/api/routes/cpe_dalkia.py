@@ -16,6 +16,7 @@ from app.services.cpe_dalkia_db import (
     get_recap_for_import,
     get_sites_for_import,
     persist_dalkia_import,
+    sync_p1_reference_from_recap,
 )
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
 
@@ -300,3 +301,19 @@ def get_recap(
         raise HTTPException(status_code=404, detail="Import introuvable.")
     rows = get_recap_for_import(db, import_id, section)
     return [RecapRow(**{k: getattr(r, k) for k in RecapRow.model_fields}) for r in rows]
+
+
+@router.post("/imports/{import_id}/sync-p1-reference")
+def sync_p1_reference(
+    import_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Met a jour la reference d'acompte P1 gaz (cpe_contract_references) depuis le RECAP de l'import.
+
+    Le controle d'acompte P1 lit cette reference : la synchro le rend auto-adaptatif aux avenants.
+    """
+    batch = get_import_by_id(db, import_id, current_user)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Import introuvable.")
+    return sync_p1_reference_from_recap(db, batch)
