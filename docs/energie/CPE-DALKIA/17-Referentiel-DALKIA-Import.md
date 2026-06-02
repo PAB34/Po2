@@ -321,54 +321,72 @@ Sections : `engagement` (GAZ/ELEC/PV/GLOBAL : QT réf/cible, % économie, CO2), 
 
 ### Structure interne du parseur (`cpe_dalkia_import.py`)
 
-```
-parse_dalkia_file(content: bytes, lot: int) → DalkiaParseResult
-│
-├── _parse_p2p3(ws) → list[DalkiaP2P3Row]
-│     Annexes 3.1 (P2) et 4 (P3) — 57 colonnes, 9 périodes, offset 6
-│
-├── _parse_cibles(ws, fluid) → list[DalkiaCibleRow]
-│     Annexes 5.1 (GAZ) et 5.2 (ELEC) — 54 colonnes, 9 périodes, offset 5
-│
-├── _parse_p1_gaz(ws, lot) → list[DalkiaP1GazRow]
-│     Annexe 6 — 38 colonnes, 9 périodes, offset 3
-│
-├── _parse_ape(ws, lot) → list[DalkiaApeRow]
-│     Annexe 2bis — row 5 = headers, 18 colonnes
-│
-└── _parse_recap(ws, lot) → list[DalkiaRecapRow]
-      RECAP MARCHE — format long clé/valeur, 6 sections hétérogènes
-      Sections : engagement, redevance_p1, redevance_p2p3, sensibilisation, travaux, bilan
+> ⚠️ Arbre vérifié ligne par ligne contre le code (2026-06-02). Tous les sous-parseurs reçoivent
+> `rows: list[tuple]` (les lignes brutes de la feuille via `ws.iter_rows(values_only=True)`),
+> **pas** un worksheet, et renvoient un **tuple `(données, warnings)`**.
 
-build_import_preview(result, lot, filename) → dict
+```
+parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) → DalkiaParseResult
+│   (ouvre le classeur, _get_rows(sheet_name) lit chaque feuille en list[tuple])
 │
-├── Comptages (nb_sites, nb_p2p3_rows, …)
-├── recap_summary : bilan_marche_ht, by_year {p1/p2/p3_total_ht}, facteurs CO2
+├── _parse_p2(rows, lot) → (sites, p2_rows, warnings)
+│     Annexe 3.1 - P2 - A (57 col) — headers ligne 9, data ligne 10
+│     PERIOD_STARTS = [5, 11, 17, 23, 29, 35, 41, 47, 53]  (offset 6)
+│
+├── _parse_p3(rows, p2_rows) → (p2p3_rows, warnings)
+│     Annexe 4 - P3 — P3 FUSIONNÉ dans les lignes P2 existantes (même objet DalkiaP2P3Row)
+│
+├── _parse_cibles(rows, fluid, lot) → (cibles, warnings)   [appelé 2× : "GAZ" puis "ELEC"]
+│     Annexes 5.1 / 5.2 (54 col) — headers ligne 8, data ligne 9
+│     PERIOD_STARTS = [10, 15, 20, 25, 30, 35, 40, 45, 50]  (offset 5)
+│
+├── _parse_p1_gaz(rows, lot) → (p1_rows, warnings)
+│     Annexe 6 - P1 GAZ (38 col) — ligne de headers trouvée dynamiquement (cherche "LOT"+"ENTITE"/"PROG")
+│     PERIOD_STARTS = [12, 15, 18, 21, 24, 27, 30, 33, 36]  (offset 3) ; code_site en col 3 (N° PROG)
+│
+├── _parse_ape(rows, lot) → (ape_rows, warnings)
+│     Annexe 2bis - Travaux APE (20 col) — header trouvé dynamiquement (cherche "CODE"+"SITE")
+│
+└── _parse_recap(rows) → (recap_rows, warnings)        [PAS de paramètre lot]
+      RECAP MARCHE — format long (1 DalkiaRecapRow par métrique × période)
+      Détection de section inline : c1.startswith("2.6"…"2.10") OU mots-clés (robuste L1/L2)
+      Colonnes de période détectées par _recap_period_map(header_row, start_col)
+      6 valeurs possibles de DalkiaRecapRow.section :
+        engagement, redevance_p1, redevance_p2p3, sensibilisation, travaux, bilan
+      (5 marqueurs current_section ; "sensibilisation" émise spécialement dans la section 2.8)
+
+build_import_preview(result: DalkiaParseResult) → DalkiaImportPreview   [dataclass, pas dict]
+│
+├── Comptages (nb_sites, nb_p2p3_rows, nb_cibles_rows, nb_p1_gaz_rows, nb_ape_rows, nb_recap_rows)
+├── recap_summary : bilan_marche_ht, by_year {p1/p2/p3_total_ht}, facteurs CO2 (via _recap_value)
 ├── period_labels, sample_sites (5 premiers sites avec données 2026)
-└── classified : _build_classified(result) → données pivotées par catégorie
+└── classified : _build_classified(result) → dict[str, Any] — données pivotées par catégorie
+      ├── years
       ├── p2p3 : [{code_site, nom_batiment, by_year: {2025…2033: {p2, p3}}}]
-      ├── cibles_gaz / cibles_elec : [{code_site, ref_globale, dju, by_year}]
+      ├── cibles_gaz / cibles_elec : [{code_site, ref_globale, dju, by_year}]   (via _pivot_cibles)
       ├── p1_gaz : [{code_site, pce, type_tarif, prix_unitaire_ht, by_year}]
       ├── ape : [{code_site, description_ape, annee_achevement, montant_ape_ht, …}]
-      └── recap_engagement / recap_redevances / recap_bilan
+      └── recap_engagement / recap_redevances / recap_travaux / recap_bilan   (via _recap_pivot)
 ```
 
 ### Constantes et invariants à connaître
 
-- `PERIOD_YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]` — 9 périodes fixes
-- La détection d'une ligne de site se fait sur `code_site` regex `r"[A-Z]{2,4}-[A-Z]{3,}[\s\d.]+"`
-- Le RECAP MARCHE change de structure selon la section — la fonction `_detect_recap_section` identifie la section par le texte de la première cellule non vide de la ligne
-- Les identifiants de feuilles sont lus par nom exact (`wb[sheet_name]`) — en cas de renommage à l'avenant, mettre à jour les constantes `SHEET_*` en début de fichier
+- `PERIOD_YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]` et `N_PERIODS = 9` — périodes fixes (haut de fichier)
+- **Détection d'une ligne de site** : `_is_site_row(val)` — n'utilise **aucune regex**. Retourne vrai si la cellule col 1 est non vide et ne commence **ni** par `TOTAL` **ni** par `SOUS` (insensible à la casse). Le `code_site` n'est donc pas validé sur un format type `VDS-…`.
+- **Noms de feuilles** : littéraux inline dans `parse_dalkia_file` via `_get_rows("Annexe 3.1 - P2 - A")`, etc. Il n'existe **pas** de constantes `SHEET_*`. En cas de renommage à l'avenant, modifier directement ces chaînes dans `parse_dalkia_file`. `_get_rows` renvoie `[]` si la feuille est absente (pas d'erreur).
+- **RECAP MARCHE** : la structure change selon la section. La détection est **inline** dans `_parse_recap` (`c1.startswith("2.6")` … `"2.10"` + mots-clés de repli). Les colonnes de période sont (re)calculées par `_recap_period_map` à chaque ligne d'en-tête (`Paramètre`, `Energie`). Les métriques sont mappées par sous-chaîne de libellé via la table `METRIC_DEFS`.
+- **P1 gaz / APE** : la ligne d'en-tête est trouvée **dynamiquement** (recherche de mots-clés), pas à un index fixe — robuste aux décalages de lignes entre L1/L2.
 
 ### Ajouter une nouvelle feuille non parsée (ex. Annexe 2 — Travaux P3.4)
 
-1. Créer `_parse_travaux_p3(ws, lot) → list[DalkiaTrvauxP3Row]` dans `cpe_dalkia_import.py`
-2. Ajouter le champ `travaux_p3: list[DalkiaTrvauxP3Row]` à `DalkiaParseResult`
-3. Appeler la fonction dans `parse_dalkia_file` : `result.travaux_p3 = _parse_travaux_p3(...)`
-4. Créer le modèle ORM dans `models/cpe_dalkia.py` + migration `alembic revision --autogenerate`
-5. Ajouter la persistance dans `cpe_dalkia_db.py` (pattern identique aux autres tables)
-6. Ajouter un onglet dans `ClassifiedPreview` (frontend) pour vérifier les données
-7. Documenter les gaps couverts dans la section 7bis de ce fichier
+1. Définir un `@dataclass DalkiaTravauxP3Row` dans `cpe_dalkia_import.py`
+2. Créer `_parse_travaux_p3(rows, lot) → tuple[list[DalkiaTravauxP3Row], list[str]]` (signature cohérente avec les autres : `rows` + retour `(données, warnings)`)
+3. Ajouter le champ `travaux_p3: list[DalkiaTravauxP3Row]` à `DalkiaParseResult`
+4. Dans `parse_dalkia_file` : `tp3_raw = _get_rows("Annexe 2 - …"); travaux_p3, w = _parse_travaux_p3(tp3_raw, lot); all_warnings.extend(w)` puis passer `travaux_p3=travaux_p3` au constructeur `DalkiaParseResult(...)`
+5. Créer le modèle ORM dans `models/cpe_dalkia.py` (+ l'exporter dans `models/__init__.py`) + migration Alembic
+6. Ajouter la persistance dans `cpe_dalkia_db.py` (pattern identique aux autres tables)
+7. Exposer dans `_build_classified` + ajouter un onglet dans `ClassifiedPreview` (frontend)
+8. Documenter le gap couvert dans la section 7bis de ce fichier
 
 ---
 
@@ -386,7 +404,7 @@ Contrairement aux connexions *à implémenter* (sections 2.1–2.5), ces connexi
 | `cpe_dalkia_ref_p1_gaz` | → | ClassifiedPreview onglet "P1 gaz" | `classified.p1_gaz` |
 | `cpe_dalkia_ref_ape` | → | ClassifiedPreview onglet "Travaux APE" | `classified.ape` |
 | `cpe_contract_references` (reference_kind=`p1_gaz_acompte`, seed manuel) | → | `_control_p1_gaz_acompte_against_dpgf()` dans `cpe_accounting.py:1733` | Contrôle automatique à chaque import facture |
-| `cpe_contract_references.annual_amount_ht / installment_count` | → | Montant attendu acompte = `annual_amount_ht / installment_count` | `cpe_accounting.py:1791` |
+| `cpe_contract_references.annual_amount_ht / installment_count` | → | Montant attendu acompte = `annual_amount_ht / installment_count` | `cpe_accounting.py:1804` |
 
 **Connexion cruciale à activer (Phase C)** : remplacer la référence seed manuelle `p1_gaz_acompte` par un endpoint qui lit `cpe_dalkia_ref_recap` (metric=`p1_total_ht`, période=année, lot=lot) et crée/met à jour `cpe_contract_references`. Cela rend le contrôle auto-adaptatif aux avenants.
 
