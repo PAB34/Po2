@@ -70,9 +70,21 @@ Composants de base (période 0, 13/10/2025), par tarif (€HT/MWhPCS) — aussi 
 PEG₀ = 44,74 (tous tarifs) · CEE₀ = 6,51 · TICGN₀ = 17,16 · acheminement (TVD₀) = 42,37 (T1) / 11,39 (T2) /
 8,19 (T3) / 1,11 (T4) · Pu₀ = 126,35 (T1) / 92,46 (T2) / 89,06 (T3) / 83,40 (T4).
 
-> **Reste pour le contrôle de révision** : il faut les **valeurs de période** de PEG/TVD/CEE/TICGN
-> (bulletins DALKIA) pour calculer le Pu révisé attendu et le comparer au Pu facturé. Source de ces
-> indices à brancher (cf. `cpe_revision_indices`, aujourd'hui limité à ICHT-IME/BT40/FSD2 pour P2/P3).
+### ✅ Contrôle « prix unitaire gaz vs OS N°3 » (2026-06-02)
+
+Implémenté : `_control_p1_gaz_pu_os3` (control_type `p1_gaz_pu_os3`, `services/cpe_accounting.py`).
+Pour 2026-2030, le `base_price` des lignes P1 / `CHAUFFAGE` porte le **Pu gaz facturé** (€/MWhPCS) —
+validé sur prod (CCAS 04 facture 70,78 en 2026 = OS N°3 T3). Le contrôle compare ce Pu au prix OS N°3
+du tarif du site (`cpe_prix_gaz`, PCI → converti en PCS via ÷ `PCS_PCI_RATIO`), tolérance 0,3 €/0,5 %.
+Tarif résolu via `cpe_dalkia_ref_p1_gaz` (import actif). Statuts : `ok` / `error` / `blocked` (tarif
+ou prix OS N°3 absent). Seules les lignes dont `base_price ∈ [30, 250]` sont contrôlées (les autres
+lignes CHAUFFAGE portent des montants, couverts par le contrôle d'acompte P1). Tests :
+`tests/test_cpe_p1_gaz_pu_os3.py` (6/6).
+
+> **Reste pour le contrôle de révision *complet*** (au-delà du prix fixe OS N°3) : il faut les
+> **valeurs de période** de PEG/TVD/CEE/TICGN (bulletins DALKIA) pour appliquer la formule Pu et
+> recalculer le révisé. Les coefficients sont déjà en base (`cpe_dalkia_ref_p1_tarifs`) ; il manque
+> la source des indices (cf. `cpe_revision_indices`, aujourd'hui limité à ICHT-IME/BT40/FSD2).
 
 ---
 

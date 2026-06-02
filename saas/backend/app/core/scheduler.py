@@ -76,6 +76,21 @@ def _enedis_customer_sync_job() -> None:
         LOG.exception("ENEDIS customer sync job failed")
 
 
+def _pronostics_score_sync_job() -> None:
+    """Rafraîchit les scores réels du jeu sans bloquer les autres tâches."""
+    if not settings.pronostics_score_sync_enabled or not settings.football_data_token:
+        return
+    try:
+        from app.services.pronostics import sync_scores  # noqa: PLC0415
+
+        with _scoped_session() as db:
+            result = sync_scores(db)
+            if result["updated"] or result["unmatched"]:
+                LOG.info("Pronostics score sync : %s", result)
+    except Exception:
+        LOG.exception("Pronostics score sync job failed")
+
+
 def start_scheduler() -> None:
     """À appeler une fois au startup de l'application FastAPI."""
     global _SCHEDULER
@@ -100,6 +115,17 @@ def start_scheduler() -> None:
             trigger="interval",
             hours=customer_interval,
             id="enedis_customer_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    if settings.pronostics_score_sync_enabled:
+        score_interval = max(int(settings.pronostics_score_sync_interval_hours), 1)
+        _SCHEDULER.add_job(
+            _pronostics_score_sync_job,
+            trigger="interval",
+            hours=score_interval,
+            id="pronostics_score_sync",
             max_instances=1,
             coalesce=True,
             replace_existing=True,

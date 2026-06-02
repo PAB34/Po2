@@ -438,6 +438,8 @@ Seuls 4 endpoints sont consommés par `CpeDalkiaImportPage.tsx` :
 | `DalkiaParseResult` complet | → | Écriture en base à la validation | POST `/cpe/dalkia-ref/confirm` → `persist_dalkia_import()` | ✅ écrit les 6 tables |
 | `cpe_dalkia_ref_cibles` (NB GAZ, import actif) | → | **Moteur d'intéressement** (N'B, écart, bilan) | `resolve_nb_for_year()` dans `services/cpe.py` → `calculer_resultat_site` / `get_bilan_annuel` | ✅ lit la base (fallback scalaire) |
 | `cpe_dalkia_ref_p2p3` (forfaits, import actif) | → | **Contrôle de facture** base P2/P3 par site | `resolve_dalkia_p2p3_forfait()` → `_control_p2p3_base_against_dalkia` (control_type `p2p3_base_dpgf`) | ✅ lit la base à chaque recompute |
+| `cpe_dalkia_ref_p1_gaz` (tarif) + `cpe_prix_gaz` (OS N°3) | → | **Contrôle de facture** prix unitaire gaz vs OS N°3 | `resolve_p1_gaz_tarif()` → `_control_p1_gaz_pu_os3` (control_type `p1_gaz_pu_os3`) | ✅ lit à chaque recompute |
+| `cpe_dalkia_ref_p1_tarifs` (coef. a-e, Annexe 6) | → | (socle parsé) base du futur contrôle de révision Pu | `cpe_dalkia_ref_p1_tarifs` ; preview onglet P1 | ⏳ contrôle en attente des indices de période |
 | `cpe_dalkia_ref_recap` (`p1_total_ht`) | → | **Réf. contractuelle P1** (consommée par le contrôle d'acompte) | `sync_p1_reference_from_recap()` via bouton « Synchroniser la réf. P1 » | ✅ upsert `cpe_contract_references` |
 
 **Précisions importantes** :

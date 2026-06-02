@@ -292,6 +292,22 @@ def resolve_dalkia_p2p3_forfait(
     return round(row.p3_total_ht - (row.p3_4_ht or 0.0), 2)
 
 
+def resolve_p1_gaz_tarif(db: Session, *, code_site: str, city_id: int | None) -> str | None:
+    """Type de tarif gaz (T1..T4) d'un site depuis l'import DALKIA actif (Annexe 6), ou None."""
+    stmt = (
+        select(CpeDalkiaRefP1Gaz.type_tarif)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefP1Gaz.import_id == CpeDalkiaRefImport.id)
+        .where(
+            CpeDalkiaRefImport.is_active.is_(True),
+            CpeDalkiaRefP1Gaz.code_site == code_site,
+            CpeDalkiaRefP1Gaz.type_tarif.is_not(None),
+        )
+    )
+    if city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    return db.scalars(stmt).first()
+
+
 def sync_p1_reference_from_recap(db: Session, import_batch: CpeDalkiaRefImport) -> dict:
     """Met a jour la reference contractuelle d'acompte P1 gaz depuis le RECAP MARCHE.
 

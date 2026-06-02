@@ -1,15 +1,72 @@
 import json
 from datetime import datetime
 from pathlib import Path
+import re
+import unicodedata
 
+import requests
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
 from app.schemas.pronostics import PronosticsPredictionWrite, PronosticsRankingRead
 
 MATCHES_FILE = Path(__file__).resolve().parent.parent / "data" / "pronostics_matches.json"
+TEAM_ALIASES = {
+    "argentina": "argentine",
+    "algeria": "algerie",
+    "australia": "australie",
+    "austria": "autriche",
+    "belgium": "belgique",
+    "brazil": "bresil",
+    "bosnia and herzegovina": "bosnie herzegovine",
+    "canada": "canada",
+    "cape verde": "cap vert",
+    "colombia": "colombie",
+    "congo dr": "rd congo",
+    "dr congo": "rd congo",
+    "curacao": "curacao",
+    "croatia": "croatie",
+    "czechia": "tchequie",
+    "czech republic": "tchequie",
+    "ecuador": "equateur",
+    "egypt": "egypte",
+    "england": "angleterre",
+    "france": "france",
+    "germany": "allemagne",
+    "ghana": "ghana",
+    "haiti": "haiti",
+    "iran": "iran",
+    "iraq": "irak",
+    "ivory coast": "cote d ivoire",
+    "japan": "japon",
+    "jordan": "jordanie",
+    "korea republic": "coree du sud",
+    "mexico": "mexique",
+    "morocco": "maroc",
+    "netherlands": "pays bas",
+    "new zealand": "nouvelle zelande",
+    "norway": "norvege",
+    "portugal": "portugal",
+    "qatar": "qatar",
+    "scotland": "ecosse",
+    "saudi arabia": "arabie saoudite",
+    "senegal": "senegal",
+    "south africa": "afrique du sud",
+    "south korea": "coree du sud",
+    "spain": "espagne",
+    "sweden": "suede",
+    "switzerland": "suisse",
+    "tunisia": "tunisie",
+    "turkey": "turquie",
+    "united states": "etats unis",
+    "united states of america": "etats unis",
+    "uruguay": "uruguay",
+    "usa": "etats unis",
+    "uzbekistan": "ouzbekistan",
+}
 
 
 def ensure_matches(db: Session) -> None:
@@ -118,6 +175,67 @@ def calculate_ranking(db: Session) -> list[PronosticsRankingRead]:
         key=lambda row: (-row["points"], -row["exact_scores"], -row["good_results"], row["pseudo"].lower()),
     )
     return [PronosticsRankingRead(rank=index, **row) for index, row in enumerate(ranking, start=1)]
+
+
+def sync_scores(db: Session) -> dict[str, int | bool]:
+    if not settings.football_data_token:
+        return {"configured": False, "api_matches": 0, "finished": 0, "updated": 0, "unmatched": 0}
+
+    ensure_matches(db)
+    response = requests.get(
+        f"{settings.football_data_base_url}/competitions/{settings.football_data_competition}/matches",
+        params={"stage": "GROUP_STAGE", "season": settings.football_data_season},
+        headers={"X-Auth-Token": settings.football_data_token},
+        timeout=30,
+    )
+    response.raise_for_status()
+    api_matches = response.json().get("matches", [])
+    local_matches = db.scalars(select(PronosticsMatch)).all()
+    local_by_teams = {
+        frozenset((_normalize_team(match.team1), _normalize_team(match.team2))): match for match in local_matches
+    }
+    result: dict[str, int | bool] = {
+        "configured": True,
+        "api_matches": len(api_matches),
+        "finished": 0,
+        "updated": 0,
+        "unmatched": 0,
+    }
+    for api_match in api_matches:
+        score = (api_match.get("score") or {}).get("fullTime") or {}
+        home_score, away_score = score.get("home"), score.get("away")
+        if api_match.get("status") not in {"FINISHED", "AWARDED"} or home_score is None or away_score is None:
+            continue
+        result["finished"] += 1
+        home_name = _api_team_name(api_match.get("homeTeam") or {})
+        away_name = _api_team_name(api_match.get("awayTeam") or {})
+        local_match = local_by_teams.get(frozenset((_normalize_team(home_name), _normalize_team(away_name))))
+        if local_match is None:
+            result["unmatched"] += 1
+            continue
+        if _normalize_team(home_name) == _normalize_team(local_match.team1):
+            score1, score2 = int(home_score), int(away_score)
+        else:
+            score1, score2 = int(away_score), int(home_score)
+        if local_match.real_score1 == score1 and local_match.real_score2 == score2 and local_match.locked:
+            continue
+        local_match.real_score1 = score1
+        local_match.real_score2 = score2
+        local_match.locked = True
+        result["updated"] += 1
+    db.commit()
+    return result
+
+
+def _api_team_name(team: dict) -> str:
+    return str(team.get("name") or team.get("shortName") or team.get("tla") or "")
+
+
+def _normalize_team(name: str) -> str:
+    normalized = unicodedata.normalize("NFD", str(name).lower())
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    return TEAM_ALIASES.get(normalized, normalized)
 
 
 def _score_prediction(p1: int, p2: int, r1: int, r2: int) -> tuple[int, bool, bool]:

@@ -34,7 +34,8 @@ from app.models.cpe import (
     CpeRevisionIndex,
     CpeSite,
 )
-from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait
+from app.services.cpe import PCS_PCI_RATIO, get_prix_gaz
+from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait, resolve_p1_gaz_tarif
 from app.schemas.cpe import (
     CpeAccountingImportResult,
     CpeAccountingNatureRuleCreate,
@@ -1965,6 +1966,96 @@ def _control_p2p3_base_against_dalkia(
     )
 
 
+def _control_p1_gaz_pu_os3(
+    db: Session,
+    line: CpeFinanceLine,
+    invoice: CpeFinanceInvoice,
+) -> CpeFinanceControl | None:
+    """Verifie que le prix unitaire gaz facture (base_price des lignes CHAUFFAGE) correspond
+    au prix fixe OS N°3 du tarif du site sur 2026-2030.
+
+    Le `base_price` des lignes P1 / service "CHAUFFAGE" porte le Pu gaz (EUR HT/MWhPCS) applique
+    a la periode (verifie sur donnees reelles : CCAS 04 -> 70,78 en 2026 = OS N°3 T3). On ne
+    contraint que les lignes dont le base_price est dans une plage de Pu plausible (les autres
+    lignes CHAUFFAGE portent des montants/regularisations, controles par ailleurs).
+    `cpe_prix_gaz` stocke le Pu en PCI -> conversion PCS = PCI / ratio PCS-PCI.
+    """
+    if (line.market or "").upper() != "P1":
+        return None
+    if (line.service_sold or "").strip().upper() != "CHAUFFAGE":
+        return None
+    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+        return None
+    base = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
+    if base is None or not (30.0 <= base <= 250.0):
+        return None  # pas une ligne "prix unitaire" (montant/regularisation)
+    year, _quarter = _line_index_period(line)
+    if year is None or year < 2026 or year > 2030:
+        return None  # hors fenetre de prix fixe OS N°3
+
+    code_site = (line.site_code_detected or "").strip()
+    formula = "Prix unitaire gaz facture = prix fixe OS N°3 du tarif (2026-2030), en EUR HT/MWhPCS"
+    tarif = resolve_p1_gaz_tarif(db, code_site=code_site, city_id=invoice.city_id) if code_site else None
+    if tarif is None:
+        return _make_basic_control(
+            line,
+            control_type="p1_gaz_pu_os3",
+            status="blocked",
+            severity="warning",
+            message=(
+                f"Tarif gaz introuvable pour {code_site or 'site inconnu'} (Annexe 6 import actif) : "
+                "controle du prix unitaire impossible."
+            ),
+            formula=formula,
+        )
+    prix = get_prix_gaz(db, year, tarif)
+    if prix is None or not prix.pu_eur_mwh_pci:
+        return _make_basic_control(
+            line,
+            control_type="p1_gaz_pu_os3",
+            status="blocked",
+            severity="warning",
+            message=f"Prix OS N°3 absent pour tarif {tarif} / {year} : controle du prix unitaire impossible.",
+            formula=formula,
+        )
+
+    expected_pcs = round(prix.pu_eur_mwh_pci / PCS_PCI_RATIO, 2)
+    base_r = round(base, 2)
+    delta = round(base_r - expected_pcs, 2)
+    delta_pct = round(delta / expected_pcs, 6) if expected_pcs else None
+    tolerance = max(0.3, abs(expected_pcs) * 0.005)
+
+    if abs(delta) <= tolerance:
+        status, severity = "ok", "info"
+        message = (
+            f"Prix unitaire gaz conforme OS N°3 pour {code_site} {year} (tarif {tarif}) : "
+            f"{base_r:.2f} EUR/MWhPCS (attendu {expected_pcs:.2f})."
+        )
+    else:
+        status, severity = "error", "error"
+        message = (
+            f"Prix unitaire gaz non conforme pour {code_site} {year} (tarif {tarif}) : facture "
+            f"{base_r:.2f} EUR/MWhPCS vs OS N°3 {expected_pcs:.2f} (ecart {delta:+.2f})."
+        )
+
+    return CpeFinanceControl(
+        city_id=line.city_id,
+        batch_id=line.batch_id,
+        invoice_id=line.invoice_id,
+        line_id=line.id,
+        control_type="p1_gaz_pu_os3",
+        status=status,
+        severity=severity,
+        message=message,
+        formula=formula,
+        base_price=base_r,
+        expected_revised_price=expected_pcs,
+        actual_revised_price=base_r,
+        delta_abs=delta,
+        delta_pct=delta_pct,
+    )
+
+
 def recompute_finance_invoice_controls(
     db: Session,
     invoice: CpeFinanceInvoice,
@@ -2011,6 +2102,10 @@ def recompute_finance_invoice_controls(
         p2p3_base_control = _control_p2p3_base_against_dalkia(db, line, invoice)
         if p2p3_base_control is not None:
             controls.append(p2p3_base_control)
+    for line in lines:
+        pu_os3_control = _control_p1_gaz_pu_os3(db, line, invoice)
+        if pu_os3_control is not None:
+            controls.append(pu_os3_control)
     db.add_all(controls)
     db.commit()
     for control in controls:
@@ -2397,6 +2492,7 @@ def _control_type_label(control_type: str | None) -> str:
         "invoice_timeline": "Calendrier edition et echeance",
         "p1_gaz_acompte_dpgf": "Acompte P1 vs reference DPGF",
         "p2p3_base_dpgf": "Base P2/P3 vs forfait DALKIA",
+        "p1_gaz_pu_os3": "Prix unitaire gaz vs OS N°3",
     }
     return mapping.get(control_type or "", control_type or "Controle")
 

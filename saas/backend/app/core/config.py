@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     jwt_token_prefix: str = "Bearer"
     jwt_header_name: str = "Authorization"
 
+    # Jeu de pronostics Coupe du Monde
+    football_data_token: str = ""
+    football_data_base_url: str = "https://api.football-data.org/v4"
+    football_data_competition: str = "WC"
+    football_data_season: int = 2026
+    pronostics_score_sync_enabled: bool = True
+    pronostics_score_sync_interval_hours: int = 6
+
     # ENEDIS API
     enedis_auth_url: str = "https://ext.prod.api.enedis.fr/oauth2/v3/token"
     enedis_base_url: str = "https://gw.ext.prod.api.enedis.fr"

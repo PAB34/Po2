@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.core.security import decode_token
 from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
+from app.models.user import User
 from app.schemas.pronostics import (
     PronosticsLoginRequest,
     PronosticsMatchRead,
@@ -24,7 +25,9 @@ from app.services.pronostics import (
     ensure_matches,
     get_player_by_id,
     save_predictions,
+    sync_scores,
 )
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/pronostics", tags=["pronostics"])
 security = HTTPBearer(auto_error=False)
@@ -122,3 +125,11 @@ def update_predictions(
 def ranking(db: Session = Depends(get_db)) -> list[PronosticsRankingRead]:
     ensure_matches(db)
     return calculate_ranking(db)
+
+
+@router.post("/admin/sync-scores")
+def update_scores(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int | bool]:
+    return sync_scores(db)
