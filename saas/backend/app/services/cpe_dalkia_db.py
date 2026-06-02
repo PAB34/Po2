@@ -286,17 +286,30 @@ def persist_dalkia_import(
     return batch
 
 
+BPU_P2P3_POSTES = ("P2", "P2-4", "P3", "P3-4")
+
+
+def normalize_p2p3_poste(billed_item: str | None) -> str:
+    """Normalise un billed_item P2/P3 : majuscules, point -> tiret (P2.4 == P2-4)."""
+    return (billed_item or "").strip().upper().replace(".", "-")
+
+
 def resolve_dalkia_p2p3_forfait(
     db: Session, *, code_site: str, year: int, billed_item: str, city_id: int | None
 ) -> float | None:
     """Forfait contractuel annuel (base) P2/P3 du référentiel DALKIA actif, ou None.
 
-    Correspondance billed_item ↔ colonne, validée sur données réelles (CCAS 01 2026 :
-    p3_total_ht 7214 = ligne P3 base 1615 + ligne P3.4 base 5599) :
-      - P2         → p2_total_ht
-      - P3.4       → p3_4_ht
-      - P3 (autre) → p3_total_ht − p3_4_ht  (part hors travaux obligatoires)
+    Correspondance billed_item ↔ colonne, validée sur données réelles (VDS-ENS 01 2026) :
+      - P2   → p2_total_ht − p2_4_ht  (P2 récurrent = P2.1+P2.2+P2.3, hors P2.4)
+      - P2-4 → p2_4_ht                (P2.4, objectifs)
+      - P3   → p3_total_ht − p3_4_ht  (P3 récurrent, hors travaux obligatoires)
+      - P3-4 → p3_4_ht                (P3.4, travaux obligatoires)
+    Les autres postes facturés (P2-11, P2-2, P1, P1EAU…) n'ont pas de correspondance dans le
+    référentiel (4 buckets P2 + 4 P3) → retourne None : ils ne sont pas contrôlés.
     """
+    item = normalize_p2p3_poste(billed_item)
+    if item not in BPU_P2P3_POSTES:
+        return None
     stmt = (
         select(CpeDalkiaRefP2P3)
         .join(CpeDalkiaRefImport, CpeDalkiaRefP2P3.import_id == CpeDalkiaRefImport.id)
@@ -311,14 +324,14 @@ def resolve_dalkia_p2p3_forfait(
     row = db.scalars(stmt).first()
     if row is None:
         return None
-    item = (billed_item or "").strip().upper()
-    if item == "P2":
-        return row.p2_total_ht
-    if item == "P3.4":
+    if item == "P2-4":
+        return row.p2_4_ht
+    if item == "P3-4":
         return row.p3_4_ht
-    if row.p3_total_ht is None:
-        return None
-    return round(row.p3_total_ht - (row.p3_4_ht or 0.0), 2)
+    if item == "P2":
+        return None if row.p2_total_ht is None else round(row.p2_total_ht - (row.p2_4_ht or 0.0), 2)
+    # item == "P3"
+    return None if row.p3_total_ht is None else round(row.p3_total_ht - (row.p3_4_ht or 0.0), 2)
 
 
 def resolve_p1_gaz_tarif(db: Session, *, code_site: str, city_id: int | None) -> str | None:

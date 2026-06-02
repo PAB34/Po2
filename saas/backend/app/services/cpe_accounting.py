@@ -35,7 +35,12 @@ from app.models.cpe import (
     CpeSite,
 )
 from app.services.cpe import PCS_PCI_RATIO, get_prix_gaz
-from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait, resolve_p1_gaz_tarif
+from app.services.cpe_dalkia_db import (
+    BPU_P2P3_POSTES,
+    normalize_p2p3_poste,
+    resolve_dalkia_p2p3_forfait,
+    resolve_p1_gaz_tarif,
+)
 from app.schemas.cpe import (
     CpeAccountingImportResult,
     CpeAccountingNatureRuleCreate,
@@ -1910,13 +1915,19 @@ def _control_p2p3_base_against_dalkia(
     if year is None:
         return None
 
-    poste = line.billed_item or line.market or ""
+    # Seuls les postes rattachables au referentiel sont controles ; les sous-postes
+    # (P2-11, P2-2, P1, P1EAU...) n'ont pas de correspondance -> pas de controle (skip).
+    poste = normalize_p2p3_poste(line.billed_item or line.market)
+    if poste not in BPU_P2P3_POSTES:
+        return None
+
     expected = resolve_dalkia_p2p3_forfait(
         db, code_site=code_site, year=year, billed_item=poste, city_id=invoice.city_id
     )
     formula = "Base P2/P3 facturee = forfait contractuel DALKIA (Annexe 3.1 P2 / Annexe 4 P3)"
 
     if expected is None:
+        # poste controllable mais aucune ligne referentiel pour (site, annee) -> desalignement code
         return _make_basic_control(
             line,
             control_type="p2p3_base_dpgf",

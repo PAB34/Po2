@@ -1,10 +1,12 @@
 """Tests du contrôle « base P2/P3 facturée vs forfait contractuel DALKIA » (Phase B).
 
-Sémantique validée sur données réelles (CCAS 01) :
-  - P2         → cpe_dalkia_ref_p2p3.p2_total_ht
-  - P3.4       → p3_4_ht
-  - P3 (autre) → p3_total_ht − p3_4_ht
-`base_price` (euros base, stable) doit égaler ce forfait ; sinon erreur.
+Sémantique validée sur données réelles (VDS-ENS 01 2026) :
+  - P2   → p2_total_ht − p2_4_ht   (P2 récurrent = P2.1+P2.2+P2.3)
+  - P2-4 → p2_4_ht
+  - P3   → p3_total_ht − p3_4_ht
+  - P3-4 → p3_4_ht
+Les autres postes (P2-11, P2-2, P1…) ne sont pas contrôlés (pas de correspondance référentiel).
+`base_price` (euros base) doit égaler ce forfait ; sinon erreur.
 """
 from datetime import date
 
@@ -19,7 +21,7 @@ from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP2P3
 from app.services.cpe_accounting import _control_p2p3_base_against_dalkia
 from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait
 
-CONTRACT = "C00190116O"  # contrat CPE Ville courant
+CONTRACT = "C00190116O"
 
 
 @pytest.fixture()
@@ -28,24 +30,21 @@ def db_session():
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(City(id=1, nom_commune="Sete", code_commune="34301"))
+        # ENS 01 2026 : p2_total=2647 (récurrent 1173 + p2_4 1474), p3_total=5624 (récurrent 1093 + p3_4 4531)
+        imp = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True)
+        session.add(imp)
+        session.flush()
+        session.add(CpeDalkiaRefP2P3(
+            import_id=imp.id, city_id=1, code_site="VDS-ENS 01", period_idx=2,
+            period_label="2026", period_year=2026,
+            p2_1_ht=762, p2_2_ht=0, p2_3_ht=411, p2_4_ht=1474, p2_total_ht=2647,
+            p3_1_ht=1003, p3_2_ht=0, p3_3_ht=90, p3_4_ht=4531, p3_total_ht=5624,
+        ))
         session.commit()
         yield session
 
 
-def _ref_p2p3(db: Session, **kw):
-    imp = db.query(CpeDalkiaRefImport).first()
-    if imp is None:
-        imp = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True)
-        db.add(imp)
-        db.flush()
-    db.add(CpeDalkiaRefP2P3(
-        import_id=imp.id, city_id=1, period_idx=kw.get("period_idx", 1),
-        period_label=str(kw["period_year"]), **kw,
-    ))
-    db.flush()
-
-
-def _line(db: Session, *, market, billed_item, base_price, code_site="CCAS 01", year=2026):
+def _line(db: Session, *, billed_item, base_price, code="VDS-ENS 01", year=2026, market=None):
     batch = db.query(CpeFinanceImportBatch).first()
     if batch is None:
         batch = CpeFinanceImportBatch(city_id=1, filename="finance.xlsx")
@@ -59,8 +58,8 @@ def _line(db: Session, *, market, billed_item, base_price, code_site="CCAS 01", 
     db.flush()
     line = CpeFinanceLine(
         batch_id=batch.id, invoice_id=inv.id, city_id=1, row_number=1,
-        contract_code=CONTRACT, market=market, billed_item=billed_item,
-        base_price=base_price, site_code_detected=code_site,
+        contract_code=CONTRACT, market=market or billed_item[:2], billed_item=billed_item,
+        base_price=base_price, site_code_detected=code,
         period_start=date(year, 1, 1), period_end=date(year, 3, 31),
     )
     db.add(line)
@@ -69,60 +68,67 @@ def _line(db: Session, *, market, billed_item, base_price, code_site="CCAS 01", 
 
 
 def test_resolver_maps_postes_correctly(db_session: Session):
-    """p3_total 7214 = P3 (1615) + P3.4 (5599) ; le resolver renvoie la bonne part par poste."""
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026,
-              p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    db_session.commit()
     f = lambda item: resolve_dalkia_p2p3_forfait(  # noqa: E731
-        db_session, code_site="CCAS 01", year=2026, billed_item=item, city_id=1)
-    assert f("P2") == pytest.approx(3199)
-    assert f("P3.4") == pytest.approx(5599)
-    assert f("P3") == pytest.approx(1615)  # 7214 − 5599
+        db_session, code_site="VDS-ENS 01", year=2026, billed_item=item, city_id=1)
+    assert f("P2") == pytest.approx(1173)      # 2647 − 1474
+    assert f("P2-4") == pytest.approx(1474)
+    assert f("P2.4") == pytest.approx(1474)    # point == tiret
+    assert f("P3") == pytest.approx(1093)      # 5624 − 4531
+    assert f("P3.4") == pytest.approx(4531)
+    assert f("P2-11") is None                  # sous-poste non rattachable
+    assert f("P1") is None
 
 
-def test_p2_base_conforme(db_session: Session):
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026, p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    line, inv = _line(db_session, market="P2", billed_item="P2", base_price=3199)
+def test_p2_recurrent_conforme(db_session: Session):
+    line, inv = _line(db_session, billed_item="P2", base_price=1173)
     db_session.commit()
     ctrl = _control_p2p3_base_against_dalkia(db_session, line, inv)
-    assert ctrl is not None
-    assert ctrl.control_type == "p2p3_base_dpgf"
-    assert ctrl.status == "ok"
+    assert ctrl is not None and ctrl.status == "ok"
 
 
-def test_p3_4_base_conforme(db_session: Session):
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026, p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    line, inv = _line(db_session, market="P3", billed_item="P3.4", base_price=5599)
+def test_p2_4_conforme(db_session: Session):
+    line, inv = _line(db_session, billed_item="P2-4", base_price=1474, market="P2")
     db_session.commit()
     ctrl = _control_p2p3_base_against_dalkia(db_session, line, inv)
-    assert ctrl.status == "ok"
+    assert ctrl is not None and ctrl.status == "ok"
 
 
-def test_p3_base_ecart_detecte(db_session: Session):
-    """Base P3 facturée 1700 alors que le contrat dit 1615 → erreur."""
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026, p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    line, inv = _line(db_session, market="P3", billed_item="P3", base_price=1700)
+def test_p3_recurrent_conforme(db_session: Session):
+    line, inv = _line(db_session, billed_item="P3", base_price=1093)
+    db_session.commit()
+    assert _control_p2p3_base_against_dalkia(db_session, line, inv).status == "ok"
+
+
+def test_p3_4_conforme(db_session: Session):
+    line, inv = _line(db_session, billed_item="P3.4", base_price=4531, market="P3")
+    db_session.commit()
+    assert _control_p2p3_base_against_dalkia(db_session, line, inv).status == "ok"
+
+
+def test_p3_ecart_detecte(db_session: Session):
+    line, inv = _line(db_session, billed_item="P3", base_price=1700)
     db_session.commit()
     ctrl = _control_p2p3_base_against_dalkia(db_session, line, inv)
     assert ctrl.status == "error"
-    assert ctrl.expected_revised_price == pytest.approx(1615)
-    assert ctrl.actual_revised_price == pytest.approx(1700)
+    assert ctrl.expected_revised_price == pytest.approx(1093)
+
+
+def test_sous_poste_non_controle(db_session: Session):
+    """P2-11 n'a pas de correspondance référentiel → aucun contrôle (None), pas d'erreur."""
+    line, inv = _line(db_session, billed_item="P2-11", base_price=5000, market="P2")
+    db_session.commit()
+    assert _control_p2p3_base_against_dalkia(db_session, line, inv) is None
 
 
 def test_code_site_non_aligne_bloque(db_session: Session):
-    """Aucun forfait pour ce code → statut blocked (détecteur de désalignement)."""
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026, p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    line, inv = _line(db_session, market="P2", billed_item="P2", base_price=3199, code_site="CCAS01")  # sans espace
+    line, inv = _line(db_session, billed_item="P2", base_price=1173, code="CCAS99")
     db_session.commit()
-    ctrl = _control_p2p3_base_against_dalkia(db_session, line, inv)
-    assert ctrl.status == "blocked"
+    assert _control_p2p3_base_against_dalkia(db_session, line, inv).status == "blocked"
 
 
 def test_skip_when_not_current_contract(db_session: Session):
-    """Ligne hors contrat CPE Ville : pas de contrôle (None)."""
-    _ref_p2p3(db_session, code_site="CCAS 01", period_year=2026, p2_total_ht=3199, p3_total_ht=7214, p3_4_ht=5599)
-    line, inv = _line(db_session, market="P2", billed_item="P2", base_price=3199)
-    inv.contract_code = "AUTRE_CONTRAT"
-    line.contract_code = "AUTRE_CONTRAT"
+    line, inv = _line(db_session, billed_item="P2", base_price=1173)
+    inv.contract_code = "AUTRE"
+    line.contract_code = "AUTRE"
     db_session.commit()
     assert _control_p2p3_base_against_dalkia(db_session, line, inv) is None
