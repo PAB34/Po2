@@ -1901,6 +1901,22 @@ def _control_p1_gaz_acompte_against_dpgf(
             formula=reference.formula,
         )
 
+    # L'acompte P1 est contractuellement un montant trimestriel au niveau du LOT, mais DALKIA
+    # le ventile sur de nombreuses factures (une par site). `scope_lines` agrege donc toutes les
+    # lignes P1 du lot pour la periode, toutes factures confondues. Pour ne pas dupliquer le meme
+    # ecart de lot sur chaque facture (et gonfler le compteur d'ecarts), on n'emet ce controle
+    # qu'une seule fois : sur la facture de plus petit id parmi celles qui portent ces lignes.
+    scope_invoice_ids = {line.invoice_id for line in scope_lines}
+    owner_invoice_id = min(scope_invoice_ids)
+    if invoice.id != owner_invoice_id:
+        return None
+    invoice_count = len(scope_invoice_ids)
+    scope_label = (
+        f"sur le lot importe ({invoice_count} factures P1)"
+        if invoice_count > 1
+        else "sur le lot importe"
+    )
+
     actual = round(sum(line.amount_ht or 0.0 for line in scope_lines), 2)
     delta = round(actual - expected, 2)
     delta_pct = round(delta / expected, 6) if expected else None
@@ -1917,7 +1933,7 @@ def _control_p1_gaz_acompte_against_dpgf(
             status="ok",
             severity="info",
             message=(
-                f"Acompte P1 gaz coherent sur le lot importe : {actual:.2f} EUR HT "
+                f"Acompte P1 gaz coherent {scope_label} : total {actual:.2f} EUR HT "
                 f"pour {invoice.period_start} - {invoice.period_end}, attendu {expected:.2f} EUR HT."
             ),
             formula=reference.formula,
@@ -1935,8 +1951,10 @@ def _control_p1_gaz_acompte_against_dpgf(
         status="error",
         severity="error",
         message=(
-            f"Ecart acompte P1 gaz sur le lot importe : facture {actual:.2f} EUR HT, "
-            f"attendu {expected:.2f} EUR HT selon DPGF revise, ecart {delta:.2f} EUR."
+            f"Ecart acompte P1 gaz agrege {scope_label} pour la periode "
+            f"{invoice.period_start} - {invoice.period_end} : total facture {actual:.2f} EUR HT, "
+            f"attendu {expected:.2f} EUR HT selon DPGF revise, ecart {delta:.2f} EUR. "
+            f"(Montant de lot, pas celui de la seule facture courante.)"
         ),
         formula=reference.formula,
         expected_revised_price=expected,
