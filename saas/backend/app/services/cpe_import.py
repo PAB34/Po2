@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.cpe import CpeGazReleveCreate, CpeImportResult
 from app.services.cpe import PCS_PCI_RATIO, get_site_by_code, upsert_releve
+from app.services.cpe_accounting import NEW_CPE_CONTRACT_CODES
 
 # Regex d'extraction du code site CPE depuis le libellé "SITE" de l'export DALKIA détaillé
 # (ex: "SETE GYMNASE VINCENT FERRARI VDS-SPORT 05" -> "VDS-SPORT 05").
@@ -117,19 +118,30 @@ def _is_dalkia_detailed(fieldnames: list[str]) -> bool:
     return "type de compteur" in keys and any(k.startswith("date du rel") for k in keys) and "consommation" in keys
 
 
+# TYPE DE COMPTEUR (export) -> code fluide normalisé
+_FLUID_MAP = {"gaz": "GAZ", "electricite": "ELEC", "ecs": "ECS", "eau": "EAU", "chaleur": "CHALEUR"}
+
+
 def _import_dalkia_detailed(
     db: Session, rows: list[dict], header_map: dict[str, str], source: str
 ) -> CpeImportResult:
     """Importe l'export DALKIA détaillé (1 ligne par compteur × relevé, multi-fluides).
 
-    Agrège par (site, année, mois) : gaz (MWh PCS -> PCI) et ECS (m³). Le code site est extrait
-    du libellé SITE. Les fluides ELEC/EAU/CHALEUR ne sont pas (encore) repris dans le modèle gaz.
+    Deux écritures :
+      - `cpe_conso_releves` : TOUS les fluides (GAZ/ELEC/ECS/EAU/CHALEUR) par site × mois,
+        avec énergie MWh, unité et qualité (réel vs estimé/panne) — pour le suivi/présentation.
+      - `cpe_gaz_releves` : sous-ensemble gaz (MWh PCS→PCI) + ECS (m³) pour l'intéressement,
+        uniquement pour les sites rattachés à un CpeSite.
+    Seuls les contrats CPE Ville DALKIA sont retenus (filtre CODE CONTRAT).
     """
+    from sqlalchemy import func, select
+
+    from app.models.cpe import CpeConsoReleve, CpeGazReleve
+
     def col(*aliases: str) -> str | None:
         for a in aliases:
             if a in header_map:
                 return header_map[a]
-        # match par préfixe (ex: "date du rel...")
         for k, orig in header_map.items():
             if any(k.startswith(a) for a in aliases):
                 return orig
@@ -140,12 +152,9 @@ def _import_dalkia_detailed(
     c_date = col("date du rel", "date du releve")
     c_conso = col("consommation")
     c_pcs = col("mwh pcs")
-
-    # agrégat : (code, annee, mois) -> {"gaz_pcs": float, "ecs_m3": float, "code_brut": str}
-    agg: dict[tuple[str, int, int], dict] = defaultdict(lambda: {"gaz_pcs": 0.0, "ecs_m3": 0.0})
-    nb_lignes = 0
-    erreurs: list[str] = []
-    sites_inconnus: set[str] = set()
+    c_contrat = col("code contrat")
+    c_nature = col("nature evenement", "nature")
+    c_unite = col("unite")
 
     def _num(v: str | None) -> float:
         try:
@@ -153,8 +162,20 @@ def _import_dalkia_detailed(
         except ValueError:
             return 0.0
 
+    # agrégat par (code, fluide, annee, mois)
+    agg: dict[tuple[str, str, int, int], dict] = defaultdict(
+        lambda: {"conso": 0.0, "energie": 0.0, "unite": None, "n": 0, "n_est": 0, "contrat": None}
+    )
+    nb_lignes = 0
+    nb_hors_cpe = 0
+    erreurs: list[str] = []
+
     for row in rows:
         nb_lignes += 1
+        contrat = (row.get(c_contrat, "") if c_contrat else "").strip().upper()
+        if c_contrat and contrat and contrat not in NEW_CPE_CONTRACT_CODES:
+            nb_hors_cpe += 1
+            continue
         code = _extract_code_site(row.get(c_site, "") if c_site else "")
         if not code:
             continue
@@ -162,35 +183,76 @@ def _import_dalkia_detailed(
         if not parsed:
             continue
         annee, mois = parsed
-        fluide = _ascii_key(row.get(c_type, "") if c_type else "")
-        key = (code, annee, mois)
-        agg[key]["code_brut"] = code
-        if fluide == "gaz":
-            agg[key]["gaz_pcs"] += _num(row.get(c_pcs) if c_pcs else None)
-        elif fluide == "ecs":
-            agg[key]["ecs_m3"] += _num(row.get(c_conso) if c_conso else None)
+        fluide = _FLUID_MAP.get(_ascii_key(row.get(c_type, "") if c_type else ""))
+        if not fluide:
+            continue
+        unite = (row.get(c_unite, "") if c_unite else "").strip() or None
+        nature = _ascii_key(row.get(c_nature, "") if c_nature else "")
 
-    nb_inseres = nb_mis_a_jour = nb_erreurs = 0
-    from sqlalchemy import func, select
+        a = agg[(code, fluide, annee, mois)]
+        a["contrat"] = contrat or a["contrat"]
+        a["unite"] = unite or a["unite"]
+        a["n"] += 1
+        if nature and nature != "releve normal":
+            a["n_est"] += 1
+        a["conso"] += _num(row.get(c_conso) if c_conso else None)
+        if fluide == "GAZ":
+            a["energie"] += _num(row.get(c_pcs) if c_pcs else None)         # MWh PCS
+        elif fluide in ("ELEC", "CHALEUR"):
+            a["energie"] += _num(row.get(c_conso) if c_conso else None) / 1000.0  # kWh -> MWh
 
-    from app.models.cpe import CpeGazReleve
-
-    for (code, annee, mois), vals in sorted(agg.items()):
+    # --- Écriture cpe_conso_releves (tous fluides) ---
+    nb_conso = 0
+    sites_inconnus: set[str] = set()
+    for (code, fluide, annee, mois), a in sorted(agg.items()):
         site = get_site_by_code(db, code)
         if site is None:
             sites_inconnus.add(code)
-            nb_erreurs += 1
+        energie = round(a["energie"], 4) if fluide in ("GAZ", "ELEC", "CHALEUR") else None
+        existing = db.scalars(
+            select(CpeConsoReleve).where(
+                CpeConsoReleve.code_site == code, CpeConsoReleve.fluide == fluide,
+                CpeConsoReleve.annee == annee, CpeConsoReleve.mois == mois,
+            )
+        ).first()
+        fields = dict(
+            city_id=(site.city_id if site else None),
+            cpe_site_id=(site.id if site else None),
+            code_site=code, contract_code=a["contrat"], fluide=fluide, annee=annee, mois=mois,
+            consommation=round(a["conso"], 3), unite=a["unite"], energie_mwh=energie,
+            nb_releves=a["n"], nb_estimes=a["n_est"],
+            qualite=("reel" if a["n_est"] == 0 else "partiel"), source=source,
+        )
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+            db.add(existing)
+        else:
+            db.add(CpeConsoReleve(**fields))
+            nb_conso += 1
+
+    # --- Écriture cpe_gaz_releves (intéressement) : gaz+ECS par site rattaché ---
+    nb_inseres = nb_mis_a_jour = nb_erreurs = 0
+    gaz_ecs: dict[tuple[str, int, int], dict] = defaultdict(lambda: {"gaz_pcs": 0.0, "ecs_m3": 0.0})
+    for (code, fluide, annee, mois), a in agg.items():
+        if fluide == "GAZ":
+            gaz_ecs[(code, annee, mois)]["gaz_pcs"] += a["energie"]
+        elif fluide == "ECS":
+            gaz_ecs[(code, annee, mois)]["ecs_m3"] += a["conso"]
+
+    for (code, annee, mois), v in sorted(gaz_ecs.items()):
+        site = get_site_by_code(db, code)
+        if site is None:
             continue
-        qt_pci = round(vals["gaz_pcs"] / PCS_PCI_RATIO, 4) if vals["gaz_pcs"] else None
-        ecs = round(vals["ecs_m3"], 3) if vals["ecs_m3"] else None
+        qt_pci = round(v["gaz_pcs"] / PCS_PCI_RATIO, 4) if v["gaz_pcs"] else None
+        ecs = round(v["ecs_m3"], 3) if v["ecs_m3"] else None
         if qt_pci is None and ecs is None:
             continue
         try:
             existing = db.execute(
                 select(func.count()).select_from(CpeGazReleve).where(
                     CpeGazReleve.cpe_site_id == site.id,
-                    CpeGazReleve.annee == annee,
-                    CpeGazReleve.mois == mois,
+                    CpeGazReleve.annee == annee, CpeGazReleve.mois == mois,
                 )
             ).scalar()
             upsert_releve(
@@ -206,6 +268,13 @@ def _import_dalkia_detailed(
             LOG.warning("Erreur import conso [%s %s-%s] : %s", code, annee, mois, exc)
             erreurs.append(f"[{code} {annee}-{mois:02d}] : {exc}")
             nb_erreurs += 1
+
+    db.commit()
+
+    notes = [f"(info) {nb_conso} relevés conso multi-fluides enregistrés"]
+    if nb_hors_cpe:
+        notes.append(f"(info) {nb_hors_cpe} lignes hors marché CPE Ville ignorées")
+    erreurs = notes + erreurs
 
     return CpeImportResult(
         nb_lignes=nb_lignes,

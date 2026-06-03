@@ -90,6 +90,42 @@ class CpeGazReleve(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class CpeConsoReleve(Base):
+    """Relevé de consommation mensuel multi-fluides (export DALKIA 'consommation détaillée').
+
+    Une ligne par (site, fluide, année, mois). Couvre tous les fluides : GAZ, ELEC, ECS, EAU,
+    CHALEUR. Sert au suivi/présentation des consommations (distinct de CpeGazReleve, dédié à
+    l'intéressement gaz). `cpe_site_id` est renseigné si le code site est rattaché à un site CPE.
+    """
+
+    __tablename__ = "cpe_conso_releves"
+    __table_args__ = (
+        UniqueConstraint("code_site", "fluide", "annee", "mois", name="uq_cpe_conso_site_fluide_mois"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    cpe_site_id: Mapped[int | None] = mapped_column(ForeignKey("cpe_sites.id"), nullable=True, index=True)
+    code_site: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    contract_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+
+    fluide: Mapped[str] = mapped_column(String(12), nullable=False, index=True)  # GAZ|ELEC|ECS|EAU|CHALEUR
+    annee: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    mois: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    consommation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    """Consommation de la période dans l'unité native (m³ pour gaz/eau/ECS, kWh pour élec/chaleur)."""
+    unite: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    energie_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    """Énergie en MWh (gaz : MWh PCS ; élec/chaleur : kWh/1000 ; null pour eau/ECS volume)."""
+
+    nb_releves: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    nb_estimes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    qualite: Mapped[str] = mapped_column(String(12), nullable=False, default="reel")  # reel|partiel
+    source: Mapped[str] = mapped_column(String(30), nullable=False, default="csv_dalkia")
+    date_import: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class CpePrixGaz(Base):
     """Prix unitaire gaz annuel (Pu) pour le calcul d'intéressement.
 
