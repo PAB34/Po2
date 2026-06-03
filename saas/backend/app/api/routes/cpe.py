@@ -594,7 +594,6 @@ def export_finance_invoice_liaison(
     if invoice is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facture DALKIA introuvable")
     content = accounting_svc.build_detailed_finance_liaison_workbook(db, invoice)
-    accounting_svc.mark_finance_liaison_exported(db, invoice)
     filename = f"fiche-liaison-dalkia-{invoice.invoice_number}.xlsx"
     return Response(
         content=content,

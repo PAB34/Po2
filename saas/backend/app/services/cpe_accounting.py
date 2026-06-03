@@ -8,6 +8,7 @@ import re
 import unicodedata
 from calendar import monthrange
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -1691,9 +1692,7 @@ def _invoice_timeline_metrics(invoice: CpeFinanceInvoice, today: date | None = N
         else None
     )
     due_in_days = (invoice.due_date - today).days if invoice.due_date else None
-    if invoice.finance_exported_at is not None:
-        deadline_status = "transmis_finances"
-    elif due_in_days is None:
+    if due_in_days is None:
         deadline_status = "echeance_absente"
     elif due_in_days < 0:
         deadline_status = "echeance_depassee"
@@ -2225,7 +2224,23 @@ def build_finance_control_report(
     controls_error = 0
     controls_blocked = 0
 
+    invoice_ids = [invoice.id for invoice in invoices]
+    lines_by_invoice: dict[int, list[CpeFinanceLine]] = defaultdict(list)
+    if invoice_ids:
+        for line in db.scalars(
+            select(CpeFinanceLine).where(CpeFinanceLine.invoice_id.in_(invoice_ids))
+        ).all():
+            lines_by_invoice[line.invoice_id].append(line)
+
+    def _join_distinct(values: Iterable[str | None]) -> str | None:
+        seen = [value for value in dict.fromkeys(v for v in values if v) ]
+        return ", ".join(seen) if seen else None
+
     for invoice in invoices:
+        invoice_lines = lines_by_invoice.get(invoice.id, [])
+        recipient_ref = _join_distinct(_line_raw_str(line, "ref_destinataire_1") for line in invoice_lines)
+        markets = _join_distinct(line.market for line in invoice_lines)
+        billed_items = _join_distinct(line.billed_item for line in invoice_lines)
         controls = (
             recompute_finance_invoice_controls(db, invoice)
             if recalculate
@@ -2249,6 +2264,9 @@ def build_finance_control_report(
                 "contract_code": invoice.contract_code,
                 "contract_label": invoice.contract_label,
                 "invoice_type": invoice.invoice_type,
+                "recipient_ref": recipient_ref,
+                "market": markets,
+                "billed_items": billed_items,
                 "total_ht": invoice.total_ht,
                 "invoice_status": invoice.status,
                 "finance_exported_at": invoice.finance_exported_at,
@@ -2339,12 +2357,14 @@ def build_finance_control_report_workbook(
         "Facture",
         "Contrat",
         "Type",
+        "Destinataire",
+        "Marche",
+        "Postes factures",
         "HT",
         "Decision",
         "Echeance",
         "Jours avant echeance",
         "Statut echeance",
-        "Transmis finances",
         "OK",
         "Ecarts",
         "Bloques",
@@ -2359,23 +2379,25 @@ def build_finance_control_report_workbook(
         ws_queue.cell(row=row, column=1, value=item["invoice_number"])
         ws_queue.cell(row=row, column=2, value=item["contract_label"] or item["contract_code"])
         ws_queue.cell(row=row, column=3, value=item["invoice_type"])
-        ws_queue.cell(row=row, column=4, value=item["total_ht"]).number_format = '#,##0.00 "EUR"'
-        ws_queue.cell(row=row, column=5, value=item["invoice_status"])
-        ws_queue.cell(row=row, column=6, value=str(item["due_date"]) if item["due_date"] else None)
-        ws_queue.cell(row=row, column=7, value=item["due_in_days"])
-        ws_queue.cell(row=row, column=8, value=item["deadline_status"])
-        ws_queue.cell(row=row, column=9, value=str(item["finance_exported_at"]) if item["finance_exported_at"] else "Non")
-        ws_queue.cell(row=row, column=10, value=item["ok"])
-        ws_queue.cell(row=row, column=11, value=item["error"])
-        ws_queue.cell(row=row, column=12, value=item["blocked"])
+        ws_queue.cell(row=row, column=4, value=item["recipient_ref"])
+        ws_queue.cell(row=row, column=5, value=item["market"])
+        ws_queue.cell(row=row, column=6, value=item["billed_items"])
+        ws_queue.cell(row=row, column=7, value=item["total_ht"]).number_format = '#,##0.00 "EUR"'
+        ws_queue.cell(row=row, column=8, value=item["invoice_status"])
+        ws_queue.cell(row=row, column=9, value=str(item["due_date"]) if item["due_date"] else None)
+        ws_queue.cell(row=row, column=10, value=item["due_in_days"])
+        ws_queue.cell(row=row, column=11, value=item["deadline_status"])
+        ws_queue.cell(row=row, column=12, value=item["ok"])
+        ws_queue.cell(row=row, column=13, value=item["error"])
+        ws_queue.cell(row=row, column=14, value=item["blocked"])
         ws_queue.cell(
             row=row,
-            column=13,
+            column=15,
             value=", ".join(_control_type_label(control_type) for control_type in item["control_types"]) or "Aucune anomalie",
         )
         row += 1
-    _set_widths(ws_queue, [18, 34, 12, 14, 14, 14, 18, 20, 22, 8, 8, 8, 46])
-    ws_queue.auto_filter.ref = f"A1:M{max(2, row - 1)}"
+    _set_widths(ws_queue, [18, 34, 12, 22, 14, 28, 14, 14, 14, 18, 20, 8, 8, 8, 46])
+    ws_queue.auto_filter.ref = f"A1:O{max(2, row - 1)}"
 
     ws_detail = wb.create_sheet("Detail controles")
     detail_headers = [

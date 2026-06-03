@@ -3020,6 +3020,9 @@ export type CpeFinanceControlReport = {
     contract_code: string | null;
     contract_label: string | null;
     invoice_type: string | null;
+    recipient_ref: string | null;
+    market: string | null;
+    billed_items: string | null;
     total_ht: number;
     invoice_status: string;
     finance_exported_at: string | null;

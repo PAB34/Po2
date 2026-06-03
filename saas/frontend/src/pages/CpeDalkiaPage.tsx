@@ -146,6 +146,21 @@ const CATEGORIE_LABEL: Record<string, string> = {
 type CpeView = "cockpit" | "finance" | "performance";
 type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "controls";
 type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "invoice_date" | "due_date" | "total_ht" | "status";
+type QueueInvoice = CpeFinanceControlReport["invoices"][number];
+type QueueSortKey =
+  | "invoice_number"
+  | "contract"
+  | "invoice_type"
+  | "recipient_ref"
+  | "market"
+  | "billed_items"
+  | "total_ht"
+  | "ok"
+  | "error"
+  | "blocked"
+  | "families"
+  | "due_date"
+  | "invoice_status";
 
 function splitList(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -1370,6 +1385,7 @@ function CpeFinanceReference({
   const [editingReferenceId, setEditingReferenceId] = useState<number | null>(null);
   const [section, setSection] = useState<CpeFinanceSection>("imports");
   const [evidenceInvoiceId, setEvidenceInvoiceId] = useState<number | null>(null);
+  const [queueSort, setQueueSort] = useState<{ key: QueueSortKey; dir: "asc" | "desc" }>({ key: "error", dir: "desc" });
   const evidencePdfRef = useRef<HTMLInputElement>(null);
   const revisionEvidencePdfRef = useRef<HTMLInputElement>(null);
   const [siteFilter, setSiteFilter] = useState("");
@@ -1628,7 +1644,6 @@ function CpeFinanceReference({
   }, [annualInvoices, annee]);
   const dueKpis = useMemo(
     () => ({
-      transmitted: annualInvoices.filter((invoice) => invoice.deadline_status === "transmis_finances").length,
       overdue: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_depassee").length,
       upcoming: annualInvoices.filter((invoice) => invoice.deadline_status === "urgent" || invoice.deadline_status === "a_anticiper").length,
       missing: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_absente").length,
@@ -1636,6 +1651,38 @@ function CpeFinanceReference({
     [annualInvoices],
   );
   const invoiceById = useMemo(() => new Map(invoices.map((invoice) => [invoice.id, invoice])), [invoices]);
+  const sortedQueueInvoices = useMemo(() => {
+    const rows = controlReport?.invoices ? [...controlReport.invoices] : [];
+    const { key, dir } = queueSort;
+    const mul = dir === "asc" ? 1 : -1;
+    const accessor: Record<QueueSortKey, (row: QueueInvoice) => string | number> = {
+      invoice_number: (row) => row.invoice_number,
+      contract: (row) => row.contract_label ?? row.contract_code ?? "",
+      invoice_type: (row) => row.invoice_type ?? "",
+      recipient_ref: (row) => row.recipient_ref ?? "",
+      market: (row) => row.market ?? "",
+      billed_items: (row) => row.billed_items ?? "",
+      total_ht: (row) => row.total_ht ?? 0,
+      ok: (row) => row.ok,
+      error: (row) => row.error,
+      blocked: (row) => row.blocked,
+      families: (row) => row.control_types.join(", "),
+      due_date: (row) => (row.due_in_days == null ? Number.POSITIVE_INFINITY : row.due_in_days),
+      invoice_status: (row) => row.invoice_status,
+    };
+    const get = accessor[key];
+    rows.sort((a, b) => {
+      const va = get(a);
+      const vb = get(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * mul;
+      return String(va).localeCompare(String(vb), "fr", { numeric: true }) * mul;
+    });
+    return rows;
+  }, [controlReport, queueSort]);
+  const toggleQueueSort = (key: QueueSortKey) =>
+    setQueueSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  const queueSortIndicator = (key: QueueSortKey) =>
+    queueSort.key === key ? (queueSort.dir === "asc" ? " ▲" : " ▼") : "";
   const controlStatusChartData = useMemo(
     () =>
       controlReport
@@ -2691,8 +2738,7 @@ function CpeFinanceReference({
               <KpiCard label="Périmètre" value={includeOutOfScopeContracts ? "Étendu" : "CPE Ville"} sub={includeOutOfScopeContracts ? "Contrats hors marché inclus" : "Contrats Ville uniquement"} color="#b45309" />
             </div>
             <div className="kpi-grid" style={{ marginTop: 10 }}>
-              <KpiCard label="Transmises aux finances" value={String(dueKpis.transmitted)} sub="Fiche de liaison XLSX déjà émise" color="#16a34a" />
-              <KpiCard label="Échéances dépassées" value={String(dueKpis.overdue)} sub="Fiche de liaison non émise" color="#dc2626" />
+              <KpiCard label="Échéances dépassées" value={String(dueKpis.overdue)} sub="Date d'échéance dépassée" color="#dc2626" />
               <KpiCard label="À traiter sous 30 jours" value={String(dueKpis.upcoming)} sub="Échéances proches à anticiper" color="#f59e0b" />
               <KpiCard label="Échéances absentes" value={String(dueKpis.missing)} sub="Donnée DALKIA à vérifier" color="#6b7280" />
             </div>
@@ -3016,31 +3062,36 @@ function CpeFinanceReference({
                   event.target.value = "";
                 }}
               />
-              <table style={{ width: "100%", minWidth: 1600, borderCollapse: "collapse", fontSize: 12 }}>
+              <table style={{ width: "100%", minWidth: 1700, borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                    <th style={thStyle}>Facture</th>
-                    <th style={thStyle}>Contrat</th>
-                    <th style={thStyle}>Type</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>HT</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>OK</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Écarts</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Bloqués</th>
-                    <th style={thStyle}>Familles à traiter</th>
-                    <th style={thStyle}>Échéance</th>
-                    <th style={thStyle}>Transmission finances</th>
-                    <th style={thStyle}>Décision</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("invoice_number")}>Facture{queueSortIndicator("invoice_number")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("contract")}>Contrat{queueSortIndicator("contract")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("invoice_type")}>Type{queueSortIndicator("invoice_type")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("recipient_ref")}>Destinataire{queueSortIndicator("recipient_ref")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("market")}>Marché{queueSortIndicator("market")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("billed_items")}>Postes factures{queueSortIndicator("billed_items")}</th>
+                    <th style={{ ...sortableThStyle, textAlign: "right" }} onClick={() => toggleQueueSort("total_ht")}>HT{queueSortIndicator("total_ht")}</th>
+                    <th style={{ ...sortableThStyle, textAlign: "right" }} onClick={() => toggleQueueSort("ok")}>OK{queueSortIndicator("ok")}</th>
+                    <th style={{ ...sortableThStyle, textAlign: "right" }} onClick={() => toggleQueueSort("error")}>Écarts{queueSortIndicator("error")}</th>
+                    <th style={{ ...sortableThStyle, textAlign: "right" }} onClick={() => toggleQueueSort("blocked")}>Bloqués{queueSortIndicator("blocked")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("families")}>Familles à traiter{queueSortIndicator("families")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("due_date")}>Échéance{queueSortIndicator("due_date")}</th>
+                    <th style={sortableThStyle} onClick={() => toggleQueueSort("invoice_status")}>Décision{queueSortIndicator("invoice_status")}</th>
                     <th style={thStyle}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {controlReport.invoices.map((invoice) => {
+                  {sortedQueueInvoices.map((invoice) => {
                     const fullInvoice = invoiceById.get(invoice.invoice_id);
                     return (
                     <tr key={invoice.invoice_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                       <td style={tdStyle}>{invoice.invoice_number}</td>
                       <td style={tdStyle}>{invoice.contract_label ?? invoice.contract_code ?? "-"}</td>
                       <td style={tdStyle}>{invoice.invoice_type ?? "-"}</td>
+                      <td style={tdStyle}>{invoice.recipient_ref ?? "-"}</td>
+                      <td style={tdStyle}>{invoice.market ?? "-"}</td>
+                      <td style={tdStyle}>{invoice.billed_items ?? "-"}</td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
                       <td style={{ ...tdStyle, textAlign: "right", color: "#166534" }}>{invoice.ok}</td>
                       <td style={{ ...tdStyle, textAlign: "right", color: "#b91c1c", fontWeight: invoice.error ? 700 : 400 }}>{invoice.error}</td>
@@ -3049,13 +3100,6 @@ function CpeFinanceReference({
                       <td style={tdStyle}>
                         <div>{fmtDate(invoice.due_date)}</div>
                         <span className={`badge ${deadlineClass(invoice.deadline_status)}`}>{deadlineLabel(invoice.deadline_status)}</span>
-                      </td>
-                      <td style={tdStyle}>
-                        {invoice.finance_exported_at ? (
-                          <span className="badge badge-green">Émise le {fmtDate(invoice.finance_exported_at)}</span>
-                        ) : (
-                          <span className="badge badge-gray">Non émise</span>
-                        )}
                       </td>
                       <td style={tdStyle}>
                         {fullInvoice && (
@@ -3308,6 +3352,19 @@ const thStyle: React.CSSProperties = {
   color: "#6b7280",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
+};
+
+const sortableThStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  textAlign: "left",
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#6b7280",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  cursor: "pointer",
+  userSelect: "none",
+  whiteSpace: "nowrap",
 };
 
 const tableSortButtonStyle: React.CSSProperties = {

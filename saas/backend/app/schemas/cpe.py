@@ -587,6 +587,9 @@ class CpeFinanceControlInvoiceSummary(BaseModel):
     contract_code: str | None
     contract_label: str | None
     invoice_type: str | None
+    recipient_ref: str | None = None
+    market: str | None = None
+    billed_items: str | None = None
     total_ht: float
     invoice_status: str
     finance_exported_at: datetime | None
