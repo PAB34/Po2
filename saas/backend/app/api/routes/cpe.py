@@ -118,6 +118,26 @@ def list_releves(
     return [CpeGazReleve.model_validate(r) for r in releves]
 
 
+@router.get("/sites/{site_id}/consommations")
+def list_consommations(
+    site_id: int,
+    annee: int | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Relevés de consommation multi-fluides d'un site (GAZ/ELEC/ECS/EAU/CHALEUR)."""
+    if svc.get_site(db, site_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site CPE introuvable")
+    return [
+        {
+            "fluide": c.fluide, "annee": c.annee, "mois": c.mois,
+            "consommation": c.consommation, "unite": c.unite, "energie_mwh": c.energie_mwh,
+            "qualite": c.qualite, "nb_releves": c.nb_releves, "nb_estimes": c.nb_estimes,
+        }
+        for c in svc.get_conso_releves(db, site_id, annee)
+    ]
+
+
 @router.post("/sites/{site_id}/releves", response_model=CpeGazReleve, status_code=status.HTTP_201_CREATED)
 def create_releve(
     site_id: int,

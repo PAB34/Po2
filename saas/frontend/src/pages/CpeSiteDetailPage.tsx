@@ -3,8 +3,10 @@ import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchCpeReleves,
+  fetchCpeConsommations,
   upsertCpeReleve,
   CpeGazReleve,
+  CpeConsoReleve,
   CpeSite,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
@@ -51,6 +53,12 @@ export default function CpeSiteDetailPage() {
     },
   });
 
+  const consoQ = useQuery({
+    queryKey: ["cpe-consommations", siteId, annee],
+    queryFn: () => fetchCpeConsommations(token!, Number(siteId), annee),
+    enabled: !!token && !!siteId,
+  });
+
   const releves = relevesQ.data ?? [];
   const releveByMois = Object.fromEntries(releves.map((r) => [r.mois, r]));
 
@@ -74,6 +82,25 @@ export default function CpeSiteDetailPage() {
 
   const totalQt = releves.reduce((s, r) => s + (r.qt_mwh_pci ?? 0), 0);
   const nbMois = releves.filter((r) => r.qt_mwh_pci != null).length;
+
+  // Consommations multi-fluides : pivot fluide -> {mois -> valeur}
+  const conso = consoQ.data ?? [];
+  const FLUID_LABEL: Record<string, string> = {
+    GAZ: "Gaz", ELEC: "Électricité", ECS: "ECS (eau chaude)", EAU: "Eau", CHALEUR: "Chaleur",
+  };
+  const FLUID_UNIT: Record<string, string> = {
+    GAZ: "MWh PCS", ELEC: "MWh", CHALEUR: "MWh", ECS: "m³", EAU: "m³",
+  };
+  const consoByFluide: Record<string, { mois: Record<number, number | null>; total: number; estime: boolean }> = {};
+  for (const c of conso) {
+    const isEnergy = c.fluide === "GAZ" || c.fluide === "ELEC" || c.fluide === "CHALEUR";
+    const v = isEnergy ? c.energie_mwh : c.consommation;
+    const entry = (consoByFluide[c.fluide] ??= { mois: {}, total: 0, estime: false });
+    entry.mois[c.mois] = v;
+    entry.total += v ?? 0;
+    if (c.nb_estimes > 0) entry.estime = true;
+  }
+  const fluidesOrder = ["GAZ", "ELEC", "CHALEUR", "ECS", "EAU"].filter((f) => consoByFluide[f]);
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -226,6 +253,57 @@ export default function CpeSiteDetailPage() {
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      {/* Consommations multi-fluides (import DALKIA détaillé) */}
+      <div style={{ marginTop: 28 }}>
+        <h3 style={{ margin: "0 0 4px" }}>Consommations {annee} — tous fluides</h3>
+        <p style={{ margin: "0 0 12px", color: "#6b7280", fontSize: 13 }}>
+          Issu de l'export DALKIA « consommation détaillée ». Énergie en MWh (gaz/élec/chaleur), volume en m³ (ECS/eau).
+        </p>
+        {fluidesOrder.length === 0 ? (
+          <p style={{ color: "#9ca3af", fontSize: 13 }}>
+            Aucune consommation importée pour {annee}. Importer le CSV DALKIA depuis{" "}
+            <Link to="/cpe" style={{ color: "#2563eb" }}>le bilan CPE</Link>.
+          </p>
+        ) : (
+          <div className="card" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+                  <th style={{ padding: "8px 12px", textAlign: "left" }}>Fluide</th>
+                  {MOIS_LABELS.map((m) => (
+                    <th key={m} style={{ padding: "8px 6px", textAlign: "right", color: "#6b7280", fontWeight: 600 }}>{m.slice(0, 3)}</th>
+                  ))}
+                  <th style={{ padding: "8px 12px", textAlign: "right" }}>Total</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left" }}>Unité</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fluidesOrder.map((f) => {
+                  const row = consoByFluide[f];
+                  return (
+                    <tr key={f} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "8px 12px", fontWeight: 600 }}>
+                        {FLUID_LABEL[f] ?? f}
+                        {row.estime ? (
+                          <span title="Contient des relevés estimés/calculés (pas tous réels)" style={{ marginLeft: 6, fontSize: 10, color: "#b45309", cursor: "help" }}>~estimé</span>
+                        ) : null}
+                      </td>
+                      {MOIS_LABELS.map((_, idx) => (
+                        <td key={idx} style={{ padding: "8px 6px", textAlign: "right", color: row.mois[idx + 1] != null ? "#111827" : "#d1d5db" }}>
+                          {row.mois[idx + 1] != null ? fmt(row.mois[idx + 1], 1) : "·"}
+                        </td>
+                      ))}
+                      <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, color: "#2563eb" }}>{fmt(row.total, 1)}</td>
+                      <td style={{ padding: "8px 12px", color: "#6b7280" }}>{FLUID_UNIT[f] ?? ""}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <p style={{ marginTop: 16, fontSize: 12, color: "#9ca3af" }}>

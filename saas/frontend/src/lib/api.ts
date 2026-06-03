@@ -3121,6 +3121,26 @@ export async function fetchCpeReleves(token: string, siteId: number, annee?: num
   return parseResponse<CpeGazReleve[]>(response);
 }
 
+export type CpeConsoReleve = {
+  fluide: string;
+  annee: number;
+  mois: number;
+  consommation: number | null;
+  unite: string | null;
+  energie_mwh: number | null;
+  qualite: string;
+  nb_releves: number;
+  nb_estimes: number;
+};
+
+export async function fetchCpeConsommations(token: string, siteId: number, annee?: number): Promise<CpeConsoReleve[]> {
+  const url = annee
+    ? `${apiBaseUrl}/cpe/sites/${siteId}/consommations?annee=${annee}`
+    : `${apiBaseUrl}/cpe/sites/${siteId}/consommations`;
+  const response = await fetch(url, { headers: buildHeaders(token) });
+  return parseResponse<CpeConsoReleve[]>(response);
+}
+
 export async function upsertCpeReleve(
   token: string,
   siteId: number,

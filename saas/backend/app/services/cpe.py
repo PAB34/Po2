@@ -21,7 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.cpe import CpeGazReleve, CpePrixGaz, CpeResultatAnnuel, CpeSite
+from app.models.cpe import CpeConsoReleve, CpeGazReleve, CpePrixGaz, CpeResultatAnnuel, CpeSite
 from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport
 from app.schemas.cpe import (
     CpeBilanAnnuel,
@@ -294,6 +294,16 @@ def upsert_prix_gaz(db: Session, payload: CpePrixGazCreate) -> CpePrixGaz:
 
 
 # ── Calcul du résultat annuel ─────────────────────────────────────────────────
+
+def get_conso_releves(db: Session, site_id: int, annee: int | None = None) -> list[CpeConsoReleve]:
+    """Relevés de consommation multi-fluides d'un site (tous fluides, par mois)."""
+    stmt = select(CpeConsoReleve).where(CpeConsoReleve.cpe_site_id == site_id)
+    if annee is not None:
+        stmt = stmt.where(CpeConsoReleve.annee == annee)
+    return list(db.scalars(stmt.order_by(
+        CpeConsoReleve.fluide, CpeConsoReleve.annee, CpeConsoReleve.mois
+    )))
+
 
 def resolve_nb_for_year_detailed(db: Session, site: CpeSite, annee: int) -> tuple[float, str]:
     """NB contractuel de l'exercice + sa source.
