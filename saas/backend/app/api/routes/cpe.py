@@ -32,6 +32,7 @@ from app.schemas.cpe import (
     CpeFinanceLineOut,
     CpeInvoiceEvidenceOut,
     CpeFinancePreview,
+    CpeMarketTrackingOut,
     CpeGazReleve,
     CpeGazReleveCreate,
     CpeGazReleveUpdate,
@@ -48,6 +49,7 @@ from app.schemas.cpe import (
 )
 from app.services import cpe as svc
 from app.services import cpe_accounting as accounting_svc
+from app.services import cpe_market_tracking as market_svc
 from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
 
@@ -537,6 +539,37 @@ def export_finance_control_report(
 ) -> Response:
     content = accounting_svc.build_finance_control_report_workbook(db, current_user.city_id)
     filename = f"rapport-controle-global-cpe-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/finances/market-tracking", response_model=CpeMarketTrackingOut)
+def get_market_tracking(
+    year_from: int = Query(2026, ge=2025, le=2033),
+    year_to: int = Query(2030, ge=2025, le=2033),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeMarketTrackingOut:
+    """Suivi marché CPE : enveloppes prévues (DPGF) vs montants reçus, par poste × année."""
+    return CpeMarketTrackingOut.model_validate(
+        market_svc.build_market_tracking(db, current_user.city_id, year_from=year_from, year_to=year_to)
+    )
+
+
+@router.get("/finances/market-tracking.xlsx")
+def export_market_tracking(
+    year_from: int = Query(2026, ge=2025, le=2033),
+    year_to: int = Query(2030, ge=2025, le=2033),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    content = market_svc.build_market_tracking_workbook(
+        db, current_user.city_id, year_from=year_from, year_to=year_to
+    )
+    filename = f"suivi-marche-cpe-{year_from}-{year_to}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -3479,6 +3479,61 @@ export async function downloadCpeFinanceControlReport(token: string): Promise<Bl
   return response.blob();
 }
 
+export type CpeMarketTrackingCell = {
+  year: number;
+  prevu: number;
+  recu: number;
+  ecart: number;
+  ecart_pct: number | null;
+  taux: number | null;
+};
+
+export type CpeMarketTrackingTotal = {
+  prevu: number;
+  recu: number;
+  ecart: number;
+  ecart_pct: number | null;
+  taux: number | null;
+};
+
+export type CpeMarketTracking = {
+  years: number[];
+  postes: Array<{
+    poste: string;
+    label: string;
+    by_year: CpeMarketTrackingCell[];
+    total: CpeMarketTrackingTotal;
+  }>;
+  totals_by_year: CpeMarketTrackingCell[];
+  grand_total: CpeMarketTrackingTotal;
+  p1_source: string;
+  has_reference: boolean;
+};
+
+export async function fetchCpeMarketTracking(
+  token: string,
+  yearFrom: number,
+  yearTo: number,
+): Promise<CpeMarketTracking> {
+  const response = await fetch(
+    `${apiBaseUrl}/cpe/finances/market-tracking?year_from=${yearFrom}&year_to=${yearTo}`,
+    { headers: buildHeaders(token) },
+  );
+  return parseResponse<CpeMarketTracking>(response);
+}
+
+export async function downloadCpeMarketTracking(token: string, yearFrom: number, yearTo: number): Promise<Blob> {
+  const response = await fetch(
+    `${apiBaseUrl}/cpe/finances/market-tracking.xlsx?year_from=${yearFrom}&year_to=${yearTo}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur ${response.status}`);
+  }
+  return response.blob();
+}
+
 export async function updateCpeFinanceInvoice(
   token: string,
   invoiceId: number,

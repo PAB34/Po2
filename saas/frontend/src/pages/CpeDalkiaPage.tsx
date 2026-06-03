@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -59,6 +59,8 @@ import {
   deleteCpeAccountingSiteMapping,
   downloadCpeFinanceInvoiceLiaison,
   downloadCpeFinanceControlReport,
+  fetchCpeMarketTracking,
+  downloadCpeMarketTracking,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateCpeContractReference,
@@ -176,7 +178,7 @@ const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail
   { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
   { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
   { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources" },
-  { id: "invoices", label: "Factures", detail: "Suivi financier annuel" },
+  { id: "invoices", label: "Factures", detail: "Suivi marché : prévu vs reçu" },
   { id: "controls", label: "Contrôle factures", detail: "Audit global et anomalies" },
 ];
 
@@ -228,6 +230,17 @@ function fmtDate(val: string | null | undefined): string {
   const parsed = new Date(val);
   return Number.isNaN(parsed.getTime()) ? val : parsed.toLocaleDateString("fr-FR");
 }
+function fmtPct(val: number | null | undefined): string {
+  if (val == null) return "—";
+  return new Intl.NumberFormat("fr-FR", { style: "percent", maximumFractionDigits: 1 }).format(val);
+}
+function tauxClass(taux: number | null | undefined): string {
+  if (taux == null) return "badge-gray";
+  if (taux >= 0.9 && taux <= 1.1) return "badge-green";
+  if (taux >= 0.7 && taux <= 1.3) return "badge-orange";
+  return "badge-red";
+}
+const MARKET_YEAR_OPTIONS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033];
 function deadlineLabel(status: string | null | undefined): string {
   if (status === "transmis_finances") return "Transmise finances";
   if (status === "echeance_depassee") return "Échéance dépassée";
@@ -1386,6 +1399,33 @@ function CpeFinanceReference({
   const [section, setSection] = useState<CpeFinanceSection>("imports");
   const [evidenceInvoiceId, setEvidenceInvoiceId] = useState<number | null>(null);
   const [queueSort, setQueueSort] = useState<{ key: QueueSortKey; dir: "asc" | "desc" }>({ key: "error", dir: "desc" });
+  const { token: financeToken } = useAuth();
+  const [marketYearFrom, setMarketYearFrom] = useState(2026);
+  const [marketYearTo, setMarketYearTo] = useState(2030);
+  const [marketExportPending, setMarketExportPending] = useState(false);
+  const marketTrackingQ = useQuery({
+    queryKey: ["cpe-market-tracking", marketYearFrom, marketYearTo],
+    queryFn: () => fetchCpeMarketTracking(financeToken!, marketYearFrom, marketYearTo),
+    enabled: !!financeToken && section === "invoices",
+  });
+  const marketTracking = marketTrackingQ.data ?? null;
+  const onExportMarketTracking = async () => {
+    if (!financeToken) return;
+    setMarketExportPending(true);
+    try {
+      const blob = await downloadCpeMarketTracking(financeToken, marketYearFrom, marketYearTo);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `suivi-marche-cpe-${marketYearFrom}-${marketYearTo}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setMarketExportPending(false);
+    }
+  };
   const evidencePdfRef = useRef<HTMLInputElement>(null);
   const revisionEvidencePdfRef = useRef<HTMLInputElement>(null);
   const [siteFilter, setSiteFilter] = useState("");
@@ -2687,299 +2727,129 @@ function CpeFinanceReference({
 
       {section === "invoices" && (
       <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-        <div style={{ overflowX: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 8 }}>
-            <div>
-              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Factures archivees</h4>
-              <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
-                {visibleInvoices.length} facture(s) affichee(s) sur {invoices.length}, {batches.length} lot(s) importe(s).
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              <input
-                value={invoiceFilter}
-                onChange={(event) => setInvoiceFilter(event.target.value)}
-                placeholder="Filtrer facture, contrat, statut..."
-                style={{ padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", minWidth: 260 }}
-              />
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ color: "#b91c1c" }}
-                disabled={deleteHistoryPending || invoices.length === 0}
-                onClick={() => {
-                  if (window.confirm("Supprimer tout l'historique des factures DALKIA importees ? Le referentiel de codification sera conserve.")) {
-                    onDeleteHistory();
-                  }
-                }}
-              >
-                {deleteHistoryPending ? "Suppression..." : "Supprimer l'historique des factures"}
-              </button>
-            </div>
-          </div>
-          {deleteHistoryResult && (
-            <p style={{ color: "#166534", fontSize: 13, margin: "0 0 8px" }}>
-              Historique supprime : {deleteHistoryResult.batches_deleted} lot(s), {deleteHistoryResult.invoices_deleted} facture(s),
-              {" "}{deleteHistoryResult.lines_deleted} ligne(s), {deleteHistoryResult.controls_deleted} controle(s).
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>Suivi du marché — prévu (DPGF) vs reçu</h3>
+            <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+              Comparaison par poste P1/P2/P3 (dont P2.4 et P3.4) entre les enveloppes contractuelles du marché et les montants facturés DALKIA reçus.
             </p>
-          )}
-          {deleteHistoryError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{deleteHistoryError}</p>}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap", marginBottom: 8 }}>
-              <div>
-                <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Suivi financier annuel {annee}</h4>
-                <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>Période analysée : 01/01/{annee} au 31/12/{annee}. Les graphiques suivent les filtres ci-dessous.</p>
-              </div>
-            </div>
-            <div className="kpi-grid">
-              <KpiCard label={`Facturé ${annee}`} value={fmtEur(annualTotalHt)} sub={`${annualInvoices.length} facture(s) dans l'exercice`} color="#1d4ed8" />
-              <KpiCard label="Références contractuelles saisies" value={fmtEur(annualContractReferenceHt)} sub="Montants annuels disponibles dans le référentiel" color="#0f766e" />
-              <KpiCard label="Montant moyen par facture" value={fmtEur(annualInvoices.length ? annualTotalHt / annualInvoices.length : 0)} sub="Sur le périmètre affiché" color="#7c3aed" />
-              <KpiCard label="Périmètre" value={includeOutOfScopeContracts ? "Étendu" : "CPE Ville"} sub={includeOutOfScopeContracts ? "Contrats hors marché inclus" : "Contrats Ville uniquement"} color="#b45309" />
-            </div>
-            <div className="kpi-grid" style={{ marginTop: 10 }}>
-              <KpiCard label="Échéances dépassées" value={String(dueKpis.overdue)} sub="Date d'échéance dépassée" color="#dc2626" />
-              <KpiCard label="À traiter sous 30 jours" value={String(dueKpis.upcoming)} sub="Échéances proches à anticiper" color="#f59e0b" />
-              <KpiCard label="Échéances absentes" value={String(dueKpis.missing)} sub="Donnée DALKIA à vérifier" color="#6b7280" />
-            </div>
           </div>
-          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Analyse interactive</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 8 }}>
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
-                <input type="checkbox" checked={includeOutOfScopeContracts} onChange={(event) => setIncludeOutOfScopeContracts(event.target.checked)} />
-                Inclure contrats hors perimetre CPE Ville
-              </label>
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
-                <input type="checkbox" checked={showOnlyAlerts} onChange={(event) => setShowOnlyAlerts(event.target.checked)} />
-                Afficher seulement les factures en alerte
-              </label>
-              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#4b5563" }}>
-                <input type="checkbox" checked={showInvoiceCountLine} onChange={(event) => setShowInvoiceCountLine(event.target.checked)} />
-                Afficher la courbe du nombre de factures
-              </label>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-              <div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Marches</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {knownMarkets.map((market) => (
-                    <label key={market} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
-                      <input type="checkbox" checked={marketFilters[market] !== false} onChange={() => toggleMarketFilter(market)} />
-                      {market}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Statuts</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {[
-                    { key: "a_controler", label: "A controler" },
-                    { key: "valide", label: "Valide" },
-                    { key: "refuse", label: "Refuse" },
-                    { key: "conteste", label: "Conteste" },
-                    { key: "autre", label: "Autre" },
-                  ].map((item) => (
-                    <label key={item.key} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
-                      <input type="checkbox" checked={statusFilters[item.key] !== false} onChange={() => toggleStatusFilter(item.key)} />
-                      {item.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Types de facture</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {invoiceTypeOptions.map((invoiceType) => (
-                    <label key={invoiceType} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "#374151" }}>
-                      <input type="checkbox" checked={typeFilters[invoiceType] !== false} onChange={() => toggleTypeFilter(invoiceType)} />
-                      {invoiceType === "VIDE" ? "Non renseigne" : invoiceType}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-              {annualInvoices.length.toLocaleString("fr-FR")} facture(s) dans l'analyse annuelle, {visibleInvoices.length.toLocaleString("fr-FR")} dans l'archive filtrée.
-            </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <label style={{ fontSize: 12, color: "#4b5563" }}>De&nbsp;
+              <select value={marketYearFrom} onChange={(e) => setMarketYearFrom(Number(e.target.value))} style={{ padding: "5px 7px", borderRadius: 6, border: "1px solid #d1d5db" }}>
+                {MARKET_YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 12, color: "#4b5563" }}>à&nbsp;
+              <select value={marketYearTo} onChange={(e) => setMarketYearTo(Number(e.target.value))} style={{ padding: "5px 7px", borderRadius: 6, border: "1px solid #d1d5db" }}>
+                {MARKET_YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </label>
+            <button type="button" className="secondary-button" disabled={marketExportPending || !marketTracking?.has_reference} onClick={onExportMarketTracking}>
+              {marketExportPending ? "Export..." : "Exporter XLSX"}
+            </button>
           </div>
+        </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: 12, marginBottom: 12 }}>
+        {marketTrackingQ.isLoading && <div className="card" style={{ padding: 18, color: "#6b7280" }}>Chargement du suivi marché…</div>}
+
+        {marketTracking && !marketTracking.has_reference && (
+          <div className="card" style={{ padding: 18, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a" }}>
+            Aucune enveloppe contractuelle trouvée pour cette plage. Importez le référentiel DALKIA (DPGF Lot 1 / Lot 2) dans « Imports » pour alimenter le prévu.
+          </div>
+        )}
+
+        {marketTracking && marketTracking.has_reference && (
+          <>
+            <div className="kpi-grid">
+              <KpiCard label="Enveloppe marché (prévu)" value={fmtEur(marketTracking.grand_total.prevu)} sub={`Postes P1/P2/P3 · ${marketYearFrom}–${marketYearTo}`} color="#1d4ed8" />
+              <KpiCard label="Reçu (facturé)" value={fmtEur(marketTracking.grand_total.recu)} sub="Factures DALKIA CPE Ville" color="#0f766e" />
+              <KpiCard label="Écart reçu − prévu" value={fmtEur(marketTracking.grand_total.ecart)} sub={marketTracking.grand_total.ecart > 0 ? "Au-dessus du marché" : "Sous le marché"} color={marketTracking.grand_total.ecart > 0 ? "#dc2626" : "#16a34a"} />
+              <KpiCard label="Taux de réalisation" value={fmtPct(marketTracking.grand_total.taux)} sub="Reçu / prévu" color="#7c3aed" />
+            </div>
+
             <div className="card" style={{ padding: 12 }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Montants mensuels par marché - exercice {annee}</h4>
-              <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Du 01/01/{annee} au 31/12/{annee}, ventilés entre P1, P2, P3 et autres postes.</p>
-              <div style={{ height: 280 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Prévu vs reçu par poste ({marketYearFrom}–{marketYearTo})</h4>
+              <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyChartData}>
+                  <BarChart data={marketTracking.postes.map((p) => ({ poste: p.label, "Prévu": p.total.prevu, "Reçu": p.total.recu }))}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis yAxisId="left" tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
-                    <YAxis yAxisId="right" orientation="right" allowDecimals={false} />
-                    <Tooltip formatter={(value, name) => (name === "invoices" ? [value, "Factures"] : [fmtEur(Number(value)), name])} />
+                    <XAxis dataKey="poste" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={70} />
+                    <YAxis tickFormatter={(v) => `${Math.round(Number(v) / 1000).toLocaleString("fr-FR")} k€`} />
+                    <Tooltip formatter={(v) => fmtEur(Number(v))} />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="P1" stackId="ht" fill={MARKET_COLORS.P1} />
-                    <Bar yAxisId="left" dataKey="P2" stackId="ht" fill={MARKET_COLORS.P2} />
-                    <Bar yAxisId="left" dataKey="P3" stackId="ht" fill={MARKET_COLORS.P3} />
-                    <Bar yAxisId="left" dataKey="AUTRE" stackId="ht" fill={MARKET_COLORS.AUTRE} />
-                    {showInvoiceCountLine && <Line yAxisId="right" type="monotone" dataKey="invoices" stroke="#111827" strokeWidth={2} dot={false} />}
+                    <Bar dataKey="Prévu" fill="#94a3b8" />
+                    <Bar dataKey="Reçu" fill="#1d4ed8" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="card" style={{ padding: 12 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Répartition par statut - {annee}</h4>
-              <div style={{ height: 280 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Tooltip formatter={(value) => `${Number(value).toLocaleString("fr-FR")} facture(s)`} />
-                    <Legend />
-                    <Pie data={statusChartData} dataKey="count" nameKey="label" outerRadius={90} label>
-                      {statusChartData.map((entry) => (
-                        <Cell key={`${entry.status}-${entry.count}`} fill={STATUS_COLORS[entry.status] ?? STATUS_COLORS.autre} />
+
+            <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Matrice poste × année</h4>
+              <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Prévu P1 : {marketTracking.p1_source}. P2/P3/P2.4/P3.4 : référentiel DPGF par site agrégé. Reçu : factures DALKIA du périmètre CPE Ville.</p>
+              <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb" }}>
+                    <th rowSpan={2} style={{ ...thStyle, position: "sticky", left: 0, background: "#f9fafb" }}>Poste</th>
+                    {marketTracking.years.map((y) => (
+                      <th key={y} colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "1px solid #e5e7eb" }}>{y}</th>
+                    ))}
+                    <th colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "2px solid #cbd5e1", background: "#eef2ff" }}>Total {marketYearFrom}–{marketYearTo}</th>
+                  </tr>
+                  <tr style={{ background: "#f9fafb" }}>
+                    {marketTracking.years.map((y) => (
+                      <Fragment key={y}>
+                        <th style={{ ...thStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>Prévu</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+                        <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
+                      </Fragment>
+                    ))}
+                    <th style={{ ...thStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>Prévu</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketTracking.postes.map((p) => (
+                    <tr key={p.poste} style={{ borderTop: "1px solid #f3f4f6" }}>
+                      <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>{p.label}</td>
+                      {p.by_year.map((c) => (
+                        <Fragment key={c.year}>
+                          <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6", color: "#6b7280" }}>{fmtEur(c.prevu)}</td>
+                          <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
+                          <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
+                          <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(c.taux)}`}>{fmtPct(c.taux)}</span></td>
+                        </Fragment>
                       ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+                      <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1", color: "#6b7280" }}>{fmtEur(p.total.prevu)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(p.total.recu)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right", color: p.total.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(p.total.ecart)}</td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(p.total.taux)}`}>{fmtPct(p.total.taux)}</span></td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: "2px solid #cbd5e1", background: "#f8fafc", fontWeight: 700 }}>
+                    <td style={{ ...tdStyle, position: "sticky", left: 0, background: "#f8fafc" }}>TOTAL marché</td>
+                    {marketTracking.totals_by_year.map((c) => (
+                      <Fragment key={c.year}>
+                        <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>{fmtEur(c.prevu)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(c.taux)}</td>
+                      </Fragment>
+                    ))}
+                    <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>{fmtEur(marketTracking.grand_total.prevu)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(marketTracking.grand_total.recu)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: marketTracking.grand_total.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(marketTracking.grand_total.ecart)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(marketTracking.grand_total.taux)}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </div>
-
-          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Montants par type de facture - exercice {annee}</h4>
-            <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>AC, AJ, DE, EC et RE permettent de distinguer acomptes, ajustements, factures définitives, échéances et régularisations.</p>
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={invoiceTypeChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="type" />
-                  <YAxis tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
-                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
-                  <Bar dataKey="amount" name="Montant HT" fill="#0f766e" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Top 10 postes facturés - exercice {annee} (montant estimé)</h4>
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topBilledItemsData} layout="vertical" margin={{ left: 18, right: 14 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
-                  <YAxis type="category" dataKey="item" width={160} />
-                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
-                  <Bar dataKey="amount" fill="#1d4ed8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Émission et échéances - exercice {annee}</h4>
-            <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Lecture financière des montants selon la date d'édition DALKIA et la date limite de traitement comptable.</p>
-            <div style={{ height: 280 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dueTimelineData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(value) => `${Math.round(Number(value)).toLocaleString("fr-FR")} €`} />
-                  <Tooltip formatter={(value) => fmtEur(Number(value))} />
-                  <Legend />
-                  <Bar dataKey="issued" name="Édité par DALKIA" fill="#2563eb" />
-                  <Bar dataKey="due" name="À échéance" fill="#f59e0b" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <table style={{ width: "100%", minWidth: 2100, borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("invoice_number")} style={tableSortButtonStyle}>
-                    Facture{sortIndicator("invoice_number")}
-                  </button>
-                </th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("contract_label")} style={tableSortButtonStyle}>
-                    Libelle contrat{sortIndicator("contract_label")}
-                  </button>
-                </th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("markets")} style={tableSortButtonStyle}>
-                    MARCHE{sortIndicator("markets")}
-                  </button>
-                </th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("billed_items")} style={tableSortButtonStyle}>
-                    Postes factures{sortIndicator("billed_items")}
-                  </button>
-                </th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("recipient_reference_1")} style={tableSortButtonStyle}>
-                    REF DESTINATAIRE 1{sortIndicator("recipient_reference_1")}
-                  </button>
-                </th>
-                <th style={thStyle}>Periode</th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("invoice_date")} style={tableSortButtonStyle}>
-                    Edition{sortIndicator("invoice_date")}
-                  </button>
-                </th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("due_date")} style={tableSortButtonStyle}>
-                    Echeance{sortIndicator("due_date")}
-                  </button>
-                </th>
-                <th style={thStyle}>Suivi echeance</th>
-                <th style={thStyle}>
-                  <button type="button" onClick={() => toggleInvoiceSort("total_ht")} style={tableSortButtonStyle}>
-                    HT{sortIndicator("total_ht")}
-                  </button>
-                </th>
-                <th style={thStyle}>Statut controle</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleInvoices.map((invoice) => (
-                <tr key={invoice.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                  <td style={tdStyle}>{invoice.invoice_number}</td>
-                  <td style={{ ...tdStyle, minWidth: 240 }}>
-                    <div>{invoice.contract_label ?? "-"}</div>
-                    <div style={{ color: "#6b7280" }}>{invoice.contract_code ?? "-"}</div>
-                  </td>
-                  <td style={tdStyle}>{invoice.markets ?? "-"}</td>
-                  <td style={{ ...tdStyle, minWidth: 320 }}>{invoice.billed_items ?? "-"}</td>
-                  <td style={tdStyle}>{invoice.recipient_reference_1 ?? "-"}</td>
-                  <td style={tdStyle}>{invoice.period_start ?? "-"} au {invoice.period_end ?? "-"}</td>
-                  <td style={tdStyle}>{fmtDate(invoice.invoice_date)}</td>
-                  <td style={tdStyle}>{fmtDate(invoice.due_date)}</td>
-                  <td style={tdStyle}>
-                    <span className={`badge ${deadlineClass(invoice.deadline_status)}`}>{deadlineLabel(invoice.deadline_status)}</span>
-                    {invoice.due_in_days != null && invoice.deadline_status !== "transmis_finances" && (
-                      <div style={{ marginTop: 4, color: "#6b7280", fontSize: 11 }}>{invoice.due_in_days} jour(s)</div>
-                    )}
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(invoice.total_ht)}</td>
-                  <td style={tdStyle}>
-                    <span className={`badge ${invoice.status === "valide" ? "badge-green" : invoice.status === "refuse" ? "badge-red" : invoice.status === "conteste" ? "badge-blue" : "badge-orange"}`}>
-                      {invoice.status.replace("_", " ")}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {visibleInvoices.length === 0 && (
-                <tr>
-                  <td colSpan={11} style={{ ...tdStyle, textAlign: "center", color: "#9ca3af" }}>
-                    Aucune facture ne correspond au filtre.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+          </>
+        )}
       </section>
       )}
 

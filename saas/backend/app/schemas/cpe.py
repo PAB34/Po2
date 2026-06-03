@@ -618,6 +618,39 @@ class CpeFinanceControlReportOut(BaseModel):
     invoices: list[CpeFinanceControlInvoiceSummary]
 
 
+class CpeMarketTrackingCell(BaseModel):
+    year: int
+    prevu: float
+    recu: float
+    ecart: float
+    ecart_pct: float | None
+    taux: float | None
+
+
+class CpeMarketTrackingTotal(BaseModel):
+    prevu: float
+    recu: float
+    ecart: float
+    ecart_pct: float | None
+    taux: float | None
+
+
+class CpeMarketTrackingPoste(BaseModel):
+    poste: str
+    label: str
+    by_year: list[CpeMarketTrackingCell]
+    total: CpeMarketTrackingTotal
+
+
+class CpeMarketTrackingOut(BaseModel):
+    years: list[int]
+    postes: list[CpeMarketTrackingPoste]
+    totals_by_year: list[CpeMarketTrackingCell]
+    grand_total: CpeMarketTrackingTotal
+    p1_source: str
+    has_reference: bool
+
+
 class CpeFinanceImportResult(BaseModel):
     batch: CpeFinanceImportBatchOut
     invoices: list[CpeFinanceInvoiceOut]
