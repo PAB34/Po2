@@ -7,7 +7,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -73,7 +72,6 @@ import {
 import { useAuth } from "../providers/AuthProvider";
 
 const CURRENT_YEAR = new Date().getFullYear();
-const MOIS_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 const MARKET_COLORS: Record<string, string> = {
   P1: "#2563eb",
   P2: "#0f766e",
@@ -147,7 +145,6 @@ const CATEGORIE_LABEL: Record<string, string> = {
 
 type CpeView = "cockpit" | "finance" | "performance";
 type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "controls";
-type InvoiceSortField = "invoice_number" | "contract_label" | "markets" | "billed_items" | "recipient_reference_1" | "invoice_date" | "due_date" | "total_ht" | "status";
 type QueueInvoice = CpeFinanceControlReport["invoices"][number];
 type QueueSortKey =
   | "invoice_number"
@@ -163,14 +160,6 @@ type QueueSortKey =
   | "families"
   | "due_date"
   | "invoice_status";
-
-function splitList(value: string | null | undefined): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
   { id: "imports", label: "Imports", detail: "Codification et exports finance" },
@@ -1431,23 +1420,6 @@ function CpeFinanceReference({
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [referenceFilter, setReferenceFilter] = useState("");
-  const [invoiceFilter, setInvoiceFilter] = useState("");
-  const [invoiceSort, setInvoiceSort] = useState<{ field: InvoiceSortField; direction: "asc" | "desc" }>({
-    field: "invoice_number",
-    direction: "asc",
-  });
-  const [marketFilters, setMarketFilters] = useState<Record<string, boolean>>({ P1: true, P2: true, P3: true, AUTRE: true });
-  const [statusFilters, setStatusFilters] = useState<Record<string, boolean>>({
-    a_controler: true,
-    valide: true,
-    refuse: true,
-    conteste: true,
-    autre: true,
-  });
-  const [typeFilters, setTypeFilters] = useState<Record<string, boolean>>({});
-  const [includeOutOfScopeContracts, setIncludeOutOfScopeContracts] = useState(false);
-  const [showOnlyAlerts, setShowOnlyAlerts] = useState(false);
-  const [showInvoiceCountLine, setShowInvoiceCountLine] = useState(true);
   const [indexDraft, setIndexDraft] = useState({
     index_code: "ICHT_IME",
     year: annee,
@@ -1458,238 +1430,6 @@ function CpeFinanceReference({
     evidence_id: null as number | null,
     notes: "",
   });
-  const invoiceTypeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          invoices.map((invoice) => (invoice.invoice_type || "VIDE").toUpperCase()),
-        ),
-      ).sort((left, right) => left.localeCompare(right, "fr")),
-    [invoices],
-  );
-  const knownMarkets = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          invoices.flatMap((invoice) => {
-            const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
-            return markets.length ? markets : ["AUTRE"];
-          }),
-        ),
-      ).sort((left, right) => left.localeCompare(right, "fr")),
-    [invoices],
-  );
-  const invoiceSortValue = (invoice: CpeFinanceInvoice, field: InvoiceSortField): string | number => {
-    if (field === "total_ht") return invoice.total_ht ?? 0;
-    if (field === "contract_label") return (invoice.contract_label ?? invoice.contract_code ?? "").toLowerCase();
-    if (field === "markets") return (invoice.markets ?? "").toLowerCase();
-    if (field === "billed_items") return (invoice.billed_items ?? "").toLowerCase();
-    if (field === "recipient_reference_1") return (invoice.recipient_reference_1 ?? "").toLowerCase();
-    if (field === "invoice_date") return invoice.invoice_date ?? "";
-    if (field === "due_date") return invoice.due_date ?? "";
-    if (field === "status") return (invoice.status ?? "").toLowerCase();
-    return (invoice.invoice_number ?? "").toLowerCase();
-  };
-  const cpeContractCodes = useMemo(
-    () =>
-      new Set(
-        contractReferences
-          .filter(
-            (reference) =>
-              reference.active &&
-              reference.reference_kind === "cpe_contract_scope" &&
-              reference.year <= annee,
-          )
-          .map((reference) => reference.contract_code.trim().toUpperCase())
-          .filter(Boolean),
-      ),
-    [contractReferences, annee],
-  );
-  const visibleInvoices = invoices
-    .filter((invoice) => {
-      const contractCode = (invoice.contract_code ?? "").trim().toUpperCase();
-      if (!includeOutOfScopeContracts && !cpeContractCodes.has(contractCode)) return false;
-      if (showOnlyAlerts && (invoice.status ?? "") === "valide") return false;
-
-      const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
-      const invoiceMarkets = markets.length ? markets : ["AUTRE"];
-      if (!invoiceMarkets.some((market) => marketFilters[market] !== false)) return false;
-
-      const statusKey = (invoice.status ?? "autre").trim().toLowerCase() || "autre";
-      if (statusFilters[statusKey] === false) return false;
-
-      const typeKey = (invoice.invoice_type || "VIDE").toUpperCase();
-      if (typeFilters[typeKey] === false) return false;
-
-      const haystack = [
-        invoice.invoice_number,
-        invoice.contract_code,
-        invoice.contract_label,
-        invoice.invoice_type,
-        invoice.status,
-        invoice.period_start,
-        invoice.period_end,
-        invoice.total_ht,
-        invoice.markets,
-        invoice.billed_items,
-        invoice.recipient_reference_1,
-      ]
-        .filter((value) => value != null)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(invoiceFilter.trim().toLowerCase());
-    })
-    .slice()
-    .sort((left, right) => {
-      const a = invoiceSortValue(left, invoiceSort.field);
-      const b = invoiceSortValue(right, invoiceSort.field);
-      let result = 0;
-      if (typeof a === "number" && typeof b === "number") {
-        result = a - b;
-      } else {
-        result = String(a).localeCompare(String(b), "fr", { sensitivity: "base", numeric: true });
-      }
-      return invoiceSort.direction === "asc" ? result : -result;
-    });
-  const annualInvoices = useMemo(
-    () =>
-      visibleInvoices.filter((invoice) => {
-        const dateValue = invoice.period_end || invoice.invoice_date;
-        if (!dateValue) return false;
-        const parsed = new Date(dateValue);
-        return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === annee;
-      }),
-    [visibleInvoices, annee],
-  );
-  const annualTotalHt = useMemo(
-    () => annualInvoices.reduce((sum, invoice) => sum + (invoice.total_ht || 0), 0),
-    [annualInvoices],
-  );
-  const annualContractReferenceHt = useMemo(
-    () =>
-      contractReferences
-        .filter(
-          (reference) =>
-            reference.active &&
-            reference.year === annee &&
-            cpeContractCodes.has(reference.contract_code.toUpperCase()),
-        )
-        .reduce((sum, reference) => sum + (reference.annual_amount_ht || 0), 0),
-    [contractReferences, cpeContractCodes, annee],
-  );
-  const monthlyChartData = useMemo(() => {
-    const rows = Array.from({ length: 12 }, (_, monthIndex) => ({
-      month: MOIS_LABELS[monthIndex],
-      P1: 0,
-      P2: 0,
-      P3: 0,
-      AUTRE: 0,
-      invoices: 0,
-      total_ht: 0,
-    }));
-    for (const invoice of annualInvoices) {
-      const monthSource = invoice.period_end || invoice.invoice_date;
-      if (!monthSource) continue;
-      const date = new Date(monthSource);
-      if (Number.isNaN(date.getTime())) continue;
-      const monthIndex = date.getMonth();
-      if (monthIndex < 0 || monthIndex > 11) continue;
-      const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
-      const normalizedMarkets = markets.length
-        ? markets.map((market) => (market === "P1" || market === "P2" || market === "P3" ? market : "AUTRE"))
-        : ["AUTRE"];
-      const share = (invoice.total_ht || 0) / normalizedMarkets.length;
-      for (const market of normalizedMarkets) {
-        rows[monthIndex][market as "P1" | "P2" | "P3" | "AUTRE"] += share;
-      }
-      rows[monthIndex].invoices += 1;
-      rows[monthIndex].total_ht += invoice.total_ht || 0;
-    }
-    return rows.map((row) => ({
-      ...row,
-      P1: Number(row.P1.toFixed(2)),
-      P2: Number(row.P2.toFixed(2)),
-      P3: Number(row.P3.toFixed(2)),
-      AUTRE: Number(row.AUTRE.toFixed(2)),
-      total_ht: Number(row.total_ht.toFixed(2)),
-    }));
-  }, [annualInvoices]);
-  const statusChartData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const invoice of annualInvoices) {
-      const key = (invoice.status || "autre").toLowerCase();
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-    const labels: Record<string, string> = {
-      a_controler: "A controler",
-      valide: "Valide",
-      refuse: "Refuse",
-      conteste: "Conteste",
-      autre: "Autre",
-    };
-    return Object.entries(counts).map(([key, count]) => ({ status: key, label: labels[key] ?? key, count }));
-  }, [annualInvoices]);
-  const topBilledItemsData = useMemo(() => {
-    const metrics: Record<string, { item: string; amount: number; invoices: number }> = {};
-    for (const invoice of annualInvoices) {
-      const items = splitList(invoice.billed_items).map((item) => item.toUpperCase());
-      const normalizedItems = items.length ? items : ["SANS_POSTE"];
-      const share = (invoice.total_ht || 0) / normalizedItems.length;
-      for (const item of normalizedItems) {
-        if (!metrics[item]) metrics[item] = { item, amount: 0, invoices: 0 };
-        metrics[item].amount += share;
-        metrics[item].invoices += 1;
-      }
-    }
-    return Object.values(metrics)
-      .sort((left, right) => right.amount - left.amount)
-      .slice(0, 10)
-      .map((row) => ({ ...row, amount: Number(row.amount.toFixed(2)) }));
-  }, [annualInvoices]);
-  const invoiceTypeChartData = useMemo(() => {
-    const labels: Record<string, string> = {
-      AC: "Acomptes",
-      AJ: "Ajustements",
-      DE: "Définitives",
-      EC: "Échéances",
-      RE: "Régularisations",
-      VIDE: "Non renseigné",
-    };
-    const metrics: Record<string, { type: string; label: string; amount: number; invoices: number }> = {};
-    for (const invoice of annualInvoices) {
-      const type = (invoice.invoice_type || "VIDE").toUpperCase();
-      if (!metrics[type]) metrics[type] = { type, label: labels[type] ?? type, amount: 0, invoices: 0 };
-      metrics[type].amount += invoice.total_ht || 0;
-      metrics[type].invoices += 1;
-    }
-    return Object.values(metrics).sort((left, right) => right.amount - left.amount);
-  }, [annualInvoices]);
-  const dueTimelineData = useMemo(() => {
-    const rows = Array.from({ length: 12 }, (_, monthIndex) => ({
-      month: MOIS_LABELS[monthIndex],
-      issued: 0,
-      due: 0,
-    }));
-    for (const invoice of annualInvoices) {
-      if (invoice.invoice_date) {
-        const issued = new Date(invoice.invoice_date);
-        if (!Number.isNaN(issued.getTime()) && issued.getFullYear() === annee) rows[issued.getMonth()].issued += invoice.total_ht || 0;
-      }
-      if (invoice.due_date) {
-        const due = new Date(invoice.due_date);
-        if (!Number.isNaN(due.getTime()) && due.getFullYear() === annee) rows[due.getMonth()].due += invoice.total_ht || 0;
-      }
-    }
-    return rows;
-  }, [annualInvoices, annee]);
-  const dueKpis = useMemo(
-    () => ({
-      overdue: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_depassee").length,
-      upcoming: annualInvoices.filter((invoice) => invoice.deadline_status === "urgent" || invoice.deadline_status === "a_anticiper").length,
-      missing: annualInvoices.filter((invoice) => invoice.deadline_status === "echeance_absente").length,
-    }),
-    [annualInvoices],
-  );
   const invoiceById = useMemo(() => new Map(invoices.map((invoice) => [invoice.id, invoice])), [invoices]);
   const sortedQueueInvoices = useMemo(() => {
     const rows = controlReport?.invoices ? [...controlReport.invoices] : [];
@@ -1949,27 +1689,6 @@ function CpeFinanceReference({
       active: referenceDraft.active,
     });
     resetReferenceDraft();
-  };
-  const toggleInvoiceSort = (field: InvoiceSortField) => {
-    setInvoiceSort((previous) => {
-      if (previous.field === field) {
-        return { field, direction: previous.direction === "asc" ? "desc" : "asc" };
-      }
-      return { field, direction: "asc" };
-    });
-  };
-  const toggleMarketFilter = (market: string) => {
-    setMarketFilters((previous) => ({ ...previous, [market]: previous[market] === false }));
-  };
-  const toggleStatusFilter = (status: string) => {
-    setStatusFilters((previous) => ({ ...previous, [status]: previous[status] === false }));
-  };
-  const toggleTypeFilter = (invoiceType: string) => {
-    setTypeFilters((previous) => ({ ...previous, [invoiceType]: previous[invoiceType] === false }));
-  };
-  const sortIndicator = (field: InvoiceSortField) => {
-    if (invoiceSort.field !== field) return "";
-    return invoiceSort.direction === "asc" ? " ▲" : " ▼";
   };
 
   return (
