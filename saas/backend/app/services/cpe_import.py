@@ -19,12 +19,19 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
+import unicodedata
+from collections import defaultdict
 from datetime import date
 
 from sqlalchemy.orm import Session
 
 from app.schemas.cpe import CpeGazReleveCreate, CpeImportResult
-from app.services.cpe import get_site_by_code, upsert_releve
+from app.services.cpe import PCS_PCI_RATIO, get_site_by_code, upsert_releve
+
+# Regex d'extraction du code site CPE depuis le libellé "SITE" de l'export DALKIA détaillé
+# (ex: "SETE GYMNASE VINCENT FERRARI VDS-SPORT 05" -> "VDS-SPORT 05").
+_CODE_SITE_RE = re.compile(r"(?:VDS-[A-Z]+|CCAS)\s+\d+(?:\.\d+)*", re.IGNORECASE)
 
 LOG = logging.getLogger(__name__)
 
@@ -89,12 +96,137 @@ def _normalize_header(h: str) -> str:
     )
 
 
+def _ascii_key(s: str) -> str:
+    """Normalise un en-tête (sans accents, sans casse, espaces compactés) pour le matcher."""
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode("ascii")
+    return " ".join(s.lower().split())
+
+
+def _extract_code_site(libelle: str) -> str | None:
+    """Extrait le code site CPE en fin de libellé SITE (dernier motif reconnu)."""
+    matches = _CODE_SITE_RE.findall(libelle or "")
+    if not matches:
+        return None
+    # findall avec groupe non capturant -> renvoie les correspondances entières
+    return re.sub(r"\s+", " ", matches[-1].strip().upper())
+
+
+def _is_dalkia_detailed(fieldnames: list[str]) -> bool:
+    """Détecte le vrai export DALKIA 'consommation détaillée' à ses colonnes."""
+    keys = {_ascii_key(h) for h in fieldnames}
+    return "type de compteur" in keys and any(k.startswith("date du rel") for k in keys) and "consommation" in keys
+
+
+def _import_dalkia_detailed(
+    db: Session, rows: list[dict], header_map: dict[str, str], source: str
+) -> CpeImportResult:
+    """Importe l'export DALKIA détaillé (1 ligne par compteur × relevé, multi-fluides).
+
+    Agrège par (site, année, mois) : gaz (MWh PCS -> PCI) et ECS (m³). Le code site est extrait
+    du libellé SITE. Les fluides ELEC/EAU/CHALEUR ne sont pas (encore) repris dans le modèle gaz.
+    """
+    def col(*aliases: str) -> str | None:
+        for a in aliases:
+            if a in header_map:
+                return header_map[a]
+        # match par préfixe (ex: "date du rel...")
+        for k, orig in header_map.items():
+            if any(k.startswith(a) for a in aliases):
+                return orig
+        return None
+
+    c_site = col("site")
+    c_type = col("type de compteur")
+    c_date = col("date du rel", "date du releve")
+    c_conso = col("consommation")
+    c_pcs = col("mwh pcs")
+
+    # agrégat : (code, annee, mois) -> {"gaz_pcs": float, "ecs_m3": float, "code_brut": str}
+    agg: dict[tuple[str, int, int], dict] = defaultdict(lambda: {"gaz_pcs": 0.0, "ecs_m3": 0.0})
+    nb_lignes = 0
+    erreurs: list[str] = []
+    sites_inconnus: set[str] = set()
+
+    def _num(v: str | None) -> float:
+        try:
+            return float((v or "").replace(",", ".").strip() or 0.0)
+        except ValueError:
+            return 0.0
+
+    for row in rows:
+        nb_lignes += 1
+        code = _extract_code_site(row.get(c_site, "") if c_site else "")
+        if not code:
+            continue
+        parsed = _parse_date(row.get(c_date, "") if c_date else "")
+        if not parsed:
+            continue
+        annee, mois = parsed
+        fluide = _ascii_key(row.get(c_type, "") if c_type else "")
+        key = (code, annee, mois)
+        agg[key]["code_brut"] = code
+        if fluide == "gaz":
+            agg[key]["gaz_pcs"] += _num(row.get(c_pcs) if c_pcs else None)
+        elif fluide == "ecs":
+            agg[key]["ecs_m3"] += _num(row.get(c_conso) if c_conso else None)
+
+    nb_inseres = nb_mis_a_jour = nb_erreurs = 0
+    from sqlalchemy import func, select
+
+    from app.models.cpe import CpeGazReleve
+
+    for (code, annee, mois), vals in sorted(agg.items()):
+        site = get_site_by_code(db, code)
+        if site is None:
+            sites_inconnus.add(code)
+            nb_erreurs += 1
+            continue
+        qt_pci = round(vals["gaz_pcs"] / PCS_PCI_RATIO, 4) if vals["gaz_pcs"] else None
+        ecs = round(vals["ecs_m3"], 3) if vals["ecs_m3"] else None
+        if qt_pci is None and ecs is None:
+            continue
+        try:
+            existing = db.execute(
+                select(func.count()).select_from(CpeGazReleve).where(
+                    CpeGazReleve.cpe_site_id == site.id,
+                    CpeGazReleve.annee == annee,
+                    CpeGazReleve.mois == mois,
+                )
+            ).scalar()
+            upsert_releve(
+                db, site.id,
+                CpeGazReleveCreate(annee=annee, mois=mois, qt_mwh_pci=qt_pci, volume_ecs_m3=ecs, etat_chauffe=None),
+                source=source,
+            )
+            if existing:
+                nb_mis_a_jour += 1
+            else:
+                nb_inseres += 1
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Erreur import conso [%s %s-%s] : %s", code, annee, mois, exc)
+            erreurs.append(f"[{code} {annee}-{mois:02d}] : {exc}")
+            nb_erreurs += 1
+
+    return CpeImportResult(
+        nb_lignes=nb_lignes,
+        nb_inseres=nb_inseres,
+        nb_mis_a_jour=nb_mis_a_jour,
+        nb_erreurs=nb_erreurs,
+        erreurs=erreurs[:50],
+        sites_inconnus=sorted(sites_inconnus),
+    )
+
+
 def import_releves_csv(
     db: Session,
     content: str | bytes,
     source: str = "csv_dalkia",
 ) -> CpeImportResult:
     """Parse et importe le fichier CSV de relevés mensuels DALKIA.
+
+    Détecte automatiquement deux formats :
+      - l'export DALKIA détaillé `consommation_detaillee_*` (multi-fluides, 1 ligne/compteur/relevé) ;
+      - le format simple historique (code_site, qt_mwh_pci, ...).
 
     Returns: CpeImportResult avec le bilan de l'import.
     """
@@ -108,6 +240,11 @@ def import_releves_csv(
     delimiter = _detect_delimiter(sample)
 
     reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
+
+    # Format DALKIA détaillé ?
+    if reader.fieldnames and _is_dalkia_detailed(list(reader.fieldnames)):
+        header_map = {_ascii_key(h): h for h in reader.fieldnames}
+        return _import_dalkia_detailed(db, list(reader), header_map, source)
 
     # Normalise les noms de colonnes
     if reader.fieldnames is None:
