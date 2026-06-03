@@ -7,7 +7,7 @@ import {
   fetchCvcImportBatches,
   fetchCvcImportItems,
   fetchEquipmentReferences,
-  fetchLocals,
+  fetchAllLocals,
   fetchSites,
   postCvcImport,
   updateCvcItem,
@@ -246,7 +246,7 @@ export function CvcImportPage() {
   });
   const localsQuery = useQuery<Local[]>({
     queryKey: ["locals", token],
-    queryFn: () => fetchLocals(token ?? ""),
+    queryFn: () => fetchAllLocals(token ?? ""),
     enabled: !!token,
     staleTime: 0,
   });
