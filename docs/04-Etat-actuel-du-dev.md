@@ -1,4 +1,16 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-03 (CVC terrain workflow persistant + durees de vie)
+> **Etat code local** : migration Alembic ajoutee `0042_extend_cvc_inventory_workflow.py` apres `0041`.
+>
+> Le chantier `/buildings/cvc-import` est reouvert pour corriger le workflow terrain :
+> l'upload enregistre maintenant l'inventaire brut meme avant rattachement patrimoine, puis expose un tableau editable.
+> Chaque ligne peut etre rattachee a un Site, Batiment et Local du referentiel patrimoine, puis associee au referentiel
+> `equipment_references` importe depuis `durees_vie_powerbi_base_wide.csv`. Le tableau expose les durees mini/reference/maxi,
+> la duree restante calculee, et un champ quantite de fluide frigorigene uniquement pour les references dont `niveau_3`
+> vaut `Production de froid :` ou `Pompes a chaleur Air/Air, Air/Eau, Eau/Eau`.
+> Validation locale : `python -m compileall app` OK. Import runtime FastAPI et build frontend non executes localement faute de
+> dependances (`fastapi`, `npm`/`node_modules`) sur le poste ; validation CI requise.
+>
 > **Mise a jour complementaire** : 2026-06-03 (CPE DALKIA consommations multi-fluides consolidees)
 > **Etat code constate** : migrations Alembic jusqu'a `0041_seed_cpe_contract_scope_references.py`.
 >

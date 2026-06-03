@@ -8,8 +8,10 @@ from app.core.db import get_db
 from app.models.user import User
 from app.schemas.cvc import (
     CvcBuildingMapping,
+    CvcImportBatchSummary,
     CvcImportResult,
     CvcInventoryItemRead,
+    CvcInventoryItemUpdate,
     CvcMatchBuildingsRequest,
     CvcMatchBuildingsResponse,
     CvcPreviewResponse,
@@ -19,9 +21,12 @@ from app.services.cvc import (
     delete_cvc_item,
     delete_cvc_items_for_building,
     import_cvc_from_excel,
+    list_cvc_import_batches,
+    list_cvc_items_for_batch,
     list_cvc_items_for_building,
     match_buildings_for_sites,
     parse_excel_preview,
+    update_cvc_item,
 )
 
 router = APIRouter(prefix="/cvc", tags=["cvc"])
@@ -51,7 +56,7 @@ def post_match_buildings(
 @router.post("/import", response_model=CvcImportResult, status_code=status.HTTP_201_CREATED)
 async def post_cvc_import(
     file: UploadFile = File(...),
-    mapping_json: str = Form(...),
+    mapping_json: str = Form(default="[]"),
     import_batch: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -63,11 +68,28 @@ async def post_cvc_import(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Mapping invalide : {e}")
     try:
-        return import_cvc_from_excel(db, raw, mappings, import_batch)
+        return import_cvc_from_excel(db, raw, mappings, current_user.city_id, import_batch)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erreur import : {e}"
         )
+
+
+@router.get("/imports", response_model=list[CvcImportBatchSummary])
+def get_cvc_import_batches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CvcImportBatchSummary]:
+    return list_cvc_import_batches(db, current_user.city_id)
+
+
+@router.get("/imports/{import_batch}/items", response_model=list[CvcInventoryItemRead])
+def get_cvc_import_items(
+    import_batch: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CvcInventoryItemRead]:
+    return list_cvc_items_for_batch(db, import_batch, current_user.city_id)
 
 
 @router.get("/buildings/{building_id}", response_model=list[CvcInventoryItemRead])
@@ -78,6 +100,22 @@ def get_cvc_building_items(
 ) -> list[CvcInventoryItemRead]:
     get_building_or_404(db, building_id, current_user)
     return list_cvc_items_for_building(db, building_id)
+
+
+@router.patch("/items/{item_id}", response_model=CvcInventoryItemRead)
+def patch_cvc_item(
+    item_id: int,
+    payload: CvcInventoryItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcInventoryItemRead:
+    try:
+        item = update_cvc_item(db, item_id, payload, current_user.city_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item introuvable.")
+    return item
 
 
 @router.delete("/buildings/{building_id}/items", status_code=status.HTTP_204_NO_CONTENT)

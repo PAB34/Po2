@@ -2542,7 +2542,10 @@ export type CvcMatchBuildingsResponse = {
 
 export type CvcInventoryItem = {
   id: number;
-  building_id: number;
+  city_id: number | null;
+  site_id: number | null;
+  building_id: number | null;
+  local_id: number | null;
   equipment_ref_id: number | null;
   site_raw: string | null;
   batiment: string | null;
@@ -2557,11 +2560,33 @@ export type CvcInventoryItem = {
   modele: string | null;
   date_mis_en_service: number | null;
   duree_vie_restante: number | null;
+  quantite_fluide_frigorigene: number | null;
   import_batch: string | null;
   criticite_pct: number | null;
   sypemi_reference_annees: number | null;
+  sypemi_mini_annees: number | null;
+  sypemi_maxi_annees: number | null;
+  equipment_ref: EquipmentReference | null;
+  requires_refrigerant_quantity: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type CvcImportBatchSummary = {
+  import_batch: string;
+  imported: number;
+  mapped_items: number;
+  reference_mapped_items: number;
+  refrigerant_items: number;
+  created_at: string | null;
+};
+
+export type UpdateCvcInventoryItemPayload = {
+  site_id?: number | null;
+  building_id?: number | null;
+  local_id?: number | null;
+  equipment_ref_id?: number | null;
+  quantite_fluide_frigorigene?: number | null;
 };
 
 export type CvcImportResult = {
@@ -2599,7 +2624,7 @@ export async function postCvcMatchBuildings(
 export async function postCvcImport(
   token: string,
   file: File,
-  mapping: { site_raw: string; building_id: number }[],
+  mapping: { site_raw: string; building_id: number }[] = [],
   importBatch?: string,
 ): Promise<CvcImportResult> {
   const form = new FormData();
@@ -2612,6 +2637,36 @@ export async function postCvcImport(
     body: form,
   });
   return parseResponse<CvcImportResult>(response);
+}
+
+export async function fetchCvcImportBatches(token: string): Promise<CvcImportBatchSummary[]> {
+  const response = await fetch(`${apiBaseUrl}/cvc/imports`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcImportBatchSummary[]>(response);
+}
+
+export async function fetchCvcImportItems(
+  token: string,
+  importBatch: string,
+): Promise<CvcInventoryItem[]> {
+  const response = await fetch(`${apiBaseUrl}/cvc/imports/${encodeURIComponent(importBatch)}/items`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcInventoryItem[]>(response);
+}
+
+export async function updateCvcItem(
+  token: string,
+  itemId: number,
+  payload: UpdateCvcInventoryItemPayload,
+): Promise<CvcInventoryItem> {
+  const response = await fetch(`${apiBaseUrl}/cvc/items/${itemId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CvcInventoryItem>(response);
 }
 
 export async function fetchCvcBuildingItems(

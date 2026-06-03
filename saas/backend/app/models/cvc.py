@@ -10,8 +10,13 @@ class CvcInventoryItem(Base):
     __tablename__ = "cvc_inventory_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    building_id: Mapped[int] = mapped_column(
-        ForeignKey("buildings.id", ondelete="CASCADE"), nullable=False, index=True
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True)
+    building_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    local_id: Mapped[int | None] = mapped_column(
+        ForeignKey("locals.id", ondelete="SET NULL"), nullable=True, index=True
     )
     equipment_ref_id: Mapped[int | None] = mapped_column(
         ForeignKey("equipment_references.id", ondelete="SET NULL"), nullable=True, index=True
@@ -29,6 +34,7 @@ class CvcInventoryItem(Base):
     modele: Mapped[str | None] = mapped_column(String(255), nullable=True)
     date_mis_en_service: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duree_vie_restante: Mapped[float | None] = mapped_column(Float, nullable=True)
+    quantite_fluide_frigorigene: Mapped[float | None] = mapped_column(Float, nullable=True)
     import_batch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

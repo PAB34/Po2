@@ -1,324 +1,305 @@
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
 import {
   fetchBuildings,
-  postCvcPreview,
-  postCvcMatchBuildings,
+  fetchCvcImportBatches,
+  fetchCvcImportItems,
+  fetchEquipmentReferences,
+  fetchLocals,
+  fetchSites,
   postCvcImport,
+  updateCvcItem,
   type Building,
-  type CvcPreviewResponse,
-  type SiteMatchResult,
-  type CvcImportResult,
+  type CvcImportBatchSummary,
+  type CvcInventoryItem,
+  type EquipmentReference,
+  type Local,
+  type Site,
+  type UpdateCvcInventoryItemPayload,
 } from "../lib/api";
 
 const SUBTLE_TEXT = "#94a3b8";
 const NEUTRAL_BORDER = "rgba(148, 163, 184, 0.25)";
 
-type Step = "upload" | "mapping" | "result";
-
-function scoreColor(score: number): string {
-  if (score >= 0.8) return "#4ade80";
-  if (score >= 0.5) return "#fbbf24";
-  return "#f87171";
+function compactLabel(parts: Array<string | null | undefined>): string {
+  return parts.filter(Boolean).join(" - ");
 }
 
-// ─── Composant SearchableSelect ──────────────────────────────────────────────
+function numberOrNull(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
-type SelectOption = {
-  id: number;
-  label: string;
-  score?: number;
+function referenceLabel(ref: EquipmentReference): string {
+  return compactLabel([
+    ref.code_niveau_2,
+    ref.niveau_3,
+    ref.niveau_4,
+    ref.niveau_5,
+    ref.equipement,
+  ]);
+}
+
+function isCvcRelevant(ref: EquipmentReference): boolean {
+  return ref.code_niveau_2 === "A.2.3" || ref.niveau_3 === "Production de froid :" || ref.niveau_3 === "Pompes à chaleur Air/Air, Air/Eau, Eau/Eau";
+}
+
+type RowSelectProps = {
+  value: number | null;
+  options: { id: number; label: string }[];
+  placeholder: string;
+  onChange: (value: number | null) => void;
+  disabled?: boolean;
 };
 
-type SearchableSelectProps = {
-  value: number | "";
-  onChange: (value: number | "") => void;
-  suggestions: SelectOption[];
-  allBuildings: SelectOption[];
-};
-
-function SearchableSelect({ value, onChange, suggestions, allBuildings }: SearchableSelectProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Fermer si clic en dehors
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSearch("");
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
-  // Focus sur l'input à l'ouverture
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
-
-  const allOptions = [...suggestions, ...allBuildings];
-  const selectedOption = value !== "" ? allOptions.find((o) => o.id === value) : null;
-  const displayLabel = selectedOption ? selectedOption.label : "— Ignorer ce site —";
-
-  const query = search.toLowerCase().trim();
-  const filteredSuggestions = query
-    ? suggestions.filter((o) => o.label.toLowerCase().includes(query))
-    : suggestions;
-  const filteredAll = query
-    ? allBuildings.filter((o) => o.label.toLowerCase().includes(query))
-    : allBuildings;
-  const hasResults = filteredSuggestions.length > 0 || filteredAll.length > 0;
-
-  function select(id: number | "") {
-    onChange(id);
-    setOpen(false);
-    setSearch("");
-  }
-
-  const itemStyle = (isSelected: boolean): React.CSSProperties => ({
-    padding: "7px 12px",
-    fontSize: "0.82rem",
-    color: isSelected ? "#93c5fd" : "#cbd5e1",
-    cursor: "pointer",
-    background: isSelected ? "rgba(59,130,246,0.12)" : "transparent",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  });
-
-  const groupHeaderStyle: React.CSSProperties = {
-    padding: "5px 12px",
-    fontSize: "0.68rem",
-    color: "#475569",
-    fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    background: "rgba(15,23,42,0.6)",
-    borderTop: "1px solid rgba(148,163,184,0.1)",
-    borderBottom: "1px solid rgba(148,163,184,0.08)",
-  };
-
+function RowSelect({ value, options, placeholder, onChange, disabled }: RowSelectProps) {
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
-      {/* Déclencheur */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          width: "100%",
-          padding: "6px 10px",
-          textAlign: "left",
-          background: "rgba(15,23,42,0.7)",
-          border: `1px solid ${value !== "" ? "rgba(34,197,94,0.4)" : "rgba(148,163,184,0.25)"}`,
-          borderRadius: 6,
-          color: value !== "" ? "#e2e8f0" : "#64748b",
-          fontSize: "0.84rem",
-          cursor: "pointer",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {displayLabel}
-        </span>
-        <span style={{ color: "#475569", fontSize: "0.65rem", flexShrink: 0 }}>▾</span>
-      </button>
-
-      {/* Panneau dropdown */}
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            background: "rgba(13,20,35,0.98)",
-            border: "1px solid rgba(148,163,184,0.25)",
-            borderRadius: 8,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-            overflow: "hidden",
-          }}
-        >
-          {/* Champ de recherche */}
-          <div style={{ padding: "8px 8px 6px", borderBottom: "1px solid rgba(148,163,184,0.15)" }}>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Rechercher un bâtiment…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "5px 9px",
-                background: "rgba(30,41,59,0.9)",
-                border: "1px solid rgba(148,163,184,0.2)",
-                borderRadius: 5,
-                color: "#e2e8f0",
-                fontSize: "0.82rem",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Liste */}
-          <div style={{ maxHeight: 300, overflowY: "auto" }}>
-            {/* Option "Ignorer" */}
-            <div
-              style={{ ...itemStyle(value === ""), borderBottom: "1px solid rgba(148,163,184,0.1)", color: value === "" ? "#93c5fd" : "#475569" }}
-              onMouseEnter={(e) => { if (value !== "") e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
-              onMouseLeave={(e) => { if (value !== "") e.currentTarget.style.background = "transparent"; }}
-              onClick={() => select("")}
-            >
-              — Ignorer ce site —
-            </div>
-
-            {/* Suggestions automatiques */}
-            {filteredSuggestions.length > 0 && (
-              <>
-                <div style={groupHeaderStyle}>Suggestions automatiques</div>
-                {filteredSuggestions.map((o) => (
-                  <div
-                    key={o.id}
-                    style={itemStyle(value === o.id)}
-                    onMouseEnter={(e) => { if (value !== o.id) e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
-                    onMouseLeave={(e) => { if (value !== o.id) e.currentTarget.style.background = value === o.id ? "rgba(59,130,246,0.12)" : "transparent"; }}
-                    onClick={() => select(o.id)}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
-                    {o.score !== undefined && (
-                      <span style={{ fontSize: "0.7rem", color: scoreColor(o.score), fontWeight: 700, flexShrink: 0 }}>
-                        {Math.round(o.score * 100)} %
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* Tous les bâtiments */}
-            {filteredAll.length > 0 && (
-              <>
-                <div style={groupHeaderStyle}>
-                  Tous les bâtiments {query ? `— ${filteredAll.length} résultat${filteredAll.length > 1 ? "s" : ""}` : ""}
-                </div>
-                {filteredAll.map((o) => (
-                  <div
-                    key={o.id}
-                    style={{ ...itemStyle(value === o.id), color: value === o.id ? "#93c5fd" : "#94a3b8" }}
-                    onMouseEnter={(e) => { if (value !== o.id) e.currentTarget.style.background = "rgba(51,65,85,0.5)"; }}
-                    onMouseLeave={(e) => { if (value !== o.id) e.currentTarget.style.background = value === o.id ? "rgba(59,130,246,0.12)" : "transparent"; }}
-                    onClick={() => select(o.id)}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.label}</span>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {/* Aucun résultat */}
-            {!hasResults && (
-              <div style={{ padding: "18px 12px", textAlign: "center", fontSize: "0.82rem", color: "#475569" }}>
-                Aucun résultat pour « {search} »
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <select
+      value={value ?? ""}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+      style={{
+        width: "100%",
+        minWidth: 180,
+        padding: "6px 8px",
+        borderRadius: 6,
+        border: `1px solid ${NEUTRAL_BORDER}`,
+        background: "rgba(15,23,42,0.9)",
+        color: disabled ? "#64748b" : "#e2e8f0",
+        fontSize: "0.78rem",
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
-// ─── Page principale ─────────────────────────────────────────────────────────
+type InventoryRowProps = {
+  item: CvcInventoryItem;
+  buildings: Building[];
+  sites: Site[];
+  locals: Local[];
+  references: EquipmentReference[];
+  saving: boolean;
+  onPatch: (item: CvcInventoryItem, payload: UpdateCvcInventoryItemPayload) => void;
+};
+
+function InventoryRow({ item, buildings, sites, locals, references, saving, onPatch }: InventoryRowProps) {
+  const building = buildings.find((b) => b.id === item.building_id);
+  const siteOptions = sites.map((site) => ({
+    id: site.id,
+    label: compactLabel([site.nom_site, site.adresse]),
+  }));
+  const buildingOptions = buildings.map((b) => ({
+    id: b.id,
+    label: compactLabel([b.nom_batiment ?? `Bâtiment #${b.id}`, b.adresse_reconstituee]),
+  }));
+  const localOptions = locals
+    .filter((local) => !item.building_id || local.building_id === item.building_id)
+    .map((local) => ({
+      id: local.id,
+      label: compactLabel([local.nom_local, local.niveau, local.type_local]),
+    }));
+  const referenceOptions = references.map((ref) => ({ id: ref.id, label: referenceLabel(ref) }));
+
+  const updateBuilding = (buildingId: number | null) => {
+    const nextBuilding = buildings.find((b) => b.id === buildingId);
+    onPatch(item, {
+      building_id: buildingId,
+      site_id: nextBuilding?.site_id ?? item.site_id ?? null,
+      local_id: null,
+    });
+  };
+
+  return (
+    <tr>
+      <td>
+        <strong>{item.designation}</strong>
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {compactLabel([item.famille, item.marque, item.modele]) || "Famille non renseignée"}
+        </div>
+      </td>
+      <td>
+        <div>{item.site_raw ?? "-"}</div>
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {compactLabel([item.batiment, item.niveau, item.local_name])}
+        </div>
+      </td>
+      <td>
+        <RowSelect
+          value={item.site_id}
+          options={siteOptions}
+          placeholder="Site patrimoine"
+          disabled={saving}
+          onChange={(site_id) => onPatch(item, { site_id })}
+        />
+      </td>
+      <td>
+        <RowSelect
+          value={item.building_id}
+          options={buildingOptions}
+          placeholder="Bâtiment patrimoine"
+          disabled={saving}
+          onChange={updateBuilding}
+        />
+      </td>
+      <td>
+        <RowSelect
+          value={item.local_id}
+          options={localOptions}
+          placeholder={building ? "Local optionnel" : "Choisir un bâtiment"}
+          disabled={saving || !item.building_id}
+          onChange={(local_id) => onPatch(item, { local_id })}
+        />
+      </td>
+      <td>
+        <RowSelect
+          value={item.equipment_ref_id}
+          options={referenceOptions}
+          placeholder="Référence durée de vie"
+          disabled={saving}
+          onChange={(equipment_ref_id) => onPatch(item, { equipment_ref_id })}
+        />
+        {item.equipment_ref && (
+          <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem", marginTop: 4 }}>
+            {compactLabel([item.equipment_ref.niveau_3, item.equipment_ref.equipement])}
+          </div>
+        )}
+      </td>
+      <td style={{ whiteSpace: "nowrap" }}>
+        {item.sypemi_mini_annees ?? "-"} / <strong>{item.sypemi_reference_annees ?? "-"}</strong> / {item.sypemi_maxi_annees ?? "-"} ans
+        {item.duree_vie_restante !== null && (
+          <div style={{ color: item.duree_vie_restante < 0 ? "#f87171" : SUBTLE_TEXT, fontSize: "0.72rem" }}>
+            {item.duree_vie_restante < 0
+              ? `${Math.abs(item.duree_vie_restante)} ans dépassé`
+              : `${item.duree_vie_restante} ans restants`}
+          </div>
+        )}
+      </td>
+      <td>
+        {item.requires_refrigerant_quantity ? (
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={item.quantite_fluide_frigorigene ?? ""}
+            disabled={saving}
+            onBlur={(e) => onPatch(item, { quantite_fluide_frigorigene: numberOrNull(e.target.value) })}
+            style={{
+              width: 110,
+              padding: "6px 8px",
+              borderRadius: 6,
+              border: `1px solid ${NEUTRAL_BORDER}`,
+              background: "rgba(15,23,42,0.9)",
+              color: "#e2e8f0",
+            }}
+          />
+        ) : (
+          <span style={{ color: "#475569" }}>Non concerné</span>
+        )}
+      </td>
+      <td style={{ color: saving ? "#fbbf24" : "#4ade80", fontSize: "0.74rem" }}>
+        {saving ? "Sauvegarde..." : "Enregistré"}
+      </td>
+    </tr>
+  );
+}
 
 export function CvcImportPage() {
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<CvcPreviewResponse | null>(null);
-  const [matches, setMatches] = useState<SiteMatchResult[]>([]);
-  const [selectedMapping, setSelectedMapping] = useState<Record<string, number | "">>({});
-  const [result, setResult] = useState<CvcImportResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [activeBatch, setActiveBatch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const batchesQuery = useQuery<CvcImportBatchSummary[]>({
+    queryKey: ["cvc-import-batches", token],
+    queryFn: () => fetchCvcImportBatches(token ?? ""),
+    enabled: !!token,
+  });
+  const itemsQuery = useQuery<CvcInventoryItem[]>({
+    queryKey: ["cvc-import-items", token, activeBatch],
+    queryFn: () => fetchCvcImportItems(token ?? "", activeBatch ?? ""),
+    enabled: !!token && !!activeBatch,
+  });
   const buildingsQuery = useQuery<Building[]>({
-    queryKey: ["buildings"],
+    queryKey: ["buildings", token],
     queryFn: () => fetchBuildings(token ?? ""),
     enabled: !!token,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+  });
+  const sitesQuery = useQuery<Site[]>({
+    queryKey: ["sites", token],
+    queryFn: () => fetchSites(token ?? ""),
+    enabled: !!token,
+    staleTime: 0,
+  });
+  const localsQuery = useQuery<Local[]>({
+    queryKey: ["locals", token],
+    queryFn: () => fetchLocals(token ?? ""),
+    enabled: !!token,
+    staleTime: 0,
+  });
+  const referencesQuery = useQuery<EquipmentReference[]>({
+    queryKey: ["equipment-references", token],
+    queryFn: () => fetchEquipmentReferences(token ?? ""),
+    enabled: !!token,
+    staleTime: 10 * 60 * 1000,
   });
 
-  async function handlePreview() {
-    if (!file || !token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const prev = await postCvcPreview(token, file);
-      setPreview(prev);
-      const matchRes = await postCvcMatchBuildings(token, prev.unique_sites);
-      const m = matchRes.matches;
-      setMatches(m);
-      const init: Record<string, number | ""> = {};
-      for (const r of m) {
-        init[r.site_raw] = r.auto_selected_id ?? "";
-      }
-      setSelectedMapping(init);
-      setStep("mapping");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur de lecture du fichier.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      if (!file || !token) throw new Error("Sélectionne un fichier Excel avant l'import.");
+      return postCvcImport(token, file, []);
+    },
+    onSuccess: (result) => {
+      setActiveBatch(result.import_batch);
+      setFile(null);
+      setError(null);
+      if (fileRef.current) fileRef.current.value = "";
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-items"] });
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur lors de l'import."),
+  });
 
-  async function handleImport() {
-    if (!file || !token) return;
-    const mapping = Object.entries(selectedMapping)
-      .filter(([, bid]) => bid !== "")
-      .map(([site_raw, building_id]) => ({ site_raw, building_id: building_id as number }));
-    if (mapping.length === 0) {
-      setError("Aucun bâtiment mappé. Associe au moins un site à un bâtiment.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await postCvcImport(token, file, mapping);
-      setResult(res);
-      setStep("result");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Erreur lors de l'import.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const updateMutation = useMutation({
+    mutationFn: ({ item, payload }: { item: CvcInventoryItem; payload: UpdateCvcInventoryItemPayload }) => {
+      if (!token) throw new Error("Session expirée.");
+      return updateCvcItem(token, item.id, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-items"] });
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["cvc-terrain"] });
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur de sauvegarde."),
+  });
 
-  function reset() {
-    setStep("upload");
-    setFile(null);
-    setPreview(null);
-    setMatches([]);
-    setSelectedMapping({});
-    setResult(null);
-    setError(null);
-    if (fileRef.current) fileRef.current.value = "";
-  }
+  const references = useMemo(
+    () => (referencesQuery.data ?? []).filter(isCvcRelevant),
+    [referencesQuery.data],
+  );
+  const items = itemsQuery.data ?? [];
+  const mappedCount = items.filter((item) => item.building_id !== null).length;
+  const refMappedCount = items.filter((item) => item.equipment_ref_id !== null).length;
+  const refrigerantCount = items.filter((item) => item.requires_refrigerant_quantity).length;
 
-  const mappedCount = Object.values(selectedMapping).filter((v) => v !== "").length;
-  const unmappedCount = matches.length - mappedCount;
+  function refreshPatrimoineLists() {
+    queryClient.invalidateQueries({ queryKey: ["buildings"] });
+    queryClient.invalidateQueries({ queryKey: ["sites"] });
+    queryClient.invalidateQueries({ queryKey: ["locals"] });
+  }
 
   if (!token) {
     return (
@@ -333,43 +314,13 @@ export function CvcImportPage() {
     <section className="panel stack-lg">
       <div className="panel-header">
         <div>
-          <p className="eyebrow">Gestion Technique</p>
-          <h2>Import inventaire CVC terrain</h2>
-          <p>Importe le fichier Excel d'inventaire matériels et rattache chaque site à un bâtiment de ta base.</p>
+          <p className="eyebrow">Gestion technique</p>
+          <h2>Inventaire CVC terrain</h2>
+          <p>Charge le fichier terrain, puis complète les rattachements patrimoine et les durées de vie dans le tableau.</p>
         </div>
         <div className="buildings-header-actions">
           <Link className="secondary-link" to="/buildings/technique">Retour à la gestion technique</Link>
         </div>
-      </div>
-
-      {/* Stepper */}
-      <div style={{ display: "flex", gap: 4, alignItems: "center", fontSize: "0.85rem" }}>
-        {(["upload", "mapping", "result"] as Step[]).map((s, i) => {
-          const labels = ["1. Upload", "2. Mapping bâtiments", "3. Résultat"];
-          const isActive = step === s;
-          const isDone = (step === "mapping" && s === "upload") || step === "result";
-          return (
-            <span key={s} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <span
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 12,
-                  fontWeight: isActive ? 700 : 400,
-                  background: isActive
-                    ? "rgba(59, 130, 246, 0.25)"
-                    : isDone
-                      ? "rgba(34, 197, 94, 0.15)"
-                      : "rgba(51, 65, 85, 0.3)",
-                  color: isActive ? "#93c5fd" : isDone ? "#4ade80" : SUBTLE_TEXT,
-                  border: `1px solid ${isActive ? "rgba(59,130,246,0.4)" : "transparent"}`,
-                }}
-              >
-                {labels[i]}
-              </span>
-              {i < 2 && <span style={{ color: SUBTLE_TEXT }}>→</span>}
-            </span>
-          );
-        })}
       </div>
 
       {error && (
@@ -378,170 +329,114 @@ export function CvcImportPage() {
         </div>
       )}
 
-      {/* ── Étape 1 : Upload ── */}
-      {step === "upload" && (
-        <div className="section-block" style={{ maxWidth: 560 }}>
-          <h3>Sélectionne le fichier Excel</h3>
-          <p style={{ color: SUBTLE_TEXT, fontSize: "0.9rem" }}>
-            Format attendu : colonnes SITE, BATIMENT, NIVEAU, LOCAL, DESIGNATION, STATUT, ETAT SANTE, QTE, FAMILLE, MARQUE, MODELE, DATE MES.
-          </p>
-          <label className="field" style={{ marginTop: 16 }}>
-            <span>Fichier .xlsx</span>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
+      <div className="section-block">
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label className="field" style={{ minWidth: 280, margin: 0 }}>
+            <span>Fichier inventaire .xlsx</span>
+            <input ref={fileRef} type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </label>
-          {file && (
-            <p style={{ fontSize: "0.85rem", color: SUBTLE_TEXT, marginTop: 4 }}>
-              Fichier sélectionné : <strong style={{ color: "#e2e8f0" }}>{file.name}</strong>
-            </p>
-          )}
           <button
             type="button"
             className="primary-button"
-            style={{ marginTop: 16 }}
-            onClick={handlePreview}
-            disabled={!file || loading}
+            onClick={() => uploadMutation.mutate()}
+            disabled={!file || uploadMutation.isPending}
           >
-            {loading ? "Analyse en cours..." : "Analyser le fichier →"}
+            {uploadMutation.isPending ? "Enregistrement..." : "Uploader et enregistrer l'inventaire"}
           </button>
         </div>
-      )}
+        {file && (
+          <p style={{ color: SUBTLE_TEXT, fontSize: "0.85rem", marginTop: 8 }}>
+            Fichier prêt : <strong style={{ color: "#e2e8f0" }}>{file.name}</strong>
+          </p>
+        )}
+      </div>
 
-      {/* ── Étape 2 : Mapping ── */}
-      {step === "mapping" && preview && (
-        <div className="section-block">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h3>Associe chaque site à un bâtiment</h3>
-              <p style={{ color: SUBTLE_TEXT, fontSize: "0.9rem" }}>
-                {preview.total_rows} lignes — {matches.length} sites détectés —{" "}
-                <strong style={{ color: "#4ade80" }}>{mappedCount} mappés</strong>
-                {unmappedCount > 0 && <span style={{ color: "#fbbf24" }}> · {unmappedCount} non mappés (ignorés)</span>}
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="secondary-button" onClick={reset}>
-                Recommencer
-              </button>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleImport}
-                disabled={loading || mappedCount === 0}
-              >
-                {loading ? "Import en cours..." : `Importer (${mappedCount} sites) →`}
-              </button>
-            </div>
+      <div className="section-block">
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <h3>Imports enregistrés</h3>
+            <p style={{ color: SUBTLE_TEXT, fontSize: "0.86rem" }}>
+              Les listes sites, bâtiments et locaux sont relues depuis le patrimoine.
+            </p>
           </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 16 }}>
-            {matches.map((m) => {
-              const selectedId = selectedMapping[m.site_raw];
-              const bestSuggestion = m.suggestions[0];
-              const suggestionIds = new Set(m.suggestions.map((s) => s.building_id));
-
-              // Convertir suggestions en SelectOption
-              const suggestionOptions: SelectOption[] = m.suggestions.map((s) => ({
-                id: s.building_id,
-                label: [s.nom_batiment ?? `Bâtiment #${s.building_id}`, s.adresse]
-                  .filter(Boolean)
-                  .join(" — "),
-                score: s.score,
-              }));
-
-              // Tous les bâtiments hors suggestions, triés par nom
-              const allBuildingOptions: SelectOption[] = (buildingsQuery.data ?? [])
-                .filter((b) => !suggestionIds.has(b.id))
-                .sort((a, b) =>
-                  (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? "", "fr", { sensitivity: "base" }),
-                )
-                .map((b) => ({
-                  id: b.id,
-                  label: [b.nom_batiment ?? `Bâtiment #${b.id}`, b.adresse_reconstituee]
-                    .filter(Boolean)
-                    .join(" — "),
-                }));
-
-              return (
-                <div
-                  key={m.site_raw}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                    alignItems: "center",
-                    padding: "10px 14px",
-                    border: `1px solid ${selectedId ? "rgba(34,197,94,0.3)" : NEUTRAL_BORDER}`,
-                    borderRadius: 8,
-                    background: selectedId ? "rgba(34,197,94,0.05)" : "rgba(15,23,42,0.3)",
-                  }}
-                >
-                  <div>
-                    <strong style={{ fontSize: "0.88rem" }}>{m.site_raw}</strong>
-                    {bestSuggestion && (
-                      <div style={{ fontSize: "0.75rem", color: SUBTLE_TEXT, marginTop: 2 }}>
-                        Meilleure suggestion :{" "}
-                        <span style={{ color: scoreColor(bestSuggestion.score), fontWeight: 600 }}>
-                          {Math.round(bestSuggestion.score * 100)} %
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <SearchableSelect
-                    value={selectedId ?? ""}
-                    onChange={(val) =>
-                      setSelectedMapping((prev) => ({ ...prev, [m.site_raw]: val }))
-                    }
-                    suggestions={suggestionOptions}
-                    allBuildings={allBuildingOptions}
-                  />
-                </div>
-              );
-            })}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" className="secondary-button" onClick={refreshPatrimoineLists}>
+              Rafraîchir patrimoine
+            </button>
+            <select
+              value={activeBatch ?? ""}
+              onChange={(e) => setActiveBatch(e.target.value || null)}
+              style={{
+                minWidth: 280,
+                padding: "8px 10px",
+                borderRadius: 6,
+                border: `1px solid ${NEUTRAL_BORDER}`,
+                background: "rgba(15,23,42,0.9)",
+                color: "#e2e8f0",
+              }}
+            >
+              <option value="">Choisir un import</option>
+              {(batchesQuery.data ?? []).map((batch) => (
+                <option key={batch.import_batch} value={batch.import_batch}>
+                  {batch.import_batch} - {batch.imported} lignes - {batch.mapped_items} patrimoine
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ── Étape 3 : Résultat ── */}
-      {step === "result" && result && (
-        <div className="section-block" style={{ maxWidth: 560 }}>
-          <h3>Import terminé</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <div style={{ textAlign: "center", padding: "12px 20px", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 8 }}>
-                <div style={{ fontSize: "2rem", fontWeight: 700, color: "#4ade80" }}>{result.imported}</div>
-                <div style={{ fontSize: "0.8rem", color: SUBTLE_TEXT }}>lignes importées</div>
+      {activeBatch && (
+        <div className="section-block">
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+            {[
+              ["Lignes", items.length],
+              ["Rattachées patrimoine", mappedCount],
+              ["Référence durée de vie", refMappedCount],
+              ["Fluides frigorigènes", refrigerantCount],
+            ].map(([label, value]) => (
+              <div key={label} style={{ padding: "10px 14px", border: `1px solid ${NEUTRAL_BORDER}`, borderRadius: 8, background: "rgba(15,23,42,0.35)" }}>
+                <div style={{ color: "#e2e8f0", fontWeight: 700 }}>{value}</div>
+                <div style={{ color: SUBTLE_TEXT, fontSize: "0.74rem" }}>{label}</div>
               </div>
-              <div style={{ textAlign: "center", padding: "12px 20px", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 8 }}>
-                <div style={{ fontSize: "2rem", fontWeight: 700, color: "#60a5fa" }}>{result.sypemi_matched}</div>
-                <div style={{ fontSize: "0.8rem", color: SUBTLE_TEXT }}>liées au référentiel SYPEMI</div>
-              </div>
-              <div style={{ textAlign: "center", padding: "12px 20px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 8 }}>
-                <div style={{ fontSize: "2rem", fontWeight: 700, color: "#fbbf24" }}>{result.skipped}</div>
-                <div style={{ fontSize: "0.8rem", color: SUBTLE_TEXT }}>ignorées (site non mappé)</div>
-              </div>
+            ))}
+          </div>
+
+          {itemsQuery.isLoading && <p>Chargement de l'inventaire...</p>}
+          {!itemsQuery.isLoading && items.length === 0 && <p>Aucune ligne trouvée pour cet import.</p>}
+          {items.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table className="data-table" style={{ minWidth: 1480 }}>
+                <thead>
+                  <tr>
+                    <th>Équipement terrain</th>
+                    <th>Localisation source</th>
+                    <th>Site patrimoine</th>
+                    <th>Bâtiment patrimoine</th>
+                    <th>Local patrimoine</th>
+                    <th>Durée de vie attachée</th>
+                    <th>Mini / Réf. / Maxi</th>
+                    <th>Fluide kg</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <InventoryRow
+                      key={item.id}
+                      item={item}
+                      buildings={buildingsQuery.data ?? []}
+                      sites={sitesQuery.data ?? []}
+                      locals={localsQuery.data ?? []}
+                      references={references}
+                      saving={updateMutation.isPending && updateMutation.variables?.item.id === item.id}
+                      onPatch={(row, payload) => updateMutation.mutate({ item: row, payload })}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p style={{ fontSize: "0.85rem", color: SUBTLE_TEXT }}>
-              Référence import : <code style={{ color: "#e2e8f0" }}>{result.import_batch}</code>
-            </p>
-            {result.sypemi_unmatched > 0 && (
-              <p style={{ fontSize: "0.85rem", color: "#fbbf24" }}>
-                {result.sypemi_unmatched} équipements sans correspondance SYPEMI — durée de vie non calculée pour ceux-ci.
-              </p>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-            <Link to="/buildings/technique" className="primary-button" style={{ textDecoration: "none" }}>
-              Voir l'inventaire technique →
-            </Link>
-            <button type="button" className="secondary-button" onClick={reset}>
-              Importer un autre fichier
-            </button>
-          </div>
+          )}
         </div>
       )}
     </section>
