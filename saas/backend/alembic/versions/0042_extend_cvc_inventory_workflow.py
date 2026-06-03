@@ -1,13 +1,13 @@
 """Extend CVC inventory workflow with persisted mapping fields.
 
 Revision ID: 0042_extend_cvc_inventory_workflow
-Revises: 0041_seed_cpe_contract_scope_references
+Revises: 0041
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = "0042_extend_cvc_inventory_workflow"
-down_revision = "0041_seed_cpe_contract_scope_references"
+down_revision = "0041"
 branch_labels = None
 depends_on = None
 
