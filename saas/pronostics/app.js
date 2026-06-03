@@ -455,6 +455,12 @@ function saveAll(){
 
 /* tirage aléatoire sur la sélection visible et modifiable */
 function randomFill(){
+  fillVisibleWith(randomScore, 'tirage expert probabiliste');
+}
+function randomCrazyFill(){
+  fillVisibleWith(randomCrazyScore, 'tirage expert fou');
+}
+function fillVisibleWith(scoreFn, label){
   var cards=[].slice.call(document.querySelectorAll('#matchGrid .match'));
   var modifiable=cards.filter(function(c){ var m=findMatch(c.getAttribute('data-id')); return m && !m.locked; });
   if(!modifiable.length){ msg('pronosMsg','Aucun match modifiable dans cette sélection.','info'); return; }
@@ -464,7 +470,7 @@ function randomFill(){
   var count=0;
   targets.forEach(function(c){
     var m=findMatch(c.getAttribute('data-id')); if(!m) return;
-    var s=randomScore(m); m.prono1=s[0]; m.prono2=s[1];
+    var s=scoreFn(m); m.prono1=s[0]; m.prono2=s[1];
     var ins=c.querySelectorAll('.scoreInput');
     if(ins[0]) ins[0].value=s[0]; if(ins[1]) ins[1].value=s[1];
     var done=isFilled(m); c.className='match '+(done?'done':'todo');
@@ -472,7 +478,7 @@ function randomFill(){
     count++;
   });
   if(count){ dirty=true; $('savebar').classList.add('show'); renderMatches(); updateProgress();
-    msg('pronosMsg', count+' match(s) remplis par le tirage expert probabiliste. Pense à enregistrer.','info'); }
+    msg('pronosMsg', count+' match(s) remplis par le '+label+'. Pense à enregistrer.','info'); }
 }
 function findMatch(id){ return (state.matches||[]).find(function(x){return String(x.id)===String(id);}); }
 /* ===================================================================
@@ -594,6 +600,82 @@ function randomScore(m){
   if(r2+35<r1 && s1-s2>=3 && Math.random()<0.65) s1=Math.max(0,s1-1);
 
   return [s1,s2];
+}
+function matchDiagnosis(m){
+  var p1=profile(m.team1,m.fifaRank1), p2=profile(m.team2,m.fifaRank2);
+  var r1=Number(m.fifaRank1)||75, r2=Number(m.fifaRank2)||75;
+  var l1=expectedGoalsFor(m.team1,m.fifaRank1,m.team2,m.fifaRank2);
+  var l2=expectedGoalsFor(m.team2,m.fifaRank2,m.team1,m.fifaRank1);
+  var favorite = l1>=l2 ? 1 : 2;
+  var fav = favorite===1 ? p1 : p2;
+  var dog = favorite===1 ? p2 : p1;
+  var rankGap = Math.abs(r1-r2);
+  var attackGap = Math.max(0, fav.atk-dog.def);
+  var tempo = (p1.tempo+p2.tempo)/2;
+  var volatility = (p1.vol+p2.vol)/200;
+  var favoriteEdge = Math.abs(l1-l2);
+  var blowoutPower = clamp((rankGap/55)+(attackGap/35)+((fav.atk-82)/35)+((74-dog.def)/35)+((tempo-66)/28), 0, 2.4);
+  var upsetPower = clamp((dog.vol/70)+((fav.def<78)?0.35:0)+((favoriteEdge<0.55)?0.45:0)+((dog.trans-fav.press)/55), 0, 1.9);
+  return {p1:p1,p2:p2,r1:r1,r2:r2,l1:l1,l2:l2,favorite:favorite,rankGap:rankGap,tempo:tempo,volatility:volatility,
+    favoriteEdge:favoriteEdge,blowoutPower:blowoutPower,upsetPower:upsetPower};
+}
+function crazyEvent(d){
+  var r=Math.random();
+  var blowout=0.10 + Math.min(0.24, d.blowoutPower*0.10);
+  var upset=0.12 + Math.min(0.20, d.upsetPower*0.10);
+  var festival=0.16 + Math.min(0.16, d.volatility*0.18 + Math.max(0,d.tempo-68)*0.01);
+  var trap=0.14 + (d.favoriteEdge<0.55 ? 0.10 : 0);
+  var closed=0.10 + (d.tempo<62 ? 0.12 : 0);
+  if(r<blowout) return 'blowout';
+  r-=blowout;
+  if(r<upset) return 'upset';
+  r-=upset;
+  if(r<festival) return 'festival';
+  r-=festival;
+  if(r<trap) return 'trap';
+  r-=trap;
+  if(r<closed) return 'closed';
+  return 'wild';
+}
+function randomCrazyScore(m){
+  var d=matchDiagnosis(m), event=crazyEvent(d);
+  var l1=d.l1, l2=d.l2;
+  var noise=0.95 + d.volatility*0.75;
+  l1=clamp(l1 + (Math.random()-.5)*noise, .05, 4.6);
+  l2=clamp(l2 + (Math.random()-.5)*noise, .05, 4.6);
+
+  if(event==='blowout'){
+    if(d.favorite===1){ l1+=0.75+d.blowoutPower*.45; l2-=0.25; }
+    else { l2+=0.75+d.blowoutPower*.45; l1-=0.25; }
+  } else if(event==='upset'){
+    if(d.favorite===1){ l1-=0.55; l2+=0.75+d.upsetPower*.40; }
+    else { l2-=0.55; l1+=0.75+d.upsetPower*.40; }
+  } else if(event==='festival'){
+    l1+=0.85+d.volatility*.45; l2+=0.85+d.volatility*.45;
+  } else if(event==='trap'){
+    if(d.favorite===1){ l1-=0.35; l2+=0.45; }
+    else { l2-=0.35; l1+=0.45; }
+  } else if(event==='closed'){
+    if(Math.random()<0.45) return [0,0];
+    l1*=0.55; l2*=0.55;
+  } else {
+    l1+=Math.random()*.65; l2+=Math.random()*.65;
+  }
+
+  var s1=Math.min(7,poisson(clamp(l1,.05,5.2))), s2=Math.min(7,poisson(clamp(l2,.05,5.2)));
+  if(event==='blowout' && d.blowoutPower>0.95){
+    if(d.favorite===1 && s1-s2<2) s1=Math.min(7,s2+2+Math.floor(Math.random()*3));
+    if(d.favorite===2 && s2-s1<2) s2=Math.min(7,s1+2+Math.floor(Math.random()*3));
+  }
+  if(event==='upset'){
+    if(d.favorite===1 && s2<=s1) s2=Math.min(7,s1+1+Math.floor(Math.random()*2));
+    if(d.favorite===2 && s1<=s2) s1=Math.min(7,s2+1+Math.floor(Math.random()*2));
+  }
+  if(event==='trap' && Math.random()<0.55){
+    var base=Math.random()<0.55 ? 1 : 2;
+    return [base,base];
+  }
+  return [clamp(s1,0,7),clamp(s2,0,7)];
 }
 function poisson(lambda){ var L=Math.exp(-lambda),p=1,k=0; do{k++;p*=Math.random();}while(p>L&&k<10); return k-1; }
 
