@@ -1202,6 +1202,30 @@ def _line_raw_str(line: CpeFinanceLine, key: str) -> str | None:
     return _clean(raw.get(key))
 
 
+def _line_revision_breakdown(line: CpeFinanceLine) -> tuple[float | None, float | None]:
+    """Decompose le montant HT facture en (acompte hors revision, montant de la revision).
+
+    DALKIA exporte un `prix_de_base` et un `prix_ou_forfait_revise` qui sont les
+    montants annuels du poste (le revise = base x coefficient de revision). Le
+    `montant_ht` facture est l'acompte de la periode, le plus souvent 1/4 de l'annuel
+    pour un acompte trimestriel. On retrouve la quote-part reellement appliquee par
+    DALKIA via le ratio `montant_ht / prix_revise`, puis on l'applique au prix de base
+    pour isoler la part hors revision. Ce ratio gere aussi bien le decoupage /4 que les
+    prorata partiels ou les lignes facturees a la consommation (prix unitaire x quantite).
+
+    Retourne `(None, None)` si la decomposition n'est pas calculable (base ou revise
+    absent, ou revise nul).
+    """
+    base = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
+    revised = line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise")
+    amount = line.amount_ht
+    if base is None or amount is None or not revised:
+        return None, None
+    base_share = round(base * (amount / revised), 2)
+    revision_share = round(amount - base_share, 2)
+    return base_share, revision_share
+
+
 def _invoice_type_label(value: str | None) -> str | None:
     code = (value or "").strip().upper()
     if not code:
@@ -2948,15 +2972,17 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         "Nature",
         "Libelle nature",
         "TVA",
-        "Prix base",
-        "Prix revise",
+        "Prix base annuel",
+        "Prix revise annuel",
+        "Acompte hors revision",
+        "Revision appliquee",
         "Controle",
         "Formule",
         "Message controle",
         "Diagnostic probable",
         "Action recommandee",
         "Lecture calcul",
-        "Montant HT",
+        "Montant HT (avec revision)",
         "Conso",
         "Unite",
         "Detail",
@@ -2976,6 +3002,7 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             for trace in [_control_calculation_trace(control) for control in line_controls[:3]]
             if trace
         ) or None
+        base_share, revision_share = _line_revision_breakdown(line)
         values = [
             line.row_number,
             _invoice_type_label(invoice.invoice_type),
@@ -3002,6 +3029,8 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             line.vat_rate,
             line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base"),
             line.revised_price if line.revised_price is not None else _line_raw_float(line, "prix_ou_forfait_revise"),
+            base_share,
+            revision_share,
             _controls_status_label(line_controls),
             " | ".join(control.formula for control in line_controls if control.formula) or None,
             " | ".join(control.message for control in line_controls) or None,
@@ -3017,10 +3046,12 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         ]
         for col, value in enumerate(values, start=1):
             detail.cell(row=row_index, column=col, value=value)
-        detail.cell(row=row_index, column=23).number_format = "0.00%"
+        detail.cell(row=row_index, column=23).number_format = '0.00"%"'
         detail.cell(row=row_index, column=24).number_format = '#,##0.0000'
         detail.cell(row=row_index, column=25).number_format = '#,##0.0000'
-        detail.cell(row=row_index, column=32).number_format = '#,##0.00 "EUR"'
+        detail.cell(row=row_index, column=26).number_format = '#,##0.00 "EUR"'
+        detail.cell(row=row_index, column=27).number_format = '#,##0.00 "EUR"'
+        detail.cell(row=row_index, column=34).number_format = '#,##0.00 "EUR"'
     _set_widths(
         detail,
         [
@@ -3047,15 +3078,17 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
             12,
             28,
             10,
-            12,
-            12,
+            14,
+            16,
+            18,
+            18,
             12,
             34,
             55,
             36,
             36,
             58,
-            14,
+            18,
             12,
             10,
             48,
@@ -3064,7 +3097,7 @@ def build_detailed_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvo
         ],
     )
     detail.freeze_panes = "A2"
-    detail.auto_filter.ref = f"A1:AK{max(2, len(lines) + 1)}"
+    detail.auto_filter.ref = f"A1:AM{max(2, len(lines) + 1)}"
 
     if controls:
         controls_sheet = wb.create_sheet("Controles")
