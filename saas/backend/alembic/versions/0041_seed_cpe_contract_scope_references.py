@@ -1,6 +1,6 @@
 """seed editable CPE DALKIA contract scope references
 
-Revision ID: 0041_seed_cpe_contract_scope_references
+Revision ID: 0041
 Revises: 0040
 Create Date: 2026-06-03
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 from alembic import op
 
 
-revision = "0041_seed_cpe_contract_scope_references"
+revision = "0041"
 down_revision = "0040"
 branch_labels = None
 depends_on = None
