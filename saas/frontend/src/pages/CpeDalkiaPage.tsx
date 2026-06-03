@@ -19,6 +19,7 @@ import {
   CpeAccountingSiteMapping,
   CpeAccountingNatureRule,
   CpeBilanAnnuel,
+  CpeConsoSynthese,
   CpeContractReference,
   CpeFinanceControlReport,
   CpeFinanceImportBatch,
@@ -38,6 +39,7 @@ import {
   deleteCpeFinanceHistory,
   deleteCpeAccountingNatureRule,
   fetchCpeBilan,
+  fetchCpeConsoSynthese,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
   fetchCpeContractReferences,
@@ -70,7 +72,6 @@ import { useAuth } from "../providers/AuthProvider";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MOIS_LABELS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
-const TARGET_CPE_CONTRACT_CODES = new Set(["C00190116O", "C00190155J"]);
 const MARKET_COLORS: Record<string, string> = {
   P1: "#2563eb",
   P2: "#0f766e",
@@ -233,7 +234,6 @@ export default function CpeDalkiaPage() {
   const [annee, setAnnee] = useState(CURRENT_YEAR);
   const [filterCat, setFilterCat] = useState<string>("tous");
   const [showPuForm, setShowPuForm] = useState(false);
-  const [showCsvHelp, setShowCsvHelp] = useState(false);
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [financePreview, setFinancePreview] = useState<CpeFinancePreview | null>(null);
@@ -253,6 +253,12 @@ export default function CpeDalkiaPage() {
     queryKey: ["cpe-dju", annee],
     queryFn: () => fetchCpeDju(token!, annee),
     enabled: !!token,
+  });
+
+  const consoSyntheseQ = useQuery({
+    queryKey: ["cpe-conso-synthese", annee],
+    queryFn: () => fetchCpeConsoSynthese(token!, annee),
+    enabled: !!token && view === "performance",
   });
 
   const accountingRulesQ = useQuery({
@@ -327,6 +333,7 @@ export default function CpeDalkiaPage() {
     mutationFn: (file: File) => importCpeCsv(token!, file),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["cpe-bilan", annee] });
+      qc.invalidateQueries({ queryKey: ["cpe-conso-synthese", annee] });
       setImportMsg(
         `Import terminé : ${res.nb_inseres} insérés, ${res.nb_mis_a_jour} mis à jour, ${res.nb_erreurs} erreurs.` +
           (res.sites_inconnus.length > 0 ? ` Sites inconnus : ${res.sites_inconnus.join(", ")}.` : "") +
@@ -505,6 +512,7 @@ export default function CpeDalkiaPage() {
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
   const dju = djuQ.data;
+  const consoSynthese = consoSyntheseQ.data;
 
   // prix_tarifs depuis le bilan (T1/T2/T3 pré-chargés par OS N°3)
   const prixTarifs = bilan?.prix_tarifs ?? {};
@@ -702,6 +710,12 @@ export default function CpeDalkiaPage() {
       )}
 
       {/* ── Actions ── */}
+      <CpeConsoSynthesePanel
+        synthese={consoSynthese}
+        isLoading={consoSyntheseQ.isLoading}
+        isError={consoSyntheseQ.isError}
+      />
+
       <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
         <button
           type="button"
@@ -718,7 +732,7 @@ export default function CpeDalkiaPage() {
             className="secondary-button"
             onClick={() => fileRef.current?.click()}
             disabled={importM.isPending}
-            title="Format attendu : fichier CSV DALKIA mensuel (avant le 5e jour ouvrable). Colonnes : code_site ; date_releve ; qt_mwh_pci ; volume_ecs_m3 ; etat_chauffe"
+            title="Importer l'export DALKIA consommation detaillee"
           >
             {importM.isPending ? "Import en cours…" : "Importer CSV DALKIA"}
           </button>
@@ -738,48 +752,10 @@ export default function CpeDalkiaPage() {
           />
         </div>
 
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={() => setShowCsvHelp((v) => !v)}
-          title="Voir le format attendu du fichier CSV"
-        >
-          ? Format CSV
-        </button>
-
         {importMsg && (
           <span style={{ fontSize: 13, color: importM.isError ? "#ef4444" : "#16a34a" }}>{importMsg}</span>
         )}
       </div>
-
-      {/* ── Aide format CSV ── */}
-      {showCsvHelp && (
-        <div className="card" style={{ marginBottom: 16, padding: 16, background: "#fffbeb", fontSize: 13 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <strong>Format du fichier CSV DALKIA</strong>
-            <button type="button" className="secondary-button" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setShowCsvHelp(false)}>✕</button>
-          </div>
-          <p style={{ margin: "8px 0 4px", color: "#6b7280" }}>
-            DALKIA envoie ce fichier avant le <strong>5e jour ouvrable de chaque mois</strong>. Colonnes séparées par <code>;</code> (ou virgule/tabulation — détecté automatiquement) :
-          </p>
-          <pre style={{ background: "#f9fafb", padding: 10, borderRadius: 6, fontSize: 12, overflow: "auto", margin: "8px 0" }}>
-{`code_site;date_releve;qt_mwh_pci;volume_ecs_m3;etat_chauffe
-VDS-ENS 02;2026-01-31;11.3;3.2;O
-VDS-SPORT 03;2026-01-31;9.8;;O
-VDS-BAM 02;2026-01-31;6.1;;N`}
-          </pre>
-          <ul style={{ margin: "4px 0", paddingLeft: 18, color: "#374151", lineHeight: 1.7 }}>
-            <li><code>code_site</code> — obligatoire, ex : <code>VDS-ENS 02</code>, <code>VDS-SPORT 03</code>, <code>CCAS 04</code></li>
-            <li><code>qt_mwh_pci</code> — consommation gaz mensuelle en MWhPCI (ou colonnes <code>consommation_gaz</code> / <code>qt</code>)</li>
-            <li><code>volume_ecs_m3</code> — volume ECS mensuel en m³ (optionnel)</li>
-            <li><code>etat_chauffe</code> — O/N ou 1/0 (optionnel)</li>
-            <li><code>date_releve</code> — formats acceptés : <code>2026-01-31</code>, <code>01/2026</code>, <code>2026-01</code> — ou colonnes séparées <code>annee</code> + <code>mois</code></li>
-          </ul>
-          <p style={{ margin: "8px 0 0", color: "#9ca3af", fontSize: 12 }}>
-            Si vous n'avez pas encore reçu de fichier DALKIA, utilisez la saisie manuelle en cliquant sur le nom d'un site dans le tableau ci-dessous.
-          </p>
-        </div>
-      )}
 
       {/* ── Filtre catégorie ── */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
@@ -906,6 +882,117 @@ function KpiCard({
       <p style={{ margin: "6px 0 4px", fontSize: 20, fontWeight: 700, color }}>{value}</p>
       <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{sub}</p>
       {action && <div style={{ marginTop: 8 }}>{action}</div>}
+    </div>
+  );
+}
+
+function CpeConsoSynthesePanel({
+  synthese,
+  isLoading,
+  isError,
+}: {
+  synthese: CpeConsoSynthese | undefined;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  const fluidLabel: Record<string, string> = {
+    GAZ: "Gaz",
+    ELEC: "Electricite",
+    CHALEUR: "Chaleur",
+    ECS: "ECS",
+    EAU: "Eau",
+  };
+  const unknownSites = synthese?.sites_inconnus.slice(0, 6) ?? [];
+  const missingSites = synthese?.sites_sans_conso.slice(0, 6) ?? [];
+
+  return (
+    <div className="card" style={{ marginBottom: 16, padding: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+        <div>
+          <h4 style={{ margin: "0 0 4px", fontSize: 15 }}>Synthese consommations multi-fluides</h4>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+            Export DALKIA detaille consolide par fluide, site et mois.
+          </p>
+        </div>
+        <div style={{ textAlign: "right", fontSize: 13, color: "#374151" }}>
+          <strong>{synthese ? `${synthese.nb_sites_couverts} / ${synthese.nb_sites_actifs}` : "-"}</strong>
+          <div style={{ color: "#9ca3af" }}>sites couverts</div>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>Chargement des consommations...</p>
+      ) : isError ? (
+        <p style={{ margin: 0, color: "#ef4444", fontSize: 13 }}>Synthese indisponible. Verifiez que la migration 0040 est appliquee.</p>
+      ) : !synthese || synthese.fluides.length === 0 ? (
+        <p style={{ margin: 0, color: "#9ca3af", fontSize: 13 }}>
+          Aucune consommation multi-fluides importee pour l'annee selectionnee.
+        </p>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 14 }}>
+            {synthese.fluides.map((fluide) => (
+              <div key={fluide.fluide} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 10 }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>{fluidLabel[fluide.fluide] ?? fluide.fluide}</div>
+                <div style={{ fontWeight: 700, color: "#111827", marginTop: 4 }}>
+                  {fmt(fluide.total, fluide.unite === "m3" ? 0 : 1)} {fluide.unite}
+                </div>
+                <div style={{ color: "#9ca3af", fontSize: 12, marginTop: 2 }}>
+                  {fluide.nb_sites} sites - {fluide.nb_mois} mois
+                  {fluide.nb_estimes > 0 ? ` - ${fluide.nb_estimes} estimes` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                Codes DALKIA non rattaches ({synthese.nb_sites_inconnus})
+              </div>
+              {unknownSites.length === 0 ? (
+                <p style={{ margin: 0, color: "#16a34a", fontSize: 13 }}>Aucun code non rattache sur cette annee.</p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <tbody>
+                    {unknownSites.map((site) => (
+                      <tr key={site.code_site} style={{ borderTop: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: "6px 4px", fontWeight: 600 }}>{site.code_site}</td>
+                        <td style={{ padding: "6px 4px", color: "#6b7280" }}>{site.fluides.join(", ")}</td>
+                        <td style={{ padding: "6px 4px", textAlign: "right", color: "#9ca3af" }}>{site.nb_mois} mois</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                Sites actifs sans consommation ({synthese.nb_sites_sans_conso})
+              </div>
+              {missingSites.length === 0 ? (
+                <p style={{ margin: 0, color: "#16a34a", fontSize: 13 }}>Tous les sites actifs ont au moins une consommation.</p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <tbody>
+                    {missingSites.map((site) => (
+                      <tr key={site.site_id} style={{ borderTop: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: "6px 4px", fontWeight: 600 }}>
+                          <Link to={`/cpe/sites/${site.site_id}`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                            {site.code_site}
+                          </Link>
+                        </td>
+                        <td style={{ padding: "6px 4px", color: "#6b7280" }}>{site.nom_site}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1152,20 +1239,20 @@ const EMPTY_NATURE_RULE = {
 };
 
 const EMPTY_CONTRACT_REFERENCE = {
-  contract_code: "C00190116O",
-  contract_label: "SETE (34) - BATIMENTS COMMUNAUX LOT 1",
-  reference_kind: "p1_gaz_acompte",
+  contract_code: "",
+  contract_label: "",
+  reference_kind: "cpe_contract_scope",
   year: CURRENT_YEAR,
-  market: "P1",
-  billed_item: "P1_GAZ_LOT1",
-  annual_amount_ht: "341293.06",
+  market: "SCOPE",
+  billed_item: "",
+  annual_amount_ht: "",
   expected_amount_ht: "",
-  installment_count: "4",
-  expected_period_months: "3,6,9",
-  included_billed_items: '["P1","ABT","CTA","CPB","LOCATION","STOCKAGE","TERME FIXE"]',
-  formula: "Acompte P1 gaz = 1/4 du P1 annuel DPGF revise",
-  tolerance_pct: "0.01",
-  tolerance_eur: "100",
+  installment_count: "",
+  expected_period_months: "",
+  included_billed_items: "",
+  formula: "",
+  tolerance_pct: "",
+  tolerance_eur: "",
   notes: "",
   active: true,
 };
@@ -1347,10 +1434,25 @@ function CpeFinanceReference({
     if (field === "status") return (invoice.status ?? "").toLowerCase();
     return (invoice.invoice_number ?? "").toLowerCase();
   };
+  const cpeContractCodes = useMemo(
+    () =>
+      new Set(
+        contractReferences
+          .filter(
+            (reference) =>
+              reference.active &&
+              reference.reference_kind === "cpe_contract_scope" &&
+              reference.year <= annee,
+          )
+          .map((reference) => reference.contract_code.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    [contractReferences, annee],
+  );
   const visibleInvoices = invoices
     .filter((invoice) => {
       const contractCode = (invoice.contract_code ?? "").trim().toUpperCase();
-      if (!includeOutOfScopeContracts && !TARGET_CPE_CONTRACT_CODES.has(contractCode)) return false;
+      if (!includeOutOfScopeContracts && !cpeContractCodes.has(contractCode)) return false;
       if (showOnlyAlerts && (invoice.status ?? "") === "valide") return false;
 
       const markets = splitList(invoice.markets).map((market) => market.toUpperCase());
@@ -1410,9 +1512,14 @@ function CpeFinanceReference({
   const annualContractReferenceHt = useMemo(
     () =>
       contractReferences
-        .filter((reference) => reference.active && reference.year === annee && TARGET_CPE_CONTRACT_CODES.has(reference.contract_code.toUpperCase()))
+        .filter(
+          (reference) =>
+            reference.active &&
+            reference.year === annee &&
+            cpeContractCodes.has(reference.contract_code.toUpperCase()),
+        )
         .reduce((sum, reference) => sum + (reference.annual_amount_ht || 0), 0),
-    [contractReferences, annee],
+    [contractReferences, cpeContractCodes, annee],
   );
   const monthlyChartData = useMemo(() => {
     const rows = Array.from({ length: 12 }, (_, monthIndex) => ({

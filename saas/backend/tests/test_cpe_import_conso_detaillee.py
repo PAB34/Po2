@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeConsoReleve, CpeGazReleve, CpeSite
-from app.services.cpe import PCS_PCI_RATIO
+from app.models.cpe import CpeConsoReleve, CpeContractReference, CpeGazReleve, CpeSite
+from app.services.cpe import PCS_PCI_RATIO, get_conso_synthese
 from app.services.cpe_import import _extract_code_site, import_releves_csv
 
 
@@ -17,6 +17,16 @@ def db_session():
     with Session(engine) as session:
         session.add(City(id=1, nom_commune="Sete", code_commune="34301"))
         session.add(CpeSite(city_id=1, code_site="VDS-SPORT 05", nom_site="Gymnase", categorie="SPORT"))
+        session.add(CpeContractReference(
+            city_id=1,
+            contract_code="C00190116O",
+            contract_label="SETE (34) - BATIMENTS COMMUNAUX LOT 1",
+            reference_kind="cpe_contract_scope",
+            year=2026,
+            market="SCOPE",
+            billed_item="CPE_VILLE_LOT_1",
+            active=True,
+        ))
         session.commit()
         yield session
 
@@ -85,6 +95,23 @@ def test_multifluide_conso_releves(db_session: Session):
     assert all(c.contract_code != "C00032657J" for c in by_fluide.values())
 
 
+def test_conso_synthese_exposes_unknown_sites_and_fluids(db_session: Session):
+    import_releves_csv(db_session, CSV)
+
+    synthese = get_conso_synthese(db_session, 2026, city_id=1)
+
+    assert synthese.nb_sites_actifs == 1
+    assert synthese.nb_sites_couverts == 1
+    assert synthese.nb_sites_inconnus == 1
+    assert [s.code_site for s in synthese.sites_inconnus] == ["VDS-ENS 99"]
+
+    by_fluide = {f.fluide: f for f in synthese.fluides}
+    assert by_fluide["GAZ"].total == pytest.approx(27.67, abs=0.01)
+    assert by_fluide["GAZ"].nb_sites == 1
+    assert by_fluide["ELEC"].total == pytest.approx(0.3)
+    assert by_fluide["ECS"].total == pytest.approx(5.0)
+
+
 def test_filtre_contrat_exclut_autre_marche(db_session: Session):
     """Une ligne d'un autre contrat (même si le code site matche) n'est jamais importée."""
     autre = (
@@ -94,6 +121,31 @@ def test_filtre_contrat_exclut_autre_marche(db_session: Session):
     res = import_releves_csv(db_session, autre)
     assert res.nb_inseres == 0
     assert db_session.scalar(select(CpeGazReleve).where(CpeGazReleve.mois == 3)) is None
+
+
+def test_filtre_contrat_lit_le_referentiel_editable(db_session: Session):
+    """Le perimetre CPE vient de cpe_contract_references, pas d'une constante de codes."""
+    db_session.add(CpeContractReference(
+        city_id=1,
+        contract_code="C00999999Z",
+        contract_label="Contrat editable de test",
+        reference_kind="cpe_contract_scope",
+        year=2026,
+        market="SCOPE",
+        billed_item="CPE_TEST",
+        active=True,
+    ))
+    db_session.commit()
+    csv = (
+        "CODE CONTRAT;SITE;TYPE DE COMPTEUR;DATE DU RELEVE;CONSOMMATION;UNITE;MWH PCS\n"
+        "C00999999Z;SETE GYMNASE VDS-SPORT 05;GAZ;2026-04-15;1000;m3;10\n"
+    )
+    res = import_releves_csv(db_session, csv, city_id=1)
+
+    assert res.nb_inseres == 1
+    releve = db_session.scalar(select(CpeGazReleve).where(CpeGazReleve.mois == 4))
+    assert releve is not None
+    assert releve.qt_mwh_pci == pytest.approx(10 / PCS_PCI_RATIO, abs=0.0001)
 
 
 def test_simple_format_still_works(db_session: Session):

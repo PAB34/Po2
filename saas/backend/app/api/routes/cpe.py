@@ -18,6 +18,7 @@ from app.schemas.cpe import (
     CpeAccountingSiteMappingOut,
     CpeAccountingSiteMappingUpdate,
     CpeBilanAnnuel,
+    CpeConsoSynthese,
     CpeContractReferenceCreate,
     CpeContractReferenceOut,
     CpeContractReferenceUpdate,
@@ -166,7 +167,17 @@ async def import_csv(
     Séparateurs acceptés : virgule, point-virgule, tabulation.
     """
     content = await file.read()
-    return import_releves_csv(db, content, source="csv_dalkia")
+    return import_releves_csv(db, content, source="csv_dalkia", city_id=current_user.city_id)
+
+
+@router.get("/consommations/synthese/{annee}", response_model=CpeConsoSynthese)
+def get_consommations_synthese(
+    annee: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeConsoSynthese:
+    """Synthese annuelle des consommations multi-fluides importees depuis DALKIA."""
+    return svc.get_conso_synthese(db, annee, city_id=current_user.city_id)
 
 
 @router.post("/finances/preview", response_model=CpeFinancePreview)

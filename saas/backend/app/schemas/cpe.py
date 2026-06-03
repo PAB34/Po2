@@ -158,6 +158,46 @@ class CpeBilanAnnuel(BaseModel):
     sites: list[CpeSiteBilanItem]
 
 
+class CpeConsoFluideSummary(BaseModel):
+    fluide: str
+    total: float
+    unite: str
+    nb_sites: int
+    nb_mois: int
+    nb_releves: int
+    nb_estimes: int
+
+
+class CpeConsoUnknownSite(BaseModel):
+    code_site: str
+    contract_code: str | None
+    fluides: list[str]
+    nb_mois: int
+    total_energie_mwh: float | None
+    total_volume: float | None
+    nb_estimes: int
+
+
+class CpeConsoCoverageSite(BaseModel):
+    site_id: int
+    code_site: str
+    nom_site: str
+    categorie: str
+    mois_couverts: int
+    fluides: list[str]
+
+
+class CpeConsoSynthese(BaseModel):
+    annee: int
+    nb_sites_actifs: int
+    nb_sites_couverts: int
+    nb_sites_sans_conso: int
+    nb_sites_inconnus: int
+    fluides: list[CpeConsoFluideSummary]
+    sites_sans_conso: list[CpeConsoCoverageSite]
+    sites_inconnus: list[CpeConsoUnknownSite]
+
+
 # ── Import CSV ────────────────────────────────────────────────────────────────
 
 class CpeImportResult(BaseModel):

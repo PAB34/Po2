@@ -23,6 +23,28 @@ def db_session():
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(City(id=1, nom_commune="Sete", code_commune="34301"))
+        session.add_all([
+            CpeContractReference(
+                city_id=1,
+                contract_code="C00190116O",
+                contract_label="SETE LOT 1",
+                reference_kind="cpe_contract_scope",
+                year=2026,
+                market="SCOPE",
+                billed_item="CPE_VILLE_LOT_1",
+                active=True,
+            ),
+            CpeContractReference(
+                city_id=1,
+                contract_code="C00190155J",
+                contract_label="SETE LOT 2",
+                reference_kind="cpe_contract_scope",
+                year=2026,
+                market="SCOPE",
+                billed_item="CPE_VILLE_LOT_2",
+                active=True,
+            ),
+        ])
         session.commit()
         yield session
 

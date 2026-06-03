@@ -16,7 +16,7 @@ from typing import Any
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from pypdf import PdfReader
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -54,7 +54,7 @@ from app.schemas.cpe import (
 )
 
 _SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
-NEW_CPE_CONTRACT_CODES = {"C00190116O", "C00190155J"}
+CPE_CONTRACT_SCOPE_KIND = "cpe_contract_scope"
 P1_GAZ_ACOMPTE_KIND = "p1_gaz_acompte"
 P1_GAZ_ACOMPTE_ITEMS = {"P1", "ABT", "CTA", "CPB", "LOCATION", "STOCKAGE", "TERME FIXE"}
 ICHT_IME_BASE = 141.4
@@ -365,8 +365,31 @@ def _market_from_billed_item(billed_item: str | None) -> str:
     return item[:30] or "AUTRE"
 
 
-def _is_current_cpe_contract(contract_code: str | None) -> bool:
-    return (contract_code or "").strip().upper() in NEW_CPE_CONTRACT_CODES
+def get_current_cpe_contract_codes(
+    db: Session,
+    city_id: int | None = None,
+    year: int | None = None,
+) -> set[str]:
+    """Contrats actifs du perimetre CPE Ville, lus depuis le referentiel editable."""
+    query = select(CpeContractReference.contract_code).where(
+        CpeContractReference.reference_kind == CPE_CONTRACT_SCOPE_KIND,
+        CpeContractReference.active.is_(True),
+    )
+    if city_id is not None:
+        query = query.where(or_(CpeContractReference.city_id == city_id, CpeContractReference.city_id.is_(None)))
+    if year is not None:
+        query = query.where(CpeContractReference.year <= year)
+    return {code.strip().upper() for code in db.scalars(query).all() if code and code.strip()}
+
+
+def _is_current_cpe_contract(
+    db: Session,
+    contract_code: str | None,
+    city_id: int | None = None,
+    year: int | None = None,
+) -> bool:
+    code = (contract_code or "").strip().upper()
+    return bool(code) and code in get_current_cpe_contract_codes(db, city_id=city_id, year=year)
 
 
 def _split_csv_tokens(value: str | None) -> set[str]:
@@ -782,8 +805,9 @@ def list_revision_observations(db: Session, city_id: int | None = None) -> list[
     fsd2_base = reference_values.get("FSD20", FSD2_BASE)
     bt40_base = reference_values.get("BT400", BT40_BASE)
 
+    current_contract_codes = get_current_cpe_contract_codes(db, city_id=city_id)
     query = select(CpeFinanceLine).where(
-        CpeFinanceLine.contract_code.in_(NEW_CPE_CONTRACT_CODES),
+        CpeFinanceLine.contract_code.in_(current_contract_codes),
         CpeFinanceLine.market.in_(("P2", "P3")),
         CpeFinanceLine.base_price.is_not(None),
         CpeFinanceLine.revised_price.is_not(None),
@@ -1491,7 +1515,7 @@ def _control_accounting_nature(line: CpeFinanceLine) -> CpeFinanceControl:
     )
 
 
-def _control_accounting_site(line: CpeFinanceLine, invoice: CpeFinanceInvoice) -> CpeFinanceControl:
+def _control_accounting_site(db: Session, line: CpeFinanceLine, invoice: CpeFinanceInvoice) -> CpeFinanceControl:
     if line.accounting_site_id:
         return _make_basic_control(
             line,
@@ -1508,7 +1532,12 @@ def _control_accounting_site(line: CpeFinanceLine, invoice: CpeFinanceInvoice) -
             severity="warning",
             message=f"Code site detecte ({line.site_code_detected}) mais non rattache a la matrice de codification.",
         )
-    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+    if not _is_current_cpe_contract(
+        db,
+        invoice.contract_code or line.contract_code,
+        city_id=invoice.city_id,
+        year=(invoice.period_end.year if invoice.period_end else None),
+    ):
         return _make_basic_control(
             line,
             control_type="accounting_site",
@@ -1772,7 +1801,12 @@ def _control_p1_gaz_acompte_against_dpgf(
         year=invoice.period_end.year,
     )
     if reference is None:
-        if _is_current_cpe_contract(invoice.contract_code):
+        if _is_current_cpe_contract(
+            db,
+            invoice.contract_code,
+            city_id=invoice.city_id,
+            year=invoice.period_end.year,
+        ):
             return _make_basic_control(
                 anchor,
                 control_type="p1_gaz_acompte_dpgf",
@@ -1903,16 +1937,21 @@ def _control_p2p3_base_against_dalkia(
     """
     if (line.market or "").upper() not in {"P2", "P3"}:
         return None
-    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+    year, _quarter = _line_index_period(line)
+    if year is None:
+        return None
+    if not _is_current_cpe_contract(
+        db,
+        invoice.contract_code or line.contract_code,
+        city_id=invoice.city_id,
+        year=year,
+    ):
         return None
     base = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
     if base is None:
         return None
     code_site = (line.site_code_detected or "").strip()
     if not code_site:
-        return None
-    year, _quarter = _line_index_period(line)
-    if year is None:
         return None
 
     # Seuls les postes rattachables au referentiel sont controles ; les sous-postes
@@ -1995,7 +2034,15 @@ def _control_p1_gaz_pu_os3(
         return None
     if (line.service_sold or "").strip().upper() != "CHAUFFAGE":
         return None
-    if not _is_current_cpe_contract(invoice.contract_code or line.contract_code):
+    year, _quarter = _line_index_period(line)
+    if year is None or year < 2026 or year > 2030:
+        return None
+    if not _is_current_cpe_contract(
+        db,
+        invoice.contract_code or line.contract_code,
+        city_id=invoice.city_id,
+        year=year,
+    ):
         return None
     base = line.base_price if line.base_price is not None else _line_raw_float(line, "prix_de_base")
     if base is None or not (30.0 <= base <= 250.0):
@@ -2101,7 +2148,7 @@ def recompute_finance_invoice_controls(
     ]
     controls.extend(_control_p2_4_objectives(db, line) for line in p2_4_lines)
     controls.extend(_control_accounting_nature(line) for line in lines)
-    controls.extend(_control_accounting_site(line, invoice) for line in lines)
+    controls.extend(_control_accounting_site(db, line, invoice) for line in lines)
     controls.append(_control_invoice_type(invoice, lines[0]))
     controls.append(_control_invoice_total(invoice, lines, lines[0]))
     controls.append(_control_invoice_period(invoice, lines, lines[0]))
@@ -2141,7 +2188,12 @@ def build_finance_control_report(
     invoices = [
         invoice
         for invoice in list_finance_invoices(db, city_id=city_id)
-        if _is_current_cpe_contract(invoice.contract_code)
+        if _is_current_cpe_contract(
+            db,
+            invoice.contract_code,
+            city_id=invoice.city_id,
+            year=(invoice.period_end.year if invoice.period_end else None),
+        )
     ]
     summaries: list[dict[str, Any]] = []
     type_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"ok": 0, "error": 0, "blocked": 0})

@@ -1,4 +1,24 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-03 (CPE DALKIA consommations multi-fluides consolidees)
+> **Etat code constate** : migrations Alembic jusqu'a `0041_seed_cpe_contract_scope_references.py`.
+>
+> Le module CPE DALKIA exploite maintenant l'export "consommation detaillee" multi-fluides :
+> stockage `cpe_conso_releves`, import GAZ/ELEC/ECS/EAU/CHALEUR par site x mois, affichage sur fiche site,
+> endpoint de synthese annuelle `/api/cpe/consommations/synthese/{annee}` et panneau portefeuille dans
+> `/cpe` > `Performance et consommations` avec totaux par fluide, couverture des sites actifs et codes
+> DALKIA non rattaches.
+> Le perimetre contrat CPE Ville n'est plus porte par une constante Python : les contrats actifs
+> sont lus depuis `cpe_contract_references` via des lignes editables `reference_kind = cpe_contract_scope`.
+>
+> **Mise a jour complementaire** : 2026-06-02 (inventaire transversal + moteur referentiel DALKIA acte d'engagement)
+> **Etat code constate** : migrations Alembic jusqu'a `0036_add_cpe_dalkia_p1_tarifs.py`, 201 routes FastAPI, 21 pages React, 50 modeles SQLAlchemy.
+> **Inventaire complet** : [[08-Inventaire-fonctionnalites-developpees-2026-06-02]]
+>
+> Le module CPE DALKIA comprend maintenant un moteur de referentiel contractuel importe depuis les XLSX
+> d'acte d'engagement Lot 1 / Lot 2 : preview classifiee, tables `cpe_dalkia_ref_*`, RECAP MARCHE,
+> cibles NB annuelles, controle des bases P2/P3, synchronisation de la reference P1 depuis le RECAP et
+> parsing des tarifs/coefficient de revision P1. Voir [[energie/CPE-DALKIA/17-Referentiel-DALKIA-Import]].
+>
 > **Mise a jour complementaire** : 2026-05-28 (CPE DALKIA finance : perimetre contrats, export liaison enrichi, controle acompte P1 gaz Lot 1)
 > **Dernier commit pousse sur `main`** : `add8d71` (feat(cpe): control DALKIA P1 acompte scope)
 > **Prod OVH** : API OK apres deploy GitHub Actions reussi. Healthcheck `https://patrimoineaucarre.com/api/health` = `status: ok`.
@@ -28,7 +48,7 @@
 | Préconisations puissance | `/energie/preconisations` | Stable |
 | Factures | `/energie/factures`, `/energie/factures/:id` | Stable en prod pour parser ENGIE, controle/decision et import lot ; le controle BPU tente une reference historique exacte dans `bpu_*` avant le repli `BillingBpuLine` |
 | Facturation TURPE | `/energie/facturation` | Stable |
-| CPE DALKIA | `/cpe` | En cours avance : cockpit finance, matrice codification editable, import/archives factures DALKIA, export XLSX fiche liaison, controles P2/P3/P2.4, controle perimetre contrats et premier controle acompte P1 gaz Lot 1 |
+| CPE DALKIA | `/cpe` | En cours avance : cockpit finance, controle factures, referentiel DALKIA et synthese consommations multi-fluides GAZ/ELEC/ECS/EAU/CHALEUR avec codes non rattaches |
 | **BPU — Timeline** | `/energie/bpu` (onglet Timeline) | Stable — graphe dual-axe Y (fourniture vs accessoires), légende composantes avec exemples chiffrés |
 | **BPU — TURPE** | `/energie/bpu` (onglet TURPE) | Refonte 2026-05-21 — 4 blocs : définition · barre empilée facture · courbe évolution · tableau CRE |
 | **BPU — Documents & Import** | `/energie/bpu` (onglet Documents) | Nouveau 2026-05-21 — stats + table BPU filtrée + import admin (séparé de Timeline) |
@@ -57,7 +77,27 @@
 0018_add_invoice_batches_and_normalized_history
 0019_add_cpe_tables
 0020_add_cpe_tarif_pce
-0021_add_building_meter_links      ← HEAD code
+0021_add_building_meter_links
+0022_seed_cpe_prix_gaz_os3
+0023_add_building_ign_features_json
+0024_add_cpe_finance_accounting
+0025_add_cpe_revision_controls
+0026_add_cpe_control_fsd2
+0027_add_cpe_accounting_contract_code
+0028_add_cpe_contract_references
+0029_seed_cpe_contract_references
+0030_add_cpe_invoice_evidences
+0031_generalize_cpe_revision_evidences
+0032_add_cpe_finance_exported_at
+0033_add_cpe_dalkia_ref_tables
+0034_drop_dalkia_cibles_unique
+0035_add_cpe_dalkia_recap
+0036_add_cpe_dalkia_p1_tarifs
+0037_add_pronostics_game
+0038_add_cpe_dalkia_bpu
+0039_add_pronostics_password_resets
+0040_add_cpe_conso_releves
+0041_seed_cpe_contract_scope_references      <- HEAD code constate 2026-06-03
 ```
 
 ## 🔧 PRs récentes
@@ -337,3 +377,30 @@ Increment calendrier et transmission finances :
 - migration `0032_add_cpe_finance_exported_at.py` ;
 - horodatage de la remise au service finance lors de l'export XLSX ;
 - controle `invoice_timeline` pour les dates absentes ou incoherentes.
+
+## Mise a jour CPE DALKIA - consommations multi-fluides - 2026-06-03
+
+Chantier concerne : `PO2-CPE-001`.
+
+Travaux livres :
+
+- migration `0040_add_cpe_conso_releves.py` et modele `CpeConsoReleve` ;
+- import du vrai export DALKIA `consommation detaillee` avec les fluides `GAZ`, `ELEC`, `ECS`, `EAU`, `CHALEUR` ;
+- filtre contrats CPE Ville via `cpe_contract_references.reference_kind = cpe_contract_scope`, avec exclusion des contrats hors perimetre type Fonquerne ;
+- conservation des codes sites non rattaches dans `cpe_conso_releves` (`cpe_site_id = null`) pour ne rien perdre ;
+- endpoint fiche site `/api/cpe/sites/{site_id}/consommations` et tableau annuel par fluide dans `/cpe/sites/{id}` ;
+- endpoint portefeuille `/api/cpe/consommations/synthese/{annee}` ;
+- panneau `/cpe` > `Performance et consommations` : totaux par fluide, couverture sites actifs, codes DALKIA non rattaches et sites actifs sans consommation.
+
+Validation :
+
+- `python -m compileall app` OK.
+- `python -m pytest tests/test_cpe_import_conso_detaillee.py` OK avec `DATABASE_URL=sqlite:///:memory:` : 6 tests passes.
+- `npm run build` non lance localement : `npm` et `node_modules` absents sur le poste ; validation frontend a faire via CI/GitHub Actions.
+
+Handoff suivant :
+
+1. Reimporter le CSV DALKIA detaille depuis `/cpe`.
+2. Verifier dans `/cpe` > `Performance et consommations` les totaux par fluide et les codes non rattaches.
+3. Rattacher les 3 codes piscines / codes DALKIA non alignes au referentiel CPE ou a la future boite de rapprochement patrimoine.
+4. Maintenir le perimetre contrat depuis `cpe_contract_references` et ajouter/retirer les contrats via l'ecran Referentiel finance si le marche evolue.

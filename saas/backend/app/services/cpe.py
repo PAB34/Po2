@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -25,6 +25,10 @@ from app.models.cpe import CpeConsoReleve, CpeGazReleve, CpePrixGaz, CpeResultat
 from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport
 from app.schemas.cpe import (
     CpeBilanAnnuel,
+    CpeConsoCoverageSite,
+    CpeConsoFluideSummary,
+    CpeConsoSynthese,
+    CpeConsoUnknownSite,
     CpeDjuAnnuel,
     CpeGazReleveCreate,
     CpePrixGazCreate,
@@ -303,6 +307,116 @@ def get_conso_releves(db: Session, site_id: int, annee: int | None = None) -> li
     return list(db.scalars(stmt.order_by(
         CpeConsoReleve.fluide, CpeConsoReleve.annee, CpeConsoReleve.mois
     )))
+
+
+def get_conso_synthese(db: Session, annee: int, city_id: int | None = None) -> CpeConsoSynthese:
+    """Synthese portefeuille des consommations multi-fluides importees depuis DALKIA."""
+    sites_actifs = get_sites(db, city_id=city_id, actifs_seulement=True)
+    sites_by_id = {s.id: s for s in sites_actifs}
+
+    stmt = select(CpeConsoReleve).where(CpeConsoReleve.annee == annee)
+    if city_id is not None:
+        stmt = stmt.where(or_(CpeConsoReleve.city_id == city_id, CpeConsoReleve.city_id.is_(None)))
+    releves = list(db.scalars(stmt))
+
+    unit_by_fluide = {"GAZ": "MWh PCS", "ELEC": "MWh", "CHALEUR": "MWh", "ECS": "m3", "EAU": "m3"}
+    energy_fluides = {"GAZ", "ELEC", "CHALEUR"}
+
+    fluides: dict[str, dict[str, Any]] = {}
+    coverage: dict[int, dict[str, Any]] = {}
+    unknown: dict[str, dict[str, Any]] = {}
+
+    for releve in releves:
+        is_energy = releve.fluide in energy_fluides
+        value = releve.energie_mwh if is_energy else releve.consommation
+        value = value or 0.0
+
+        f = fluides.setdefault(
+            releve.fluide,
+            {"total": 0.0, "sites": set(), "months": set(), "nb_releves": 0, "nb_estimes": 0},
+        )
+        f["total"] += value
+        f["months"].add((releve.code_site, releve.mois))
+        f["nb_releves"] += releve.nb_releves
+        f["nb_estimes"] += releve.nb_estimes
+        if releve.cpe_site_id is not None:
+            f["sites"].add(releve.cpe_site_id)
+            c = coverage.setdefault(releve.cpe_site_id, {"mois": set(), "fluides": set()})
+            c["mois"].add(releve.mois)
+            c["fluides"].add(releve.fluide)
+        else:
+            u = unknown.setdefault(
+                releve.code_site,
+                {
+                    "contract_code": releve.contract_code,
+                    "fluides": set(),
+                    "months": set(),
+                    "energy": 0.0,
+                    "volume": 0.0,
+                    "nb_estimes": 0,
+                },
+            )
+            u["contract_code"] = releve.contract_code or u["contract_code"]
+            u["fluides"].add(releve.fluide)
+            u["months"].add((releve.fluide, releve.mois))
+            if is_energy:
+                u["energy"] += value
+            else:
+                u["volume"] += value
+            u["nb_estimes"] += releve.nb_estimes
+
+    covered_site_ids = set(coverage.keys()) & set(sites_by_id.keys())
+    missing_sites = [s for s in sites_actifs if s.id not in covered_site_ids]
+
+    fluide_order = {"GAZ": 0, "ELEC": 1, "CHALEUR": 2, "ECS": 3, "EAU": 4}
+    fluide_summaries = [
+        CpeConsoFluideSummary(
+            fluide=fluide,
+            total=round(data["total"], 3),
+            unite=unit_by_fluide.get(fluide, ""),
+            nb_sites=len(data["sites"]),
+            nb_mois=len(data["months"]),
+            nb_releves=data["nb_releves"],
+            nb_estimes=data["nb_estimes"],
+        )
+        for fluide, data in sorted(fluides.items(), key=lambda item: fluide_order.get(item[0], 99))
+    ]
+
+    sites_sans_conso = [
+        CpeConsoCoverageSite(
+            site_id=site.id,
+            code_site=site.code_site,
+            nom_site=site.nom_site,
+            categorie=site.categorie,
+            mois_couverts=0,
+            fluides=[],
+        )
+        for site in missing_sites
+    ]
+
+    sites_inconnus = [
+        CpeConsoUnknownSite(
+            code_site=code,
+            contract_code=data["contract_code"],
+            fluides=sorted(data["fluides"], key=lambda f: fluide_order.get(f, 99)),
+            nb_mois=len(data["months"]),
+            total_energie_mwh=round(data["energy"], 3) if data["energy"] else None,
+            total_volume=round(data["volume"], 3) if data["volume"] else None,
+            nb_estimes=data["nb_estimes"],
+        )
+        for code, data in sorted(unknown.items())
+    ]
+
+    return CpeConsoSynthese(
+        annee=annee,
+        nb_sites_actifs=len(sites_actifs),
+        nb_sites_couverts=len(covered_site_ids),
+        nb_sites_sans_conso=len(sites_sans_conso),
+        nb_sites_inconnus=len(sites_inconnus),
+        fluides=fluide_summaries,
+        sites_sans_conso=sites_sans_conso,
+        sites_inconnus=sites_inconnus,
+    )
 
 
 def resolve_nb_for_year_detailed(db: Session, site: CpeSite, annee: int) -> tuple[float, str]:

@@ -2736,6 +2736,46 @@ export type CpeBilanAnnuel = {
   sites: CpeSiteBilanItem[];
 };
 
+export type CpeConsoFluideSummary = {
+  fluide: string;
+  total: number;
+  unite: string;
+  nb_sites: number;
+  nb_mois: number;
+  nb_releves: number;
+  nb_estimes: number;
+};
+
+export type CpeConsoUnknownSite = {
+  code_site: string;
+  contract_code: string | null;
+  fluides: string[];
+  nb_mois: number;
+  total_energie_mwh: number | null;
+  total_volume: number | null;
+  nb_estimes: number;
+};
+
+export type CpeConsoCoverageSite = {
+  site_id: number;
+  code_site: string;
+  nom_site: string;
+  categorie: string;
+  mois_couverts: number;
+  fluides: string[];
+};
+
+export type CpeConsoSynthese = {
+  annee: number;
+  nb_sites_actifs: number;
+  nb_sites_couverts: number;
+  nb_sites_sans_conso: number;
+  nb_sites_inconnus: number;
+  fluides: CpeConsoFluideSummary[];
+  sites_sans_conso: CpeConsoCoverageSite[];
+  sites_inconnus: CpeConsoUnknownSite[];
+};
+
 export type CpeDjuAnnuel = {
   annee: number;
   dju_total: number;
@@ -3081,6 +3121,11 @@ export async function fetchCpeSites(token: string): Promise<CpeSite[]> {
 export async function fetchCpeBilan(token: string, annee: number): Promise<CpeBilanAnnuel> {
   const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}`, { headers: buildHeaders(token) });
   return parseResponse<CpeBilanAnnuel>(response);
+}
+
+export async function fetchCpeConsoSynthese(token: string, annee: number): Promise<CpeConsoSynthese> {
+  const response = await fetch(`${apiBaseUrl}/cpe/consommations/synthese/${annee}`, { headers: buildHeaders(token) });
+  return parseResponse<CpeConsoSynthese>(response);
 }
 
 export async function calculerCpeBilan(token: string, annee: number): Promise<CpeResultatAnnuel[]> {

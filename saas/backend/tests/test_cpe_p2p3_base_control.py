@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine
+from app.models.cpe import CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP2P3
 from app.services.cpe_accounting import _control_p2p3_base_against_dalkia
 from app.services.cpe_dalkia_db import resolve_dalkia_p2p3_forfait
@@ -31,6 +31,16 @@ def db_session():
     with Session(engine) as session:
         session.add(City(id=1, nom_commune="Sete", code_commune="34301"))
         # ENS 01 2026 : p2_total=2647 (récurrent 1173 + p2_4 1474), p3_total=5624 (récurrent 1093 + p3_4 4531)
+        session.add(CpeContractReference(
+            city_id=1,
+            contract_code=CONTRACT,
+            contract_label="SETE LOT 1",
+            reference_kind="cpe_contract_scope",
+            year=2026,
+            market="SCOPE",
+            billed_item="CPE_VILLE_LOT_1",
+            active=True,
+        ))
         imp = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True)
         session.add(imp)
         session.flush()

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine, CpePrixGaz
+from app.models.cpe import CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine, CpePrixGaz
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz
 from app.services.cpe import PCS_PCI_RATIO
 from app.services.cpe_accounting import _control_p1_gaz_pu_os3
@@ -28,6 +28,16 @@ def db_session():
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(City(id=1, nom_commune="Sete", code_commune="34301"))
+        session.add(CpeContractReference(
+            city_id=1,
+            contract_code=CONTRACT,
+            contract_label="SETE LOT 1",
+            reference_kind="cpe_contract_scope",
+            year=2026,
+            market="SCOPE",
+            billed_item="CPE_VILLE_LOT_1",
+            active=True,
+        ))
         # tarif du site CCAS 04 = T3 (import DALKIA actif)
         imp = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True)
         session.add(imp)

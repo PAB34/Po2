@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.cpe import CpeGazReleveCreate, CpeImportResult
 from app.services.cpe import PCS_PCI_RATIO, get_site_by_code, upsert_releve
-from app.services.cpe_accounting import NEW_CPE_CONTRACT_CODES
+from app.services.cpe_accounting import get_current_cpe_contract_codes
 
 # Regex d'extraction du code site CPE depuis le libellé "SITE" de l'export DALKIA détaillé
 # (ex: "SETE GYMNASE VINCENT FERRARI VDS-SPORT 05" -> "VDS-SPORT 05").
@@ -123,7 +123,11 @@ _FLUID_MAP = {"gaz": "GAZ", "electricite": "ELEC", "ecs": "ECS", "eau": "EAU", "
 
 
 def _import_dalkia_detailed(
-    db: Session, rows: list[dict], header_map: dict[str, str], source: str
+    db: Session,
+    rows: list[dict],
+    header_map: dict[str, str],
+    source: str,
+    city_id: int | None = None,
 ) -> CpeImportResult:
     """Importe l'export DALKIA détaillé (1 ligne par compteur × relevé, multi-fluides).
 
@@ -173,9 +177,6 @@ def _import_dalkia_detailed(
     for row in rows:
         nb_lignes += 1
         contrat = (row.get(c_contrat, "") if c_contrat else "").strip().upper()
-        if c_contrat and contrat and contrat not in NEW_CPE_CONTRACT_CODES:
-            nb_hors_cpe += 1
-            continue
         code = _extract_code_site(row.get(c_site, "") if c_site else "")
         if not code:
             continue
@@ -183,6 +184,10 @@ def _import_dalkia_detailed(
         if not parsed:
             continue
         annee, mois = parsed
+        current_contract_codes = get_current_cpe_contract_codes(db, city_id=city_id, year=annee)
+        if c_contrat and contrat and contrat not in current_contract_codes:
+            nb_hors_cpe += 1
+            continue
         fluide = _FLUID_MAP.get(_ascii_key(row.get(c_type, "") if c_type else ""))
         if not fluide:
             continue
@@ -290,6 +295,7 @@ def import_releves_csv(
     db: Session,
     content: str | bytes,
     source: str = "csv_dalkia",
+    city_id: int | None = None,
 ) -> CpeImportResult:
     """Parse et importe le fichier CSV de relevés mensuels DALKIA.
 
@@ -313,7 +319,7 @@ def import_releves_csv(
     # Format DALKIA détaillé ?
     if reader.fieldnames and _is_dalkia_detailed(list(reader.fieldnames)):
         header_map = {_ascii_key(h): h for h in reader.fieldnames}
-        return _import_dalkia_detailed(db, list(reader), header_map, source)
+        return _import_dalkia_detailed(db, list(reader), header_map, source, city_id=city_id)
 
     # Normalise les noms de colonnes
     if reader.fieldnames is None:
