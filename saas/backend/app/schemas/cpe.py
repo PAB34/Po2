@@ -678,3 +678,51 @@ class CpeDjuAnnuel(BaseModel):
     dju_total: float
     nb_jours: int
     source: str
+
+
+# ── Devis petits travaux P3 (type P6 DALKIA) ─────────────────────────────────
+
+class CpeP3DevisOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero: str
+    devis_date: date | None
+    localisation: str | None
+    site_code: str | None
+    libelle: str | None
+    domaine: str | None
+    type_devis: str | None
+    destinataire: str | None
+    etat: str | None
+    montant_ht: float | None
+    montant_ttc: float | None
+    in_scope: bool
+
+
+class CpeP3DevisImportResult(BaseModel):
+    created: int
+    updated: int
+    in_scope: int
+    out_of_scope: int
+    skipped: int
+    errors: list[str] = []
+
+
+class CpeP3AtterrissageEtat(BaseModel):
+    etat: str
+    count: int
+    montant_ht: float
+
+
+class CpeP3AtterrissageOut(BaseModel):
+    year: int
+    provision_p3: float
+    provision_p3_4: float
+    provision_total: float
+    engage_total: float
+    reste_provision: float
+    taux_engagement: float | None
+    devis_count: int
+    by_etat: list[CpeP3AtterrissageEtat]
+    has_provision: bool

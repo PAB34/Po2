@@ -33,6 +33,9 @@ from app.schemas.cpe import (
     CpeInvoiceEvidenceOut,
     CpeFinancePreview,
     CpeMarketTrackingOut,
+    CpeP3AtterrissageOut,
+    CpeP3DevisImportResult,
+    CpeP3DevisOut,
     CpeGazReleve,
     CpeGazReleveCreate,
     CpeGazReleveUpdate,
@@ -50,6 +53,7 @@ from app.schemas.cpe import (
 from app.services import cpe as svc
 from app.services import cpe_accounting as accounting_svc
 from app.services import cpe_market_tracking as market_svc
+from app.services import cpe_p3_devis as p3_devis_svc
 from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
 
@@ -371,6 +375,41 @@ async def import_finances_export(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/finances/p3-devis/import", response_model=CpeP3DevisImportResult)
+async def import_p3_devis(
+    file: UploadFile = File(..., description="Export devis CSV de l'espace client DALKIA"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeP3DevisImportResult:
+    """Importe les devis de petits travaux P3 (type P6). Scope = COMMUNE DE SETE."""
+    try:
+        result = p3_devis_svc.import_p3_devis_csv(db, await file.read(), city_id=current_user.city_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return CpeP3DevisImportResult(**result)
+
+
+@router.get("/finances/p3-devis", response_model=list[CpeP3DevisOut])
+def list_p3_devis(
+    in_scope_only: bool = Query(default=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CpeP3DevisOut]:
+    devis = p3_devis_svc.list_p3_devis(db, current_user.city_id, in_scope_only=in_scope_only)
+    return [CpeP3DevisOut.model_validate(item) for item in devis]
+
+
+@router.get("/finances/p3-devis/atterrissage", response_model=CpeP3AtterrissageOut)
+def get_p3_atterrissage(
+    year: int = Query(default=2026),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeP3AtterrissageOut:
+    return CpeP3AtterrissageOut.model_validate(
+        p3_devis_svc.build_p3_atterrissage(db, current_user.city_id, year=year)
+    )
 
 
 @router.get("/finances/batches", response_model=list[CpeFinanceImportBatchOut])

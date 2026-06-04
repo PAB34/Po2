@@ -519,3 +519,34 @@ class CpeFinanceControl(Base):
     delta_abs: Mapped[float | None] = mapped_column(Float, nullable=True)
     delta_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class CpeP3Devis(Base):
+    """Devis de petits travaux P3 (type DALKIA 'P6') exportes depuis l'espace client.
+
+    Source : export devis CSV (formulaire separe de l'export finances). Pas de code contrat
+    dans le fichier : le perimetre CPE Ville est determine par le destinataire
+    (COMMUNE DE SETE), porte par ``in_scope``.
+    """
+
+    __tablename__ = "cpe_p3_devis"
+    __table_args__ = (UniqueConstraint("city_id", "numero", name="uq_cpe_p3_devis_numero"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    numero: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    devis_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    localisation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    site_code: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    libelle: Mapped[str | None] = mapped_column(Text, nullable=True)
+    domaine: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    type_devis: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    destinataire: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    etat: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    montant_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    montant_ttc: Mapped[float | None] = mapped_column(Float, nullable=True)
+    in_scope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
