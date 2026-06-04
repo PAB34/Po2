@@ -2525,7 +2525,15 @@ export type CvcPreviewResponse = {
 
 export type BuildingMatchSuggestion = {
   building_id: number;
+  site_id: number | null;
   nom_batiment: string | null;
+  adresse: string | null;
+  score: number;
+};
+
+export type PatrimoineSiteSuggestion = {
+  site_id: number;
+  nom_site: string;
   adresse: string | null;
   score: number;
 };
@@ -2538,6 +2546,21 @@ export type SiteMatchResult = {
 
 export type CvcMatchBuildingsResponse = {
   matches: SiteMatchResult[];
+};
+
+export type CvcImportSiteMatchResult = {
+  site_raw: string;
+  item_count: number;
+  current_site_id: number | null;
+  current_building_id: number | null;
+  site_suggestions: PatrimoineSiteSuggestion[];
+  building_suggestions: BuildingMatchSuggestion[];
+  auto_site_id: number | null;
+  auto_building_id: number | null;
+};
+
+export type CvcImportSiteMatchResponse = {
+  matches: CvcImportSiteMatchResult[];
 };
 
 export type CvcInventoryItem = {
@@ -2587,6 +2610,17 @@ export type UpdateCvcInventoryItemPayload = {
   local_id?: number | null;
   equipment_ref_id?: number | null;
   quantite_fluide_frigorigene?: number | null;
+};
+
+export type CvcSiteMappingPayload = {
+  site_raw: string;
+  site_id: number | null;
+  building_id: number | null;
+};
+
+export type CvcApplySiteMappingsResult = {
+  updated: number;
+  mappings_applied: number;
 };
 
 export type CvcImportResult = {
@@ -2654,6 +2688,29 @@ export async function fetchCvcImportItems(
     headers: buildHeaders(token),
   });
   return parseResponse<CvcInventoryItem[]>(response);
+}
+
+export async function fetchCvcImportSiteMatches(
+  token: string,
+  importBatch: string,
+): Promise<CvcImportSiteMatchResponse> {
+  const response = await fetch(`${apiBaseUrl}/cvc/imports/${encodeURIComponent(importBatch)}/site-matches`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcImportSiteMatchResponse>(response);
+}
+
+export async function applyCvcImportSiteMappings(
+  token: string,
+  importBatch: string,
+  mappings: CvcSiteMappingPayload[],
+): Promise<CvcApplySiteMappingsResult> {
+  const response = await fetch(`${apiBaseUrl}/cvc/imports/${encodeURIComponent(importBatch)}/site-mappings`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ mappings }),
+  });
+  return parseResponse<CvcApplySiteMappingsResult>(response);
 }
 
 export async function updateCvcItem(

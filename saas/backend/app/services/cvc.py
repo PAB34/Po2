@@ -14,6 +14,9 @@ from app.models.local import Local
 from app.models.site import Site
 from app.schemas.cvc import (
     BuildingMatchSuggestion,
+    CvcApplySiteMappingsResult,
+    CvcImportSiteMatchResponse,
+    CvcImportSiteMatchResult,
     CvcBuildingMapping,
     CvcEquipmentReferenceRead,
     CvcImportBatchSummary,
@@ -21,7 +24,9 @@ from app.schemas.cvc import (
     CvcInventoryItemRead,
     CvcInventoryItemUpdate,
     CvcMatchBuildingsResponse,
+    CvcSiteMapping,
     CvcPreviewResponse,
+    PatrimoineSiteSuggestion,
     SiteMatchResult,
 )
 
@@ -111,6 +116,7 @@ def match_buildings_for_sites(
         suggestions = [
             BuildingMatchSuggestion(
                 building_id=b.id,
+                site_id=b.site_id,
                 nom_batiment=b.nom_batiment,
                 adresse=_build_address(b),
                 score=round(s, 3),
@@ -122,6 +128,153 @@ def match_buildings_for_sites(
         results.append(SiteMatchResult(site_raw=site, suggestions=suggestions, auto_selected_id=auto_id))
 
     return CvcMatchBuildingsResponse(matches=results)
+
+
+def _best_current_id(values: list[int | None]) -> int | None:
+    counts: dict[int, int] = {}
+    for value in values:
+        if value is not None:
+            counts[value] = counts.get(value, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def list_site_matches_for_import(
+    db: Session, import_batch: str, city_id: int | None
+) -> CvcImportSiteMatchResponse:
+    stmt = select(CvcInventoryItem).where(CvcInventoryItem.import_batch == import_batch)
+    if city_id is not None:
+        stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+    items = list(db.scalars(stmt))
+
+    sites_stmt = select(Site)
+    buildings_stmt = select(Building)
+    if city_id is not None:
+        sites_stmt = sites_stmt.where(Site.city_id == city_id)
+        buildings_stmt = buildings_stmt.where(Building.city_id == city_id)
+    patrimoine_sites = list(db.scalars(sites_stmt))
+    buildings = list(db.scalars(buildings_stmt))
+
+    grouped: dict[str, list[CvcInventoryItem]] = {}
+    for item in items:
+        key = (item.site_raw or "").strip()
+        if key:
+            grouped.setdefault(key, []).append(item)
+
+    results: list[CvcImportSiteMatchResult] = []
+    for site_raw, site_items in grouped.items():
+        site_scored = sorted(
+            ((_similarity(site_raw, site.nom_site), site) for site in patrimoine_sites),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+        building_scored = sorted(
+            (
+                (
+                    max(
+                        _similarity(site_raw, building.nom_batiment or ""),
+                        _similarity(site_raw, building.adresse_reconstituee or ""),
+                    ),
+                    building,
+                )
+                for building in buildings
+            ),
+            key=lambda item: item[0],
+            reverse=True,
+        )
+
+        site_suggestions = [
+            PatrimoineSiteSuggestion(
+                site_id=site.id,
+                nom_site=site.nom_site,
+                adresse=site.adresse,
+                score=round(score, 3),
+            )
+            for score, site in site_scored[:5]
+            if score > 0.1
+        ]
+        building_suggestions = [
+            BuildingMatchSuggestion(
+                building_id=building.id,
+                site_id=building.site_id,
+                nom_batiment=building.nom_batiment,
+                adresse=_build_address(building),
+                score=round(score, 3),
+            )
+            for score, building in building_scored[:5]
+            if score > 0.1
+        ]
+
+        auto_site_id = site_scored[0][1].id if site_scored and site_scored[0][0] >= 0.72 else None
+        auto_building_id = building_scored[0][1].id if building_scored and building_scored[0][0] >= 0.72 else None
+        if auto_building_id is not None and auto_site_id is None:
+            auto_site_id = building_scored[0][1].site_id
+
+        results.append(
+            CvcImportSiteMatchResult(
+                site_raw=site_raw,
+                item_count=len(site_items),
+                current_site_id=_best_current_id([item.site_id for item in site_items]),
+                current_building_id=_best_current_id([item.building_id for item in site_items]),
+                site_suggestions=site_suggestions,
+                building_suggestions=building_suggestions,
+                auto_site_id=auto_site_id,
+                auto_building_id=auto_building_id,
+            )
+        )
+
+    return CvcImportSiteMatchResponse(matches=sorted(results, key=lambda item: item.site_raw.lower()))
+
+
+def apply_site_mappings_to_import(
+    db: Session, import_batch: str, mappings: list[CvcSiteMapping], city_id: int | None
+) -> CvcApplySiteMappingsResult:
+    updated = 0
+    applied = 0
+
+    for mapping in mappings:
+        site_raw = mapping.site_raw.strip()
+        if not site_raw:
+            continue
+
+        site = db.get(Site, mapping.site_id) if mapping.site_id is not None else None
+        if mapping.site_id is not None and site is None:
+            raise ValueError(f"Site introuvable pour {site_raw}.")
+        if site and city_id is not None and site.city_id != city_id:
+            raise ValueError(f"Site hors perimetre pour {site_raw}.")
+
+        building = db.get(Building, mapping.building_id) if mapping.building_id is not None else None
+        if mapping.building_id is not None and building is None:
+            raise ValueError(f"Batiment introuvable pour {site_raw}.")
+        if building and city_id is not None and building.city_id != city_id:
+            raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
+
+        next_site_id = site.id if site else (building.site_id if building else None)
+        if building and site and building.site_id not in (None, site.id):
+            raise ValueError(f"Le batiment choisi n'appartient pas au site choisi pour {site_raw}.")
+
+        stmt = select(CvcInventoryItem).where(
+            CvcInventoryItem.import_batch == import_batch,
+            CvcInventoryItem.site_raw == site_raw,
+        )
+        if city_id is not None:
+            stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        items = list(db.scalars(stmt))
+        if not items:
+            continue
+
+        for item in items:
+            building_changed = item.building_id != (building.id if building else None)
+            item.site_id = next_site_id
+            item.building_id = building.id if building else None
+            if building_changed:
+                item.local_id = None
+            updated += 1
+        applied += 1
+
+    db.commit()
+    return CvcApplySiteMappingsResult(updated=updated, mappings_applied=applied)
 
 
 def _resolve_family(

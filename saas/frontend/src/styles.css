@@ -984,6 +984,14 @@ button:disabled {
     max-width: 100%;
   }
 
+  .cvc-workspace-panel {
+    max-width: 100%;
+  }
+
+  .cvc-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
   .buildings-workspace {
     grid-template-columns: 1fr;
   }
@@ -1129,6 +1137,107 @@ button:disabled {
 
 .data-table tr:last-child td {
   border-bottom: 0;
+}
+
+.cvc-workspace-panel {
+  width: 100%;
+  max-width: min(1760px, calc(100vw - 360px));
+  border-radius: 12px;
+}
+
+.cvc-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cvc-preview-grid div {
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.cvc-preview-grid strong,
+.cvc-preview-grid span {
+  display: block;
+}
+
+.cvc-preview-grid span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.cvc-table-wrapper {
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.cvc-inventory-table,
+.cvc-site-mapping-table {
+  table-layout: fixed;
+  min-width: 0;
+}
+
+.cvc-inventory-table th,
+.cvc-inventory-table td,
+.cvc-site-mapping-table th,
+.cvc-site-mapping-table td {
+  padding: 9px 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.cvc-inventory-table th:nth-child(1) {
+  width: 16%;
+}
+
+.cvc-inventory-table th:nth-child(2) {
+  width: 14%;
+}
+
+.cvc-inventory-table th:nth-child(3),
+.cvc-inventory-table th:nth-child(4) {
+  width: 13%;
+}
+
+.cvc-inventory-table th:nth-child(5) {
+  width: 11%;
+}
+
+.cvc-inventory-table th:nth-child(6) {
+  width: 18%;
+}
+
+.cvc-inventory-table th:nth-child(7) {
+  width: 8%;
+}
+
+.cvc-inventory-table th:nth-child(8) {
+  width: 5%;
+}
+
+.cvc-inventory-table th:nth-child(9) {
+  width: 6%;
+}
+
+.cvc-site-mapping-table th:nth-child(1) {
+  width: 18%;
+}
+
+.cvc-site-mapping-table th:nth-child(2),
+.cvc-site-mapping-table th:nth-child(3) {
+  width: 20%;
+}
+
+.cvc-site-mapping-table th:nth-child(4),
+.cvc-site-mapping-table th:nth-child(5) {
+  width: 18%;
+}
+
+.cvc-site-mapping-table th:nth-child(6) {
+  width: 8%;
 }
 
 .clickable-row {

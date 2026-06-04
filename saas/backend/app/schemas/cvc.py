@@ -13,7 +13,15 @@ class CvcPreviewResponse(BaseModel):
 
 class BuildingMatchSuggestion(BaseModel):
     building_id: int
+    site_id: int | None = None
     nom_batiment: str | None
+    adresse: str | None
+    score: float
+
+
+class PatrimoineSiteSuggestion(BaseModel):
+    site_id: int
+    nom_site: str
     adresse: str | None
     score: float
 
@@ -32,9 +40,39 @@ class CvcMatchBuildingsResponse(BaseModel):
     matches: list[SiteMatchResult]
 
 
+class CvcImportSiteMatchResult(BaseModel):
+    site_raw: str
+    item_count: int
+    current_site_id: int | None = None
+    current_building_id: int | None = None
+    site_suggestions: list[PatrimoineSiteSuggestion]
+    building_suggestions: list[BuildingMatchSuggestion]
+    auto_site_id: int | None = None
+    auto_building_id: int | None = None
+
+
+class CvcImportSiteMatchResponse(BaseModel):
+    matches: list[CvcImportSiteMatchResult]
+
+
 class CvcBuildingMapping(BaseModel):
     site_raw: str
     building_id: int
+
+
+class CvcSiteMapping(BaseModel):
+    site_raw: str
+    site_id: int | None = None
+    building_id: int | None = None
+
+
+class CvcApplySiteMappingsRequest(BaseModel):
+    mappings: list[CvcSiteMapping]
+
+
+class CvcApplySiteMappingsResult(BaseModel):
+    updated: int
+    mappings_applied: int
 
 
 class CvcImportBatchSummary(BaseModel):

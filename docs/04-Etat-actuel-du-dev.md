@@ -1,4 +1,15 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-04 (CVC import + matching sites separes)
+> **Etat code local** : increment UX sur `/buildings/cvc-import` et nouvelle route `/buildings/cvc-import/sites`.
+>
+> Le flux CVC terrain est recadre : l'utilisateur uploade d'abord le fichier pour obtenir une preview non persistante,
+> puis utilise un bouton separe pour enregistrer l'inventaire. Le matching des sites importes vers le referentiel
+> patrimoine est deplace dans une page dediee, avec detection des correspondances evidentes, selection/correction
+> Site + Batiment, puis application en masse a toutes les lignes du lot. Le tableau inventaire affiche ensuite les
+> colonnes Site/Batiment issues de ce mapping, garde l'affinage Local et reference duree de vie ligne par ligne, et
+> utilise un gabarit pleine largeur pour reduire le scroll horizontal.
+> Validation locale : `python -m compileall app` OK. Build frontend non execute localement : `npm` absent sur le poste.
+>
 > **Mise a jour complementaire** : 2026-06-03 (CVC terrain workflow persistant + durees de vie)
 > **Etat code local** : migration Alembic ajoutee `0042_extend_cvc_inventory_workflow.py` apres `0041`.
 >

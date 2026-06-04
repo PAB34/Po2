@@ -7,9 +7,12 @@ from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.models.user import User
 from app.schemas.cvc import (
+    CvcApplySiteMappingsRequest,
+    CvcApplySiteMappingsResult,
     CvcBuildingMapping,
     CvcImportBatchSummary,
     CvcImportResult,
+    CvcImportSiteMatchResponse,
     CvcInventoryItemRead,
     CvcInventoryItemUpdate,
     CvcMatchBuildingsRequest,
@@ -18,12 +21,14 @@ from app.schemas.cvc import (
 )
 from app.services.buildings import get_building_or_404
 from app.services.cvc import (
+    apply_site_mappings_to_import,
     delete_cvc_item,
     delete_cvc_items_for_building,
     import_cvc_from_excel,
     list_cvc_import_batches,
     list_cvc_items_for_batch,
     list_cvc_items_for_building,
+    list_site_matches_for_import,
     match_buildings_for_sites,
     parse_excel_preview,
     update_cvc_item,
@@ -90,6 +95,28 @@ def get_cvc_import_items(
     current_user: User = Depends(get_current_user),
 ) -> list[CvcInventoryItemRead]:
     return list_cvc_items_for_batch(db, import_batch, current_user.city_id)
+
+
+@router.get("/imports/{import_batch}/site-matches", response_model=CvcImportSiteMatchResponse)
+def get_cvc_import_site_matches(
+    import_batch: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcImportSiteMatchResponse:
+    return list_site_matches_for_import(db, import_batch, current_user.city_id)
+
+
+@router.patch("/imports/{import_batch}/site-mappings", response_model=CvcApplySiteMappingsResult)
+def patch_cvc_import_site_mappings(
+    import_batch: str,
+    payload: CvcApplySiteMappingsRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcApplySiteMappingsResult:
+    try:
+        return apply_site_mappings_to_import(db, import_batch, payload.mappings, current_user.city_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/buildings/{building_id}", response_model=list[CvcInventoryItemRead])

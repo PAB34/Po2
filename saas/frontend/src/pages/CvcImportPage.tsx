@@ -3,17 +3,19 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
 import {
+  fetchAllLocals,
   fetchBuildings,
   fetchCvcImportBatches,
   fetchCvcImportItems,
   fetchEquipmentReferences,
-  fetchAllLocals,
   fetchSites,
   postCvcImport,
+  postCvcPreview,
   updateCvcItem,
   type Building,
   type CvcImportBatchSummary,
   type CvcInventoryItem,
+  type CvcPreviewResponse,
   type EquipmentReference,
   type Local,
   type Site,
@@ -44,7 +46,11 @@ function referenceLabel(ref: EquipmentReference): string {
 }
 
 function isCvcRelevant(ref: EquipmentReference): boolean {
-  return ref.code_niveau_2 === "A.2.3" || ref.niveau_3 === "Production de froid :" || ref.niveau_3 === "Pompes à chaleur Air/Air, Air/Eau, Eau/Eau";
+  return (
+    ref.code_niveau_2 === "A.2.3" ||
+    ref.niveau_3 === "Production de froid :" ||
+    ref.niveau_3 === "Pompes a chaleur Air/Air, Air/Eau, Eau/Eau"
+  );
 }
 
 type RowSelectProps = {
@@ -63,7 +69,7 @@ function RowSelect({ value, options, placeholder, onChange, disabled }: RowSelec
       onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
       style={{
         width: "100%",
-        minWidth: 180,
+        minWidth: 0,
         padding: "6px 8px",
         borderRadius: 6,
         border: `1px solid ${NEUTRAL_BORDER}`,
@@ -94,14 +100,7 @@ type InventoryRowProps = {
 
 function InventoryRow({ item, buildings, sites, locals, references, saving, onPatch }: InventoryRowProps) {
   const building = buildings.find((b) => b.id === item.building_id);
-  const siteOptions = sites.map((site) => ({
-    id: site.id,
-    label: compactLabel([site.nom_site, site.adresse]),
-  }));
-  const buildingOptions = buildings.map((b) => ({
-    id: b.id,
-    label: compactLabel([b.nom_batiment ?? `Bâtiment #${b.id}`, b.adresse_reconstituee]),
-  }));
+  const site = sites.find((s) => s.id === item.site_id);
   const localOptions = locals
     .filter((local) => !item.building_id || local.building_id === item.building_id)
     .map((local) => ({
@@ -110,21 +109,12 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
     }));
   const referenceOptions = references.map((ref) => ({ id: ref.id, label: referenceLabel(ref) }));
 
-  const updateBuilding = (buildingId: number | null) => {
-    const nextBuilding = buildings.find((b) => b.id === buildingId);
-    onPatch(item, {
-      building_id: buildingId,
-      site_id: nextBuilding?.site_id ?? item.site_id ?? null,
-      local_id: null,
-    });
-  };
-
   return (
     <tr>
       <td>
         <strong>{item.designation}</strong>
         <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
-          {compactLabel([item.famille, item.marque, item.modele]) || "Famille non renseignée"}
+          {compactLabel([item.famille, item.marque, item.modele]) || "Famille non renseignee"}
         </div>
       </td>
       <td>
@@ -134,28 +124,22 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
         </div>
       </td>
       <td>
-        <RowSelect
-          value={item.site_id}
-          options={siteOptions}
-          placeholder="Site patrimoine"
-          disabled={saving}
-          onChange={(site_id) => onPatch(item, { site_id })}
-        />
+        <strong>{site?.nom_site ?? "-"}</strong>
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {site?.adresse ?? "A matcher dans Sites"}
+        </div>
       </td>
       <td>
-        <RowSelect
-          value={item.building_id}
-          options={buildingOptions}
-          placeholder="Bâtiment patrimoine"
-          disabled={saving}
-          onChange={updateBuilding}
-        />
+        <strong>{building?.nom_batiment ?? (item.building_id ? `Batiment #${item.building_id}` : "-")}</strong>
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {building?.adresse_reconstituee ?? "A matcher dans Sites"}
+        </div>
       </td>
       <td>
         <RowSelect
           value={item.local_id}
           options={localOptions}
-          placeholder={building ? "Local optionnel" : "Choisir un bâtiment"}
+          placeholder={building ? "Local optionnel" : "Choisir un batiment"}
           disabled={saving || !item.building_id}
           onChange={(local_id) => onPatch(item, { local_id })}
         />
@@ -164,7 +148,7 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
         <RowSelect
           value={item.equipment_ref_id}
           options={referenceOptions}
-          placeholder="Référence durée de vie"
+          placeholder="Reference duree de vie"
           disabled={saving}
           onChange={(equipment_ref_id) => onPatch(item, { equipment_ref_id })}
         />
@@ -179,7 +163,7 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
         {item.duree_vie_restante !== null && (
           <div style={{ color: item.duree_vie_restante < 0 ? "#f87171" : SUBTLE_TEXT, fontSize: "0.72rem" }}>
             {item.duree_vie_restante < 0
-              ? `${Math.abs(item.duree_vie_restante)} ans dépassé`
+              ? `${Math.abs(item.duree_vie_restante)} ans depasse`
               : `${item.duree_vie_restante} ans restants`}
           </div>
         )}
@@ -194,7 +178,8 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
             disabled={saving}
             onBlur={(e) => onPatch(item, { quantite_fluide_frigorigene: numberOrNull(e.target.value) })}
             style={{
-              width: 110,
+              width: "100%",
+              minWidth: 0,
               padding: "6px 8px",
               borderRadius: 6,
               border: `1px solid ${NEUTRAL_BORDER}`,
@@ -203,11 +188,11 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
             }}
           />
         ) : (
-          <span style={{ color: "#475569" }}>Non concerné</span>
+          <span style={{ color: "#475569" }}>Non concerne</span>
         )}
       </td>
       <td style={{ color: saving ? "#fbbf24" : "#4ade80", fontSize: "0.74rem" }}>
-        {saving ? "Sauvegarde..." : "Enregistré"}
+        {saving ? "Sauvegarde..." : "Enregistre"}
       </td>
     </tr>
   );
@@ -219,6 +204,7 @@ export function CvcImportPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<CvcPreviewResponse | null>(null);
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -257,25 +243,38 @@ export function CvcImportPage() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const uploadMutation = useMutation({
+  const previewMutation = useMutation({
     mutationFn: async () => {
-      if (!file || !token) throw new Error("Sélectionne un fichier Excel avant l'import.");
+      if (!file || !token) throw new Error("Selectionne un fichier Excel.");
+      return postCvcPreview(token, file);
+    },
+    onSuccess: (result) => {
+      setPreview(result);
+      setError(null);
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur lors de l'analyse."),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!file || !token) throw new Error("Selectionne un fichier Excel avant l'import.");
       return postCvcImport(token, file, []);
     },
     onSuccess: (result) => {
       setActiveBatch(result.import_batch);
       setFile(null);
+      setPreview(null);
       setError(null);
       if (fileRef.current) fileRef.current.value = "";
       queryClient.invalidateQueries({ queryKey: ["cvc-import-batches"] });
       queryClient.invalidateQueries({ queryKey: ["cvc-import-items"] });
     },
-    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur lors de l'import."),
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement."),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ item, payload }: { item: CvcInventoryItem; payload: UpdateCvcInventoryItemPayload }) => {
-      if (!token) throw new Error("Session expirée.");
+      if (!token) throw new Error("Session expiree.");
       return updateCvcItem(token, item.id, payload);
     },
     onSuccess: () => {
@@ -305,21 +304,21 @@ export function CvcImportPage() {
     return (
       <section className="panel stack-lg">
         <h2>Import inventaire CVC</h2>
-        <p>Connecte-toi pour accéder à cette page.</p>
+        <p>Connecte-toi pour acceder a cette page.</p>
       </section>
     );
   }
 
   return (
-    <section className="panel stack-lg">
+    <section className="panel stack-lg cvc-workspace-panel">
       <div className="panel-header">
         <div>
           <p className="eyebrow">Gestion technique</p>
           <h2>Inventaire CVC terrain</h2>
-          <p>Charge le fichier terrain, puis complète les rattachements patrimoine et les durées de vie dans le tableau.</p>
+          <p>Charge le fichier terrain, enregistre l'inventaire, puis traite le matching patrimoine dans une page dediee.</p>
         </div>
         <div className="buildings-header-actions">
-          <Link className="secondary-link" to="/buildings/technique">Retour à la gestion technique</Link>
+          <Link className="secondary-link" to="/buildings/technique">Retour a la gestion technique</Link>
         </div>
       </div>
 
@@ -333,36 +332,76 @@ export function CvcImportPage() {
         <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
           <label className="field" style={{ minWidth: 280, margin: 0 }}>
             <span>Fichier inventaire .xlsx</span>
-            <input ref={fileRef} type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx"
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null);
+                setPreview(null);
+                setError(null);
+              }}
+            />
           </label>
-          <button
-            type="button"
-            className="primary-button"
-            onClick={() => uploadMutation.mutate()}
-            disabled={!file || uploadMutation.isPending}
-          >
-            {uploadMutation.isPending ? "Enregistrement..." : "Uploader et enregistrer l'inventaire"}
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => previewMutation.mutate()}
+              disabled={!file || previewMutation.isPending || saveMutation.isPending}
+            >
+              {previewMutation.isPending ? "Analyse..." : "Uploader le fichier"}
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => saveMutation.mutate()}
+              disabled={!file || !preview || saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Enregistrement..." : "Enregistrer l'inventaire"}
+            </button>
+          </div>
         </div>
         {file && (
           <p style={{ color: SUBTLE_TEXT, fontSize: "0.85rem", marginTop: 8 }}>
-            Fichier prêt : <strong style={{ color: "#e2e8f0" }}>{file.name}</strong>
+            Fichier pret : <strong style={{ color: "#e2e8f0" }}>{file.name}</strong>
           </p>
+        )}
+        {preview && (
+          <div className="cvc-preview-grid">
+            <div>
+              <strong>{preview.total_rows}</strong>
+              <span>Lignes detectees</span>
+            </div>
+            <div>
+              <strong>{preview.unique_sites.length}</strong>
+              <span>Sites source</span>
+            </div>
+            <div>
+              <strong>{preview.unique_families.length}</strong>
+              <span>Familles source</span>
+            </div>
+          </div>
         )}
       </div>
 
       <div className="section-block">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div>
-            <h3>Imports enregistrés</h3>
+            <h3>Imports enregistres</h3>
             <p style={{ color: SUBTLE_TEXT, fontSize: "0.86rem" }}>
-              Les listes sites, bâtiments et locaux sont relues depuis le patrimoine.
+              Les listes sites, batiments et locaux sont relues depuis le patrimoine.
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button type="button" className="secondary-button" onClick={refreshPatrimoineLists}>
-              Rafraîchir patrimoine
+              Rafraichir patrimoine
             </button>
+            {activeBatch && (
+              <Link className="secondary-link" to={`/buildings/cvc-import/sites?batch=${encodeURIComponent(activeBatch)}`}>
+                Matcher les sites
+              </Link>
+            )}
             <select
               value={activeBatch ?? ""}
               onChange={(e) => setActiveBatch(e.target.value || null)}
@@ -378,7 +417,7 @@ export function CvcImportPage() {
               <option value="">Choisir un import</option>
               {(batchesQuery.data ?? []).map((batch) => (
                 <option key={batch.import_batch} value={batch.import_batch}>
-                  {batch.import_batch} - {batch.imported} lignes - {batch.mapped_items} patrimoine
+                  {batch.import_batch} - {batch.imported} lignes - {batch.mapped_items} rattachees
                 </option>
               ))}
             </select>
@@ -391,9 +430,9 @@ export function CvcImportPage() {
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
             {[
               ["Lignes", items.length],
-              ["Rattachées patrimoine", mappedCount],
-              ["Référence durée de vie", refMappedCount],
-              ["Fluides frigorigènes", refrigerantCount],
+              ["Rattachees patrimoine", mappedCount],
+              ["Reference duree de vie", refMappedCount],
+              ["Fluides frigorigenes", refrigerantCount],
             ].map(([label, value]) => (
               <div key={label} style={{ padding: "10px 14px", border: `1px solid ${NEUTRAL_BORDER}`, borderRadius: 8, background: "rgba(15,23,42,0.35)" }}>
                 <div style={{ color: "#e2e8f0", fontWeight: 700 }}>{value}</div>
@@ -403,19 +442,19 @@ export function CvcImportPage() {
           </div>
 
           {itemsQuery.isLoading && <p>Chargement de l'inventaire...</p>}
-          {!itemsQuery.isLoading && items.length === 0 && <p>Aucune ligne trouvée pour cet import.</p>}
+          {!itemsQuery.isLoading && items.length === 0 && <p>Aucune ligne trouvee pour cet import.</p>}
           {items.length > 0 && (
-            <div style={{ overflowX: "auto" }}>
-              <table className="data-table" style={{ minWidth: 1480 }}>
+            <div className="table-wrapper cvc-table-wrapper">
+              <table className="data-table cvc-inventory-table">
                 <thead>
                   <tr>
-                    <th>Équipement terrain</th>
+                    <th>Equipement terrain</th>
                     <th>Localisation source</th>
                     <th>Site patrimoine</th>
-                    <th>Bâtiment patrimoine</th>
+                    <th>Batiment patrimoine</th>
                     <th>Local patrimoine</th>
-                    <th>Durée de vie attachée</th>
-                    <th>Mini / Réf. / Maxi</th>
+                    <th>Duree de vie attachee</th>
+                    <th>Mini / Ref. / Maxi</th>
                     <th>Fluide kg</th>
                     <th>Statut</th>
                   </tr>
