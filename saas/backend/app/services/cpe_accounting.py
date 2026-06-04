@@ -1944,43 +1944,59 @@ def _control_p1_gaz_acompte_against_dpgf(
     )
 
     actual = round(sum(line.amount_ht or 0.0 for line in scope_lines), 2)
+    annual_revised = (
+        round(reference.annual_amount_ht, 2)
+        if reference.annual_amount_ht is not None
+        else round(expected * (reference.installment_count or 4), 2)
+    )
     delta = round(actual - expected, 2)
     delta_pct = round(delta / expected, 6) if expected else None
-    tolerance_pct = reference.tolerance_pct if reference.tolerance_pct is not None else 0.01
-    tolerance_eur = reference.tolerance_eur if reference.tolerance_eur is not None else 100.0
-    tolerance = max(tolerance_eur, expected * tolerance_pct)
-    if abs(delta) <= tolerance:
+    ratio = (actual / expected) if expected else None
+
+    # Garde-fou ZERO tolerance : un acompte trimestriel ne peut pas depasser le P1 annuel revise
+    # complet. C'est la seule incoherence certaine au stade de l'acompte (provisionnel).
+    if actual > annual_revised + 1.0:
         return CpeFinanceControl(
             city_id=anchor.city_id,
             batch_id=anchor.batch_id,
             invoice_id=anchor.invoice_id,
             line_id=anchor.id,
             control_type="p1_gaz_acompte_dpgf",
-            status="ok",
-            severity="info",
+            status="error",
+            severity="error",
             message=(
-                f"Acompte P1 gaz coherent {scope_label} : total {actual:.2f} EUR HT "
-                f"pour {invoice.period_start} - {invoice.period_end}, attendu {expected:.2f} EUR HT."
+                f"Acompte P1 gaz incoherent {scope_label} : l'acompte du trimestre "
+                f"{invoice.period_start} - {invoice.period_end} ({actual:.2f} EUR HT) depasse le P1 "
+                f"annuel revise complet ({annual_revised:.2f} EUR HT). Impossible pour un acompte trimestriel."
             ),
             formula=reference.formula,
-            expected_revised_price=expected,
+            expected_revised_price=annual_revised,
             actual_revised_price=actual,
-            delta_abs=delta,
-            delta_pct=delta_pct,
+            delta_abs=round(actual - annual_revised, 2),
         )
+
+    # Sinon : controle INFORMATIF (jamais d'erreur sur l'ecart au quart). L'acompte trimestriel est
+    # PROVISIONNEL et ventile par site selon la logique DALKIA (conso historique/saisonniere) : il
+    # n'est PAS egal au P1 annuel / 4 (verifie sur donnees reelles : ratio facture/(annuel/4) de 0,42
+    # a 1,38 selon site). Mettre une tolerance dessus reviendrait a masquer une base de comparaison
+    # fausse. La verification EXACTE du P1 se fait (1) sur le prix unitaire via la formule de revision
+    # (controle p1_gaz_pu_os3 : Pu = Pu0 x (a + b.PEG/PEG0 + c.TVD/TVD0 + d.CEE/CEE0 + e.TICGN/TICGN0))
+    # et (2) au decompte definitif (conso reelle x prix indexes, 15/02/N+1).
+    ratio_txt = f"{ratio:.0%}" if ratio is not None else "n/a"
     return CpeFinanceControl(
         city_id=anchor.city_id,
         batch_id=anchor.batch_id,
         invoice_id=anchor.invoice_id,
         line_id=anchor.id,
         control_type="p1_gaz_acompte_dpgf",
-        status="error",
-        severity="error",
+        status="ok",
+        severity="info",
         message=(
-            f"Ecart acompte P1 gaz agrege {scope_label} pour la periode "
-            f"{invoice.period_start} - {invoice.period_end} : total facture {actual:.2f} EUR HT, "
-            f"attendu {expected:.2f} EUR HT selon DPGF revise, ecart {delta:.2f} EUR. "
-            f"(Montant de lot, pas celui de la seule facture courante.)"
+            f"Acompte P1 gaz provisionnel {scope_label} pour {invoice.period_start} - "
+            f"{invoice.period_end} : total facture {actual:.2f} EUR HT ({ratio_txt} du quart theorique "
+            f"{expected:.2f}, P1 annuel revise {annual_revised:.2f}). Acompte ventile par site "
+            f"(non egal a annuel/4) ; verification exacte par le prix unitaire (formule de revision) "
+            f"et au decompte definitif."
         ),
         formula=reference.formula,
         expected_revised_price=expected,

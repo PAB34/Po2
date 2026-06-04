@@ -95,7 +95,7 @@ def test_p1_acompte_control_emitted_once_per_lot_period(db_session):
     batch = CpeFinanceImportBatch(city_id=1, filename="lot.xlsx")
     db_session.add(batch)
     db_session.flush()
-    # 3 factures P1 du même trimestre, total lot = 90000 (> attendu 79443.74)
+    # 3 factures P1 du même trimestre, total lot = 90000 (acompte provisionnel < annuel révisé)
     invoices = [
         _make_p1_invoice(db_session, batch.id, "INV-A", 30000.0),
         _make_p1_invoice(db_session, batch.id, "INV-B", 30000.0),
@@ -119,5 +119,26 @@ def test_p1_acompte_control_emitted_once_per_lot_period(db_session):
     # Le montant agrégé est bien la somme du lot, pas celui d'une facture isolée.
     assert control.actual_revised_price == 90000.0
     assert control.expected_revised_price == 79443.74
-    assert control.status == "error"
+    # Acompte provisionnel : informatif (pas d'erreur sur l'écart au quart théorique).
+    assert control.status == "ok"
+    assert control.severity == "info"
     assert "3 factures P1" in control.message
+
+
+def test_p1_acompte_error_when_quarter_exceeds_annual(db_session):
+    """Garde-fou zéro tolérance : un acompte trimestriel > P1 annuel révisé est impossible."""
+    batch = CpeFinanceImportBatch(city_id=1, filename="lot.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    # Lot trimestriel = 320000 > annuel révisé 317774.96 -> erreur.
+    invoice = _make_p1_invoice(db_session, batch.id, "INV-XL", 320000.0)
+    db_session.commit()
+
+    recompute_finance_invoice_controls(db_session, invoice)
+
+    control = db_session.scalars(
+        select(CpeFinanceControl).where(CpeFinanceControl.control_type == "p1_gaz_acompte_dpgf")
+    ).one()
+    assert control.status == "error"
+    assert control.expected_revised_price == 317774.96
+    assert control.actual_revised_price == 320000.0

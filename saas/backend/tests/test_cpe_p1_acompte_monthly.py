@@ -137,7 +137,8 @@ def test_monthly_invoice_ending_quarter_not_applied(db_session):
 
 
 def test_real_quarter_invoice_is_controlled(db_session):
-    """Vraie facture TRIMESTRIELLE 01/01 -> 31/03 : controle applique et compare au 1/4 annuel."""
+    """Vraie facture TRIMESTRIELLE 01/01 -> 31/03 : controle applique, INFORMATIF (acompte
+    provisionnel, pas d'erreur sur l'ecart au quart theorique)."""
     batch = CpeFinanceImportBatch(city_id=1, filename="lot.xlsx")
     db_session.add(batch)
     db_session.flush()
@@ -145,7 +146,7 @@ def test_real_quarter_invoice_is_controlled(db_session):
         db_session,
         batch.id,
         "TRIM-Q1",
-        83001.0,  # > attendu 79443.74 -> ecart attendu
+        83001.0,  # ecart au quart theorique 79443.74 -> informatif, pas une erreur
         period_start=date(2026, 1, 1),
         period_end=date(2026, 3, 31),
     )
@@ -156,7 +157,8 @@ def test_real_quarter_invoice_is_controlled(db_session):
     controls = _p1_controls(db_session)
     assert len(controls) == 1
     control = controls[0]
-    assert control.status == "error"
+    assert control.status == "ok"
+    assert control.severity == "info"
     assert control.expected_revised_price == 79443.74
     assert control.actual_revised_price == 83001.0
 
