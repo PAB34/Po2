@@ -6,7 +6,9 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
+  Line,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -60,6 +62,9 @@ import {
   downloadCpeFinanceControlReport,
   fetchCpeMarketTracking,
   downloadCpeMarketTracking,
+  type CpeMarketTrackingCell,
+  type CpeMarketTrackingTotal,
+  type CpeMarketTrackingPoste,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateCpeContractReference,
@@ -900,6 +905,126 @@ function KpiCard({
       <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{sub}</p>
       {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
+  );
+}
+
+function MarketTrackingMatrix({
+  title,
+  subtitle,
+  years,
+  postes,
+  totalsByYear,
+  grandTotal,
+  yearFrom,
+  yearTo,
+}: {
+  title: string;
+  subtitle?: string;
+  years: number[];
+  postes: CpeMarketTrackingPoste[];
+  totalsByYear: CpeMarketTrackingCell[];
+  grandTotal: CpeMarketTrackingTotal;
+  yearFrom: number;
+  yearTo: number;
+}) {
+  const chartData = postes.map((p) => ({
+    poste: p.label,
+    "Prévu": p.total.prevu,
+    "Reçu": p.total.recu,
+    "Taux": p.total.taux != null ? Math.round(p.total.taux * 1000) / 10 : null,
+  }));
+  return (
+    <>
+      <div className="kpi-grid">
+        <KpiCard label="Enveloppe (prévu)" value={fmtEur(grandTotal.prevu)} sub={`${title} · ${yearFrom}–${yearTo}`} color="#1d4ed8" />
+        <KpiCard label="Reçu (facturé)" value={fmtEur(grandTotal.recu)} sub="Factures DALKIA" color="#0f766e" />
+        <KpiCard label="Écart reçu − prévu" value={fmtEur(grandTotal.ecart)} sub={grandTotal.ecart > 0 ? "Au-dessus du marché" : "Sous le marché"} color={grandTotal.ecart > 0 ? "#dc2626" : "#16a34a"} />
+        <KpiCard label="Taux de réalisation" value={fmtPct(grandTotal.taux)} sub="Reçu / prévu" color="#7c3aed" />
+      </div>
+
+      <div className="card" style={{ padding: 12 }}>
+        <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>{title} — prévu vs reçu par poste ({yearFrom}–{yearTo})</h4>
+        {subtitle && <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>{subtitle}</p>}
+        <div style={{ height: 300 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="poste" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={70} />
+              <YAxis yAxisId="left" tickFormatter={(v) => `${Math.round(Number(v) / 1000).toLocaleString("fr-FR")} k€`} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${v} %`} domain={[0, "auto"]} />
+              <Tooltip formatter={(value, name) => (String(name).startsWith("Taux") ? (value == null ? "—" : `${Number(value).toFixed(1)} %`) : fmtEur(Number(value)))} />
+              <Legend />
+              <Bar yAxisId="left" dataKey="Prévu" fill="#94a3b8" />
+              <Bar yAxisId="left" dataKey="Reçu" fill="#1d4ed8" />
+              <Line yAxisId="right" type="monotone" dataKey="Taux" name="Taux (%)" stroke="#dc2626" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+        <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Matrice poste × année — {title}</h4>
+        <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
+          <thead>
+            <tr style={{ background: "#f9fafb" }}>
+              <th rowSpan={2} style={{ ...thStyle, position: "sticky", left: 0, background: "#f9fafb" }}>Poste</th>
+              {years.map((y) => (
+                <th key={y} colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "1px solid #e5e7eb" }}>{y}</th>
+              ))}
+              <th colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "2px solid #cbd5e1", background: "#eef2ff" }}>Total {yearFrom}–{yearTo}</th>
+            </tr>
+            <tr style={{ background: "#f9fafb" }}>
+              {years.map((y) => (
+                <Fragment key={y}>
+                  <th style={{ ...thStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>Prévu</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
+                </Fragment>
+              ))}
+              <th style={{ ...thStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>Prévu</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
+            </tr>
+          </thead>
+          <tbody>
+            {postes.map((p) => (
+              <tr key={p.poste} style={{ borderTop: "1px solid #f3f4f6" }}>
+                <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>{p.label}</td>
+                {p.by_year.map((c) => (
+                  <Fragment key={c.year}>
+                    <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6", color: "#6b7280" }}>{fmtEur(c.prevu)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(c.taux)}`}>{fmtPct(c.taux)}</span></td>
+                  </Fragment>
+                ))}
+                <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1", color: "#6b7280" }}>{fmtEur(p.total.prevu)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(p.total.recu)}</td>
+                <td style={{ ...tdStyle, textAlign: "right", color: p.total.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(p.total.ecart)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(p.total.taux)}`}>{fmtPct(p.total.taux)}</span></td>
+              </tr>
+            ))}
+            <tr style={{ borderTop: "2px solid #cbd5e1", background: "#f8fafc", fontWeight: 700 }}>
+              <td style={{ ...tdStyle, position: "sticky", left: 0, background: "#f8fafc" }}>TOTAL</td>
+              {totalsByYear.map((c) => (
+                <Fragment key={c.year}>
+                  <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>{fmtEur(c.prevu)}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
+                  <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(c.taux)}</td>
+                </Fragment>
+              ))}
+              <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>{fmtEur(grandTotal.prevu)}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(grandTotal.recu)}</td>
+              <td style={{ ...tdStyle, textAlign: "right", color: grandTotal.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(grandTotal.ecart)}</td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(grandTotal.taux)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -2480,93 +2605,29 @@ function CpeFinanceReference({
 
         {marketTracking && marketTracking.has_reference && (
           <>
-            <div className="kpi-grid">
-              <KpiCard label="Enveloppe marché (prévu)" value={fmtEur(marketTracking.grand_total.prevu)} sub={`Postes P1/P2/P3 · ${marketYearFrom}–${marketYearTo}`} color="#1d4ed8" />
-              <KpiCard label="Reçu (facturé)" value={fmtEur(marketTracking.grand_total.recu)} sub="Factures DALKIA CPE Ville" color="#0f766e" />
-              <KpiCard label="Écart reçu − prévu" value={fmtEur(marketTracking.grand_total.ecart)} sub={marketTracking.grand_total.ecart > 0 ? "Au-dessus du marché" : "Sous le marché"} color={marketTracking.grand_total.ecart > 0 ? "#dc2626" : "#16a34a"} />
-              <KpiCard label="Taux de réalisation" value={fmtPct(marketTracking.grand_total.taux)} sub="Reçu / prévu" color="#7c3aed" />
-            </div>
-
-            <div className="card" style={{ padding: 12 }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Prévu vs reçu par poste ({marketYearFrom}–{marketYearTo})</h4>
-              <div style={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={marketTracking.postes.map((p) => ({ poste: p.label, "Prévu": p.total.prevu, "Reçu": p.total.recu }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="poste" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={70} />
-                    <YAxis tickFormatter={(v) => `${Math.round(Number(v) / 1000).toLocaleString("fr-FR")} k€`} />
-                    <Tooltip formatter={(v) => fmtEur(Number(v))} />
-                    <Legend />
-                    <Bar dataKey="Prévu" fill="#94a3b8" />
-                    <Bar dataKey="Reçu" fill="#1d4ed8" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="card" style={{ padding: 12, overflowX: "auto" }}>
-              <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Matrice poste × année</h4>
-              <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>Prévu P1 : {marketTracking.p1_source}. P2/P3/P2.4/P3.4 : référentiel DPGF par site agrégé. Reçu : factures DALKIA du périmètre CPE Ville.</p>
-              <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
-                <thead>
-                  <tr style={{ background: "#f9fafb" }}>
-                    <th rowSpan={2} style={{ ...thStyle, position: "sticky", left: 0, background: "#f9fafb" }}>Poste</th>
-                    {marketTracking.years.map((y) => (
-                      <th key={y} colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "1px solid #e5e7eb" }}>{y}</th>
-                    ))}
-                    <th colSpan={4} style={{ ...thStyle, textAlign: "center", borderLeft: "2px solid #cbd5e1", background: "#eef2ff" }}>Total {marketYearFrom}–{marketYearTo}</th>
-                  </tr>
-                  <tr style={{ background: "#f9fafb" }}>
-                    {marketTracking.years.map((y) => (
-                      <Fragment key={y}>
-                        <th style={{ ...thStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>Prévu</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
-                        <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
-                      </Fragment>
-                    ))}
-                    <th style={{ ...thStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>Prévu</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Reçu</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Taux</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marketTracking.postes.map((p) => (
-                    <tr key={p.poste} style={{ borderTop: "1px solid #f3f4f6" }}>
-                      <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>{p.label}</td>
-                      {p.by_year.map((c) => (
-                        <Fragment key={c.year}>
-                          <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6", color: "#6b7280" }}>{fmtEur(c.prevu)}</td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
-                          <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
-                          <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(c.taux)}`}>{fmtPct(c.taux)}</span></td>
-                        </Fragment>
-                      ))}
-                      <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1", color: "#6b7280" }}>{fmtEur(p.total.prevu)}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(p.total.recu)}</td>
-                      <td style={{ ...tdStyle, textAlign: "right", color: p.total.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(p.total.ecart)}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}><span className={`badge ${tauxClass(p.total.taux)}`}>{fmtPct(p.total.taux)}</span></td>
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: "2px solid #cbd5e1", background: "#f8fafc", fontWeight: 700 }}>
-                    <td style={{ ...tdStyle, position: "sticky", left: 0, background: "#f8fafc" }}>TOTAL marché</td>
-                    {marketTracking.totals_by_year.map((c) => (
-                      <Fragment key={c.year}>
-                        <td style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>{fmtEur(c.prevu)}</td>
-                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(c.recu)}</td>
-                        <td style={{ ...tdStyle, textAlign: "right", color: c.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(c.ecart)}</td>
-                        <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(c.taux)}</td>
-                      </Fragment>
-                    ))}
-                    <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1" }}>{fmtEur(marketTracking.grand_total.prevu)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(marketTracking.grand_total.recu)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right", color: marketTracking.grand_total.ecart > 0 ? "#b91c1c" : "#166534" }}>{fmtEur(marketTracking.grand_total.ecart)}</td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtPct(marketTracking.grand_total.taux)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <MarketTrackingMatrix
+              title="Ensemble du marché"
+              subtitle={`Prévu P1 : ${marketTracking.p1_source}. P2/P3/P2.4/P3.4 : référentiel DPGF par site agrégé. Reçu : factures DALKIA du périmètre CPE Ville.`}
+              years={marketTracking.years}
+              postes={marketTracking.postes}
+              totalsByYear={marketTracking.totals_by_year}
+              grandTotal={marketTracking.grand_total}
+              yearFrom={marketYearFrom}
+              yearTo={marketYearTo}
+            />
+            {marketTracking.by_lot.map((lot) => (
+              <MarketTrackingMatrix
+                key={lot.lot}
+                title={lot.label}
+                subtitle={`Contrat ${lot.contract_codes.join(", ")} — prévu DPGF Lot ${lot.lot} vs reçu factures du lot.`}
+                years={marketTracking.years}
+                postes={lot.postes}
+                totalsByYear={lot.totals_by_year}
+                grandTotal={lot.grand_total}
+                yearFrom={marketYearFrom}
+                yearTo={marketYearTo}
+              />
+            ))}
           </>
         )}
       </section>

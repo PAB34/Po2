@@ -3608,18 +3608,31 @@ export type CpeMarketTrackingTotal = {
   taux: number | null;
 };
 
+export type CpeMarketTrackingPoste = {
+  poste: string;
+  label: string;
+  by_year: CpeMarketTrackingCell[];
+  total: CpeMarketTrackingTotal;
+};
+
+export type CpeMarketTrackingLot = {
+  lot: number;
+  label: string;
+  contract_codes: string[];
+  postes: CpeMarketTrackingPoste[];
+  totals_by_year: CpeMarketTrackingCell[];
+  grand_total: CpeMarketTrackingTotal;
+  has_reference: boolean;
+};
+
 export type CpeMarketTracking = {
   years: number[];
-  postes: Array<{
-    poste: string;
-    label: string;
-    by_year: CpeMarketTrackingCell[];
-    total: CpeMarketTrackingTotal;
-  }>;
+  postes: CpeMarketTrackingPoste[];
   totals_by_year: CpeMarketTrackingCell[];
   grand_total: CpeMarketTrackingTotal;
   p1_source: string;
   has_reference: boolean;
+  by_lot: CpeMarketTrackingLot[];
 };
 
 export async function fetchCpeMarketTracking(
