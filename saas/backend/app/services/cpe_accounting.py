@@ -1737,19 +1737,28 @@ def _control_invoice_timeline(invoice: CpeFinanceInvoice, anchor: CpeFinanceLine
             severity="error",
             message="Calendrier facture incoherent : debut de periode posterieur a la fin.",
         )
-    if invoice.due_date < invoice.invoice_date:
+    # Modele de facturation DALKIA : l'echeance est ancree sur une borne de la periode facturee
+    # (debut OU fin de periode), et l'edition suit (acomptes edites juste apres la cloture) ou
+    # arrive bien plus tard (regularisations). Une echeance anterieure a la date d'edition est
+    # donc STRUCTURELLE chez DALKIA, pas une incoherence : la signaler en erreur produisait 275
+    # faux positifs sur 473 factures (verifie sur l'export reel). On ne retient comme vraie
+    # incoherence que l'echeance situee AVANT le debut de la periode facturee (impossible :
+    # echeance d'un service pas encore commence).
+    if invoice.due_date < invoice.period_start:
         return _make_basic_control(
             anchor,
             control_type="invoice_timeline",
             status="error",
             severity="error",
-            message="Calendrier facture incoherent : echeance anterieure a la date d'edition.",
+            message="Calendrier facture incoherent : echeance anterieure au debut de la periode facturee.",
         )
     metrics = _invoice_timeline_metrics(invoice)
     message = (
         f"Calendrier facture coherent : periode {invoice.period_start} au {invoice.period_end}, "
         f"edition {invoice.invoice_date}, echeance {invoice.due_date}."
     )
+    if invoice.due_date < invoice.invoice_date:
+        message += " Echeance sur une borne de periode, edition posterieure (acompte/regularisation) : coherent."
     if metrics["issue_delay_days"] is not None:
         message += f" Edition {metrics['issue_delay_days']} jour(s) apres la fin de periode."
     return _make_basic_control(
