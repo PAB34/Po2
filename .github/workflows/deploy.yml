@@ -78,5 +78,5 @@ jobs:
 
             # Migrations Alembic — on attend que le backend soit prêt (5 s) puis on migre
             sleep 5
-            $COMPOSE exec -T backend python -c "from app.core.db import SessionLocal; from sqlalchemy import text; db=SessionLocal(); db.execute(text(\"delete from alembic_version where version_num='0040' and exists (select 1 from alembic_version where version_num='0041')\")); db.commit(); db.close()"
+            $COMPOSE exec -T backend python -c "from app.core.db import SessionLocal; from sqlalchemy import text; db=SessionLocal(); db.execute(text(\"delete from alembic_version where version_num='0040' and exists (select 1 from alembic_version where version_num in ('0041','0042_cvc_inventory_workflow'))\")); db.execute(text(\"delete from alembic_version where version_num='0041' and exists (select 1 from alembic_version where version_num='0042_cvc_inventory_workflow')\")); db.commit(); db.close()"
             $COMPOSE exec -T backend alembic upgrade head
