@@ -3659,6 +3659,73 @@ export async function downloadCpeMarketTracking(token: string, yearFrom: number,
   return response.blob();
 }
 
+// ── Devis petits travaux P3 (type P6 DALKIA) ─────────────────────────────────
+
+export type CpeP3Devis = {
+  id: number;
+  numero: string;
+  devis_date: string | null;
+  localisation: string | null;
+  site_code: string | null;
+  libelle: string | null;
+  domaine: string | null;
+  type_devis: string | null;
+  destinataire: string | null;
+  etat: string | null;
+  montant_ht: number | null;
+  montant_ttc: number | null;
+  in_scope: boolean;
+};
+
+export type CpeP3DevisImportResult = {
+  created: number;
+  updated: number;
+  in_scope: number;
+  out_of_scope: number;
+  skipped: number;
+  errors: string[];
+};
+
+export type CpeP3Atterrissage = {
+  year: number;
+  provision_p3: number;
+  provision_p3_4: number;
+  provision_total: number;
+  engage_total: number;
+  reste_provision: number;
+  taux_engagement: number | null;
+  devis_count: number;
+  by_etat: Array<{ etat: string; count: number; montant_ht: number }>;
+  has_provision: boolean;
+};
+
+export async function importCpeP3Devis(token: string, file: File): Promise<CpeP3DevisImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/p3-devis/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<CpeP3DevisImportResult>(response);
+}
+
+export async function fetchCpeP3Devis(token: string, inScopeOnly = true): Promise<CpeP3Devis[]> {
+  const response = await fetch(
+    `${apiBaseUrl}/cpe/finances/p3-devis?in_scope_only=${inScopeOnly}`,
+    { headers: buildHeaders(token) },
+  );
+  return parseResponse<CpeP3Devis[]>(response);
+}
+
+export async function fetchCpeP3Atterrissage(token: string, year: number): Promise<CpeP3Atterrissage> {
+  const response = await fetch(
+    `${apiBaseUrl}/cpe/finances/p3-devis/atterrissage?year=${year}`,
+    { headers: buildHeaders(token) },
+  );
+  return parseResponse<CpeP3Atterrissage>(response);
+}
+
 export async function updateCpeFinanceInvoice(
   token: string,
   invoiceId: number,

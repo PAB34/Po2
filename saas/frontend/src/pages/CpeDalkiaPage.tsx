@@ -65,6 +65,10 @@ import {
   type CpeMarketTrackingCell,
   type CpeMarketTrackingTotal,
   type CpeMarketTrackingPoste,
+  importCpeP3Devis,
+  fetchCpeP3Devis,
+  fetchCpeP3Atterrissage,
+  type CpeP3Atterrissage,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateCpeContractReference,
@@ -149,7 +153,7 @@ const CATEGORIE_LABEL: Record<string, string> = {
 };
 
 type CpeView = "cockpit" | "finance" | "performance";
-type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "controls";
+type CpeFinanceSection = "imports" | "sites" | "rules" | "references" | "indices" | "invoices" | "p3-devis" | "controls";
 type QueueInvoice = CpeFinanceControlReport["invoices"][number];
 type QueueSortKey =
   | "invoice_number"
@@ -173,6 +177,7 @@ const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail
   { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
   { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources" },
   { id: "invoices", label: "Factures", detail: "Suivi marché : prévu vs reçu" },
+  { id: "p3-devis", label: "Factures petits travaux P3", detail: "Devis P3/P6 et atterrissage" },
   { id: "controls", label: "Contrôle factures", detail: "Audit global et anomalies" },
 ];
 
@@ -1028,6 +1033,55 @@ function MarketTrackingMatrix({
   );
 }
 
+function P3AtterrissageChart({ data }: { data: CpeP3Atterrissage }) {
+  const chartData = [
+    { name: "Provision P3", Montant: data.provision_total },
+    { name: "Engagé (devis)", Montant: data.engage_total },
+  ];
+  return (
+    <div className="card" style={{ padding: 12 }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Atterrissage P3 {data.year} — engagé (devis) vs provision</h4>
+      <div className="kpi-grid">
+        <KpiCard label="Provision P3 (année)" value={fmtEur(data.provision_total)} sub={`P3 ${fmtEur(data.provision_p3)} + P3.4 ${fmtEur(data.provision_p3_4)}`} color="#1d4ed8" />
+        <KpiCard label="Engagé (devis P3)" value={fmtEur(data.engage_total)} sub={`${data.devis_count} devis du périmètre`} color="#0f766e" />
+        <KpiCard label="Reste provision" value={fmtEur(data.reste_provision)} sub={data.reste_provision < 0 ? "Dépassement" : "Disponible"} color={data.reste_provision < 0 ? "#dc2626" : "#16a34a"} />
+        <KpiCard label="Taux d'engagement" value={data.taux_engagement != null ? fmtPct(data.taux_engagement) : "—"} sub="Engagé / provision" color="#7c3aed" />
+      </div>
+      <div style={{ height: 240 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+            <YAxis tickFormatter={(v) => `${Math.round(Number(v) / 1000).toLocaleString("fr-FR")} k€`} />
+            <Tooltip formatter={(v) => fmtEur(Number(v))} />
+            <Bar dataKey="Montant" fill="#1d4ed8" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {data.by_etat.length > 0 && (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 8 }}>
+          <thead>
+            <tr style={{ background: "#f9fafb" }}>
+              <th style={{ ...thStyle, textAlign: "left" }}>État des devis</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Nombre</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Montant HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.by_etat.map((b) => (
+              <tr key={b.etat} style={{ borderTop: "1px solid #f3f4f6" }}>
+                <td style={tdStyle}>{b.etat}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{b.count}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(b.montant_ht)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function CpeConsoSynthesePanel({
   synthese,
   isLoading,
@@ -1542,6 +1596,30 @@ function CpeFinanceReference({
   };
   const evidencePdfRef = useRef<HTMLInputElement>(null);
   const revisionEvidencePdfRef = useRef<HTMLInputElement>(null);
+  const p3DevisFileRef = useRef<HTMLInputElement>(null);
+  const financeQc = useQueryClient();
+  const p3DevisQ = useQuery({
+    queryKey: ["cpe-p3-devis"],
+    queryFn: () => fetchCpeP3Devis(financeToken!, true),
+    enabled: !!financeToken && section === "p3-devis",
+  });
+  const p3AtterrissageQ = useQuery({
+    queryKey: ["cpe-p3-atterrissage", marketYearFrom],
+    queryFn: () => fetchCpeP3Atterrissage(financeToken!, marketYearFrom),
+    enabled: !!financeToken && (section === "p3-devis" || section === "invoices"),
+  });
+  const [p3ImportMsg, setP3ImportMsg] = useState<string | null>(null);
+  const importP3DevisM = useMutation({
+    mutationFn: (file: File) => importCpeP3Devis(financeToken!, file),
+    onSuccess: (res) => {
+      setP3ImportMsg(`Devis importés : ${res.in_scope} dans le périmètre (Commune), ${res.out_of_scope} hors périmètre ignorés.`);
+      financeQc.invalidateQueries({ queryKey: ["cpe-p3-devis"] });
+      financeQc.invalidateQueries({ queryKey: ["cpe-p3-atterrissage"] });
+    },
+    onError: (err) => setP3ImportMsg(err instanceof Error ? err.message : "Erreur d'import des devis."),
+  });
+  const p3Devis = p3DevisQ.data ?? [];
+  const p3Atterrissage = p3AtterrissageQ.data ?? null;
   const [siteFilter, setSiteFilter] = useState("");
   const [ruleFilter, setRuleFilter] = useState("");
   const [referenceFilter, setReferenceFilter] = useState("");
@@ -1895,8 +1973,25 @@ function CpeFinanceReference({
                 event.target.value = "";
               }}
             />
+            <button type="button" className="secondary-button" onClick={() => p3DevisFileRef.current?.click()} disabled={importP3DevisM.isPending}>
+              {importP3DevisM.isPending ? "Import..." : "Importer devis P3"}
+            </button>
+            <input
+              ref={p3DevisFileRef}
+              type="file"
+              accept=".csv"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) importP3DevisM.mutate(file);
+                event.target.value = "";
+              }}
+            />
           </div>
         </div>
+        {p3ImportMsg && (
+          <p style={{ color: "#166534", fontSize: 13, margin: "12px 0 0" }}>{p3ImportMsg}</p>
+        )}
         {codificationImportResult && (
           <p style={{ color: "#166534", fontSize: 13, margin: "12px 0 0" }}>
             Codification importee : {codificationImportResult.site_mappings_created} site(s) crees, {codificationImportResult.site_mappings_updated} mis a jour,
@@ -2628,8 +2723,55 @@ function CpeFinanceReference({
                 yearTo={marketYearTo}
               />
             ))}
+            {p3Atterrissage && p3Atterrissage.has_provision && <P3AtterrissageChart data={p3Atterrissage} />}
           </>
         )}
+      </section>
+      )}
+
+      {section === "p3-devis" && (
+      <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
+        <div>
+          <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>Factures petits travaux P3 (devis P6)</h3>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+            Devis de petits travaux P3 importés depuis l'espace client DALKIA (périmètre COMMUNE DE SETE). Importez‑les via « Imports » → « Importer devis P3 ».
+          </p>
+        </div>
+        {p3AtterrissageQ.isLoading && <div className="card" style={{ padding: 18, color: "#6b7280" }}>Chargement…</div>}
+        {p3Atterrissage && <P3AtterrissageChart data={p3Atterrissage} />}
+        <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+          <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Devis du périmètre ({p3Devis.length})</h4>
+          {p3Devis.length === 0 ? (
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Aucun devis importé. Utilisez « Importer devis P3 » dans la section Imports.</p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb" }}>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Date</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Numéro</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Site</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Libellé</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>Domaine</th>
+                  <th style={{ ...thStyle, textAlign: "left" }}>État</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Montant HT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p3Devis.map((d) => (
+                  <tr key={d.id} style={{ borderTop: "1px solid #f3f4f6" }}>
+                    <td style={tdStyle}>{d.devis_date ?? "—"}</td>
+                    <td style={tdStyle}>{d.numero}</td>
+                    <td style={tdStyle}>{d.site_code ?? "—"}</td>
+                    <td style={tdStyle}>{d.libelle ?? "—"}</td>
+                    <td style={tdStyle}>{d.domaine ?? "—"}</td>
+                    <td style={tdStyle}>{d.etat ?? "—"}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmtEur(d.montant_ht)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
       )}
 
