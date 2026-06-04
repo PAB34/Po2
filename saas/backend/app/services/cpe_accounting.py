@@ -54,7 +54,11 @@ from app.schemas.cpe import (
     CpeRevisionIndexCreate,
 )
 
-_SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+\s+\d+(?:\.\d+)?|CCAS\s+\d+)\b", flags=re.IGNORECASE)
+# Le separateur entre la categorie et le numero est un ESPACE pour la plupart des sites
+# (VDS-ENS 01, VDS-SPORT 02.01) mais un TIRET pour les piscines du Lot 2 (VDS-PSC-01.01,
+# VDS-PSC-02.1). On accepte les deux ([\s-]+) et 0..n niveaux de decimale (.01, .01.01) pour
+# detecter ces codes et les aligner sur le referentiel DALKIA L2.
+_SITE_CODE_RE = re.compile(r"\b(VDS-[A-Z]+[\s-]+\d+(?:\.\d+)*|CCAS\s+\d+)\b", flags=re.IGNORECASE)
 CPE_CONTRACT_SCOPE_KIND = "cpe_contract_scope"
 P1_GAZ_ACOMPTE_KIND = "p1_gaz_acompte"
 P1_GAZ_ACOMPTE_ITEMS = {"P1", "ABT", "CTA", "CPB", "LOCATION", "STOCKAGE", "TERME FIXE"}
