@@ -1845,19 +1845,36 @@ def _control_p1_gaz_acompte_against_dpgf(
 
     expected_months = _split_csv_tokens(reference.expected_period_months)
     expected_month_numbers = {int(month) for month in expected_months if month.isdigit()} or {3, 6, 9}
-    is_expected_acompte_date = (
-        invoice.period_end.month in expected_month_numbers
-        and invoice.period_end.day == monthrange(invoice.period_end.year, invoice.period_end.month)[1]
+    period_start = invoice.period_start
+    period_end = invoice.period_end
+    # L'acompte P1 est contractuellement TRIMESTRIEL : il ne se compare a 1/4 de l'annuel que
+    # si la periode de la facture couvre reellement un trimestre entier se terminant a une
+    # echeance d'acompte (31/03, 30/06, 30/09). Une facture MENSUELLE finissant un dernier jour
+    # de mois de fin de trimestre (ex. 01/03 -> 31/03) passait a tort le seul test de fin de
+    # trimestre : le scope_query n'agregeait alors qu'un seul mois et le comparait au trimestre
+    # complet -> ecart trompeur. On exige donc en plus que period_start soit le 1er jour du
+    # trimestre (mois de fin - 2), ce qui isole les vraies factures trimestrielles.
+    is_quarter_end = (
+        period_end.month in expected_month_numbers
+        and period_end.day == monthrange(period_end.year, period_end.month)[1]
     )
+    quarter_start_month = period_end.month - 2
+    covers_full_quarter = (
+        quarter_start_month >= 1
+        and period_start == date(period_end.year, quarter_start_month, 1)
+    )
+    is_expected_acompte_date = is_quarter_end and covers_full_quarter
     if not is_expected_acompte_date:
+        period_days = (period_end - period_start).days + 1
         return _make_basic_control(
             anchor,
             control_type="p1_gaz_acompte_dpgf",
             status="ok",
             severity="info",
             message=(
-                "Controle acompte P1 gaz non applique : la periode ne correspond pas "
-                "a une echeance trimestrielle d'acompte contractuelle."
+                f"Controle acompte P1 gaz non applique : la periode {period_start} - {period_end} "
+                f"({period_days} j) ne couvre pas un trimestre complet se terminant a une echeance "
+                "d'acompte (31/03, 30/06, 30/09)."
             ),
             formula=reference.formula or "Acomptes P1 attendus aux 31/03, 30/06 et 30/09 ; decompte definitif au 15/02/N+1",
         )
