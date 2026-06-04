@@ -642,6 +642,16 @@ class CpeMarketTrackingPoste(BaseModel):
     total: CpeMarketTrackingTotal
 
 
+class CpeMarketTrackingLot(BaseModel):
+    lot: int
+    label: str
+    contract_codes: list[str]
+    postes: list[CpeMarketTrackingPoste]
+    totals_by_year: list[CpeMarketTrackingCell]
+    grand_total: CpeMarketTrackingTotal
+    has_reference: bool
+
+
 class CpeMarketTrackingOut(BaseModel):
     years: list[int]
     postes: list[CpeMarketTrackingPoste]
@@ -649,6 +659,7 @@ class CpeMarketTrackingOut(BaseModel):
     grand_total: CpeMarketTrackingTotal
     p1_source: str
     has_reference: bool
+    by_lot: list[CpeMarketTrackingLot] = []
 
 
 class CpeFinanceImportResult(BaseModel):

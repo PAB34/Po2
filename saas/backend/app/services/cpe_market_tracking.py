@@ -17,6 +17,7 @@ La page n'a besoin d'aucun nouveau parser : tout est déjà en base.
 from __future__ import annotations
 
 import io
+import re
 from typing import Any
 
 import openpyxl
@@ -24,10 +25,18 @@ from openpyxl.styles import Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.cpe import CpeFinanceLine
+from app.models.cpe import CpeContractReference, CpeFinanceLine
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz, CpeDalkiaRefP2P3
-from app.services.cpe_accounting import _is_current_cpe_contract, list_finance_invoices
+from app.services.cpe_accounting import (
+    CPE_CONTRACT_SCOPE_KIND,
+    _is_current_cpe_contract,
+    list_finance_invoices,
+)
 from app.services.cpe_dalkia_db import normalize_p2p3_poste
+
+# Le numero de lot est encode dans le billed_item des references de perimetre
+# (kind cpe_contract_scope), ex. "CPE_VILLE_LOT_1" / "CPE_VILLE_LOT_2".
+_LOT_RE = re.compile(r"LOT[_\s-]*(\d+)", re.IGNORECASE)
 
 # Ordre et libellés des postes affichés dans la matrice.
 POSTE_ORDER = ["P1", "P2", "P2-4", "P3", "P3-4"]
@@ -80,20 +89,42 @@ def _cell(prevu: float, recu: float) -> dict[str, Any]:
     }
 
 
-def build_market_tracking(
-    db: Session,
-    city_id: int | None = None,
-    *,
-    year_from: int = 2026,
-    year_to: int = 2030,
-) -> dict[str, Any]:
-    """Construit la matrice poste × année (prévu DPGF vs reçu factures)."""
-    if year_to < year_from:
-        year_from, year_to = year_to, year_from
-    years = list(range(year_from, year_to + 1))
-    year_set = set(years)
+def _poste_row(poste: str, label: str, prevu_by_year: dict[int, float], recu_by_year: dict[int, float], years: list[int]) -> dict[str, Any]:
+    by_year = [{"year": y, **_cell(prevu_by_year.get(y, 0.0), recu_by_year.get(y, 0.0))} for y in years]
+    total_prevu = round(sum(prevu_by_year.get(y, 0.0) for y in years), 2)
+    total_recu = round(sum(recu_by_year.get(y, 0.0) for y in years), 2)
+    return {"poste": poste, "label": label, "by_year": by_year, "total": _cell(total_prevu, total_recu)}
 
-    # ── Prévu (référentiel DALKIA actif) ─────────────────────────────────────
+
+def _contract_lot_map(db: Session, city_id: int | None) -> dict[str, int]:
+    """Associe chaque code contrat CPE a son numero de lot, lu depuis les references de
+    perimetre editables (billed_item type 'CPE_VILLE_LOT_1'). Aucun code en dur."""
+    stmt = select(CpeContractReference).where(
+        CpeContractReference.reference_kind == CPE_CONTRACT_SCOPE_KIND,
+        CpeContractReference.active.is_(True),
+    )
+    if city_id is not None:
+        stmt = stmt.where(CpeContractReference.city_id == city_id)
+    mapping: dict[str, int] = {}
+    for ref in db.scalars(stmt).all():
+        match = _LOT_RE.search(ref.billed_item or "")
+        code = (ref.contract_code or "").strip().upper()
+        if code and match:
+            mapping[code] = int(match.group(1))
+    return mapping
+
+
+def _collect(
+    db: Session,
+    city_id: int | None,
+    years: list[int],
+    year_set: set[int],
+    *,
+    prevu_lot: int | None = None,
+    recu_contracts: set[str] | None = None,
+) -> tuple[dict[str, dict[int, float]], dict[str, dict[int, float]], dict[int, float], int]:
+    """Accumule prévu (référentiel) et reçu (factures), éventuellement filtré par lot DPGF
+    (``prevu_lot``) et par codes contrat reçus (``recu_contracts``)."""
     prevu: dict[str, dict[int, float]] = {poste: {y: 0.0 for y in years} for poste in POSTE_ORDER}
 
     p2p3_stmt = (
@@ -101,8 +132,18 @@ def build_market_tracking(
         .join(CpeDalkiaRefImport, CpeDalkiaRefP2P3.import_id == CpeDalkiaRefImport.id)
         .where(CpeDalkiaRefImport.is_active.is_(True))
     )
+    p1_stmt = (
+        select(CpeDalkiaRefP1Gaz)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefP1Gaz.import_id == CpeDalkiaRefImport.id)
+        .where(CpeDalkiaRefImport.is_active.is_(True))
+    )
     if city_id is not None:
         p2p3_stmt = p2p3_stmt.where(CpeDalkiaRefImport.city_id == city_id)
+        p1_stmt = p1_stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    if prevu_lot is not None:
+        p2p3_stmt = p2p3_stmt.where(CpeDalkiaRefImport.lot == prevu_lot)
+        p1_stmt = p1_stmt.where(CpeDalkiaRefImport.lot == prevu_lot)
+
     reference_rows = 0
     for row in db.scalars(p2p3_stmt).all():
         if row.period_year not in year_set:
@@ -114,24 +155,14 @@ def build_market_tracking(
         prevu["P2-4"][row.period_year] += p2_4
         prevu["P3"][row.period_year] += (row.p3_total_ht or 0.0) - p3_4
         prevu["P3-4"][row.period_year] += p3_4
-
-    p1_stmt = (
-        select(CpeDalkiaRefP1Gaz)
-        .join(CpeDalkiaRefImport, CpeDalkiaRefP1Gaz.import_id == CpeDalkiaRefImport.id)
-        .where(CpeDalkiaRefImport.is_active.is_(True))
-    )
-    if city_id is not None:
-        p1_stmt = p1_stmt.where(CpeDalkiaRefImport.city_id == city_id)
     for row in db.scalars(p1_stmt).all():
         if row.period_year not in year_set:
             continue
         reference_rows += 1
         prevu["P1"][row.period_year] += row.p10_total_ht or 0.0
 
-    # ── Reçu (factures DALKIA, périmètre CPE Ville) ──────────────────────────
     recu: dict[str, dict[int, float]] = {poste: {y: 0.0 for y in years} for poste in POSTE_ORDER}
     recu_other: dict[int, float] = {y: 0.0 for y in years}
-
     invoices = [
         invoice
         for invoice in list_finance_invoices(db, city_id=city_id)
@@ -141,6 +172,7 @@ def build_market_tracking(
             city_id=invoice.city_id,
             year=(invoice.period_end.year if invoice.period_end else None),
         )
+        and (recu_contracts is None or (invoice.contract_code or "").strip().upper() in recu_contracts)
     ]
     invoice_ids = [invoice.id for invoice in invoices]
     if invoice_ids:
@@ -156,20 +188,18 @@ def build_market_tracking(
                 recu_other[year] += amount
             else:
                 recu[poste][year] += amount
+    return prevu, recu, recu_other, reference_rows
 
-    has_other = any(value for value in recu_other.values())
 
-    # ── Construction de la sortie ────────────────────────────────────────────
-    def _poste_row(poste: str, label: str, prevu_by_year: dict[int, float], recu_by_year: dict[int, float]) -> dict[str, Any]:
-        by_year = [{"year": y, **_cell(prevu_by_year.get(y, 0.0), recu_by_year.get(y, 0.0))} for y in years]
-        total_prevu = round(sum(prevu_by_year.get(y, 0.0) for y in years), 2)
-        total_recu = round(sum(recu_by_year.get(y, 0.0) for y in years), 2)
-        total = _cell(total_prevu, total_recu)
-        return {"poste": poste, "label": label, "by_year": by_year, "total": total}
-
-    postes = [_poste_row(poste, POSTE_LABELS[poste], prevu[poste], recu[poste]) for poste in POSTE_ORDER]
-    if has_other:
-        postes.append(_poste_row(POSTE_OTHER, POSTE_OTHER_LABEL, {y: 0.0 for y in years}, recu_other))
+def _assemble(
+    prevu: dict[str, dict[int, float]],
+    recu: dict[str, dict[int, float]],
+    recu_other: dict[int, float],
+    years: list[int],
+) -> dict[str, Any]:
+    postes = [_poste_row(poste, POSTE_LABELS[poste], prevu[poste], recu[poste], years) for poste in POSTE_ORDER]
+    if any(value for value in recu_other.values()):
+        postes.append(_poste_row(POSTE_OTHER, POSTE_OTHER_LABEL, {y: 0.0 for y in years}, recu_other, years))
 
     totals_by_year = []
     for y in years:
@@ -177,18 +207,57 @@ def build_market_tracking(
         recu_y = sum(recu[poste][y] for poste in POSTE_ORDER) + recu_other[y]
         totals_by_year.append({"year": y, **_cell(prevu_y, recu_y)})
 
-    grand_prevu = round(sum(cell["prevu"] for cell in totals_by_year), 2)
-    grand_recu = round(sum(cell["recu"] for cell in totals_by_year), 2)
-    grand_total = _cell(grand_prevu, grand_recu)
+    grand_total = _cell(
+        round(sum(cell["prevu"] for cell in totals_by_year), 2),
+        round(sum(cell["recu"] for cell in totals_by_year), 2),
+    )
+    return {"postes": postes, "totals_by_year": totals_by_year, "grand_total": grand_total}
 
-    return {
+
+def build_market_tracking(
+    db: Session,
+    city_id: int | None = None,
+    *,
+    year_from: int = 2026,
+    year_to: int = 2030,
+) -> dict[str, Any]:
+    """Construit la matrice poste × année (prévu DPGF vs reçu factures).
+
+    Renvoie le suivi combiné (tous lots) plus, dans ``by_lot``, le même découpage par lot
+    contractuel (Lot 1 / Lot 2) quand le périmètre les distingue.
+    """
+    if year_to < year_from:
+        year_from, year_to = year_to, year_from
+    years = list(range(year_from, year_to + 1))
+    year_set = set(years)
+
+    prevu, recu, recu_other, reference_rows = _collect(db, city_id, years, year_set)
+    result: dict[str, Any] = {
         "years": years,
-        "postes": postes,
-        "totals_by_year": totals_by_year,
-        "grand_total": grand_total,
+        **_assemble(prevu, recu, recu_other, years),
         "p1_source": P1_SOURCE_LABEL,
         "has_reference": reference_rows > 0,
     }
+
+    # ── Découpage par lot ────────────────────────────────────────────────────
+    contract_lot = _contract_lot_map(db, city_id)
+    by_lot: list[dict[str, Any]] = []
+    for lot in sorted(set(contract_lot.values())):
+        contracts = {code for code, value in contract_lot.items() if value == lot}
+        l_prevu, l_recu, l_recu_other, l_refrows = _collect(
+            db, city_id, years, year_set, prevu_lot=lot, recu_contracts=contracts
+        )
+        by_lot.append(
+            {
+                "lot": lot,
+                "label": f"Lot {lot}",
+                "contract_codes": sorted(contracts),
+                **_assemble(l_prevu, l_recu, l_recu_other, years),
+                "has_reference": l_refrows > 0,
+            }
+        )
+    result["by_lot"] = by_lot
+    return result
 
 
 def build_market_tracking_workbook(

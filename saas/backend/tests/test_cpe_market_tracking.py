@@ -166,3 +166,70 @@ def test_empty_reference_flag(db_session):
     report = build_market_tracking(db_session, 1, year_from=2026, year_to=2030)
     assert report["has_reference"] is False
     assert report["grand_total"]["prevu"] == 0.0
+    assert report["by_lot"] == []
+
+
+def _seed_two_lots(db: Session) -> None:
+    """Périmètre Lot 1 (C00190116O) + Lot 2 (C00190155J), références + factures par lot."""
+    db.add_all(
+        [
+            CpeContractReference(
+                city_id=1, contract_code="C00190155J", contract_label="LOT 2",
+                reference_kind="cpe_contract_scope", year=2026, market="SCOPE",
+                billed_item="CPE_VILLE_LOT_2", active=True,
+            ),
+            # remplace le billed_item du Lot 1 (fixture = 'CPE') par le format lot
+            CpeContractReference(
+                city_id=1, contract_code="C00190116O", contract_label="LOT 1",
+                reference_kind="cpe_contract_scope", year=2027, market="SCOPE",
+                billed_item="CPE_VILLE_LOT_1", active=True,
+            ),
+        ]
+    )
+    db.flush()
+    for lot, code, p2, p1 in [(1, "C00190116O", 1000.0, 8000.0), (2, "C00190155J", 500.0, 0.0)]:
+        imp = CpeDalkiaRefImport(city_id=1, lot=lot, filename=f"L{lot}.xlsx", is_active=True)
+        db.add(imp)
+        db.flush()
+        db.add(CpeDalkiaRefP2P3(
+            import_id=imp.id, city_id=1, code_site=f"S{lot}", period_idx=1,
+            period_label="2026", period_year=2026, p2_total_ht=p2, p2_4_ht=0.0,
+            p3_total_ht=0.0, p3_4_ht=0.0,
+        ))
+        if p1:
+            db.add(CpeDalkiaRefP1Gaz(
+                import_id=imp.id, city_id=1, code_site=f"S{lot}", period_idx=1,
+                period_label="2026", period_year=2026, p10_total_ht=p1,
+            ))
+        batch = CpeFinanceImportBatch(city_id=1, filename=f"fin{lot}.xlsx")
+        db.add(batch)
+        db.flush()
+        invoice = CpeFinanceInvoice(
+            batch_id=batch.id, city_id=1, invoice_number=f"INV{lot}", contract_code=code,
+            period_start=date(2026, 1, 1), period_end=date(2026, 3, 31), total_ht=0.0,
+        )
+        db.add(invoice)
+        db.flush()
+        db.add(CpeFinanceLine(
+            batch_id=batch.id, invoice_id=invoice.id, city_id=1, row_number=1,
+            market="P2", billed_item="P2", amount_ht=float(100 * lot),
+            period_start=date(2026, 1, 1), period_end=date(2026, 3, 31),
+        ))
+    db.commit()
+
+
+def test_by_lot_split(db_session):
+    _seed_two_lots(db_session)
+    report = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
+    lots = {entry["lot"]: entry for entry in report["by_lot"]}
+    assert set(lots) == {1, 2}
+    # Lot 1 : prévu P2 = 1000, reçu P2 = 100 ; Lot 2 : prévu P2 = 500, reçu P2 = 200
+    l1 = {p["poste"]: p["total"] for p in lots[1]["postes"]}
+    l2 = {p["poste"]: p["total"] for p in lots[2]["postes"]}
+    assert l1["P2"]["prevu"] == 1000.0 and l1["P2"]["recu"] == 100.0
+    assert l2["P2"]["prevu"] == 500.0 and l2["P2"]["recu"] == 200.0
+    assert lots[1]["contract_codes"] == ["C00190116O"]
+    assert lots[2]["contract_codes"] == ["C00190155J"]
+    # Le combiné reste la somme des lots.
+    combined = {p["poste"]: p["total"] for p in report["postes"]}
+    assert combined["P2"]["prevu"] == 1500.0 and combined["P2"]["recu"] == 300.0
