@@ -721,6 +721,7 @@ class CpeP24Objective(BaseModel):
     elec_cible_mwh: float
     elec_reel_mwh: float
     elec_sites: int
+    elec_sites_avec_cible: int
     p24_montant_ht: float
     p24_taux: float
     p24_facturable_ht: float
@@ -734,6 +735,7 @@ class CpeElecPerfItem(BaseModel):
     code_site: str
     nom_site: str
     cible_mwh: float | None
+    cible_periode_mwh: float | None
     cible_source: str
     conso_reelle_mwh: float | None
     nb_mois: int
@@ -745,8 +747,10 @@ class CpeElecPerfItem(BaseModel):
 class CpeElecPerfOut(BaseModel):
     annee: int
     nb_sites: int
+    nb_avec_cible: int
     nb_suivis: int
     total_cible_mwh: float
+    total_cible_periode_mwh: float
     total_conso_mwh: float
     total_ecart_mwh: float
     total_ecart_pct: float | None

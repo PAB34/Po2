@@ -492,16 +492,23 @@ def build_elec_performance(db: Session, annee: int, city_id: int | None = None) 
     """Suivi de performance ÉLECTRIQUE par site : cible vs conso réelle (logique IPMVP option B).
 
     HORS intéressement (l'élec n'a pas d'intéressement € — cf. CCTPM §11) : informatif, alimente
-    l'engagement vérifié par IPMVP et l'objectif global qui conditionne P2.4. La conso réelle est
-    le cumul à date (partielle si < 12 mois). Écart = conso − cible (positif = surconsommation).
+    l'engagement vérifié par IPMVP et l'objectif global qui conditionne P2.4.
+
+    La conso réelle est le cumul à date (partielle si < 12 mois). Pour une comparaison **équitable**,
+    l'écart est calculé contre la **cible au prorata de la période** (cible annuelle × mois/12), et
+    non contre la cible annuelle — sinon un cumul de 5 mois paraît ~−90 % sous la cible.
     """
     items: list[dict[str, Any]] = []
-    total_cible = 0.0
+    total_cible = 0.0           # cible annuelle (sites suivis)
+    total_cible_periode = 0.0   # cible au prorata des mois disponibles
     total_conso = 0.0
     nb_suivis = 0
+    nb_avec_cible = 0
 
     for site in get_sites(db, city_id=city_id, actifs_seulement=True):
         cible, cible_source = resolve_cible_elec_for_year(db, site, annee)
+        if cible is not None:
+            nb_avec_cible += 1
 
         conso_stmt = select(CpeConsoReleve).where(
             CpeConsoReleve.fluide == "ELEC",
@@ -510,12 +517,14 @@ def build_elec_performance(db: Session, annee: int, city_id: int | None = None) 
         )
         releves = list(db.scalars(conso_stmt))
         mois = {r.mois for r in releves if r.energie_mwh is not None}
+        nb_mois = len(mois)
         conso = sum(r.energie_mwh for r in releves if r.energie_mwh is not None) or None
 
-        ecart = ecart_pct = None
-        if cible and conso is not None:
-            ecart = round(conso - cible, 2)
-            ecart_pct = round(ecart / cible, 4) if cible else None
+        cible_periode = ecart = ecart_pct = None
+        if cible and conso is not None and nb_mois > 0:
+            cible_periode = round(cible * nb_mois / 12.0, 2)
+            ecart = round(conso - cible_periode, 2)  # vs cible au prorata (équitable)
+            ecart_pct = round(ecart / cible_periode, 4) if cible_periode else None
 
         if cible is None:
             statut = "sans_cible"
@@ -525,6 +534,7 @@ def build_elec_performance(db: Session, annee: int, city_id: int | None = None) 
             statut = "suivi"
             nb_suivis += 1
             total_cible += cible
+            total_cible_periode += cible_periode or 0.0
             total_conso += conso
 
         items.append({
@@ -532,24 +542,28 @@ def build_elec_performance(db: Session, annee: int, city_id: int | None = None) 
             "code_site": site.code_site,
             "nom_site": site.nom_site,
             "cible_mwh": round(cible, 2) if cible is not None else None,
+            "cible_periode_mwh": cible_periode,
             "cible_source": cible_source,
             "conso_reelle_mwh": round(conso, 2) if conso is not None else None,
-            "nb_mois": len(mois),
+            "nb_mois": nb_mois,
             "ecart_mwh": ecart,
             "ecart_pct": ecart_pct,
             "statut": statut,
         })
 
     total_cible = round(total_cible, 2)
+    total_cible_periode = round(total_cible_periode, 2)
     total_conso = round(total_conso, 2)
     return {
         "annee": annee,
         "nb_sites": len(items),
+        "nb_avec_cible": nb_avec_cible,
         "nb_suivis": nb_suivis,
         "total_cible_mwh": total_cible,
+        "total_cible_periode_mwh": total_cible_periode,
         "total_conso_mwh": total_conso,
-        "total_ecart_mwh": round(total_conso - total_cible, 2),
-        "total_ecart_pct": round((total_conso - total_cible) / total_cible, 4) if total_cible else None,
+        "total_ecart_mwh": round(total_conso - total_cible_periode, 2),
+        "total_ecart_pct": round((total_conso - total_cible_periode) / total_cible_periode, 4) if total_cible_periode else None,
         "has_data": nb_suivis > 0,
         "items": items,
     }
@@ -581,7 +595,9 @@ def build_p24_objective(db: Session, annee: int, city_id: int | None = None) -> 
             gas_mois_min = min(gas_mois_min, it.nb_mois_releves)
 
     elec = build_elec_performance(db, annee, city_id=city_id)
-    elec_cible = elec["total_cible_mwh"]
+    # Cible élec AU PRORATA des mois disponibles (cohérent avec le gaz N'B, déjà période-consistant
+    # via DJU cumulé). Sinon une cible annuelle face à une conso partielle fausse l'économie.
+    elec_cible = elec["total_cible_periode_mwh"]
     elec_reel = elec["total_conso_mwh"]
 
     global_cible = round(gas_cible + elec_cible, 2)
@@ -623,6 +639,7 @@ def build_p24_objective(db: Session, annee: int, city_id: int | None = None) -> 
         "elec_cible_mwh": round(elec_cible, 2),
         "elec_reel_mwh": round(elec_reel, 2),
         "elec_sites": elec["nb_suivis"],
+        "elec_sites_avec_cible": elec["nb_avec_cible"],
         "p24_montant_ht": p24_montant,
         "p24_taux": taux,
         "p24_facturable_ht": p24_facturable,

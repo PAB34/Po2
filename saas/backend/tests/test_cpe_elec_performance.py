@@ -69,8 +69,10 @@ def test_cible_dalkia_vs_conso_reelle(db_session):
     it = res["items"][0]
     assert it["cible_mwh"] == 15.8 and it["cible_source"] == "dalkia"  # cible DALKIA prioritaire
     assert it["conso_reelle_mwh"] == 18.0 and it["nb_mois"] == 6
-    assert it["ecart_mwh"] == round(18.0 - 15.8, 2)  # surconsommation
-    assert it["ecart_pct"] == round((18.0 - 15.8) / 15.8, 4)
+    # écart calculé vs cible AU PRORATA (6/12) = 7.9, pas vs cible annuelle 15.8
+    assert it["cible_periode_mwh"] == round(15.8 * 6 / 12, 2)
+    assert it["ecart_mwh"] == round(18.0 - 7.9, 2)  # surconsommation reelle (cumul > prorata)
+    assert it["ecart_pct"] == round((18.0 - 7.9) / 7.9, 4)
     assert it["statut"] == "suivi"
     # schéma Pydantic : le champ items traverse bien
     out = CpeElecPerfOut.model_validate(res)
