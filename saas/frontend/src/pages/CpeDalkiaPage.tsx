@@ -67,6 +67,7 @@ import {
   type CpeMarketTrackingPoste,
   type CpeP1Dpgf,
   type CpeMarketTrackingQuarters,
+  type CpeDju,
   importCpeP3Devis,
   fetchCpeP3Devis,
   fetchCpeP3Atterrissage,
@@ -1120,6 +1121,60 @@ function MarketTrackingMatrix({
         </div>
       )}
     </>
+  );
+}
+
+function DjuBand({ dju }: { dju: CpeDju }) {
+  // Couleur selon la rigueur : hiver plus froid que la réf (ratio>1) = orange/rouge ; plus doux = bleu.
+  const ratioColor = (ratio: number | null) => {
+    if (ratio == null) return "#6b7280";
+    if (ratio >= 1.05) return "#b45309"; // hiver sensiblement plus rigoureux
+    if (ratio <= 0.95) return "#1d4ed8"; // hiver plus doux
+    return "#166534"; // proche de la référence
+  };
+  return (
+    <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+      <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Rigueur climatique (DJU chauffage base 18 °C)</h4>
+      <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>
+        <strong>Informatif</strong> : compare les DJU réels de Sète à la référence contractuelle de{" "}
+        <strong>{Math.round(dju.reference)} DJU</strong>. N'entre pas dans les montants ci-dessus, mais aide à
+        lire un P1 reçu élevé (un hiver plus rigoureux → plus de consommation gaz). Source : {dju.source}.
+      </p>
+      <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 600 }}>
+        <thead>
+          <tr style={{ background: "#f9fafb" }}>
+            <th style={{ ...thStyle, position: "sticky", left: 0, background: "#f9fafb" }}>Année</th>
+            {dju.by_year.map((d) => (
+              <th key={d.year} style={{ ...thStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>
+                {d.year}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ borderTop: "1px solid #f3f4f6" }}>
+            <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>DJU réel</td>
+            {dju.by_year.map((d) => (
+              <td key={d.year} style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6" }}>
+                {d.dju_real == null ? "—" : Math.round(d.dju_real).toLocaleString("fr-FR")}
+                {d.dju_real != null && !d.complete ? <span style={{ color: "#9ca3af" }}> *</span> : null}
+              </td>
+            ))}
+          </tr>
+          <tr style={{ borderTop: "1px solid #f3f4f6" }}>
+            <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>vs réf. {Math.round(dju.reference)}</td>
+            {dju.by_year.map((d) => (
+              <td key={d.year} style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6", color: ratioColor(d.ratio), fontWeight: 600 }}>
+                {d.ratio == null ? "—" : `${d.ratio >= 1 ? "+" : ""}${Math.round((d.ratio - 1) * 100)} %`}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+      {dju.by_year.some((d) => d.dju_real != null && !d.complete) ? (
+        <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>* année incomplète (moins de 12 mois de données) — ratio indicatif.</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -2803,6 +2858,7 @@ function CpeFinanceReference({
               quartersBilled={marketTracking.quarters_billed}
               installmentsPerYear={marketTracking.installments_per_year}
             />
+            {marketTracking.dju && marketTracking.dju.has_data && <DjuBand dju={marketTracking.dju} />}
             {marketTracking.by_lot.map((lot) => (
               <MarketTrackingMatrix
                 key={lot.lot}

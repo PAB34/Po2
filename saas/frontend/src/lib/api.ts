@@ -3633,6 +3633,22 @@ export type CpeMarketTrackingQuarters = {
   expected: number;
 };
 
+export type CpeDjuYear = {
+  year: number;
+  dju_real: number | null;
+  months: number;
+  complete: boolean;
+  ratio: number | null;
+};
+
+export type CpeDju = {
+  reference: number;
+  source: string;
+  base: number;
+  by_year: CpeDjuYear[];
+  has_data: boolean;
+};
+
 export type CpeMarketTrackingLot = {
   lot: number;
   label: string;
@@ -3656,6 +3672,7 @@ export type CpeMarketTracking = {
   p1_dpgf: CpeP1Dpgf;
   quarters_billed: CpeMarketTrackingQuarters[];
   installments_per_year: number;
+  dju: CpeDju | null;
 };
 
 export async function fetchCpeMarketTracking(
