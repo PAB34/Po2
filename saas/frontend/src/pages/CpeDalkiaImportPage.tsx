@@ -184,6 +184,73 @@ async function syncCpeSites(token: string): Promise<{ created: number; updated: 
   return resp.json() as Promise<{ created: number; updated: number; total: number }>;
 }
 
+// ── DPGF P1 révisé (livrable séparé, lignée d'import propre) ─────────────────
+
+type DpgfP1Preview = {
+  lot: number;
+  filename: string;
+  nb_lines: number;
+  nb_sites: Record<string, number>;
+  totals: Record<string, Record<string, number>>; // {level: {year: total}}
+  warnings: string[];
+};
+
+type DpgfP1Import = {
+  id: number;
+  lot: number;
+  filename: string;
+  import_date: string;
+  nb_lines: number;
+  is_active: boolean;
+  notes: string | null;
+};
+
+const DPGF_LEVEL_LABELS: Record<string, string> = {
+  contrat: "P1 gaz contrat",
+  rev_temp: "P1 gaz Rév Temp",
+  rev_temp_prix: "P1 gaz Rév T° & prix",
+};
+
+async function previewDpgfP1(token: string, file: File, lot: number): Promise<DpgfP1Preview> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("lot", String(lot));
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/preview`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: fd,
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Erreur ${resp.status}`);
+  }
+  return resp.json() as Promise<DpgfP1Preview>;
+}
+
+async function confirmDpgfP1(token: string, file: File, lot: number): Promise<DpgfP1Import> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("lot", String(lot));
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/confirm`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: fd,
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Erreur ${resp.status}`);
+  }
+  return resp.json() as Promise<DpgfP1Import>;
+}
+
+async function fetchDpgfP1Imports(token: string): Promise<DpgfP1Import[]> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/imports`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<DpgfP1Import[]>;
+}
+
 async function syncP1Reference(token: string, importId: number): Promise<SyncP1Result> {
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/sync-p1-reference`, {
     method: "POST",
@@ -223,6 +290,13 @@ export function CpeDalkiaImportPage() {
   const [syncP1Result, setSyncP1Result] = useState<{ id: number; res: SyncP1Result } | null>(null);
   const [sitesMsg, setSitesMsg] = useState<string | null>(null);
 
+  // DPGF P1 révisé (import séparé)
+  const dpgfFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dpgfFile, setDpgfFile] = useState<File | null>(null);
+  const [dpgfLot, setDpgfLot] = useState<1 | 2>(1);
+  const [dpgfPreview, setDpgfPreview] = useState<DpgfP1Preview | null>(null);
+  const [dpgfError, setDpgfError] = useState<string | null>(null);
+
   const syncSitesMutation = useMutation({
     mutationFn: () => syncCpeSites(token as string),
     onSuccess: (r) => setSitesMsg(`✓ ${r.total} sites CPE synchronisés (${r.created} créés, ${r.updated} mis à jour).`),
@@ -243,6 +317,37 @@ export function CpeDalkiaImportPage() {
     queryKey: ["cpe-dalkia-imports", token],
     queryFn: () => fetchImports(token as string),
     enabled: Boolean(token),
+  });
+
+  const dpgfImportsQuery = useQuery({
+    queryKey: ["cpe-dpgf-p1-imports", token],
+    queryFn: () => fetchDpgfP1Imports(token as string),
+    enabled: Boolean(token),
+  });
+
+  const dpgfPreviewMutation = useMutation({
+    mutationFn: () => previewDpgfP1(token as string, dpgfFile as File, dpgfLot),
+    onSuccess: (data) => {
+      setDpgfPreview(data);
+      setDpgfError(null);
+    },
+    onError: (err: unknown) => {
+      setDpgfError(err instanceof Error ? err.message : "Erreur d'analyse");
+      setDpgfPreview(null);
+    },
+  });
+
+  const dpgfConfirmMutation = useMutation({
+    mutationFn: () => confirmDpgfP1(token as string, dpgfFile as File, dpgfLot),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cpe-dpgf-p1-imports"] });
+      setDpgfPreview(null);
+      setDpgfFile(null);
+      if (dpgfFileInputRef.current) dpgfFileInputRef.current.value = "";
+    },
+    onError: (err: unknown) => {
+      setDpgfError(err instanceof Error ? err.message : "Erreur d'import");
+    },
   });
 
   const sitesQuery = useQuery({
@@ -394,6 +499,145 @@ export function CpeDalkiaImportPage() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* ── Import DPGF P1 révisé (livrable séparé après OS) ── */}
+      <div className="section-block">
+        <div className="section-heading">
+          <h3>Importer un DPGF P1 révisé (après OS)</h3>
+          <p>
+            Chemin <strong>séparé</strong> du fichier maître. Quand DALKIA livre un{" "}
+            <code>P1 - DPGF LOT x …xlsx</code> suite à un OS impactant le prix gaz, importe-le ici :
+            seul le P1 révisé du lot est mis à jour (3 niveaux : contrat / Rév Temp / Rév T° &amp; prix).
+            Cela <strong>ne modifie pas</strong> le référentiel maître (P2/P3/APE/cibles/RECAP) ni le
+            « prévu P1 » du suivi marché (qui reste au niveau contrat).
+          </p>
+        </div>
+
+        {/* Statut des DPGF P1 actifs */}
+        <div className="detail-grid">
+          {[1, 2].map((l) => {
+            const active = (dpgfImportsQuery.data ?? []).find((i) => i.lot === l && i.is_active);
+            return (
+              <div className="detail-card" key={l}>
+                <span>DPGF P1 actif — Lot {l}</span>
+                <strong>
+                  {active
+                    ? `${active.nb_lines} lignes · ${active.filename} · ${new Date(active.import_date).toLocaleDateString("fr-FR")}`
+                    : "Aucun DPGF P1 importé"}
+                </strong>
+              </div>
+            );
+          })}
+        </div>
+
+        <form
+          className="form"
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            if (dpgfFile) dpgfPreviewMutation.mutate();
+          }}
+        >
+          <div className="form-grid">
+            <label className="field">
+              <span>Lot</span>
+              <select
+                value={dpgfLot}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                  setDpgfLot(Number(e.target.value) as 1 | 2);
+                  setDpgfPreview(null);
+                }}
+              >
+                <option value={1}>Lot 1 — Écoles, sport (L1)</option>
+                <option value={2}>Lot 2 — Piscines (L2)</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Fichier DPGF P1 (.xlsx)</span>
+              <input
+                ref={dpgfFileInputRef}
+                type="file"
+                accept=".xlsx,.xlsm"
+                onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                  setDpgfFile(e.target.files?.[0] ?? null);
+                  setDpgfPreview(null);
+                  setDpgfError(null);
+                }}
+              />
+            </label>
+          </div>
+          {dpgfError ? <p className="error-text">{dpgfError}</p> : null}
+          {dpgfConfirmMutation.isSuccess ? (
+            <p className="success-text">✓ DPGF P1 Lot {dpgfLot} importé. Le P1 révisé est mis à jour.</p>
+          ) : null}
+          <div className="form-actions">
+            <button type="submit" className="secondary-button" disabled={!dpgfFile || dpgfPreviewMutation.isPending}>
+              {dpgfPreviewMutation.isPending ? "Analyse en cours..." : "Analyser le DPGF P1"}
+            </button>
+          </div>
+        </form>
+
+        {/* Aperçu : totaux par niveau × année */}
+        {dpgfPreview ? (
+          <>
+            <div className="section-heading" style={{ marginTop: 12 }}>
+              <h4>Aperçu — {dpgfPreview.filename}</h4>
+              <p>
+                {dpgfPreview.nb_lines} lignes parsées. Vérifie les totaux avant de confirmer.
+              </p>
+            </div>
+            {dpgfPreview.warnings.length > 0 ? (
+              <ul className="error-text" style={{ fontSize: 12 }}>
+                {dpgfPreview.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            ) : null}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.3)" }}>
+                    <th style={{ textAlign: "left", padding: "6px 12px" }}>Niveau P1</th>
+                    {Object.keys(dpgfPreview.totals.contrat ?? dpgfPreview.totals[Object.keys(dpgfPreview.totals)[0]] ?? {})
+                      .sort()
+                      .map((y) => (
+                        <th key={y} style={{ textAlign: "right", padding: "6px 12px" }}>
+                          {y}
+                        </th>
+                      ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {["contrat", "rev_temp", "rev_temp_prix"].map((level) => {
+                    const byYear = dpgfPreview.totals[level];
+                    if (!byYear) return null;
+                    const years = Object.keys(byYear).sort();
+                    return (
+                      <tr key={level} style={{ borderBottom: "1px solid rgba(148,163,184,0.1)" }}>
+                        <td style={{ padding: "6px 12px", fontWeight: 600 }}>{DPGF_LEVEL_LABELS[level]}</td>
+                        {years.map((y) => (
+                          <td key={y} style={{ textAlign: "right", padding: "6px 12px" }}>
+                            {formatEur(byYear[y])}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="form-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={dpgfConfirmMutation.isPending}
+                onClick={() => dpgfConfirmMutation.mutate()}
+              >
+                {dpgfConfirmMutation.isPending ? "Import en cours..." : "Confirmer l'import du DPGF P1"}
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {/* ── Rapport d'analyse (preview) ── */}
