@@ -25,7 +25,7 @@ from openpyxl.styles import Font, PatternFill
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.cpe import CpeContractReference, CpeFinanceLine
+from app.models.cpe import CpeContractReference, CpeFinanceLine, CpeSite
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz, CpeDalkiaRefP2P3
 from app.models.cpe_dpgf_p1 import DPGF_P1_LEVELS, DPGF_P1_LEVEL_LABELS
 from app.services.cpe_accounting import (
@@ -57,6 +57,11 @@ P1_SOURCE_LABEL = "Annexe 6 DPGF — somme p10_total_ht (imports actifs Lot 1 + 
 
 # Cadence d'acompte du marche CPE : 4 echeances par an (acomptes trimestriels + regularisation).
 INSTALLMENTS_PER_YEAR = 4
+
+# DJU de reference contractuel (base 18°C, station Montpellier 1981-2010). Fallback si aucun
+# dju_reference en base. Le DJU reel (CSV Open-Meteo) est aussi en base 18 -> comparable.
+DJU_REFERENCE_DEFAULT = 1426.0
+DJU_SOURCE_LABEL = "DJU chauffage base 18°C — Open-Meteo / COSTIC (DJU/dju_sete.csv)"
 
 
 def _classify_received_poste(line: CpeFinanceLine) -> str | None:
@@ -237,6 +242,75 @@ def _quarters_block(quarters_seen: dict[int, set[int]], years: list[int]) -> lis
     ]
 
 
+def _dju_reference(db: Session, city_id: int | None) -> float:
+    """DJU de reference contractuel : valeur la plus frequente dans cpe_sites, sinon defaut 1426."""
+    stmt = select(CpeSite.dju_reference).where(CpeSite.dju_reference.is_not(None))
+    if city_id is not None:
+        stmt = stmt.where(CpeSite.city_id == city_id)
+    values = [v for v in db.scalars(stmt) if v]
+    if not values:
+        return DJU_REFERENCE_DEFAULT
+    # mode (valeur la plus frequente)
+    return max(set(values), key=values.count)
+
+
+def _dju_block(db: Session, city_id: int | None, years: list[int]) -> dict[str, Any]:
+    """Bandeau informatif de rigueur climatique : DJU chauffage reel vs reference, par annee.
+
+    Purement explicatif (n'entre PAS dans le calcul prevu/recu en euros). Permet de
+    contextualiser un P1 recu eleve par un hiver plus rigoureux. Le DJU reel vient du CSV
+    Open-Meteo (base 18°C, meme base que la reference contractuelle). Une annee incomplete
+    (< 12 mois de donnees) est marquee ``complete=false`` et son ratio est indicatif.
+    """
+    try:
+        from app.services.energie import get_dju_monthly  # noqa: PLC0415 (lazy : lit un CSV)
+        monthly = get_dju_monthly()
+    except Exception:  # noqa: BLE001 — pas de CSV / source indispo -> bandeau absent
+        monthly = []
+
+    if not monthly:
+        return {"reference": _dju_reference(db, city_id), "source": DJU_SOURCE_LABEL,
+                "base": 18, "by_year": [], "has_data": False}
+
+    sums: dict[int, float] = {y: 0.0 for y in years}
+    months: dict[int, int] = {y: 0 for y in years}
+    year_set = set(years)
+    for row in monthly:
+        ym = row.get("month", "")
+        if len(ym) < 7:
+            continue
+        try:
+            y = int(ym[:4])
+        except ValueError:
+            continue
+        if y not in year_set:
+            continue
+        sums[y] += row.get("dju_chauffe", 0.0) or 0.0
+        months[y] += 1
+
+    reference = _dju_reference(db, city_id)
+    by_year = []
+    has_data = False
+    for y in years:
+        m = months[y]
+        if m == 0:
+            by_year.append({"year": y, "dju_real": None, "months": 0, "complete": False, "ratio": None})
+            continue
+        has_data = True
+        dju_real = round(sums[y], 1)
+        complete = m >= 12
+        ratio = round(dju_real / reference, 4) if reference else None
+        by_year.append({"year": y, "dju_real": dju_real, "months": m, "complete": complete, "ratio": ratio})
+
+    return {
+        "reference": round(reference, 1),
+        "source": DJU_SOURCE_LABEL,
+        "base": 18,
+        "by_year": by_year,
+        "has_data": has_data,
+    }
+
+
 def _dpgf_p1_block(db: Session, city_id: int | None, years: list[int], *, lot: int | None) -> dict[str, Any]:
     """Bloc informatif des niveaux P1 revises (DPGF) par annee : contrat / Rev Temp / Rev T° & prix.
 
@@ -287,6 +361,7 @@ def build_market_tracking(
         "p1_dpgf": _dpgf_p1_block(db, city_id, years, lot=None),
         "quarters_billed": _quarters_block(quarters_seen, years),
         "installments_per_year": INSTALLMENTS_PER_YEAR,
+        "dju": _dju_block(db, city_id, years),
     }
 
     # ── Découpage par lot ────────────────────────────────────────────────────
@@ -380,6 +455,27 @@ def build_market_tracking_workbook(
         for q in quarters:
             cell = ws.cell(row=row, column=col, value=f"{q['billed']}/{q.get('expected', expected)}")
             cell.font = Font(italic=True, color="6B7280")
+            col += 4
+        row += 1
+
+    # Ligne "Rigueur climatique" : DJU reel vs reference (informatif)
+    dju = report.get("dju") or {}
+    if dju.get("has_data"):
+        ref = round(dju.get("reference") or 0)
+        dlabel = ws.cell(row=row, column=1, value=f"Rigueur climatique — DJU réel / réf. {ref}")
+        dlabel.font = Font(italic=True, color="6B7280")
+        by_year_dju = {d["year"]: d for d in dju.get("by_year", [])}
+        col = 2
+        for y in years:
+            d = by_year_dju.get(y)
+            if d and d.get("dju_real") is not None:
+                pct = f" ({round(d['ratio'] * 100)} %)" if d.get("ratio") is not None else ""
+                suffix = "" if d.get("complete") else " partiel"
+                txt = f"{round(d['dju_real'])}{pct}{suffix}"
+            else:
+                txt = "—"
+            c = ws.cell(row=row, column=col, value=txt)
+            c.font = Font(italic=True, color="6B7280")
             col += 4
         row += 1
 

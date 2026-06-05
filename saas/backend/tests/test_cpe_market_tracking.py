@@ -14,6 +14,7 @@ from app.models.cpe import (
     CpeFinanceImportBatch,
     CpeFinanceInvoice,
     CpeFinanceLine,
+    CpeSite,
 )
 from app.models.cpe_dalkia import (
     CpeDalkiaRefImport,
@@ -183,6 +184,38 @@ def test_quarters_billed_counts_distinct_quarters(db_session):
     report2 = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
     q2026b = next(q for q in report2["quarters_billed"] if q["year"] == 2026)
     assert q2026b["billed"] == 2
+
+
+def test_dju_block_real_vs_reference(db_session, monkeypatch):
+    import app.services.energie as energie_mod
+
+    # 2026 complet (12 mois, somme 1610), 2027 partiel (3 mois, somme 400)
+    fake = [{"month": f"2026-{m:02d}", "dju_chauffe": 1610.0 / 12, "dju_froid": 0.0} for m in range(1, 13)]
+    fake += [{"month": f"2027-{m:02d}", "dju_chauffe": 400.0 / 3, "dju_froid": 0.0} for m in range(1, 4)]
+    monkeypatch.setattr(energie_mod, "get_dju_monthly", lambda: fake)
+
+    # reference contractuelle lue depuis cpe_sites (mode = 1426)
+    db_session.add(CpeSite(city_id=1, code_site="VDS-ENS 01", nom_site="X", categorie="ENS", nb_mwh_pci=0.0, dju_reference=1426.0))
+    db_session.commit()
+
+    report = build_market_tracking(db_session, 1, year_from=2026, year_to=2027)
+    dju = report["dju"]
+    assert dju["has_data"] is True
+    assert dju["reference"] == 1426.0 and dju["base"] == 18
+    y2026 = next(d for d in dju["by_year"] if d["year"] == 2026)
+    assert y2026["months"] == 12 and y2026["complete"] is True
+    assert round(y2026["dju_real"]) == 1610
+    assert y2026["ratio"] == round(1610.0 / 1426.0, 4)  # ~1.129 => hiver +13 %
+    y2027 = next(d for d in dju["by_year"] if d["year"] == 2027)
+    assert y2027["months"] == 3 and y2027["complete"] is False  # annee incomplete -> partiel
+
+
+def test_dju_block_absent_without_source(db_session, monkeypatch):
+    import app.services.energie as energie_mod
+    monkeypatch.setattr(energie_mod, "get_dju_monthly", lambda: [])
+    report = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
+    assert report["dju"]["has_data"] is False
+    assert report["dju"]["by_year"] == []
 
 
 def test_workbook_builds(db_session):

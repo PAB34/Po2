@@ -665,6 +665,22 @@ class CpeMarketTrackingQuarters(BaseModel):
     expected: int
 
 
+class CpeDjuYear(BaseModel):
+    year: int
+    dju_real: float | None
+    months: int
+    complete: bool
+    ratio: float | None
+
+
+class CpeDju(BaseModel):
+    reference: float
+    source: str
+    base: int
+    by_year: list[CpeDjuYear] = []
+    has_data: bool = False
+
+
 class CpeMarketTrackingLot(BaseModel):
     lot: int
     label: str
@@ -688,6 +704,7 @@ class CpeMarketTrackingOut(BaseModel):
     p1_dpgf: CpeP1Dpgf = CpeP1Dpgf()
     quarters_billed: list[CpeMarketTrackingQuarters] = []
     installments_per_year: int = 4
+    dju: CpeDju | None = None
 
 
 class CpeFinanceImportResult(BaseModel):
