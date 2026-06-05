@@ -333,39 +333,68 @@ def _resolve_alias_reference(
     family = _normalize(famille)
     text = _combined_item_text(famille, designation, marque, modele)
 
+    if family in {"analyseur", "appareil de mesure", "compteur", "plomberie"}:
+        return None
+
     if "armoire electrique" in family or "tableau electrique" in text or "coffret electrique" in text:
         return _find_ref(all_refs, id_ligne=118, equipment_contains="Armoire électrique")
 
-    if family in {"pompe a chaleur", "groupe thermodynamique"} or "pac" in text or "thermodynamique" in text:
+    if family in {"centrale traitement air"} or "cta" in text or "centrale traitement air" in text:
+        return _find_ref(all_refs, id_ligne=221, equipment_contains="CTA")
+
+    if family == "chaudiere":
+        if "murale" in text:
+            return _find_ref(all_refs, id_ligne=169, equipment_contains="Chaudi")
+        return _find_ref(all_refs, id_ligne=163, equipment_contains="Chaudi")
+
+    if family in {"preparateur ecs", "ballon de stockage"}:
+        return _find_ref(all_refs, id_ligne=97, equipment_contains="Ballon")
+
+    if family == "vase expansion" or "vase d expansion" in text or "vase expansion" in text:
+        return _find_ref(all_refs, id_ligne=188, equipment_contains="Vase")
+
+    if family == "gtb / gtc" or re.search(r"\bgtb\b|\bgtc\b", text):
+        return _find_ref(all_refs, id_ligne=162, equipment_contains="GTB")
+
+    if family == "circulateur":
+        return _find_ref(all_refs, id_ligne=186, equipment_contains="Circulateur")
+
+    if family == "echangeur":
+        if "froid" in text or "glacee" in text:
+            return _find_ref(all_refs, id_ligne=213, equipment_contains="Echangeur")
+        return _find_ref(all_refs, id_ligne=179, equipment_contains="Echangeur")
+
+    if family == "robinet / vanne" or "vanne" in text or "robinet" in text:
+        return _find_ref(all_refs, id_ligne=181, equipment_contains="Vannes")
+
+    if family in {"pompe a chaleur", "groupe thermodynamique"} or (
+        family in {"", "autre a qualifier"} and ("pac" in text or "thermodynamique" in text)
+    ):
         return _find_ref(all_refs, id_ligne=238, equipment_contains="PAC")
 
-    if family in {"split system", "vrv", "systeme vrv", "climatiseur"} or any(
-        token in text
-        for token in [
-            "mono-split",
-            "monosplit",
-            "multi-split",
-            "multisplit",
-            "split",
-            "ue clim",
-            "ui clim",
-            "unite interieure",
-            "unite exterieure",
-            "climatisation",
-            "cassette",
-            "daikin",
-            "hitachi",
-            "mitsubishi",
-            "atlantic",
-            "fujitsu",
-        ]
+    split_keywords = [
+        "mono-split",
+        "monosplit",
+        "multi-split",
+        "multisplit",
+        "split",
+        "ue clim",
+        "ui clim",
+        "unite interieure",
+        "unite exterieure",
+        "climatisation",
+        "climatiseur",
+        "cassette",
+        "vrv",
+        "drv",
+    ]
+    split_like = any(token in text for token in split_keywords)
+    if family in {"split system", "vrv", "systeme vrv", "climatiseur", "cassette"} or (
+        family in {"", "autre a qualifier"} and split_like
     ):
         if "armoire de climatisation" in text or "roof" in text:
             return _find_ref(all_refs, id_ligne=237, equipment_contains="Armoires autonomes")
         return _find_ref(all_refs, id_ligne=236, equipment_contains="Split")
-
-    if family in {"centrale traitement air"} or "cta" in text or "centrale traitement air" in text:
-        return _find_ref(all_refs, id_ligne=221, equipment_contains="CTA")
 
     if family in {"groupe froid"} or "groupe froid" in text:
         return _find_ref(all_refs, id_ligne=207, equipment_contains="Groupe")
@@ -400,9 +429,6 @@ def _resolve_alias_reference(
         if "chauffage" in text or "circulateur" in text or "radiateur" in text:
             return _find_ref(all_refs, id_ligne=186, equipment_contains="Circulateur")
         return None
-
-    if family == "preparateur ecs":
-        return _find_ref(all_refs, id_ligne=97, equipment_contains="Ballon")
 
     if family == "batterie":
         if "chaude" in text or "froide" in text or "cta" in text:
