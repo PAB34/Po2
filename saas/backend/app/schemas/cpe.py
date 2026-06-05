@@ -707,6 +707,31 @@ class CpeMarketTrackingOut(BaseModel):
     dju: CpeDju | None = None
 
 
+class CpeElecPerfItem(BaseModel):
+    site_id: int
+    code_site: str
+    nom_site: str
+    cible_mwh: float | None
+    cible_source: str
+    conso_reelle_mwh: float | None
+    nb_mois: int
+    ecart_mwh: float | None
+    ecart_pct: float | None
+    statut: str
+
+
+class CpeElecPerfOut(BaseModel):
+    annee: int
+    nb_sites: int
+    nb_suivis: int
+    total_cible_mwh: float
+    total_conso_mwh: float
+    total_ecart_mwh: float
+    total_ecart_pct: float | None
+    has_data: bool
+    items: list[CpeElecPerfItem] = []
+
+
 class CpeAtterrissageItem(BaseModel):
     code_site: str
     nom_site: str

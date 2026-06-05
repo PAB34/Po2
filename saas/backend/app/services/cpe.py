@@ -459,6 +459,102 @@ def resolve_nb_for_year(db: Session, site: CpeSite, annee: int) -> float:
     return resolve_nb_for_year_detailed(db, site, annee)[0]
 
 
+def resolve_cible_elec_for_year(db: Session, site: CpeSite, annee: int) -> tuple[float | None, str]:
+    """Cible de consommation ÉLECTRIQUE de l'exercice + sa source.
+
+    Lit la cible ELEC (Annexe 5.2) de l'import DALKIA actif pour (code_site, annee).
+    Sources : "dalkia" (cible importée de l'année) ; "site" (fallback `site.cible_elec_mwh`) ;
+    "absente" (aucune cible). Pas de correction DJU (l'élec n'est pas thermosensible comme le gaz).
+    """
+    stmt = (
+        select(CpeDalkiaRefCible)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefCible.import_id == CpeDalkiaRefImport.id)
+        .where(
+            CpeDalkiaRefImport.is_active.is_(True),
+            CpeDalkiaRefCible.fluid == "ELEC",
+            CpeDalkiaRefCible.code_site == site.code_site,
+            CpeDalkiaRefCible.period_year == annee,
+        )
+    )
+    if site.city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == site.city_id)
+    row = db.scalars(stmt).first()
+    if row is not None:
+        cible = row.nb_mwhpci if row.nb_mwhpci else row.qt_global_mwhpci
+        if cible and cible > 0:
+            return cible, "dalkia"
+    if site.cible_elec_mwh and site.cible_elec_mwh > 0:
+        return site.cible_elec_mwh, "site"
+    return None, "absente"
+
+
+def build_elec_performance(db: Session, annee: int, city_id: int | None = None) -> dict[str, Any]:
+    """Suivi de performance ÉLECTRIQUE par site : cible vs conso réelle (logique IPMVP option B).
+
+    HORS intéressement (l'élec n'a pas d'intéressement € — cf. CCTPM §11) : informatif, alimente
+    l'engagement vérifié par IPMVP et l'objectif global qui conditionne P2.4. La conso réelle est
+    le cumul à date (partielle si < 12 mois). Écart = conso − cible (positif = surconsommation).
+    """
+    items: list[dict[str, Any]] = []
+    total_cible = 0.0
+    total_conso = 0.0
+    nb_suivis = 0
+
+    for site in get_sites(db, city_id=city_id, actifs_seulement=True):
+        cible, cible_source = resolve_cible_elec_for_year(db, site, annee)
+
+        conso_stmt = select(CpeConsoReleve).where(
+            CpeConsoReleve.fluide == "ELEC",
+            CpeConsoReleve.annee == annee,
+            or_(CpeConsoReleve.cpe_site_id == site.id, CpeConsoReleve.code_site == site.code_site),
+        )
+        releves = list(db.scalars(conso_stmt))
+        mois = {r.mois for r in releves if r.energie_mwh is not None}
+        conso = sum(r.energie_mwh for r in releves if r.energie_mwh is not None) or None
+
+        ecart = ecart_pct = None
+        if cible and conso is not None:
+            ecart = round(conso - cible, 2)
+            ecart_pct = round(ecart / cible, 4) if cible else None
+
+        if cible is None:
+            statut = "sans_cible"
+        elif conso is None:
+            statut = "sans_conso"
+        else:
+            statut = "suivi"
+            nb_suivis += 1
+            total_cible += cible
+            total_conso += conso
+
+        items.append({
+            "site_id": site.id,
+            "code_site": site.code_site,
+            "nom_site": site.nom_site,
+            "cible_mwh": round(cible, 2) if cible is not None else None,
+            "cible_source": cible_source,
+            "conso_reelle_mwh": round(conso, 2) if conso is not None else None,
+            "nb_mois": len(mois),
+            "ecart_mwh": ecart,
+            "ecart_pct": ecart_pct,
+            "statut": statut,
+        })
+
+    total_cible = round(total_cible, 2)
+    total_conso = round(total_conso, 2)
+    return {
+        "annee": annee,
+        "nb_sites": len(items),
+        "nb_suivis": nb_suivis,
+        "total_cible_mwh": total_cible,
+        "total_conso_mwh": total_conso,
+        "total_ecart_mwh": round(total_conso - total_cible, 2),
+        "total_ecart_pct": round((total_conso - total_cible) / total_cible, 4) if total_cible else None,
+        "has_data": nb_suivis > 0,
+        "items": items,
+    }
+
+
 def calculer_resultat_site(
     db: Session,
     site_id: int,

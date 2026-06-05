@@ -33,6 +33,7 @@ from app.schemas.cpe import (
     CpeInvoiceEvidenceOut,
     CpeFinancePreview,
     CpeAtterrissageOut,
+    CpeElecPerfOut,
     CpeMarketTrackingOut,
     CpeP3AtterrissageOut,
     CpeP3DevisImportResult,
@@ -768,6 +769,22 @@ def get_bilan(
 ) -> CpeBilanAnnuel:
     """Retourne le bilan CPE consolidé pour tous les sites de l'exercice."""
     return svc.get_bilan_annuel(db, annee, city_id=current_user.city_id)
+
+
+@router.get("/bilan/{annee}/elec-performance", response_model=CpeElecPerfOut)
+def get_elec_performance(
+    annee: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeElecPerfOut:
+    """Suivi de performance électrique par site (cible vs conso réelle, IPMVP B).
+
+    HORS intéressement (l'élec n'a pas d'intéressement € — cf. CCTPM §11). Informatif :
+    alimente l'engagement vérifié par IPMVP et l'objectif global qui conditionne P2.4.
+    """
+    return CpeElecPerfOut.model_validate(
+        svc.build_elec_performance(db, annee, city_id=current_user.city_id)
+    )
 
 
 @router.get("/bilan/{annee}/atterrissage", response_model=CpeAtterrissageOut)
