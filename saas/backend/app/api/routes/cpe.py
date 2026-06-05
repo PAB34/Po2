@@ -32,6 +32,7 @@ from app.schemas.cpe import (
     CpeFinanceLineOut,
     CpeInvoiceEvidenceOut,
     CpeFinancePreview,
+    CpeAtterrissageOut,
     CpeMarketTrackingOut,
     CpeP3AtterrissageOut,
     CpeP3DevisImportResult,
@@ -52,6 +53,7 @@ from app.schemas.cpe import (
 )
 from app.services import cpe as svc
 from app.services import cpe_accounting as accounting_svc
+from app.services import cpe_atterrissage as atterrissage_svc
 from app.services import cpe_market_tracking as market_svc
 from app.services import cpe_p3_devis as p3_devis_svc
 from app.services.cpe_finance_preview import preview_finance_export
@@ -766,3 +768,19 @@ def get_bilan(
 ) -> CpeBilanAnnuel:
     """Retourne le bilan CPE consolidé pour tous les sites de l'exercice."""
     return svc.get_bilan_annuel(db, annee, city_id=current_user.city_id)
+
+
+@router.get("/bilan/{annee}/atterrissage", response_model=CpeAtterrissageOut)
+def get_atterrissage(
+    annee: int,
+    trimestre: int = Query(..., ge=1, le=4),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeAtterrissageOut:
+    """Projection d'atterrissage de fin d'année à partir du réalisé jusqu'à fin de trimestre.
+
+    Méthode pro-rata DJU (extrapolation climatique). Sert aux réunions trimestrielles DALKIA.
+    """
+    return CpeAtterrissageOut.model_validate(
+        atterrissage_svc.build_atterrissage(db, annee, trimestre, city_id=current_user.city_id)
+    )

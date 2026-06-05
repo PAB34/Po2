@@ -707,6 +707,40 @@ class CpeMarketTrackingOut(BaseModel):
     dju: CpeDju | None = None
 
 
+class CpeAtterrissageItem(BaseModel):
+    code_site: str
+    nom_site: str
+    site_id: int
+    tarif: str | None
+    nb_exercice: float
+    nb_source: str
+    mois_realises: int
+    nc_realise: float | None
+    nc_projete: float | None
+    n_prime_b_projete: float | None
+    ecart_projete: float | None
+    type_resultat: str | None
+    montant_ht_projete: float | None
+    statut: str
+
+
+class CpeAtterrissageOut(BaseModel):
+    annee: int
+    trimestre: int
+    mois_ecoules: int
+    dju_reel_ecoule: float
+    dju_normal_restant: float
+    dju_projete_annuel: float
+    dju_reference: float
+    dju_method: str
+    has_data: bool
+    nb_sites_projetes: int
+    total_interessement_projete: float
+    total_penalite_projete: float
+    net_projete: float
+    items: list[CpeAtterrissageItem] = []
+
+
 class CpeFinanceImportResult(BaseModel):
     batch: CpeFinanceImportBatchOut
     invoices: list[CpeFinanceInvoiceOut]
