@@ -21,6 +21,11 @@ from app.services.cpe_dalkia_db import (
     sync_p1_reference_from_recap,
 )
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
+from app.services.cpe_dpgf_p1 import (
+    get_active_dpgf_p1_imports,
+    parse_dpgf_p1_file,
+    persist_dpgf_p1_import,
+)
 
 router = APIRouter(prefix="/cpe/dalkia-ref", tags=["cpe-dalkia"])
 
@@ -344,6 +349,110 @@ def sync_cpe_sites(
     Alimente le volet performance/intéressement (bilan, NB par année). Réexécutable après avenant.
     """
     return sync_cpe_sites_from_dalkia(db, city_id=current_user.city_id)
+
+
+# ── DPGF P1 revise (livrable separe, lignee d'import propre) ─────────────────
+
+
+class DpgfP1PreviewResponse(BaseModel):
+    lot: int
+    filename: str
+    nb_lines: int
+    nb_sites: dict[str, int]
+    totals: dict[str, dict[str, float]]  # {level: {year: total}}
+    warnings: list[str]
+
+
+class DpgfP1ImportResponse(BaseModel):
+    id: int
+    lot: int
+    filename: str
+    import_date: str
+    nb_lines: int
+    is_active: bool
+    notes: str | None
+
+
+def _dpgf_totals_str_keys(totals: dict[int, dict]) -> dict[str, dict[str, float]]:
+    return {lvl: {str(y): round(v, 2) for y, v in by_year.items()} for lvl, by_year in totals.items()}
+
+
+@router.post("/dpgf-p1/preview", response_model=DpgfP1PreviewResponse)
+async def preview_dpgf_p1(
+    file: UploadFile = File(...),
+    lot: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DpgfP1PreviewResponse:
+    """Parse un DPGF P1 revise et renvoie un apercu (totaux par niveau x annee) sans rien ecrire."""
+    if lot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Le lot doit etre 1 ou 2.")
+    raw = await file.read()
+    filename = file.filename or f"dpgf_p1_lot{lot}.xlsx"
+    try:
+        result = parse_dpgf_p1_file(raw, filename, lot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return DpgfP1PreviewResponse(
+        lot=result.lot,
+        filename=result.filename,
+        nb_lines=len(result.lines),
+        nb_sites=result.nb_sites,
+        totals=_dpgf_totals_str_keys(result.totals),
+        warnings=result.warnings,
+    )
+
+
+@router.post("/dpgf-p1/confirm", response_model=DpgfP1ImportResponse, status_code=status.HTTP_201_CREATED)
+async def confirm_dpgf_p1(
+    file: UploadFile = File(...),
+    lot: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DpgfP1ImportResponse:
+    """Persiste un DPGF P1 revise dans sa lignee propre.
+
+    Ne desactive que le DPGF P1 precedent du meme lot ; ne touche jamais le referentiel maitre
+    (P2/P3/APE/cibles/RECAP) ni cpe_contract_references.
+    """
+    if lot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Le lot doit etre 1 ou 2.")
+    raw = await file.read()
+    filename = file.filename or f"dpgf_p1_lot{lot}.xlsx"
+    try:
+        result = parse_dpgf_p1_file(raw, filename, lot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    batch = persist_dpgf_p1_import(db, result, current_user)
+    return DpgfP1ImportResponse(
+        id=batch.id,
+        lot=batch.lot,
+        filename=batch.filename,
+        import_date=batch.import_date.isoformat(),
+        nb_lines=batch.nb_lines,
+        is_active=batch.is_active,
+        notes=batch.notes,
+    )
+
+
+@router.get("/dpgf-p1/imports", response_model=list[DpgfP1ImportResponse])
+def list_dpgf_p1_imports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DpgfP1ImportResponse]:
+    """Liste les imports DPGF P1 actifs (un par lot au plus)."""
+    return [
+        DpgfP1ImportResponse(
+            id=b.id,
+            lot=b.lot,
+            filename=b.filename,
+            import_date=b.import_date.isoformat(),
+            nb_lines=b.nb_lines,
+            is_active=b.is_active,
+            notes=b.notes,
+        )
+        for b in get_active_dpgf_p1_imports(db, current_user)
+    ]
 
 
 @router.post("/imports/{import_id}/sync-p1-reference")

@@ -27,12 +27,14 @@ from sqlalchemy.orm import Session
 
 from app.models.cpe import CpeContractReference, CpeFinanceLine
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz, CpeDalkiaRefP2P3
+from app.models.cpe_dpgf_p1 import DPGF_P1_LEVELS, DPGF_P1_LEVEL_LABELS
 from app.services.cpe_accounting import (
     CPE_CONTRACT_SCOPE_KIND,
     _is_current_cpe_contract,
     list_finance_invoices,
 )
 from app.services.cpe_dalkia_db import normalize_p2p3_poste
+from app.services.cpe_dpgf_p1 import get_dpgf_p1_levels
 
 # Le numero de lot est encode dans le billed_item des references de perimetre
 # (kind cpe_contract_scope), ex. "CPE_VILLE_LOT_1" / "CPE_VILLE_LOT_2".
@@ -214,6 +216,30 @@ def _assemble(
     return {"postes": postes, "totals_by_year": totals_by_year, "grand_total": grand_total}
 
 
+def _dpgf_p1_block(db: Session, city_id: int | None, years: list[int], *, lot: int | None) -> dict[str, Any]:
+    """Bloc informatif des niveaux P1 revises (DPGF) par annee : contrat / Rev Temp / Rev T° & prix.
+
+    Purement additif : n'entre PAS dans le calcul prevu/recu. Le ``prevu P1`` reste au niveau
+    contrat (cf. decision : DPGF P1 expose en plus, sans creer d'ecart artificiel).
+    """
+    levels = get_dpgf_p1_levels(db, city_id, years, lot=lot)
+    rows = []
+    has_data = False
+    for level in DPGF_P1_LEVELS:
+        by_year = levels.get(level, {})
+        amounts = [round(by_year.get(y, 0.0), 2) for y in years]
+        total = round(sum(amounts), 2)
+        if total:
+            has_data = True
+        rows.append({
+            "level": level,
+            "label": DPGF_P1_LEVEL_LABELS[level],
+            "by_year": [{"year": y, "total": a} for y, a in zip(years, amounts)],
+            "total": total,
+        })
+    return {"levels": rows, "has_data": has_data}
+
+
 def build_market_tracking(
     db: Session,
     city_id: int | None = None,
@@ -237,6 +263,7 @@ def build_market_tracking(
         **_assemble(prevu, recu, recu_other, years),
         "p1_source": P1_SOURCE_LABEL,
         "has_reference": reference_rows > 0,
+        "p1_dpgf": _dpgf_p1_block(db, city_id, years, lot=None),
     }
 
     # ── Découpage par lot ────────────────────────────────────────────────────
@@ -254,6 +281,7 @@ def build_market_tracking(
                 "contract_codes": sorted(contracts),
                 **_assemble(l_prevu, l_recu, l_recu_other, years),
                 "has_reference": l_refrows > 0,
+                "p1_dpgf": _dpgf_p1_block(db, city_id, years, lot=lot),
             }
         )
     result["by_lot"] = by_lot
