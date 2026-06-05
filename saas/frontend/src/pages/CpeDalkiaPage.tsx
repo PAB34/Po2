@@ -65,6 +65,7 @@ import {
   type CpeMarketTrackingCell,
   type CpeMarketTrackingTotal,
   type CpeMarketTrackingPoste,
+  type CpeP1Dpgf,
   importCpeP3Devis,
   fetchCpeP3Devis,
   fetchCpeP3Atterrissage,
@@ -922,6 +923,7 @@ function MarketTrackingMatrix({
   grandTotal,
   yearFrom,
   yearTo,
+  p1Dpgf,
 }: {
   title: string;
   subtitle?: string;
@@ -931,6 +933,7 @@ function MarketTrackingMatrix({
   grandTotal: CpeMarketTrackingTotal;
   yearFrom: number;
   yearTo: number;
+  p1Dpgf?: CpeP1Dpgf;
 }) {
   const chartData = postes.map((p) => ({
     poste: p.label,
@@ -1029,6 +1032,52 @@ function MarketTrackingMatrix({
           </tbody>
         </table>
       </div>
+
+      {p1Dpgf && p1Dpgf.has_data && (
+        <div className="card" style={{ padding: 12, overflowX: "auto" }}>
+          <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>P1 gaz révisé (DPGF après OS) — {title}</h4>
+          <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>
+            Niveaux de révision issus du DPGF P1 (livrable séparé). <strong>Informatif</strong> : le « prévu P1 »
+            de la matrice ci-dessus reste au niveau <em>contrat</em>. Tant qu'aucune révision n'est facturée,
+            la base d'acompte retenue est « Rév Temp ».
+          </p>
+          <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 700 }}>
+            <thead>
+              <tr style={{ background: "#f9fafb" }}>
+                <th style={{ ...thStyle, position: "sticky", left: 0, background: "#f9fafb" }}>Niveau P1</th>
+                {years.map((y) => (
+                  <th key={y} style={{ ...thStyle, textAlign: "right", borderLeft: "1px solid #e5e7eb" }}>{y}</th>
+                ))}
+                <th style={{ ...thStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1", background: "#eef2ff" }}>
+                  Total {yearFrom}–{yearTo}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {p1Dpgf.levels.map((lv) => {
+                const byYear = new Map(lv.by_year.map((c) => [c.year, c.total] as [number, number]));
+                const isContrat = lv.level === "contrat";
+                return (
+                  <tr key={lv.level} style={{ borderTop: "1px solid #f3f4f6" }}>
+                    <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>
+                      {lv.label}
+                      {isContrat && <span style={{ color: "#6b7280", fontWeight: 400 }}> (= prévu P1)</span>}
+                    </td>
+                    {years.map((y) => (
+                      <td key={y} style={{ ...tdStyle, textAlign: "right", borderLeft: "1px solid #f3f4f6", color: isContrat ? "#6b7280" : undefined }}>
+                        {fmtEur(byYear.get(y) ?? 0)}
+                      </td>
+                    ))}
+                    <td style={{ ...tdStyle, textAlign: "right", borderLeft: "2px solid #cbd5e1", fontWeight: 600 }}>
+                      {fmtEur(lv.total)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </>
   );
 }
@@ -2709,6 +2758,7 @@ function CpeFinanceReference({
               grandTotal={marketTracking.grand_total}
               yearFrom={marketYearFrom}
               yearTo={marketYearTo}
+              p1Dpgf={marketTracking.p1_dpgf}
             />
             {marketTracking.by_lot.map((lot) => (
               <MarketTrackingMatrix
@@ -2721,6 +2771,7 @@ function CpeFinanceReference({
                 grandTotal={lot.grand_total}
                 yearFrom={marketYearFrom}
                 yearTo={marketYearTo}
+                p1Dpgf={lot.p1_dpgf}
               />
             ))}
             {p3Atterrissage && p3Atterrissage.has_provision && <P3AtterrissageChart data={p3Atterrissage} />}

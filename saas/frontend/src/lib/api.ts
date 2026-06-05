@@ -3615,6 +3615,18 @@ export type CpeMarketTrackingPoste = {
   total: CpeMarketTrackingTotal;
 };
 
+export type CpeP1DpgfLevel = {
+  level: string;
+  label: string;
+  by_year: { year: number; total: number }[];
+  total: number;
+};
+
+export type CpeP1Dpgf = {
+  levels: CpeP1DpgfLevel[];
+  has_data: boolean;
+};
+
 export type CpeMarketTrackingLot = {
   lot: number;
   label: string;
@@ -3623,6 +3635,7 @@ export type CpeMarketTrackingLot = {
   totals_by_year: CpeMarketTrackingCell[];
   grand_total: CpeMarketTrackingTotal;
   has_reference: boolean;
+  p1_dpgf: CpeP1Dpgf;
 };
 
 export type CpeMarketTracking = {
@@ -3633,6 +3646,7 @@ export type CpeMarketTracking = {
   p1_source: string;
   has_reference: boolean;
   by_lot: CpeMarketTrackingLot[];
+  p1_dpgf: CpeP1Dpgf;
 };
 
 export async function fetchCpeMarketTracking(
