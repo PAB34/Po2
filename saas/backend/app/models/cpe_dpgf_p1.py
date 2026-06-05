@@ -35,8 +35,8 @@ from app.core.db import Base
 DPGF_P1_LEVELS = ("contrat", "rev_temp", "rev_temp_prix")
 DPGF_P1_LEVEL_LABELS = {
     "contrat": "P1 gaz contrat",
-    "rev_temp": "P1 gaz Rev Temp",
-    "rev_temp_prix": "P1 gaz Rev T° & prix",
+    "rev_temp": "P1 gaz Rév Temp",
+    "rev_temp_prix": "P1 gaz Rév T° & prix",
 }
 
 

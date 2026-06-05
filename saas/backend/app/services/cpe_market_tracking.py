@@ -344,6 +344,29 @@ def build_market_tracking_workbook(
     _write_cell_group(row, col, report["grand_total"])
     for c in range(1, len(headers) + 1):
         ws.cell(row=row, column=c).fill = PatternFill("solid", fgColor="E5E7EB")
+    row += 1
+
+    # ── Bloc informatif : P1 gaz revise (DPGF apres OS) ──────────────────────
+    p1_dpgf = report.get("p1_dpgf") or {}
+    if p1_dpgf.get("has_data"):
+        row += 1  # ligne vide de separation
+        title_cell = ws.cell(
+            row=row, column=1,
+            value="P1 gaz révisé (DPGF) — informatif (le prévu P1 ci-dessus reste au niveau contrat)",
+        )
+        title_cell.font = Font(bold=True, italic=True, color="6B7280")
+        row += 1
+        for lvl in p1_dpgf["levels"]:
+            label = lvl["label"] + (" (= prévu P1)" if lvl["level"] == "contrat" else "")
+            ws.cell(row=row, column=1, value=label).font = Font(bold=True)
+            col = 2
+            for cell in lvl["by_year"]:
+                amount_cell = ws.cell(row=row, column=col, value=round(cell["total"], 2))
+                amount_cell.number_format = '#,##0 "€"'
+                col += 4  # une seule valeur par annee (colonne "Prévu" du groupe)
+            total_cell = ws.cell(row=row, column=col, value=round(lvl["total"], 2))
+            total_cell.number_format = '#,##0 "€"'
+            row += 1
 
     ws.column_dimensions["A"].width = 34
     for c in range(2, len(headers) + 1):

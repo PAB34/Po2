@@ -24,7 +24,7 @@ from app.services.cpe_dpgf_p1 import (
     parse_dpgf_p1_file,
     persist_dpgf_p1_import,
 )
-from app.services.cpe_market_tracking import build_market_tracking
+from app.services.cpe_market_tracking import build_market_tracking, build_market_tracking_workbook
 
 PERIOD_YEARS = [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033]
 
@@ -234,3 +234,20 @@ def test_market_tracking_exposes_dpgf_without_changing_prevu(db_session, user):
     # decoupage par lot : le Lot 1 porte aussi son bloc DPGF
     lot1 = next(e for e in report["by_lot"] if e["lot"] == 1)
     assert {lv["level"]: lv["total"] for lv in lot1["p1_dpgf"]["levels"]}["rev_temp"] == 352073.0
+
+
+def test_workbook_includes_dpgf_block(db_session, user):
+    _seed_master_import(db_session, lot=1, p1_2026=317775.0)
+    persist_dpgf_p1_import(db_session, parse_dpgf_p1_file(_build_dpgf_bytes(SAMPLE), "DPGF_L1.xlsx", lot=1), user)
+
+    content = build_market_tracking_workbook(db_session, 1, year_from=2026, year_to=2026)
+    assert content[:2] == b"PK"  # xlsx = zip
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    ws = wb.active
+    seen = {ws.cell(row=r, column=1).value for r in range(1, ws.max_row + 1)}
+    assert any(v and "P1 gaz révisé (DPGF)" in str(v) for v in seen)
+    assert any(v and "Rév Temp" in str(v) for v in seen)
+    # la valeur 2026 du niveau Rév Temp (352073) doit figurer dans la colonne Prévu
+    all_values = [ws.cell(row=r, column=c).value for r in range(1, ws.max_row + 1) for c in range(1, ws.max_column + 1)]
+    assert 352073.0 in all_values
