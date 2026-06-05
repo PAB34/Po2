@@ -642,6 +642,29 @@ class CpeMarketTrackingPoste(BaseModel):
     total: CpeMarketTrackingTotal
 
 
+class CpeP1DpgfLevelYear(BaseModel):
+    year: int
+    total: float
+
+
+class CpeP1DpgfLevel(BaseModel):
+    level: str
+    label: str
+    by_year: list[CpeP1DpgfLevelYear]
+    total: float
+
+
+class CpeP1Dpgf(BaseModel):
+    levels: list[CpeP1DpgfLevel] = []
+    has_data: bool = False
+
+
+class CpeMarketTrackingQuarters(BaseModel):
+    year: int
+    billed: int
+    expected: int
+
+
 class CpeMarketTrackingLot(BaseModel):
     lot: int
     label: str
@@ -650,6 +673,8 @@ class CpeMarketTrackingLot(BaseModel):
     totals_by_year: list[CpeMarketTrackingCell]
     grand_total: CpeMarketTrackingTotal
     has_reference: bool
+    p1_dpgf: CpeP1Dpgf = CpeP1Dpgf()
+    quarters_billed: list[CpeMarketTrackingQuarters] = []
 
 
 class CpeMarketTrackingOut(BaseModel):
@@ -660,6 +685,9 @@ class CpeMarketTrackingOut(BaseModel):
     p1_source: str
     has_reference: bool
     by_lot: list[CpeMarketTrackingLot] = []
+    p1_dpgf: CpeP1Dpgf = CpeP1Dpgf()
+    quarters_billed: list[CpeMarketTrackingQuarters] = []
+    installments_per_year: int = 4
 
 
 class CpeFinanceImportResult(BaseModel):

@@ -155,6 +155,36 @@ def test_recu_classification_and_other_bucket(db_session):
     assert grand["recu"] == round(2000 + 200 + 50 + 250 + 1000 + 99, 2)
 
 
+def test_quarters_billed_counts_distinct_quarters(db_session):
+    _seed_reference(db_session)
+    # Q1 (jan-mars) via _seed_invoice
+    _seed_invoice(db_session)
+    report = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
+    assert report["installments_per_year"] == 4
+    q2026 = next(q for q in report["quarters_billed"] if q["year"] == 2026)
+    assert q2026 == {"year": 2026, "billed": 1, "expected": 4}
+
+    # Ajoute une facture Q2 (avr-juin) -> 2 trimestres facturés
+    batch = CpeFinanceImportBatch(city_id=1, filename="fin_q2.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    inv = CpeFinanceInvoice(
+        batch_id=batch.id, city_id=1, invoice_number="INV-Q2", contract_code="C00190116O",
+        period_start=date(2026, 4, 1), period_end=date(2026, 6, 30), total_ht=0.0,
+    )
+    db_session.add(inv)
+    db_session.flush()
+    db_session.add(CpeFinanceLine(
+        batch_id=batch.id, invoice_id=inv.id, city_id=1, row_number=1,
+        market="P1", billed_item="ABT", amount_ht=2000.0,
+        period_start=date(2026, 4, 1), period_end=date(2026, 6, 30),
+    ))
+    db_session.commit()
+    report2 = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
+    q2026b = next(q for q in report2["quarters_billed"] if q["year"] == 2026)
+    assert q2026b["billed"] == 2
+
+
 def test_workbook_builds(db_session):
     _seed_reference(db_session)
     _seed_invoice(db_session)

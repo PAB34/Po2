@@ -55,6 +55,9 @@ POSTE_OTHER_LABEL = "Autre (reçu non rattaché)"
 
 P1_SOURCE_LABEL = "Annexe 6 DPGF — somme p10_total_ht (imports actifs Lot 1 + Lot 2)"
 
+# Cadence d'acompte du marche CPE : 4 echeances par an (acomptes trimestriels + regularisation).
+INSTALLMENTS_PER_YEAR = 4
+
 
 def _classify_received_poste(line: CpeFinanceLine) -> str | None:
     """Classe une ligne de facture dans un poste contractuel, ou None si hors postes."""
@@ -76,6 +79,12 @@ def _classify_received_poste(line: CpeFinanceLine) -> str | None:
 def _line_year(line: CpeFinanceLine) -> int | None:
     anchor = line.period_end or line.period_start
     return anchor.year if anchor else None
+
+
+def _line_quarter(line: CpeFinanceLine) -> int | None:
+    """Numero de trimestre (1..4) de la periode de la ligne, ou None."""
+    anchor = line.period_end or line.period_start
+    return (anchor.month - 1) // 3 + 1 if anchor else None
 
 
 def _cell(prevu: float, recu: float) -> dict[str, Any]:
@@ -124,7 +133,7 @@ def _collect(
     *,
     prevu_lot: int | None = None,
     recu_contracts: set[str] | None = None,
-) -> tuple[dict[str, dict[int, float]], dict[str, dict[int, float]], dict[int, float], int]:
+) -> tuple[dict[str, dict[int, float]], dict[str, dict[int, float]], dict[int, float], int, dict[int, set[int]]]:
     """Accumule prévu (référentiel) et reçu (factures), éventuellement filtré par lot DPGF
     (``prevu_lot``) et par codes contrat reçus (``recu_contracts``)."""
     prevu: dict[str, dict[int, float]] = {poste: {y: 0.0 for y in years} for poste in POSTE_ORDER}
@@ -165,6 +174,7 @@ def _collect(
 
     recu: dict[str, dict[int, float]] = {poste: {y: 0.0 for y in years} for poste in POSTE_ORDER}
     recu_other: dict[int, float] = {y: 0.0 for y in years}
+    quarters_seen: dict[int, set[int]] = {y: set() for y in years}
     invoices = [
         invoice
         for invoice in list_finance_invoices(db, city_id=city_id)
@@ -184,13 +194,16 @@ def _collect(
             year = _line_year(line)
             if year not in year_set:
                 continue
+            quarter = _line_quarter(line)
+            if quarter is not None:
+                quarters_seen[year].add(quarter)
             poste = _classify_received_poste(line)
             amount = line.amount_ht or 0.0
             if poste is None:
                 recu_other[year] += amount
             else:
                 recu[poste][year] += amount
-    return prevu, recu, recu_other, reference_rows
+    return prevu, recu, recu_other, reference_rows, quarters_seen
 
 
 def _assemble(
@@ -214,6 +227,14 @@ def _assemble(
         round(sum(cell["recu"] for cell in totals_by_year), 2),
     )
     return {"postes": postes, "totals_by_year": totals_by_year, "grand_total": grand_total}
+
+
+def _quarters_block(quarters_seen: dict[int, set[int]], years: list[int]) -> list[dict[str, Any]]:
+    """Nombre de trimestres factures par annee (sur INSTALLMENTS_PER_YEAR attendus)."""
+    return [
+        {"year": y, "billed": len(quarters_seen.get(y, set())), "expected": INSTALLMENTS_PER_YEAR}
+        for y in years
+    ]
 
 
 def _dpgf_p1_block(db: Session, city_id: int | None, years: list[int], *, lot: int | None) -> dict[str, Any]:
@@ -257,13 +278,15 @@ def build_market_tracking(
     years = list(range(year_from, year_to + 1))
     year_set = set(years)
 
-    prevu, recu, recu_other, reference_rows = _collect(db, city_id, years, year_set)
+    prevu, recu, recu_other, reference_rows, quarters_seen = _collect(db, city_id, years, year_set)
     result: dict[str, Any] = {
         "years": years,
         **_assemble(prevu, recu, recu_other, years),
         "p1_source": P1_SOURCE_LABEL,
         "has_reference": reference_rows > 0,
         "p1_dpgf": _dpgf_p1_block(db, city_id, years, lot=None),
+        "quarters_billed": _quarters_block(quarters_seen, years),
+        "installments_per_year": INSTALLMENTS_PER_YEAR,
     }
 
     # ── Découpage par lot ────────────────────────────────────────────────────
@@ -271,7 +294,7 @@ def build_market_tracking(
     by_lot: list[dict[str, Any]] = []
     for lot in sorted(set(contract_lot.values())):
         contracts = {code for code, value in contract_lot.items() if value == lot}
-        l_prevu, l_recu, l_recu_other, l_refrows = _collect(
+        l_prevu, l_recu, l_recu_other, l_refrows, l_quarters = _collect(
             db, city_id, years, year_set, prevu_lot=lot, recu_contracts=contracts
         )
         by_lot.append(
@@ -282,6 +305,7 @@ def build_market_tracking(
                 **_assemble(l_prevu, l_recu, l_recu_other, years),
                 "has_reference": l_refrows > 0,
                 "p1_dpgf": _dpgf_p1_block(db, city_id, years, lot=lot),
+                "quarters_billed": _quarters_block(l_quarters, years),
             }
         )
     result["by_lot"] = by_lot
@@ -345,6 +369,19 @@ def build_market_tracking_workbook(
     for c in range(1, len(headers) + 1):
         ws.cell(row=row, column=c).fill = PatternFill("solid", fgColor="E5E7EB")
     row += 1
+
+    # Ligne "Trimestres factures / N" (lecture annuel vs trimestriel)
+    quarters = report.get("quarters_billed") or []
+    expected = report.get("installments_per_year", 4)
+    if quarters:
+        q_label = ws.cell(row=row, column=1, value=f"Trimestres facturés (sur {expected})")
+        q_label.font = Font(italic=True, color="6B7280")
+        col = 2
+        for q in quarters:
+            cell = ws.cell(row=row, column=col, value=f"{q['billed']}/{q.get('expected', expected)}")
+            cell.font = Font(italic=True, color="6B7280")
+            col += 4
+        row += 1
 
     # ── Bloc informatif : P1 gaz revise (DPGF apres OS) ──────────────────────
     p1_dpgf = report.get("p1_dpgf") or {}
