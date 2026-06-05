@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.cpe import CpeConsoReleve, CpeGazReleve, CpePrixGaz, CpeResultatAnnuel, CpeSite
-from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport
+from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport, CpeDalkiaRefP2P3
 from app.schemas.cpe import (
     CpeBilanAnnuel,
     CpeConsoCoverageSite,
@@ -552,6 +552,83 @@ def build_elec_performance(db: Session, annee: int, city_id: int | None = None) 
         "total_ecart_pct": round((total_conso - total_cible) / total_cible, 4) if total_cible else None,
         "has_data": nb_suivis > 0,
         "items": items,
+    }
+
+
+def build_p24_objective(db: Session, annee: int, city_id: int | None = None) -> dict[str, Any]:
+    """Indicateur P2.4 : objectif d'économie d'énergie global atteint ? → redevance 100 % / 50 %.
+
+    Base contractuelle (CCTPM §11.3) : « si les objectifs d'économies d'énergie sont atteints
+    (au global), P2.4 facturé 100 % ; sinon 50 % ». Le % objectif est défini dans l'Acte
+    d'Engagement et **déjà encodé dans les cibles** (NB gaz, cible élec). Donc « atteint au
+    global » = consommation réelle globale ≤ cible globale, sans seuil inventé.
+
+    Global cible = Σ N'B gaz (cible recalée DJU) + Σ cible élec.
+    Global réel  = Σ NC gaz (conso corrigée ECS) + Σ conso élec réelle.
+    Le montant P2.4 vient de l'Annexe 3.1 (cpe_dalkia_ref_p2p3.p2_4_ht, import actif, année).
+    ⚠️ Données cumulées à date : verdict définitif au décompte de fin d'exercice.
+    """
+    bilan = get_bilan_annuel(db, annee, city_id=city_id)
+    gas_cible = 0.0
+    gas_reel = 0.0
+    gas_sites = 0
+    gas_mois_min = 12
+    for it in bilan.sites:
+        if it.n_prime_b is not None and it.nc_cumul is not None:
+            gas_cible += it.n_prime_b
+            gas_reel += it.nc_cumul
+            gas_sites += 1
+            gas_mois_min = min(gas_mois_min, it.nb_mois_releves)
+
+    elec = build_elec_performance(db, annee, city_id=city_id)
+    elec_cible = elec["total_cible_mwh"]
+    elec_reel = elec["total_conso_mwh"]
+
+    global_cible = round(gas_cible + elec_cible, 2)
+    global_reel = round(gas_reel + elec_reel, 2)
+    economie_mwh = round(global_cible - global_reel, 2)  # > 0 = objectif atteint
+    economie_pct = round(economie_mwh / global_cible, 4) if global_cible else None
+
+    # Montant P2.4 contractuel de l'année (Annexe 3.1, imports actifs)
+    p24_stmt = (
+        select(CpeDalkiaRefP2P3.p2_4_ht)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefP2P3.import_id == CpeDalkiaRefImport.id)
+        .where(
+            CpeDalkiaRefImport.is_active.is_(True),
+            CpeDalkiaRefP2P3.period_year == annee,
+            CpeDalkiaRefP2P3.p2_4_ht.is_not(None),
+        )
+    )
+    if city_id is not None:
+        p24_stmt = p24_stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    p24_montant = round(sum(v for v in db.scalars(p24_stmt) if v) or 0.0, 2)
+
+    has_data = (gas_sites > 0 or elec["nb_suivis"] > 0) and global_cible > 0
+    objectif_atteint = has_data and economie_mwh >= 0
+    taux = 1.0 if objectif_atteint else 0.5
+    p24_facturable = round(p24_montant * taux, 2)
+    p24_a_risque = round(p24_montant * 0.5, 2)  # part perdue si objectif non atteint
+
+    return {
+        "annee": annee,
+        "has_data": has_data,
+        "objectif_atteint": objectif_atteint,
+        "global_cible_mwh": global_cible,
+        "global_reel_mwh": global_reel,
+        "economie_mwh": economie_mwh,
+        "economie_pct": economie_pct,
+        "gas_cible_mwh": round(gas_cible, 2),
+        "gas_reel_mwh": round(gas_reel, 2),
+        "gas_sites": gas_sites,
+        "elec_cible_mwh": round(elec_cible, 2),
+        "elec_reel_mwh": round(elec_reel, 2),
+        "elec_sites": elec["nb_suivis"],
+        "p24_montant_ht": p24_montant,
+        "p24_taux": taux,
+        "p24_facturable_ht": p24_facturable,
+        "p24_a_risque_ht": p24_a_risque,
+        "gas_mois_min": gas_mois_min if gas_sites > 0 else 0,
+        "complet": gas_sites > 0 and gas_mois_min >= 12,
     }
 
 

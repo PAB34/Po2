@@ -35,6 +35,7 @@ from app.schemas.cpe import (
     CpeAtterrissageOut,
     CpeElecPerfOut,
     CpeMarketTrackingOut,
+    CpeP24Objective,
     CpeP3AtterrissageOut,
     CpeP3DevisImportResult,
     CpeP3DevisOut,
@@ -769,6 +770,22 @@ def get_bilan(
 ) -> CpeBilanAnnuel:
     """Retourne le bilan CPE consolidé pour tous les sites de l'exercice."""
     return svc.get_bilan_annuel(db, annee, city_id=current_user.city_id)
+
+
+@router.get("/bilan/{annee}/p24-objective", response_model=CpeP24Objective)
+def get_p24_objective(
+    annee: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeP24Objective:
+    """Indicateur P2.4 : objectif d'économie d'énergie global (gaz+élec) atteint ? → 100 % / 50 %.
+
+    Base CCTPM §11.3 : objectif (% défini en AE, encodé dans les cibles). « Atteint au global »
+    = conso réelle globale ≤ cible globale. Données cumulées : définitif au décompte de fin d'année.
+    """
+    return CpeP24Objective.model_validate(
+        svc.build_p24_objective(db, annee, city_id=current_user.city_id)
+    )
 
 
 @router.get("/bilan/{annee}/elec-performance", response_model=CpeElecPerfOut)

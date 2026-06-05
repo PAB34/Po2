@@ -707,6 +707,28 @@ class CpeMarketTrackingOut(BaseModel):
     dju: CpeDju | None = None
 
 
+class CpeP24Objective(BaseModel):
+    annee: int
+    has_data: bool
+    objectif_atteint: bool
+    global_cible_mwh: float
+    global_reel_mwh: float
+    economie_mwh: float
+    economie_pct: float | None
+    gas_cible_mwh: float
+    gas_reel_mwh: float
+    gas_sites: int
+    elec_cible_mwh: float
+    elec_reel_mwh: float
+    elec_sites: int
+    p24_montant_ht: float
+    p24_taux: float
+    p24_facturable_ht: float
+    p24_a_risque_ht: float
+    gas_mois_min: int
+    complet: bool
+
+
 class CpeElecPerfItem(BaseModel):
     site_id: int
     code_site: str
