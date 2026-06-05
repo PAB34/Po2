@@ -810,6 +810,77 @@ export default function CpeDalkiaPage() {
         ))}
       </div>
 
+      {/* ── Légende des colonnes ── */}
+      <details style={{ marginBottom: 16, border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", background: "#fbfcfe" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 13, color: "#374151" }}>
+          Comprendre le tableau — définition des colonnes et nature du calcul
+        </summary>
+        <div style={{ marginTop: 10, fontSize: 12.5, color: "#374151", lineHeight: 1.55 }}>
+          <p style={{ margin: "0 0 10px" }}>
+            Ce tableau est le <strong>bilan d'intéressement énergétique annuel</strong> du marché CPE, calculé sur les
+            données <strong>cumulées depuis le 1ᵉʳ janvier</strong> de l'année sélectionnée. En cours d'année (ex. après
+            le T1 ou le T2), les valeurs sont <strong>partielles</strong> : elles reflètent le cumul à date, pas une
+            projection de fin d'année. Le résultat ne devient <strong>ferme</strong> qu'avec 12 mois de relevés (statut
+            <em> calculé</em>). C'est la différence avec un « atterrissage » trimestriel, qui projette la fin d'année —
+            voir la note sous le tableau.
+          </p>
+          <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 14px", margin: 0 }}>
+            <dt style={{ fontWeight: 700 }}>Tarif</dt>
+            <dd style={{ margin: 0 }}>Tarif gaz contractuel du site (T1–T4, OS prix gaz). Détermine le prix unitaire Pu (€/MWh) du calcul.</dd>
+
+            <dt style={{ fontWeight: 700 }}>NB année (MWhPCI)</dt>
+            <dd style={{ margin: 0 }}>
+              Consommation <strong>cible</strong> contractuelle de l'année (objectif), en MWh PCI. Badge{" "}
+              <strong style={{ color: "#16a34a" }}>DLK</strong> = cible DALKIA importée pour l'année (révisée après travaux APE) ;{" "}
+              <strong style={{ color: "#f97316" }}>SITE</strong> = valeur de secours du site (alignement code site à vérifier).
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>N'B corrigé</dt>
+            <dd style={{ margin: 0 }}>
+              Cible recalée du climat réel : <strong>N'B = NB × (DJU réels / 1426)</strong>. Un hiver plus froid (DJU élevés)
+              relève la cible ; un hiver doux l'abaisse. C'est la cible « juste » à comparer au réel.
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>NC réel</dt>
+            <dd style={{ margin: 0 }}>
+              Consommation <strong>réellement mesurée</strong> (cumul), nette de l'eau chaude sanitaire :{" "}
+              <strong>NC = QT − (m × qECS)</strong>. C'est la conso chauffage du site.
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>Écart</dt>
+            <dd style={{ margin: 0 }}>
+              <strong>N'B − NC</strong>. <span style={{ color: "#16a34a", fontWeight: 600 }}>Positif (vert)</span> = on consomme
+              moins que la cible recalée → bonne performance.{" "}
+              <span style={{ color: "#ef4444", fontWeight: 600 }}>Négatif (rouge)</span> = surconsommation. Le % = écart / N'B.
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>Résultat</dt>
+            <dd style={{ margin: 0 }}>
+              Qualification de l'écart : <strong>Intéressement</strong> (gain partagé, DALKIA facture la collectivité),{" "}
+              <strong>Pénalité</strong> (DALKIA émet un avoir), équilibre, ou incomplet.
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>Montant HT</dt>
+            <dd style={{ margin: 0 }}>
+              Valorisation € de l'écart. Intéressement = <strong>½ × min(écart ; 15 % × N'B) × Pu</strong> (plafonné à 15 % de
+              N'B). Pénalité = <strong>|écart| × Pu</strong> (100 %, sans plafond).
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>Mois</dt>
+            <dd style={{ margin: 0 }}>
+              Nombre de mois de relevés de consommation disponibles sur l'année (<strong>x/12</strong>). Moins de 12 = cumul
+              partiel → résultat non définitif.
+            </dd>
+
+            <dt style={{ fontWeight: 700 }}>Statut</dt>
+            <dd style={{ margin: 0 }}>
+              <strong>calculé</strong> = 12 mois de relevés + prix + DJU disponibles (résultat ferme, compté dans les totaux) ;{" "}
+              <strong>partiel</strong> = données incomplètes (résultat indicatif, exclu des totaux).
+            </dd>
+          </dl>
+        </div>
+      </details>
+
       {/* ── Tableau des sites ── */}
       {bilanQ.isLoading ? (
         <p>Chargement…</p>
