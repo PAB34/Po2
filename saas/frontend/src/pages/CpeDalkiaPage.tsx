@@ -46,6 +46,8 @@ import {
   fetchCpeElecPerformance,
   type CpeElecPerf,
   type CpeElecPerfItem,
+  fetchCpeP24Objective,
+  type CpeP24Objective,
   fetchCpeConsoSynthese,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
@@ -307,6 +309,12 @@ export default function CpeDalkiaPage() {
   const elecPerfQ = useQuery({
     queryKey: ["cpe-elec-performance", annee],
     queryFn: () => fetchCpeElecPerformance(token!, annee),
+    enabled: !!token && view === "performance",
+  });
+
+  const p24Q = useQuery({
+    queryKey: ["cpe-p24-objective", annee],
+    queryFn: () => fetchCpeP24Objective(token!, annee),
     enabled: !!token && view === "performance",
   });
 
@@ -996,6 +1004,9 @@ export default function CpeDalkiaPage() {
 
       {/* ── Suivi performance électrique (hors intéressement) ── */}
       <ElecPerformanceCard data={elecPerfQ.data} isLoading={elecPerfQ.isLoading} annee={annee} />
+
+      {/* ── Indicateur P2.4 (objectif global gaz+élec) ── */}
+      <P24ObjectiveCard data={p24Q.data} isLoading={p24Q.isLoading} />
         </>
       )}
     </div>
@@ -1413,6 +1424,50 @@ function AtterrissageCard({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function P24ObjectiveCard({ data, isLoading }: { data: CpeP24Objective | undefined; isLoading: boolean }) {
+  if (isLoading) {
+    return <div className="card" style={{ marginTop: 24, padding: 12 }}><p>Chargement…</p></div>;
+  }
+  if (!data || !data.has_data) {
+    return null; // pas de données -> pas d'indicateur
+  }
+  const atteint = data.objectif_atteint;
+  return (
+    <div className="card" style={{ marginTop: 24, padding: 12, borderLeft: `4px solid ${atteint ? "#16a34a" : "#dc2626"}` }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h4 style={{ margin: "0 0 2px", fontSize: 14 }}>
+            Redevance P2.4 — objectif d'économie d'énergie global{" "}
+            <span className={`badge ${atteint ? "badge-green" : "badge-red"}`}>
+              {atteint ? "Atteint → 100 %" : "Non atteint → 50 %"}
+            </span>
+          </h4>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>
+            Conso réelle globale (gaz + élec) vs cible globale. Si la cible est tenue, P2.4 facturé à 100 % ;
+            sinon 50 % (CCTPM §11.3). {data.complet ? "" : "⚠️ Cumul à date — verdict définitif au décompte de fin d'exercice."}
+          </p>
+        </div>
+      </div>
+      <div className="kpi-grid" style={{ marginTop: 10 }}>
+        <KpiCard
+          label="Économie vs cible (global)"
+          value={`${data.economie_mwh >= 0 ? "+" : ""}${fmt(data.economie_mwh, 1)} MWh`}
+          sub={data.economie_pct != null ? `${data.economie_pct >= 0 ? "+" : ""}${fmt(data.economie_pct * 100, 1)} %` : "—"}
+          color={data.economie_mwh >= 0 ? "#16a34a" : "#dc2626"}
+        />
+        <KpiCard label="P2.4 contractuel (année)" value={fmtEur(data.p24_montant_ht)} sub="redevance pleine" color="#1d4ed8" />
+        <KpiCard label="P2.4 facturable" value={fmtEur(data.p24_facturable_ht)} sub={`taux ${Math.round(data.p24_taux * 100)} %`} color={atteint ? "#16a34a" : "#dc2626"} />
+        <KpiCard label="Montant à risque" value={fmtEur(data.p24_a_risque_ht)} sub="perdu si objectif manqué" color="#b45309" />
+      </div>
+      <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+        Détail : cible globale <strong>{fmt(data.global_cible_mwh, 1)} MWh</strong> (gaz {fmt(data.gas_cible_mwh, 1)} + élec {fmt(data.elec_cible_mwh, 1)}){" "}
+        · réel <strong>{fmt(data.global_reel_mwh, 1)} MWh</strong> (gaz {fmt(data.gas_reel_mwh, 1)} + élec {fmt(data.elec_reel_mwh, 1)}){" "}
+        · {data.gas_sites} sites gaz, {data.elec_sites} sites élec.
+      </div>
     </div>
   );
 }

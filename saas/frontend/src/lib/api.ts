@@ -3330,6 +3330,35 @@ export async function fetchCpeElecPerformance(token: string, annee: number): Pro
   return parseResponse<CpeElecPerf>(response);
 }
 
+export type CpeP24Objective = {
+  annee: number;
+  has_data: boolean;
+  objectif_atteint: boolean;
+  global_cible_mwh: number;
+  global_reel_mwh: number;
+  economie_mwh: number;
+  economie_pct: number | null;
+  gas_cible_mwh: number;
+  gas_reel_mwh: number;
+  gas_sites: number;
+  elec_cible_mwh: number;
+  elec_reel_mwh: number;
+  elec_sites: number;
+  p24_montant_ht: number;
+  p24_taux: number;
+  p24_facturable_ht: number;
+  p24_a_risque_ht: number;
+  gas_mois_min: number;
+  complet: boolean;
+};
+
+export async function fetchCpeP24Objective(token: string, annee: number): Promise<CpeP24Objective> {
+  const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}/p24-objective`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeP24Objective>(response);
+}
+
 export async function fetchCpeConsoSynthese(token: string, annee: number): Promise<CpeConsoSynthese> {
   const response = await fetch(`${apiBaseUrl}/cpe/consommations/synthese/${annee}`, { headers: buildHeaders(token) });
   return parseResponse<CpeConsoSynthese>(response);
