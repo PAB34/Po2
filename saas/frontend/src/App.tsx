@@ -9,6 +9,7 @@ import { BuildingsListPage } from "./pages/BuildingsListPage";
 import { BuildingsLandingPage } from "./pages/BuildingsLandingPage";
 import { BuildingTechniquePage } from "./pages/BuildingTechniquePage";
 import { CvcImportPage } from "./pages/CvcImportPage";
+import { CvcRefrigerantsPage } from "./pages/CvcRefrigerantsPage";
 import { CvcSiteMappingPage } from "./pages/CvcSiteMappingPage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import CpeDalkiaPage from "./pages/CpeDalkiaPage";
@@ -84,6 +85,7 @@ export default function App() {
 
             <p className="nav-section" style={navSectionStyle}>Technique</p>
             <Link to="/buildings/technique">Inventaire &amp; CVC</Link>
+            <Link to="/buildings/cvc-fluides">Fluides frigorigenes &amp; ESP</Link>
 
             <p className="nav-section" style={navSectionStyle}>Administration</p>
             <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
@@ -107,6 +109,7 @@ export default function App() {
             <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
             <Route path="/buildings/technique" element={<BuildingTechniquePage />} />
             <Route path="/buildings/cvc-import" element={<CvcImportPage />} />
+            <Route path="/buildings/cvc-fluides" element={<CvcRefrigerantsPage />} />
             <Route path="/buildings/cvc-import/sites" element={<CvcSiteMappingPage />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />

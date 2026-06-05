@@ -2631,6 +2631,80 @@ export type CvcRecomputeReferencesResult = {
   changed: number;
 };
 
+export type CvcInventoryItemCompact = {
+  id: number;
+  site_raw: string | null;
+  designation: string;
+  famille: string | null;
+  marque: string | null;
+  modele: string | null;
+  date_mis_en_service: number | null;
+  import_batch: string | null;
+};
+
+export type CvcRefrigerantMatchCandidate = {
+  item: CvcInventoryItemCompact;
+  score: number;
+  method: string;
+};
+
+export type CvcRefrigerantItem = {
+  id: number;
+  city_id: number | null;
+  cvc_inventory_item_id: number | null;
+  import_batch: string;
+  source_filename: string | null;
+  row_number: number | null;
+  site_raw: string | null;
+  designation: string;
+  quantite_relevee: number | null;
+  famille: string | null;
+  marque: string | null;
+  modele: string | null;
+  fluide_frigorigene: string | null;
+  quantite_fluide_kg: number | null;
+  puissance_froid_kw: number | null;
+  date_mis_en_service: number | null;
+  gwp: number | null;
+  teqco2: number | null;
+  esp_status: string | null;
+  cout_desp_date_eur: number | null;
+  cumul_5_ans_eur: number | null;
+  schedule: Record<string, string>;
+  match_status: string;
+  match_method: string | null;
+  match_score: number | null;
+  matched_inventory_item: CvcInventoryItemCompact | null;
+  candidates: CvcRefrigerantMatchCandidate[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CvcRefrigerantBatchSummary = {
+  import_batch: string;
+  source_filename: string | null;
+  imported: number;
+  matched_items: number;
+  pending_items: number;
+  total_fluide_kg: number;
+  total_teqco2: number;
+  created_at: string | null;
+};
+
+export type CvcRefrigerantImportResult = {
+  import_batch: string;
+  imported: number;
+  auto_matched: number;
+  pending: number;
+  ambiguous: number;
+  total_fluide_kg: number;
+  total_teqco2: number;
+};
+
+export type UpdateCvcRefrigerantItemPayload = {
+  cvc_inventory_item_id: number | null;
+};
+
 export type CvcImportResult = {
   imported: number;
   skipped: number;
@@ -2769,6 +2843,50 @@ export async function deleteCvcItem(token: string, itemId: number): Promise<void
     headers: buildHeaders(token),
   });
   return parseResponse<void>(response);
+}
+
+export async function postCvcRefrigerantImport(
+  token: string,
+  file: File,
+): Promise<CvcRefrigerantImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cvc/refrigerants/import`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: form,
+  });
+  return parseResponse<CvcRefrigerantImportResult>(response);
+}
+
+export async function fetchCvcRefrigerantBatches(token: string): Promise<CvcRefrigerantBatchSummary[]> {
+  const response = await fetch(`${apiBaseUrl}/cvc/refrigerants/imports`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcRefrigerantBatchSummary[]>(response);
+}
+
+export async function fetchCvcRefrigerantItems(
+  token: string,
+  importBatch: string,
+): Promise<CvcRefrigerantItem[]> {
+  const response = await fetch(`${apiBaseUrl}/cvc/refrigerants/imports/${encodeURIComponent(importBatch)}/items`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcRefrigerantItem[]>(response);
+}
+
+export async function updateCvcRefrigerantItem(
+  token: string,
+  itemId: number,
+  payload: UpdateCvcRefrigerantItemPayload,
+): Promise<CvcRefrigerantItem> {
+  const response = await fetch(`${apiBaseUrl}/cvc/refrigerants/items/${itemId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CvcRefrigerantItem>(response);
 }
 
 // ── CPE DALKIA ───────────────────────────────────────────────────────────────
@@ -3303,6 +3421,7 @@ export type CpeElecPerfItem = {
   code_site: string;
   nom_site: string;
   cible_mwh: number | null;
+  cible_periode_mwh: number | null;
   cible_source: string;
   conso_reelle_mwh: number | null;
   nb_mois: number;
@@ -3314,8 +3433,10 @@ export type CpeElecPerfItem = {
 export type CpeElecPerf = {
   annee: number;
   nb_sites: number;
+  nb_avec_cible: number;
   nb_suivis: number;
   total_cible_mwh: number;
+  total_cible_periode_mwh: number;
   total_conso_mwh: number;
   total_ecart_mwh: number;
   total_ecart_pct: number | null;
@@ -3344,6 +3465,7 @@ export type CpeP24Objective = {
   elec_cible_mwh: number;
   elec_reel_mwh: number;
   elec_sites: number;
+  elec_sites_avec_cible: number;
   p24_montant_ht: number;
   p24_taux: number;
   p24_facturable_ht: number;

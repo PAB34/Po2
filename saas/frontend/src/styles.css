@@ -1174,7 +1174,8 @@ button:disabled {
 }
 
 .cvc-inventory-table,
-.cvc-site-mapping-table {
+.cvc-site-mapping-table,
+.cvc-refrigerant-table {
   table-layout: fixed;
   min-width: 0;
 }
@@ -1182,7 +1183,9 @@ button:disabled {
 .cvc-inventory-table th,
 .cvc-inventory-table td,
 .cvc-site-mapping-table th,
-.cvc-site-mapping-table td {
+.cvc-site-mapping-table td,
+.cvc-refrigerant-table th,
+.cvc-refrigerant-table td {
   padding: 9px 10px;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1238,6 +1241,32 @@ button:disabled {
 
 .cvc-site-mapping-table th:nth-child(6) {
   width: 8%;
+}
+
+.cvc-refrigerant-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.cvc-refrigerant-table th:nth-child(1) {
+  width: 22%;
+}
+
+.cvc-refrigerant-table th:nth-child(2),
+.cvc-refrigerant-table th:nth-child(3),
+.cvc-refrigerant-table th:nth-child(4) {
+  width: 11%;
+}
+
+.cvc-refrigerant-table th:nth-child(5) {
+  width: 19%;
+}
+
+.cvc-refrigerant-table th:nth-child(6) {
+  width: 20%;
+}
+
+.cvc-refrigerant-table th:nth-child(7) {
+  width: 6%;
 }
 
 .clickable-row {

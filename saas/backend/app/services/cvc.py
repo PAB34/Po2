@@ -1,7 +1,9 @@
 import io
+import json
 import re
 import unicodedata
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from difflib import SequenceMatcher
 
@@ -10,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
-from app.models.cvc import CvcInventoryItem
+from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem
 from app.models.equipment import EquipmentReference
 from app.models.local import Local
 from app.models.site import Site
@@ -27,6 +29,12 @@ from app.schemas.cvc import (
     CvcInventoryItemUpdate,
     CvcMatchBuildingsResponse,
     CvcRecomputeReferencesResult,
+    CvcRefrigerantBatchSummary,
+    CvcRefrigerantImportResult,
+    CvcRefrigerantItemRead,
+    CvcRefrigerantItemUpdate,
+    CvcRefrigerantMatchCandidate,
+    CvcInventoryItemCompact,
     CvcSiteMapping,
     CvcPreviewResponse,
     PatrimoineSiteSuggestion,
@@ -120,6 +128,190 @@ def parse_excel_preview(raw_bytes: bytes) -> CvcPreviewResponse:
         unique_families=unique_families,
         sample_rows=sample_rows,
     )
+
+
+def _normalize_model(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _normalize(value))
+
+
+def _parse_float(value) -> float | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip().replace(" ", "").replace(",", ".")
+    if not cleaned:
+        return None
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _parse_int(value) -> int | None:
+    parsed = _parse_float(value)
+    return int(parsed) if parsed is not None else None
+
+
+def _header_lookup(header: list[str]) -> dict[str, int]:
+    return {_normalize(col): idx for idx, col in enumerate(header) if col}
+
+
+def _get_header_value(row: tuple, header_lookup: dict[str, int], name: str):
+    idx = header_lookup.get(_normalize(name))
+    if idx is None or idx >= len(row):
+        return None
+    return row[idx]
+
+
+def _clean_cell(value) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _read_refrigerant_rows(raw_bytes: bytes) -> tuple[list[str], list[dict]]:
+    wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return [], []
+
+    header = [str(c).strip() if c is not None else "" for c in rows[0]]
+    lookup = _header_lookup(header)
+    years = [str(year) for year in range(2026, 2043)]
+    parsed_rows: list[dict] = []
+
+    for row_number, row in enumerate(rows[1:], start=2):
+        if not any(value is not None and str(value).strip() for value in row):
+            continue
+        designation = _clean_cell(_get_header_value(row, lookup, "DESIGNATION"))
+        if not designation:
+            continue
+        schedule = {
+            year: value
+            for year in years
+            if (value := _clean_cell(_get_header_value(row, lookup, year)))
+        }
+        parsed_rows.append(
+            {
+                "row_number": row_number,
+                "site_raw": _clean_cell(_get_header_value(row, lookup, "SITE")),
+                "designation": designation,
+                "quantite_relevee": _parse_int(_get_header_value(row, lookup, "QTE QTE RELEVEE")),
+                "famille": _clean_cell(_get_header_value(row, lookup, "FAMILLE")),
+                "marque": _clean_cell(_get_header_value(row, lookup, "MARQUE")),
+                "modele": _clean_cell(_get_header_value(row, lookup, "MODELE")),
+                "fluide_frigorigene": _clean_cell(_get_header_value(row, lookup, "Fluide frigo")),
+                "quantite_fluide_kg": _parse_float(_get_header_value(row, lookup, "Quantite fluide en Kg")),
+                "puissance_froid_kw": _parse_float(_get_header_value(row, lookup, "Puissance Froid en Kw")),
+                "date_mis_en_service": _parse_int(_get_header_value(row, lookup, "DATE MES")),
+                "gwp": _parse_float(_get_header_value(row, lookup, "GWP")),
+                "teqco2": _parse_float(_get_header_value(row, lookup, "tEqCO2")),
+                "esp_status": _clean_cell(_get_header_value(row, lookup, "ESP")),
+                "cout_desp_date_eur": _parse_float(_get_header_value(row, lookup, "COUT DESP a Date")),
+                "cumul_5_ans_eur": _parse_float(_get_header_value(row, lookup, "CUMUL SUR 5 ANS")),
+                "schedule_json": json.dumps(schedule, ensure_ascii=False) if schedule else None,
+            }
+        )
+    return header, parsed_rows
+
+
+def _inventory_compact(item: CvcInventoryItem) -> CvcInventoryItemCompact:
+    return CvcInventoryItemCompact(
+        id=item.id,
+        site_raw=item.site_raw,
+        designation=item.designation,
+        famille=item.famille,
+        marque=item.marque,
+        modele=item.modele,
+        date_mis_en_service=item.date_mis_en_service,
+        import_batch=item.import_batch,
+    )
+
+
+def _refrigerant_key(data: dict, parts: tuple[str, ...]) -> tuple[str, ...]:
+    values: list[str] = []
+    for part in parts:
+        if part == "modele":
+            values.append(_normalize_model(data.get("modele")))
+        elif part == "date":
+            values.append(str(data.get("date_mis_en_service") or ""))
+        else:
+            values.append(_normalize(data.get(part)))
+    return tuple(values)
+
+
+def _inventory_key(item: CvcInventoryItem, parts: tuple[str, ...]) -> tuple[str, ...]:
+    values: list[str] = []
+    for part in parts:
+        if part == "modele":
+            values.append(_normalize_model(item.modele))
+        elif part == "date":
+            values.append(str(item.date_mis_en_service or ""))
+        else:
+            values.append(_normalize(getattr(item, part)))
+    return tuple(values)
+
+
+def _score_inventory_candidate(data: dict, item: CvcInventoryItem) -> tuple[float, str] | None:
+    if _normalize(data.get("site_raw")) != _normalize(item.site_raw):
+        return None
+    designation_score = _similarity(_normalize(data.get("designation")), _normalize(item.designation))
+    model_left = _normalize_model(data.get("modele"))
+    model_right = _normalize_model(item.modele)
+    model_score = _similarity(model_left, model_right) if model_left and model_right else 0.0
+    brand_score = _similarity(_normalize(data.get("marque")), _normalize(item.marque)) if data.get("marque") else 0.0
+    score = round(designation_score * 0.65 + model_score * 0.25 + brand_score * 0.1, 3)
+    return (score, "fuzzy_same_site") if score >= 0.82 else None
+
+
+def _find_refrigerant_candidates(
+    data: dict, inventory_items: list[CvcInventoryItem], limit: int = 5
+) -> list[CvcRefrigerantMatchCandidate]:
+    key_defs: list[tuple[str, tuple[str, ...], float]] = [
+        ("site+designation+famille+marque+modele+date", ("site_raw", "designation", "famille", "marque", "modele", "date"), 1.0),
+        ("site+designation+famille+modele+date", ("site_raw", "designation", "famille", "modele", "date"), 0.97),
+        ("site+designation+modele+date", ("site_raw", "designation", "modele", "date"), 0.94),
+        ("site+designation+marque+modele", ("site_raw", "designation", "marque", "modele"), 0.93),
+    ]
+
+    candidates: list[tuple[float, str, CvcInventoryItem]] = []
+    for method, parts, score in key_defs:
+        key = _refrigerant_key(data, parts)
+        if not all(key):
+            continue
+        exact = [item for item in inventory_items if _inventory_key(item, parts) == key]
+        if exact:
+            candidates.extend((score, method, item) for item in exact)
+            break
+
+    if not candidates:
+        for item in inventory_items:
+            scored = _score_inventory_candidate(data, item)
+            if scored:
+                score, method = scored
+                candidates.append((score, method, item))
+
+    dedup: dict[int, tuple[float, str, CvcInventoryItem]] = {}
+    for score, method, item in sorted(candidates, key=lambda row: row[0], reverse=True):
+        dedup.setdefault(item.id, (score, method, item))
+
+    return [
+        CvcRefrigerantMatchCandidate(item=_inventory_compact(item), score=score, method=method)
+        for score, method, item in list(dedup.values())[:limit]
+    ]
+
+
+def _select_auto_refrigerant_candidate(
+    candidates: list[CvcRefrigerantMatchCandidate],
+) -> CvcRefrigerantMatchCandidate | None:
+    if not candidates:
+        return None
+    if candidates[0].score < 0.93:
+        return None
+    if len(candidates) > 1 and candidates[0].score == candidates[1].score:
+        return None
+    return candidates[0]
 
 
 def match_buildings_for_sites(
@@ -721,6 +913,199 @@ def recompute_cvc_references_for_batch(
         unmatched=unmatched,
         changed=changed,
     )
+
+
+def import_cvc_refrigerants_from_excel(
+    db: Session,
+    raw_bytes: bytes,
+    city_id: int | None,
+    source_filename: str | None = None,
+) -> CvcRefrigerantImportResult:
+    _, rows = _read_refrigerant_rows(raw_bytes)
+    batch_id = f"esp_{uuid.uuid4().hex[:8]}"
+    inventory_stmt = select(CvcInventoryItem)
+    if city_id is not None:
+        inventory_stmt = inventory_stmt.where(
+            (CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None))
+        )
+    inventory_items = list(db.scalars(inventory_stmt))
+
+    imported = 0
+    auto_matched = 0
+    ambiguous = 0
+    total_fluide_kg = 0.0
+    total_teqco2 = 0.0
+
+    for row in rows:
+        candidates = _find_refrigerant_candidates(row, inventory_items)
+        auto_candidate = _select_auto_refrigerant_candidate(candidates)
+        match_status = "pending"
+        match_method = None
+        match_score = None
+        inventory_item_id = None
+
+        if auto_candidate:
+            match_status = "auto_matched"
+            match_method = auto_candidate.method
+            match_score = auto_candidate.score
+            inventory_item_id = auto_candidate.item.id
+        elif candidates:
+            match_status = "ambiguous"
+            ambiguous += 1
+
+        item = CvcRefrigerantItem(
+            city_id=city_id,
+            cvc_inventory_item_id=inventory_item_id,
+            import_batch=batch_id,
+            source_filename=source_filename,
+            row_number=row["row_number"],
+            site_raw=row["site_raw"],
+            designation=row["designation"],
+            quantite_relevee=row["quantite_relevee"],
+            famille=row["famille"],
+            marque=row["marque"],
+            modele=row["modele"],
+            fluide_frigorigene=row["fluide_frigorigene"],
+            quantite_fluide_kg=row["quantite_fluide_kg"],
+            puissance_froid_kw=row["puissance_froid_kw"],
+            date_mis_en_service=row["date_mis_en_service"],
+            gwp=row["gwp"],
+            teqco2=row["teqco2"],
+            esp_status=row["esp_status"],
+            cout_desp_date_eur=row["cout_desp_date_eur"],
+            cumul_5_ans_eur=row["cumul_5_ans_eur"],
+            schedule_json=row["schedule_json"],
+            match_status=match_status,
+            match_method=match_method,
+            match_score=match_score,
+        )
+        db.add(item)
+
+        if inventory_item_id is not None:
+            matched_inventory = next((i for i in inventory_items if i.id == inventory_item_id), None)
+            if matched_inventory is not None and row["quantite_fluide_kg"] is not None:
+                matched_inventory.quantite_fluide_frigorigene = row["quantite_fluide_kg"]
+            auto_matched += 1
+        total_fluide_kg += row["quantite_fluide_kg"] or 0.0
+        total_teqco2 += row["teqco2"] or 0.0
+        imported += 1
+
+    db.commit()
+    return CvcRefrigerantImportResult(
+        import_batch=batch_id,
+        imported=imported,
+        auto_matched=auto_matched,
+        pending=imported - auto_matched - ambiguous,
+        ambiguous=ambiguous,
+        total_fluide_kg=round(total_fluide_kg, 3),
+        total_teqco2=round(total_teqco2, 3),
+    )
+
+
+def list_cvc_refrigerant_batches(db: Session, city_id: int | None) -> list[CvcRefrigerantBatchSummary]:
+    stmt = select(CvcRefrigerantItem)
+    if city_id is not None:
+        stmt = stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+    items = list(db.scalars(stmt))
+    batches: dict[str, list[CvcRefrigerantItem]] = defaultdict(list)
+    for item in items:
+        batches[item.import_batch].append(item)
+
+    summaries: list[CvcRefrigerantBatchSummary] = []
+    for import_batch, batch_items in batches.items():
+        summaries.append(
+            CvcRefrigerantBatchSummary(
+                import_batch=import_batch,
+                source_filename=next((item.source_filename for item in batch_items if item.source_filename), None),
+                imported=len(batch_items),
+                matched_items=sum(1 for item in batch_items if item.cvc_inventory_item_id is not None),
+                pending_items=sum(1 for item in batch_items if item.cvc_inventory_item_id is None),
+                total_fluide_kg=round(sum(item.quantite_fluide_kg or 0.0 for item in batch_items), 3),
+                total_teqco2=round(sum(item.teqco2 or 0.0 for item in batch_items), 3),
+                created_at=min((item.created_at for item in batch_items), default=None),
+            )
+        )
+    return sorted(summaries, key=lambda item: item.created_at or datetime.min, reverse=True)
+
+
+def _read_refrigerant_item(
+    item: CvcRefrigerantItem,
+    inventory_map: dict[int, CvcInventoryItem],
+    inventory_items: list[CvcInventoryItem],
+) -> CvcRefrigerantItemRead:
+    read = CvcRefrigerantItemRead.model_validate(item)
+    read.schedule = json.loads(item.schedule_json) if item.schedule_json else {}
+    if item.cvc_inventory_item_id:
+        matched = inventory_map.get(item.cvc_inventory_item_id)
+        read.matched_inventory_item = _inventory_compact(matched) if matched else None
+    read.candidates = _find_refrigerant_candidates(
+        {
+            "site_raw": item.site_raw,
+            "designation": item.designation,
+            "famille": item.famille,
+            "marque": item.marque,
+            "modele": item.modele,
+            "date_mis_en_service": item.date_mis_en_service,
+        },
+        inventory_items,
+    )
+    return read
+
+
+def list_cvc_refrigerant_items_for_batch(
+    db: Session, import_batch: str, city_id: int | None
+) -> list[CvcRefrigerantItemRead]:
+    stmt = select(CvcRefrigerantItem).where(CvcRefrigerantItem.import_batch == import_batch)
+    inventory_stmt = select(CvcInventoryItem)
+    if city_id is not None:
+        stmt = stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+        inventory_stmt = inventory_stmt.where(
+            (CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None))
+        )
+    items = list(db.scalars(stmt.order_by(CvcRefrigerantItem.site_raw, CvcRefrigerantItem.designation)))
+    inventory_items = list(db.scalars(inventory_stmt))
+    inventory_map = {item.id: item for item in inventory_items}
+    return [_read_refrigerant_item(item, inventory_map, inventory_items) for item in items]
+
+
+def update_cvc_refrigerant_item(
+    db: Session,
+    item_id: int,
+    payload: CvcRefrigerantItemUpdate,
+    city_id: int | None,
+) -> CvcRefrigerantItemRead | None:
+    item = db.scalar(select(CvcRefrigerantItem).where(CvcRefrigerantItem.id == item_id))
+    if not item:
+        return None
+    if city_id is not None and item.city_id not in (None, city_id):
+        return None
+
+    inventory_item = None
+    if payload.cvc_inventory_item_id is not None:
+        inventory_item = db.get(CvcInventoryItem, payload.cvc_inventory_item_id)
+        if inventory_item is None:
+            raise ValueError("Equipement CVC introuvable.")
+        if city_id is not None and inventory_item.city_id not in (None, city_id):
+            raise ValueError("Equipement CVC hors perimetre utilisateur.")
+
+    item.cvc_inventory_item_id = inventory_item.id if inventory_item else None
+    item.match_status = "manual_matched" if inventory_item else "pending"
+    item.match_method = "manual" if inventory_item else None
+    item.match_score = 1.0 if inventory_item else None
+    if inventory_item and item.quantite_fluide_kg is not None:
+        inventory_item.quantite_fluide_frigorigene = item.quantite_fluide_kg
+
+    db.commit()
+    db.refresh(item)
+
+    inventory_stmt = select(CvcInventoryItem)
+    if city_id is not None:
+        inventory_stmt = inventory_stmt.where(
+            (CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None))
+        )
+    inventory_items = list(db.scalars(inventory_stmt))
+    inventory_map = {inventory.id: inventory for inventory in inventory_items}
+    return _read_refrigerant_item(item, inventory_map, inventory_items)
 
 
 def _hydrate_items(db: Session, items: list[CvcInventoryItem]) -> list[CvcInventoryItemRead]:

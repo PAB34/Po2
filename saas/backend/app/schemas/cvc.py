@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CvcPreviewResponse(BaseModel):
@@ -160,3 +160,79 @@ class CvcRecomputeReferencesResult(BaseModel):
     matched: int
     unmatched: int
     changed: int
+
+
+class CvcRefrigerantImportResult(BaseModel):
+    import_batch: str
+    imported: int
+    auto_matched: int
+    pending: int
+    ambiguous: int
+    total_fluide_kg: float
+    total_teqco2: float
+
+
+class CvcRefrigerantBatchSummary(BaseModel):
+    import_batch: str
+    source_filename: str | None = None
+    imported: int
+    matched_items: int
+    pending_items: int
+    total_fluide_kg: float
+    total_teqco2: float
+    created_at: datetime | None = None
+
+
+class CvcInventoryItemCompact(BaseModel):
+    id: int
+    site_raw: str | None = None
+    designation: str
+    famille: str | None = None
+    marque: str | None = None
+    modele: str | None = None
+    date_mis_en_service: int | None = None
+    import_batch: str | None = None
+
+
+class CvcRefrigerantMatchCandidate(BaseModel):
+    item: CvcInventoryItemCompact
+    score: float
+    method: str
+
+
+class CvcRefrigerantItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    city_id: int | None = None
+    cvc_inventory_item_id: int | None = None
+    import_batch: str
+    source_filename: str | None = None
+    row_number: int | None = None
+    site_raw: str | None = None
+    designation: str
+    quantite_relevee: int | None = None
+    famille: str | None = None
+    marque: str | None = None
+    modele: str | None = None
+    fluide_frigorigene: str | None = None
+    quantite_fluide_kg: float | None = None
+    puissance_froid_kw: float | None = None
+    date_mis_en_service: int | None = None
+    gwp: float | None = None
+    teqco2: float | None = None
+    esp_status: str | None = None
+    cout_desp_date_eur: float | None = None
+    cumul_5_ans_eur: float | None = None
+    schedule: dict[str, str] = Field(default_factory=dict)
+    match_status: str
+    match_method: str | None = None
+    match_score: float | None = None
+    matched_inventory_item: CvcInventoryItemCompact | None = None
+    candidates: list[CvcRefrigerantMatchCandidate] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class CvcRefrigerantItemUpdate(BaseModel):
+    cvc_inventory_item_id: int | None = None

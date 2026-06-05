@@ -19,6 +19,10 @@ from app.schemas.cvc import (
     CvcMatchBuildingsResponse,
     CvcPreviewResponse,
     CvcRecomputeReferencesResult,
+    CvcRefrigerantBatchSummary,
+    CvcRefrigerantImportResult,
+    CvcRefrigerantItemRead,
+    CvcRefrigerantItemUpdate,
 )
 from app.services.buildings import get_building_or_404
 from app.services.cvc import (
@@ -26,14 +30,18 @@ from app.services.cvc import (
     delete_cvc_item,
     delete_cvc_items_for_building,
     import_cvc_from_excel,
+    import_cvc_refrigerants_from_excel,
     list_cvc_import_batches,
     list_cvc_items_for_batch,
     list_cvc_items_for_building,
+    list_cvc_refrigerant_batches,
+    list_cvc_refrigerant_items_for_batch,
     list_site_matches_for_import,
     match_buildings_for_sites,
     parse_excel_preview,
     recompute_cvc_references_for_batch,
     update_cvc_item,
+    update_cvc_refrigerant_item,
 )
 
 router = APIRouter(prefix="/cvc", tags=["cvc"])
@@ -177,3 +185,49 @@ def delete_cvc_item_by_id(
     if not ok:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item introuvable.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/refrigerants/import", response_model=CvcRefrigerantImportResult, status_code=status.HTTP_201_CREATED)
+async def post_cvc_refrigerant_import(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcRefrigerantImportResult:
+    raw = await file.read()
+    try:
+        return import_cvc_refrigerants_from_excel(db, raw, current_user.city_id, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Erreur import ESP : {e}")
+
+
+@router.get("/refrigerants/imports", response_model=list[CvcRefrigerantBatchSummary])
+def get_cvc_refrigerant_batches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CvcRefrigerantBatchSummary]:
+    return list_cvc_refrigerant_batches(db, current_user.city_id)
+
+
+@router.get("/refrigerants/imports/{import_batch}/items", response_model=list[CvcRefrigerantItemRead])
+def get_cvc_refrigerant_items(
+    import_batch: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CvcRefrigerantItemRead]:
+    return list_cvc_refrigerant_items_for_batch(db, import_batch, current_user.city_id)
+
+
+@router.patch("/refrigerants/items/{item_id}", response_model=CvcRefrigerantItemRead)
+def patch_cvc_refrigerant_item(
+    item_id: int,
+    payload: CvcRefrigerantItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcRefrigerantItemRead:
+    try:
+        item = update_cvc_refrigerant_item(db, item_id, payload, current_user.city_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ligne ESP introuvable.")
+    return item
