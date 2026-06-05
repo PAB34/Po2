@@ -97,7 +97,34 @@ Suite directe de l'audit :
 - endpoint de recalcul ajoute : `POST /api/cvc/imports/{import_batch}/recompute-references` ;
 - bouton front ajoute : `Recalculer les references`.
 
+Renforcement applique apres audit du recalcul prod :
+
+- les familles de mesure (`Compteur`, `Appareil de mesure`, `Analyseur`, `Plomberie`) ne declenchent plus d'alias PAC/CTA/split ;
+- les familles precises passent avant les alias clim : CTA, chaudiere, preparateur ECS, ballon, vase expansion, GTB/GTC, circulateur, echangeur, robinets/vannes ;
+- les marques seules (`Daikin`, `Atlantic`, etc.) ne suffisent plus a rattacher un equipement a `Split - Multi-split`.
+
+Recalcul prod du lot `import_d0791486` apres deploiement :
+
+| Indicateur | Valeur |
+|---|---:|
+| Lignes recalculees | 1133 |
+| References rattachees | 895 |
+| References non rattachees | 238 |
+| Lignes modifiees par le recalcul final | 199 |
+
+Controles cibles apres recalcul :
+
+| Cas | Resultat |
+|---|---|
+| `UE clim DAIKIN 3` | `id 236 Split - Multi-split`, `A.2.3` |
+| `Armoire electrique` | `id 118 Armoire electrique`, `A.2.2` |
+| `CPT elec PAC` / famille `Compteur` | non rattache, a valider manuellement |
+| `Centrale Traitement Air` | 24/24 vers `id 221 CTA simple ou double flux` |
+| `Chaudiere` | 44 vers chaudiere condensation, 22 vers chaudiere murale, aucun split/PAC |
+| `Vase expansion` | 52/52 vers `id 188 Vase d'expansion a membrane` |
+| `GTB / GTC` | 3/3 vers `id 162 Point de GTB / GTC` |
+
 Validation locale :
 
 - `python -m compileall app tests/test_cvc_reference_matching.py` OK ;
-- `DATABASE_URL=sqlite:///:memory: python -m pytest tests/test_cvc_reference_matching.py -p no:cacheprovider` OK, 6 tests passes.
+- `DATABASE_URL=sqlite:///:memory: python -m pytest tests/test_cvc_reference_matching.py -p no:cacheprovider` OK, 11 tests passes.
