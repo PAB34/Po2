@@ -12,6 +12,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefBpu,
     CpeDalkiaRefCible,
     CpeDalkiaRefImport,
+    CpeDalkiaRefP1Elec,
     CpeDalkiaRefP1Gaz,
     CpeDalkiaRefP1Tarif,
     CpeDalkiaRefP2P3,
@@ -228,6 +229,22 @@ def persist_dalkia_import(
             recette_vente_energie_ht=row.recette_vente_energie_ht,
             ratio_ht_mwhpci=row.ratio_ht_mwhpci,
             commentaires=row.commentaires,
+        ))
+
+    # P1 elec (Annexe 6.2, Lot 2 piscines : PSE elec retenue)
+    for row in result.p1_elec:
+        db.add(CpeDalkiaRefP1Elec(
+            import_id=batch.id,
+            city_id=city_id,
+            code_site=row.code_site,
+            pdl=row.pdl,
+            prix_unitaire_ht=row.prix_unitaire_ht,
+            period_idx=row.period_idx,
+            period_label=row.period_label,
+            period_year=row.period_year,
+            qt_mwh=row.qt_mwh,
+            p10_var_ht=row.p10_var_ht,
+            p10_total_ht=row.p10_total_ht,
         ))
 
     # P1 gaz : composants de prix + coefficients de revision par tarif (en-tete Annexe 6)

@@ -26,7 +26,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.cpe import CpeContractReference, CpeFinanceLine, CpeSite
-from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz, CpeDalkiaRefP2P3
+from app.models.cpe_dalkia import (
+    CpeDalkiaRefImport,
+    CpeDalkiaRefP1Elec,
+    CpeDalkiaRefP1Gaz,
+    CpeDalkiaRefP2P3,
+)
 from app.models.cpe_dpgf_p1 import DPGF_P1_LEVELS, DPGF_P1_LEVEL_LABELS
 from app.services.cpe_accounting import (
     CPE_CONTRACT_SCOPE_KIND,
@@ -41,9 +46,10 @@ from app.services.cpe_dpgf_p1 import get_dpgf_p1_levels
 _LOT_RE = re.compile(r"LOT[_\s-]*(\d+)", re.IGNORECASE)
 
 # Ordre et libellés des postes affichés dans la matrice.
-POSTE_ORDER = ["P1", "P2", "P2-4", "P3", "P3-4"]
+POSTE_ORDER = ["P1", "P1-ELEC", "P2", "P2-4", "P3", "P3-4"]
 POSTE_LABELS = {
     "P1": "P1 — Fourniture gaz",
+    "P1-ELEC": "P1 Élec — Fourniture électricité (Lot 2 piscines)",
     "P2": "P2 — Maintenance (hors P2.4)",
     "P2-4": "P2.4 — Intéressement / objectifs",
     "P3": "P3 — Gros entretien (hors P3.4)",
@@ -53,7 +59,10 @@ POSTE_LABELS = {
 POSTE_OTHER = "AUTRE"
 POSTE_OTHER_LABEL = "Autre (reçu non rattaché)"
 
-P1_SOURCE_LABEL = "Annexe 6 DPGF — somme p10_total_ht (imports actifs Lot 1 + Lot 2)"
+P1_SOURCE_LABEL = (
+    "P1 gaz : Annexe 6 (somme p10_total_ht) · P1 élec : Annexe 6.2 (Lot 2 piscines, PSE retenue) "
+    "— imports DALKIA actifs"
+)
 
 # Cadence d'acompte du marche CPE : 4 echeances par an (acomptes trimestriels + regularisation).
 INSTALLMENTS_PER_YEAR = 4
@@ -130,6 +139,18 @@ def _contract_lot_map(db: Session, city_id: int | None) -> dict[str, int]:
     return mapping
 
 
+def _elec_p1_lots(db: Session, city_id: int | None) -> set[int]:
+    """Numéros de lot dont le P1 est de l'électricité (présence dans cpe_dalkia_ref_p1_elec actif)."""
+    stmt = (
+        select(CpeDalkiaRefImport.lot)
+        .join(CpeDalkiaRefP1Elec, CpeDalkiaRefP1Elec.import_id == CpeDalkiaRefImport.id)
+        .where(CpeDalkiaRefImport.is_active.is_(True), CpeDalkiaRefP1Elec.p10_total_ht.is_not(None))
+    )
+    if city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == city_id)
+    return {lot for lot in db.scalars(stmt).all() if lot is not None}
+
+
 def _collect(
     db: Session,
     city_id: int | None,
@@ -153,12 +174,19 @@ def _collect(
         .join(CpeDalkiaRefImport, CpeDalkiaRefP1Gaz.import_id == CpeDalkiaRefImport.id)
         .where(CpeDalkiaRefImport.is_active.is_(True))
     )
+    p1elec_stmt = (
+        select(CpeDalkiaRefP1Elec)
+        .join(CpeDalkiaRefImport, CpeDalkiaRefP1Elec.import_id == CpeDalkiaRefImport.id)
+        .where(CpeDalkiaRefImport.is_active.is_(True))
+    )
     if city_id is not None:
         p2p3_stmt = p2p3_stmt.where(CpeDalkiaRefImport.city_id == city_id)
         p1_stmt = p1_stmt.where(CpeDalkiaRefImport.city_id == city_id)
+        p1elec_stmt = p1elec_stmt.where(CpeDalkiaRefImport.city_id == city_id)
     if prevu_lot is not None:
         p2p3_stmt = p2p3_stmt.where(CpeDalkiaRefImport.lot == prevu_lot)
         p1_stmt = p1_stmt.where(CpeDalkiaRefImport.lot == prevu_lot)
+        p1elec_stmt = p1elec_stmt.where(CpeDalkiaRefImport.lot == prevu_lot)
 
     reference_rows = 0
     for row in db.scalars(p2p3_stmt).all():
@@ -176,6 +204,16 @@ def _collect(
             continue
         reference_rows += 1
         prevu["P1"][row.period_year] += row.p10_total_ht or 0.0
+    for row in db.scalars(p1elec_stmt).all():
+        if row.period_year not in year_set:
+            continue
+        reference_rows += 1
+        prevu["P1-ELEC"][row.period_year] += row.p10_total_ht or 0.0
+
+    # Lots dont le P1 est de l'electricite (fourniture DALKIA, ex. Lot 2 piscines) -> pour router
+    # le recu P1 vers le poste P1-ELEC. Non filtre par prevu_lot (classification globale).
+    elec_lots = _elec_p1_lots(db, city_id)
+    contract_lot = _contract_lot_map(db, city_id)
 
     recu: dict[str, dict[int, float]] = {poste: {y: 0.0 for y in years} for poste in POSTE_ORDER}
     recu_other: dict[int, float] = {y: 0.0 for y in years}
@@ -192,6 +230,11 @@ def _collect(
         and (recu_contracts is None or (invoice.contract_code or "").strip().upper() in recu_contracts)
     ]
     invoice_ids = [invoice.id for invoice in invoices]
+    # Lot de chaque facture (pour router le P1 gaz vs P1 elec selon le lot).
+    invoice_lot = {
+        inv.id: contract_lot.get((inv.contract_code or "").strip().upper())
+        for inv in invoices
+    }
     if invoice_ids:
         for line in db.scalars(
             select(CpeFinanceLine).where(CpeFinanceLine.invoice_id.in_(invoice_ids))
@@ -203,6 +246,9 @@ def _collect(
             if quarter is not None:
                 quarters_seen[year].add(quarter)
             poste = _classify_received_poste(line)
+            # Un P1 facture sur un lot "electricite" (ex. Lot 2 piscines) -> poste P1-ELEC.
+            if poste == "P1" and invoice_lot.get(line.invoice_id) in elec_lots:
+                poste = "P1-ELEC"
             amount = line.amount_ht or 0.0
             if poste is None:
                 recu_other[year] += amount

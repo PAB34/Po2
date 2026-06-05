@@ -108,6 +108,20 @@ class DalkiaP1GazRow:
 
 
 @dataclass
+class DalkiaP1ElecRow:
+    """Fourniture electricite P1 par site x periode (Annexe 6.2 - P1 ELEC_PSE, Lot 2)."""
+    code_site: str
+    pdl: str | None
+    prix_unitaire_ht: float | None
+    period_idx: int
+    period_label: str
+    period_year: int
+    qt_mwh: float | None
+    p10_var_ht: float | None
+    p10_total_ht: float | None
+
+
+@dataclass
 class DalkiaP1TarifRow:
     """En-tete Annexe 6 : composants de prix + coefficients de revision Pu par tarif (T1-T4).
 
@@ -205,6 +219,7 @@ class DalkiaParseResult:
     cibles_gaz: list[DalkiaCibleRow] = field(default_factory=list)
     cibles_elec: list[DalkiaCibleRow] = field(default_factory=list)
     p1_gaz: list[DalkiaP1GazRow] = field(default_factory=list)
+    p1_elec: list[DalkiaP1ElecRow] = field(default_factory=list)
     p1_tarifs: list[DalkiaP1TarifRow] = field(default_factory=list)
     bpu_rows: list[DalkiaBpuRow] = field(default_factory=list)
     ape_rows: list[DalkiaApeRow] = field(default_factory=list)
@@ -536,6 +551,76 @@ def _parse_p1_gaz(rows: list[tuple], lot: int) -> tuple[list[DalkiaP1GazRow], li
             ))
 
     return p1_rows, warnings
+
+
+def _parse_p1_elec(rows: list[tuple], lot: int) -> tuple[list[DalkiaP1ElecRow], list[str]]:
+    """Parse Annexe 6.2 - P1 ELEC_PSE (Lot 2 piscines).
+
+    Structure identique a l'Annexe 6 gaz : en-tete (LOT/PROG), code_site en 'N° PROG',
+    9 colonnes 'P10 - TOTAL' (une par periode), chacune precedee de QT et P10 variable.
+    Reperage par libelle d'en-tete (robuste aux decalages de colonnes propres a cette feuille).
+    """
+    if not rows:
+        return [], []
+    header_row_idx = None
+    for i, row in enumerate(rows):
+        vals = [str(v).upper() for v in row if v is not None]
+        if any("LOT" in v for v in vals) and any("PROG" in v for v in vals):
+            header_row_idx = i
+            break
+    if header_row_idx is None:
+        return [], ["Annexe 6.2 P1 ELEC : ligne de headers (LOT/PROG) non trouvee"]
+
+    header = rows[header_row_idx]
+
+    def _col_with(*needles: str) -> int | None:
+        for j, c in enumerate(header):
+            if c is None:
+                continue
+            up = str(c).upper()
+            if all(n in up for n in needles):
+                return j
+        return None
+
+    code_col = _col_with("PROG")
+    if code_col is None:
+        return [], ["Annexe 6.2 P1 ELEC : colonne 'N° PROG' non trouvee"]
+    pdl_col = _col_with("PDL")
+    pu_col = _col_with("PRIX UNITAIRE")
+    total_cols = [
+        j for j, c in enumerate(header)
+        if c is not None and str(c).upper().replace("\n", " ").strip().startswith("P10 - TOTA")
+    ]
+    total_cols = total_cols[:N_PERIODS]
+
+    out: list[DalkiaP1ElecRow] = []
+    warnings: list[str] = []
+    if len(total_cols) < N_PERIODS:
+        warnings.append(f"Annexe 6.2 P1 ELEC : {len(total_cols)} colonnes 'P10 - TOTAL' (attendu {N_PERIODS})")
+
+    for row in rows[header_row_idx + 1:]:
+        code_val = row[code_col] if len(row) > code_col else None
+        if not _is_site_row(code_val):
+            continue
+        code_site = str(code_val).strip()
+        pdl = _clean_str(row[pdl_col]) if pdl_col is not None and len(row) > pdl_col else None
+        pu = _to_float(row[pu_col]) if pu_col is not None and len(row) > pu_col else None
+        for period_i, tc in enumerate(total_cols):
+            qt = _to_float(row[tc - 2]) if tc - 2 >= 0 and len(row) > tc - 2 else None
+            p10_var = _to_float(row[tc - 1]) if tc - 1 >= 0 and len(row) > tc - 1 else None
+            p10_tot = _to_float(row[tc]) if len(row) > tc else None
+            out.append(DalkiaP1ElecRow(
+                code_site=code_site,
+                pdl=pdl,
+                prix_unitaire_ht=pu,
+                period_idx=period_i + 1,
+                period_label=str(PERIOD_YEARS[period_i]),
+                period_year=PERIOD_YEARS[period_i],
+                qt_mwh=qt,
+                p10_var_ht=p10_var,
+                p10_total_ht=p10_tot,
+            ))
+    return out, warnings
 
 
 def _parse_p1_gaz_tarifs(rows: list[tuple]) -> tuple[list[DalkiaP1TarifRow], list[str]]:
@@ -1032,6 +1117,11 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
     p1_tarifs, w = _parse_p1_gaz_tarifs(p1_raw)
     all_warnings.extend(w)
 
+    # --- P1 ELEC (Annexe 6.2, Lot 2 piscines : PSE elec retenue) ---
+    p1_elec_raw = _get_rows("Annexe 6.2 - P1 ELEC_PSE")
+    p1_elec, w = _parse_p1_elec(p1_elec_raw, lot)
+    all_warnings.extend(w)
+
     # --- APE ---
     ape_raw = _get_rows("Annexe 2bis - Travaux APE")
     ape_rows, w = _parse_ape(ape_raw, lot)
@@ -1065,6 +1155,7 @@ def parse_dalkia_file(raw_bytes: bytes, filename: str, lot: int) -> DalkiaParseR
         cibles_gaz=cibles_gaz,
         cibles_elec=cibles_elec,
         p1_gaz=p1_gaz,
+        p1_elec=p1_elec,
         p1_tarifs=p1_tarifs,
         bpu_rows=bpu_rows,
         ape_rows=ape_rows,

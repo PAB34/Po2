@@ -18,6 +18,7 @@ from app.models.cpe import (
 )
 from app.models.cpe_dalkia import (
     CpeDalkiaRefImport,
+    CpeDalkiaRefP1Elec,
     CpeDalkiaRefP1Gaz,
     CpeDalkiaRefP2P3,
 )
@@ -216,6 +217,57 @@ def test_dju_block_absent_without_source(db_session, monkeypatch):
     report = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
     assert report["dju"]["has_data"] is False
     assert report["dju"]["by_year"] == []
+
+
+def test_p1_elec_lot2_prevu_and_recu_routing(db_session):
+    """Lot 2 piscines : le P1 Élec (Annexe 6.2) alimente le poste P1-ELEC en prévu,
+    et un P1 facturé sur le contrat Lot 2 est routé vers P1-ELEC (pas P1 gaz)."""
+    # Périmètre Lot 2 (C00190155J) avec billed_item lot-conscient
+    db_session.add(
+        CpeContractReference(
+            city_id=1, contract_code="C00190155J", contract_label="LOT 2",
+            reference_kind="cpe_contract_scope", year=2026, market="SCOPE",
+            billed_item="CPE_VILLE_LOT_2", active=True,
+        )
+    )
+    db_session.flush()
+
+    imp = CpeDalkiaRefImport(city_id=1, lot=2, filename="L2.xlsx", is_active=True)
+    db_session.add(imp)
+    db_session.flush()
+    db_session.add(CpeDalkiaRefP1Elec(
+        import_id=imp.id, city_id=1, code_site="VDS-PSC-01", period_idx=2,
+        period_label="2026", period_year=2026, p10_total_ht=94936.4,
+    ))
+
+    batch = CpeFinanceImportBatch(city_id=1, filename="finL2.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    inv = CpeFinanceInvoice(
+        batch_id=batch.id, city_id=1, invoice_number="INVL2", contract_code="C00190155J",
+        period_start=date(2026, 1, 1), period_end=date(2026, 3, 31), total_ht=0.0,
+    )
+    db_session.add(inv)
+    db_session.flush()
+    db_session.add(CpeFinanceLine(
+        batch_id=batch.id, invoice_id=inv.id, city_id=1, row_number=1,
+        market="P1", billed_item="ABT", amount_ht=23734.0,
+        period_start=date(2026, 1, 1), period_end=date(2026, 3, 31),
+    ))
+    db_session.commit()
+
+    report = build_market_tracking(db_session, 1, year_from=2026, year_to=2026)
+    by_poste = {p["poste"]: p for p in report["postes"]}
+    # Prévu P1 Élec = 94936.4 ; le P1 gaz reste 0 (piscines sans gaz)
+    assert by_poste["P1-ELEC"]["by_year"][0]["prevu"] == 94936.4
+    assert by_poste["P1"]["by_year"][0]["prevu"] == 0.0
+    # Le P1 facturé du Lot 2 est routé vers P1-ELEC, pas vers P1
+    assert by_poste["P1-ELEC"]["by_year"][0]["recu"] == 23734.0
+    assert by_poste["P1"]["by_year"][0]["recu"] == 0.0
+    # Découpage par lot : le Lot 2 porte le P1 Élec
+    lot2 = next(e for e in report["by_lot"] if e["lot"] == 2)
+    l2_postes = {p["poste"]: p["total"] for p in lot2["postes"]}
+    assert l2_postes["P1-ELEC"]["prevu"] == 94936.4 and l2_postes["P1-ELEC"]["recu"] == 23734.0
 
 
 def test_workbook_builds(db_session):

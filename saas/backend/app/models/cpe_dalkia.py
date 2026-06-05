@@ -148,6 +148,35 @@ class CpeDalkiaRefP1Gaz(Base):
     p10_total_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
+class CpeDalkiaRefP1Elec(Base):
+    """Fourniture electricite P1 par site x periode (Annexe 6.2 - P1 ELEC_PSE).
+
+    Concerne le Lot 2 (piscines) ou la PSE P1 electricite est RETENUE : DALKIA fournit
+    l'electricite, facturee comme le P1 gaz (cf. OUV11-MGPE L2, art 7.2.1 CCAP). Le Lot 1
+    n'a pas de P1 elec (PSE non retenue).
+    """
+
+    __tablename__ = "cpe_dalkia_ref_p1_elec"
+    __table_args__ = (
+        UniqueConstraint("import_id", "code_site", "period_idx", name="uq_dalkia_p1_elec"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    import_id: Mapped[int] = mapped_column(
+        ForeignKey("cpe_dalkia_ref_imports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    code_site: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    pdl: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    prix_unitaire_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    period_idx: Mapped[int] = mapped_column(Integer, nullable=False)
+    period_label: Mapped[str] = mapped_column(String(80), nullable=False)
+    period_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    qt_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p10_var_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+    p10_total_ht: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 class CpeDalkiaRefApe(Base):
     """Travaux APE par site (plusieurs lignes possibles)."""
 
