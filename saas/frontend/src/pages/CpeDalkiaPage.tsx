@@ -1443,12 +1443,14 @@ function P24ObjectiveCard({ data, isLoading }: { data: CpeP24Objective | undefin
           <h4 style={{ margin: "0 0 2px", fontSize: 14 }}>
             Redevance P2.4 — objectif d'économie d'énergie global{" "}
             <span className={`badge ${atteint ? "badge-green" : "badge-red"}`}>
-              {atteint ? "Atteint → 100 %" : "Non atteint → 50 %"}
+              {atteint ? "Atteint → 100 %" : "Non atteint → 50 %"}{data.complet ? "" : " (provisoire)"}
             </span>
           </h4>
           <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>
-            Conso réelle globale (gaz + élec) vs cible globale. Si la cible est tenue, P2.4 facturé à 100 % ;
-            sinon 50 % (CCTPM §11.3). {data.complet ? "" : "⚠️ Cumul à date — verdict définitif au décompte de fin d'exercice."}
+            Conso réelle globale (gaz + élec) vs cible globale, gaz et élec ramenés à la période écoulée. Si la cible
+            est tenue, P2.4 facturé à 100 % ; sinon 50 % (CCTPM §11.3).{" "}
+            {data.complet ? "" : "⚠️ Cumul à date — verdict provisoire, définitif au décompte de fin d'exercice."}
+            {data.elec_sites < data.elec_sites_avec_cible ? ` ⚠️ Couverture élec partielle (${data.elec_sites}/${data.elec_sites_avec_cible} sites avec conso) — le volet élec est sous-représenté.` : ""}
           </p>
         </div>
       </div>
@@ -1473,7 +1475,9 @@ function P24ObjectiveCard({ data, isLoading }: { data: CpeP24Objective | undefin
 }
 
 function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | undefined; isLoading: boolean; annee: number }) {
-  const items: CpeElecPerfItem[] = (data?.items ?? []).filter((i) => i.statut === "suivi");
+  // On affiche tous les sites qui ont une cible (suivi + sans conso), pour rendre la couverture visible.
+  const items: CpeElecPerfItem[] = (data?.items ?? []).filter((i) => i.statut === "suivi" || i.statut === "sans_conso");
+  const sansConso = (data?.nb_avec_cible ?? 0) - (data?.nb_suivis ?? 0);
   return (
     <div className="card" style={{ marginTop: 24, padding: 12 }}>
       <h4 style={{ margin: "0 0 2px", fontSize: 14 }}>Électricité — engagement (cible vs réel, {annee})</h4>
@@ -1481,8 +1485,16 @@ function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | u
         Suivi des consommations électriques par rapport aux cibles contractuelles (Annexe 5.2).{" "}
         <strong>Hors intéressement</strong> : l'électricité n'a pas d'intéressement € (CCTPM §11) — elle est vérifiée
         via le protocole <strong>IPMVP option B</strong> et pèse sur l'<strong>objectif global</strong> qui conditionne
-        la redevance <strong>P2.4</strong> (100 % / 50 %). Conso = cumul à date (partielle si &lt; 12 mois).
+        la redevance <strong>P2.4</strong> (100 % / 50 %). L'écart est calculé contre la cible{" "}
+        <strong>au prorata des mois disponibles</strong> (sinon un cumul partiel paraît très sous la cible annuelle).
       </p>
+      {data && data.has_data && sansConso > 0 ? (
+        <p style={{ margin: "0 0 8px", padding: "6px 10px", background: "#fff7ed", borderRadius: 6, color: "#9a3412", fontSize: 12 }}>
+          ⚠️ Couverture partielle : <strong>{data.nb_suivis}</strong> site(s) avec conso élec relevée sur{" "}
+          <strong>{data.nb_avec_cible}</strong> ayant une cible. {sansConso} site(s) sans relevé élec (import conso
+          incomplet) — listés ci-dessous avec conso « — ».
+        </p>
+      ) : null}
       {isLoading ? (
         <p>Chargement…</p>
       ) : !data || !data.has_data ? (
@@ -1493,10 +1505,10 @@ function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | u
       ) : (
         <>
           <div className="kpi-grid">
-            <KpiCard label="Cible élec (sites suivis)" value={`${fmt(data.total_cible_mwh, 1)} MWh`} sub={`${data.nb_suivis} sites`} color="#1d4ed8" />
+            <KpiCard label="Cible élec au prorata" value={`${fmt(data.total_cible_periode_mwh, 1)} MWh`} sub={`${data.nb_suivis}/${data.nb_avec_cible} sites suivis · cible an. ${fmt(data.total_cible_mwh, 0)}`} color="#1d4ed8" />
             <KpiCard label="Conso élec réelle (cumul)" value={`${fmt(data.total_conso_mwh, 1)} MWh`} sub="à date" color="#0f766e" />
             <KpiCard
-              label="Écart global"
+              label="Écart vs cible au prorata"
               value={`${data.total_ecart_mwh > 0 ? "+" : ""}${fmt(data.total_ecart_mwh, 1)} MWh`}
               sub={data.total_ecart_pct != null ? `${data.total_ecart_pct > 0 ? "+" : ""}${fmt(data.total_ecart_pct * 100, 0)} %` : "—"}
               color={data.total_ecart_mwh > 0 ? "#dc2626" : "#16a34a"}
@@ -1508,15 +1520,18 @@ function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | u
                 <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
                   <th style={thStyle}>Code</th>
                   <th style={thStyle}>Site</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Cible (MWh)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Cible an. (MWh)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Cible prorata</th>
                   <th style={{ ...thStyle, textAlign: "right" }}>Conso réelle</th>
-                  <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Écart (vs prorata)</th>
                   <th style={{ ...thStyle, textAlign: "center" }}>Mois</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.site_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                {items.map((it) => {
+                  const sansConso = it.statut === "sans_conso";
+                  return (
+                  <tr key={it.site_id} style={{ borderBottom: "1px solid #f3f4f6", background: sansConso ? "#fffdf7" : undefined }}>
                     <td style={tdStyle}><code style={{ fontSize: 11, color: "#6b7280" }}>{it.code_site}</code></td>
                     <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.nom_site}</td>
                     <td style={{ ...tdStyle, textAlign: "right" }}>
@@ -1525,14 +1540,18 @@ function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | u
                         {it.cible_source === "dalkia" ? "DLK" : "SITE"}
                       </span>
                     </td>
-                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(it.conso_reelle_mwh, 1)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: "#6b7280" }}>{fmt(it.cible_periode_mwh, 1)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>
+                      {sansConso ? <span style={{ color: "#f97316" }} title="Aucun relevé de conso élec importé pour ce site">— (pas de relevé)</span> : fmt(it.conso_reelle_mwh, 1)}
+                    </td>
                     <td style={{ ...tdStyle, textAlign: "right", color: (it.ecart_mwh ?? 0) > 0 ? "#ef4444" : "#16a34a", fontWeight: 600 }}>
                       {it.ecart_mwh == null ? "—" : `${it.ecart_mwh > 0 ? "+" : ""}${fmt(it.ecart_mwh, 1)}`}
                       {it.ecart_pct != null ? ` (${it.ecart_pct > 0 ? "+" : ""}${fmt(it.ecart_pct * 100, 0)}%)` : ""}
                     </td>
                     <td style={{ ...tdStyle, textAlign: "center", color: it.nb_mois < 12 ? "#f97316" : "#16a34a" }}>{it.nb_mois}/12</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
