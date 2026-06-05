@@ -1,4 +1,6 @@
 import io
+import re
+import unicodedata
 import uuid
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -24,6 +26,7 @@ from app.schemas.cvc import (
     CvcInventoryItemRead,
     CvcInventoryItemUpdate,
     CvcMatchBuildingsResponse,
+    CvcRecomputeReferencesResult,
     CvcSiteMapping,
     CvcPreviewResponse,
     PatrimoineSiteSuggestion,
@@ -31,7 +34,31 @@ from app.schemas.cvc import (
 )
 
 CURRENT_YEAR = datetime.now().year
+ALLOWED_CVC_REFERENCE_DOMAINS = {"A.2.1", "A.2.2", "A.2.3"}
+NO_FUZZY_FAMILIES = {
+    "analyseur",
+    "appareil de mesure",
+    "autre a qualifier",
+    "compteur",
+    "plomberie",
+}
 REFRIGERANT_NIVEAU_3 = {"Production de froid :", "Pompes à chaleur Air/Air, Air/Eau, Eau/Eau"}
+
+
+def _normalize(value: str | None) -> str:
+    if not value:
+        return ""
+    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", ascii_value.lower()).strip()
+
+
+def _combined_item_text(
+    famille: str | None,
+    designation: str | None = None,
+    marque: str | None = None,
+    modele: str | None = None,
+) -> str:
+    return _normalize(" ".join(part for part in [famille, designation, marque, modele] if part))
 
 
 def _similarity(a: str, b: str) -> float:
@@ -277,22 +304,163 @@ def apply_site_mappings_to_import(
     return CvcApplySiteMappingsResult(updated=updated, mappings_applied=applied)
 
 
+def _find_ref(
+    all_refs: list[EquipmentReference],
+    *,
+    id_ligne: int | None = None,
+    equipment_contains: str | None = None,
+    code_niveau_2: str | None = None,
+) -> EquipmentReference | None:
+    normalized_contains = _normalize(equipment_contains)
+    for ref in all_refs:
+        if id_ligne is not None and ref.id_ligne != id_ligne:
+            continue
+        if code_niveau_2 is not None and ref.code_niveau_2 != code_niveau_2:
+            continue
+        if normalized_contains and normalized_contains not in _normalize(ref.equipement):
+            continue
+        return ref
+    return None
+
+
+def _resolve_alias_reference(
+    famille: str | None,
+    designation: str | None,
+    marque: str | None,
+    modele: str | None,
+    all_refs: list[EquipmentReference],
+) -> EquipmentReference | None:
+    family = _normalize(famille)
+    text = _combined_item_text(famille, designation, marque, modele)
+
+    if "armoire electrique" in family or "tableau electrique" in text or "coffret electrique" in text:
+        return _find_ref(all_refs, id_ligne=118, equipment_contains="Armoire électrique")
+
+    if family in {"pompe a chaleur", "groupe thermodynamique"} or "pac" in text or "thermodynamique" in text:
+        return _find_ref(all_refs, id_ligne=238, equipment_contains="PAC")
+
+    if family in {"split system", "vrv", "systeme vrv", "climatiseur"} or any(
+        token in text
+        for token in [
+            "mono-split",
+            "monosplit",
+            "multi-split",
+            "multisplit",
+            "split",
+            "ue clim",
+            "ui clim",
+            "unite interieure",
+            "unite exterieure",
+            "climatisation",
+            "cassette",
+            "daikin",
+            "hitachi",
+            "mitsubishi",
+            "atlantic",
+            "fujitsu",
+        ]
+    ):
+        if "armoire de climatisation" in text or "roof" in text:
+            return _find_ref(all_refs, id_ligne=237, equipment_contains="Armoires autonomes")
+        return _find_ref(all_refs, id_ligne=236, equipment_contains="Split")
+
+    if family in {"centrale traitement air"} or "cta" in text or "centrale traitement air" in text:
+        return _find_ref(all_refs, id_ligne=221, equipment_contains="CTA")
+
+    if family in {"groupe froid"} or "groupe froid" in text:
+        return _find_ref(all_refs, id_ligne=207, equipment_contains="Groupe")
+
+    if family == "aerotherme" or "aerotherme" in text:
+        return _find_ref(all_refs, id_ligne=201, equipment_contains="Aérothermes") or _find_ref(
+            all_refs, id_ligne=219, equipment_contains="Rideau"
+        )
+
+    if family == "bouches de soufflage" or "bouche" in text:
+        return _find_ref(all_refs, id_ligne=223, equipment_contains="Gaine")
+
+    if family == "ventilation":
+        if "desenfum" in text:
+            return _find_ref(all_refs, id_ligne=244, equipment_contains="Ventilateurs")
+        if "vmc" in text or "extract" in text or "ventil" in text:
+            return _find_ref(all_refs, id_ligne=233, equipment_contains="Ventilateur")
+        return None
+
+    if family == "filtre":
+        if "sable" in text or "piscine" in text:
+            return _find_ref(all_refs, id_ligne=92, equipment_contains="Filtre")
+        if "pot a boue" in text or "chauffage" in text or "vanne" in text:
+            return _find_ref(all_refs, id_ligne=181, equipment_contains="filtres")
+        return None
+
+    if family == "pompe":
+        if "doseuse" in text:
+            return _find_ref(all_refs, id_ligne=91, equipment_contains="Pompe doseuse")
+        if "froid" in text or "glacee" in text:
+            return _find_ref(all_refs, id_ligne=214, equipment_contains="Pompes")
+        if "chauffage" in text or "circulateur" in text or "radiateur" in text:
+            return _find_ref(all_refs, id_ligne=186, equipment_contains="Circulateur")
+        return None
+
+    if family == "preparateur ecs":
+        return _find_ref(all_refs, id_ligne=97, equipment_contains="Ballon")
+
+    if family == "batterie":
+        if "chaude" in text or "froide" in text or "cta" in text:
+            return _find_ref(all_refs, id_ligne=221, equipment_contains="CTA")
+        return None
+
+    if family == "regulation":
+        return _find_ref(all_refs, id_ligne=200, equipment_contains="régulation")
+
+    if family == "tube radiant":
+        return _find_ref(all_refs, id_ligne=194, equipment_contains="Radiateur")
+
+    return None
+
+
 def _resolve_family(
-    famille: str | None, all_refs: list[EquipmentReference], cache: dict
+    famille: str | None,
+    all_refs: list[EquipmentReference],
+    cache: dict,
+    designation: str | None = None,
+    marque: str | None = None,
+    modele: str | None = None,
 ) -> EquipmentReference | None:
     if not famille:
         return None
-    if famille in cache:
-        return cache[famille]
+    cache_key = (
+        _normalize(famille),
+        _normalize(designation),
+        _normalize(marque),
+        _normalize(modele),
+    )
+    if cache_key in cache:
+        return cache[cache_key]
+
+    alias_ref = _resolve_alias_reference(famille, designation, marque, modele, all_refs)
+    if alias_ref is not None:
+        cache[cache_key] = alias_ref
+        return alias_ref
+
+    normalized_family = _normalize(famille)
+    if normalized_family in NO_FUZZY_FAMILIES:
+        cache[cache_key] = None
+        return None
+
     best_score = 0.0
     best_ref = None
     for ref in all_refs:
-        score = _similarity(famille, ref.equipement)
+        if ref.code_niveau_2 not in ALLOWED_CVC_REFERENCE_DOMAINS:
+            continue
+        score = max(
+            _similarity(normalized_family, _normalize(ref.equipement)),
+            _similarity(normalized_family, _normalize(ref.niveau_4)),
+        )
         if score > best_score:
             best_score = score
             best_ref = ref
-    result = best_ref if best_score >= 0.5 else None
-    cache[famille] = result
+    result = best_ref if best_score >= 0.72 else None
+    cache[cache_key] = result
     return result
 
 
@@ -376,9 +544,16 @@ def import_cvc_from_excel(
         building_id = mapping_dict.get(site)
         building = db.get(Building, building_id) if building_id is not None else None
 
+        def clean(col: str) -> str | None:
+            v = get_val(row, col)
+            s = str(v).strip() if v is not None else ""
+            return s or None
+
         famille_raw = get_val(row, "FAMILLE")
         famille = str(famille_raw).strip() if famille_raw else None
-        ref = _resolve_family(famille, all_refs, family_cache)
+        marque = clean("MARQUE")
+        modele = clean("MODELE")
+        ref = _resolve_family(famille, all_refs, family_cache, designation, marque, modele)
 
         date_raw = get_val(row, "DATE MES")
         try:
@@ -393,11 +568,6 @@ def import_cvc_from_excel(
             quantite_relevee = int(qte_raw) if qte_raw is not None else None
         except (ValueError, TypeError):
             quantite_relevee = None
-
-        def clean(col: str) -> str | None:
-            v = get_val(row, col)
-            s = str(v).strip() if v is not None else ""
-            return s or None
 
         item = CvcInventoryItem(
             city_id=city_id,
@@ -414,8 +584,8 @@ def import_cvc_from_excel(
             etat_sante=clean("ETAT SANTE"),
             quantite_relevee=quantite_relevee,
             famille=famille,
-            marque=clean("MARQUE"),
-            modele=clean("MODELE"),
+            marque=marque,
+            modele=modele,
             date_mis_en_service=date_mes,
             duree_vie_restante=duree_vie_restante,
             quantite_fluide_frigorigene=None,
@@ -479,6 +649,52 @@ def list_cvc_items_for_batch(
         stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
     items = list(db.scalars(stmt.order_by(CvcInventoryItem.site_raw, CvcInventoryItem.designation)))
     return _hydrate_items(db, items)
+
+
+def recompute_cvc_references_for_batch(
+    db: Session, import_batch: str, city_id: int | None
+) -> CvcRecomputeReferencesResult:
+    stmt = select(CvcInventoryItem).where(CvcInventoryItem.import_batch == import_batch)
+    if city_id is not None:
+        stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+    items = list(db.scalars(stmt))
+    all_refs = list(db.scalars(select(EquipmentReference)))
+    family_cache: dict = {}
+
+    updated = 0
+    changed = 0
+    matched = 0
+    unmatched = 0
+    for item in items:
+        next_ref = _resolve_family(
+            item.famille,
+            all_refs,
+            family_cache,
+            item.designation,
+            item.marque,
+            item.modele,
+        )
+        next_ref_id = next_ref.id if next_ref else None
+        if item.equipment_ref_id != next_ref_id:
+            changed += 1
+        item.equipment_ref_id = next_ref_id
+        item.duree_vie_restante = _compute_remaining_life(item.date_mis_en_service, next_ref)
+        if not _requires_refrigerant_quantity(next_ref):
+            item.quantite_fluide_frigorigene = None
+        if next_ref:
+            matched += 1
+        else:
+            unmatched += 1
+        updated += 1
+
+    db.commit()
+    return CvcRecomputeReferencesResult(
+        import_batch=import_batch,
+        updated=updated,
+        matched=matched,
+        unmatched=unmatched,
+        changed=changed,
+    )
 
 
 def _hydrate_items(db: Session, items: list[CvcInventoryItem]) -> list[CvcInventoryItemRead]:

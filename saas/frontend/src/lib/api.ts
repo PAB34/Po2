@@ -2623,6 +2623,14 @@ export type CvcApplySiteMappingsResult = {
   mappings_applied: number;
 };
 
+export type CvcRecomputeReferencesResult = {
+  import_batch: string;
+  updated: number;
+  matched: number;
+  unmatched: number;
+  changed: number;
+};
+
 export type CvcImportResult = {
   imported: number;
   skipped: number;
@@ -2711,6 +2719,17 @@ export async function applyCvcImportSiteMappings(
     body: JSON.stringify({ mappings }),
   });
   return parseResponse<CvcApplySiteMappingsResult>(response);
+}
+
+export async function recomputeCvcImportReferences(
+  token: string,
+  importBatch: string,
+): Promise<CvcRecomputeReferencesResult> {
+  const response = await fetch(`${apiBaseUrl}/cvc/imports/${encodeURIComponent(importBatch)}/recompute-references`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcRecomputeReferencesResult>(response);
 }
 
 export async function updateCvcItem(

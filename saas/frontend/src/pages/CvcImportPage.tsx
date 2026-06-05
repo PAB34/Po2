@@ -11,6 +11,7 @@ import {
   fetchSites,
   postCvcImport,
   postCvcPreview,
+  recomputeCvcImportReferences,
   updateCvcItem,
   type Building,
   type CvcImportBatchSummary,
@@ -47,9 +48,9 @@ function referenceLabel(ref: EquipmentReference): string {
 
 function isCvcRelevant(ref: EquipmentReference): boolean {
   return (
-    ref.code_niveau_2 === "A.2.3" ||
-    ref.niveau_3 === "Production de froid :" ||
-    ref.niveau_3 === "Pompes a chaleur Air/Air, Air/Eau, Eau/Eau"
+    ref.code_niveau_2 === "A.2.1" ||
+    ref.code_niveau_2 === "A.2.2" ||
+    ref.code_niveau_2 === "A.2.3"
   );
 }
 
@@ -285,6 +286,20 @@ export function CvcImportPage() {
     onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur de sauvegarde."),
   });
 
+  const recomputeMutation = useMutation({
+    mutationFn: async () => {
+      if (!token || !activeBatch) throw new Error("Choisis un import.");
+      return recomputeCvcImportReferences(token, activeBatch);
+    },
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-items"] });
+      queryClient.invalidateQueries({ queryKey: ["cvc-import-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["cvc-terrain"] });
+    },
+    onError: (e: unknown) => setError(e instanceof Error ? e.message : "Erreur pendant le recalcul des references."),
+  });
+
   const references = useMemo(
     () => (referencesQuery.data ?? []).filter(isCvcRelevant),
     [referencesQuery.data],
@@ -401,6 +416,16 @@ export function CvcImportPage() {
               <Link className="secondary-link" to={`/buildings/cvc-import/sites?batch=${encodeURIComponent(activeBatch)}`}>
                 Matcher les sites
               </Link>
+            )}
+            {activeBatch && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => recomputeMutation.mutate()}
+                disabled={recomputeMutation.isPending}
+              >
+                {recomputeMutation.isPending ? "Recalcul..." : "Recalculer les references"}
+              </button>
             )}
             <select
               value={activeBatch ?? ""}

@@ -152,3 +152,11 @@ class CvcImportResult(BaseModel):
     import_batch: str
     sypemi_matched: int
     sypemi_unmatched: int
+
+
+class CvcRecomputeReferencesResult(BaseModel):
+    import_batch: str
+    updated: int
+    matched: int
+    unmatched: int
+    changed: int

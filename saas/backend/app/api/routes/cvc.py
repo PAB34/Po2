@@ -18,6 +18,7 @@ from app.schemas.cvc import (
     CvcMatchBuildingsRequest,
     CvcMatchBuildingsResponse,
     CvcPreviewResponse,
+    CvcRecomputeReferencesResult,
 )
 from app.services.buildings import get_building_or_404
 from app.services.cvc import (
@@ -31,6 +32,7 @@ from app.services.cvc import (
     list_site_matches_for_import,
     match_buildings_for_sites,
     parse_excel_preview,
+    recompute_cvc_references_for_batch,
     update_cvc_item,
 )
 
@@ -95,6 +97,15 @@ def get_cvc_import_items(
     current_user: User = Depends(get_current_user),
 ) -> list[CvcInventoryItemRead]:
     return list_cvc_items_for_batch(db, import_batch, current_user.city_id)
+
+
+@router.post("/imports/{import_batch}/recompute-references", response_model=CvcRecomputeReferencesResult)
+def post_cvc_recompute_import_references(
+    import_batch: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcRecomputeReferencesResult:
+    return recompute_cvc_references_for_batch(db, import_batch, current_user.city_id)
 
 
 @router.get("/imports/{import_batch}/site-matches", response_model=CvcImportSiteMatchResponse)

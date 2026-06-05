@@ -1,4 +1,15 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-05 (CVC referentiel terrain fiabilise)
+> **Etat code local** : moteur de rattachement CVC corrige et endpoint de recalcul de lot ajoute.
+>
+> L'audit du dernier import `import_d0791486` a montre que la collecte brute est saine mais que le fuzzy matching
+> vers `equipment_references` produisait de nombreux faux positifs (`Split system` -> `Plieuse`, `Compteur` -> `Pompe`,
+> `CTA` -> videosurveillance, `Cassette` -> `Chaussee`). Le moteur utilise maintenant des alias metier prioritaires,
+> limite le fuzzy aux domaines `A.2.1`, `A.2.2`, `A.2.3`, et laisse certaines familles generiques non rattachees
+> plutot que de creer une fausse duree de vie. Un bouton front `Recalculer les references` appelle
+> `POST /api/cvc/imports/{import_batch}/recompute-references` pour corriger un lot deja importe.
+> Validation locale : `compileall` OK et `tests/test_cvc_reference_matching.py` OK avec SQLite in-memory.
+>
 > **Mise a jour complementaire** : 2026-06-04 (CVC import + matching sites separes)
 > **Etat code local** : increment UX sur `/buildings/cvc-import` et nouvelle route `/buildings/cvc-import/sites`.
 >
