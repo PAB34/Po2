@@ -3298,6 +3298,38 @@ export async function fetchCpeAtterrissage(token: string, annee: number, trimest
   return parseResponse<CpeAtterrissage>(response);
 }
 
+export type CpeElecPerfItem = {
+  site_id: number;
+  code_site: string;
+  nom_site: string;
+  cible_mwh: number | null;
+  cible_source: string;
+  conso_reelle_mwh: number | null;
+  nb_mois: number;
+  ecart_mwh: number | null;
+  ecart_pct: number | null;
+  statut: string;
+};
+
+export type CpeElecPerf = {
+  annee: number;
+  nb_sites: number;
+  nb_suivis: number;
+  total_cible_mwh: number;
+  total_conso_mwh: number;
+  total_ecart_mwh: number;
+  total_ecart_pct: number | null;
+  has_data: boolean;
+  items: CpeElecPerfItem[];
+};
+
+export async function fetchCpeElecPerformance(token: string, annee: number): Promise<CpeElecPerf> {
+  const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}/elec-performance`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeElecPerf>(response);
+}
+
 export async function fetchCpeConsoSynthese(token: string, annee: number): Promise<CpeConsoSynthese> {
   const response = await fetch(`${apiBaseUrl}/cpe/consommations/synthese/${annee}`, { headers: buildHeaders(token) });
   return parseResponse<CpeConsoSynthese>(response);

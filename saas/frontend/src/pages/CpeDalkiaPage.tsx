@@ -43,6 +43,9 @@ import {
   fetchCpeAtterrissage,
   type CpeAtterrissage,
   type CpeAtterrissageItem,
+  fetchCpeElecPerformance,
+  type CpeElecPerf,
+  type CpeElecPerfItem,
   fetchCpeConsoSynthese,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
@@ -298,6 +301,12 @@ export default function CpeDalkiaPage() {
   const atterrissageQ = useQuery({
     queryKey: ["cpe-atterrissage", annee, trimestre],
     queryFn: () => fetchCpeAtterrissage(token!, annee, trimestre),
+    enabled: !!token && view === "performance",
+  });
+
+  const elecPerfQ = useQuery({
+    queryKey: ["cpe-elec-performance", annee],
+    queryFn: () => fetchCpeElecPerformance(token!, annee),
     enabled: !!token && view === "performance",
   });
 
@@ -820,6 +829,17 @@ export default function CpeDalkiaPage() {
         ))}
       </div>
 
+      {/* ── Intitulé : intéressement = gaz ── */}
+      <div style={{ marginBottom: 8 }}>
+        <h4 style={{ margin: "0 0 2px", fontSize: 15 }}>
+          Intéressement énergétique — <span style={{ color: "#b45309" }}>Gaz (chauffage + ECS)</span>
+        </h4>
+        <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>
+          L'intéressement € porte sur le gaz uniquement (CCTPM §11). L'électricité est suivie plus bas
+          (cible vs réel, hors intéressement).
+        </p>
+      </div>
+
       {/* ── Légende des colonnes ── */}
       <details style={{ marginBottom: 16, border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", background: "#fbfcfe" }}>
         <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 13, color: "#374151" }}>
@@ -973,6 +993,9 @@ export default function CpeDalkiaPage() {
         trimestre={trimestre}
         setTrimestre={setTrimestre}
       />
+
+      {/* ── Suivi performance électrique (hors intéressement) ── */}
+      <ElecPerformanceCard data={elecPerfQ.data} isLoading={elecPerfQ.isLoading} annee={annee} />
         </>
       )}
     </div>
@@ -1383,6 +1406,76 @@ function AtterrissageCard({
                     <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: it.type_resultat === "interessement" ? "#16a34a" : it.type_resultat === "penalite" ? "#ef4444" : "#374151" }}>
                       {it.montant_ht_projete == null ? "—" : fmtEur(it.montant_ht_projete)}
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ElecPerformanceCard({ data, isLoading, annee }: { data: CpeElecPerf | undefined; isLoading: boolean; annee: number }) {
+  const items: CpeElecPerfItem[] = (data?.items ?? []).filter((i) => i.statut === "suivi");
+  return (
+    <div className="card" style={{ marginTop: 24, padding: 12 }}>
+      <h4 style={{ margin: "0 0 2px", fontSize: 14 }}>Électricité — engagement (cible vs réel, {annee})</h4>
+      <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>
+        Suivi des consommations électriques par rapport aux cibles contractuelles (Annexe 5.2).{" "}
+        <strong>Hors intéressement</strong> : l'électricité n'a pas d'intéressement € (CCTPM §11) — elle est vérifiée
+        via le protocole <strong>IPMVP option B</strong> et pèse sur l'<strong>objectif global</strong> qui conditionne
+        la redevance <strong>P2.4</strong> (100 % / 50 %). Conso = cumul à date (partielle si &lt; 12 mois).
+      </p>
+      {isLoading ? (
+        <p>Chargement…</p>
+      ) : !data || !data.has_data ? (
+        <p style={{ color: "#9ca3af", fontSize: 13 }}>
+          Aucun suivi élec disponible : il faut des cibles élec (import DALKIA Annexe 5.2) et des relevés de
+          consommation électrique pour l'année.
+        </p>
+      ) : (
+        <>
+          <div className="kpi-grid">
+            <KpiCard label="Cible élec (sites suivis)" value={`${fmt(data.total_cible_mwh, 1)} MWh`} sub={`${data.nb_suivis} sites`} color="#1d4ed8" />
+            <KpiCard label="Conso élec réelle (cumul)" value={`${fmt(data.total_conso_mwh, 1)} MWh`} sub="à date" color="#0f766e" />
+            <KpiCard
+              label="Écart global"
+              value={`${data.total_ecart_mwh > 0 ? "+" : ""}${fmt(data.total_ecart_mwh, 1)} MWh`}
+              sub={data.total_ecart_pct != null ? `${data.total_ecart_pct > 0 ? "+" : ""}${fmt(data.total_ecart_pct * 100, 0)} %` : "—"}
+              color={data.total_ecart_mwh > 0 ? "#dc2626" : "#16a34a"}
+            />
+          </div>
+          <div style={{ overflowX: "auto", marginTop: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+                  <th style={thStyle}>Code</th>
+                  <th style={thStyle}>Site</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Cible (MWh)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Conso réelle</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Écart</th>
+                  <th style={{ ...thStyle, textAlign: "center" }}>Mois</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.site_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <td style={tdStyle}><code style={{ fontSize: 11, color: "#6b7280" }}>{it.code_site}</code></td>
+                    <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.nom_site}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>
+                      {fmt(it.cible_mwh, 1)}
+                      <span title={it.cible_source === "dalkia" ? "Cible DALKIA (Annexe 5.2)" : "Valeur de secours du site"} style={{ marginLeft: 4, fontSize: 9, fontWeight: 700, color: it.cible_source === "dalkia" ? "#16a34a" : "#f97316", cursor: "help" }}>
+                        {it.cible_source === "dalkia" ? "DLK" : "SITE"}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(it.conso_reelle_mwh, 1)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: (it.ecart_mwh ?? 0) > 0 ? "#ef4444" : "#16a34a", fontWeight: 600 }}>
+                      {it.ecart_mwh == null ? "—" : `${it.ecart_mwh > 0 ? "+" : ""}${fmt(it.ecart_mwh, 1)}`}
+                      {it.ecart_pct != null ? ` (${it.ecart_pct > 0 ? "+" : ""}${fmt(it.ecart_pct * 100, 0)}%)` : ""}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "center", color: it.nb_mois < 12 ? "#f97316" : "#16a34a" }}>{it.nb_mois}/12</td>
                   </tr>
                 ))}
               </tbody>
