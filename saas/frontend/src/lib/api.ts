@@ -3238,6 +3238,47 @@ export async function fetchCpeBilan(token: string, annee: number): Promise<CpeBi
   return parseResponse<CpeBilanAnnuel>(response);
 }
 
+export type CpeAtterrissageItem = {
+  code_site: string;
+  nom_site: string;
+  site_id: number;
+  tarif: string | null;
+  nb_exercice: number;
+  nb_source: string;
+  mois_realises: number;
+  nc_realise: number | null;
+  nc_projete: number | null;
+  n_prime_b_projete: number | null;
+  ecart_projete: number | null;
+  type_resultat: string | null;
+  montant_ht_projete: number | null;
+  statut: string;
+};
+
+export type CpeAtterrissage = {
+  annee: number;
+  trimestre: number;
+  mois_ecoules: number;
+  dju_reel_ecoule: number;
+  dju_normal_restant: number;
+  dju_projete_annuel: number;
+  dju_reference: number;
+  dju_method: string;
+  has_data: boolean;
+  nb_sites_projetes: number;
+  total_interessement_projete: number;
+  total_penalite_projete: number;
+  net_projete: number;
+  items: CpeAtterrissageItem[];
+};
+
+export async function fetchCpeAtterrissage(token: string, annee: number, trimestre: number): Promise<CpeAtterrissage> {
+  const response = await fetch(`${apiBaseUrl}/cpe/bilan/${annee}/atterrissage?trimestre=${trimestre}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CpeAtterrissage>(response);
+}
+
 export async function fetchCpeConsoSynthese(token: string, annee: number): Promise<CpeConsoSynthese> {
   const response = await fetch(`${apiBaseUrl}/cpe/consommations/synthese/${annee}`, { headers: buildHeaders(token) });
   return parseResponse<CpeConsoSynthese>(response);

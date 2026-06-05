@@ -40,6 +40,9 @@ import {
   deleteCpeFinanceHistory,
   deleteCpeAccountingNatureRule,
   fetchCpeBilan,
+  fetchCpeAtterrissage,
+  type CpeAtterrissage,
+  type CpeAtterrissageItem,
   fetchCpeConsoSynthese,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
@@ -263,6 +266,7 @@ export default function CpeDalkiaPage() {
   const qc = useQueryClient();
   const [annee, setAnnee] = useState(CURRENT_YEAR);
   const [filterCat, setFilterCat] = useState<string>("tous");
+  const [trimestre, setTrimestre] = useState<number>(2);
   const [showPuForm, setShowPuForm] = useState(false);
   const [puInput, setPuInput] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -288,6 +292,12 @@ export default function CpeDalkiaPage() {
   const consoSyntheseQ = useQuery({
     queryKey: ["cpe-conso-synthese", annee],
     queryFn: () => fetchCpeConsoSynthese(token!, annee),
+    enabled: !!token && view === "performance",
+  });
+
+  const atterrissageQ = useQuery({
+    queryKey: ["cpe-atterrissage", annee, trimestre],
+    queryFn: () => fetchCpeAtterrissage(token!, annee, trimestre),
     enabled: !!token && view === "performance",
   });
 
@@ -954,6 +964,15 @@ export default function CpeDalkiaPage() {
           )}
         </div>
       )}
+
+      {/* ── Atterrissage trimestriel ── */}
+      <AtterrissageCard
+        data={atterrissageQ.data}
+        isLoading={atterrissageQ.isLoading}
+        annee={annee}
+        trimestre={trimestre}
+        setTrimestre={setTrimestre}
+      />
         </>
       )}
     </div>
@@ -1245,6 +1264,132 @@ function DjuBand({ dju }: { dju: CpeDju }) {
       {dju.by_year.some((d) => d.dju_real != null && !d.complete) ? (
         <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>* année incomplète (moins de 12 mois de données) — ratio indicatif.</p>
       ) : null}
+    </div>
+  );
+}
+
+function AtterrissageCard({
+  data,
+  isLoading,
+  annee,
+  trimestre,
+  setTrimestre,
+}: {
+  data: CpeAtterrissage | undefined;
+  isLoading: boolean;
+  annee: number;
+  trimestre: number;
+  setTrimestre: (t: number) => void;
+}) {
+  const TRIMESTRES = [
+    { t: 1, label: "T1 (jan–mars)" },
+    { t: 2, label: "T2 (→ juin)" },
+    { t: 3, label: "T3 (→ sept)" },
+    { t: 4, label: "T4 (année)" },
+  ];
+  const items: CpeAtterrissageItem[] = (data?.items ?? []).filter((i) => i.statut === "projete");
+  return (
+    <div className="card" style={{ marginTop: 24, padding: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h4 style={{ margin: "0 0 2px", fontSize: 14 }}>Atterrissage de fin d'année (projection {annee})</h4>
+          <p style={{ margin: 0, color: "#6b7280", fontSize: 12 }}>
+            Où atterrit-on au 31/12 vu le réalisé à date ? Projection <strong>pro-rata DJU</strong> (extrapolation
+            climatique du réalisé, pas un pro-rata temporel). Pour les réunions trimestrielles DALKIA.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {TRIMESTRES.map(({ t, label }) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTrimestre(t)}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: "1px solid",
+                borderColor: trimestre === t ? "#2563eb" : "#d1d5db",
+                background: trimestre === t ? "#2563eb" : "white",
+                color: trimestre === t ? "white" : "#374151",
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <p style={{ marginTop: 12 }}>Chargement…</p>
+      ) : !data || !data.has_data ? (
+        <p style={{ marginTop: 12, color: "#9ca3af", fontSize: 13 }}>
+          Projection indisponible pour ce trimestre : il faut des relevés de consommation à date, un prix gaz et des
+          DJU réels. (Importez le CSV DALKIA et vérifiez la synchro DJU.)
+        </p>
+      ) : (
+        <>
+          <div className="kpi-grid" style={{ marginTop: 12 }}>
+            <KpiCard label="Intéressement projeté 31/12" value={fmtEur(data.total_interessement_projete)} sub={`${data.nb_sites_projetes} sites projetés`} color="#16a34a" />
+            <KpiCard label="Pénalité projetée 31/12" value={fmtEur(data.total_penalite_projete)} sub="Avoir DALKIA" color="#ef4444" />
+            <KpiCard label="Net projeté" value={fmtEur(data.net_projete)} sub={data.net_projete >= 0 ? "En faveur de DALKIA" : "En faveur de la Ville"} color={data.net_projete >= 0 ? "#16a34a" : "#ef4444"} />
+            <KpiCard label="DJU projeté annuel" value={`${Math.round(data.dju_projete_annuel)} / ${Math.round(data.dju_reference)}`} sub={`réel ${Math.round(data.dju_reel_ecoule)} + normal ${Math.round(data.dju_normal_restant)}`} color="#2563eb" />
+          </div>
+
+          <p style={{ margin: "10px 0", color: "#6b7280", fontSize: 12 }}>
+            Méthode : NC projeté = NC réalisé × (DJU projeté annuel / DJU réel à date) ; N'B projeté = NB × (DJU projeté
+            / {Math.round(data.dju_reference)}). DJU des mois restants estimés par le profil climatique{" "}
+            {data.dju_method === "fallback_reference" ? (
+              <strong style={{ color: "#f97316" }}>de secours (référence/12 — pas d'historique DJU, projection dégradée)</strong>
+            ) : (
+              "normal (moyenne historique Open-Meteo)"
+            )}
+            . À caler sur la méthode DALKIA à réception de leur tableau.
+          </p>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ background: "#f9fafb", borderBottom: "2px solid #e5e7eb" }}>
+                  <th style={thStyle}>Code</th>
+                  <th style={thStyle}>Site</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>NB</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>N'B projeté</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>NC réalisé (à date)</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>NC projeté 31/12</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Écart projeté</th>
+                  <th style={thStyle}>Résultat</th>
+                  <th style={{ ...thStyle, textAlign: "right" }}>Montant projeté</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.site_id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <td style={tdStyle}><code style={{ fontSize: 11, color: "#6b7280" }}>{it.code_site}</code></td>
+                    <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.nom_site}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(it.nb_exercice)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(it.n_prime_b_projete)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: "#6b7280" }}>{fmt(it.nc_realise)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right" }}>{fmt(it.nc_projete)}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", color: (it.ecart_projete ?? 0) >= 0 ? "#16a34a" : "#ef4444", fontWeight: 600 }}>
+                      {it.ecart_projete == null ? "—" : `${it.ecart_projete > 0 ? "+" : ""}${fmt(it.ecart_projete)}`}
+                    </td>
+                    <td style={tdStyle}>
+                      <span className={`badge ${TYPE_CLASS[it.type_resultat ?? ""] ?? "badge-gray"}`}>
+                        {TYPE_LABEL[it.type_resultat ?? ""] ?? "—"}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", fontWeight: 600, color: it.type_resultat === "interessement" ? "#16a34a" : it.type_resultat === "penalite" ? "#ef4444" : "#374151" }}>
+                      {it.montant_ht_projete == null ? "—" : fmtEur(it.montant_ht_projete)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }
