@@ -3627,6 +3627,12 @@ export type CpeP1Dpgf = {
   has_data: boolean;
 };
 
+export type CpeMarketTrackingQuarters = {
+  year: number;
+  billed: number;
+  expected: number;
+};
+
 export type CpeMarketTrackingLot = {
   lot: number;
   label: string;
@@ -3636,6 +3642,7 @@ export type CpeMarketTrackingLot = {
   grand_total: CpeMarketTrackingTotal;
   has_reference: boolean;
   p1_dpgf: CpeP1Dpgf;
+  quarters_billed: CpeMarketTrackingQuarters[];
 };
 
 export type CpeMarketTracking = {
@@ -3647,6 +3654,8 @@ export type CpeMarketTracking = {
   has_reference: boolean;
   by_lot: CpeMarketTrackingLot[];
   p1_dpgf: CpeP1Dpgf;
+  quarters_billed: CpeMarketTrackingQuarters[];
+  installments_per_year: number;
 };
 
 export async function fetchCpeMarketTracking(

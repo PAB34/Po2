@@ -66,6 +66,7 @@ import {
   type CpeMarketTrackingTotal,
   type CpeMarketTrackingPoste,
   type CpeP1Dpgf,
+  type CpeMarketTrackingQuarters,
   importCpeP3Devis,
   fetchCpeP3Devis,
   fetchCpeP3Atterrissage,
@@ -924,6 +925,8 @@ function MarketTrackingMatrix({
   yearFrom,
   yearTo,
   p1Dpgf,
+  quartersBilled,
+  installmentsPerYear = 4,
 }: {
   title: string;
   subtitle?: string;
@@ -934,7 +937,10 @@ function MarketTrackingMatrix({
   yearFrom: number;
   yearTo: number;
   p1Dpgf?: CpeP1Dpgf;
+  quartersBilled?: CpeMarketTrackingQuarters[];
+  installmentsPerYear?: number;
 }) {
+  const quartersByYear = new Map((quartersBilled ?? []).map((q) => [q.year, q] as [number, CpeMarketTrackingQuarters]));
   const chartData = postes.map((p) => ({
     poste: p.label,
     "Prévu": p.total.prevu,
@@ -971,7 +977,13 @@ function MarketTrackingMatrix({
       </div>
 
       <div className="card" style={{ padding: 12, overflowX: "auto" }}>
-        <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>Matrice poste × année — {title}</h4>
+        <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Matrice poste × année — {title}</h4>
+        <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>
+          Chaque colonne = une <strong>année</strong>. <strong>Prévu</strong> = enveloppe contractuelle{" "}
+          <strong>annuelle</strong> (DPGF). <strong>Reçu</strong> = cumul des <strong>acomptes trimestriels</strong>{" "}
+          déjà facturés. Le <strong>Taux</strong> n'atteint 100 % qu'en fin d'exercice : voir la ligne
+          « Trimestres facturés » pour savoir combien d'acomptes (sur {installmentsPerYear}) sont déjà reçus.
+        </p>
         <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 900 }}>
           <thead>
             <tr style={{ background: "#f9fafb" }}>
@@ -997,6 +1009,35 @@ function MarketTrackingMatrix({
             </tr>
           </thead>
           <tbody>
+            {quartersBilled && quartersBilled.length > 0 && (
+              <tr style={{ borderTop: "1px solid #f3f4f6", background: "#fafafa" }}>
+                <td style={{ ...tdStyle, fontStyle: "italic", color: "#6b7280", position: "sticky", left: 0, background: "#fafafa" }}>
+                  Trimestres facturés
+                </td>
+                {years.map((y) => {
+                  const q = quartersByYear.get(y);
+                  const billed = q?.billed ?? 0;
+                  const expected = q?.expected ?? installmentsPerYear;
+                  const complete = billed >= expected;
+                  return (
+                    <td
+                      key={y}
+                      colSpan={4}
+                      style={{
+                        ...tdStyle,
+                        textAlign: "center",
+                        borderLeft: "1px solid #e5e7eb",
+                        fontStyle: "italic",
+                        color: billed === 0 ? "#9ca3af" : complete ? "#166534" : "#b45309",
+                      }}
+                    >
+                      {billed}/{expected} trim.
+                    </td>
+                  );
+                })}
+                <td colSpan={4} style={{ ...tdStyle, borderLeft: "2px solid #cbd5e1" }} />
+              </tr>
+            )}
             {postes.map((p) => (
               <tr key={p.poste} style={{ borderTop: "1px solid #f3f4f6" }}>
                 <td style={{ ...tdStyle, fontWeight: 600, position: "sticky", left: 0, background: "#fff" }}>{p.label}</td>
@@ -2759,6 +2800,8 @@ function CpeFinanceReference({
               yearFrom={marketYearFrom}
               yearTo={marketYearTo}
               p1Dpgf={marketTracking.p1_dpgf}
+              quartersBilled={marketTracking.quarters_billed}
+              installmentsPerYear={marketTracking.installments_per_year}
             />
             {marketTracking.by_lot.map((lot) => (
               <MarketTrackingMatrix
@@ -2772,6 +2815,8 @@ function CpeFinanceReference({
                 yearFrom={marketYearFrom}
                 yearTo={marketYearTo}
                 p1Dpgf={lot.p1_dpgf}
+                quartersBilled={lot.quarters_billed}
+                installmentsPerYear={marketTracking.installments_per_year}
               />
             ))}
             {p3Atterrissage && p3Atterrissage.has_provision && <P3AtterrissageChart data={p3Atterrissage} />}
