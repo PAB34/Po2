@@ -16,6 +16,8 @@
 - [[03-Roadmap-fonctionnalites]] — Les 13 fonctionnalités cibles (issues du fichier `Fonctionnalités.xlsx`) avec statut fait/en cours/todo
 - [[04-Etat-actuel-du-dev]] — Snapshot précis : ce qui tourne en prod, les dernières PRs, les chantiers ouverts
 - [[06-Rapport-audit-projet-obsidian-2026-05-19]] — Audit code + Obsidian, dépendances entre tâches, recommandations
+- [[08-Inventaire-fonctionnalites-developpees-2026-06-02]] — Inventaire transversal du code reel : utile, recouvrements, APIs non cablees et candidats au retrait
+- [[09-Vision-produit-et-navigation-UX]] — Cartographie produit orientee utilisateur et proposition de navigation cible
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
