@@ -4,7 +4,7 @@ import re
 import unicodedata
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 
 import openpyxl
@@ -30,6 +30,9 @@ from app.schemas.cvc import (
     CvcMatchBuildingsResponse,
     CvcRecomputeReferencesResult,
     CvcRefrigerantBatchSummary,
+    CvcRefrigerantDashboard,
+    CvcRefrigerantDashboardKpi,
+    CvcRefrigerantActionSummary,
     CvcRefrigerantImportResult,
     CvcRefrigerantItemRead,
     CvcRefrigerantItemUpdate,
@@ -54,6 +57,131 @@ NO_FUZZY_FAMILIES = {
     "plomberie",
 }
 REFRIGERANT_NIVEAU_3 = {"Production de froid :", "Pompes à chaleur Air/Air, Air/Eau, Eau/Eau"}
+
+
+DEFAULT_ACTION_STATUS = "À créer"
+
+
+def _add_months(value: date, months: int) -> date:
+    month = value.month - 1 + months
+    year = value.year + month // 12
+    month = month % 12 + 1
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    month_lengths = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    return date(year, month, min(value.day, month_lengths[month - 1]))
+
+
+def _fgas_status(teqco2: float | None) -> str:
+    if teqco2 is None:
+        return "Données à compléter"
+    if teqco2 < 5:
+        return "Hors seuil contrôle périodique"
+    if teqco2 < 50:
+        return "Contrôle annuel"
+    if teqco2 < 500:
+        return "Contrôle semestriel"
+    return "Suivi renforcé ≥500"
+
+
+def _fgas_frequency_months(teqco2: float | None, detection_permanente: bool | None) -> int | None:
+    if teqco2 is None or teqco2 < 5:
+        return None
+    if teqco2 < 50:
+        return 24 if detection_permanente else 12
+    if teqco2 < 500:
+        return 12 if detection_permanente else 6
+    return 6 if detection_permanente else 3
+
+
+def _document_required(fgas_status: str) -> str:
+    if fgas_status == "Hors seuil contrôle périodique":
+        return "Fiche intervention uniquement si manipulation de fluide"
+    if fgas_status == "Données à compléter":
+        return "Fiche équipement / plaque signalétique"
+    return "Rapport contrôle étanchéité + Cerfa 15497*04 si intervention fluide"
+
+
+def _conformity_status(item: CvcRefrigerantItem, fgas_status: str, frequency_months: int | None) -> str:
+    if fgas_status == "Données à compléter":
+        return "Données à compléter"
+    if fgas_status == "Hors seuil contrôle périodique":
+        return "Non prioritaire"
+    if item.dernier_controle_etancheite is None and item.prochaine_echeance is None:
+        return "Dernier contrôle à demander"
+    due_date = item.prochaine_echeance
+    if due_date is None and item.dernier_controle_etancheite and frequency_months:
+        due_date = _add_months(item.dernier_controle_etancheite, frequency_months)
+    if due_date is None:
+        return "Dernier contrôle à demander"
+    today = date.today()
+    if due_date < today:
+        return "En retard"
+    if due_date <= today + timedelta(days=60):
+        return "À programmer < 60 j"
+    return "OK"
+
+
+def _priority(item: CvcRefrigerantItem, conformity_status: str) -> str:
+    esp = _normalize(item.esp_status)
+    if (
+        conformity_status in {"En retard", "Dernier contrôle à demander", "Données à compléter"}
+        or (item.teqco2 is not None and item.teqco2 >= 50)
+        or esp == "manque de donnee"
+    ):
+        return "Haute"
+    if conformity_status == "À programmer < 60 j":
+        return "Moyenne"
+    return "Basse"
+
+
+def _next_action(conformity_status: str) -> str:
+    if conformity_status == "Données à compléter":
+        return "Compléter fluide / charge kg / GWP"
+    if conformity_status == "Dernier contrôle à demander":
+        return "Demander au titulaire le dernier contrôle et la prochaine échéance"
+    if conformity_status == "En retard":
+        return "Programmer un contrôle d’étanchéité"
+    if conformity_status == "À programmer < 60 j":
+        return "Créer un OT GMAO de contrôle"
+    if conformity_status == "Non prioritaire":
+        return "Surveiller uniquement en cas d’intervention"
+    return "Conserver les preuves"
+
+
+def _computed_refrigerant_fields(item: CvcRefrigerantItem) -> dict[str, object]:
+    fgas_status = _fgas_status(item.teqco2)
+    frequency = _fgas_frequency_months(item.teqco2, item.detection_permanente)
+    conformity = _conformity_status(item, fgas_status, frequency)
+    return {
+        "fgas_status": fgas_status,
+        "frequence_controle_mois": frequency,
+        "statut_conformite": conformity,
+        "action_prioritaire": _next_action(conformity),
+        "preuve_attendue": _document_required(fgas_status),
+        "priorite": _priority(item, conformity),
+    }
+
+
+def _action_summary(
+    item: CvcRefrigerantItem,
+    theme: str,
+    constat: str,
+    action: str | None = None,
+) -> CvcRefrigerantActionSummary:
+    computed = _computed_refrigerant_fields(item)
+    return CvcRefrigerantActionSummary(
+        item_id=item.id,
+        priority=str(computed["priorite"]),
+        theme=theme,
+        site=item.site_raw,
+        equipment=item.designation,
+        constat=constat,
+        action=action or str(computed["action_prioritaire"]),
+        preuve_attendue=str(computed["preuve_attendue"]),
+        responsable=item.titulaire or item.responsable_collectivite,
+        echeance_cible=item.prochaine_echeance,
+        statut_action=item.statut_action or DEFAULT_ACTION_STATUS,
+    )
 
 
 def _normalize(value: str | None) -> str:
@@ -1221,6 +1349,88 @@ def list_cvc_refrigerant_batches(db: Session, city_id: int | None) -> list[CvcRe
     return sorted(summaries, key=lambda item: item.created_at or datetime.min, reverse=True)
 
 
+def get_cvc_refrigerant_dashboard(db: Session, city_id: int | None) -> CvcRefrigerantDashboard:
+    stmt = select(CvcRefrigerantItem)
+    if city_id is not None:
+        stmt = stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+    items = list(db.scalars(stmt.order_by(CvcRefrigerantItem.created_at.desc(), CvcRefrigerantItem.site_raw)))
+    batches = list_cvc_refrigerant_batches(db, city_id) if items else []
+    latest_batch = batches[0] if batches else None
+
+    status_counts: dict[str, int] = {}
+    conformity_counts: dict[str, int] = {}
+    priority_counts: dict[str, int] = {}
+    open_actions: list[CvcRefrigerantActionSummary] = []
+    esp_signals: list[CvcRefrigerantActionSummary] = []
+
+    for item in items:
+        computed = _computed_refrigerant_fields(item)
+        fgas_status = str(computed["fgas_status"])
+        conformity = str(computed["statut_conformite"])
+        priority = str(computed["priorite"])
+        status_counts[fgas_status] = status_counts.get(fgas_status, 0) + 1
+        conformity_counts[conformity] = conformity_counts.get(conformity, 0) + 1
+        priority_counts[priority] = priority_counts.get(priority, 0) + 1
+
+        if conformity not in {"OK", "Non prioritaire"}:
+            open_actions.append(
+                _action_summary(
+                    item,
+                    "F-Gaz",
+                    f"{fgas_status} : {conformity}",
+                )
+            )
+        if _normalize(item.esp_status) in {"soumis", "manque de donnee"}:
+            esp_signals.append(
+                _action_summary(
+                    item,
+                    "ESP/DESP",
+                    f"Statut source ESP : {item.esp_status or 'Non renseigné'}",
+                    "Récupérer dossier ESP, PV IP/RP, prochaine échéance et preuve LUNE si applicable",
+                )
+            )
+
+    priority_order = {"Haute": 0, "Moyenne": 1, "Basse": 2}
+    open_actions.sort(key=lambda action: (priority_order.get(action.priority, 9), action.echeance_cible or date.max, action.site or ""))
+    esp_signals.sort(key=lambda action: (priority_order.get(action.priority, 9), action.site or "", action.equipment))
+
+    missing_data = sum(1 for item in items if item.teqco2 is None or not item.fluide_frigorigene or item.quantite_fluide_kg is None or item.gwp is None)
+    over_5 = sum(1 for item in items if item.teqco2 is not None and item.teqco2 >= 5)
+    over_50 = sum(1 for item in items if item.teqco2 is not None and item.teqco2 >= 50)
+    overdue_or_due = sum(
+        1
+        for item in items
+        if str(_computed_refrigerant_fields(item)["statut_conformite"]) in {"En retard", "À programmer < 60 j"}
+    )
+    last_check_missing = sum(
+        1 for item in items if str(_computed_refrigerant_fields(item)["statut_conformite"]) == "Dernier contrôle à demander"
+    )
+    unmapped = sum(1 for item in items if item.cvc_inventory_item_id is None)
+
+    kpis = [
+        CvcRefrigerantDashboardKpi(key="items", label="Équipements inventoriés", value=len(items), helper="Lignes fluides ESP importées"),
+        CvcRefrigerantDashboardKpi(key="fgas", label="À suivre F-Gaz ≥ 5 t", value=over_5, tone="warning", helper="Contrôle périodique requis"),
+        CvcRefrigerantDashboardKpi(key="fgas50", label="≥ 50 t éq. CO2", value=over_50, tone="danger", helper="Priorité renforcée"),
+        CvcRefrigerantDashboardKpi(key="missing", label="Données à compléter", value=missing_data, tone="danger", helper="Fluide, charge ou GWP absent"),
+        CvcRefrigerantDashboardKpi(key="check_missing", label="Contrôle à demander", value=last_check_missing, tone="warning", helper="Dernier contrôle non renseigné"),
+        CvcRefrigerantDashboardKpi(key="due", label="À programmer / retard", value=overdue_or_due, tone="danger", helper="Échéance dépassée ou proche"),
+        CvcRefrigerantDashboardKpi(key="esp", label="Signaux ESP", value=len(esp_signals), tone="warning", helper="Dossier ESP/DESP à suivre à part"),
+        CvcRefrigerantDashboardKpi(key="unmapped", label="Non rattachés CVC", value=unmapped, tone="warning", helper="Lien équipement à valider"),
+    ]
+
+    return CvcRefrigerantDashboard(
+        total_items=len(items),
+        latest_batch=latest_batch.import_batch if latest_batch else None,
+        latest_batch_label=latest_batch.source_filename if latest_batch else None,
+        kpis=kpis,
+        status_counts=status_counts,
+        conformity_counts=conformity_counts,
+        priority_counts=priority_counts,
+        open_actions=open_actions[:80],
+        esp_signals=esp_signals[:80],
+    )
+
+
 def _read_refrigerant_item(
     item: CvcRefrigerantItem,
     inventory_map: dict[int, CvcInventoryItem],
@@ -1228,6 +1438,13 @@ def _read_refrigerant_item(
 ) -> CvcRefrigerantItemRead:
     read = CvcRefrigerantItemRead.model_validate(item)
     read.schedule = json.loads(item.schedule_json) if item.schedule_json else {}
+    computed = _computed_refrigerant_fields(item)
+    read.fgas_status = str(computed["fgas_status"])
+    read.frequence_controle_mois = computed["frequence_controle_mois"] if isinstance(computed["frequence_controle_mois"], int) else None
+    read.statut_conformite = str(computed["statut_conformite"])
+    read.action_prioritaire = str(computed["action_prioritaire"])
+    read.preuve_attendue = str(computed["preuve_attendue"])
+    read.priorite = str(computed["priorite"])
     if item.cvc_inventory_item_id:
         matched = inventory_map.get(item.cvc_inventory_item_id)
         read.matched_inventory_item = _inventory_compact(matched) if matched else None
@@ -1273,22 +1490,41 @@ def update_cvc_refrigerant_item(
     if city_id is not None and item.city_id not in (None, city_id):
         return None
 
+    updates = payload.model_dump(exclude_unset=True)
     inventory_item = None
-    if payload.cvc_inventory_item_id is not None:
+    if "cvc_inventory_item_id" in updates and payload.cvc_inventory_item_id is not None:
         inventory_item = db.get(CvcInventoryItem, payload.cvc_inventory_item_id)
         if inventory_item is None:
             raise ValueError("Equipement CVC introuvable.")
         if city_id is not None and inventory_item.city_id not in (None, city_id):
             raise ValueError("Equipement CVC hors perimetre utilisateur.")
 
-    item.cvc_inventory_item_id = inventory_item.id if inventory_item else None
-    item.site_id = inventory_item.site_id if inventory_item else payload.site_id
-    item.building_id = inventory_item.building_id if inventory_item else payload.building_id
-    item.match_status = "manual_matched" if inventory_item else "pending"
-    item.match_method = "manual" if inventory_item else None
-    item.match_score = 1.0 if inventory_item else None
-    if inventory_item and item.quantite_fluide_kg is not None:
-        inventory_item.quantite_fluide_frigorigene = item.quantite_fluide_kg
+    if "cvc_inventory_item_id" in updates:
+        item.cvc_inventory_item_id = inventory_item.id if inventory_item else None
+        item.site_id = inventory_item.site_id if inventory_item else payload.site_id
+        item.building_id = inventory_item.building_id if inventory_item else payload.building_id
+        item.match_status = "manual_matched" if inventory_item else "pending"
+        item.match_method = "manual" if inventory_item else None
+        item.match_score = 1.0 if inventory_item else None
+        if inventory_item and item.quantite_fluide_kg is not None:
+            inventory_item.quantite_fluide_frigorigene = item.quantite_fluide_kg
+    else:
+        if "site_id" in updates:
+            item.site_id = payload.site_id
+        if "building_id" in updates:
+            item.building_id = payload.building_id
+
+    for field in (
+        "detection_permanente",
+        "dernier_controle_etancheite",
+        "prochaine_echeance",
+        "titulaire",
+        "responsable_collectivite",
+        "statut_action",
+        "commentaire_gmao",
+    ):
+        if field in updates:
+            setattr(item, field, updates[field])
 
     db.commit()
     db.refresh(item)

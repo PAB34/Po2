@@ -20,6 +20,7 @@ from app.schemas.cvc import (
     CvcPreviewResponse,
     CvcRecomputeReferencesResult,
     CvcRefrigerantBatchSummary,
+    CvcRefrigerantDashboard,
     CvcRefrigerantImportResult,
     CvcRefrigerantItemRead,
     CvcRefrigerantItemUpdate,
@@ -34,6 +35,7 @@ from app.services.cvc import (
     delete_cvc_items_for_building,
     import_cvc_from_excel,
     import_cvc_refrigerants_from_excel,
+    get_cvc_refrigerant_dashboard,
     list_cvc_import_batches,
     list_cvc_items_for_batch,
     list_cvc_items_for_building,
@@ -212,6 +214,14 @@ def get_cvc_refrigerant_batches(
     current_user: User = Depends(get_current_user),
 ) -> list[CvcRefrigerantBatchSummary]:
     return list_cvc_refrigerant_batches(db, current_user.city_id)
+
+
+@router.get("/refrigerants/dashboard", response_model=CvcRefrigerantDashboard)
+def get_cvc_refrigerants_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcRefrigerantDashboard:
+    return get_cvc_refrigerant_dashboard(db, current_user.city_id)
 
 
 @router.get("/refrigerants/imports/{import_batch}/items", response_model=list[CvcRefrigerantItemRead])

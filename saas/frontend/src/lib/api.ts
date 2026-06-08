@@ -2696,6 +2696,19 @@ export type CvcRefrigerantItem = {
   cout_desp_date_eur: number | null;
   cumul_5_ans_eur: number | null;
   schedule: Record<string, string>;
+  detection_permanente: boolean | null;
+  dernier_controle_etancheite: string | null;
+  prochaine_echeance: string | null;
+  titulaire: string | null;
+  responsable_collectivite: string | null;
+  statut_action: string | null;
+  commentaire_gmao: string | null;
+  fgas_status: string;
+  frequence_controle_mois: number | null;
+  statut_conformite: string;
+  action_prioritaire: string;
+  preuve_attendue: string;
+  priorite: string;
   match_status: string;
   match_method: string | null;
   match_score: number | null;
@@ -2727,9 +2740,50 @@ export type CvcRefrigerantImportResult = {
 };
 
 export type UpdateCvcRefrigerantItemPayload = {
-  cvc_inventory_item_id: number | null;
+  cvc_inventory_item_id?: number | null;
   site_id?: number | null;
   building_id?: number | null;
+  detection_permanente?: boolean | null;
+  dernier_controle_etancheite?: string | null;
+  prochaine_echeance?: string | null;
+  titulaire?: string | null;
+  responsable_collectivite?: string | null;
+  statut_action?: string | null;
+  commentaire_gmao?: string | null;
+};
+
+export type CvcRefrigerantDashboardKpi = {
+  key: string;
+  label: string;
+  value: number | string;
+  tone: string;
+  helper: string | null;
+};
+
+export type CvcRefrigerantActionSummary = {
+  item_id: number;
+  priority: string;
+  theme: string;
+  site: string | null;
+  equipment: string;
+  constat: string;
+  action: string;
+  preuve_attendue: string;
+  responsable: string | null;
+  echeance_cible: string | null;
+  statut_action: string;
+};
+
+export type CvcRefrigerantDashboard = {
+  total_items: number;
+  latest_batch: string | null;
+  latest_batch_label: string | null;
+  kpis: CvcRefrigerantDashboardKpi[];
+  status_counts: Record<string, number>;
+  conformity_counts: Record<string, number>;
+  priority_counts: Record<string, number>;
+  open_actions: CvcRefrigerantActionSummary[];
+  esp_signals: CvcRefrigerantActionSummary[];
 };
 
 export type CvcSourceBuildingMapping = {
@@ -2932,6 +2986,13 @@ export async function fetchCvcRefrigerantBatches(token: string): Promise<CvcRefr
     headers: buildHeaders(token),
   });
   return parseResponse<CvcRefrigerantBatchSummary[]>(response);
+}
+
+export async function fetchCvcRefrigerantDashboard(token: string): Promise<CvcRefrigerantDashboard> {
+  const response = await fetch(`${apiBaseUrl}/cvc/refrigerants/dashboard`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcRefrigerantDashboard>(response);
 }
 
 export async function fetchCvcRefrigerantItems(

@@ -1,4 +1,17 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-08 (CVC fluides : cockpit F-Gaz / ESP)
+> **Etat code local** : premiere centrale de pilotage `/buildings/cvc-fluides` implementee.
+>
+> La page Fluides frigorigenes & ESP n'est plus seulement un ecran d'import/rattachement : elle devient un cockpit
+> inspire du classeur `saas/energie/CVC/modele_GMAO_suivi_fluides_collectivite_simple.xlsx`. Ajouts locaux :
+> migration additive `0048_add_cvc_refrigerant_pilotage_fields.py`, champs de suivi sur `cvc_refrigerant_items`
+> (detection permanente, dernier controle, prochaine echeance, titulaire, responsable, statut action, commentaire),
+> endpoint `/api/cvc/refrigerants/dashboard`, calculs serveur F-Gaz (seuils 5/50/500 t eq. CO2, frequence, conformite,
+> priorite, preuve attendue), plan d'action derive et signaux ESP/DESP separes. Le front expose 5 onglets :
+> Cockpit, Registre F-Gaz, Actions, ESP/DESP, Import.
+> Validation locale : `python -m compileall app` OK. Build frontend non execute localement : `npm` et `node_modules`
+> absents du poste ; validation CI requise.
+>
 > **Mise a jour complementaire** : 2026-06-05 (CVC referentiel terrain fiabilise)
 > **Etat code local** : moteur de rattachement CVC corrige et endpoint de recalcul de lot ajoute.
 >

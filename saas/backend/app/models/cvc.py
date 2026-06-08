@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -78,6 +78,13 @@ class CvcRefrigerantItem(Base):
     cout_desp_date_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     cumul_5_ans_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     schedule_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detection_permanente: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    dernier_controle_etancheite: Mapped[date | None] = mapped_column(Date, nullable=True)
+    prochaine_echeance: Mapped[date | None] = mapped_column(Date, nullable=True)
+    titulaire: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    responsable_collectivite: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    statut_action: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    commentaire_gmao: Mapped[str | None] = mapped_column(Text, nullable=True)
     match_status: Mapped[str] = mapped_column(String(40), nullable=False, server_default="pending")
     match_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
     match_score: Mapped[float | None] = mapped_column(Float, nullable=True)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -227,6 +227,19 @@ class CvcRefrigerantItemRead(BaseModel):
     cout_desp_date_eur: float | None = None
     cumul_5_ans_eur: float | None = None
     schedule: dict[str, str] = Field(default_factory=dict)
+    detection_permanente: bool | None = None
+    dernier_controle_etancheite: date | None = None
+    prochaine_echeance: date | None = None
+    titulaire: str | None = None
+    responsable_collectivite: str | None = None
+    statut_action: str | None = None
+    commentaire_gmao: str | None = None
+    fgas_status: str = "Données à compléter"
+    frequence_controle_mois: int | None = None
+    statut_conformite: str = "Données à compléter"
+    action_prioritaire: str = "Compléter fluide / charge kg / GWP"
+    preuve_attendue: str = "Fiche équipement / plaque signalétique"
+    priorite: str = "Haute"
     match_status: str
     match_method: str | None = None
     match_score: float | None = None
@@ -240,6 +253,47 @@ class CvcRefrigerantItemUpdate(BaseModel):
     cvc_inventory_item_id: int | None = None
     site_id: int | None = None
     building_id: int | None = None
+    detection_permanente: bool | None = None
+    dernier_controle_etancheite: date | None = None
+    prochaine_echeance: date | None = None
+    titulaire: str | None = None
+    responsable_collectivite: str | None = None
+    statut_action: str | None = None
+    commentaire_gmao: str | None = None
+
+
+class CvcRefrigerantDashboardKpi(BaseModel):
+    key: str
+    label: str
+    value: int | float | str
+    tone: str = "neutral"
+    helper: str | None = None
+
+
+class CvcRefrigerantActionSummary(BaseModel):
+    item_id: int
+    priority: str
+    theme: str
+    site: str | None = None
+    equipment: str
+    constat: str
+    action: str
+    preuve_attendue: str
+    responsable: str | None = None
+    echeance_cible: date | None = None
+    statut_action: str
+
+
+class CvcRefrigerantDashboard(BaseModel):
+    total_items: int
+    latest_batch: str | None = None
+    latest_batch_label: str | None = None
+    kpis: list[CvcRefrigerantDashboardKpi]
+    status_counts: dict[str, int]
+    conformity_counts: dict[str, int]
+    priority_counts: dict[str, int]
+    open_actions: list[CvcRefrigerantActionSummary]
+    esp_signals: list[CvcRefrigerantActionSummary]
 
 
 class CvcSourceBuildingMappingRead(BaseModel):
