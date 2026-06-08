@@ -65,6 +65,8 @@ from app.schemas.bpu import (
     BpuTimePeriodCreate,
     BpuTimePeriodRead,
     BpuTimePeriodUpdate,
+    BpuXlsxImportRequest,
+    BpuXlsxImportResponse,
 )
 from app.services.bpu import (
     DEFAULT_BPU_SOURCE_DIR,
@@ -410,6 +412,40 @@ def trigger_import(
         skipped=skipped,
         results=payload_results,
     )
+
+
+@router.post("/import-xlsx", response_model=BpuXlsxImportResponse)
+def trigger_xlsx_import(
+    payload: BpuXlsxImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BpuXlsxImportResponse:
+    """Importe le fichier de référence `extraction_tarifs_electricite_BPU.xlsx`.
+
+    C'est la **source de vérité** (extraction manuelle validée, confiance 1.0),
+    à privilégier sur l'ingestion PDF/OCR. Le fichier est lu côté serveur depuis
+    le dépôt monté en read-only (`/workspace`). `force=True` (défaut) remplace
+    les BPU déjà présents pour les PDFs listés dans l'onglet `Sources_PDF`.
+    """
+    # Import différé : la dépendance pandas n'est tirée qu'à l'appel.
+    from app.scripts.import_bpu_xlsx import DEFAULT_XLSX, import_xlsx
+
+    if not DEFAULT_XLSX.exists():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fichier xlsx introuvable côté serveur : {DEFAULT_XLSX}",
+        )
+
+    try:
+        counters = import_xlsx(DEFAULT_XLSX, force=payload.force)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Import BPU xlsx a échoué")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur d'import xlsx : {type(exc).__name__}: {exc}",
+        )
+
+    return BpuXlsxImportResponse(**counters)
 
 
 # ---------------------------------------------------------------------------

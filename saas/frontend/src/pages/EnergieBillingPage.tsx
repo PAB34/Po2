@@ -317,6 +317,28 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
     },
   });
 
+  // Reprend les prix BPU depuis le fichier de référence (xlsx audité) côté serveur.
+  const syncBpuMut = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(
+        `${apiBaseUrl}/billing/configs/${configId}/bpu-lines/sync?apply=true`,
+        { method: "POST", headers: buildHeaders(token!) },
+      );
+      if (!r.ok) throw new Error(await r.text());
+      return r.json() as Promise<{
+        lines_count: number;
+        source_filename: string | null;
+        source_year: number | null;
+        warnings: string[];
+      }>;
+    },
+    onSuccess: () => {
+      setBpuInitDone(false); // force la ré-hydratation des champs depuis les données synchronisées
+      qc.invalidateQueries({ queryKey: ["billing-bpu-lines", configId] });
+      qc.invalidateQueries({ queryKey: ["billing-supplier-groups"] });
+    },
+  });
+
   return (
     <div className="wizard-overlay" onClick={onClose}>
       <div className="wizard-panel" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
@@ -384,11 +406,43 @@ function BillingWizard({ group, onClose }: { group: SupplierGroup; onClose: () =
           {step === 2 && configId && (
             <div>
               <p className="field-label" style={{ marginBottom: 4 }}>Prix unitaires BPU par tarif TURPE</p>
-              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
+              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
                 Saisissez les prix du BPU pour chaque tarif détecté sur les PRMs de{" "}
                 <strong>{group.supplier}</strong>. Le total est calculé automatiquement.
                 Les prix sont en €/MWh HTT.
               </p>
+
+              {/* Branchement BPU : reprend les prix audités du fichier de référence */}
+              <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="btn-primary"
+                    style={{ background: "#16a34a", borderColor: "#16a34a" }}
+                    disabled={syncBpuMut.isPending}
+                    onClick={() => syncBpuMut.mutate()}
+                  >
+                    {syncBpuMut.isPending ? "Synchronisation…" : "↻ Reprendre les prix depuis le BPU"}
+                  </button>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>
+                    Évite la double saisie : importe les prix du fichier de référence audité
+                    (<code>extraction_tarifs_electricite_BPU.xlsx</code>), document le plus récent du lot.
+                  </span>
+                </div>
+                {syncBpuMut.data && (
+                  <p style={{ fontSize: 12, color: "#15803d", margin: "8px 0 0" }}>
+                    ✓ {syncBpuMut.data.lines_count} lignes reprises depuis{" "}
+                    <strong>{syncBpuMut.data.source_filename}</strong> ({syncBpuMut.data.source_year}).
+                    {syncBpuMut.data.warnings.length > 0 && (
+                      <span style={{ color: "#b45309" }}> · {syncBpuMut.data.warnings.length} ligne(s) non mappée(s)</span>
+                    )}
+                  </p>
+                )}
+                {syncBpuMut.isError && (
+                  <p style={{ fontSize: 12, color: "#dc2626", margin: "8px 0 0" }}>
+                    Erreur : {String(syncBpuMut.error)}
+                  </p>
+                )}
+              </div>
 
               {bpuLinesQuery.isLoading && <p style={{ color: "#64748b", fontSize: 13 }}>Chargement…</p>}
 

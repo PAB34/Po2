@@ -11,6 +11,8 @@ from app.models.user import User
 from app.schemas.billing import (
     BillingBpuLineIn,
     BillingBpuLineOut,
+    BillingBpuSyncPreviewLine,
+    BillingBpuSyncResult,
     BillingConfigOut,
     BillingConfigPatch,
     BillingHphcSlotIn,
@@ -43,6 +45,7 @@ from app.services.billing import (
     replace_prices,
     upsert_supplier_config,
 )
+from app.services.billing_bpu_sync import apply_config_sync, preview_config_sync
 from app.services.invoices import (
     analyze_existing_invoice_import,
     create_invoice_batch,
@@ -209,6 +212,34 @@ def set_bpu_lines(
     city_id = _require_city(current_user)
     _get_cfg_or_404(db, config_id, city_id)
     return replace_bpu_lines(db, config_id, [ln.model_dump() for ln in lines])
+
+
+@router.post("/configs/{config_id}/bpu-lines/sync", response_model=BillingBpuSyncResult)
+def sync_bpu_lines_from_bpu(
+    config_id: int,
+    apply: bool = Query(False, description="False = aperçu (dry-run) ; True = écrit en base."),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reprend les prix BPU du fichier de référence (xlsx audité) dans `BillingBpuLine`.
+
+    Source = le xlsx canonique, document de l'année la plus récente pour le lot du config.
+    `apply=false` renvoie l'aperçu sans rien écrire ; `apply=true` remplace les lignes
+    courantes (year IS NULL). Voir `services/billing_bpu_sync.py`.
+    """
+    city_id = _require_city(current_user)
+    cfg = _get_cfg_or_404(db, config_id, city_id)
+    res = apply_config_sync(db, cfg) if apply else preview_config_sync(db, cfg)
+    return BillingBpuSyncResult(
+        applied=apply and bool(res.lines),
+        lot_number=res.lot_number,
+        source_filename=res.source_filename,
+        source_year=res.source_year,
+        source_supplier=res.source_supplier,
+        lines_count=len(res.lines),
+        warnings=res.warnings,
+        lines=[BillingBpuSyncPreviewLine(**{k: v for k, v in ln.items() if k != "year" and k != "observation"}) for ln in res.lines],
+    )
 
 
 @router.get("/invoices/imports", response_model=list[EnergyInvoiceImportOut])

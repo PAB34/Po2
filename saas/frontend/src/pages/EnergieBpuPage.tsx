@@ -21,9 +21,11 @@ import {
   fetchBpuTimeline,
   fetchBpuTurpeEvolution,
   triggerBpuImport,
+  triggerBpuXlsxImport,
   type BpuDocumentSummary,
   type BpuFormula,
   type BpuImportResponse,
+  type BpuXlsxImportResponse,
   type BpuTurpeEvolutionPoint,
   type BpuTimelineFilters,
   type BpuTimelinePoint,
@@ -94,6 +96,10 @@ export default function EnergieBpuPage() {
   });
   const importMutation = useMutation<BpuImportResponse, Error, { force: boolean }>({
     mutationFn: ({ force }) => triggerBpuImport(token ?? "", { force, enable_ocr: true }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bpu"] }),
+  });
+  const xlsxImportMutation = useMutation<BpuXlsxImportResponse, Error, { force: boolean }>({
+    mutationFn: ({ force }) => triggerBpuXlsxImport(token ?? "", { force }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["bpu"] }),
   });
 
@@ -356,12 +362,48 @@ export default function EnergieBpuPage() {
             )}
           </div>
 
-          {/* Import admin */}
-          <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px" }}>
-            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 4px" }}>Import des PDFs côté serveur</h2>
+          {/* Import xlsx — SOURCE DE VÉRITÉ (recommandé) */}
+          <div style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 10, padding: "16px" }}>
+            <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: "0 0 4px" }}>
+              Importer le fichier de référence (xlsx) <span style={{ fontSize: "0.7rem", color: "#4ade80", fontWeight: 600 }}>· recommandé</span>
+            </h2>
             <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "0 0 14px", maxWidth: 580 }}>
-              Lance l'ingestion du répertoire <code style={{ color: "#93c5fd" }}>saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/</code>.
-              PDFs textuels parsés directement, scans via OCR. Idempotent sauf si « Forcer » coché.
+              Charge <code style={{ color: "#86efac" }}>extraction_tarifs_electricite_BPU.xlsx</code> — l'extraction
+              manuelle <strong>validée et auditée</strong> (source de vérité, confiance 1.0). À privilégier :
+              les prix sont exacts, contrairement à la ré-ingestion PDF/OCR ci-dessous.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => xlsxImportMutation.mutate({ force: true })}
+                disabled={xlsxImportMutation.isPending}
+                style={{ padding: "7px 16px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 7, fontSize: "0.85rem", fontWeight: 500, cursor: "pointer", opacity: xlsxImportMutation.isPending ? 0.6 : 1 }}
+              >
+                {xlsxImportMutation.isPending ? "Import en cours…" : "Importer le fichier de référence"}
+              </button>
+              {xlsxImportMutation.data && (
+                <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+                  <span style={{ color: "#4ade80" }}>{xlsxImportMutation.data.documents} docs</span> ·{" "}
+                  {xlsxImportMutation.data.components} prix · {xlsxImportMutation.data.charges} surcoûts
+                  {xlsxImportMutation.data.errors > 0 && (
+                    <span style={{ color: "#f87171" }}> · {xlsxImportMutation.data.errors} erreurs</span>
+                  )}
+                </span>
+              )}
+            </div>
+            {xlsxImportMutation.isError && (
+              <ErrorBanner message={(xlsxImportMutation.error as Error).message} style={{ marginTop: 12 }} />
+            )}
+          </div>
+
+          {/* Import admin — PDF/OCR (avancé, secondaire) */}
+          <div style={{ background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "16px", opacity: 0.85 }}>
+            <h2 style={{ fontSize: "0.95rem", fontWeight: 600, margin: "0 0 4px", color: "#94a3b8" }}>
+              Avancé · ré-ingestion PDF/OCR côté serveur
+            </h2>
+            <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "0 0 14px", maxWidth: 580 }}>
+              Re-parse les PDF du répertoire <code style={{ color: "#93c5fd" }}>saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/</code> (textuels directs, scans via OCR).
+              <strong style={{ color: "#fbbf24" }}> Ne reprend pas les corrections du xlsx</strong> et peut réintroduire des imprécisions d'OCR — n'utiliser que pour un nouveau PDF non encore saisi dans le fichier de référence.
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button

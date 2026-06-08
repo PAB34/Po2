@@ -353,3 +353,25 @@ class BpuImportResponse(BaseModel):
     failed: int
     skipped: int
     results: list[BpuImportResult]
+
+
+class BpuXlsxImportRequest(BaseModel):
+    """Body pour POST /api/bpu/import-xlsx (import du fichier de référence)."""
+
+    force: bool = Field(
+        default=True,
+        description="Si True (défaut), remplace les BPU déjà présents par la version xlsx.",
+    )
+
+
+class BpuXlsxImportResponse(BaseModel):
+    """Compteurs renvoyés par l'import du xlsx canonique."""
+
+    documents: int = 0
+    segments: int = 0
+    periods: int = 0
+    components: int = 0
+    charges: int = 0
+    skipped_prices: int = 0
+    skipped_charges: int = 0
+    errors: int = 0

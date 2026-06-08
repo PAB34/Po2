@@ -124,3 +124,26 @@ class BillingBpuLineOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BillingBpuSyncPreviewLine(BaseModel):
+    tariff_code: str
+    poste: str
+    pu_fourniture: float | None = None
+    pu_capacite: float | None = None
+    pu_cee: float | None = None
+    pu_go: float | None = None
+    pu_total: float | None = None
+
+
+class BillingBpuSyncResult(BaseModel):
+    """Résultat d'une sync BPU → BillingBpuLine (preview ou appliquée)."""
+
+    applied: bool
+    lot_number: int
+    source_filename: str | None = None
+    source_year: int | None = None
+    source_supplier: str | None = None
+    lines_count: int = 0
+    warnings: list[str] = []
+    lines: list[BillingBpuSyncPreviewLine] = []

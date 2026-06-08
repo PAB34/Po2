@@ -2335,6 +2335,17 @@ export type BpuImportResponse = {
   results: BpuImportResult[];
 };
 
+export type BpuXlsxImportResponse = {
+  documents: number;
+  segments: number;
+  periods: number;
+  components: number;
+  charges: number;
+  skipped_prices: number;
+  skipped_charges: number;
+  errors: number;
+};
+
 function buildQuery(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -2409,6 +2420,18 @@ export async function triggerBpuImport(
     body: JSON.stringify(payload),
   });
   return parseResponse<BpuImportResponse>(response);
+}
+
+export async function triggerBpuXlsxImport(
+  token: string,
+  payload: { force?: boolean } = {},
+): Promise<BpuXlsxImportResponse> {
+  const response = await fetch(`${apiBaseUrl}/bpu/import-xlsx`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BpuXlsxImportResponse>(response);
 }
 
 // === BPU édition tableau ====================================================
