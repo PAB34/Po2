@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.db import Base
 from app.models.pronostics import PronosticsMatch, PronosticsPasswordReset
 from app.schemas.pronostics import PronosticsPredictionWrite
+from app.services.football_data import FootballDataClient, build_pronostics_model_feed
 from app.services.pronostics import (
     _normalize_team,
     _score_prediction,
@@ -18,6 +19,98 @@ from app.services.pronostics import (
     sync_scores,
     update_player,
 )
+
+
+class FakeFootballDataClient(FootballDataClient):
+    def __init__(self):
+        super().__init__(token="test-token", base_url="https://example.test")
+        self.paths: list[tuple[str, dict | None]] = []
+
+    def get(self, path: str, *, params: dict | None = None) -> dict:
+        self.paths.append((path, params))
+        if path == "competitions/WC/teams":
+            return {
+                "teams": [
+                    {
+                        "id": 1,
+                        "name": "Mexico",
+                        "shortName": "Mexico",
+                        "tla": "MEX",
+                        "area": {"name": "Mexico", "code": "MEX"},
+                        "crest": "https://crests.example/mex.png",
+                    }
+                ]
+            }
+        if path == "teams/1":
+            return {
+                "id": 1,
+                "name": "Mexico",
+                "shortName": "Mexico",
+                "tla": "MEX",
+                "area": {"name": "Mexico", "code": "MEX"},
+                "crest": "https://crests.example/mex.png",
+                "coach": {
+                    "id": 10,
+                    "name": "Coach Mexico",
+                    "nationality": "Mexico",
+                    "contract": {"start": "2024-01", "until": "2026-12"},
+                },
+                "squad": [
+                    {
+                        "id": 100,
+                        "name": "Player One",
+                        "position": "Attacker",
+                        "dateOfBirth": "1999-01-01",
+                        "nationality": "Mexico",
+                        "shirtNumber": 9,
+                        "currentTeam": {"id": 500, "name": "Club One", "contract": {"until": "2027-06"}},
+                    }
+                ],
+                "staff": [{"id": 11, "name": "Assistant"}],
+            }
+        if path == "teams/1/matches":
+            return {
+                "resultSet": {"wins": 1, "draws": 0, "losses": 1},
+                "matches": [
+                    {
+                        "homeTeam": {"name": "Mexico"},
+                        "awayTeam": {"name": "Canada"},
+                        "score": {"fullTime": {"home": 2, "away": 0}},
+                    },
+                    {
+                        "homeTeam": {"name": "United States"},
+                        "awayTeam": {"name": "Mexico"},
+                        "score": {"fullTime": {"home": 1, "away": 0}},
+                    },
+                ],
+            }
+        if path == "persons/100/matches":
+            return {
+                "aggregations": {
+                    "matchesOnPitch": 3,
+                    "startingXI": 2,
+                    "minutesPlayed": 210,
+                    "goals": 1,
+                    "assists": 2,
+                    "subbedIn": 1,
+                    "subbedOut": 1,
+                    "yellowCards": 0,
+                    "redCards": 0,
+                }
+            }
+        if path == "competitions/WC/scorers":
+            return {
+                "scorers": [
+                    {
+                        "player": {"id": 100, "name": "Player One"},
+                        "team": {"id": 1, "name": "Mexico"},
+                        "goals": 2,
+                        "assists": 1,
+                        "penalties": 0,
+                    }
+                ]
+            }
+        raise AssertionError(f"Unexpected path {path}")
 
 
 def test_score_prediction_barème():
@@ -132,3 +225,43 @@ def test_ranking_recalculates_points_from_real_scores():
     assert ranking[0].points == 10
     assert ranking[0].exact_scores == 1
     assert ranking[0].good_results == 1
+
+
+def test_model_feed_reports_unconfigured_without_token(monkeypatch):
+    monkeypatch.setattr("app.services.football_data.settings.football_data_token", "")
+
+    feed = build_pronostics_model_feed()
+
+    assert feed["configured"] is False
+    assert feed["summary"]["teams"] == 0
+    assert "injury_status" in feed["unavailable_fields"]
+
+
+def test_model_feed_collects_team_coach_squad_and_recent_form():
+    client = FakeFootballDataClient()
+
+    feed = build_pronostics_model_feed(client=client)
+
+    assert feed["configured"] is True
+    assert feed["summary"]["teams"] == 1
+    assert feed["summary"]["players"] == 1
+    assert feed["teams"][0]["local_team_key"] == "mexique"
+    assert feed["teams"][0]["coach"]["name"] == "Coach Mexico"
+    assert feed["teams"][0]["recent_form"]["goals_for"] == 2
+    assert feed["teams"][0]["recent_form"]["goals_against"] == 1
+    assert feed["teams"][0]["recent_form"]["clean_sheets"] == 1
+    assert feed["players"][0]["current_team_name"] == "Club One"
+    assert feed["competition_scorers"][0]["player_name"] == "Player One"
+    assert not any(path == "persons/100/matches" for path, _ in client.paths)
+
+
+def test_model_feed_can_enrich_player_recent_stats():
+    client = FakeFootballDataClient()
+
+    feed = build_pronostics_model_feed(client=client, include_player_matches=True)
+
+    assert feed["summary"]["players_with_recent_match_stats"] == 1
+    assert feed["coverage"]["player_recent_matches"]["status"] == "retrieved"
+    assert feed["players"][0]["recent_stats"]["minutes_played"] == 210
+    assert feed["players"][0]["recent_stats"]["goals"] == 1
+    assert any(path == "persons/100/matches" for path, _ in client.paths)

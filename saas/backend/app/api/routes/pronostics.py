@@ -13,6 +13,7 @@ from app.schemas.pronostics import (
     PronosticsMatchRead,
     PronosticsForgotPasswordRequest,
     PronosticsMessageRead,
+    PronosticsModelFeedRead,
     PronosticsParticipantRead,
     PronosticsPlayerRead,
     PronosticsPlayerUpdate,
@@ -22,6 +23,7 @@ from app.schemas.pronostics import (
     PronosticsResetPasswordRequest,
     PronosticsTokenResponse,
 )
+from app.services.football_data import build_pronostics_model_feed
 from app.services.pronostics import (
     authenticate_player,
     calculate_ranking,
@@ -186,3 +188,19 @@ def update_scores(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, int | bool]:
     return sync_scores(db)
+
+
+@router.get("/admin/model-feed", response_model=PronosticsModelFeedRead)
+def model_feed(
+    include_player_matches: bool = False,
+    recent_team_matches_limit: int = 10,
+    recent_player_matches_limit: int = 10,
+    current_user: User = Depends(get_current_user),
+) -> PronosticsModelFeedRead:
+    return PronosticsModelFeedRead.model_validate(
+        build_pronostics_model_feed(
+            include_player_matches=include_player_matches,
+            recent_team_matches_limit=max(1, min(recent_team_matches_limit, 100)),
+            recent_player_matches_limit=max(1, min(recent_player_matches_limit, 100)),
+        )
+    )

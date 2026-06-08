@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -89,3 +90,16 @@ class PronosticsRankingRead(BaseModel):
     exact_scores: int
     good_results: int
     predictions_count: int
+
+
+class PronosticsModelFeedRead(BaseModel):
+    configured: bool
+    source: str
+    competition: str
+    season: int
+    summary: dict[str, Any]
+    coverage: dict[str, Any]
+    teams: list[dict[str, Any]]
+    players: list[dict[str, Any]]
+    competition_scorers: list[dict[str, Any]]
+    unavailable_fields: dict[str, str]
