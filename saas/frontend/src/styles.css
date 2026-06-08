@@ -1175,7 +1175,8 @@ button:disabled {
 
 .cvc-inventory-table,
 .cvc-site-mapping-table,
-.cvc-refrigerant-table {
+.cvc-refrigerant-table,
+.cvc-source-mapping-table {
   table-layout: fixed;
   min-width: 0;
 }
@@ -1185,7 +1186,9 @@ button:disabled {
 .cvc-site-mapping-table th,
 .cvc-site-mapping-table td,
 .cvc-refrigerant-table th,
-.cvc-refrigerant-table td {
+.cvc-refrigerant-table td,
+.cvc-source-mapping-table th,
+.cvc-source-mapping-table td {
   padding: 9px 10px;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1247,6 +1250,10 @@ button:disabled {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
+.cvc-technical-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .cvc-refrigerant-table th:nth-child(1) {
   width: 22%;
 }
@@ -1267,6 +1274,31 @@ button:disabled {
 
 .cvc-refrigerant-table th:nth-child(7) {
   width: 6%;
+}
+
+.cvc-source-mapping-table th:nth-child(1) {
+  width: 20%;
+}
+
+.cvc-source-mapping-table th:nth-child(2) {
+  width: 18%;
+}
+
+.cvc-source-mapping-table th:nth-child(3),
+.cvc-source-mapping-table th:nth-child(4) {
+  width: 18%;
+}
+
+.cvc-source-mapping-table th:nth-child(5) {
+  width: 12%;
+}
+
+.cvc-source-mapping-table th:nth-child(6) {
+  width: 10%;
+}
+
+.cvc-source-mapping-table th:nth-child(7) {
+  width: 4%;
 }
 
 .clickable-row {

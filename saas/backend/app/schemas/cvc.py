@@ -205,6 +205,8 @@ class CvcRefrigerantItemRead(BaseModel):
 
     id: int
     city_id: int | None = None
+    site_id: int | None = None
+    building_id: int | None = None
     cvc_inventory_item_id: int | None = None
     import_batch: str
     source_filename: str | None = None
@@ -236,3 +238,48 @@ class CvcRefrigerantItemRead(BaseModel):
 
 class CvcRefrigerantItemUpdate(BaseModel):
     cvc_inventory_item_id: int | None = None
+    site_id: int | None = None
+    building_id: int | None = None
+
+
+class CvcSourceBuildingMappingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    city_id: int | None = None
+    source_type: str
+    import_batch: str
+    source_site_raw: str
+    site_id: int | None = None
+    building_id: int | None = None
+    status: str
+    notes: str | None = None
+    match_score: float | None = None
+    match_method: str | None = None
+    site_suggestions: list[PatrimoineSiteSuggestion] = Field(default_factory=list)
+    building_suggestions: list[BuildingMatchSuggestion] = Field(default_factory=list)
+    item_count: int = 0
+    refrigerant_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class CvcSourceBuildingMappingUpdate(BaseModel):
+    site_id: int | None = None
+    building_id: int | None = None
+    status: str = "to_review"
+    notes: str | None = None
+
+
+class CvcTechnicalCoverageReport(BaseModel):
+    patrimoine_buildings: int
+    cvc_inventory_items: int
+    cvc_refrigerant_items: int
+    inventory_without_building: int
+    refrigerants_without_building: int
+    refrigerants_without_inventory_item: int
+    source_mappings_to_review: int
+    source_mappings_not_found: int
+    patrimoine_buildings_without_cvc: list[BuildingMatchSuggestion]
+    inventory_unmapped_by_source: list[dict]
+    refrigerants_unmapped_by_source: list[dict]

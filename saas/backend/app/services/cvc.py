@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
-from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem
+from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.equipment import EquipmentReference
 from app.models.local import Local
 from app.models.site import Site
@@ -35,6 +35,9 @@ from app.schemas.cvc import (
     CvcRefrigerantItemUpdate,
     CvcRefrigerantMatchCandidate,
     CvcInventoryItemCompact,
+    CvcSourceBuildingMappingRead,
+    CvcSourceBuildingMappingUpdate,
+    CvcTechnicalCoverageReport,
     CvcSiteMapping,
     CvcPreviewResponse,
     PatrimoineSiteSuggestion,
@@ -359,6 +362,186 @@ def _best_current_id(values: list[int | None]) -> int | None:
     return max(counts.items(), key=lambda item: item[1])[0]
 
 
+def _suggest_source_building(
+    source_site_raw: str,
+    sites: list[Site],
+    buildings: list[Building],
+) -> tuple[int | None, int | None, float | None, str | None]:
+    site_scored = sorted(
+        ((_similarity(source_site_raw, site.nom_site), site) for site in sites),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    building_scored = sorted(
+        (
+            (
+                max(
+                    _similarity(source_site_raw, building.nom_batiment or ""),
+                    _similarity(source_site_raw, building.adresse_reconstituee or ""),
+                ),
+                building,
+            )
+            for building in buildings
+        ),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    if building_scored and building_scored[0][0] >= 0.72:
+        building = building_scored[0][1]
+        return building.site_id, building.id, round(building_scored[0][0], 3), "auto_building"
+    if site_scored and site_scored[0][0] >= 0.72:
+        site = site_scored[0][1]
+        return site.id, None, round(site_scored[0][0], 3), "auto_site"
+    return None, None, None, None
+
+
+def _mapping_suggestions(
+    source_site_raw: str,
+    sites: list[Site],
+    buildings: list[Building],
+) -> tuple[list[PatrimoineSiteSuggestion], list[BuildingMatchSuggestion]]:
+    site_scored = sorted(
+        ((_similarity(source_site_raw, site.nom_site), site) for site in sites),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    building_scored = sorted(
+        (
+            (
+                max(
+                    _similarity(source_site_raw, building.nom_batiment or ""),
+                    _similarity(source_site_raw, building.adresse_reconstituee or ""),
+                ),
+                building,
+            )
+            for building in buildings
+        ),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    site_suggestions = [
+        PatrimoineSiteSuggestion(
+            site_id=site.id,
+            nom_site=site.nom_site,
+            adresse=site.adresse,
+            score=round(score, 3),
+        )
+        for score, site in site_scored[:5]
+        if score > 0.1
+    ]
+    building_suggestions = [
+        BuildingMatchSuggestion(
+            building_id=building.id,
+            site_id=building.site_id,
+            nom_batiment=building.nom_batiment,
+            adresse=_build_address(building),
+            score=round(score, 3),
+        )
+        for score, building in building_scored[:5]
+        if score > 0.1
+    ]
+    return site_suggestions, building_suggestions
+
+
+def ensure_cvc_source_building_mappings(db: Session, city_id: int | None) -> int:
+    sites_stmt = select(Site)
+    buildings_stmt = select(Building)
+    inventory_stmt = select(CvcInventoryItem)
+    refrigerant_stmt = select(CvcRefrigerantItem)
+    mapping_stmt = select(CvcSourceBuildingMapping)
+    if city_id is not None:
+        sites_stmt = sites_stmt.where(Site.city_id == city_id)
+        buildings_stmt = buildings_stmt.where(Building.city_id == city_id)
+        inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+        mapping_stmt = mapping_stmt.where((CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None)))
+
+    sites = list(db.scalars(sites_stmt))
+    buildings = list(db.scalars(buildings_stmt))
+    existing = {
+        (mapping.source_type, mapping.import_batch, _normalize(mapping.source_site_raw))
+        for mapping in db.scalars(mapping_stmt)
+    }
+    sources: set[tuple[str, str, str]] = set()
+    for item in db.scalars(inventory_stmt):
+        if item.import_batch and item.site_raw:
+            sources.add(("inventory", item.import_batch, item.site_raw.strip()))
+    for item in db.scalars(refrigerant_stmt):
+        if item.import_batch and item.site_raw:
+            sources.add(("refrigerant", item.import_batch, item.site_raw.strip()))
+
+    created = 0
+    created_mappings: list[CvcSourceBuildingMapping] = []
+    for source_type, import_batch, source_site_raw in sorted(sources):
+        key = (source_type, import_batch, _normalize(source_site_raw))
+        if key in existing:
+            continue
+        site_id, building_id, score, method = _suggest_source_building(source_site_raw, sites, buildings)
+        status = "matched" if site_id or building_id else "to_review"
+        mapping = CvcSourceBuildingMapping(
+            city_id=city_id,
+            source_type=source_type,
+            import_batch=import_batch,
+            source_site_raw=source_site_raw,
+            site_id=site_id,
+            building_id=building_id,
+            status=status,
+            match_score=score,
+            match_method=method,
+        )
+        db.add(mapping)
+        created_mappings.append(mapping)
+        created += 1
+    if created:
+        db.flush()
+        for mapping in created_mappings:
+            if mapping.status == "matched":
+                _apply_source_mapping_to_rows(db, mapping)
+        db.commit()
+    return created
+
+
+def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping) -> int:
+    updated = 0
+    building = db.get(Building, mapping.building_id) if mapping.building_id is not None else None
+    next_site_id = mapping.site_id if mapping.site_id is not None else (building.site_id if building else None)
+    if mapping.source_type == "inventory":
+        rows = list(
+            db.scalars(
+                select(CvcInventoryItem).where(
+                    CvcInventoryItem.import_batch == mapping.import_batch,
+                    CvcInventoryItem.site_raw == mapping.source_site_raw,
+                )
+            )
+        )
+        for item in rows:
+            item.site_id = next_site_id
+            item.building_id = building.id if building else None
+            if building is None:
+                item.local_id = None
+            linked_refrigerants = list(
+                db.scalars(select(CvcRefrigerantItem).where(CvcRefrigerantItem.cvc_inventory_item_id == item.id))
+            )
+            for refrigerant in linked_refrigerants:
+                refrigerant.site_id = item.site_id
+                refrigerant.building_id = item.building_id
+            updated += 1
+    elif mapping.source_type == "refrigerant":
+        rows = list(
+            db.scalars(
+                select(CvcRefrigerantItem).where(
+                    CvcRefrigerantItem.import_batch == mapping.import_batch,
+                    CvcRefrigerantItem.site_raw == mapping.source_site_raw,
+                )
+            )
+        )
+        for item in rows:
+            item.site_id = next_site_id
+            item.building_id = building.id if building else None
+            updated += 1
+    return updated
+
+
 def list_site_matches_for_import(
     db: Session, import_batch: str, city_id: int | None
 ) -> CvcImportSiteMatchResponse:
@@ -489,6 +672,12 @@ def apply_site_mappings_to_import(
             item.building_id = building.id if building else None
             if building_changed:
                 item.local_id = None
+            linked_refrigerants = list(
+                db.scalars(select(CvcRefrigerantItem).where(CvcRefrigerantItem.cvc_inventory_item_id == item.id))
+            )
+            for refrigerant in linked_refrigerants:
+                refrigerant.site_id = item.site_id
+                refrigerant.building_id = item.building_id
             updated += 1
         applied += 1
 
@@ -818,6 +1007,7 @@ def import_cvc_from_excel(
         imported += 1
 
     db.commit()
+    ensure_cvc_source_building_mappings(db, city_id)
     return CvcImportResult(
         imported=imported,
         skipped=skipped,
@@ -952,9 +1142,12 @@ def import_cvc_refrigerants_from_excel(
         elif candidates:
             match_status = "ambiguous"
             ambiguous += 1
+        matched_inventory = next((i for i in inventory_items if i.id == inventory_item_id), None)
 
         item = CvcRefrigerantItem(
             city_id=city_id,
+            site_id=matched_inventory.site_id if matched_inventory else None,
+            building_id=matched_inventory.building_id if matched_inventory else None,
             cvc_inventory_item_id=inventory_item_id,
             import_batch=batch_id,
             source_filename=source_filename,
@@ -982,7 +1175,6 @@ def import_cvc_refrigerants_from_excel(
         db.add(item)
 
         if inventory_item_id is not None:
-            matched_inventory = next((i for i in inventory_items if i.id == inventory_item_id), None)
             if matched_inventory is not None and row["quantite_fluide_kg"] is not None:
                 matched_inventory.quantite_fluide_frigorigene = row["quantite_fluide_kg"]
             auto_matched += 1
@@ -991,6 +1183,7 @@ def import_cvc_refrigerants_from_excel(
         imported += 1
 
     db.commit()
+    ensure_cvc_source_building_mappings(db, city_id)
     return CvcRefrigerantImportResult(
         import_batch=batch_id,
         imported=imported,
@@ -1089,6 +1282,8 @@ def update_cvc_refrigerant_item(
             raise ValueError("Equipement CVC hors perimetre utilisateur.")
 
     item.cvc_inventory_item_id = inventory_item.id if inventory_item else None
+    item.site_id = inventory_item.site_id if inventory_item else payload.site_id
+    item.building_id = inventory_item.building_id if inventory_item else payload.building_id
     item.match_status = "manual_matched" if inventory_item else "pending"
     item.match_method = "manual" if inventory_item else None
     item.match_score = 1.0 if inventory_item else None
@@ -1106,6 +1301,157 @@ def update_cvc_refrigerant_item(
     inventory_items = list(db.scalars(inventory_stmt))
     inventory_map = {inventory.id: inventory for inventory in inventory_items}
     return _read_refrigerant_item(item, inventory_map, inventory_items)
+
+
+def list_cvc_source_building_mappings(
+    db: Session,
+    city_id: int | None,
+    source_type: str | None = None,
+    import_batch: str | None = None,
+) -> list[CvcSourceBuildingMappingRead]:
+    ensure_cvc_source_building_mappings(db, city_id)
+    stmt = select(CvcSourceBuildingMapping)
+    sites_stmt = select(Site)
+    buildings_stmt = select(Building)
+    if city_id is not None:
+        stmt = stmt.where((CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None)))
+        sites_stmt = sites_stmt.where(Site.city_id == city_id)
+        buildings_stmt = buildings_stmt.where(Building.city_id == city_id)
+    if source_type:
+        stmt = stmt.where(CvcSourceBuildingMapping.source_type == source_type)
+    if import_batch:
+        stmt = stmt.where(CvcSourceBuildingMapping.import_batch == import_batch)
+
+    mappings = list(db.scalars(stmt.order_by(CvcSourceBuildingMapping.source_type, CvcSourceBuildingMapping.source_site_raw)))
+    sites = list(db.scalars(sites_stmt))
+    buildings = list(db.scalars(buildings_stmt))
+
+    inventory_counts: dict[tuple[str, str], int] = {}
+    refrigerant_counts: dict[tuple[str, str], int] = {}
+    inventory_stmt = select(CvcInventoryItem)
+    refrigerant_stmt = select(CvcRefrigerantItem)
+    if city_id is not None:
+        inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+    for item in db.scalars(inventory_stmt):
+        if item.import_batch and item.site_raw:
+            key = (item.import_batch, item.site_raw.strip())
+            inventory_counts[key] = inventory_counts.get(key, 0) + 1
+    for item in db.scalars(refrigerant_stmt):
+        if item.import_batch and item.site_raw:
+            key = (item.import_batch, item.site_raw.strip())
+            refrigerant_counts[key] = refrigerant_counts.get(key, 0) + 1
+
+    results: list[CvcSourceBuildingMappingRead] = []
+    for mapping in mappings:
+        site_suggestions, building_suggestions = _mapping_suggestions(mapping.source_site_raw, sites, buildings)
+        read = CvcSourceBuildingMappingRead.model_validate(mapping)
+        read.site_suggestions = site_suggestions
+        read.building_suggestions = building_suggestions
+        key = (mapping.import_batch, mapping.source_site_raw.strip())
+        read.item_count = inventory_counts.get(key, 0)
+        read.refrigerant_count = refrigerant_counts.get(key, 0)
+        results.append(read)
+    return results
+
+
+def update_cvc_source_building_mapping(
+    db: Session,
+    mapping_id: int,
+    payload: CvcSourceBuildingMappingUpdate,
+    city_id: int | None,
+) -> CvcSourceBuildingMappingRead | None:
+    mapping = db.get(CvcSourceBuildingMapping, mapping_id)
+    if not mapping:
+        return None
+    if city_id is not None and mapping.city_id not in (None, city_id):
+        return None
+
+    site = db.get(Site, payload.site_id) if payload.site_id is not None else None
+    if payload.site_id is not None and site is None:
+        raise ValueError("Site introuvable.")
+    if site and city_id is not None and site.city_id != city_id:
+        raise ValueError("Site hors perimetre utilisateur.")
+
+    building = db.get(Building, payload.building_id) if payload.building_id is not None else None
+    if payload.building_id is not None and building is None:
+        raise ValueError("Batiment introuvable.")
+    if building and city_id is not None and building.city_id != city_id:
+        raise ValueError("Batiment hors perimetre utilisateur.")
+    if building and site and building.site_id not in (None, site.id):
+        raise ValueError("Le batiment choisi n'appartient pas au site choisi.")
+
+    mapping.site_id = site.id if site else (building.site_id if building else None)
+    mapping.building_id = building.id if building else None
+    mapping.status = payload.status
+    mapping.notes = payload.notes
+    mapping.match_method = "manual"
+    mapping.match_score = 1.0 if building or site else None
+    updated_rows = _apply_source_mapping_to_rows(db, mapping)
+    db.commit()
+    db.refresh(mapping)
+
+    read = CvcSourceBuildingMappingRead.model_validate(mapping)
+    read.item_count = updated_rows if mapping.source_type == "inventory" else 0
+    read.refrigerant_count = updated_rows if mapping.source_type == "refrigerant" else 0
+    return read
+
+
+def get_cvc_technical_coverage_report(db: Session, city_id: int | None) -> CvcTechnicalCoverageReport:
+    ensure_cvc_source_building_mappings(db, city_id)
+    buildings_stmt = select(Building)
+    inventory_stmt = select(CvcInventoryItem)
+    refrigerant_stmt = select(CvcRefrigerantItem)
+    mapping_stmt = select(CvcSourceBuildingMapping)
+    if city_id is not None:
+        buildings_stmt = buildings_stmt.where(Building.city_id == city_id)
+        inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+        mapping_stmt = mapping_stmt.where((CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None)))
+
+    buildings = list(db.scalars(buildings_stmt))
+    inventory_items = list(db.scalars(inventory_stmt))
+    refrigerant_items = list(db.scalars(refrigerant_stmt))
+    mappings = list(db.scalars(mapping_stmt))
+
+    inventory_building_ids = {item.building_id for item in inventory_items if item.building_id is not None}
+    refrigerant_building_ids = {item.building_id for item in refrigerant_items if item.building_id is not None}
+    covered_building_ids = inventory_building_ids | refrigerant_building_ids
+    patrimoine_without_cvc = [
+        BuildingMatchSuggestion(
+            building_id=building.id,
+            site_id=building.site_id,
+            nom_batiment=building.nom_batiment,
+            adresse=_build_address(building),
+            score=1.0,
+        )
+        for building in buildings
+        if building.id not in covered_building_ids
+    ]
+
+    def grouped_unmapped(rows, source_type: str) -> list[dict]:
+        grouped: dict[str, int] = {}
+        for item in rows:
+            if item.building_id is None and item.site_raw:
+                grouped[item.site_raw] = grouped.get(item.site_raw, 0) + 1
+        return [
+            {"source_type": source_type, "source_site_raw": source_site_raw, "count": count}
+            for source_site_raw, count in sorted(grouped.items())
+        ]
+
+    return CvcTechnicalCoverageReport(
+        patrimoine_buildings=len(buildings),
+        cvc_inventory_items=len(inventory_items),
+        cvc_refrigerant_items=len(refrigerant_items),
+        inventory_without_building=sum(1 for item in inventory_items if item.building_id is None),
+        refrigerants_without_building=sum(1 for item in refrigerant_items if item.building_id is None),
+        refrigerants_without_inventory_item=sum(1 for item in refrigerant_items if item.cvc_inventory_item_id is None),
+        source_mappings_to_review=sum(1 for mapping in mappings if mapping.status == "to_review"),
+        source_mappings_not_found=sum(1 for mapping in mappings if mapping.status == "not_found"),
+        patrimoine_buildings_without_cvc=patrimoine_without_cvc[:300],
+        inventory_unmapped_by_source=grouped_unmapped(inventory_items, "inventory"),
+        refrigerants_unmapped_by_source=grouped_unmapped(refrigerant_items, "refrigerant"),
+    )
 
 
 def _hydrate_items(db: Session, items: list[CvcInventoryItem]) -> list[CvcInventoryItemRead]:
@@ -1185,6 +1531,13 @@ def update_cvc_item(
             item.quantite_fluide_frigorigene = payload.quantite_fluide_frigorigene
     else:
         item.quantite_fluide_frigorigene = None
+
+    linked_refrigerants = list(
+        db.scalars(select(CvcRefrigerantItem).where(CvcRefrigerantItem.cvc_inventory_item_id == item.id))
+    )
+    for refrigerant in linked_refrigerants:
+        refrigerant.site_id = item.site_id
+        refrigerant.building_id = item.building_id
 
     db.commit()
     db.refresh(item)

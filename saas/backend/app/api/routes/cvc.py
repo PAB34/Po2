@@ -23,6 +23,9 @@ from app.schemas.cvc import (
     CvcRefrigerantImportResult,
     CvcRefrigerantItemRead,
     CvcRefrigerantItemUpdate,
+    CvcSourceBuildingMappingRead,
+    CvcSourceBuildingMappingUpdate,
+    CvcTechnicalCoverageReport,
 )
 from app.services.buildings import get_building_or_404
 from app.services.cvc import (
@@ -36,12 +39,15 @@ from app.services.cvc import (
     list_cvc_items_for_building,
     list_cvc_refrigerant_batches,
     list_cvc_refrigerant_items_for_batch,
+    list_cvc_source_building_mappings,
     list_site_matches_for_import,
     match_buildings_for_sites,
     parse_excel_preview,
     recompute_cvc_references_for_batch,
     update_cvc_item,
     update_cvc_refrigerant_item,
+    update_cvc_source_building_mapping,
+    get_cvc_technical_coverage_report,
 )
 
 router = APIRouter(prefix="/cvc", tags=["cvc"])
@@ -231,3 +237,37 @@ def patch_cvc_refrigerant_item(
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ligne ESP introuvable.")
     return item
+
+
+@router.get("/source-building-mappings", response_model=list[CvcSourceBuildingMappingRead])
+def get_cvc_source_building_mappings(
+    source_type: str | None = None,
+    import_batch: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[CvcSourceBuildingMappingRead]:
+    return list_cvc_source_building_mappings(db, current_user.city_id, source_type, import_batch)
+
+
+@router.patch("/source-building-mappings/{mapping_id}", response_model=CvcSourceBuildingMappingRead)
+def patch_cvc_source_building_mapping(
+    mapping_id: int,
+    payload: CvcSourceBuildingMappingUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcSourceBuildingMappingRead:
+    try:
+        mapping = update_cvc_source_building_mapping(db, mapping_id, payload, current_user.city_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not mapping:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapping introuvable.")
+    return mapping
+
+
+@router.get("/technical-report", response_model=CvcTechnicalCoverageReport)
+def get_cvc_technical_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcTechnicalCoverageReport:
+    return get_cvc_technical_coverage_report(db, current_user.city_id)

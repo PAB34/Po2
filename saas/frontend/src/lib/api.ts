@@ -2651,6 +2651,8 @@ export type CvcRefrigerantMatchCandidate = {
 export type CvcRefrigerantItem = {
   id: number;
   city_id: number | null;
+  site_id: number | null;
+  building_id: number | null;
   cvc_inventory_item_id: number | null;
   import_batch: string;
   source_filename: string | null;
@@ -2703,6 +2705,49 @@ export type CvcRefrigerantImportResult = {
 
 export type UpdateCvcRefrigerantItemPayload = {
   cvc_inventory_item_id: number | null;
+  site_id?: number | null;
+  building_id?: number | null;
+};
+
+export type CvcSourceBuildingMapping = {
+  id: number;
+  city_id: number | null;
+  source_type: string;
+  import_batch: string;
+  source_site_raw: string;
+  site_id: number | null;
+  building_id: number | null;
+  status: string;
+  notes: string | null;
+  match_score: number | null;
+  match_method: string | null;
+  site_suggestions: PatrimoineSiteSuggestion[];
+  building_suggestions: BuildingMatchSuggestion[];
+  item_count: number;
+  refrigerant_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UpdateCvcSourceBuildingMappingPayload = {
+  site_id: number | null;
+  building_id: number | null;
+  status: string;
+  notes?: string | null;
+};
+
+export type CvcTechnicalCoverageReport = {
+  patrimoine_buildings: number;
+  cvc_inventory_items: number;
+  cvc_refrigerant_items: number;
+  inventory_without_building: number;
+  refrigerants_without_building: number;
+  refrigerants_without_inventory_item: number;
+  source_mappings_to_review: number;
+  source_mappings_not_found: number;
+  patrimoine_buildings_without_cvc: BuildingMatchSuggestion[];
+  inventory_unmapped_by_source: Array<Record<string, unknown>>;
+  refrigerants_unmapped_by_source: Array<Record<string, unknown>>;
 };
 
 export type CvcImportResult = {
@@ -2887,6 +2932,40 @@ export async function updateCvcRefrigerantItem(
     body: JSON.stringify(payload),
   });
   return parseResponse<CvcRefrigerantItem>(response);
+}
+
+export async function fetchCvcSourceBuildingMappings(
+  token: string,
+  filters?: { sourceType?: string; importBatch?: string },
+): Promise<CvcSourceBuildingMapping[]> {
+  const params = new URLSearchParams();
+  if (filters?.sourceType) params.set("source_type", filters.sourceType);
+  if (filters?.importBatch) params.set("import_batch", filters.importBatch);
+  const query = params.toString();
+  const response = await fetch(`${apiBaseUrl}/cvc/source-building-mappings${query ? `?${query}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcSourceBuildingMapping[]>(response);
+}
+
+export async function updateCvcSourceBuildingMapping(
+  token: string,
+  mappingId: number,
+  payload: UpdateCvcSourceBuildingMappingPayload,
+): Promise<CvcSourceBuildingMapping> {
+  const response = await fetch(`${apiBaseUrl}/cvc/source-building-mappings/${mappingId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<CvcSourceBuildingMapping>(response);
+}
+
+export async function fetchCvcTechnicalCoverageReport(token: string): Promise<CvcTechnicalCoverageReport> {
+  const response = await fetch(`${apiBaseUrl}/cvc/technical-report`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcTechnicalCoverageReport>(response);
 }
 
 // ── CPE DALKIA ───────────────────────────────────────────────────────────────

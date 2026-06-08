@@ -22,7 +22,7 @@ from app.models.invoice import (
     EnergyInvoicePeriod,
     EnergyInvoiceSite,
 )
-from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem
+from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
 from app.models.site import Site

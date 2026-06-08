@@ -52,6 +52,10 @@ class CvcRefrigerantItem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True)
+    building_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     cvc_inventory_item_id: Mapped[int | None] = mapped_column(
         ForeignKey("cvc_inventory_items.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -77,6 +81,33 @@ class CvcRefrigerantItem(Base):
     match_status: Mapped[str] = mapped_column(String(40), nullable=False, server_default="pending")
     match_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
     match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class CvcSourceBuildingMapping(Base):
+    __tablename__ = "cvc_source_building_mappings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    import_batch: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_site_raw: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True, index=True)
+    building_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(40), nullable=False, server_default="to_review")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    match_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    match_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
