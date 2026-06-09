@@ -551,3 +551,63 @@ Les quotas sont définis dans la documentation des Ateliers Fonctionnels disponi
 - **Indisponibilités planifiées** : https://sites.grdf.fr/web/portail-api-grdf-adict/indisponibilites
 - **Décodeur JWT** : https://jwt.io
 - Fichiers source : `saas/energie/GRDF/GRDFADICT_PROD_v1.12/`
+
+---
+
+## 13. État opérationnel & préparation visio GRDF (2026-06-09)
+
+> Analyse de mise en production. Intrants déjà présents dans `saas/energie/GRDF/` :
+> contrat signé (`CONTRAT D ACCES AU SERVICE GRDF ADICT.pdf`), spec v1.9 (swagger vérifié
+> conforme à ce module), et surtout `modele-donnees.xlsx` = **fichier de déclaration de
+> droits en masse rempli** (~50 PCE Commune de Sète, consentement 01/05/2026→01/05/2029,
+> accès données depuis 01/01/2024, périmètres conso/contractuel/technique = OUI).
+
+### Le verrou central : modèle de consentement
+
+Deux voies pour déclarer un droit d'accès. Pour les ~50 PCE de Sète, la voie cible est la
+**déclaration en masse** (`PUT /pce/{id_pce}/droit_acces`, rôle `AUTORISE_CONTRAT_FOURNITURE`,
+email + code postal du titulaire → GRDF envoie un mail de validation → état `Active`), pas le
+parcours Client Connect web (lourd à 50 PCE). C'est exactement ce que prépare `modele-donnees.xlsx`.
+
+⚠️ Deux points à clarifier sur le fichier :
+- PCE de **formats mixtes** : 14 chiffres (`24355282138581`) ET `GI+6` (`GI091919`).
+- Email de validation = adresse **`@dalkia`** → qui est juridiquement titulaire (mairie) vs
+  mandataire (DALKIA) ? Point RGPD/acceptation le plus sensible.
+
+### Checklist questions GRDF (visio)
+
+1. `client_id`/`client_secret` actifs en **PROD** ? scope `/adict/v2` ?
+2. URL callback à déclarer même en voie « déclaration en masse » ?
+3. Déclaration batch confirmée vs Client Connect ? 1 appel/PCE ou endpoint batch ?
+4. Validation titulaire par PCE ou globale ? délai ?
+5. Adresse de validation DALKIA (mandataire) acceptée ou mairie obligatoire ?
+6. Formats PCE mixtes (14 chiffres / `GI+6`) tous valides ?
+7. Profondeur réelle : 5 ans publiées + données dispo depuis 01/01/2024 ?
+8. **Quotas précis** (429) : req/s, req/h, req/jour ?
+9. Fraîcheur des données informatives journalières (J+1 ? J+2 ?) → calage scheduler.
+10. Révocation (`1000014`) : push ou polling `GET /droits_acces` ?
+11. Flux indisponibilités planifiées à surveiller ?
+
+### Scaffolding livré (Phases 0-1) — 2026-06-09
+
+| Élément | Fichier | État |
+|---|---|---|
+| Config `grdf_*` (auth, base url, quotas, sync) | `app/core/config.py` | ✅ |
+| Auth `GrdfTokenManager` + `RateLimiter` (réutilise `enedis_common`) | `app/services/grdf_auth.py` | ✅ compile + instanciable |
+| Modèles `GasPce` / `GasConsumption` | `app/models/gas.py` (+ `__init__.py`) | ✅ enregistrés (SQLite OK) |
+| Migration `0049_add_gas_pce_consumption` | `alembic/versions/` | ✅ écrite (down_revision `0048`) |
+
+> Validation locale : `compileall` OK ; import modèles + settings OK via `DATABASE_URL=sqlite:///:memory:`.
+> Build frontend non lancé (npm absent du poste). `alembic upgrade head` à passer en CI/prod.
+
+### Reste à faire (post-visio, selon réponses Q3-Q6)
+
+- **Phase 2** : script import `modele-donnees.xlsx` → `gas_pces` ; `grdf_gda.py`
+  (`declare_droit`/`list_droits`/`revoke_droit`) ; endpoint `POST /api/grdf/droits/declare-batch`.
+- **Phase 3** : `grdf_conso.py` (publiées/informatives) + backfill depuis 2024-01-01 ;
+  `grdf_contractuel.py` (CAR, tarif, profil, technique) → enrichit `gas_pces`.
+- **Phase 4** : job `_grdf_conso_sync_job` dans `core/scheduler.py` (interval 24h, no-op si
+  credentials vides, fenêtre glissante J-7→J, upsert `(pce_id, date_debut, type_conso)`).
+- **Phase 5 (valeur métier)** : rapprochement conso GRDF ↔ factures **P1 GAZ DALKIA**
+  (jointure `gas_pces.id_pce` ↔ `cpe_dalkia_ref_p1_gaz.pce`) + suivi temporel par bâtiment via
+  `BuildingMeterLink`. ⚠️ Conversion kWh (GRDF) ↔ MWh PCI (CPE) à tracer (cf. écart PCS/PCI /1,1068).

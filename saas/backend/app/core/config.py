@@ -64,6 +64,26 @@ class Settings(BaseSettings):
     engie_base_url: str = "https://api.entreprises-collectivites.engie.fr/ec/v1"
     engie_subscription_key: str = ""  # Ocp-Apim-Subscription-Key
 
+    # GRDF ADICT API (gaz — distributeur)
+    # Auth client_credentials (token API valide ~4h) ; scope /adict/v2.
+    grdf_auth_url: str = (
+        "https://sofit-sso-oidc.grdf.fr/openam/oauth2/realms/externeGrdf/access_token"
+    )
+    grdf_base_url: str = "https://api.grdf.fr/adict/v2"
+    grdf_scope: str = "/adict/v2"
+    grdf_client_id: str = ""  # reçu par mail
+    grdf_client_secret: str = ""  # reçu par SMS — JAMAIS commité
+    grdf_redirect_uri: str = "https://patrimoineaucarre.com/api/grdf/callback"
+    grdf_history_days: int = 1825  # 5 ans — profondeur max données publiées
+    # Quotas (marge de sécurité ; à caler après réponse GRDF sur les limites réelles)
+    grdf_max_rps: float = 5.0
+    grdf_max_concurrent: int = 5
+    grdf_max_hourly: int = 950
+    # Sync quotidienne des consommations publiées
+    grdf_conso_sync_enabled: bool = True
+    grdf_conso_sync_interval_hours: int = 24
+    grdf_conso_sync_lookback_days: int = 7  # fenêtre glissante pour rattraper les retards
+
     # FTP — serveur de réception des publications ENEDIS (canal de contact)
     ftp_host: str = ""
     ftp_port: int = 21
