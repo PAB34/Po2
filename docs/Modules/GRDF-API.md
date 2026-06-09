@@ -588,6 +588,29 @@ parcours Client Connect web (lourd à 50 PCE). C'est exactement ce que prépare 
 10. Révocation (`1000014`) : push ou polling `GET /droits_acces` ?
 11. Flux indisponibilités planifiées à surveiller ?
 
+### ⚡ Mise à jour majeure (2026-06-09) — les droits sont déjà ACTIVE
+
+L'export réel `liste_droit_d_acces_GRDF (1).xlsx` (66 PCE) montre que **tous les droits sont
+déjà `Active`** côté GRDF → la collecte de consommation peut démarrer **sans nouvelle
+déclaration de consentement**. La Phase 2 (déclaration) est de fait déjà réalisée par GRDF.
+
+- **49 `AUTORISE_CONTRAT_FOURNITURE`** : périmètres conso/contractuel/technique = `Vrai`,
+  fenêtre d'accès 2024/2026 → 2029. ✅ Pleinement exploitables.
+- **17 `DETENTEUR_CONTRAT_FOURNITURE`** : périmètres vides dans l'export (le détenteur n'a pas
+  besoin de consentement). ⚠️ **Q visio** : confirmer que conso/contractuel/technique restent
+  lisibles pour un droit DÉTENTEUR malgré les périmètres affichés vides.
+- Chaque ligne porte le **`Numéro unique du droit d'accès`** (`id_droit_acces`, UUID) → requis
+  pour la révocation, importé tel quel.
+- Plusieurs titulaires : Commune de Sète, CA Sète Agglopole (34200), Mairie de Vic-la-Gardiole
+  (34110), Dalkia, écoles… → périmètre plus large que la seule Ville. Scoping `city_id` à arbitrer.
+
+**Import livré** : `app/scripts/import_grdf_droits.py` (lecture XLSX robuste à l'encodage,
+upsert `gas_pces` par `(city_id, id_pce)`, `--dry-run`, idempotent). Validé sur le fichier réel :
+66 PCE créés, 2e run 0/0/66 (idempotence OK).
+```
+python -m app.scripts.import_grdf_droits --file "<...>/liste_droit_d_acces_GRDF (1).xlsx" --city-id 1
+```
+
 ### Scaffolding livré (Phases 0-1) — 2026-06-09
 
 | Élément | Fichier | État |
@@ -600,11 +623,13 @@ parcours Client Connect web (lourd à 50 PCE). C'est exactement ce que prépare 
 > Validation locale : `compileall` OK ; import modèles + settings OK via `DATABASE_URL=sqlite:///:memory:`.
 > Build frontend non lancé (npm absent du poste). `alembic upgrade head` à passer en CI/prod.
 
-### Reste à faire (post-visio, selon réponses Q3-Q6)
+### Reste à faire
 
-- **Phase 2** : script import `modele-donnees.xlsx` → `gas_pces` ; `grdf_gda.py`
-  (`declare_droit`/`list_droits`/`revoke_droit`) ; endpoint `POST /api/grdf/droits/declare-batch`.
-- **Phase 3** : `grdf_conso.py` (publiées/informatives) + backfill depuis 2024-01-01 ;
+- **Phase 2 — ✅ largement faite** : import du référentiel réel livré (`import_grdf_droits.py`),
+  droits déjà `Active`. Reste optionnel : `grdf_gda.py` (`list_droits`/`revoke_droit`) pour le
+  suivi/révocation et resynchroniser l'état depuis l'API plutôt que le fichier.
+- **Phase 3 — priorité immédiate (débloquée)** : `grdf_conso.py` (publiées/informatives) +
+  backfill depuis 2024-01-01 ;
   `grdf_contractuel.py` (CAR, tarif, profil, technique) → enrichit `gas_pces`.
 - **Phase 4** : job `_grdf_conso_sync_job` dans `core/scheduler.py` (interval 24h, no-op si
   credentials vides, fenêtre glissante J-7→J, upsert `(pce_id, date_debut, type_conso)`).

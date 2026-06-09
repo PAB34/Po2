@@ -47,12 +47,20 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
 
 ## 🚧 Ce qui reste à faire / handoff
 
-### Priorité 1 — Phase 2 : import PCE + déclaration de droits (après réponses GRDF Q3-Q6)
-- **Solution** : script import `modele-donnees.xlsx` → `gas_pces` (état `null`) ; service
-  `grdf_gda.py` (`declare_droit`/`list_droits`/`revoke_droit`) ; endpoint
-  `POST /api/grdf/droits/declare-batch` + suivi `etat_droit_acces`.
-- **Pièges** : formats PCE mixtes ; consentement validé côté titulaire avant toute collecte
-  (sinon collecte à vide, cf. canal ENEDIS en attente).
+### ⚡ Tournant — droits déjà ACTIVE (export réel reçu en cours de session)
+- L'utilisateur a fourni `liste_droit_d_acces_GRDF (1).xlsx` : **66 PCE tous `Active`**
+  (49 AUTORISE périmètres complets + 17 DETENTEUR). La collecte conso est donc **débloquée**,
+  pas besoin de déclarer les consentements.
+- **Livré** : `app/scripts/import_grdf_droits.py` (upsert `gas_pces`, `--dry-run`, idempotent).
+  Validé sur fichier réel : 66 créés, 2e run 0/0/66.
+- Pièges traités : matcher d'en-tête en mode ET (sinon « accès » matchait « Etat du droit
+  d'accès ») ; glyphes ASCII (console Windows cp1252).
+
+### Priorité 1 — Phase 3 : collecte conso (débloquée, ne dépend plus du consentement)
+- `grdf_conso.py` (`fetch_consos_publiees`/`informatives`) + backfill 2024-01-01→aujourd'hui ;
+  `grdf_contractuel.py` (CAR/tarif/profil/technique) pour enrichir `gas_pces`.
+- **Q visio restante** : un droit DÉTENTEUR (périmètres vides) permet-il quand même de lire
+  conso/contractuel/technique ? Sinon seuls les 49 AUTORISE sont collectables.
 
 ### Priorité 2 — Phases 3-4 : collecte + sync
 - `grdf_conso.py` (publiées/informatives) + backfill 2024-01-01→aujourd'hui (n'insérer que
