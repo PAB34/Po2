@@ -623,16 +623,29 @@ python -m app.scripts.import_grdf_droits --file "<...>/liste_droit_d_acces_GRDF 
 > Validation locale : `compileall` OK ; import modèles + settings OK via `DATABASE_URL=sqlite:///:memory:`.
 > Build frontend non lancé (npm absent du poste). `alembic upgrade head` à passer en CI/prod.
 
+### Phases 2-4 livrées (2026-06-09) — collecte opérationnelle
+
+| Brique | Fichier | État |
+|---|---|---|
+| Client HTTP (token + rate-limit + retries 429/503/504 + ndjson) | `services/grdf_client.py` | ✅ |
+| GDA référentiel depuis l'API (`GET /droits_acces`) + `revoke_droit` | `services/grdf_gda.py` | ✅ `sync_droits` upsert `gas_pces` |
+| CONSO backfill 5 ans + sync incrémentale + upsert idempotent | `services/grdf_conso.py` | ✅ testé E2E (SQLite) |
+| Contractuel/technique → enrichit `gas_pces` | `services/grdf_contractuel.py` | ✅ |
+| Job quotidien `_grdf_conso_sync_job` | `core/scheduler.py` | ✅ interval 24h, no-op si creds vides |
+| Routes `/api/grdf/*` (pces, pces/sync, conso/backfill, conso/sync, conso/status, contractuel/enrich) | `api/routes/grdf.py` | ✅ montées |
+
+> **Décision architecturale actée** : le référentiel PCE/droits est requêtable live
+> (`GET /droits_acces` → `sync_droits`), donc l'API devient source de vérité (le fichier xlsx
+> n'amorce que le 1er import). Les **consommations sont stockées** (`gas_consumptions`) :
+> rétention GRDF limitée à 5 ans, quotas 429, jointures SQL avec P1 DALKIA, latence/dispo.
+> Validation : `compileall` OK, app boot + 6 routes OK, backfill E2E (upsert + idempotence) via SQLite.
+
 ### Reste à faire
 
-- **Phase 2 — ✅ largement faite** : import du référentiel réel livré (`import_grdf_droits.py`),
-  droits déjà `Active`. Reste optionnel : `grdf_gda.py` (`list_droits`/`revoke_droit`) pour le
-  suivi/révocation et resynchroniser l'état depuis l'API plutôt que le fichier.
-- **Phase 3 — priorité immédiate (débloquée)** : `grdf_conso.py` (publiées/informatives) +
-  backfill depuis 2024-01-01 ;
-  `grdf_contractuel.py` (CAR, tarif, profil, technique) → enrichit `gas_pces`.
-- **Phase 4** : job `_grdf_conso_sync_job` dans `core/scheduler.py` (interval 24h, no-op si
-  credentials vides, fenêtre glissante J-7→J, upsert `(pce_id, date_debut, type_conso)`).
 - **Phase 5 (valeur métier)** : rapprochement conso GRDF ↔ factures **P1 GAZ DALKIA**
   (jointure `gas_pces.id_pce` ↔ `cpe_dalkia_ref_p1_gaz.pce`) + suivi temporel par bâtiment via
   `BuildingMeterLink`. ⚠️ Conversion kWh (GRDF) ↔ MWh PCI (CPE) à tracer (cf. écart PCS/PCI /1,1068).
+- **Frontend** : page `/energie/gaz` (liste PCE + boutons sync + courbe conso mensuelle).
+- **À confirmer au 1er appel réel** : forme exacte des réponses conso (objet vs liste de périodes)
+  et noms de champs `GET /droits_acces` — les parseurs sont volontairement tolérants mais non
+  validés contre l'API live (credentials PROD requis).

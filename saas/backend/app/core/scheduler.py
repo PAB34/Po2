@@ -76,6 +76,24 @@ def _enedis_customer_sync_job() -> None:
         LOG.exception("ENEDIS customer sync job failed")
 
 
+def _grdf_conso_sync_job() -> None:
+    """Job périodique : synchro incrémentale des consommations gaz GRDF."""
+    if not settings.grdf_conso_sync_enabled:
+        return
+    if not settings.grdf_client_id or not settings.grdf_client_secret:
+        return
+    try:
+        from app.services.grdf_conso import is_sync_running, run_recent_sync  # noqa: PLC0415
+
+        if is_sync_running():
+            LOG.info("GRDF conso sync déjà en cours, job périodique ignoré.")
+            return
+        result = run_recent_sync()
+        LOG.info("GRDF conso sync : %s", result)
+    except Exception:
+        LOG.exception("GRDF conso sync job failed")
+
+
 def _pronostics_score_sync_job() -> None:
     """Rafraîchit les scores réels du jeu sans bloquer les autres tâches."""
     if not settings.pronostics_score_sync_enabled or not settings.football_data_token:
@@ -115,6 +133,17 @@ def start_scheduler() -> None:
             trigger="interval",
             hours=customer_interval,
             id="enedis_customer_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    if settings.grdf_conso_sync_enabled:
+        grdf_interval = max(int(settings.grdf_conso_sync_interval_hours), 1)
+        _SCHEDULER.add_job(
+            _grdf_conso_sync_job,
+            trigger="interval",
+            hours=grdf_interval,
+            id="grdf_conso_sync",
             max_instances=1,
             coalesce=True,
             replace_existing=True,

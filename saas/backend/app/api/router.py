@@ -11,6 +11,7 @@ from app.api.routes.cvc import router as cvc_router
 from app.api.routes.enedis_async import router as enedis_async_router
 from app.api.routes.equipment import router as equipment_router
 from app.api.routes.engie import router as engie_router
+from app.api.routes.grdf import router as grdf_router
 from app.api.routes.energie import router as energie_router
 from app.api.routes.enedis_sync import router as enedis_sync_router
 from app.api.routes.health import router as health_router
@@ -30,6 +31,7 @@ api_router.include_router(cvc_router, prefix="/api")
 api_router.include_router(enedis_async_router, prefix="/api")
 api_router.include_router(enedis_sync_router, prefix="/api")
 api_router.include_router(engie_router, prefix="/api")
+api_router.include_router(grdf_router, prefix="/api")
 api_router.include_router(energie_router, prefix="/api")
 api_router.include_router(equipment_router, prefix="/api")
 api_router.include_router(cpe_router, prefix="/api")

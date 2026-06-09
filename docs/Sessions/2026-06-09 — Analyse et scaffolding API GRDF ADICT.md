@@ -56,11 +56,22 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
 - Pièges traités : matcher d'en-tête en mode ET (sinon « accès » matchait « Etat du droit
   d'accès ») ; glyphes ASCII (console Windows cp1252).
 
-### Priorité 1 — Phase 3 : collecte conso (débloquée, ne dépend plus du consentement)
-- `grdf_conso.py` (`fetch_consos_publiees`/`informatives`) + backfill 2024-01-01→aujourd'hui ;
-  `grdf_contractuel.py` (CAR/tarif/profil/technique) pour enrichir `gas_pces`.
-- **Q visio restante** : un droit DÉTENTEUR (périmètres vides) permet-il quand même de lire
-  conso/contractuel/technique ? Sinon seuls les 49 AUTORISE sont collectables.
+### Phase 3-4 — ✅ FAITE (collecte conso)
+- `grdf_client.py` (HTTP token+rate-limit+retries+ndjson), `grdf_gda.py` (`list_droits`/
+  `sync_droits` API source de vérité/`revoke_droit`), `grdf_conso.py` (backfill 5 ans + sync
+  incrémentale + upsert idempotent + état /status), `grdf_contractuel.py` (enrichissement),
+  job `_grdf_conso_sync_job` (24h) dans `core/scheduler.py`, routes `api/routes/grdf.py` (6).
+- Validé : compileall, app boot + 6 routes, backfill E2E (upsert + idempotence) SQLite.
+
+### Priorité 1 — Phase 5 : rapprochement métier P1 DALKIA
+- Conso GRDF (`gas_consumptions`, kWh) ↔ factures P1 GAZ DALKIA (`cpe_dalkia_ref_p1_gaz.pce`),
+  conversion kWh↔MWh PCI à tracer ; suivi temporel par bâtiment via `BuildingMeterLink`.
+- Frontend `/energie/gaz` (liste PCE + sync + courbe mensuelle).
+
+### Côté visio / 1er appel réel
+- Q DÉTENTEUR : périmètres vides → conso/contract/tech lisibles ? (sinon seuls 49 AUTORISE).
+- Vérifier forme réelle des réponses conso (objet vs liste) et champs `GET /droits_acces` :
+  parseurs tolérants mais non validés contre l'API live (credentials PROD requis).
 
 ### Priorité 2 — Phases 3-4 : collecte + sync
 - `grdf_conso.py` (publiées/informatives) + backfill 2024-01-01→aujourd'hui (n'insérer que
