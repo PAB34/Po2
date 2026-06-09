@@ -88,14 +88,32 @@ FIFA_RANKINGS = {
 
 
 def ensure_matches(db: Session) -> None:
-    if db.scalar(select(PronosticsMatch.id).limit(1)) is not None:
-        return
-
     rows = json.loads(MATCHES_FILE.read_text(encoding="utf-8"))
-    db.add_all(
-        [PronosticsMatch(**{**row, "match_at": datetime.fromisoformat(row["match_at"].replace("Z", "+00:00"))}) for row in rows]
-    )
-    db.commit()
+    existing = {match.id: match for match in db.scalars(select(PronosticsMatch)).all()}
+    changed = False
+
+    for row in rows:
+        match_at = datetime.fromisoformat(row["match_at"].replace("Z", "+00:00"))
+        match = existing.get(row["id"])
+        if match is None:
+            db.add(PronosticsMatch(**{**row, "match_at": match_at}))
+            changed = True
+            continue
+
+        updates = {
+            "group_name": row["group_name"],
+            "team1": row["team1"],
+            "team2": row["team2"],
+            "match_at": match_at,
+            "stadium": row["stadium"],
+        }
+        for field, value in updates.items():
+            if getattr(match, field) != value:
+                setattr(match, field, value)
+                changed = True
+
+    if changed:
+        db.commit()
 
 
 def create_player(db: Session, *, email: str, password: str, pseudo: str, service: str) -> PronosticsPlayer:

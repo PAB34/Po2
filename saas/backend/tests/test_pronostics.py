@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -202,6 +204,34 @@ def test_sync_scores_updates_finished_match(monkeypatch):
 
     assert result == {"configured": True, "api_matches": 1, "finished": 1, "updated": 1, "unmatched": 0}
     assert match is not None
+    assert (match.real_score1, match.real_score2, match.locked) == (2, 1, True)
+
+
+def test_ensure_matches_updates_existing_schedule_without_scores():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add(
+            PronosticsMatch(
+                id="M001",
+                group_name="A",
+                team1="Mexique",
+                team2="Afrique du Sud",
+                match_at=datetime(2026, 6, 11, tzinfo=timezone.utc),
+                stadium="Ancien stade",
+                real_score1=2,
+                real_score2=1,
+                locked=True,
+            )
+        )
+        db.commit()
+
+        ensure_matches(db)
+        match = db.get(PronosticsMatch, "M001")
+
+    assert match is not None
+    assert match.match_at.isoformat() == "2026-06-11T19:00:00"
+    assert match.stadium == "Estadio Azteca, Mexico City"
     assert (match.real_score1, match.real_score2, match.locked) == (2, 1, True)
 
 

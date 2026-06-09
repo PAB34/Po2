@@ -4,55 +4,55 @@
     "group_name": "A",
     "team1": "Mexique",
     "team2": "Afrique du Sud",
-    "match_at": "2026-06-11T00:00:00Z",
-    "stadium": "Stade Azteca, Mexico"
+    "match_at": "2026-06-11T19:00:00Z",
+    "stadium": "Estadio Azteca, Mexico City"
   },
   {
     "id": "M002",
     "group_name": "A",
-    "team1": "Corée du Sud",
-    "team2": "Tchéquie",
-    "match_at": "2026-06-11T00:00:00Z",
+    "team1": "Coree du Sud",
+    "team2": "Tchequie",
+    "match_at": "2026-06-12T02:00:00Z",
     "stadium": "Estadio Akron, Guadalajara"
   },
   {
     "id": "M003",
     "group_name": "A",
-    "team1": "Afrique du Sud",
-    "team2": "Tchéquie",
-    "match_at": "2026-06-18T00:00:00Z",
+    "team1": "Tchequie",
+    "team2": "Afrique du Sud",
+    "match_at": "2026-06-18T16:00:00Z",
     "stadium": "Mercedes-Benz Stadium, Atlanta"
   },
   {
     "id": "M004",
     "group_name": "A",
     "team1": "Mexique",
-    "team2": "Corée du Sud",
-    "match_at": "2026-06-18T00:00:00Z",
+    "team2": "Coree du Sud",
+    "match_at": "2026-06-19T01:00:00Z",
     "stadium": "Estadio Akron, Guadalajara"
   },
   {
     "id": "M005",
     "group_name": "A",
-    "team1": "Tchéquie",
+    "team1": "Tchequie",
     "team2": "Mexique",
-    "match_at": "2026-06-24T00:00:00Z",
-    "stadium": "Stade Azteca, Mexico"
+    "match_at": "2026-06-25T01:00:00Z",
+    "stadium": "Estadio Azteca, Mexico City"
   },
   {
     "id": "M006",
     "group_name": "A",
     "team1": "Afrique du Sud",
-    "team2": "Corée du Sud",
-    "match_at": "2026-06-24T00:00:00Z",
-    "stadium": "Stade BBVA, Monterrey"
+    "team2": "Coree du Sud",
+    "match_at": "2026-06-25T01:00:00Z",
+    "stadium": "Monterrey Stadium, Monterrey"
   },
   {
     "id": "M007",
     "group_name": "B",
     "team1": "Canada",
-    "team2": "Bosnie-Herzégovine",
-    "match_at": "2026-06-12T00:00:00Z",
+    "team2": "Bosnie-Herzegovine",
+    "match_at": "2026-06-12T19:00:00Z",
     "stadium": "BMO Field, Toronto"
   },
   {
@@ -60,23 +60,23 @@
     "group_name": "B",
     "team1": "Qatar",
     "team2": "Suisse",
-    "match_at": "2026-06-13T00:00:00Z",
-    "stadium": "Levi's Stadium, San Francisco"
+    "match_at": "2026-06-13T19:00:00Z",
+    "stadium": "Levi's Stadium, Santa Clara"
   },
   {
     "id": "M009",
     "group_name": "B",
-    "team1": "Bosnie-Herzégovine",
-    "team2": "Suisse",
-    "match_at": "2026-06-18T00:00:00Z",
-    "stadium": "SoFi Stadium, Los Angeles"
+    "team1": "Suisse",
+    "team2": "Bosnie-Herzegovine",
+    "match_at": "2026-06-18T19:00:00Z",
+    "stadium": "SoFi Stadium, Inglewood"
   },
   {
     "id": "M010",
     "group_name": "B",
     "team1": "Canada",
     "team2": "Qatar",
-    "match_at": "2026-06-18T00:00:00Z",
+    "match_at": "2026-06-18T22:00:00Z",
     "stadium": "BC Place, Vancouver"
   },
   {
@@ -84,63 +84,63 @@
     "group_name": "B",
     "team1": "Suisse",
     "team2": "Canada",
-    "match_at": "2026-06-24T00:00:00Z",
+    "match_at": "2026-06-24T19:00:00Z",
     "stadium": "BC Place, Vancouver"
   },
   {
     "id": "M012",
     "group_name": "B",
-    "team1": "Bosnie-Herzégovine",
+    "team1": "Bosnie-Herzegovine",
     "team2": "Qatar",
-    "match_at": "2026-06-24T00:00:00Z",
-    "stadium": "Lumen Field, Seattle"
+    "match_at": "2026-06-24T19:00:00Z",
+    "stadium": "Seattle Stadium, Seattle"
   },
   {
     "id": "M013",
     "group_name": "C",
-    "team1": "Brésil",
+    "team1": "Bresil",
     "team2": "Maroc",
-    "match_at": "2026-06-12T00:00:00Z",
-    "stadium": "Gillette Stadium, Boston"
+    "match_at": "2026-06-13T22:00:00Z",
+    "stadium": "MetLife Stadium, New York/New Jersey"
   },
   {
     "id": "M014",
     "group_name": "C",
-    "team1": "Haïti",
+    "team1": "Haiti",
     "team2": "Ecosse",
-    "match_at": "2026-06-13T00:00:00Z",
-    "stadium": "MetLife Stadium, New York"
+    "match_at": "2026-06-14T01:00:00Z",
+    "stadium": "Gillette Stadium, Boston"
   },
   {
     "id": "M015",
     "group_name": "C",
-    "team1": "Maroc",
-    "team2": "Ecosse",
-    "match_at": "2026-06-19T00:00:00Z",
-    "stadium": "Lincoln Financial Field, Philadelphie"
+    "team1": "Ecosse",
+    "team2": "Maroc",
+    "match_at": "2026-06-19T22:00:00Z",
+    "stadium": "Gillette Stadium, Boston"
   },
   {
     "id": "M016",
     "group_name": "C",
-    "team1": "Brésil",
-    "team2": "Haïti",
-    "match_at": "2026-06-19T00:00:00Z",
-    "stadium": "Gillette Stadium, Boston"
+    "team1": "Bresil",
+    "team2": "Haiti",
+    "match_at": "2026-06-20T01:00:00Z",
+    "stadium": "Lincoln Financial Field, Philadelphia"
   },
   {
     "id": "M017",
     "group_name": "C",
     "team1": "Ecosse",
-    "team2": "Brésil",
-    "match_at": "2026-06-24T00:00:00Z",
+    "team2": "Bresil",
+    "match_at": "2026-06-24T22:00:00Z",
     "stadium": "Hard Rock Stadium, Miami"
   },
   {
     "id": "M018",
     "group_name": "C",
     "team1": "Maroc",
-    "team2": "Haïti",
-    "match_at": "2026-06-24T00:00:00Z",
+    "team2": "Haiti",
+    "match_at": "2026-06-24T22:00:00Z",
     "stadium": "Mercedes-Benz Stadium, Atlanta"
   },
   {
@@ -148,7 +148,7 @@
     "group_name": "D",
     "team1": "Etats-Unis",
     "team2": "Paraguay",
-    "match_at": "2026-06-12T00:00:00Z",
+    "match_at": "2026-06-13T01:00:00Z",
     "stadium": "SoFi Stadium, Los Angeles"
   },
   {
@@ -156,7 +156,7 @@
     "group_name": "D",
     "team1": "Australie",
     "team2": "Turquie",
-    "match_at": "2026-06-13T00:00:00Z",
+    "match_at": "2026-06-14T04:00:00Z",
     "stadium": "BC Place, Vancouver"
   },
   {
@@ -164,119 +164,119 @@
     "group_name": "D",
     "team1": "Etats-Unis",
     "team2": "Australie",
-    "match_at": "2026-06-19T00:00:00Z",
-    "stadium": "Levi's Stadium, San Francisco"
+    "match_at": "2026-06-19T19:00:00Z",
+    "stadium": "Lumen Field, Seattle"
   },
   {
     "id": "M022",
     "group_name": "D",
-    "team1": "Paraguay",
-    "team2": "Turquie",
-    "match_at": "2026-06-19T00:00:00Z",
-    "stadium": "Lumen Field, Seattle"
+    "team1": "Turquie",
+    "team2": "Paraguay",
+    "match_at": "2026-06-20T04:00:00Z",
+    "stadium": "Levi's Stadium, Santa Clara"
   },
   {
     "id": "M023",
     "group_name": "D",
     "team1": "Paraguay",
     "team2": "Australie",
-    "match_at": "2026-06-25T00:00:00Z",
-    "stadium": "SoFi Stadium, Los Angeles"
+    "match_at": "2026-06-26T02:00:00Z",
+    "stadium": "Levi's Stadium, Santa Clara"
   },
   {
     "id": "M024",
     "group_name": "D",
-    "team1": "Turquie",
-    "team2": "Etats-Unis",
-    "match_at": "2026-06-25T00:00:00Z",
-    "stadium": "Levi's Stadium, San Francisco"
+    "team1": "Etats-Unis",
+    "team2": "Turquie",
+    "match_at": "2026-06-26T02:00:00Z",
+    "stadium": "SoFi Stadium, Los Angeles"
   },
   {
     "id": "M025",
     "group_name": "E",
     "team1": "Allemagne",
-    "team2": "Curaçao",
-    "match_at": "2026-06-14T00:00:00Z",
-    "stadium": "Lincoln Financial Field, Philadelphie"
+    "team2": "Curacao",
+    "match_at": "2026-06-14T17:00:00Z",
+    "stadium": "NRG Stadium, Houston"
   },
   {
     "id": "M026",
     "group_name": "E",
-    "team1": "Côte d'Ivoire",
+    "team1": "Cote d'Ivoire",
     "team2": "Equateur",
-    "match_at": "2026-06-14T00:00:00Z",
-    "stadium": "NRG Stadium, Houston"
+    "match_at": "2026-06-14T23:00:00Z",
+    "stadium": "Lincoln Financial Field, Philadelphia"
   },
   {
     "id": "M027",
     "group_name": "E",
-    "team1": "Curaçao",
-    "team2": "Equateur",
-    "match_at": "2026-06-20T00:00:00Z",
-    "stadium": "BMO Field, Toronto"
+    "team1": "Equateur",
+    "team2": "Curacao",
+    "match_at": "2026-06-21T00:00:00Z",
+    "stadium": "Arrowhead Stadium, Kansas City"
   },
   {
     "id": "M028",
     "group_name": "E",
     "team1": "Allemagne",
-    "team2": "Côte d'Ivoire",
-    "match_at": "2026-06-20T00:00:00Z",
-    "stadium": "Arrowhead Stadium, Kansas City"
+    "team2": "Cote d'Ivoire",
+    "match_at": "2026-06-20T20:00:00Z",
+    "stadium": "BMO Field, Toronto"
   },
   {
     "id": "M029",
     "group_name": "E",
-    "team1": "Curaçao",
-    "team2": "Côte d'Ivoire",
-    "match_at": "2026-06-25T00:00:00Z",
-    "stadium": "Lincoln Financial Field, Philadelphie"
+    "team1": "Curacao",
+    "team2": "Cote d'Ivoire",
+    "match_at": "2026-06-25T20:00:00Z",
+    "stadium": "Lincoln Financial Field, Philadelphia"
   },
   {
     "id": "M030",
     "group_name": "E",
     "team1": "Equateur",
     "team2": "Allemagne",
-    "match_at": "2026-06-25T00:00:00Z",
-    "stadium": "MetLife Stadium, New York"
+    "match_at": "2026-06-25T20:00:00Z",
+    "stadium": "MetLife Stadium, New York/New Jersey"
   },
   {
     "id": "M031",
     "group_name": "F",
     "team1": "Pays-Bas",
     "team2": "Japon",
-    "match_at": "2026-06-14T00:00:00Z",
+    "match_at": "2026-06-14T20:00:00Z",
     "stadium": "AT&T Stadium, Dallas"
   },
   {
     "id": "M032",
     "group_name": "F",
-    "team1": "Suède",
+    "team1": "Suede",
     "team2": "Tunisie",
-    "match_at": "2026-06-14T00:00:00Z",
+    "match_at": "2026-06-15T02:00:00Z",
     "stadium": "Estadio BBVA, Monterrey"
   },
   {
     "id": "M033",
     "group_name": "F",
     "team1": "Pays-Bas",
-    "team2": "Suède",
-    "match_at": "2026-06-20T00:00:00Z",
+    "team2": "Suede",
+    "match_at": "2026-06-20T17:00:00Z",
     "stadium": "NRG Stadium, Houston"
   },
   {
     "id": "M034",
     "group_name": "F",
-    "team1": "Japon",
-    "team2": "Tunisie",
-    "match_at": "2026-06-20T00:00:00Z",
+    "team1": "Tunisie",
+    "team2": "Japon",
+    "match_at": "2026-06-21T04:00:00Z",
     "stadium": "Estadio BBVA, Monterrey"
   },
   {
     "id": "M035",
     "group_name": "F",
     "team1": "Japon",
-    "team2": "Suède",
-    "match_at": "2026-06-25T00:00:00Z",
+    "team2": "Suede",
+    "match_at": "2026-06-25T22:00:00Z",
     "stadium": "AT&T Stadium, Dallas"
   },
   {
@@ -284,7 +284,7 @@
     "group_name": "F",
     "team1": "Tunisie",
     "team2": "Pays-Bas",
-    "match_at": "2026-06-25T00:00:00Z",
+    "match_at": "2026-06-25T22:00:00Z",
     "stadium": "Arrowhead Stadium, Kansas City"
   },
   {
@@ -292,31 +292,31 @@
     "group_name": "G",
     "team1": "Belgique",
     "team2": "Egypte",
-    "match_at": "2026-06-15T00:00:00Z",
-    "stadium": "SoFi Stadium, Los Angeles"
+    "match_at": "2026-06-15T19:00:00Z",
+    "stadium": "Lumen Field, Seattle"
   },
   {
     "id": "M038",
     "group_name": "G",
     "team1": "Iran",
-    "team2": "Nouvelle-Zélande",
-    "match_at": "2026-06-15T00:00:00Z",
-    "stadium": "Lumen Field, Seattle"
+    "team2": "Nouvelle-Zelande",
+    "match_at": "2026-06-16T01:00:00Z",
+    "stadium": "SoFi Stadium, Los Angeles"
   },
   {
     "id": "M039",
     "group_name": "G",
     "team1": "Belgique",
     "team2": "Iran",
-    "match_at": "2026-06-21T00:00:00Z",
+    "match_at": "2026-06-21T19:00:00Z",
     "stadium": "SoFi Stadium, Los Angeles"
   },
   {
     "id": "M040",
     "group_name": "G",
-    "team1": "Egypte",
-    "team2": "Nouvelle-Zélande",
-    "match_at": "2026-06-21T00:00:00Z",
+    "team1": "Nouvelle-Zelande",
+    "team2": "Egypte",
+    "match_at": "2026-06-22T01:00:00Z",
     "stadium": "BC Place, Vancouver"
   },
   {
@@ -324,15 +324,15 @@
     "group_name": "G",
     "team1": "Egypte",
     "team2": "Iran",
-    "match_at": "2026-06-26T00:00:00Z",
+    "match_at": "2026-06-27T03:00:00Z",
     "stadium": "Lumen Field, Seattle"
   },
   {
     "id": "M042",
     "group_name": "G",
-    "team1": "Nouvelle-Zélande",
+    "team1": "Nouvelle-Zelande",
     "team2": "Belgique",
-    "match_at": "2026-06-26T00:00:00Z",
+    "match_at": "2026-06-27T03:00:00Z",
     "stadium": "BC Place, Vancouver"
   },
   {
@@ -340,39 +340,39 @@
     "group_name": "H",
     "team1": "Espagne",
     "team2": "Cap-Vert",
-    "match_at": "2026-06-15T00:00:00Z",
-    "stadium": "Hard Rock Stadium, Miami"
+    "match_at": "2026-06-15T16:00:00Z",
+    "stadium": "Mercedes-Benz Stadium, Atlanta"
   },
   {
     "id": "M044",
     "group_name": "H",
     "team1": "Arabie Saoudite",
     "team2": "Uruguay",
-    "match_at": "2026-06-15T00:00:00Z",
-    "stadium": "Mercedes-Benz Stadium, Atlanta"
+    "match_at": "2026-06-15T22:00:00Z",
+    "stadium": "Hard Rock Stadium, Miami"
   },
   {
     "id": "M045",
     "group_name": "H",
     "team1": "Espagne",
     "team2": "Arabie Saoudite",
-    "match_at": "2026-06-21T00:00:00Z",
-    "stadium": "Hard Rock Stadium, Miami"
+    "match_at": "2026-06-21T16:00:00Z",
+    "stadium": "Mercedes-Benz Stadium, Atlanta"
   },
   {
     "id": "M046",
     "group_name": "H",
-    "team1": "Cap-Vert",
-    "team2": "Uruguay",
-    "match_at": "2026-06-21T00:00:00Z",
-    "stadium": "Mercedes-Benz Stadium, Atlanta"
+    "team1": "Uruguay",
+    "team2": "Cap-Vert",
+    "match_at": "2026-06-21T22:00:00Z",
+    "stadium": "Hard Rock Stadium, Miami"
   },
   {
     "id": "M047",
     "group_name": "H",
     "team1": "Cap-Vert",
     "team2": "Arabie Saoudite",
-    "match_at": "2026-06-26T00:00:00Z",
+    "match_at": "2026-06-27T00:00:00Z",
     "stadium": "NRG Stadium, Houston"
   },
   {
@@ -380,23 +380,23 @@
     "group_name": "H",
     "team1": "Uruguay",
     "team2": "Espagne",
-    "match_at": "2026-06-26T00:00:00Z",
+    "match_at": "2026-06-27T00:00:00Z",
     "stadium": "Estadio Akron, Guadalajara"
   },
   {
     "id": "M049",
     "group_name": "I",
     "team1": "France",
-    "team2": "Sénégal",
-    "match_at": "2026-06-16T00:00:00Z",
-    "stadium": "MetLife Stadium, New York"
+    "team2": "Senegal",
+    "match_at": "2026-06-16T19:00:00Z",
+    "stadium": "MetLife Stadium, New York/New Jersey"
   },
   {
     "id": "M050",
     "group_name": "I",
     "team1": "Irak",
-    "team2": "Norvège",
-    "match_at": "2026-06-16T00:00:00Z",
+    "team2": "Norvege",
+    "match_at": "2026-06-16T22:00:00Z",
     "stadium": "Gillette Stadium, Boston"
   },
   {
@@ -404,39 +404,39 @@
     "group_name": "I",
     "team1": "France",
     "team2": "Irak",
-    "match_at": "2026-06-22T00:00:00Z",
-    "stadium": "MetLife Stadium, New York"
+    "match_at": "2026-06-22T21:00:00Z",
+    "stadium": "Lincoln Financial Field, Philadelphia"
   },
   {
     "id": "M052",
     "group_name": "I",
-    "team1": "Sénégal",
-    "team2": "Norvège",
-    "match_at": "2026-06-22T00:00:00Z",
-    "stadium": "Lincoln Financial Field, Philadelphie"
+    "team1": "Norvege",
+    "team2": "Senegal",
+    "match_at": "2026-06-23T00:00:00Z",
+    "stadium": "MetLife Stadium, New York/New Jersey"
   },
   {
     "id": "M053",
     "group_name": "I",
-    "team1": "Sénégal",
+    "team1": "Senegal",
     "team2": "Irak",
-    "match_at": "2026-06-26T00:00:00Z",
-    "stadium": "Gillette Stadium, Boston"
+    "match_at": "2026-06-26T19:00:00Z",
+    "stadium": "BMO Field, Toronto"
   },
   {
     "id": "M054",
     "group_name": "I",
-    "team1": "Norvège",
+    "team1": "Norvege",
     "team2": "France",
-    "match_at": "2026-06-26T00:00:00Z",
-    "stadium": "BMO Field, Toronto"
+    "match_at": "2026-06-26T19:00:00Z",
+    "stadium": "Gillette Stadium, Boston"
   },
   {
     "id": "M055",
     "group_name": "J",
     "team1": "Argentine",
-    "team2": "Algérie",
-    "match_at": "2026-06-16T00:00:00Z",
+    "team2": "Algerie",
+    "match_at": "2026-06-17T01:00:00Z",
     "stadium": "Arrowhead Stadium, Kansas City"
   },
   {
@@ -444,31 +444,31 @@
     "group_name": "J",
     "team1": "Autriche",
     "team2": "Jordanie",
-    "match_at": "2026-06-16T00:00:00Z",
-    "stadium": "Levi's Stadium, San Francisco"
+    "match_at": "2026-06-17T04:00:00Z",
+    "stadium": "Levi's Stadium, Santa Clara"
   },
   {
     "id": "M057",
     "group_name": "J",
     "team1": "Argentine",
     "team2": "Autriche",
-    "match_at": "2026-06-22T00:00:00Z",
+    "match_at": "2026-06-22T17:00:00Z",
     "stadium": "AT&T Stadium, Dallas"
   },
   {
     "id": "M058",
     "group_name": "J",
-    "team1": "Algérie",
-    "team2": "Jordanie",
-    "match_at": "2026-06-22T00:00:00Z",
-    "stadium": "Levi's Stadium, San Francisco"
+    "team1": "Jordanie",
+    "team2": "Algerie",
+    "match_at": "2026-06-23T03:00:00Z",
+    "stadium": "Levi's Stadium, Santa Clara"
   },
   {
     "id": "M059",
     "group_name": "J",
-    "team1": "Algérie",
+    "team1": "Algerie",
     "team2": "Autriche",
-    "match_at": "2026-06-27T00:00:00Z",
+    "match_at": "2026-06-28T02:00:00Z",
     "stadium": "Arrowhead Stadium, Kansas City"
   },
   {
@@ -476,7 +476,7 @@
     "group_name": "J",
     "team1": "Jordanie",
     "team2": "Argentine",
-    "match_at": "2026-06-27T00:00:00Z",
+    "match_at": "2026-06-28T02:00:00Z",
     "stadium": "AT&T Stadium, Dallas"
   },
   {
@@ -484,79 +484,79 @@
     "group_name": "K",
     "team1": "Portugal",
     "team2": "RD Congo",
-    "match_at": "2026-06-17T00:00:00Z",
+    "match_at": "2026-06-17T17:00:00Z",
     "stadium": "NRG Stadium, Houston"
   },
   {
     "id": "M062",
     "group_name": "K",
-    "team1": "Ouzbékistan",
+    "team1": "Ouzbekistan",
     "team2": "Colombie",
-    "match_at": "2026-06-17T00:00:00Z",
-    "stadium": "Estadio Akron, Guadalajara"
+    "match_at": "2026-06-18T01:00:00Z",
+    "stadium": "Estadio Azteca, Mexico City"
   },
   {
     "id": "M063",
     "group_name": "K",
     "team1": "Portugal",
-    "team2": "Ouzbékistan",
-    "match_at": "2026-06-23T00:00:00Z",
+    "team2": "Ouzbekistan",
+    "match_at": "2026-06-23T17:00:00Z",
     "stadium": "NRG Stadium, Houston"
   },
   {
     "id": "M064",
     "group_name": "K",
-    "team1": "RD Congo",
-    "team2": "Colombie",
-    "match_at": "2026-06-23T00:00:00Z",
+    "team1": "Colombie",
+    "team2": "RD Congo",
+    "match_at": "2026-06-24T02:00:00Z",
     "stadium": "Estadio Akron, Guadalajara"
   },
   {
     "id": "M065",
     "group_name": "K",
     "team1": "RD Congo",
-    "team2": "Ouzbékistan",
-    "match_at": "2026-06-27T00:00:00Z",
-    "stadium": "Hard Rock Stadium, Miami"
+    "team2": "Ouzbekistan",
+    "match_at": "2026-06-27T23:30:00Z",
+    "stadium": "Mercedes-Benz Stadium, Atlanta"
   },
   {
     "id": "M066",
     "group_name": "K",
     "team1": "Colombie",
     "team2": "Portugal",
-    "match_at": "2026-06-27T00:00:00Z",
-    "stadium": "Mercedes-Benz Stadium, Atlanta"
+    "match_at": "2026-06-27T23:30:00Z",
+    "stadium": "Hard Rock Stadium, Miami"
   },
   {
     "id": "M067",
     "group_name": "L",
     "team1": "Angleterre",
     "team2": "Croatie",
-    "match_at": "2026-06-17T00:00:00Z",
-    "stadium": "BMO Field, Toronto"
+    "match_at": "2026-06-17T20:00:00Z",
+    "stadium": "AT&T Stadium, Dallas"
   },
   {
     "id": "M068",
     "group_name": "L",
     "team1": "Ghana",
     "team2": "Panama",
-    "match_at": "2026-06-17T00:00:00Z",
-    "stadium": "AT&T Stadium, Dallas"
+    "match_at": "2026-06-17T23:00:00Z",
+    "stadium": "BMO Field, Toronto"
   },
   {
     "id": "M069",
     "group_name": "L",
     "team1": "Angleterre",
     "team2": "Ghana",
-    "match_at": "2026-06-23T00:00:00Z",
+    "match_at": "2026-06-23T20:00:00Z",
     "stadium": "Gillette Stadium, Boston"
   },
   {
     "id": "M070",
     "group_name": "L",
-    "team1": "Croatie",
-    "team2": "Panama",
-    "match_at": "2026-06-23T00:00:00Z",
+    "team1": "Panama",
+    "team2": "Croatie",
+    "match_at": "2026-06-23T23:00:00Z",
     "stadium": "BMO Field, Toronto"
   },
   {
@@ -564,15 +564,15 @@
     "group_name": "L",
     "team1": "Croatie",
     "team2": "Ghana",
-    "match_at": "2026-06-27T00:00:00Z",
-    "stadium": "MetLife Stadium, New York"
+    "match_at": "2026-06-27T21:00:00Z",
+    "stadium": "Lincoln Financial Field, Philadelphia"
   },
   {
     "id": "M072",
     "group_name": "L",
     "team1": "Panama",
     "team2": "Angleterre",
-    "match_at": "2026-06-27T00:00:00Z",
-    "stadium": "Lincoln Financial Field, Philadelphie"
+    "match_at": "2026-06-27T21:00:00Z",
+    "stadium": "MetLife Stadium, New York/New Jersey"
   }
 ]

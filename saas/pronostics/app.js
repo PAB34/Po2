@@ -44,6 +44,12 @@ function setAll(cls,val){var els=document.querySelectorAll('.'+cls); for(var i=0
 var MONTHS=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
 function fmtDate(s){
   if(!s) return '';
+  var d=new Date(s);
+  if(!isNaN(d.getTime())){
+    return new Intl.DateTimeFormat('fr-FR',{
+      day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Paris'
+    }).format(d).replace(':','h');
+  }
   var m=String(s).match(/(\d{4})-(\d{2})-(\d{2})[ T]?(\d{2})?:?(\d{2})?/);
   if(!m) return String(s);
   var day=Number(m[3]), mon=MONTHS[Number(m[2])-1]||'', hh=m[4], mm=m[5];
