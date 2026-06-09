@@ -1932,6 +1932,7 @@ export type EnergyInvoiceXlsxImportSummary = {
     site_count: number | null;
     total_ttc: number | null;
     decision_preserved: string | null;
+    repair?: boolean;
   }>;
   duplicates_detail: Array<{
     invoice_number: string;

@@ -103,7 +103,12 @@ def import_engie_xlsx(
         ).scalar_one_or_none()
 
         if existing_import is not None:
-            if not force_update:
+            should_repair_failed_xlsx = (
+                existing_import.source == SOURCE_TAG
+                and existing_import.analysis_status == "failed"
+                and _has_parser_failed_issue(existing_import)
+            )
+            if not force_update and not should_repair_failed_xlsx:
                 duplicates.append(
                     {
                         "invoice_number": invoice_number,
@@ -153,6 +158,7 @@ def import_engie_xlsx(
                     "site_count": existing_import.site_count,
                     "total_ttc": existing_import.total_ttc,
                     "decision_preserved": preserved_decision["decision_status"],
+                    "repair": should_repair_failed_xlsx,
                 }
             )
             continue
@@ -241,3 +247,15 @@ def _persist_file(file_bytes: bytes, original_filename: str) -> tuple[Path, str,
     storage_path = storage_dir / stored_filename
     storage_path.write_bytes(file_bytes)
     return storage_path, sha256_hex, len(file_bytes)
+
+
+def _has_parser_failed_issue(invoice_import: EnergyInvoiceImport) -> bool:
+    """Detecte les imports XLSX coinces dans l'ancien parseur fichier PDF-only."""
+    try:
+        report = json.loads(invoice_import.control_report_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return False
+    issues = report.get("issues")
+    if not isinstance(issues, list):
+        return False
+    return any(isinstance(issue, dict) and issue.get("code") == "PARSER_FAILED" for issue in issues)

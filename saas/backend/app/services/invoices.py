@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.models.invoice import EnergyInvoiceBatch, EnergyInvoiceBatchItem, EnergyInvoiceImport
 from app.services.energie import _daily_consumption_index
-from app.services.invoice_analysis import analyze_invoice_import
+from app.services.invoice_analysis import analyze_invoice_import, apply_parsed_to_invoice_import
 
 ALLOWED_EXTENSIONS = {".pdf", ".xml", ".csv", ".txt", ".xlsx", ".xls", ".zip"}
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -497,7 +497,10 @@ def analyze_existing_invoice_import(
     invoice_import = get_invoice_import(db, city_id, invoice_import_id)
     if invoice_import is None:
         return None
-    analyze_invoice_import(db, invoice_import)
+    if invoice_import.source == "engie_xlsx_export" and invoice_import.analysis_result:
+        apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
+    else:
+        analyze_invoice_import(db, invoice_import)
     db.commit()
     db.refresh(invoice_import)
     return invoice_import

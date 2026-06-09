@@ -988,6 +988,7 @@ export function EnergieInvoicesPage() {
             Dépose le fichier <strong>MesFactures_*.xlsx</strong> exporté depuis l'espace ENGIE Entreprise.
             Chaque bordereau du fichier devient une facture importée séparément, avec analyse BPU/TURPE/périodes.
             Par défaut, les bordereaux déjà en base sont conservés tels quels (ta décision et ton historique sont préservés).
+            Les bordereaux XLSX bloqués en erreur parser sont réparés automatiquement au réimport.
           </p>
         </div>
         <div className="invoice-upload-actions">
@@ -1015,7 +1016,7 @@ export function EnergieInvoicesPage() {
             checked={xlsxForceUpdate}
             onChange={(e) => setXlsxForceUpdate(e.target.checked)}
           />
-          <span>Forcer la mise à jour des bordereaux déjà importés <em>(préserve les décisions utilisateur)</em></span>
+          <span>Forcer la mise à jour de tous les bordereaux déjà importés <em>(préserve les décisions utilisateur)</em></span>
         </label>
         {xlsxFile && (
           <p className="invoice-upload-selection">Fichier sélectionné : {xlsxFile.name}</p>

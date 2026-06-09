@@ -2,6 +2,7 @@ from io import BytesIO
 from zipfile import ZipFile
 
 from app.models.invoice import EnergyInvoice, EnergyInvoiceBatch, EnergyInvoiceBatchItem, EnergyInvoiceImport
+from app.services.engie_xlsx_import import SOURCE_TAG, _has_parser_failed_issue
 from app.services import invoices
 
 
@@ -72,3 +73,23 @@ def test_invoice_import_contract_holder_uses_parsed_invoice_fallback() -> None:
     invoice_import = EnergyInvoiceImport(analysis_result_json='{"invoice":{"contract_holder":"VILLE DE SETE"}}')
 
     assert invoice_import.contract_holder == "VILLE DE SETE"
+
+
+def test_xlsx_parser_failed_import_is_detected_for_repair() -> None:
+    invoice_import = EnergyInvoiceImport(
+        source=SOURCE_TAG,
+        analysis_status="failed",
+        control_report_json='{"issues":[{"code":"PARSER_FAILED","message":"Analyse impossible"}]}',
+    )
+
+    assert _has_parser_failed_issue(invoice_import) is True
+
+
+def test_non_parser_failed_import_is_not_detected_for_repair() -> None:
+    invoice_import = EnergyInvoiceImport(
+        source=SOURCE_TAG,
+        analysis_status="failed",
+        control_report_json='{"issues":[{"code":"BPU_PRICE_MISMATCH"}]}',
+    )
+
+    assert _has_parser_failed_issue(invoice_import) is False
