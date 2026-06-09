@@ -640,12 +640,24 @@ python -m app.scripts.import_grdf_droits --file "<...>/liste_droit_d_acces_GRDF 
 > rétention GRDF limitée à 5 ans, quotas 429, jointures SQL avec P1 DALKIA, latence/dispo.
 > Validation : `compileall` OK, app boot + 6 routes OK, backfill E2E (upsert + idempotence) via SQLite.
 
+### Phase 5 livrée (2026-06-09) — rapprochement P1 + suivi temporel
+
+`services/gas_analytics.py` + 2 routes :
+- `GET /api/grdf/conso/monthly` (`?id_pce=` ou `?building_id=`) → série mensuelle kWh / MWh PCS
+  (suivi temporel).
+- `GET /api/grdf/rapprochement-p1/{year}` → par PCE × année : conso GRDF mesurée vs quantité P1
+  DALKIA (`cpe_dalkia_ref_p1_gaz.qt_mwhpcs`), écart MWh/%, statut `ok|ecart|blocked`.
+
+> 🔑 **Unités tranchées** (validé contre les modèles) : GRDF `energie` = **kWh PCS**, P1 DALKIA
+> `qt_mwhpcs` = **MWh PCS** → comparables via `kWh/1000`, **sans** conversion PCI. Le coefficient
+> `grdf_pcs_to_pci` (1,1068) n'est requis que pour comparer à une cible NB (MWh PCI). `statut=blocked`
+> = pas de réf P1 pour ce PCE/année (détecteur de désalignement PCE, comme le badge NB du CPE).
+> Tolérance d'écart `grdf_ecart_tolerance_pct` (5 %). Testé E2E SQLite : 120 vs 110 MWh → +9,09 % `ecart`.
+
 ### Reste à faire
 
-- **Phase 5 (valeur métier)** : rapprochement conso GRDF ↔ factures **P1 GAZ DALKIA**
-  (jointure `gas_pces.id_pce` ↔ `cpe_dalkia_ref_p1_gaz.pce`) + suivi temporel par bâtiment via
-  `BuildingMeterLink`. ⚠️ Conversion kWh (GRDF) ↔ MWh PCI (CPE) à tracer (cf. écart PCS/PCI /1,1068).
-- **Frontend** : page `/energie/gaz` (liste PCE + boutons sync + courbe conso mensuelle).
+- **Frontend** : page `/energie/gaz` (liste PCE + boutons sync + courbe conso mensuelle + tableau
+  rapprochement P1). Non lançable localement (`npm` absent du poste) → validation CI.
 - **À confirmer au 1er appel réel** : forme exacte des réponses conso (objet vs liste de périodes)
   et noms de champs `GET /droits_acces` — les parseurs sont volontairement tolérants mais non
   validés contre l'API live (credentials PROD requis).

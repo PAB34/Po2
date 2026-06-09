@@ -113,3 +113,62 @@ def enrich_contractuel(
     from app.services.grdf_contractuel import enrich_pces  # noqa: PLC0415
 
     return enrich_pces(db, city_id=current_user.city_id)
+
+
+# ---------------------------------------------------------------------------
+# Analytics — suivi temporel + rapprochement P1 DALKIA (Phase 5)
+# ---------------------------------------------------------------------------
+
+class MonthlyPointOut(BaseModel):
+    model_config = {"from_attributes": True}
+    annee: int
+    mois: int
+    energie_kwh: int
+    mwh_pcs: float
+
+
+class MonthlySeriesOut(BaseModel):
+    model_config = {"from_attributes": True}
+    id_pce: str
+    nom_site: str | None = None
+    total_kwh: int
+    points: list[MonthlyPointOut]
+
+
+class P1ReconcileItemOut(BaseModel):
+    model_config = {"from_attributes": True}
+    id_pce: str
+    code_site: str | None = None
+    nom_site: str | None = None
+    grdf_mwh_pcs: float
+    dalkia_p1_qt_mwhpcs: float | None = None
+    dalkia_conso_mwh: float | None = None
+    p1_total_ht: float | None = None
+    ecart_mwh: float | None = None
+    ecart_pct: float | None = None
+    statut: str
+
+
+@router.get("/conso/monthly", response_model=list[MonthlySeriesOut])
+def conso_monthly(
+    id_pce: str | None = None,
+    building_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list:
+    """Série mensuelle de consommation GRDF (suivi temporel), par PCE."""
+    from app.services.gas_analytics import monthly_series  # noqa: PLC0415
+
+    return monthly_series(db, city_id=current_user.city_id, id_pce=id_pce, building_id=building_id)
+
+
+@router.get("/rapprochement-p1/{year}", response_model=list[P1ReconcileItemOut])
+def rapprochement_p1(
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list:
+    """Rapproche la conso GRDF réelle de la quantité P1 GAZ DALKIA, par PCE × année."""
+    from app.services.gas_analytics import reconcile_p1  # noqa: PLC0415
+
+    return reconcile_p1(db, city_id=current_user.city_id, year=year)

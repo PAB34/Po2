@@ -63,10 +63,17 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
   job `_grdf_conso_sync_job` (24h) dans `core/scheduler.py`, routes `api/routes/grdf.py` (6).
 - Validé : compileall, app boot + 6 routes, backfill E2E (upsert + idempotence) SQLite.
 
-### Priorité 1 — Phase 5 : rapprochement métier P1 DALKIA
-- Conso GRDF (`gas_consumptions`, kWh) ↔ factures P1 GAZ DALKIA (`cpe_dalkia_ref_p1_gaz.pce`),
-  conversion kWh↔MWh PCI à tracer ; suivi temporel par bâtiment via `BuildingMeterLink`.
-- Frontend `/energie/gaz` (liste PCE + sync + courbe mensuelle).
+### Phase 5 — ✅ FAITE (rapprochement P1 + suivi temporel)
+- `services/gas_analytics.py` : `monthly_series()` (suivi mensuel kWh/MWh PCS par PCE/bâtiment)
+  et `reconcile_p1()` (conso GRDF vs `cpe_dalkia_ref_p1_gaz.qt_mwhpcs`, écart, statut ok/ecart/blocked).
+- Routes `GET /api/grdf/conso/monthly` et `GET /api/grdf/rapprochement-p1/{year}`.
+- **Unités tranchées** : GRDF kWh PCS ↔ P1 MWh PCS comparables direct (÷1000) ; coeff PCI (1,1068)
+  seulement pour cible NB. Config `grdf_pcs_to_pci`, `grdf_ecart_tolerance_pct` (5%).
+- Validé E2E SQLite : 120 vs 110 MWh → +9,09% statut `ecart` ; serialization dataclass→Pydantic OK.
+
+### Priorité 1 restante — Frontend `/energie/gaz`
+- Liste PCE + boutons sync (pces/sync, conso/backfill, conso/sync) + courbe mensuelle + tableau
+  rapprochement P1. Non lançable localement (npm absent) → validation CI.
 
 ### Côté visio / 1er appel réel
 - Q DÉTENTEUR : périmètres vides → conso/contract/tech lisibles ? (sinon seuls 49 AUTORISE).

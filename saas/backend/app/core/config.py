@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     grdf_conso_sync_enabled: bool = True
     grdf_conso_sync_interval_hours: int = 24
     grdf_conso_sync_lookback_days: int = 7  # fenêtre glissante pour rattraper les retards
+    # Conversion énergie : GRDF restitue des kWh PCS ; le NB DALKIA est en MWh PCI.
+    # MWh_PCI = kWh_PCS / 1000 / coeff. La quantité P1 (qt_mwhpcs) est déjà en MWh PCS
+    # → comparable directement à GRDF (kWh/1000), sans ce coefficient.
+    grdf_pcs_to_pci: float = 1.1068
+    grdf_ecart_tolerance_pct: float = 5.0  # seuil d'alerte écart conso GRDF vs P1
 
     # FTP — serveur de réception des publications ENEDIS (canal de contact)
     ftp_host: str = ""
