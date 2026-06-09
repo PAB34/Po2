@@ -685,12 +685,17 @@ def parse_engie_xlsx(path: Path) -> list[dict[str, Any]]:
         segments = sorted(s for s in entry.pop("_segments") if s)
         entry["xlsx_sheets"] = sheets
         entry["xlsx_segments"] = segments
-        # Recalcule total_ttc global comme somme des FIC si absent au niveau bordereau
-        if entry["invoice"].get("total_ttc") is None:
-            sums = [_coerce_decimal(s.get("total_ttc")) for s in entry["sites"]]
-            sums = [s for s in sums if s is not None]
-            if sums:
-                entry["invoice"]["total_ttc"] = float(sum(sums, Decimal("0")))
+        # L'export ENGIE repete le montant TTC au niveau FIC/site, pas au niveau
+        # bordereau. Le total document doit donc etre reconstruit depuis les FIC.
+        sums = [_coerce_decimal(s.get("total_ttc")) for s in entry["sites"]]
+        sums = [s for s in sums if s is not None]
+        if sums:
+            entry["invoice"]["total_ttc"] = float(sum(sums, Decimal("0")))
+
+        consumption_sums = [_coerce_decimal(s.get("total_consumption_kwh")) for s in entry["sites"]]
+        consumption_sums = [s for s in consumption_sums if s is not None]
+        if consumption_sums:
+            entry["invoice"]["total_consumption_kwh"] = float(sum(consumption_sums, Decimal("0")))
         # Période globale = min/max des périodes sites
         starts = [s.get("period_start") for s in entry["sites"] if s.get("period_start")]
         ends = [s.get("period_end") for s in entry["sites"] if s.get("period_end")]

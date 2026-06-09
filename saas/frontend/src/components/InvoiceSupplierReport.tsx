@@ -9,6 +9,7 @@ import {
   INVOICE_ISSUE_FAMILY_LABEL,
   invoiceIssueFamily,
   isInternalControlLimit,
+  isSupplierReportIssue,
 } from "../lib/invoiceIssues";
 import type { InvoiceIssueFamily } from "../lib/invoiceIssues";
 import { InvoicePeriodTimeline } from "./InvoicePeriodTimeline";
@@ -165,7 +166,7 @@ function filteredIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupp
 }
 
 function selectedIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
-  return filteredIssues(invoiceImport, filters);
+  return filteredIssues(invoiceImport, filters).filter(isSupplierReportIssue);
 }
 
 function excludedInternalIssues(invoiceImport: EnergyInvoiceImport, filters: InvoiceSupplierReportFilters) {
