@@ -1,7 +1,7 @@
 import json
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -349,3 +349,75 @@ class EnergyInvoiceCheck(Base):
     scope: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     invoice: Mapped[EnergyInvoice] = relationship(back_populates="checks")
+
+
+# ---------------------------------------------------------------------------
+# Matrice comptable ENGIE (codification pour la fiche de liaison finances).
+# Calqué sur CpeAccountingSiteMapping / CpeAccountingNatureRule (module CPE),
+# mais autonome : clé site = PRM (les factures ENGIE sont par PRM).
+# ---------------------------------------------------------------------------
+
+
+class EnergyAccountingSiteMapping(Base):
+    """Codification comptable d'un PRM ENGIE pour la fiche de liaison finances."""
+
+    __tablename__ = "energy_accounting_site_mappings"
+    __table_args__ = (UniqueConstraint("city_id", "prm_id", name="uq_energy_accounting_site_city_prm"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    prm_id: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    site_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    regroupement: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    family: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    manager: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    alternate_manager: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    service_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    service_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    function_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    function_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    antenna_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    antenna_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    operation_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    operation_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class EnergyAccountingNatureRule(Base):
+    """Mapping entre les postes facturés ENGIE et la nature comptable cible."""
+
+    __tablename__ = "energy_accounting_nature_rules"
+    __table_args__ = (
+        UniqueConstraint(
+            "city_id",
+            "supplier",
+            "market",
+            "billed_item",
+            "frequency",
+            name="uq_energy_accounting_rule_key",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"), nullable=True, index=True)
+
+    supplier: Mapped[str] = mapped_column(String(100), nullable=False, default="ENGIE", index=True)
+    market: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    billed_item: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    frequency: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    accounting_nature: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    accounting_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

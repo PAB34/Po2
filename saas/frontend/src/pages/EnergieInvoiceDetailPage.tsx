@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import {
+  downloadInvoiceLiaison,
   fetchEnergyInvoiceImport,
+  fetchInvoiceCodification,
   updateEnergyInvoiceDecision,
 } from "../lib/api";
 import type {
@@ -404,6 +406,13 @@ export function EnergieInvoiceDetailPage() {
     },
   });
 
+  const codificationQuery = useQuery({
+    queryKey: ["energy-invoice-codification", invoiceImportId],
+    queryFn: () => fetchInvoiceCodification(token!, invoiceImportId),
+    enabled: !!token && Number.isFinite(invoiceImportId),
+  });
+  const [liaisonError, setLiaisonError] = useState<string | null>(null);
+
   if (invoiceQuery.isLoading) {
     return (
       <div className="page">
@@ -517,6 +526,71 @@ export function EnergieInvoiceDetailPage() {
             </button>
           </div>
           {decisionMut.isError && <p className="error-text">{(decisionMut.error as Error).message}</p>}
+        </section>
+
+        <section className="invoice-detail-section">
+          <h3>Fiche de liaison finances</h3>
+          {codificationQuery.isLoading && <p className="loading-text">Codification…</p>}
+          {codificationQuery.data && (
+            <>
+              <p style={{ fontSize: 13, color: "#475569", margin: "0 0 10px" }}>
+                {codificationQuery.data.rows_count} ligne(s) ·{" "}
+                {codificationQuery.data.blocked_count > 0 ? (
+                  <span style={{ color: "#b45309" }}>
+                    {codificationQuery.data.blocked_count} à codifier (PRM ou poste absent de la matrice)
+                  </span>
+                ) : (
+                  <span style={{ color: "#15803d" }}>toutes les lignes sont codifiées</span>
+                )}
+              </p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => {
+                    setLiaisonError(null);
+                    downloadInvoiceLiaison(
+                      token!,
+                      invoiceImportId,
+                      invoiceImport.invoice_number ?? String(invoiceImportId),
+                    ).catch((e) => setLiaisonError((e as Error).message));
+                  }}
+                >
+                  Exporter la fiche de liaison (xlsx)
+                </button>
+                <Link to="/energie/factures" className="btn-secondary btn-compact">
+                  Ouvrir la matrice comptable
+                </Link>
+              </div>
+              {liaisonError && <p className="error-text">{liaisonError}</p>}
+              <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      {["PRM", "Site", "Poste", "Montant HT", "Service", "Fonction", "Antenne", "Nature", ""].map((h) => (
+                        <th key={h} style={{ textAlign: "left", padding: "5px 8px", background: "#f1f5f9", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {codificationQuery.data.rows.slice(0, 200).map((r, i) => (
+                      <tr key={i} style={{ background: r.status === "blocked" ? "rgba(251,191,36,0.12)" : undefined }}>
+                        <td style={{ padding: "4px 8px", fontFamily: "monospace", whiteSpace: "nowrap" }}>{r.prm_id}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.site_name}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.poste}</td>
+                        <td style={{ padding: "4px 8px", textAlign: "right" }}>{r.amount_ht != null ? r.amount_ht.toFixed(2) : ""}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.service_code}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.function_code}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.antenna_code}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.accounting_nature}</td>
+                        <td style={{ padding: "4px 8px" }}>{r.status === "blocked" ? "⚠️" : "✓"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </section>
       </div>
 

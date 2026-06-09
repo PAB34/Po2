@@ -20,6 +20,13 @@ from app.schemas.billing import (
     BillingPriceEntryIn,
     BillingPriceEntryOut,
     BillingSupplierGroup,
+    EnergyAccountingNatureRuleIn,
+    EnergyAccountingNatureRuleOut,
+    EnergyAccountingSiteMappingIn,
+    EnergyAccountingSiteMappingOut,
+    EnergyCodificationImportResult,
+    EnergyLiaisonPreview,
+    EnergyLiaisonPreviewRow,
     TurpeVersionOut,
 )
 from app.schemas.invoice import (
@@ -46,6 +53,7 @@ from app.services.billing import (
     upsert_supplier_config,
 )
 from app.services.billing_bpu_sync import apply_config_sync, preview_config_sync
+from app.services import energie_accounting as accounting_svc
 from app.services.invoices import (
     analyze_existing_invoice_import,
     create_invoice_batch,
@@ -545,3 +553,176 @@ def analyze_energy_invoice_import(
     if invoice_import is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
     return invoice_import
+
+
+# ---------------------------------------------------------------------------
+# Matrice comptable ENGIE (codification) + fiche de liaison finances
+# ---------------------------------------------------------------------------
+
+
+@router.post("/accounting/import-codification", response_model=EnergyCodificationImportResult)
+async def import_energy_codification(
+    file: UploadFile = File(..., description="Classeur de codification comptable ENGIE (xlsx)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    raw = await file.read()
+    res = accounting_svc.import_codification_workbook(db, raw, filename=file.filename, city_id=city_id)
+    return EnergyCodificationImportResult(
+        filename=res.filename,
+        nature_rules_created=res.nature_rules_created,
+        nature_rules_updated=res.nature_rules_updated,
+        site_mappings_created=res.site_mappings_created,
+        site_mappings_updated=res.site_mappings_updated,
+        errors=res.errors,
+    )
+
+
+@router.post("/accounting/site-mappings/bootstrap")
+def bootstrap_energy_site_mappings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return accounting_svc.bootstrap_site_mappings_from_invoices(db, city_id)
+
+
+@router.get("/accounting/site-mappings", response_model=list[EnergyAccountingSiteMappingOut])
+def list_energy_site_mappings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return accounting_svc.list_site_mappings(db, _require_city(current_user))
+
+
+@router.post("/accounting/site-mappings", response_model=EnergyAccountingSiteMappingOut, status_code=status.HTTP_201_CREATED)
+def create_energy_site_mapping(
+    payload: EnergyAccountingSiteMappingIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return accounting_svc.create_site_mapping(db, {**payload.model_dump(), "city_id": city_id})
+
+
+@router.patch("/accounting/site-mappings/{mapping_id}", response_model=EnergyAccountingSiteMappingOut)
+def update_energy_site_mapping(
+    mapping_id: int,
+    payload: EnergyAccountingSiteMappingIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    obj = accounting_svc.get_site_mapping(db, mapping_id, city_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Codification site introuvable")
+    return accounting_svc.update_site_mapping(db, obj, payload.model_dump(exclude={"prm_id"}))
+
+
+@router.delete("/accounting/site-mappings/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_energy_site_mapping(
+    mapping_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    city_id = _require_city(current_user)
+    obj = accounting_svc.get_site_mapping(db, mapping_id, city_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Codification site introuvable")
+    accounting_svc.delete_site_mapping(db, obj)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/accounting/nature-rules", response_model=list[EnergyAccountingNatureRuleOut])
+def list_energy_nature_rules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return accounting_svc.list_nature_rules(db, _require_city(current_user))
+
+
+@router.post("/accounting/nature-rules", response_model=EnergyAccountingNatureRuleOut, status_code=status.HTTP_201_CREATED)
+def create_energy_nature_rule(
+    payload: EnergyAccountingNatureRuleIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return accounting_svc.create_nature_rule(db, {**payload.model_dump(), "city_id": city_id})
+
+
+@router.patch("/accounting/nature-rules/{rule_id}", response_model=EnergyAccountingNatureRuleOut)
+def update_energy_nature_rule(
+    rule_id: int,
+    payload: EnergyAccountingNatureRuleIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    obj = accounting_svc.get_nature_rule(db, rule_id, city_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle de nature introuvable")
+    return accounting_svc.update_nature_rule(db, obj, payload.model_dump())
+
+
+@router.delete("/accounting/nature-rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_energy_nature_rule(
+    rule_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    city_id = _require_city(current_user)
+    obj = accounting_svc.get_nature_rule(db, rule_id, city_id)
+    if obj is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle de nature introuvable")
+    accounting_svc.delete_nature_rule(db, obj)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/invoices/imports/{invoice_import_id}/codification", response_model=EnergyLiaisonPreview)
+def preview_invoice_codification(
+    invoice_import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    rows = accounting_svc.resolve_invoice_codification(db, invoice_import)
+    preview_rows = [
+        EnergyLiaisonPreviewRow(
+            prm_id=r.prm_id, site_name=r.site_name, poste=r.poste, label=r.label, amount_ht=r.amount_ht,
+            service_code=r.service_code, function_code=r.function_code, antenna_code=r.antenna_code,
+            operation_code=r.operation_code, accounting_nature=r.accounting_nature,
+            accounting_label=r.accounting_label, status=r.status,
+        )
+        for r in rows
+    ]
+    return EnergyLiaisonPreview(
+        invoice_number=invoice_import.invoice_number,
+        rows_count=len(preview_rows),
+        blocked_count=sum(1 for r in preview_rows if r.status == "blocked"),
+        rows=preview_rows,
+    )
+
+
+@router.get("/invoices/imports/{invoice_import_id}/liaison.xlsx")
+def export_invoice_liaison(
+    invoice_import_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    city_id = _require_city(current_user)
+    invoice_import = get_invoice_import(db, city_id, invoice_import_id)
+    if invoice_import is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
+    content = accounting_svc.build_energy_liaison_workbook(db, invoice_import)
+    label = invoice_import.invoice_number or str(invoice_import.id)
+    filename = f"fiche-liaison-engie-{label}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

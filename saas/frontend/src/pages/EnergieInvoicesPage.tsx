@@ -26,6 +26,7 @@ import {
 } from "../lib/api";
 import type { EnergyInvoiceImport, EnergyInvoiceMonthlyConsumptionPoint } from "../lib/api";
 import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
+import EnergieAccountingMatrix from "../components/EnergieAccountingMatrix";
 import { InvoicePeriodTimeline } from "../components/InvoicePeriodTimeline";
 import type { TimelineGroup, TimelineItem } from "../components/InvoicePeriodTimeline";
 import {
@@ -384,6 +385,7 @@ export function EnergieInvoicesPage() {
   const [issueCodeFilters, setIssueCodeFilters] = useState<string[]>([]);
   const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
+  const [isAccountingOpen, setIsAccountingOpen] = useState(false);
 
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
@@ -1121,6 +1123,13 @@ export function EnergieInvoicesPage() {
           >
             Editer rapport
           </button>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
+            onClick={() => setIsAccountingOpen(true)}
+          >
+            Matrice comptable
+          </button>
         </div>
         <div className="form-grid">
           <label>
@@ -1442,6 +1451,8 @@ export function EnergieInvoicesPage() {
           token={token}
         />
       )}
+
+      {isAccountingOpen && <EnergieAccountingMatrix onClose={() => setIsAccountingOpen(false)} />}
     </div>
   );
 }

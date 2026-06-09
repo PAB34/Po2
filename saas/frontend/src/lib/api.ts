@@ -1478,6 +1478,145 @@ export async function setBillingHphcSlots(token: string, configId: number, slots
   return parseResponse<BillingHphcSlotOut[]>(response);
 }
 
+// --- Matrice comptable ENGIE (codification) + fiche de liaison ---
+
+export type EnergyAccountingSiteMapping = {
+  id: number;
+  city_id: number | null;
+  prm_id: string;
+  site_name: string | null;
+  regroupement: string | null;
+  manager: string | null;
+  service_code: string | null;
+  service_label: string | null;
+  function_code: string | null;
+  function_label: string | null;
+  antenna_code: string | null;
+  antenna_label: string | null;
+  operation_code: string | null;
+  operation_label: string | null;
+  active: boolean;
+  notes: string | null;
+};
+
+export type EnergyAccountingNatureRule = {
+  id: number;
+  city_id: number | null;
+  supplier: string;
+  market: string | null;
+  billed_item: string;
+  frequency: string | null;
+  accounting_nature: string;
+  accounting_label: string | null;
+  active: boolean;
+  notes: string | null;
+};
+
+export type EnergyCodificationImportResult = {
+  filename: string | null;
+  nature_rules_created: number;
+  nature_rules_updated: number;
+  site_mappings_created: number;
+  site_mappings_updated: number;
+  errors: string[];
+};
+
+export type EnergyLiaisonPreviewRow = {
+  prm_id: string | null;
+  site_name: string | null;
+  poste: string | null;
+  label: string | null;
+  amount_ht: number | null;
+  service_code: string | null;
+  function_code: string | null;
+  antenna_code: string | null;
+  operation_code: string | null;
+  accounting_nature: string | null;
+  accounting_label: string | null;
+  status: string;
+};
+
+export type EnergyLiaisonPreview = {
+  invoice_number: string | null;
+  rows_count: number;
+  blocked_count: number;
+  rows: EnergyLiaisonPreviewRow[];
+};
+
+export async function fetchEnergySiteMappings(token: string): Promise<EnergyAccountingSiteMapping[]> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/site-mappings`, { headers: buildHeaders(token) });
+  return parseResponse<EnergyAccountingSiteMapping[]>(r);
+}
+
+export async function fetchEnergyNatureRules(token: string): Promise<EnergyAccountingNatureRule[]> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/nature-rules`, { headers: buildHeaders(token) });
+  return parseResponse<EnergyAccountingNatureRule[]>(r);
+}
+
+export async function updateEnergySiteMapping(
+  token: string, id: number, patch: Partial<EnergyAccountingSiteMapping>,
+): Promise<EnergyAccountingSiteMapping> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/site-mappings/${id}`, {
+    method: "PATCH", headers: buildHeaders(token), body: JSON.stringify(patch),
+  });
+  return parseResponse<EnergyAccountingSiteMapping>(r);
+}
+
+export async function updateEnergyNatureRule(
+  token: string, id: number, patch: Partial<EnergyAccountingNatureRule>,
+): Promise<EnergyAccountingNatureRule> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/nature-rules/${id}`, {
+    method: "PATCH", headers: buildHeaders(token), body: JSON.stringify(patch),
+  });
+  return parseResponse<EnergyAccountingNatureRule>(r);
+}
+
+export async function createEnergyNatureRule(
+  token: string, payload: Partial<EnergyAccountingNatureRule> & { billed_item: string; accounting_nature: string },
+): Promise<EnergyAccountingNatureRule> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/nature-rules`, {
+    method: "POST", headers: buildHeaders(token), body: JSON.stringify(payload),
+  });
+  return parseResponse<EnergyAccountingNatureRule>(r);
+}
+
+export async function importEnergyCodification(token: string, file: File): Promise<EnergyCodificationImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/import-codification`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<EnergyCodificationImportResult>(r);
+}
+
+export async function bootstrapEnergySiteMappings(token: string): Promise<{ created: number; existing: number }> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/site-mappings/bootstrap`, {
+    method: "POST", headers: buildHeaders(token),
+  });
+  return parseResponse<{ created: number; existing: number }>(r);
+}
+
+export async function fetchInvoiceCodification(token: string, importId: number): Promise<EnergyLiaisonPreview> {
+  const r = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}/codification`, { headers: buildHeaders(token) });
+  return parseResponse<EnergyLiaisonPreview>(r);
+}
+
+export async function downloadInvoiceLiaison(token: string, importId: number, invoiceLabel: string): Promise<void> {
+  const r = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}/liaison.xlsx`, { headers: buildHeaders(token) });
+  if (!r.ok) throw new Error(await r.text());
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `fiche-liaison-engie-${invoiceLabel}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // --- Energy invoice imports ---
 
 export type EnergyInvoiceImport = {
@@ -4194,4 +4333,123 @@ export async function downloadCpeFinanceInvoiceLiaison(token: string, invoiceId:
     throw new Error(text || `Erreur ${response.status}`);
   }
   return response.blob();
+}
+
+// ---------------------------------------------------------------------------
+// GRDF ADICT — gaz (PCE, consommations, rapprochement P1 DALKIA)
+// ---------------------------------------------------------------------------
+
+export type GrdfPce = {
+  id: number;
+  id_pce: string;
+  nom_site: string | null;
+  nom_titulaire: string | null;
+  role_tiers: string;
+  etat_droit_acces: string | null;
+  perim_publiees: boolean;
+  tarif_acheminement: string | null;
+  car_actuelle: number | null;
+  frequence_releve: string | null;
+};
+
+export type GrdfConsoSyncStatus = {
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  pce_total: number;
+  pce_done: number;
+  rows_upserted: number;
+  mode: string | null;
+  error: string | null;
+  log: string[];
+};
+
+export type GrdfMonthlyPoint = {
+  annee: number;
+  mois: number;
+  energie_kwh: number;
+  mwh_pcs: number;
+};
+
+export type GrdfMonthlySeries = {
+  id_pce: string;
+  nom_site: string | null;
+  total_kwh: number;
+  points: GrdfMonthlyPoint[];
+};
+
+export type GrdfP1ReconcileItem = {
+  id_pce: string;
+  code_site: string | null;
+  nom_site: string | null;
+  grdf_mwh_pcs: number;
+  dalkia_p1_qt_mwhpcs: number | null;
+  dalkia_conso_mwh: number | null;
+  p1_total_ht: number | null;
+  ecart_mwh: number | null;
+  ecart_pct: number | null;
+  statut: string;
+};
+
+export async function fetchGrdfPces(token: string): Promise<GrdfPce[]> {
+  const response = await fetch(`${apiBaseUrl}/grdf/pces`, { headers: buildHeaders(token) });
+  return parseResponse<GrdfPce[]>(response);
+}
+
+export type GrdfSyncDroitsResult = { total_api: number; created: number; updated: number };
+
+export async function syncGrdfPces(token: string): Promise<GrdfSyncDroitsResult> {
+  const response = await fetch(`${apiBaseUrl}/grdf/pces/sync`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GrdfSyncDroitsResult>(response);
+}
+
+export async function fetchGrdfConsoStatus(token: string): Promise<GrdfConsoSyncStatus> {
+  const response = await fetch(`${apiBaseUrl}/grdf/conso/status`, { headers: buildHeaders(token) });
+  return parseResponse<GrdfConsoSyncStatus>(response);
+}
+
+export async function startGrdfBackfill(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/grdf/conso/backfill`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
+
+export async function startGrdfConsoSync(token: string): Promise<{ message: string }> {
+  const response = await fetch(`${apiBaseUrl}/grdf/conso/sync`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ message: string }>(response);
+}
+
+export type GrdfEnrichResult = { pce_total: number; done: number; errors: number };
+
+export async function enrichGrdfContractuel(token: string): Promise<GrdfEnrichResult> {
+  const response = await fetch(`${apiBaseUrl}/grdf/contractuel/enrich`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GrdfEnrichResult>(response);
+}
+
+export async function fetchGrdfMonthly(token: string, idPce?: string): Promise<GrdfMonthlySeries[]> {
+  const params = new URLSearchParams();
+  if (idPce) params.set("id_pce", idPce);
+  const qs = params.toString();
+  const response = await fetch(`${apiBaseUrl}/grdf/conso/monthly${qs ? `?${qs}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GrdfMonthlySeries[]>(response);
+}
+
+export async function fetchGrdfReconcileP1(token: string, year: number): Promise<GrdfP1ReconcileItem[]> {
+  const response = await fetch(`${apiBaseUrl}/grdf/rapprochement-p1/${year}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GrdfP1ReconcileItem[]>(response);
 }
