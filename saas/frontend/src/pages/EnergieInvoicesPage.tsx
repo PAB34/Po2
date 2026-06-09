@@ -387,6 +387,25 @@ export function EnergieInvoicesPage() {
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
   const [isAccountingOpen, setIsAccountingOpen] = useState(false);
 
+  function resetInvoiceFilters() {
+    setControlFilters([]);
+    setDecisionFilters([]);
+    setRegroupementFilters([]);
+    setContractHolderFilters([]);
+    setInvoiceMonthFilters([]);
+    setPrmFilters([]);
+    setFicFilters([]);
+    setSiteFilters([]);
+    setSiteCityFilters([]);
+    setSegmentFilters([]);
+    setTariffCodeFilters([]);
+    setTariffOptionLabelFilters([]);
+    setDocumentTypeFilters([]);
+    setIssueFamilyFilters([]);
+    setIssueCodeFilters([]);
+    setInvoiceSearch("");
+  }
+
   const importsQuery = useQuery({
     queryKey: ["energy-invoice-imports"],
     queryFn: () => fetchEnergyInvoiceImports(token!),
@@ -658,8 +677,33 @@ export function EnergieInvoicesPage() {
     const invalid = imports.filter((i) => i.control_status === "invalid").length;
     const review = imports.filter((i) => i.control_status === "review" || i.analysis_status === "pending").length;
     const valid = imports.filter((i) => i.control_status === "valid").length;
-    return { total: imports.length, invalid, review, valid };
+    const decisionsToReview = imports.filter((i) => i.decision_status === "to_review").length;
+    return { total: imports.length, invalid, review, valid, decisionsToReview };
   }, [imports]);
+  const filteredStats = useMemo(() => {
+    const totalTtc = filteredImports.reduce((sum, invoiceImport) => sum + (invoiceImport.total_ttc ?? 0), 0);
+    const invalid = filteredImports.filter((i) => i.control_status === "invalid").length;
+    const warnings = filteredImports.reduce((sum, invoiceImport) => sum + invoiceImport.control_warnings_count, 0);
+    const errors = filteredImports.reduce((sum, invoiceImport) => sum + invoiceImport.control_errors_count, 0);
+    return { totalTtc, invalid, warnings, errors };
+  }, [filteredImports]);
+  const activeFilterCount =
+    controlFilters.length +
+    decisionFilters.length +
+    regroupementFilters.length +
+    contractHolderFilters.length +
+    invoiceMonthFilters.length +
+    prmFilters.length +
+    ficFilters.length +
+    siteFilters.length +
+    siteCityFilters.length +
+    segmentFilters.length +
+    tariffCodeFilters.length +
+    tariffOptionLabelFilters.length +
+    documentTypeFilters.length +
+    issueFamilyFilters.length +
+    issueCodeFilters.length +
+    (invoiceSearch.trim() ? 1 : 0);
 
   useEffect(() => {
     if (selectedBatchId === null && batches[0]) {
@@ -703,6 +747,19 @@ export function EnergieInvoicesPage() {
 
   const analyzeMut = useMutation({
     mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
+    },
+  });
+
+  const bulkAnalyzeMut = useMutation({
+    mutationFn: async (invoiceImports: EnergyInvoiceImport[]) => {
+      for (const invoiceImport of invoiceImports) {
+        await analyzeEnergyInvoiceImport(token!, invoiceImport.id);
+      }
+      return invoiceImports.length;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
       qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
@@ -770,6 +827,10 @@ export function EnergieInvoicesPage() {
         <div className="kpi-card">
           <span className="kpi-label">Valides</span>
           <span className="kpi-value">{stats.valid}</span>
+        </div>
+        <div className="kpi-card kpi-card--info">
+          <span className="kpi-label">Decisions a rendre</span>
+          <span className="kpi-value">{stats.decisionsToReview}</span>
         </div>
       </div>
 
@@ -1058,9 +1119,35 @@ export function EnergieInvoicesPage() {
       </details>
       )}
 
-      <section className="invoice-detail-section">
-        <h3>Filtrer les factures</h3>
-        <div className="invoice-action-cell">
+      <section className="invoice-control-workbench">
+        <div className="invoice-control-workbench-header">
+          <div>
+            <p className="field-label">Controle factures</p>
+            <h3>Piloter les validations finance</h3>
+            <span>
+              {sortedImports.length} facture{sortedImports.length > 1 ? "s" : ""} affichee{sortedImports.length > 1 ? "s" : ""}
+              {" "}sur {imports.length} importee{imports.length > 1 ? "s" : ""} · {formatCurrency(filteredStats.totalTtc)} TTC
+            </span>
+          </div>
+          <div className="invoice-control-workbench-kpis">
+            <span><strong>{filteredStats.invalid}</strong> invalides</span>
+            <span><strong>{filteredStats.errors}</strong> erreurs</span>
+            <span><strong>{filteredStats.warnings}</strong> alertes</span>
+            <span><strong>{supplierReportImports.length}</strong> lignes rapport</span>
+          </div>
+        </div>
+
+        <div className="invoice-control-toolbar">
+          <label className="invoice-control-search">
+            <span className="field-label">Recherche</span>
+            <input
+              type="search"
+              className="form-input"
+              value={invoiceSearch}
+              onChange={(e) => setInvoiceSearch(e.target.value)}
+              placeholder="Facture, site, titulaire, PRM..."
+            />
+          </label>
           <button
             type="button"
             className="btn-secondary btn-compact"
@@ -1094,30 +1181,22 @@ export function EnergieInvoicesPage() {
           <button
             type="button"
             className="btn-secondary btn-compact"
-            onClick={() => {
-              setControlFilters([]);
-              setDecisionFilters([]);
-              setRegroupementFilters([]);
-              setContractHolderFilters([]);
-              setInvoiceMonthFilters([]);
-              setPrmFilters([]);
-              setFicFilters([]);
-              setSiteFilters([]);
-              setSiteCityFilters([]);
-              setSegmentFilters([]);
-              setTariffCodeFilters([]);
-              setTariffOptionLabelFilters([]);
-              setDocumentTypeFilters([]);
-              setIssueFamilyFilters([]);
-              setIssueCodeFilters([]);
-              setInvoiceSearch("");
-            }}
+            onClick={resetInvoiceFilters}
+            disabled={activeFilterCount === 0}
           >
-            Reinitialiser
+            Reinitialiser{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
           </button>
           <button
             type="button"
             className="btn-primary btn-compact"
+            disabled={bulkAnalyzeMut.isPending || sortedImports.length === 0}
+            onClick={() => bulkAnalyzeMut.mutate(sortedImports)}
+          >
+            {bulkAnalyzeMut.isPending ? "Controle en cours..." : "Lancer le controle global"}
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-compact"
             disabled={supplierReportImports.length === 0}
             onClick={() => setIsSupplierReportOpen(true)}
           >
@@ -1131,17 +1210,13 @@ export function EnergieInvoicesPage() {
             Matrice comptable
           </button>
         </div>
-        <div className="form-grid">
-          <label>
-            <span className="field-label">Recherche</span>
-            <input
-              type="search"
-              className="form-input"
-              value={invoiceSearch}
-              onChange={(e) => setInvoiceSearch(e.target.value)}
-              placeholder="Facture, fichier, regroupement, titulaire"
-            />
-          </label>
+
+        <details className="invoice-advanced-filters">
+          <summary>
+            <span>Filtres avances</span>
+            <strong>{activeFilterCount === 0 ? "aucun filtre actif" : `${activeFilterCount} filtre${activeFilterCount > 1 ? "s" : ""} actif${activeFilterCount > 1 ? "s" : ""}`}</strong>
+          </summary>
+          <div className="form-grid">
           <InvoiceMultiFilter
             label="Controle"
             allLabel="Tous"
@@ -1254,7 +1329,8 @@ export function EnergieInvoicesPage() {
             values={issueCodeFilters}
             onChange={setIssueCodeFilters}
           />
-        </div>
+          </div>
+        </details>
       </section>
 
       {activeTurpeVersion && (

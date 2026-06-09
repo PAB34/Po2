@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -38,6 +39,11 @@ _PERIOD_TO_POSTE = {
     "HCE": "hce",
     "HP": "hp",
     "HC": "hc",
+}
+
+CURRENT_ELECTRICITY_LOT_BY_SUPPLIER = {
+    "ENGIE": 1,
+    "EDF": 2,
 }
 
 
@@ -212,6 +218,41 @@ def build_lines_for_lot(lot_number: int, xlsx_path: Path | None = None) -> LotSy
                 }
             )
     return res
+
+
+def _normalize_supplier(value: str | None) -> str | None:
+    upper = (value or "").upper()
+    if "ENGIE" in upper:
+        return "ENGIE"
+    if "EDF" in upper or "ELECTRICITE DE FRANCE" in upper:
+        return "EDF"
+    return None
+
+
+@lru_cache(maxsize=8)
+def _build_current_lines_for_supplier_cached(supplier: str, xlsx_path: str | None) -> LotSyncResult:
+    lot_number = CURRENT_ELECTRICITY_LOT_BY_SUPPLIER[supplier]
+    return build_lines_for_lot(lot_number, Path(xlsx_path) if xlsx_path else None)
+
+
+def build_current_lines_for_supplier(supplier: str | None, xlsx_path: Path | None = None) -> LotSyncResult:
+    """Construit les lignes BPU courantes du fournisseur depuis le xlsx canonique.
+
+    Pour le contrôle de facture, le fournisseur facturant doit primer sur une
+    configuration UI éventuellement restée sur un ancien lot : ENGIE = Lot 1,
+    EDF = Lot 2 dans le BPU électricité courant.
+    """
+    normalized = _normalize_supplier(supplier)
+    if normalized is None:
+        res = LotSyncResult(lot_number=0)
+        res.warnings.append(f"Fournisseur non mappable vers un lot BPU courant : {supplier or 'inconnu'}")
+        return res
+    return _build_current_lines_for_supplier_cached(normalized, str(xlsx_path) if xlsx_path else None)
+
+
+def clear_current_bpu_cache() -> None:
+    """Vide le cache après réimport du xlsx de référence."""
+    _build_current_lines_for_supplier_cached.cache_clear()
 
 
 def _lot_number_from_config_lot(lot: str | None) -> int | None:

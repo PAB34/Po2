@@ -429,6 +429,7 @@ def trigger_xlsx_import(
     """
     # Import différé : la dépendance pandas n'est tirée qu'à l'appel.
     from app.scripts.import_bpu_xlsx import DEFAULT_XLSX, import_xlsx
+    from app.services.billing_bpu_sync import clear_current_bpu_cache
 
     if not DEFAULT_XLSX.exists():
         raise HTTPException(
@@ -438,6 +439,7 @@ def trigger_xlsx_import(
 
     try:
         counters = import_xlsx(DEFAULT_XLSX, force=payload.force)
+        clear_current_bpu_cache()
     except Exception as exc:  # noqa: BLE001
         logger.exception("Import BPU xlsx a échoué")
         raise HTTPException(

@@ -1,4 +1,17 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-09 (controle factures ENGIE vs BPU canonique)
+> **Etat code local** : controle BPU facture recale sur `extraction_tarifs_electricite_BPU.xlsx`.
+>
+> Diagnostic sur `saas/energie/ENGIE/FACTURES/MesFactures_20260609132103.xlsx` : 185 bordereaux,
+> 1 267 sites, BPU courant ENGIE 2026 = `2025_18_MS1_BPU_ENGIE_LOT_1.pdf` (Lot 1) depuis le xlsx
+> canonique. Reproduction locale : 5 996 lignes tarifaires controlees, 0 ecart prix BPU, 0 reference
+> manquante. Les nombreuses erreurs observees etaient des faux positifs de referentiel/mapping
+> (mauvais lot/configuration ou C2/C5 mal derives), pas des erreurs ENGIE averees sur les prix unitaires.
+> Le moteur de controle charge maintenant les lignes courantes par fournisseur depuis le xlsx canonique
+> (ENGIE -> Lot 1, EDF -> Lot 2), expose le document canonique dans le resume BPU, conserve le controle
+> historique quand une reference exacte existe, et invalide le cache apres reimport BPU xlsx. Tests cibles :
+> `python -m pytest tests/test_billing_bpu_sync.py tests/test_invoice_analysis_bpu_mapping.py` OK.
+>
 > **Mise a jour complementaire** : 2026-06-08 (CVC fluides : cockpit F-Gaz / ESP)
 > **Etat code local** : premiere centrale de pilotage `/buildings/cvc-fluides` implementee.
 >

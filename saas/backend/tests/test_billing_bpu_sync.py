@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.services.billing_bpu_sync import (
+    build_current_lines_for_supplier,
     build_lines_for_lot,
     tariff_codes_for_row,
     _to_eur_per_mwh,
@@ -46,6 +47,16 @@ def test_lot1_identical_to_template():
     got = sorted(_key6(l) for l in res.lines)
     exp = sorted(_key6(l) for l in BPU_TEMPLATES_BY_LOT["lot1"])
     assert got == exp
+
+
+def test_current_supplier_mapping_uses_engie_lot1_xlsx():
+    res = build_current_lines_for_supplier("ENGIE Entreprises", xlsx_path=XLSX)
+
+    assert res.warnings == []
+    assert res.lot_number == 1
+    assert res.source_supplier == "ENGIE"
+    assert res.source_year == 2026
+    assert sorted(_key6(l) for l in res.lines) == sorted(_key6(l) for l in BPU_TEMPLATES_BY_LOT["lot1"])
 
 
 def test_lot2_matches_template_except_blacked_out_mudt():

@@ -5,6 +5,7 @@ import unicodedata
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.billing import BillingBpuLine, BillingConfig
 from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
+from app.services.billing_bpu_sync import build_current_lines_for_supplier
 from app.services.energie import _contracts, _daily_consumption_index, _load_curve_index, _max_power_index, _safe_float
 from app.services.invoice_bpu import load_historical_bpu_prices, resolve_historical_bpu_price
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
@@ -478,9 +480,14 @@ def _check_bpu(
 ) -> None:
     historical_prices = load_historical_bpu_prices(db, parsed.get("supplier"))
     historical_documents: set[tuple[int, str, int, int]] = set()
+    canonical_bpu = build_current_lines_for_supplier(parsed.get("supplier"))
+    canonical_bpu_lines = [
+        SimpleNamespace(**line)
+        for line in canonical_bpu.lines
+    ]
     configs = db.query(BillingConfig).filter(BillingConfig.city_id == city_id).all()
     engie_configs = [cfg for cfg in configs if "ENGIE" in (cfg.supplier or "").upper()]
-    if not engie_configs and not historical_prices:
+    if not engie_configs and not historical_prices and not canonical_bpu_lines:
         issue("warning", "BPU_CONFIG_MISSING", "Aucune configuration BPU ENGIE trouvee pour controler les prix.")
         return
 
@@ -495,7 +502,18 @@ def _check_bpu(
         .filter(BillingBpuLine.config_id.in_([cfg.id for cfg in engie_configs]))
         .all()
     )
+    bpu_source = "configured"
     bpu_index = {(line.tariff_code, line.poste): line for line in bpu_lines}
+    if canonical_bpu_lines:
+        bpu_source = "canonical_xlsx"
+        bpu_index = {(line.tariff_code, line.poste): line for line in canonical_bpu_lines}
+        if canonical_bpu.source_filename:
+            bpu_summary["canonical_document"] = {
+                "filename": canonical_bpu.source_filename,
+                "valid_year": canonical_bpu.source_year,
+                "supplier": canonical_bpu.source_supplier,
+                "lot_number": canonical_bpu.lot_number,
+            }
     if not bpu_index and not historical_prices:
         issue("warning", "BPU_LINES_MISSING", "Configuration ENGIE presente mais aucune ligne BPU disponible.")
         return
@@ -565,7 +583,7 @@ def _check_bpu(
                 )
                 continue
 
-            expected_value = getattr(bpu_line, component_field)
+            expected_value = _bpu_line_value(bpu_line, component_field)
             if expected_value is None:
                 bpu_summary["missing_references"] += 1
                 issue(
@@ -640,7 +658,7 @@ def _check_bpu(
                     invoice_price_eur_mwh=invoice_value_mwh,
                     bpu_price_eur_mwh=expected,
                     bpu_reference=bpu_ref,
-                    source="configured",
+                    source=bpu_source,
                 )
                 issue(
                     "error",
@@ -1071,6 +1089,8 @@ def _tariff_code_for_site(site: dict[str, Any]) -> str:
     segment = (site.get("segment") or "").upper()
     version = _normalize_xlsx_tariff_code(site.get("tariff_code"))
     extracted = _extract_tariff_code(label)
+    if segment in {"C1", "C2", "C3"}:
+        return segment
     if "SEGMENT C4" in upper or segment == "C4":
         return "C4"
     if segment == "C5" or "SEGMENT C5" in upper:
@@ -1129,7 +1149,13 @@ def _bpu_component_field(component: str | None) -> str | None:
     }.get(component or "")
 
 
-def _first_poste_for_tariff(bpu_index: dict[tuple[str, str], BillingBpuLine], tariff_code: str) -> str | None:
+def _bpu_line_value(line: Any, field: str) -> Any:
+    if isinstance(line, dict):
+        return line.get(field)
+    return getattr(line, field, None)
+
+
+def _first_poste_for_tariff(bpu_index: dict[tuple[str, str], Any], tariff_code: str) -> str | None:
     for code, poste in bpu_index:
         if code == tariff_code:
             return poste
@@ -1137,12 +1163,12 @@ def _first_poste_for_tariff(bpu_index: dict[tuple[str, str], BillingBpuLine], ta
 
 
 def _find_bpu_line_for_invoice_line(
-    bpu_index: dict[tuple[str, str], BillingBpuLine],
+    bpu_index: dict[tuple[str, str], Any],
     site: dict[str, Any],
     line: dict[str, Any],
     tariff_code: str,
     poste: str | None,
-) -> tuple[BillingBpuLine | None, bool]:
+) -> tuple[Any | None, bool]:
     for index, candidate in enumerate(_bpu_candidate_keys(tariff_code, poste)):
         if candidate in bpu_index:
             return bpu_index[candidate], index > 0
@@ -1159,8 +1185,8 @@ def _bpu_candidate_keys(tariff_code: str, poste: str | None) -> list[tuple[str, 
 
 
 def _is_bpu_tariff_poste_inconsistency(
-    bpu_index: dict[tuple[str, str], BillingBpuLine],
-    bpu_line: BillingBpuLine,
+    bpu_index: dict[tuple[str, str], Any],
+    bpu_line: Any,
     component_field: str,
     invoice_value_mwh: Decimal,
     poste: str | None,
@@ -1186,19 +1212,19 @@ def _is_bpu_tariff_poste_inconsistency(
 
 
 def _matching_bpu_price_lines(
-    bpu_index: dict[tuple[str, str], BillingBpuLine],
+    bpu_index: dict[tuple[str, str], Any],
     component_field: str,
     invoice_value_mwh: Decimal,
     poste: str | None,
     exclude: tuple[str, str] | None = None,
-) -> list[BillingBpuLine]:
-    matches: list[BillingBpuLine] = []
+) -> list[Any]:
+    matches: list[Any] = []
     for key, candidate in bpu_index.items():
         if exclude and key == exclude:
             continue
         if poste and candidate.poste != poste:
             continue
-        candidate_value = getattr(candidate, component_field)
+        candidate_value = _bpu_line_value(candidate, component_field)
         if candidate_value is None:
             continue
         expected = _decimal(candidate_value)
