@@ -18,6 +18,7 @@ import { CpeDalkiaImportPage } from "./pages/CpeDalkiaImportPage";
 import CpeSiteDetailPage from "./pages/CpeSiteDetailPage";
 import EnergieBpuPage from "./pages/EnergieBpuPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
+import { EnergieGazPage } from "./pages/EnergieGazPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
 import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
 import { EnergiePage } from "./pages/EnergiePage";
@@ -80,6 +81,7 @@ export default function App() {
             <Link to="/energie/factures">Factures fournisseurs</Link>
             <Link to="/energie/preconisations">Préconisations</Link>
             <Link to="/energie/bpu">Prix et TURPE</Link>
+            <Link to="/energie/gaz">Gaz GRDF</Link>
 
             <p className="nav-section" style={navSectionStyle}>Marchés et contrats</p>
             <Link to="/cpe">CPE DALKIA</Link>
@@ -121,6 +123,7 @@ export default function App() {
             <Route path="/energie/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
             <Route path="/energie/facturation" element={<EnergieBillingPage />} />
             <Route path="/energie/bpu" element={<EnergieBpuPage />} />
+            <Route path="/energie/gaz" element={<EnergieGazPage />} />
             <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
             <Route path="/cpe" element={<CpeDalkiaPage />} />
             <Route path="/cpe/sites/:siteId" element={<CpeSiteDetailPage />} />

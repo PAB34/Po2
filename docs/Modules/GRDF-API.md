@@ -654,10 +654,26 @@ python -m app.scripts.import_grdf_droits --file "<...>/liste_droit_d_acces_GRDF 
 > = pas de réf P1 pour ce PCE/année (détecteur de désalignement PCE, comme le badge NB du CPE).
 > Tolérance d'écart `grdf_ecart_tolerance_pct` (5 %). Testé E2E SQLite : 120 vs 110 MWh → +9,09 % `ecart`.
 
+### Frontend livré (2026-06-09) — page `/energie/gaz`
+
+`pages/EnergieGazPage.tsx` + types/fonctions dans `lib/api.ts` + route (avant `/energie/:prmId`)
+et lien sidebar « Gaz GRDF ». Contenu :
+- **KPI** : PCE référencés / droits actifs / collectables / conso GRDF de l'année.
+- **Actions** : resync référentiel (API), backfill 5 ans, sync récente, enrichir contractuel —
+  avec statut de collecte en temps réel (`refetchInterval` tant que `status=running`).
+- **Rapprochement P1** : tableau conso GRDF vs quantité P1 DALKIA par PCE × année, badge
+  `Conforme/Écart/Réf. P1 absente`, sélecteur d'année.
+- **Suivi temporel** : tableau mensuel MWh PCS par PCE (filtre PCE), cumul annuel.
+
+> ⚠️ Non buildé localement (`npm`/`node` absents du poste) → **validation CI requise**. Conformité
+> vérifiée à la main : React Query v5 (`isPending`, `refetchInterval` fonction), classes CSS
+> existantes, génériques `parseResponse<T>` explicites.
+
 ### Reste à faire
 
-- **Frontend** : page `/energie/gaz` (liste PCE + boutons sync + courbe conso mensuelle + tableau
-  rapprochement P1). Non lançable localement (`npm` absent du poste) → validation CI.
+- **1er appel API réel** (credentials PROD) : valider la forme des réponses conso/droits.
+- Question visio DÉTENTEUR (périmètres lisibles ?).
+- Éventuel : lier `gas_pces.building_id` au patrimoine pour le filtre par bâtiment.
 - **À confirmer au 1er appel réel** : forme exacte des réponses conso (objet vs liste de périodes)
   et noms de champs `GET /droits_acces` — les parseurs sont volontairement tolérants mais non
   validés contre l'API live (credentials PROD requis).

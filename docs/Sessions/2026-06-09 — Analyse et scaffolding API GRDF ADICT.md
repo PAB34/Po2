@@ -71,9 +71,15 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
   seulement pour cible NB. Config `grdf_pcs_to_pci`, `grdf_ecart_tolerance_pct` (5%).
 - Validé E2E SQLite : 120 vs 110 MWh → +9,09% statut `ecart` ; serialization dataclass→Pydantic OK.
 
-### Priorité 1 restante — Frontend `/energie/gaz`
-- Liste PCE + boutons sync (pces/sync, conso/backfill, conso/sync) + courbe mensuelle + tableau
-  rapprochement P1. Non lançable localement (npm absent) → validation CI.
+### Frontend — ✅ FAIT (page `/energie/gaz`)
+- `pages/EnergieGazPage.tsx` (KPI + actions sync + rapprochement P1 + suivi mensuel),
+  types/fonctions `lib/api.ts`, route App.tsx (avant `/energie/:prmId`), lien sidebar « Gaz GRDF ».
+- Non buildé localement (npm/node absents) → **validation CI**. Conformité vérifiée main :
+  RQ v5 (`isPending`, `refetchInterval` fonction), classes CSS existantes, génériques explicites.
+
+### Reste (post-visio / 1er appel live)
+- Valider forme réelle réponses conso/droits (credentials PROD) ; question DÉTENTEUR.
+- Optionnel : lier `gas_pces.building_id` au patrimoine pour le filtre par bâtiment.
 
 ### Côté visio / 1er appel réel
 - Q DÉTENTEUR : périmètres vides → conso/contract/tech lisibles ? (sinon seuls 49 AUTORISE).
