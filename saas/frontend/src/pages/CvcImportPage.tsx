@@ -8,7 +8,6 @@ import {
   fetchCvcImportBatches,
   fetchCvcImportItems,
   fetchEquipmentReferences,
-  fetchSites,
   postCvcImport,
   postCvcPreview,
   recomputeCvcImportReferences,
@@ -18,7 +17,6 @@ import {
   type CvcInventoryItem,
   type CvcPreviewResponse,
   type EquipmentReference,
-  type Site,
   type UpdateCvcInventoryItemPayload,
 } from "../lib/api";
 
@@ -241,7 +239,6 @@ function RowSelect({ value, options, placeholder, onChange, disabled }: RowSelec
 type InventoryRowProps = {
   item: CvcInventoryItem;
   buildings: Building[];
-  sites: Site[];
   references: EquipmentReference[];
   saving: boolean;
   onPatch: (item: CvcInventoryItem, payload: UpdateCvcInventoryItemPayload) => void;
@@ -348,12 +345,6 @@ export function CvcImportPage() {
     enabled: !!token,
     staleTime: 0,
   });
-  const sitesQuery = useQuery<Site[]>({
-    queryKey: ["sites", token],
-    queryFn: () => fetchSites(token ?? ""),
-    enabled: !!token,
-    staleTime: 0,
-  });
   const referencesQuery = useQuery<EquipmentReference[]>({
     queryKey: ["equipment-references", token],
     queryFn: () => fetchEquipmentReferences(token ?? ""),
@@ -434,7 +425,6 @@ export function CvcImportPage() {
 
   function refreshPatrimoineLists() {
     queryClient.invalidateQueries({ queryKey: ["buildings"] });
-    queryClient.invalidateQueries({ queryKey: ["sites"] });
   }
 
   if (!token) {
