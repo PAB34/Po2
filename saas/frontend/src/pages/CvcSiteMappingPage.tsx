@@ -21,6 +21,7 @@ const NEUTRAL_BORDER = "rgba(148, 163, 184, 0.25)";
 type DraftMapping = {
   site_id: number | null;
   building_id: number | null;
+  create_building?: boolean;
 };
 
 function compactLabel(parts: Array<string | null | undefined>): string {
@@ -44,6 +45,7 @@ function suggestedMapping(match: CvcImportSiteMatchResult): DraftMapping {
   return {
     site_id: match.current_site_id ?? match.auto_site_id,
     building_id: match.current_building_id ?? match.auto_building_id,
+    create_building: false,
   };
 }
 
@@ -100,7 +102,7 @@ function MappingRow({
           value={value.site_id ?? ""}
           onChange={(e) => {
             const site_id = e.target.value ? Number(e.target.value) : null;
-            onChange({ site_id, building_id: null });
+            onChange({ site_id, building_id: null, create_building: false });
           }}
           style={selectStyle()}
         >
@@ -114,17 +116,23 @@ function MappingRow({
       </td>
       <td>
         <select
-          value={value.building_id ?? ""}
+          value={value.create_building ? "__create__" : value.building_id ?? ""}
           onChange={(e) => {
+            if (e.target.value === "__create__") {
+              onChange({ site_id: null, building_id: null, create_building: true });
+              return;
+            }
             const building = buildings.find((item) => item.id === Number(e.target.value));
             onChange({
               site_id: building?.site_id ?? value.site_id,
               building_id: e.target.value ? Number(e.target.value) : null,
+              create_building: false,
             });
           }}
           style={selectStyle()}
         >
           <option value="">Aucun batiment</option>
+          <option value="__create__">Ajouter ce batiment a la liste patrimoniale</option>
           {filteredBuildings.map((building) => (
             <option key={building.id} value={building.id}>
               {compactLabel([building.nom_batiment ?? `Batiment #${building.id}`, building.adresse_reconstituee])}
@@ -133,7 +141,9 @@ function MappingRow({
         </select>
       </td>
       <td>
-        {match.current_building_id || match.current_site_id ? (
+        {value.create_building ? (
+          <span style={{ color: "#fbbf24" }}>Creation patrimoine</span>
+        ) : match.current_building_id || match.current_site_id ? (
           <span className="success-text">Deja rattache</span>
         ) : isAuto ? (
           <span style={{ color: "#7dd3fc" }}>Preselection</span>
@@ -193,6 +203,7 @@ export function CvcSiteMappingPage() {
         site_raw: match.site_raw,
         site_id: drafts[match.site_raw]?.site_id ?? null,
         building_id: drafts[match.site_raw]?.building_id ?? null,
+        create_building: drafts[match.site_raw]?.create_building ?? false,
       }));
       return applyCvcImportSiteMappings(token, activeBatch, mappings);
     },
@@ -208,7 +219,7 @@ export function CvcSiteMappingPage() {
 
   const stats = useMemo(() => {
     const clearlyMatched = matches.filter((match) => match.auto_site_id || match.auto_building_id).length;
-    const selected = Object.values(drafts).filter((draft) => draft.site_id || draft.building_id).length;
+    const selected = Object.values(drafts).filter((draft) => draft.site_id || draft.building_id || draft.create_building).length;
     return { clearlyMatched, selected };
   }, [drafts, matches]);
 

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
@@ -25,15 +26,17 @@ import {
 
 const SUBTLE_TEXT = "#94a3b8";
 const NEUTRAL_BORDER = "rgba(148, 163, 184, 0.25)";
+const CURRENT_YEAR = new Date().getFullYear();
 
 function compactLabel(parts: Array<string | null | undefined>): string {
   return parts.filter(Boolean).join(" - ");
 }
 
-function numberOrNull(value: string): number | null {
+function yearOrNull(value: string): number | null {
   if (!value.trim()) return null;
-  const parsed = Number(value.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1900 || parsed > CURRENT_YEAR + 1) return null;
+  return parsed;
 }
 
 function referenceLabel(ref: EquipmentReference): string {
@@ -51,6 +54,154 @@ function isCvcRelevant(ref: EquipmentReference): boolean {
     ref.code_niveau_2 === "A.2.1" ||
     ref.code_niveau_2 === "A.2.2" ||
     ref.code_niveau_2 === "A.2.3"
+  );
+}
+
+function formatPercent(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "-";
+  return `${Math.round(value)}%`;
+}
+
+function formatRemainingLife(item: CvcInventoryItem): string {
+  if (item.duree_vie_restante === null) return "Non calculable";
+  if (item.duree_vie_restante < 0) return `${Math.abs(item.duree_vie_restante)} ans depasses`;
+  return `${item.duree_vie_restante} ans restants`;
+}
+
+function familyColor(index: number): string {
+  return ["#38bdf8", "#22c55e", "#f59e0b", "#f43f5e", "#a78bfa", "#14b8a6"][index % 6];
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: number) {
+  const angleRad = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(angleRad),
+    y: cy + radius * Math.sin(angleRad),
+  };
+}
+
+function donutPath(cx: number, cy: number, radius: number, startAngle: number, endAngle: number): string {
+  const start = polarToCartesian(cx, cy, radius, endAngle);
+  const end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+  return ["M", start.x, start.y, "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y].join(" ");
+}
+
+function CvcOverviewCharts({ items }: { items: CvcInventoryItem[] }) {
+  const stats = useMemo(() => {
+    const withReference = items.filter((item) => item.sypemi_reference_annees !== null);
+    const withCriticity = items.filter((item) => item.criticite_pct !== null);
+    const avgCriticity = withCriticity.length
+      ? withCriticity.reduce((sum, item) => sum + (item.criticite_pct ?? 0), 0) / withCriticity.length
+      : null;
+    const expired = items.filter((item) => item.duree_vie_restante !== null && item.duree_vie_restante < 0).length;
+    const soon = items.filter(
+      (item) => item.duree_vie_restante !== null && item.duree_vie_restante >= 0 && item.duree_vie_restante <= 3,
+    ).length;
+    const sourceCounts = {
+      dateMes: items.filter((item) => item.lifecycle_age_source === "date_mes").length,
+      estimated: items.filter((item) => item.lifecycle_age_source === "etat_sante").length,
+      missing: items.filter((item) => item.lifecycle_age_source === "missing").length,
+    };
+    const familyMap = new Map<string, number>();
+    for (const item of items) {
+      const key = item.famille?.trim() || "Non renseignee";
+      familyMap.set(key, (familyMap.get(key) ?? 0) + 1);
+    }
+    const families = [...familyMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([label, count], index) => ({ label, count, color: familyColor(index) }));
+    return {
+      withReference: withReference.length,
+      avgCriticity,
+      expired,
+      soon,
+      sourceCounts,
+      families,
+      sourceTotal: Math.max(1, items.length),
+    };
+  }, [items]);
+
+  let currentAngle = 0;
+  const totalFamilies = Math.max(1, stats.families.reduce((sum, item) => sum + item.count, 0));
+
+  return (
+    <div className="cvc-overview-grid">
+      <div className="cvc-aging-card">
+        <div>
+          <p className="eyebrow">Vieillissement global</p>
+          <strong>{formatPercent(stats.avgCriticity)}</strong>
+          <span>de duree de vie consommee</span>
+        </div>
+        <div
+          className="cvc-aging-ring"
+          style={
+            { "--age": `${Math.min(100, Math.max(0, stats.avgCriticity ?? 0))}%` } as CSSProperties & Record<"--age", string>
+          }
+        >
+          <span>{formatPercent(stats.avgCriticity)}</span>
+        </div>
+        <div className="cvc-mini-metrics">
+          <span><strong>{stats.expired}</strong> depasses</span>
+          <span><strong>{stats.soon}</strong> a 3 ans</span>
+          <span><strong>{stats.withReference}</strong> references</span>
+        </div>
+      </div>
+
+      <div className="cvc-chart-card">
+        <div>
+          <p className="eyebrow">Familles equipements</p>
+          <h3>Repartition</h3>
+        </div>
+        <div className="cvc-donut-row">
+          <svg viewBox="0 0 120 120" className="cvc-donut" aria-hidden="true">
+            <circle cx="60" cy="60" r="42" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="18" />
+            {stats.families.map((entry) => {
+              const slice = (entry.count / totalFamilies) * 360;
+              if (slice >= 359) {
+                return <circle key={entry.label} cx="60" cy="60" r="42" fill="none" stroke={entry.color} strokeWidth="18" />;
+              }
+              const path = donutPath(60, 60, 42, currentAngle, currentAngle + slice);
+              currentAngle += slice;
+              return <path key={entry.label} d={path} fill="none" stroke={entry.color} strokeWidth="18" strokeLinecap="round" />;
+            })}
+          </svg>
+          <div className="cvc-chart-legend">
+            {stats.families.map((entry) => (
+              <span key={entry.label}>
+                <i style={{ background: entry.color }} />
+                {entry.label} <strong>{entry.count}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="cvc-chart-card">
+        <div>
+          <p className="eyebrow">Qualite du calcul</p>
+          <h3>Source de l'age</h3>
+        </div>
+        <div className="cvc-source-bars">
+          <span>
+            <strong>DATE MES</strong>
+            <i><b style={{ width: `${(stats.sourceCounts.dateMes / stats.sourceTotal) * 100}%` }} /></i>
+            {stats.sourceCounts.dateMes}
+          </span>
+          <span>
+            <strong>ETAT SANTE</strong>
+            <i><b style={{ width: `${(stats.sourceCounts.estimated / stats.sourceTotal) * 100}%` }} /></i>
+            {stats.sourceCounts.estimated}
+          </span>
+          <span>
+            <strong>A completer</strong>
+            <i><b style={{ width: `${(stats.sourceCounts.missing / stats.sourceTotal) * 100}%` }} /></i>
+            {stats.sourceCounts.missing}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -159,41 +310,38 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
           </div>
         )}
       </td>
+      <td>
+        <input
+          type="number"
+          min="1900"
+          max={CURRENT_YEAR + 1}
+          defaultValue={item.date_mis_en_service ?? ""}
+          disabled={saving}
+          onBlur={(e) => onPatch(item, { date_mis_en_service: yearOrNull(e.target.value) })}
+          style={{
+            width: "100%",
+            minWidth: 0,
+            padding: "6px 8px",
+            borderRadius: 6,
+            border: `1px solid ${NEUTRAL_BORDER}`,
+            background: "rgba(15,23,42,0.9)",
+            color: "#e2e8f0",
+          }}
+        />
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem", marginTop: 4 }}>
+          {item.lifecycle_age_label ?? "Age non determine"}
+        </div>
+      </td>
       <td style={{ whiteSpace: "nowrap" }}>
         {item.sypemi_mini_annees ?? "-"} / <strong>{item.sypemi_reference_annees ?? "-"}</strong> / {item.sypemi_maxi_annees ?? "-"} ans
-        {item.duree_vie_restante !== null && (
-          <div style={{ color: item.duree_vie_restante < 0 ? "#f87171" : SUBTLE_TEXT, fontSize: "0.72rem" }}>
-            {item.duree_vie_restante < 0
-              ? `${Math.abs(item.duree_vie_restante)} ans depasse`
-              : `${item.duree_vie_restante} ans restants`}
+        <div style={{ color: item.duree_vie_restante !== null && item.duree_vie_restante < 0 ? "#f87171" : SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {formatRemainingLife(item)}
+        </div>
+        {item.criticite_pct !== null && (
+          <div style={{ color: "#7dd3fc", fontSize: "0.72rem" }}>
+            Vie consommee {formatPercent(item.criticite_pct)}
           </div>
         )}
-      </td>
-      <td>
-        {item.requires_refrigerant_quantity ? (
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={item.quantite_fluide_frigorigene ?? ""}
-            disabled={saving}
-            onBlur={(e) => onPatch(item, { quantite_fluide_frigorigene: numberOrNull(e.target.value) })}
-            style={{
-              width: "100%",
-              minWidth: 0,
-              padding: "6px 8px",
-              borderRadius: 6,
-              border: `1px solid ${NEUTRAL_BORDER}`,
-              background: "rgba(15,23,42,0.9)",
-              color: "#e2e8f0",
-            }}
-          />
-        ) : (
-          <span style={{ color: "#475569" }}>Non concerne</span>
-        )}
-      </td>
-      <td style={{ color: saving ? "#fbbf24" : "#4ade80", fontSize: "0.74rem" }}>
-        {saving ? "Sauvegarde..." : "Enregistre"}
       </td>
     </tr>
   );
@@ -307,7 +455,7 @@ export function CvcImportPage() {
   const items = itemsQuery.data ?? [];
   const mappedCount = items.filter((item) => item.building_id !== null).length;
   const refMappedCount = items.filter((item) => item.equipment_ref_id !== null).length;
-  const refrigerantCount = items.filter((item) => item.requires_refrigerant_quantity).length;
+  const computedFromHealthCount = items.filter((item) => item.lifecycle_age_source === "etat_sante").length;
 
   function refreshPatrimoineLists() {
     queryClient.invalidateQueries({ queryKey: ["buildings"] });
@@ -452,12 +600,14 @@ export function CvcImportPage() {
 
       {activeBatch && (
         <div className="section-block">
+          {items.length > 0 && <CvcOverviewCharts items={items} />}
+
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
             {[
               ["Lignes", items.length],
               ["Rattachees patrimoine", mappedCount],
               ["Reference duree de vie", refMappedCount],
-              ["Fluides frigorigenes", refrigerantCount],
+              ["Ages estimes", computedFromHealthCount],
             ].map(([label, value]) => (
               <div key={label} style={{ padding: "10px 14px", border: `1px solid ${NEUTRAL_BORDER}`, borderRadius: 8, background: "rgba(15,23,42,0.35)" }}>
                 <div style={{ color: "#e2e8f0", fontWeight: 700 }}>{value}</div>
@@ -479,9 +629,8 @@ export function CvcImportPage() {
                     <th>Batiment patrimoine</th>
                     <th>Local patrimoine</th>
                     <th>Duree de vie attachee</th>
+                    <th>DATE MES</th>
                     <th>Mini / Ref. / Maxi</th>
-                    <th>Fluide kg</th>
-                    <th>Statut</th>
                   </tr>
                 </thead>
                 <tbody>

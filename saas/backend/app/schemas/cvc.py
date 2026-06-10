@@ -64,6 +64,7 @@ class CvcSiteMapping(BaseModel):
     site_raw: str
     site_id: int | None = None
     building_id: int | None = None
+    create_building: bool = False
 
 
 class CvcApplySiteMappingsRequest(BaseModel):
@@ -125,6 +126,9 @@ class CvcInventoryItemRead(BaseModel):
     modele: str | None = None
     date_mis_en_service: int | None = None
     duree_vie_restante: float | None = None
+    lifecycle_age_years: float | None = None
+    lifecycle_age_source: str = "missing"
+    lifecycle_age_label: str | None = None
     quantite_fluide_frigorigene: float | None = None
     import_batch: str | None = None
     criticite_pct: float | None = None
@@ -142,6 +146,7 @@ class CvcInventoryItemUpdate(BaseModel):
     building_id: int | None = None
     local_id: int | None = None
     equipment_ref_id: int | None = None
+    date_mis_en_service: int | None = None
     quantite_fluide_frigorigene: float | None = None
 
 

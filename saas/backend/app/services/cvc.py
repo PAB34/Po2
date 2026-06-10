@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
+from app.models.city import City
 from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.equipment import EquipmentReference
 from app.models.local import Local
@@ -48,6 +49,11 @@ from app.schemas.cvc import (
 )
 
 CURRENT_YEAR = datetime.now().year
+HEALTH_AGE_RATIOS = {
+    "bon": 0.25,
+    "moyen": 0.6,
+    "mauvais": 0.95,
+}
 ALLOWED_CVC_REFERENCE_DOMAINS = {"A.2.1", "A.2.2", "A.2.3"}
 NO_FUZZY_FAMILIES = {
     "analyseur",
@@ -490,6 +496,34 @@ def _best_current_id(values: list[int | None]) -> int | None:
     return max(counts.items(), key=lambda item: item[1])[0]
 
 
+def _create_or_reuse_cvc_placeholder_building(
+    db: Session,
+    source_name: str,
+    city_id: int | None,
+) -> Building:
+    normalized_source = _normalize(source_name)
+    stmt = select(Building).where(Building.source_creation == "CVC_IMPORT", Building.site_id.is_(None))
+    if city_id is not None:
+        stmt = stmt.where(Building.city_id == city_id)
+    for building in db.scalars(stmt):
+        if _normalize(building.nom_batiment) == normalized_source:
+            return building
+
+    city = db.get(City, city_id) if city_id is not None else None
+    building = Building(
+        city_id=city_id,
+        site_id=None,
+        nom_batiment=source_name[:255],
+        nom_commune=city.nom_commune if city else "A qualifier",
+        adresse_reconstituee=None,
+        source_creation="CVC_IMPORT",
+        statut_geocodage="NON_FAIT",
+    )
+    db.add(building)
+    db.flush()
+    return building
+
+
 def _suggest_source_building(
     source_site_raw: str,
     sites: list[Site],
@@ -768,19 +802,24 @@ def apply_site_mappings_to_import(
         if not site_raw:
             continue
 
-        site = db.get(Site, mapping.site_id) if mapping.site_id is not None else None
-        if mapping.site_id is not None and site is None:
+        create_building = bool(mapping.create_building)
+        site = None if create_building else (db.get(Site, mapping.site_id) if mapping.site_id is not None else None)
+        if not create_building and mapping.site_id is not None and site is None:
             raise ValueError(f"Site introuvable pour {site_raw}.")
         if site and city_id is not None and site.city_id != city_id:
             raise ValueError(f"Site hors perimetre pour {site_raw}.")
 
-        building = db.get(Building, mapping.building_id) if mapping.building_id is not None else None
-        if mapping.building_id is not None and building is None:
+        building = (
+            _create_or_reuse_cvc_placeholder_building(db, site_raw, city_id)
+            if create_building
+            else (db.get(Building, mapping.building_id) if mapping.building_id is not None else None)
+        )
+        if not create_building and mapping.building_id is not None and building is None:
             raise ValueError(f"Batiment introuvable pour {site_raw}.")
         if building and city_id is not None and building.city_id != city_id:
             raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
 
-        next_site_id = site.id if site else (building.site_id if building else None)
+        next_site_id = None if create_building else (site.id if site else (building.site_id if building else None))
         if building and site and building.site_id not in (None, site.id):
             raise ValueError(f"Le batiment choisi n'appartient pas au site choisi pour {site_raw}.")
 
@@ -1003,22 +1042,72 @@ def _requires_refrigerant_quantity(ref: EquipmentReference | None) -> bool:
     return bool(ref and ref.niveau_3 in REFRIGERANT_NIVEAU_3)
 
 
-def _compute_remaining_life(date_mes: int | None, ref: EquipmentReference | None) -> float | None:
-    if not date_mes or not ref or not ref.sypemi_reference_annees:
+def _health_age_ratio(etat_sante: str | None) -> float | None:
+    normalized = _normalize(etat_sante)
+    if not normalized:
         return None
-    age = CURRENT_YEAR - date_mes
-    return round(ref.sypemi_reference_annees - age, 1)
+    for key, ratio in HEALTH_AGE_RATIOS.items():
+        if key in normalized:
+            return ratio
+    return None
+
+
+def _compute_lifecycle(
+    date_mes: int | None,
+    ref: EquipmentReference | None,
+    etat_sante: str | None = None,
+) -> tuple[float | None, float | None, str, str | None]:
+    if not ref or not ref.sypemi_reference_annees:
+        return None, None, "missing", "Reference duree de vie absente"
+
+    if date_mes:
+        age = max(0, CURRENT_YEAR - date_mes)
+        return (
+            round(ref.sypemi_reference_annees - age, 1),
+            round(age, 1),
+            "date_mes",
+            "Calcule depuis DATE MES",
+        )
+
+    ratio = _health_age_ratio(etat_sante)
+    if ratio is not None:
+        age = round(ref.sypemi_reference_annees * ratio, 1)
+        return (
+            round(ref.sypemi_reference_annees - age, 1),
+            age,
+            "etat_sante",
+            f"DATE MES absente, estime depuis ETAT SANTE : {etat_sante}",
+        )
+
+    return None, None, "missing", "DATE MES et ETAT SANTE exploitables absents"
+
+
+def _compute_remaining_life(
+    date_mes: int | None,
+    ref: EquipmentReference | None,
+    etat_sante: str | None = None,
+) -> float | None:
+    remaining, _, _, _ = _compute_lifecycle(date_mes, ref, etat_sante)
+    return remaining
 
 
 def _read_item(item: CvcInventoryItem, ref: EquipmentReference | None) -> CvcInventoryItemRead:
     sypemi_years = ref.sypemi_reference_annees if ref else None
+    remaining_life, lifecycle_age, lifecycle_source, lifecycle_label = _compute_lifecycle(
+        item.date_mis_en_service,
+        ref,
+        item.etat_sante,
+    )
 
     criticite_pct = None
-    if item.date_mis_en_service and sypemi_years and sypemi_years > 0:
-        age = CURRENT_YEAR - item.date_mis_en_service
-        criticite_pct = min(100.0, round(age / sypemi_years * 100, 1))
+    if lifecycle_age is not None and sypemi_years and sypemi_years > 0:
+        criticite_pct = min(100.0, round(lifecycle_age / sypemi_years * 100, 1))
 
     read = CvcInventoryItemRead.model_validate(item)
+    read.duree_vie_restante = remaining_life
+    read.lifecycle_age_years = lifecycle_age
+    read.lifecycle_age_source = lifecycle_source
+    read.lifecycle_age_label = lifecycle_label
     read.criticite_pct = criticite_pct
     read.sypemi_reference_annees = sypemi_years
     read.sypemi_mini_annees = ref.sypemi_mini_annees if ref else None
@@ -1096,7 +1185,8 @@ def import_cvc_from_excel(
         except (ValueError, TypeError):
             date_mes = None
 
-        duree_vie_restante = _compute_remaining_life(date_mes, ref)
+        etat_sante = clean("ETAT SANTE")
+        duree_vie_restante = _compute_remaining_life(date_mes, ref, etat_sante)
 
         qte_raw = get_val(row, "QTE QTE RELEVEE")
         try:
@@ -1116,7 +1206,7 @@ def import_cvc_from_excel(
             local_name=clean("LOCAL"),
             designation=designation,
             statut=clean("STATUT"),
-            etat_sante=clean("ETAT SANTE"),
+            etat_sante=etat_sante,
             quantite_relevee=quantite_relevee,
             famille=famille,
             marque=marque,
@@ -1214,7 +1304,7 @@ def recompute_cvc_references_for_batch(
         if item.equipment_ref_id != next_ref_id:
             changed += 1
         item.equipment_ref_id = next_ref_id
-        item.duree_vie_restante = _compute_remaining_life(item.date_mis_en_service, next_ref)
+        item.duree_vie_restante = _compute_remaining_life(item.date_mis_en_service, next_ref, item.etat_sante)
         if not _requires_refrigerant_quantity(next_ref):
             item.quantite_fluide_frigorigene = None
         if next_ref:
@@ -1730,6 +1820,7 @@ def update_cvc_item(
     next_site_id = updates.get("site_id", item.site_id)
     next_local_id = updates.get("local_id", item.local_id)
     next_ref_id = updates.get("equipment_ref_id", item.equipment_ref_id)
+    next_date_mes = updates.get("date_mis_en_service", item.date_mis_en_service)
 
     building = db.get(Building, next_building_id) if next_building_id is not None else None
     if next_building_id is not None and building is None:
@@ -1761,7 +1852,9 @@ def update_cvc_item(
         item.local_id = next_local_id
     if "equipment_ref_id" in updates:
         item.equipment_ref_id = next_ref_id
-    item.duree_vie_restante = _compute_remaining_life(item.date_mis_en_service, ref)
+    if "date_mis_en_service" in updates:
+        item.date_mis_en_service = next_date_mes
+    item.duree_vie_restante = _compute_remaining_life(item.date_mis_en_service, ref, item.etat_sante)
     if _requires_refrigerant_quantity(ref):
         if "quantite_fluide_frigorigene" in updates:
             item.quantite_fluide_frigorigene = payload.quantite_fluide_frigorigene

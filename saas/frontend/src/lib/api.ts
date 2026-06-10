@@ -2746,6 +2746,9 @@ export type CvcInventoryItem = {
   modele: string | null;
   date_mis_en_service: number | null;
   duree_vie_restante: number | null;
+  lifecycle_age_years: number | null;
+  lifecycle_age_source: string;
+  lifecycle_age_label: string | null;
   quantite_fluide_frigorigene: number | null;
   import_batch: string | null;
   criticite_pct: number | null;
@@ -2772,6 +2775,7 @@ export type UpdateCvcInventoryItemPayload = {
   building_id?: number | null;
   local_id?: number | null;
   equipment_ref_id?: number | null;
+  date_mis_en_service?: number | null;
   quantite_fluide_frigorigene?: number | null;
 };
 
@@ -2779,6 +2783,7 @@ export type CvcSiteMappingPayload = {
   site_raw: string;
   site_id: number | null;
   building_id: number | null;
+  create_building?: boolean;
 };
 
 export type CvcApplySiteMappingsResult = {
