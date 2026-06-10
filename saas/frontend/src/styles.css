@@ -1353,6 +1353,22 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.cvc-row-search {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  padding: 7px 9px;
+  font-size: 0.78rem;
+}
+
+.cvc-row-search::placeholder {
+  color: #64748b;
+}
+
 .cvc-inventory-table,
 .cvc-site-mapping-table,
 .cvc-refrigerant-table,

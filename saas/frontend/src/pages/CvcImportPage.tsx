@@ -547,7 +547,7 @@ export function CvcImportPage() {
               Rafraichir patrimoine
             </button>
             {activeBatch && (
-              <Link className="secondary-link" to="/buildings/cvc-import/batiment">
+              <Link className="secondary-link" to="/buildings/cvc-import/batiments">
                 Matcher les batiments
               </Link>
             )}

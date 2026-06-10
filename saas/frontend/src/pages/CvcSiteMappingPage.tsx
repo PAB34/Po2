@@ -28,6 +28,14 @@ function compactLabel(parts: Array<string | null | undefined>): string {
   return parts.filter(Boolean).join(" - ");
 }
 
+function searchText(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function selectStyle() {
   return {
     width: "100%",
@@ -62,7 +70,20 @@ function MappingRow({
   value: DraftMapping;
   onChange: (value: DraftMapping) => void;
 }) {
-  const filteredBuildings = buildings.filter((building) => !value.site_id || building.site_id === value.site_id);
+  const [siteSearch, setSiteSearch] = useState("");
+  const [buildingSearch, setBuildingSearch] = useState("");
+  const siteQuery = searchText(siteSearch);
+  const buildingQuery = searchText(buildingSearch);
+  const filteredSites = sites.filter((site) => {
+    if (!siteQuery) return true;
+    return searchText(compactLabel([site.nom_site, site.adresse])).includes(siteQuery);
+  });
+  const filteredBuildings = buildings
+    .filter((building) => !value.site_id || building.site_id === value.site_id)
+    .filter((building) => {
+      if (!buildingQuery) return true;
+      return searchText(compactLabel([building.nom_batiment ?? `Batiment #${building.id}`, building.adresse_reconstituee])).includes(buildingQuery);
+    });
   const bestSite = match.site_suggestions[0];
   const bestBuilding = match.building_suggestions[0];
   const isAuto = !match.current_site_id && (match.auto_site_id || match.auto_building_id);
@@ -98,6 +119,13 @@ function MappingRow({
         )}
       </td>
       <td>
+        <input
+          className="cvc-row-search"
+          type="search"
+          value={siteSearch}
+          onChange={(e) => setSiteSearch(e.target.value)}
+          placeholder="Rechercher un site"
+        />
         <select
           value={value.site_id ?? ""}
           onChange={(e) => {
@@ -107,7 +135,7 @@ function MappingRow({
           style={selectStyle()}
         >
           <option value="">Aucun site</option>
-          {sites.map((site) => (
+          {filteredSites.map((site) => (
             <option key={site.id} value={site.id}>
               {compactLabel([site.nom_site, site.adresse])}
             </option>
@@ -115,6 +143,13 @@ function MappingRow({
         </select>
       </td>
       <td>
+        <input
+          className="cvc-row-search"
+          type="search"
+          value={buildingSearch}
+          onChange={(e) => setBuildingSearch(e.target.value)}
+          placeholder="Rechercher un batiment"
+        />
         <select
           value={value.create_building ? "__create__" : value.building_id ?? ""}
           onChange={(e) => {
