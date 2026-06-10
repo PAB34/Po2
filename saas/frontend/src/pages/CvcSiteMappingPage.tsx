@@ -93,8 +93,16 @@ function SearchableMultiDropdown({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const normalizedQuery = searchText(query);
+  const optionsByValue = new Map(options.map((option) => [option.value, option]));
   const selectedOptions = values
-    .map((value) => options.find((option) => option.value === value))
+    .map(
+      (value) =>
+        optionsByValue.get(value) ?? {
+          value,
+          label: `Batiment #${value}`,
+          helper: "Rattache au matching, en attente de chargement dans la liste patrimoine",
+        },
+    )
     .filter((option): option is SearchableOption => Boolean(option));
   const visibleOptions = options.filter((option) => {
     if (!normalizedQuery) return true;
@@ -116,7 +124,7 @@ function SearchableMultiDropdown({
   return (
     <div className="cvc-combobox cvc-multi-combobox">
       <div className="cvc-selected-chips">
-        {selectedOptions.length === 0 && <span>{placeholder}</span>}
+        {values.length === 0 && <span>{placeholder}</span>}
         {selectedOptions.map((option) => (
           <button
             key={option.value}
@@ -383,6 +391,7 @@ export function CvcSiteMappingPage() {
     },
     onSuccess: () => {
       setError(null);
+      queryClient.invalidateQueries({ queryKey: ["buildings"] });
       queryClient.invalidateQueries({ queryKey: ["cvc-import-site-matches"] });
       queryClient.invalidateQueries({ queryKey: ["cvc-import-items"] });
       queryClient.invalidateQueries({ queryKey: ["cvc-import-batches"] });
@@ -436,7 +445,15 @@ export function CvcSiteMappingPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button type="button" className="secondary-button" onClick={() => matchesQuery.refetch()} disabled={!activeBatch || matchesQuery.isFetching}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                matchesQuery.refetch();
+                buildingsQuery.refetch();
+              }}
+              disabled={!activeBatch || matchesQuery.isFetching || buildingsQuery.isFetching}
+            >
               Rafraichir
             </button>
             <button type="button" className="primary-button" onClick={() => saveMutation.mutate()} disabled={!activeBatch || saveMutation.isPending}>
