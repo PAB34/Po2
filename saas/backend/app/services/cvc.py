@@ -582,6 +582,34 @@ def _best_current_id(values: list[int | None]) -> int | None:
     return max(counts.items(), key=lambda item: item[1])[0]
 
 
+def _dedupe_ids(values: list[int | None]) -> list[int]:
+    result: list[int] = []
+    seen: set[int] = set()
+    for value in values:
+        if value is None or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _read_mapping_building_ids(mapping: CvcSourceBuildingMapping) -> list[int]:
+    if mapping.building_ids_json:
+        try:
+            values = json.loads(mapping.building_ids_json)
+        except json.JSONDecodeError:
+            values = []
+        if isinstance(values, list):
+            return _dedupe_ids([value if isinstance(value, int) else None for value in values])
+    return [mapping.building_id] if mapping.building_id is not None else []
+
+
+def _write_mapping_building_ids(mapping: CvcSourceBuildingMapping, building_ids: list[int]) -> None:
+    clean_ids = _dedupe_ids(building_ids)
+    mapping.building_ids_json = json.dumps(clean_ids) if clean_ids else None
+    mapping.building_id = clean_ids[0] if len(clean_ids) == 1 else None
+
+
 def _create_or_reuse_cvc_placeholder_building(
     db: Session,
     source_name: str,
@@ -751,8 +779,15 @@ def ensure_cvc_source_building_mappings(db: Session, city_id: int | None) -> int
 
 def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping) -> int:
     updated = 0
-    building = db.get(Building, mapping.building_id) if mapping.building_id is not None else None
-    next_site_id = mapping.site_id if mapping.site_id is not None else (building.site_id if building else None)
+    selected_building_ids = _read_mapping_building_ids(mapping)
+    buildings = [building for building_id in selected_building_ids if (building := db.get(Building, building_id))]
+    single_building = buildings[0] if len(buildings) == 1 else None
+    selected_site_ids = {building.site_id for building in buildings if building.site_id is not None}
+    next_site_id = mapping.site_id
+    if next_site_id is None and len(selected_site_ids) == 1:
+        next_site_id = next(iter(selected_site_ids))
+    if next_site_id is None and single_building is not None:
+        next_site_id = single_building.site_id
     if mapping.source_type == "inventory":
         rows = list(
             db.scalars(
@@ -764,8 +799,8 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
         )
         for item in rows:
             item.site_id = next_site_id
-            item.building_id = building.id if building else None
-            if building is None:
+            item.building_id = single_building.id if single_building else None
+            if single_building is None:
                 item.local_id = None
             linked_refrigerants = list(
                 db.scalars(select(CvcRefrigerantItem).where(CvcRefrigerantItem.cvc_inventory_item_id == item.id))
@@ -785,7 +820,7 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
         )
         for item in rows:
             item.site_id = next_site_id
-            item.building_id = building.id if building else None
+            item.building_id = single_building.id if single_building else None
             updated += 1
     return updated
 
@@ -793,10 +828,23 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
 def list_site_matches_for_import(
     db: Session, import_batch: str, city_id: int | None
 ) -> CvcImportSiteMatchResponse:
+    ensure_cvc_source_building_mappings(db, city_id)
     stmt = select(CvcInventoryItem).where(CvcInventoryItem.import_batch == import_batch)
     if city_id is not None:
         stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
     items = _filter_latest_inventory_batch(list(db.scalars(stmt)))
+    mapping_stmt = select(CvcSourceBuildingMapping).where(
+        CvcSourceBuildingMapping.import_batch == import_batch,
+        CvcSourceBuildingMapping.source_type == "inventory",
+    )
+    if city_id is not None:
+        mapping_stmt = mapping_stmt.where(
+            (CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None))
+        )
+    source_mappings = {
+        _normalize(mapping.source_site_raw): mapping
+        for mapping in db.scalars(mapping_stmt)
+    }
 
     sites_stmt = select(Site)
     buildings_stmt = select(Building)
@@ -814,6 +862,12 @@ def list_site_matches_for_import(
 
     results: list[CvcImportSiteMatchResult] = []
     for site_raw, site_items in grouped.items():
+        source_mapping = source_mappings.get(_normalize(site_raw))
+        current_building_ids = (
+            _read_mapping_building_ids(source_mapping)
+            if source_mapping is not None
+            else _dedupe_ids([item.building_id for item in site_items])
+        )
         site_scored = sorted(
             ((_similarity(site_raw, site.nom_site), site) for site in patrimoine_sites),
             key=lambda item: item[0],
@@ -865,8 +919,9 @@ def list_site_matches_for_import(
             CvcImportSiteMatchResult(
                 site_raw=site_raw,
                 item_count=len(site_items),
-                current_site_id=_best_current_id([item.site_id for item in site_items]),
-                current_building_id=_best_current_id([item.building_id for item in site_items]),
+                current_site_id=source_mapping.site_id if source_mapping is not None else _best_current_id([item.site_id for item in site_items]),
+                current_building_id=current_building_ids[0] if len(current_building_ids) == 1 else None,
+                current_building_ids=current_building_ids,
                 site_suggestions=site_suggestions,
                 building_suggestions=building_suggestions,
                 auto_site_id=auto_site_id,
@@ -889,25 +944,59 @@ def apply_site_mappings_to_import(
             continue
 
         create_building = bool(mapping.create_building)
+        requested_building_ids = _dedupe_ids(mapping.building_ids or ([mapping.building_id] if mapping.building_id else []))
         site = None if create_building else (db.get(Site, mapping.site_id) if mapping.site_id is not None else None)
         if not create_building and mapping.site_id is not None and site is None:
             raise ValueError(f"Site introuvable pour {site_raw}.")
         if site and city_id is not None and site.city_id != city_id:
             raise ValueError(f"Site hors perimetre pour {site_raw}.")
 
-        building = (
-            _create_or_reuse_cvc_placeholder_building(db, site_raw, city_id)
-            if create_building
-            else (db.get(Building, mapping.building_id) if mapping.building_id is not None else None)
-        )
-        if not create_building and mapping.building_id is not None and building is None:
-            raise ValueError(f"Batiment introuvable pour {site_raw}.")
-        if building and city_id is not None and building.city_id != city_id:
-            raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
+        buildings: list[Building] = []
+        if create_building:
+            buildings = [_create_or_reuse_cvc_placeholder_building(db, site_raw, city_id)]
+            requested_building_ids = [buildings[0].id]
+        else:
+            for building_id in requested_building_ids:
+                building = db.get(Building, building_id)
+                if building is None:
+                    raise ValueError(f"Batiment introuvable pour {site_raw}.")
+                if city_id is not None and building.city_id != city_id:
+                    raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
+                buildings.append(building)
 
-        next_site_id = None if create_building else (site.id if site else (building.site_id if building else None))
-        if building and site and building.site_id not in (None, site.id):
-            raise ValueError(f"Le batiment choisi n'appartient pas au site choisi pour {site_raw}.")
+        single_building = buildings[0] if len(buildings) == 1 else None
+        selected_site_ids = {building.site_id for building in buildings if building.site_id is not None}
+
+        next_site_id = None if create_building else (site.id if site else None)
+        if next_site_id is None and len(selected_site_ids) == 1:
+            next_site_id = next(iter(selected_site_ids))
+        if next_site_id is None and single_building is not None:
+            next_site_id = single_building.site_id
+        if site:
+            for building in buildings:
+                if building.site_id not in (None, site.id):
+                    raise ValueError(f"Le batiment choisi n'appartient pas au site choisi pour {site_raw}.")
+
+        source_mapping = db.scalar(
+            select(CvcSourceBuildingMapping).where(
+                CvcSourceBuildingMapping.source_type == "inventory",
+                CvcSourceBuildingMapping.import_batch == import_batch,
+                CvcSourceBuildingMapping.source_site_raw == site_raw,
+            )
+        )
+        if source_mapping is None:
+            source_mapping = CvcSourceBuildingMapping(
+                city_id=city_id,
+                source_type="inventory",
+                import_batch=import_batch,
+                source_site_raw=site_raw,
+            )
+            db.add(source_mapping)
+        source_mapping.site_id = next_site_id
+        _write_mapping_building_ids(source_mapping, requested_building_ids)
+        source_mapping.status = "matched" if requested_building_ids or next_site_id else "to_review"
+        source_mapping.match_method = "manual"
+        source_mapping.match_score = 1.0 if requested_building_ids or next_site_id else None
 
         stmt = select(CvcInventoryItem).where(
             CvcInventoryItem.import_batch == import_batch,
@@ -920,9 +1009,9 @@ def apply_site_mappings_to_import(
             continue
 
         for item in items:
-            building_changed = item.building_id != (building.id if building else None)
+            building_changed = item.building_id != (single_building.id if single_building else None)
             item.site_id = next_site_id
-            item.building_id = building.id if building else None
+            item.building_id = single_building.id if single_building else None
             if building_changed:
                 item.local_id = None
             linked_refrigerants = list(
@@ -1762,6 +1851,7 @@ def list_cvc_source_building_mappings(
     for mapping in mappings:
         site_suggestions, building_suggestions = _mapping_suggestions(mapping.source_site_raw, sites, buildings)
         read = CvcSourceBuildingMappingRead.model_validate(mapping)
+        read.building_ids = _read_mapping_building_ids(mapping)
         read.site_suggestions = site_suggestions
         read.building_suggestions = building_suggestions
         key = (mapping.import_batch, mapping.source_site_raw.strip())
@@ -1789,25 +1879,31 @@ def update_cvc_source_building_mapping(
     if site and city_id is not None and site.city_id != city_id:
         raise ValueError("Site hors perimetre utilisateur.")
 
-    building = db.get(Building, payload.building_id) if payload.building_id is not None else None
-    if payload.building_id is not None and building is None:
-        raise ValueError("Batiment introuvable.")
-    if building and city_id is not None and building.city_id != city_id:
-        raise ValueError("Batiment hors perimetre utilisateur.")
-    if building and site and building.site_id not in (None, site.id):
-        raise ValueError("Le batiment choisi n'appartient pas au site choisi.")
+    requested_building_ids = _dedupe_ids(payload.building_ids or ([payload.building_id] if payload.building_id else []))
+    buildings: list[Building] = []
+    for building_id in requested_building_ids:
+        building = db.get(Building, building_id)
+        if building is None:
+            raise ValueError("Batiment introuvable.")
+        if city_id is not None and building.city_id != city_id:
+            raise ValueError("Batiment hors perimetre utilisateur.")
+        if site and building.site_id not in (None, site.id):
+            raise ValueError("Le batiment choisi n'appartient pas au site choisi.")
+        buildings.append(building)
+    selected_site_ids = {building.site_id for building in buildings if building.site_id is not None}
 
-    mapping.site_id = site.id if site else (building.site_id if building else None)
-    mapping.building_id = building.id if building else None
+    mapping.site_id = site.id if site else (next(iter(selected_site_ids)) if len(selected_site_ids) == 1 else None)
+    _write_mapping_building_ids(mapping, requested_building_ids)
     mapping.status = payload.status
     mapping.notes = payload.notes
     mapping.match_method = "manual"
-    mapping.match_score = 1.0 if building or site else None
+    mapping.match_score = 1.0 if requested_building_ids or site else None
     updated_rows = _apply_source_mapping_to_rows(db, mapping)
     db.commit()
     db.refresh(mapping)
 
     read = CvcSourceBuildingMappingRead.model_validate(mapping)
+    read.building_ids = _read_mapping_building_ids(mapping)
     read.item_count = updated_rows if mapping.source_type == "inventory" else 0
     read.refrigerant_count = updated_rows if mapping.source_type == "refrigerant" else 0
     return read
@@ -1833,7 +1929,13 @@ def get_cvc_technical_coverage_report(db: Session, city_id: int | None) -> CvcTe
 
     inventory_building_ids = {item.building_id for item in inventory_items if item.building_id is not None}
     refrigerant_building_ids = {item.building_id for item in refrigerant_items if item.building_id is not None}
-    covered_building_ids = inventory_building_ids | refrigerant_building_ids
+    source_mapping_building_ids = {
+        building_id
+        for mapping in mappings
+        if mapping.status == "matched"
+        for building_id in _read_mapping_building_ids(mapping)
+    }
+    covered_building_ids = inventory_building_ids | refrigerant_building_ids | source_mapping_building_ids
     patrimoine_without_cvc = [
         BuildingMatchSuggestion(
             building_id=building.id,

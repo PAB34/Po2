@@ -1405,6 +1405,11 @@ button:disabled {
   color: #f8fafc;
 }
 
+.cvc-combobox-menu button.is-selected {
+  background: rgba(34, 197, 94, 0.14);
+  color: #dcfce7;
+}
+
 .cvc-combobox-menu strong,
 .cvc-combobox-menu small {
   display: block;
@@ -1414,6 +1419,41 @@ button:disabled {
   color: #94a3b8;
   font-size: 0.72rem;
   margin-top: 2px;
+}
+
+.cvc-multi-combobox {
+  display: grid;
+  gap: 6px;
+}
+
+.cvc-selected-chips {
+  display: flex;
+  min-height: 34px;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.62);
+  padding: 5px;
+}
+
+.cvc-selected-chips span {
+  color: #64748b;
+  font-size: 0.76rem;
+  padding: 2px 4px;
+}
+
+.cvc-selected-chips button {
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  color: #bae6fd;
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  padding: 4px 8px;
+  max-width: 100%;
 }
 
 .cvc-inventory-table,

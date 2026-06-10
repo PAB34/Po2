@@ -45,6 +45,7 @@ class CvcImportSiteMatchResult(BaseModel):
     item_count: int
     current_site_id: int | None = None
     current_building_id: int | None = None
+    current_building_ids: list[int] = Field(default_factory=list)
     site_suggestions: list[PatrimoineSiteSuggestion]
     building_suggestions: list[BuildingMatchSuggestion]
     auto_site_id: int | None = None
@@ -64,6 +65,7 @@ class CvcSiteMapping(BaseModel):
     site_raw: str
     site_id: int | None = None
     building_id: int | None = None
+    building_ids: list[int] | None = None
     create_building: bool = False
 
 
@@ -311,6 +313,7 @@ class CvcSourceBuildingMappingRead(BaseModel):
     source_site_raw: str
     site_id: int | None = None
     building_id: int | None = None
+    building_ids: list[int] = Field(default_factory=list)
     status: str
     notes: str | None = None
     match_score: float | None = None
@@ -326,6 +329,7 @@ class CvcSourceBuildingMappingRead(BaseModel):
 class CvcSourceBuildingMappingUpdate(BaseModel):
     site_id: int | None = None
     building_id: int | None = None
+    building_ids: list[int] | None = None
     status: str = "to_review"
     notes: str | None = None
 

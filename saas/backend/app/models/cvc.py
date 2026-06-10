@@ -111,6 +111,7 @@ class CvcSourceBuildingMapping(Base):
     building_id: Mapped[int | None] = mapped_column(
         ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    building_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(40), nullable=False, server_default="to_review")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     match_score: Mapped[float | None] = mapped_column(Float, nullable=True)

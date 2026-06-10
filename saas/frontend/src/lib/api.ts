@@ -2716,6 +2716,7 @@ export type CvcImportSiteMatchResult = {
   item_count: number;
   current_site_id: number | null;
   current_building_id: number | null;
+  current_building_ids: number[];
   site_suggestions: PatrimoineSiteSuggestion[];
   building_suggestions: BuildingMatchSuggestion[];
   auto_site_id: number | null;
@@ -2783,6 +2784,7 @@ export type CvcSiteMappingPayload = {
   site_raw: string;
   site_id: number | null;
   building_id: number | null;
+  building_ids?: number[] | null;
   create_building?: boolean;
 };
 
@@ -2939,6 +2941,7 @@ export type CvcSourceBuildingMapping = {
   source_site_raw: string;
   site_id: number | null;
   building_id: number | null;
+  building_ids: number[];
   status: string;
   notes: string | null;
   match_score: number | null;
@@ -2954,6 +2957,7 @@ export type CvcSourceBuildingMapping = {
 export type UpdateCvcSourceBuildingMappingPayload = {
   site_id: number | null;
   building_id: number | null;
+  building_ids?: number[] | null;
   status: string;
   notes?: string | null;
 };
