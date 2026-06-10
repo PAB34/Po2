@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -452,10 +452,16 @@ export function CvcImportPage() {
     () => (referencesQuery.data ?? []).filter(isCvcRelevant),
     [referencesQuery.data],
   );
+  const latestBatch = batchesQuery.data?.[0] ?? null;
   const items = itemsQuery.data ?? [];
   const mappedCount = items.filter((item) => item.building_id !== null).length;
   const refMappedCount = items.filter((item) => item.equipment_ref_id !== null).length;
   const computedFromHealthCount = items.filter((item) => item.lifecycle_age_source === "etat_sante").length;
+
+  useEffect(() => {
+    const batch = batchesQuery.data?.[0]?.import_batch ?? null;
+    setActiveBatch((current) => (current === batch ? current : batch));
+  }, [batchesQuery.data]);
 
   function refreshPatrimoineLists() {
     queryClient.invalidateQueries({ queryKey: ["buildings"] });
@@ -551,17 +557,24 @@ export function CvcImportPage() {
       <div className="section-block">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div>
-            <h3>Imports enregistres</h3>
+            <h3>Inventaire courant</h3>
             <p style={{ color: SUBTLE_TEXT, fontSize: "0.86rem" }}>
-              Les listes sites, batiments et locaux sont relues depuis le patrimoine.
+              Le dernier import remplace l'inventaire CVC terrain precedent.
             </p>
+            {latestBatch ? (
+              <p style={{ color: "#cbd5e1", fontSize: "0.84rem", marginTop: 6 }}>
+                {latestBatch.import_batch} - {latestBatch.imported} lignes - {latestBatch.mapped_items} rattachees
+              </p>
+            ) : (
+              <p style={{ color: SUBTLE_TEXT, fontSize: "0.84rem", marginTop: 6 }}>Aucun inventaire enregistre.</p>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button type="button" className="secondary-button" onClick={refreshPatrimoineLists}>
               Rafraichir patrimoine
             </button>
             {activeBatch && (
-              <Link className="secondary-link" to={`/buildings/cvc-import/sites?batch=${encodeURIComponent(activeBatch)}`}>
+              <Link className="secondary-link" to="/buildings/cvc-import/sites">
                 Matcher les sites
               </Link>
             )}
@@ -575,25 +588,6 @@ export function CvcImportPage() {
                 {recomputeMutation.isPending ? "Recalcul..." : "Recalculer les references"}
               </button>
             )}
-            <select
-              value={activeBatch ?? ""}
-              onChange={(e) => setActiveBatch(e.target.value || null)}
-              style={{
-                minWidth: 280,
-                padding: "8px 10px",
-                borderRadius: 6,
-                border: `1px solid ${NEUTRAL_BORDER}`,
-                background: "rgba(15,23,42,0.9)",
-                color: "#e2e8f0",
-              }}
-            >
-              <option value="">Choisir un import</option>
-              {(batchesQuery.data ?? []).map((batch) => (
-                <option key={batch.import_batch} value={batch.import_batch}>
-                  {batch.import_batch} - {batch.imported} lignes - {batch.mapped_items} rattachees
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </div>

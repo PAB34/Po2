@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
 import {
@@ -158,8 +158,7 @@ function MappingRow({
 export function CvcSiteMappingPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [activeBatch, setActiveBatch] = useState(searchParams.get("batch") ?? "");
+  const [activeBatch, setActiveBatch] = useState("");
   const [drafts, setDrafts] = useState<Record<string, DraftMapping>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -187,6 +186,12 @@ export function CvcSiteMappingPage() {
   });
 
   const matches = useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
+  const latestBatch = batchesQuery.data?.[0] ?? null;
+
+  useEffect(() => {
+    const batch = batchesQuery.data?.[0]?.import_batch ?? "";
+    setActiveBatch((current) => (current === batch ? current : batch));
+  }, [batchesQuery.data]);
 
   useEffect(() => {
     const next: Record<string, DraftMapping> = {};
@@ -253,21 +258,14 @@ export function CvcSiteMappingPage() {
 
       <div className="section-block">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <select
-            value={activeBatch}
-            onChange={(e) => {
-              setActiveBatch(e.target.value);
-              setSearchParams(e.target.value ? { batch: e.target.value } : {});
-            }}
-            style={{ ...selectStyle(), maxWidth: 460 }}
-          >
-            <option value="">Choisir un import</option>
-            {(batchesQuery.data ?? []).map((batch) => (
-              <option key={batch.import_batch} value={batch.import_batch}>
-                {batch.import_batch} - {batch.imported} lignes - {batch.mapped_items} rattachees
-              </option>
-            ))}
-          </select>
+          <div>
+            <h3>Inventaire courant</h3>
+            <p style={{ color: SUBTLE_TEXT, fontSize: "0.84rem" }}>
+              {latestBatch
+                ? `${latestBatch.import_batch} - ${latestBatch.imported} lignes - ${latestBatch.mapped_items} rattachees`
+                : "Aucun inventaire CVC terrain enregistre."}
+            </p>
+          </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button type="button" className="secondary-button" onClick={() => matchesQuery.refetch()} disabled={!activeBatch || matchesQuery.isFetching}>
               Rafraichir

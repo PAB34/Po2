@@ -451,6 +451,92 @@ def _select_auto_refrigerant_candidate(
     return candidates[0]
 
 
+def _clear_current_cvc_inventory(db: Session, city_id: int | None) -> None:
+    inventory_stmt = select(CvcInventoryItem)
+    mapping_stmt = select(CvcSourceBuildingMapping).where(CvcSourceBuildingMapping.source_type == "inventory")
+    refrigerant_stmt = select(CvcRefrigerantItem)
+    if city_id is not None:
+        inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        mapping_stmt = mapping_stmt.where((CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None)))
+        refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+
+    for refrigerant in db.scalars(refrigerant_stmt):
+        refrigerant.cvc_inventory_item_id = None
+        refrigerant.match_status = "pending"
+        refrigerant.match_method = None
+        refrigerant.match_score = None
+
+    for mapping in db.scalars(mapping_stmt):
+        db.delete(mapping)
+    for item in db.scalars(inventory_stmt):
+        db.delete(item)
+    db.flush()
+
+
+def _refresh_refrigerant_inventory_links(db: Session, city_id: int | None) -> int:
+    inventory_stmt = select(CvcInventoryItem)
+    refrigerant_stmt = select(CvcRefrigerantItem)
+    if city_id is not None:
+        inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+        refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
+
+    inventory_items = list(db.scalars(inventory_stmt))
+    inventory_by_id = {item.id: item for item in inventory_items}
+    relinked = 0
+    for refrigerant in db.scalars(refrigerant_stmt):
+        candidates = _find_refrigerant_candidates(
+            {
+                "site_raw": refrigerant.site_raw,
+                "designation": refrigerant.designation,
+                "famille": refrigerant.famille,
+                "marque": refrigerant.marque,
+                "modele": refrigerant.modele,
+                "date_mis_en_service": refrigerant.date_mis_en_service,
+            },
+            inventory_items,
+        )
+        auto_candidate = _select_auto_refrigerant_candidate(candidates)
+        if auto_candidate is None:
+            refrigerant.cvc_inventory_item_id = None
+            refrigerant.match_status = "ambiguous" if candidates else "pending"
+            refrigerant.match_method = None
+            refrigerant.match_score = None
+            continue
+        matched_inventory = inventory_by_id.get(auto_candidate.item.id)
+        if matched_inventory is None:
+            continue
+        refrigerant.cvc_inventory_item_id = matched_inventory.id
+        refrigerant.site_id = matched_inventory.site_id
+        refrigerant.building_id = matched_inventory.building_id
+        refrigerant.match_status = "auto_matched"
+        refrigerant.match_method = auto_candidate.method
+        refrigerant.match_score = auto_candidate.score
+        if refrigerant.quantite_fluide_kg is not None:
+            matched_inventory.quantite_fluide_frigorigene = refrigerant.quantite_fluide_kg
+        relinked += 1
+    return relinked
+
+
+def _latest_inventory_batch(items: list[CvcInventoryItem]) -> str | None:
+    batches: dict[str, float] = {}
+    for item in items:
+        if item.import_batch:
+            created_at = item.created_at.timestamp() if item.created_at else 0.0
+            current = batches.get(item.import_batch)
+            if current is None or created_at < current:
+                batches[item.import_batch] = created_at
+    if not batches:
+        return None
+    return max(batches.items(), key=lambda item: item[1])[0]
+
+
+def _filter_latest_inventory_batch(items: list[CvcInventoryItem]) -> list[CvcInventoryItem]:
+    latest_batch = _latest_inventory_batch(items)
+    if latest_batch is None:
+        return []
+    return [item for item in items if item.import_batch == latest_batch]
+
+
 def match_buildings_for_sites(
     db: Session, sites: list[str], city_id: int | None
 ) -> CvcMatchBuildingsResponse:
@@ -710,7 +796,7 @@ def list_site_matches_for_import(
     stmt = select(CvcInventoryItem).where(CvcInventoryItem.import_batch == import_batch)
     if city_id is not None:
         stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
-    items = list(db.scalars(stmt))
+    items = _filter_latest_inventory_batch(list(db.scalars(stmt)))
 
     sites_stmt = select(Site)
     buildings_stmt = select(Building)
@@ -1147,6 +1233,8 @@ def import_cvc_from_excel(
     all_refs = list(db.scalars(select(EquipmentReference)))
     family_cache: dict = {}
 
+    _clear_current_cvc_inventory(db, city_id)
+
     imported = 0
     skipped = 0
     errors: list[str] = []
@@ -1224,6 +1312,8 @@ def import_cvc_from_excel(
             sypemi_unmatched += 1
         imported += 1
 
+    db.flush()
+    _refresh_refrigerant_inventory_links(db, city_id)
     db.commit()
     ensure_cvc_source_building_mappings(db, city_id)
     return CvcImportResult(
@@ -1737,6 +1827,7 @@ def get_cvc_technical_coverage_report(db: Session, city_id: int | None) -> CvcTe
 
     buildings = list(db.scalars(buildings_stmt))
     inventory_items = list(db.scalars(inventory_stmt))
+    inventory_items = _filter_latest_inventory_batch(inventory_items)
     refrigerant_items = list(db.scalars(refrigerant_stmt))
     mappings = list(db.scalars(mapping_stmt))
 
@@ -1801,6 +1892,7 @@ def list_cvc_items_for_building(db: Session, building_id: int) -> list[CvcInvent
             .order_by(CvcInventoryItem.famille, CvcInventoryItem.designation)
         )
     )
+    items = _filter_latest_inventory_batch(items)
 
     return _hydrate_items(db, items)
 
