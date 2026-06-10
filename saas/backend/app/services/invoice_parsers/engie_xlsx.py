@@ -166,6 +166,8 @@ def _build_column_index(ws: Worksheet) -> ColumnIndex:
     name_to_col: dict[str, int] = {}
     for col in range(1, ws.max_column + 1):
         raw = ws.cell(row=HEADER_ROW, column=col).value
+        if raw is None and HEADER_ROW > 1:
+            raw = ws.cell(row=HEADER_ROW - 1, column=col).value
         if raw is None:
             continue
         name_to_col[_normalize_header(raw)] = col
@@ -257,10 +259,29 @@ def _cell(ws: Worksheet, row: int, idx: ColumnIndex, key: str) -> Any:
 
 
 def _cell_by_name(ws: Worksheet, row: int, idx: ColumnIndex, name: str) -> Any:
-    col = idx.column_by_name.get(_normalize_header(name))
+    target = _normalize_header(name)
+    col = idx.column_by_name.get(target)
+    if col is None:
+        target_lower = target.lower()
+        for header, candidate_col in idx.column_by_name.items():
+            if header.lower() == target_lower:
+                col = candidate_col
+                break
     if col is None:
         return None
     return ws.cell(row=row, column=col).value
+
+
+def _max_float_by_header_prefix(ws: Worksheet, row: int, idx: ColumnIndex, prefix: str) -> float | None:
+    values: list[float] = []
+    normalized_prefix = _normalize_header(prefix).lower()
+    for header, col in idx.column_by_name.items():
+        if not header.lower().startswith(normalized_prefix):
+            continue
+        value = _coerce_float(ws.cell(row=row, column=col).value)
+        if value is not None:
+            values.append(value)
+    return max(values) if values else None
 
 
 # ── Reconstitution des invoice_lines (énergie + capacité + acheminement) ──────
@@ -563,9 +584,9 @@ def _parse_row(ws: Worksheet, row: int, idx: ColumnIndex) -> dict[str, Any] | No
         "period_start": period_start,
         "period_end": period_end,
         "period_days": _coerce_int(_cell(ws, row, idx, "period_days")),
-        "subscribed_power_kva": _coerce_float(_cell_by_name(ws, row, idx, "Puissance souscrite (kVA)"))
+        "subscribed_power_kva": _max_float_by_header_prefix(ws, row, idx, "Puissance souscrite")
             or _coerce_float(_cell_by_name(ws, row, idx, "Puissances")),
-        "max_reached_power_kva": _coerce_float(_cell_by_name(ws, row, idx, "Puissance atteinte (kVA)")),
+        "max_reached_power_kva": _max_float_by_header_prefix(ws, row, idx, "Puissance atteinte"),
         "total_consumption_kwh": _coerce_float(_cell(ws, row, idx, "total_consumption")),
         "total_ht": _coerce_float(_cell(ws, row, idx, "amount_excl_vat"))
             or _coerce_float(_cell(ws, row, idx, "amount_htt")),

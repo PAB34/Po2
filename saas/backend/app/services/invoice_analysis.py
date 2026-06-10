@@ -273,9 +273,6 @@ def _check_document_identity(
         issue("error", "MISSING_TOTAL_TTC", "Montant TTC global absent.")
     if not invoice.get("regroupement"):
         issue("error", "MISSING_REGROUPEMENT", "Regroupement absent.")
-    if not invoice.get("chorus_ej") or not invoice.get("chorus_service_code"):
-        issue("warning", "MISSING_CHORUS_DATA", "Donnees Chorus incompletes.")
-
     market_reference = invoice.get("market_reference")
     if not market_reference:
         issue("error", "MISSING_MARKET_REFERENCE", "Reference marche absente.")

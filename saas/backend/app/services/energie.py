@@ -8,9 +8,17 @@ from typing import Any
 from app.core.config import settings
 
 
+def _energie_path(*parts: str) -> Path:
+    configured = Path(settings.energie_dir)
+    if configured.exists():
+        return configured.joinpath(*parts)
+    repo_output = Path(__file__).resolve().parents[3] / "energie" / "output"
+    return repo_output.joinpath(*parts)
+
+
 def _load_diagnostic(filename: str) -> dict[str, str]:
     """Charge un fichier de diagnostic (mapping PRM → outcome). Tolérant aux absences."""
-    path = Path(settings.energie_dir) / filename
+    path = _energie_path(filename)
     if not path.exists():
         return {}
     try:
@@ -25,7 +33,7 @@ def _load_diagnostic(filename: str) -> dict[str, str]:
 
 def _load_lc_outcomes() -> dict[str, str]:
     """Le rapport CDC stocke les outcomes dans `prms_by_outcome` (liste par outcome)."""
-    path = Path(settings.energie_dir) / "enedis_lc_report.json"
+    path = _energie_path("enedis_lc_report.json")
     if not path.exists():
         return {}
     try:
@@ -66,7 +74,7 @@ def _meter_profile(service_level: str | None, connection_state: str | None) -> s
 
 def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
     """Scanne un CSV en streaming pour trouver première/dernière date et nombre de lignes."""
-    path = Path(settings.energie_dir) / rel_path
+    path = _energie_path(rel_path)
     if not path.exists() or path.stat().st_size == 0:
         return {"first_date": None, "last_date": None, "row_count": 0}
     min_d = max_d = None
@@ -93,7 +101,7 @@ def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
 
 
 def _source_coverage(rel_path: str, date_col: str) -> dict[str, Any]:
-    path = Path(settings.energie_dir) / rel_path
+    path = _energie_path(rel_path)
     if not path.exists() or path.stat().st_size == 0:
         return {
             "first_date": None,
@@ -192,7 +200,7 @@ def get_data_ranges() -> dict[str, Any]:
     """Retourne les plages de dates disponibles pour chaque source de données."""
     # Contrats : simple comptage
     contracts_count = 0
-    cp = Path(settings.energie_dir) / "enedis_contracts.csv"
+    cp = _energie_path("enedis_contracts.csv")
     if cp.exists():
         with open(cp, encoding="utf-8-sig") as f:
             contracts_count = max(0, sum(1 for _ in f) - 1)
@@ -452,7 +460,7 @@ def get_data_audit() -> dict[str, Any]:
 
 
 def _csv_rows(filename: str) -> list[dict[str, str]]:
-    path = Path(settings.energie_dir) / filename
+    path = _energie_path(filename)
     if not path.exists():
         return []
     with open(path, encoding="utf-8-sig", newline="") as f:
@@ -542,7 +550,7 @@ def _load_curve_index() -> dict[str, list[dict[str, Any]]]:
 
 @lru_cache(maxsize=1)
 def _dju_rows() -> list[dict[str, str]]:
-    dju_path = Path(settings.energie_dir) / "DJU" / "dju_sete.csv"
+    dju_path = _energie_path("DJU", "dju_sete.csv")
     return _csv_rows_path(dju_path)
 
 
