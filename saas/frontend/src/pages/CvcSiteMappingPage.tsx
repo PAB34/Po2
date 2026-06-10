@@ -7,12 +7,10 @@ import {
   fetchBuildings,
   fetchCvcImportBatches,
   fetchCvcImportSiteMatches,
-  fetchSites,
   type Building,
   type CvcImportBatchSummary,
   type CvcImportSiteMatchResult,
   type CvcSiteMappingPayload,
-  type Site,
 } from "../lib/api";
 
 const SUBTLE_TEXT = "#94a3b8";
@@ -36,75 +34,111 @@ function searchText(value: string | null | undefined): string {
     .trim();
 }
 
-function selectStyle() {
-  return {
-    width: "100%",
-    minWidth: 0,
-    padding: "8px 10px",
-    borderRadius: 6,
-    border: `1px solid ${NEUTRAL_BORDER}`,
-    background: "rgba(15,23,42,0.9)",
-    color: "#e2e8f0",
-    fontSize: "0.82rem",
-  };
-}
-
 function suggestedMapping(match: CvcImportSiteMatchResult): DraftMapping {
+  const buildingId = match.current_building_id ?? match.auto_building_id;
   return {
-    site_id: match.current_site_id ?? match.auto_site_id,
-    building_id: match.current_building_id ?? match.auto_building_id,
+    site_id: buildingId ? (match.current_site_id ?? match.auto_site_id) : null,
+    building_id: buildingId,
     create_building: false,
   };
 }
 
+type SearchableOption = {
+  value: string;
+  label: string;
+  helper?: string | null;
+};
+
+function SearchableDropdown({
+  value,
+  options,
+  placeholder,
+  searchPlaceholder,
+  onChange,
+}: {
+  value: string;
+  options: SearchableOption[];
+  placeholder: string;
+  searchPlaceholder: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = options.find((option) => option.value === value);
+  const normalizedQuery = searchText(query);
+  const visibleOptions = options.filter((option) => {
+    if (!normalizedQuery) return true;
+    return searchText(`${option.label} ${option.helper ?? ""}`).includes(normalizedQuery);
+  });
+
+  return (
+    <div className="cvc-combobox">
+      <input
+        type="search"
+        value={open ? query : selected?.label ?? ""}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        placeholder={selected ? searchPlaceholder : placeholder}
+      />
+      {open && (
+        <div className="cvc-combobox-menu">
+          {visibleOptions.length === 0 && <span>Aucun resultat</span>}
+          {visibleOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <strong>{option.label}</strong>
+              {option.helper && <small>{option.helper}</small>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MappingRow({
   match,
-  sites,
   buildings,
   value,
   onChange,
 }: {
   match: CvcImportSiteMatchResult;
-  sites: Site[];
   buildings: Building[];
   value: DraftMapping;
   onChange: (value: DraftMapping) => void;
 }) {
-  const [siteSearch, setSiteSearch] = useState("");
-  const [buildingSearch, setBuildingSearch] = useState("");
-  const siteQuery = searchText(siteSearch);
-  const buildingQuery = searchText(buildingSearch);
-  const filteredSites = sites.filter((site) => {
-    if (!siteQuery) return true;
-    return searchText(compactLabel([site.nom_site, site.adresse])).includes(siteQuery);
-  });
-  const filteredBuildings = buildings
-    .filter((building) => !value.site_id || building.site_id === value.site_id)
-    .filter((building) => {
-      if (!buildingQuery) return true;
-      return searchText(compactLabel([building.nom_batiment ?? `Batiment #${building.id}`, building.adresse_reconstituee])).includes(buildingQuery);
-    });
-  const bestSite = match.site_suggestions[0];
+  const buildingOptions: SearchableOption[] = [
+    { value: "", label: "Aucun batiment", helper: "Ne pas rattacher ce batiment source" },
+    { value: "__create__", label: "Ajouter ce batiment a la liste patrimoniale", helper: "Creation sans site, a qualifier ensuite" },
+    ...buildings.map((building) => ({
+      value: String(building.id),
+      label: building.nom_batiment ?? `Batiment #${building.id}`,
+      helper: building.adresse_reconstituee,
+    })),
+  ];
   const bestBuilding = match.building_suggestions[0];
-  const isAuto = !match.current_site_id && (match.auto_site_id || match.auto_building_id);
+  const isAuto = !match.current_building_id && match.auto_building_id;
 
   return (
     <tr>
       <td>
         <strong>{match.site_raw}</strong>
         <div style={{ color: SUBTLE_TEXT, fontSize: "0.74rem" }}>{match.item_count} ligne(s) inventaire</div>
-      </td>
-      <td>
-        {bestSite ? (
-          <>
-            <strong>{bestSite.nom_site}</strong>
-            <div style={{ color: SUBTLE_TEXT, fontSize: "0.74rem" }}>
-              Score {Math.round(bestSite.score * 100)}% {bestSite.adresse ? `- ${bestSite.adresse}` : ""}
-            </div>
-          </>
-        ) : (
-          <span style={{ color: SUBTLE_TEXT }}>Aucune suggestion site</span>
-        )}
       </td>
       <td>
         {bestBuilding ? (
@@ -119,66 +153,29 @@ function MappingRow({
         )}
       </td>
       <td>
-        <input
-          className="cvc-row-search"
-          type="search"
-          value={siteSearch}
-          onChange={(e) => setSiteSearch(e.target.value)}
-          placeholder="Rechercher un site"
-        />
-        <select
-          value={value.site_id ?? ""}
-          onChange={(e) => {
-            const site_id = e.target.value ? Number(e.target.value) : null;
-            onChange({ site_id, building_id: null, create_building: false });
-          }}
-          style={selectStyle()}
-        >
-          <option value="">Aucun site</option>
-          {filteredSites.map((site) => (
-            <option key={site.id} value={site.id}>
-              {compactLabel([site.nom_site, site.adresse])}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <input
-          className="cvc-row-search"
-          type="search"
-          value={buildingSearch}
-          onChange={(e) => setBuildingSearch(e.target.value)}
-          placeholder="Rechercher un batiment"
-        />
-        <select
-          value={value.create_building ? "__create__" : value.building_id ?? ""}
-          onChange={(e) => {
-            if (e.target.value === "__create__") {
+        <SearchableDropdown
+          value={value.create_building ? "__create__" : value.building_id ? String(value.building_id) : ""}
+          options={buildingOptions}
+          placeholder="Choisir un batiment"
+          searchPlaceholder="Rechercher dans les batiments"
+          onChange={(selectedValue) => {
+            if (selectedValue === "__create__") {
               onChange({ site_id: null, building_id: null, create_building: true });
               return;
             }
-            const building = buildings.find((item) => item.id === Number(e.target.value));
+            const building = buildings.find((item) => item.id === Number(selectedValue));
             onChange({
-              site_id: building?.site_id ?? value.site_id,
-              building_id: e.target.value ? Number(e.target.value) : null,
+              site_id: building?.site_id ?? null,
+              building_id: selectedValue ? Number(selectedValue) : null,
               create_building: false,
             });
           }}
-          style={selectStyle()}
-        >
-          <option value="">Aucun batiment</option>
-          <option value="__create__">Ajouter ce batiment a la liste patrimoniale</option>
-          {filteredBuildings.map((building) => (
-            <option key={building.id} value={building.id}>
-              {compactLabel([building.nom_batiment ?? `Batiment #${building.id}`, building.adresse_reconstituee])}
-            </option>
-          ))}
-        </select>
+        />
       </td>
       <td>
         {value.create_building ? (
           <span style={{ color: "#fbbf24" }}>Creation patrimoine</span>
-        ) : match.current_building_id || match.current_site_id ? (
+        ) : match.current_building_id ? (
           <span className="success-text">Deja rattache</span>
         ) : isAuto ? (
           <span style={{ color: "#7dd3fc" }}>Preselection</span>
@@ -206,12 +203,6 @@ export function CvcSiteMappingPage() {
     queryKey: ["cvc-import-site-matches", token, activeBatch],
     queryFn: () => fetchCvcImportSiteMatches(token ?? "", activeBatch),
     enabled: !!token && !!activeBatch,
-  });
-  const sitesQuery = useQuery<Site[]>({
-    queryKey: ["sites", token],
-    queryFn: () => fetchSites(token ?? ""),
-    enabled: !!token,
-    staleTime: 0,
   });
   const buildingsQuery = useQuery<Building[]>({
     queryKey: ["buildings", token],
@@ -266,7 +257,7 @@ export function CvcSiteMappingPage() {
   if (!token) {
     return (
       <section className="panel stack-lg">
-        <h2>Matching bÃ¢timent CVC</h2>
+        <h2>Matching b&acirc;timent CVC</h2>
         <p>Connecte-toi pour acceder a cette page.</p>
       </section>
     );
@@ -277,7 +268,7 @@ export function CvcSiteMappingPage() {
       <div className="panel-header">
         <div>
           <p className="eyebrow">Gestion technique</p>
-          <h2>Matching bÃ¢timent CVC</h2>
+          <h2>Matching b&acirc;timent CVC</h2>
           <p>Rapproche les batiments du fichier importe avec les batiments du patrimoine.</p>
         </div>
         <div className="buildings-header-actions">
@@ -328,16 +319,14 @@ export function CvcSiteMappingPage() {
           </div>
 
           {matchesQuery.isLoading && <p>Chargement des correspondances...</p>}
-          {!matchesQuery.isLoading && matches.length === 0 && <p>Aucun site source trouve pour cet import.</p>}
+          {!matchesQuery.isLoading && matches.length === 0 && <p>Aucun batiment source trouve pour cet import.</p>}
           {matches.length > 0 && (
             <div className="table-wrapper cvc-table-wrapper">
               <table className="data-table cvc-site-mapping-table">
                 <thead>
                   <tr>
                     <th>Batiment source</th>
-                    <th>Suggestion site</th>
                     <th>Suggestion batiment</th>
-                    <th>Site retenu</th>
                     <th>Batiment retenu</th>
                     <th>Statut</th>
                   </tr>
@@ -347,7 +336,6 @@ export function CvcSiteMappingPage() {
                     <MappingRow
                       key={match.site_raw}
                       match={match}
-                      sites={sitesQuery.data ?? []}
                       buildings={buildingsQuery.data ?? []}
                       value={drafts[match.site_raw] ?? suggestedMapping(match)}
                       onChange={(value) => setDrafts((current) => ({ ...current, [match.site_raw]: value }))}

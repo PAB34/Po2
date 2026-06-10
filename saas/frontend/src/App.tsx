@@ -94,7 +94,7 @@ export default function App() {
             <p className="nav-section" style={navSectionStyle}>Administration</p>
             <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
             <Link to="/buildings/cvc-import">Import CVC terrain</Link>
-            <Link to="/buildings/cvc-import/batiments">Matching bÃ¢timent CVC</Link>
+            <Link to="/buildings/cvc-import/batiments">Matching b&acirc;timent CVC</Link>
             <Link to="/energie/facturation">Configuration tarifaire</Link>
 
             <p className="nav-section" style={navSectionStyle}>Mon compte</p>
