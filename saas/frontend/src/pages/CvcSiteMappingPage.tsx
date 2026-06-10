@@ -22,6 +22,8 @@ type DraftMapping = {
   building_ids: number[];
   create_building?: boolean;
   create_building_name?: string | null;
+  create_building_names: string[];
+  pending_create_building_name: string;
 };
 
 function searchText(value: string | null | undefined): string {
@@ -46,6 +48,8 @@ function suggestedMapping(match: CvcImportSiteMatchResult): DraftMapping {
     building_ids: buildingIds,
     create_building: false,
     create_building_name: null,
+    create_building_names: [],
+    pending_create_building_name: suggestedCreatedBuildingName(match.site_raw),
   };
 }
 
@@ -63,20 +67,6 @@ type SearchableOption = {
   helper?: string | null;
 };
 
-function buildingOptions(buildings: Building[], options?: { includeCreate?: boolean }): SearchableOption[] {
-  return [
-    { value: "", label: "Aucun batiment", helper: "Ne pas rattacher" },
-    ...(options?.includeCreate
-      ? [{ value: "__create__", label: "Ajouter ce batiment a la liste patrimoniale", helper: "Creation sans site, a qualifier ensuite" }]
-      : []),
-    ...buildings.map((building) => ({
-      value: String(building.id),
-      label: building.nom_batiment ?? `Batiment #${building.id}`,
-      helper: building.adresse_reconstituee,
-    })),
-  ];
-}
-
 function buildingOnlyOptions(buildings: Building[]): SearchableOption[] {
   return buildings.map((building) => ({
     value: String(building.id),
@@ -85,80 +75,20 @@ function buildingOnlyOptions(buildings: Building[]): SearchableOption[] {
   }));
 }
 
-function SearchableDropdown({
-  value,
-  options,
-  placeholder,
-  searchPlaceholder,
-  onChange,
-}: {
-  value: string;
-  options: SearchableOption[];
-  placeholder: string;
-  searchPlaceholder: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const selected = options.find((option) => option.value === value);
-  const normalizedQuery = searchText(query);
-  const visibleOptions = options.filter((option) => {
-    if (!normalizedQuery) return true;
-    return searchText(`${option.label} ${option.helper ?? ""}`).includes(normalizedQuery);
-  });
-
-  return (
-    <div className="cvc-combobox">
-      <input
-        type="search"
-        value={open ? query : selected?.label ?? ""}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        placeholder={selected ? searchPlaceholder : placeholder}
-      />
-      {open && (
-        <div className="cvc-combobox-menu">
-          {visibleOptions.length === 0 && <span>Aucun resultat</span>}
-          {visibleOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(option.value);
-                setQuery("");
-                setOpen(false);
-              }}
-            >
-              <strong>{option.label}</strong>
-              {option.helper && <small>{option.helper}</small>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SearchableMultiDropdown({
   values,
   options,
   placeholder,
   searchPlaceholder,
   onChange,
+  onCreate,
 }: {
   values: string[];
   options: SearchableOption[];
   placeholder: string;
   searchPlaceholder: string;
   onChange: (values: string[]) => void;
+  onCreate?: (label: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -180,6 +110,8 @@ function SearchableMultiDropdown({
     setQuery("");
     setOpen(true);
   };
+
+  const canCreate = Boolean(onCreate && query.trim());
 
   return (
     <div className="cvc-combobox cvc-multi-combobox">
@@ -208,7 +140,7 @@ function SearchableMultiDropdown({
       />
       {open && (
         <div className="cvc-combobox-menu">
-          {visibleOptions.length === 0 && <span>Aucun resultat</span>}
+          {visibleOptions.length === 0 && !canCreate && <span>Aucun resultat</span>}
           {visibleOptions.map((option) => {
             const selected = values.includes(option.value);
             return (
@@ -224,6 +156,21 @@ function SearchableMultiDropdown({
               </button>
             );
           })}
+          {canCreate && (
+            <button
+              type="button"
+              className="is-create-option"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onCreate?.(query.trim());
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <strong>Ajouter "{query.trim()}" a creer</strong>
+              <small>Creation patrimoine lors de l'application du matching</small>
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -241,11 +188,29 @@ function MappingRow({
   value: DraftMapping;
   onChange: (value: DraftMapping) => void;
 }) {
-  const singleOptions = buildingOptions(buildings, { includeCreate: true });
   const multiOptions = buildingOnlyOptions(buildings);
   const bestBuilding = match.building_suggestions[0];
-  const isAuto = value.building_ids.length === 0 && !match.current_building_id && match.auto_building_id;
+  const isAuto =
+    value.building_ids.length === 0 &&
+    value.create_building_names.length === 0 &&
+    !match.current_building_id &&
+    match.auto_building_id;
   const selectedBuildingCount = value.building_ids.length;
+  const createBuildingCount = value.create_building_names.length;
+  const addCreatedBuilding = (rawName: string) => {
+    const name = rawName.trim();
+    if (!name) return;
+    if (value.create_building_names.some((item) => searchText(item) === searchText(name))) {
+      return;
+    }
+    onChange({
+      ...value,
+      create_building: true,
+      create_building_name: name,
+      create_building_names: [...value.create_building_names, name],
+      pending_create_building_name: suggestedCreatedBuildingName(match.site_raw),
+    });
+  };
 
   return (
     <tr>
@@ -283,61 +248,70 @@ function MappingRow({
               site_id: selectedSiteIds.length === 1 ? selectedSiteIds[0] : null,
               building_id: buildingIds.length === 1 ? buildingIds[0] : null,
               building_ids: buildingIds,
-              create_building: false,
+              create_building: value.create_building_names.length > 0,
+              create_building_name: value.create_building_names[0] ?? null,
+              create_building_names: value.create_building_names,
+              pending_create_building_name: value.pending_create_building_name,
             });
           }}
+          onCreate={addCreatedBuilding}
         />
+        {value.create_building_names.length > 0 && (
+          <div className="cvc-pending-create-chips">
+            <span>A creer</span>
+            {value.create_building_names.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => {
+                  const nextNames = value.create_building_names.filter((item) => item !== name);
+                  onChange({
+                    ...value,
+                    create_building: nextNames.length > 0,
+                    create_building_name: nextNames[0] ?? null,
+                    create_building_names: nextNames,
+                  });
+                }}
+              >
+                {name} x
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
           <span style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
-            {selectedBuildingCount > 1
-              ? `${selectedBuildingCount} batiments retenus pour cette source`
+            {selectedBuildingCount + createBuildingCount > 1
+              ? `${selectedBuildingCount + createBuildingCount} batiments retenus pour cette source`
               : "Cas simple : un batiment retenu alimente les equipements"}
           </span>
         </div>
-        <SearchableDropdown
-          value={value.create_building ? "__create__" : ""}
-          options={singleOptions.filter((option) => option.value === "" || option.value === "__create__")}
-          placeholder="Option speciale"
-          searchPlaceholder="Ajouter si absent du patrimoine"
-          onChange={(selectedValue) => {
-            if (selectedValue === "__create__") {
-              onChange({
-                ...value,
-                create_building: true,
-                create_building_name: value.create_building_name ?? suggestedCreatedBuildingName(match.site_raw),
-              });
-              return;
-            }
-            onChange({
-              ...value,
-              create_building: false,
-              create_building_name: null,
-            });
-          }}
-        />
-        {value.create_building && (
-          <div className="cvc-create-building-inline">
-            <label>
-              Nom du batiment a creer
-              <input
-                type="text"
-                value={value.create_building_name ?? ""}
-                onChange={(e) => onChange({ ...value, create_building_name: e.target.value })}
-                placeholder="Restaurant scolaire"
-              />
-            </label>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => onChange({ ...value, create_building: false, create_building_name: null })}
-            >
-              Annuler
-            </button>
-          </div>
-        )}
+        <div className="cvc-create-building-inline">
+          <label>
+            Batiment absent du patrimoine
+            <input
+              type="text"
+              value={value.pending_create_building_name}
+              onChange={(e) => onChange({ ...value, pending_create_building_name: e.target.value })}
+              placeholder="Restaurant scolaire"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCreatedBuilding(value.pending_create_building_name);
+                }
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => addCreatedBuilding(value.pending_create_building_name)}
+          >
+            Ajouter
+          </button>
+        </div>
       </td>
       <td>
-        {value.create_building ? (
+        {value.create_building_names.length > 0 ? (
           <span style={{ color: "#fbbf24" }}>Ajout + rattachement</span>
         ) : value.building_ids.length > 1 ? (
           <span className="success-text">Multi-batiment</span>
@@ -403,6 +377,7 @@ export function CvcSiteMappingPage() {
         building_ids: drafts[match.site_raw]?.building_ids ?? [],
         create_building: drafts[match.site_raw]?.create_building ?? false,
         create_building_name: drafts[match.site_raw]?.create_building_name ?? null,
+        create_building_names: drafts[match.site_raw]?.create_building_names ?? [],
       }));
       return applyCvcImportSiteMappings(token, activeBatch, mappings);
     },

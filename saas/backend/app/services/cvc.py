@@ -960,8 +960,14 @@ def apply_site_mappings_to_import(
                 raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
             buildings.append(building)
 
-        if create_building:
-            building_name = (mapping.create_building_name or site_raw).strip() or site_raw
+        create_building_names = [
+            name.strip()
+            for name in (mapping.create_building_names or ([mapping.create_building_name] if mapping.create_building_name else []))
+            if name and name.strip()
+        ]
+        if create_building and not create_building_names:
+            create_building_names = [site_raw]
+        for building_name in create_building_names:
             created_building = _create_or_reuse_cvc_placeholder_building(db, building_name, city_id)
             if created_building.id not in requested_building_ids:
                 requested_building_ids.append(created_building.id)

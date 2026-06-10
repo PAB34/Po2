@@ -1410,6 +1410,12 @@ button:disabled {
   color: #dcfce7;
 }
 
+.cvc-combobox-menu button.is-create-option {
+  border-top: 1px solid rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+  margin-top: 4px;
+}
+
 .cvc-combobox-menu strong,
 .cvc-combobox-menu small {
   display: block;
@@ -1454,6 +1460,31 @@ button:disabled {
   line-height: 1.2;
   padding: 4px 8px;
   max-width: 100%;
+}
+
+.cvc-pending-create-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.cvc-pending-create-chips span {
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cvc-pending-create-chips button {
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.12);
+  color: #fde68a;
+  cursor: pointer;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  padding: 4px 8px;
 }
 
 .cvc-create-building-inline {
