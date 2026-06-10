@@ -77,7 +77,11 @@ def _enedis_customer_sync_job() -> None:
 
 
 def _grdf_conso_sync_job() -> None:
-    """Job périodique : synchro incrémentale des consommations gaz GRDF."""
+    """Job périodique : synchro des consommations publiées GRDF.
+
+    Tourne quotidiennement mais la garde par PCE (`run_recent_sync`) respecte la
+    préconisation GRDF de ~1 appel/mois/PCE pour les publiées.
+    """
     if not settings.grdf_conso_sync_enabled:
         return
     if not settings.grdf_client_id or not settings.grdf_client_secret:
@@ -92,6 +96,24 @@ def _grdf_conso_sync_job() -> None:
         LOG.info("GRDF conso sync : %s", result)
     except Exception:
         LOG.exception("GRDF conso sync job failed")
+
+
+def _grdf_informatives_sync_job() -> None:
+    """Job quotidien optionnel : consommations informatives (PCE JJ/MM, suivi fin)."""
+    if not settings.grdf_informatives_sync_enabled:
+        return
+    if not settings.grdf_client_id or not settings.grdf_client_secret:
+        return
+    try:
+        from app.services.grdf_conso import is_sync_running, run_informatives_sync  # noqa: PLC0415
+
+        if is_sync_running():
+            LOG.info("GRDF sync déjà en cours, job informatives ignoré.")
+            return
+        result = run_informatives_sync()
+        LOG.info("GRDF informatives sync : %s", result)
+    except Exception:
+        LOG.exception("GRDF informatives sync job failed")
 
 
 def _pronostics_score_sync_job() -> None:
@@ -144,6 +166,16 @@ def start_scheduler() -> None:
             trigger="interval",
             hours=grdf_interval,
             id="grdf_conso_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    if settings.grdf_informatives_sync_enabled:
+        _SCHEDULER.add_job(
+            _grdf_informatives_sync_job,
+            trigger="interval",
+            hours=max(int(settings.grdf_conso_sync_interval_hours), 1),
+            id="grdf_informatives_sync",
             max_instances=1,
             coalesce=True,
             replace_existing=True,

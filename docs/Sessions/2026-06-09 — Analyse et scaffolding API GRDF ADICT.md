@@ -77,9 +77,21 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
 - Non buildé localement (npm/node absents) → **validation CI**. Conformité vérifiée main :
   RQ v5 (`isPending`, `refetchInterval` fonction), classes CSS existantes, génériques explicites.
 
+### Mise en conformité specs réunion GRDF (slides reçus) — ✅ FAIT
+- **Quotas Annexe 4** (parc < 5000 PCE = 1 appel/s, 6000/jour) : `GrdfRateLimiter` (rps=1,
+  concurrent=1, quota journalier glissant 6000) qui lève `GrdfQuotaExceeded` (arrêt propre).
+  Avant : rps=5/concurrent=5/sans quota jour → **non conforme**, corrigé.
+- **Cadence préconisée** : publiées 1/mois/PCE → garde par PCE (`grdf_publiees_min_interval_days=25`)
+  sur un job quotidien ; informatives/JJ 1/jour → `run_informatives_sync` + job optionnel (off).
+- **Délais publication** (J+1 DPM, 1er du mois, J+1 15h) → fenêtre rattrapage 62j.
+- **Profondeur** : publiées 5 ans, informatives 3 ans (`grdf_informatives_history_days`).
+- Validé : compileall, quota lève après N appels, garde recent 25j/5j, app boot 8 routes.
+- Détail : `docs/Modules/GRDF-API.md` §14.
+
 ### Reste (post-visio / 1er appel live)
 - Valider forme réelle réponses conso/droits (credentials PROD) ; question DÉTENTEUR.
-- Optionnel : lier `gas_pces.building_id` au patrimoine pour le filtre par bâtiment.
+- Router les PCE JJ/MM (via `frequence_releve`) vers la synchro informative.
+- Optionnel : lier `gas_pces.building_id` au patrimoine ; auto-câbler la sync droits 1/jour.
 
 ### Côté visio / 1er appel réel
 - Q DÉTENTEUR : périmètres vides → conso/contract/tech lisibles ? (sinon seuls 49 AUTORISE).

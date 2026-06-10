@@ -98,7 +98,7 @@ class GrdfTokenManager:
 # Singletons partagés (token + rate limiter) ------------------------------------
 
 _TOKEN_MANAGER: Optional[GrdfTokenManager] = None
-_RATE_LIMITER: Optional[RateLimiter] = None
+_RATE_LIMITER: Optional["GrdfRateLimiter"] = None
 _LOCK = threading.Lock()
 
 
@@ -110,13 +110,49 @@ def get_token_manager() -> GrdfTokenManager:
         return _TOKEN_MANAGER
 
 
-def get_rate_limiter() -> RateLimiter:
+class GrdfQuotaExceeded(RuntimeError):
+    """Quota journalier GRDF atteint (Annexe 4) — arrêt propre, reprise le lendemain."""
+
+
+class GrdfRateLimiter:
+    """Limiteur GRDF : rps + concurrence (délégués à `RateLimiter`) + quota JOURNALIER.
+
+    Le quota journalier (6 000 appels/jour pour un parc < 5 000 PCE) est la limite
+    réellement contraignante (à 1 rps, le plafond horaire ne peut pas être atteint).
+    Lorsqu'il est dépassé, `acquire()` lève `GrdfQuotaExceeded` plutôt que de bloquer :
+    la collecte s'arrête proprement et reprend à la prochaine fenêtre planifiée.
+    """
+
+    def __init__(self, rps: float, max_concurrent: int, max_hourly: int, max_daily: int) -> None:
+        self._inner = RateLimiter(rps=rps, max_concurrent=max_concurrent, max_hourly=max_hourly)
+        self._max_daily = max_daily
+        self._daily_ts: list[float] = []
+        self._daily_lock = threading.Lock()
+
+    def acquire(self) -> None:
+        with self._daily_lock:
+            now = _time.monotonic()
+            self._daily_ts = [t for t in self._daily_ts if t > now - 86400]
+            if len(self._daily_ts) >= self._max_daily:
+                raise GrdfQuotaExceeded(
+                    f"Quota journalier GRDF atteint ({self._max_daily} appels/24h)."
+                )
+        self._inner.acquire()
+        with self._daily_lock:
+            self._daily_ts.append(_time.monotonic())
+
+    def release(self) -> None:
+        self._inner.release()
+
+
+def get_rate_limiter() -> GrdfRateLimiter:
     global _RATE_LIMITER
     with _LOCK:
         if _RATE_LIMITER is None:
-            _RATE_LIMITER = RateLimiter(
+            _RATE_LIMITER = GrdfRateLimiter(
                 rps=settings.grdf_max_rps,
                 max_concurrent=settings.grdf_max_concurrent,
                 max_hourly=settings.grdf_max_hourly,
+                max_daily=settings.grdf_max_daily,
             )
         return _RATE_LIMITER

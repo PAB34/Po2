@@ -74,15 +74,23 @@ class Settings(BaseSettings):
     grdf_client_id: str = ""  # reçu par mail
     grdf_client_secret: str = ""  # reçu par SMS — JAMAIS commité
     grdf_redirect_uri: str = "https://patrimoineaucarre.com/api/grdf/callback"
-    grdf_history_days: int = 1825  # 5 ans — profondeur max données publiées
-    # Quotas (marge de sécurité ; à caler après réponse GRDF sur les limites réelles)
-    grdf_max_rps: float = 5.0
-    grdf_max_concurrent: int = 5
-    grdf_max_hourly: int = 950
-    # Sync quotidienne des consommations publiées
+    grdf_history_days: int = 1825  # publiées : 5 ans (profondeur max)
+    grdf_informatives_history_days: int = 1095  # informatives : 3 ans (profondeur max)
+    # Quotas contractuels GRDF ADICT (Annexe 4) — parc < 5 000 PCE :
+    # 1 appel/seconde, 6 000 appels/jour (toutes API confondues). Au-delà → 429.
+    grdf_max_rps: float = 1.0
+    grdf_max_concurrent: int = 1
+    grdf_max_daily: int = 6000
+    grdf_max_hourly: int = 3600  # plafond de sécurité (non contraignant à 1 rps)
+    # Cadence (préconisations d'appels GRDF) :
+    #  - publiées : 1/mois/PCE → job quotidien mais GARDE par PCE (skip si données récentes)
+    #  - informatives/JJ : 1/jour/PCE (gros volume) → désactivé par défaut
+    #  - droits d'accès : 1/jour (1 appel pour tous les PCE)
     grdf_conso_sync_enabled: bool = True
     grdf_conso_sync_interval_hours: int = 24
-    grdf_conso_sync_lookback_days: int = 7  # fenêtre glissante pour rattraper les retards
+    grdf_publiees_lookback_days: int = 62  # couvre le délai de publication (J+1 DPM) + corrections
+    grdf_publiees_min_interval_days: int = 25  # garde anti-redondance (~1 appel/mois/PCE)
+    grdf_informatives_sync_enabled: bool = False  # activer pour les PCE JJ/MM (suivi quotidien)
     # Conversion énergie : GRDF restitue des kWh PCS ; le NB DALKIA est en MWh PCI.
     # MWh_PCI = kWh_PCS / 1000 / coeff. La quantité P1 (qt_mwhpcs) est déjà en MWh PCS
     # → comparable directement à GRDF (kWh/1000), sans ce coefficient.

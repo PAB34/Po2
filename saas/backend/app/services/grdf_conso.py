@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.gas import GasConsumption, GasPce
+from app.services.grdf_auth import GrdfQuotaExceeded
 from app.services.grdf_client import GrdfApiError, get_json
 
 LOG = logging.getLogger(__name__)
@@ -182,20 +183,45 @@ def _upsert_rows(db: Session, pce_id: int, rows: list[dict]) -> int:
     return n
 
 
-def _collectable_pces(db: Session) -> list[GasPce]:
-    """PCE dont le droit est actif et le périmètre publiées accordé."""
+def _collectable_pces(db: Session, *, informatives: bool = False) -> list[GasPce]:
+    """PCE dont le droit est actif et le périmètre demandé accordé."""
+    perim = GasPce.perim_informatives if informatives else GasPce.perim_publiees
     return (
         db.query(GasPce)
-        .filter(GasPce.etat_droit_acces == "Active", GasPce.perim_publiees.is_(True))
+        .filter(GasPce.etat_droit_acces == "Active", perim.is_(True))
         .all()
     )
+
+
+def _has_recent_publiees(db: Session, pce_id: int, min_days: int, type_conso: str) -> bool:
+    """Vrai si le dernier relevé stocké pour ce PCE date de moins de `min_days`.
+
+    Implémente la préconisation GRDF « publiées : 1 appel/mois/PCE » : on évite de
+    rappeler l'API tant qu'un relevé récent couvre déjà la période.
+    """
+    last = (
+        db.query(GasConsumption.date_fin)
+        .filter(GasConsumption.pce_id == pce_id, GasConsumption.type_conso == type_conso)
+        .order_by(GasConsumption.date_fin.desc())
+        .first()
+    )
+    if last is None or last[0] is None:
+        return False
+    return (date.today() - last[0]).days < min_days
 
 
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def _run(mode: str, date_debut: date, date_fin: date) -> dict:
+def _run(
+    mode: str,
+    date_debut: date,
+    date_fin: date,
+    *,
+    informatives: bool = False,
+    guard_min_days: int | None = None,
+) -> dict:
     with _LOCK:
         if _STATE["status"] == "running":
             return {"message": "déjà en cours"}
@@ -203,20 +229,36 @@ def _run(mode: str, date_debut: date, date_fin: date) -> dict:
             status="running", started_at=datetime.utcnow().isoformat(), finished_at=None,
             mode=mode, pce_done=0, rows_upserted=0, error=None, log=[],
         )
+    fetch = fetch_consos_informatives if informatives else fetch_consos_publiees
+    type_conso = "Informative Journalier" if informatives else "Publiée"
     db = SessionLocal()
     total_rows = 0
+    skipped = 0
     try:
-        pces = _collectable_pces(db)
+        pces = _collectable_pces(db, informatives=informatives)
         with _LOCK:
             _STATE["pce_total"] = len(pces)
-        _log(f"{mode} : {len(pces)} PCE collectables ({date_debut} → {date_fin})")
+        _log(f"{mode} : {len(pces)} PCE ({date_debut} → {date_fin})")
         for pce in pces:
+            # Garde anti-redondance (préconisation 1/mois/PCE pour les publiées)
+            if guard_min_days and _has_recent_publiees(db, pce.id, guard_min_days, type_conso):
+                skipped += 1
+                with _LOCK:
+                    _STATE["pce_done"] += 1
+                continue
             try:
-                rows = fetch_consos_publiees(pce.id_pce, date_debut, date_fin)
+                rows = fetch(pce.id_pce, date_debut, date_fin)
                 added = _upsert_rows(db, pce.id, rows)
                 pce.last_synced_at = datetime.utcnow()
                 db.commit()
                 total_rows += added
+            except GrdfQuotaExceeded as exc:
+                # Quota journalier atteint → arrêt propre, reprise à la prochaine fenêtre.
+                db.rollback()
+                _log(f"{mode} interrompu : {exc}")
+                with _LOCK:
+                    _STATE["error"] = str(exc)
+                break
             except GrdfApiError as exc:
                 db.rollback()
                 _log(f"PCE {pce.id_pce} : erreur {exc}")
@@ -228,18 +270,18 @@ def _run(mode: str, date_debut: date, date_fin: date) -> dict:
                 _STATE["rows_upserted"] = total_rows
         with _LOCK:
             _STATE.update(status="success", finished_at=datetime.utcnow().isoformat())
-        _log(f"{mode} terminé : {total_rows} lignes upsert")
+        _log(f"{mode} terminé : {total_rows} lignes upsert, {skipped} PCE déjà à jour")
     except Exception as exc:  # noqa: BLE001
         with _LOCK:
             _STATE.update(status="error", finished_at=datetime.utcnow().isoformat(), error=str(exc))
         _log(f"{mode} échec global : {exc}")
     finally:
         db.close()
-    return {"mode": mode, "rows_upserted": total_rows}
+    return {"mode": mode, "rows_upserted": total_rows, "skipped": skipped}
 
 
 def run_backfill(history_days: int | None = None) -> dict:
-    """Backfill historique complet (par défaut `grdf_history_days` = 5 ans)."""
+    """Backfill complet des publiées (par défaut `grdf_history_days` = 5 ans). Sans garde."""
     days = history_days or settings.grdf_history_days
     fin = date.today()
     debut = fin - timedelta(days=days)
@@ -247,7 +289,24 @@ def run_backfill(history_days: int | None = None) -> dict:
 
 
 def run_recent_sync() -> dict:
-    """Synchro incrémentale : fenêtre glissante des derniers jours."""
+    """Synchro planifiée des publiées (préconisation GRDF : ~1/mois/PCE).
+
+    Fenêtre de rattrapage large (couvre le délai de publication J+1 DPM + corrections)
+    + garde par PCE pour ne pas dépasser ~1 appel/mois/PCE même si le job tourne tous
+    les jours.
+    """
     fin = date.today()
-    debut = fin - timedelta(days=settings.grdf_conso_sync_lookback_days)
-    return _run("recent", debut, fin)
+    debut = fin - timedelta(days=settings.grdf_publiees_lookback_days)
+    return _run("recent", debut, fin, guard_min_days=settings.grdf_publiees_min_interval_days)
+
+
+def run_informatives_sync(history_days: int | None = None) -> dict:
+    """Synchro des consommations informatives (JJ/MM, préconisation 1/jour/PCE).
+
+    Profondeur plafonnée à `grdf_informatives_history_days` (3 ans). Sans garde
+    (cadence quotidienne assumée pour le suivi fin).
+    """
+    days = history_days or settings.grdf_informatives_history_days
+    fin = date.today()
+    debut = fin - timedelta(days=min(days, settings.grdf_informatives_history_days))
+    return _run("informatives", debut, fin, informatives=True)

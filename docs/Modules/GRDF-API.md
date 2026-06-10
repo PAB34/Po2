@@ -674,6 +674,63 @@ et lien sidebar « Gaz GRDF ». Contenu :
 - **1er appel API réel** (credentials PROD) : valider la forme des réponses conso/droits.
 - Question visio DÉTENTEUR (périmètres lisibles ?).
 - Éventuel : lier `gas_pces.building_id` au patrimoine pour le filtre par bâtiment.
+
+---
+
+## 14. Modèle de fonctionnement — specs réunion GRDF (2026-06-09)
+
+Spécifications transmises en réunion (slides GRDF). **Mises en œuvre dans le code.**
+
+### 14.1 Quotas contractuels (Annexe 4) — limite réelle
+
+Quotas **par Tiers, toutes API confondues**, adaptés au parc. Sète ≈ 66 PCE → **tranche < 5 000** :
+
+| Parc | Appels/seconde | Appels/jour |
+|---|---|---|
+| **0 – 5 000 PCE** | **1 / s** | **6 000 / j** |
+| 5 000 – 50 000 | 1 / s | 60 000 / j |
+| > 50 000 | 3 / s | 240 000 / j |
+
+> Dépassement → l'appel **tombe en erreur** (429). **Implémenté** : `GrdfRateLimiter`
+> (`grdf_auth.py`) applique `rps=1`, `concurrent=1` et un **quota journalier glissant** de 6 000 ;
+> au-delà il lève `GrdfQuotaExceeded` → la collecte s'arrête proprement et reprend le lendemain
+> (pas de blocage). Config : `grdf_max_rps`, `grdf_max_concurrent`, `grdf_max_daily`.
+
+### 14.2 Préconisations d'appels (cadence) — implémentées
+
+| API / donnée | Fréquence préconisée | Implémentation |
+|---|---|---|
+| Consulter mes droits d'accès | **1/jour** (1 appel pour TOUS les PCE) | `sync_droits` (ndjson, 1 appel) — endpoint manuel ; auto à câbler |
+| Consommations **publiées** (6M/1M/MM) | **1/mois/PCE** | job quotidien + **garde par PCE** `grdf_publiees_min_interval_days=25` → ~1/mois |
+| Consommations **informatives** + **JJ** | 1/jour/PCE (gros volume) | `run_informatives_sync` + job optionnel `grdf_informatives_sync_enabled` (off) |
+| Données contractuelles / techniques | 1/mois/PCE | `enrich_pces` (endpoint manuel / mensuel) |
+| Déclarer / révoquer / preuves | selon besoin / 1·mois | endpoints `grdf_gda` |
+
+### 14.3 Types de données, délais de publication, profondeur
+
+| Format PCE | Fréq. | Publiées (facturation) | Informatives | Délai publication | Profondeur |
+|---|---|---|---|---|---|
+| **14 chiffres** (`12345678912345`) | 6M | semestrielles | — | J+1 DPM | 5 ans |
+| 14 chiffres | 1M | mensuelles | quotidiennes (J+3) | J+1 DPM / J+3 | 5 ans / 3 ans |
+| **GI + 6** (`GI123456`) | MM (Gazpar) | mensuelles | quotidiennes (J+2) | 1ᵉʳ du mois / J+2 | 5 ans / 3 ans |
+| GI + 6 | JJ | quotidiennes | — | J+1 après 15 h | 5 ans |
+
+> **Conséquences implémentées** : profondeur **publiées 5 ans** (`grdf_history_days=1825`),
+> **informatives 3 ans** (`grdf_informatives_history_days=1095`). La synchro publiées utilise une
+> **fenêtre de rattrapage large** (`grdf_publiees_lookback_days=62`) pour absorber le délai
+> J+1 DPM et les corrections. Le `frequence_releve` de chaque PCE (6M/1M/MM/JJ) est récupéré via
+> `enrich_pces` (données techniques) → permettra de router les PCE JJ/MM vers la synchro informative.
+
+### 14.4 Récap des changements de paramètres (vs version initiale)
+
+| Paramètre | Avant | Après (specs GRDF) |
+|---|---|---|
+| `grdf_max_rps` | 5.0 | **1.0** |
+| `grdf_max_concurrent` | 5 | **1** |
+| quota journalier | absent | **`grdf_max_daily=6000`** (+ `GrdfRateLimiter`) |
+| fenêtre rattrapage publiées | 7 j | **62 j** (`grdf_publiees_lookback_days`) |
+| cadence publiées | quotidienne | **~1/mois/PCE** (garde `grdf_publiees_min_interval_days=25`) |
+| informatives | — | **3 ans**, job optionnel JJ/MM |
 - **À confirmer au 1er appel réel** : forme exacte des réponses conso (objet vs liste de périodes)
   et noms de champs `GET /droits_acces` — les parseurs sont volontairement tolérants mais non
   validés contre l'API live (credentials PROD requis).
