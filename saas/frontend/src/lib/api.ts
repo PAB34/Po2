@@ -2786,6 +2786,7 @@ export type CvcSiteMappingPayload = {
   building_id: number | null;
   building_ids?: number[] | null;
   create_building?: boolean;
+  create_building_name?: string | null;
 };
 
 export type CvcApplySiteMappingsResult = {

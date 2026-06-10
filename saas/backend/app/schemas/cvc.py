@@ -67,6 +67,7 @@ class CvcSiteMapping(BaseModel):
     building_id: int | None = None
     building_ids: list[int] | None = None
     create_building: bool = False
+    create_building_name: str | None = None
 
 
 class CvcApplySiteMappingsRequest(BaseModel):

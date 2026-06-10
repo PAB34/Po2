@@ -21,6 +21,7 @@ type DraftMapping = {
   building_id: number | null;
   building_ids: number[];
   create_building?: boolean;
+  create_building_name?: string | null;
 };
 
 function searchText(value: string | null | undefined): string {
@@ -44,7 +45,16 @@ function suggestedMapping(match: CvcImportSiteMatchResult): DraftMapping {
     building_id: buildingId,
     building_ids: buildingIds,
     create_building: false,
+    create_building_name: null,
   };
+}
+
+function suggestedCreatedBuildingName(sourceName: string): string {
+  const parts = sourceName
+    .split(/\s+\+\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : sourceName.trim();
 }
 
 type SearchableOption = {
@@ -291,21 +301,44 @@ function MappingRow({
           searchPlaceholder="Ajouter si absent du patrimoine"
           onChange={(selectedValue) => {
             if (selectedValue === "__create__") {
-              onChange({ site_id: null, building_id: null, building_ids: [], create_building: true });
+              onChange({
+                ...value,
+                create_building: true,
+                create_building_name: value.create_building_name ?? suggestedCreatedBuildingName(match.site_raw),
+              });
               return;
             }
             onChange({
-              site_id: null,
-              building_id: null,
-              building_ids: [],
+              ...value,
               create_building: false,
+              create_building_name: null,
             });
           }}
         />
+        {value.create_building && (
+          <div className="cvc-create-building-inline">
+            <label>
+              Nom du batiment a creer
+              <input
+                type="text"
+                value={value.create_building_name ?? ""}
+                onChange={(e) => onChange({ ...value, create_building_name: e.target.value })}
+                placeholder="Restaurant scolaire"
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => onChange({ ...value, create_building: false, create_building_name: null })}
+            >
+              Annuler
+            </button>
+          </div>
+        )}
       </td>
       <td>
         {value.create_building ? (
-          <span style={{ color: "#fbbf24" }}>Creation patrimoine</span>
+          <span style={{ color: "#fbbf24" }}>Ajout + rattachement</span>
         ) : value.building_ids.length > 1 ? (
           <span className="success-text">Multi-batiment</span>
         ) : match.current_building_id ? (
@@ -369,6 +402,7 @@ export function CvcSiteMappingPage() {
         building_id: drafts[match.site_raw]?.building_id ?? null,
         building_ids: drafts[match.site_raw]?.building_ids ?? [],
         create_building: drafts[match.site_raw]?.create_building ?? false,
+        create_building_name: drafts[match.site_raw]?.create_building_name ?? null,
       }));
       return applyCvcImportSiteMappings(token, activeBatch, mappings);
     },

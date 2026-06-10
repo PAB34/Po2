@@ -952,22 +952,25 @@ def apply_site_mappings_to_import(
             raise ValueError(f"Site hors perimetre pour {site_raw}.")
 
         buildings: list[Building] = []
+        for building_id in requested_building_ids:
+            building = db.get(Building, building_id)
+            if building is None:
+                raise ValueError(f"Batiment introuvable pour {site_raw}.")
+            if city_id is not None and building.city_id != city_id:
+                raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
+            buildings.append(building)
+
         if create_building:
-            buildings = [_create_or_reuse_cvc_placeholder_building(db, site_raw, city_id)]
-            requested_building_ids = [buildings[0].id]
-        else:
-            for building_id in requested_building_ids:
-                building = db.get(Building, building_id)
-                if building is None:
-                    raise ValueError(f"Batiment introuvable pour {site_raw}.")
-                if city_id is not None and building.city_id != city_id:
-                    raise ValueError(f"Batiment hors perimetre pour {site_raw}.")
-                buildings.append(building)
+            building_name = (mapping.create_building_name or site_raw).strip() or site_raw
+            created_building = _create_or_reuse_cvc_placeholder_building(db, building_name, city_id)
+            if created_building.id not in requested_building_ids:
+                requested_building_ids.append(created_building.id)
+                buildings.append(created_building)
 
         single_building = buildings[0] if len(buildings) == 1 else None
         selected_site_ids = {building.site_id for building in buildings if building.site_id is not None}
 
-        next_site_id = None if create_building else (site.id if site else None)
+        next_site_id = site.id if site else None
         if next_site_id is None and len(selected_site_ids) == 1:
             next_site_id = next(iter(selected_site_ids))
         if next_site_id is None and single_building is not None:
