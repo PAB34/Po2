@@ -116,7 +116,6 @@ export default function App() {
             <Route path="/buildings/cvc-fluides" element={<CvcRefrigerantsPage />} />
             <Route path="/buildings/cvc-rapport-technique" element={<CvcTechnicalReportPage />} />
             <Route path="/buildings/cvc-import/batiment" element={<CvcSiteMappingPage />} />
-            <Route path="/buildings/cvc-import/sites" element={<Navigate to="/buildings/cvc-import/batiment" replace />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
