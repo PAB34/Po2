@@ -1313,6 +1313,46 @@ button:disabled {
   overflow-x: auto;
 }
 
+.cvc-table-filters {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.cvc-table-filters label {
+  display: grid;
+  gap: 5px;
+  min-width: min(320px, 100%);
+}
+
+.cvc-table-filters span {
+  color: #94a3b8;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.cvc-table-filters select {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  padding: 8px 10px;
+}
+
+.cvc-table-filters strong {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+
 .cvc-inventory-table,
 .cvc-site-mapping-table,
 .cvc-refrigerant-table,
@@ -1335,28 +1375,41 @@ button:disabled {
   vertical-align: top;
 }
 
+.cvc-inventory-table thead th,
+.cvc-site-mapping-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #0f172a;
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.22), 0 8px 18px rgba(15, 23, 42, 0.28);
+}
+
 .cvc-inventory-table th:nth-child(1) {
-  width: 22%;
+  width: 20%;
 }
 
 .cvc-inventory-table th:nth-child(2) {
-  width: 18%;
+  width: 13%;
 }
 
 .cvc-inventory-table th:nth-child(3) {
-  width: 18%;
+  width: 16%;
 }
 
 .cvc-inventory-table th:nth-child(4) {
-  width: 22%;
+  width: 16%;
 }
 
 .cvc-inventory-table th:nth-child(5) {
-  width: 10%;
+  width: 18%;
 }
 
 .cvc-inventory-table th:nth-child(6) {
-  width: 10%;
+  width: 8%;
+}
+
+.cvc-inventory-table th:nth-child(7) {
+  width: 9%;
 }
 
 .cvc-site-mapping-table th:nth-child(1) {

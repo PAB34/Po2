@@ -253,7 +253,13 @@ function InventoryRow({ item, buildings, references, saving, onPatch }: Inventor
       <td>
         <strong>{item.designation}</strong>
         <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
-          {compactLabel([item.famille, item.marque, item.modele]) || "Famille non renseignee"}
+          {compactLabel([item.marque, item.modele]) || "Marque / modele non renseignes"}
+        </div>
+      </td>
+      <td>
+        <strong>{item.famille || "-"}</strong>
+        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
+          {item.etat_sante ? `Etat : ${item.etat_sante}` : "Etat non renseigne"}
         </div>
       </td>
       <td>
@@ -327,6 +333,7 @@ export function CvcImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<CvcPreviewResponse | null>(null);
   const [activeBatch, setActiveBatch] = useState<string | null>(null);
+  const [familyFilter, setFamilyFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const batchesQuery = useQuery<CvcImportBatchSummary[]>({
@@ -414,6 +421,14 @@ export function CvcImportPage() {
   );
   const latestBatch = batchesQuery.data?.[0] ?? null;
   const items = itemsQuery.data ?? [];
+  const familyOptions = useMemo(
+    () => [...new Set(items.map((item) => item.famille?.trim()).filter((value): value is string => Boolean(value)))].sort(),
+    [items],
+  );
+  const visibleItems = useMemo(
+    () => (familyFilter ? items.filter((item) => (item.famille?.trim() || "") === familyFilter) : items),
+    [familyFilter, items],
+  );
   const mappedCount = items.filter((item) => item.building_id !== null).length;
   const refMappedCount = items.filter((item) => item.equipment_ref_id !== null).length;
   const computedFromHealthCount = items.filter((item) => item.lifecycle_age_source === "etat_sante").length;
@@ -502,7 +517,7 @@ export function CvcImportPage() {
             </div>
             <div>
               <strong>{preview.unique_sites.length}</strong>
-              <span>Sites source</span>
+              <span>Batiments source</span>
             </div>
             <div>
               <strong>{preview.unique_families.length}</strong>
@@ -532,8 +547,8 @@ export function CvcImportPage() {
               Rafraichir patrimoine
             </button>
             {activeBatch && (
-              <Link className="secondary-link" to="/buildings/cvc-import/sites">
-                Matcher les sites
+              <Link className="secondary-link" to="/buildings/cvc-import/batiment">
+                Matcher les batiments
               </Link>
             )}
             {activeBatch && (
@@ -571,32 +586,47 @@ export function CvcImportPage() {
           {itemsQuery.isLoading && <p>Chargement de l'inventaire...</p>}
           {!itemsQuery.isLoading && items.length === 0 && <p>Aucune ligne trouvee pour cet import.</p>}
           {items.length > 0 && (
-            <div className="table-wrapper cvc-table-wrapper">
-              <table className="data-table cvc-inventory-table">
-                <thead>
-                  <tr>
-                    <th>Equipement terrain</th>
-                    <th>Localisation source</th>
-                    <th>Batiment patrimoine</th>
-                    <th>Duree de vie attachee</th>
-                    <th>DATE MES</th>
-                    <th>Mini / Ref. / Maxi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <InventoryRow
-                      key={item.id}
-                      item={item}
-                      buildings={buildingsQuery.data ?? []}
-                      references={references}
-                      saving={updateMutation.isPending && updateMutation.variables?.item.id === item.id}
-                      onPatch={(row, payload) => updateMutation.mutate({ item: row, payload })}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="cvc-table-filters">
+                <label>
+                  <span>Famille</span>
+                  <select value={familyFilter} onChange={(e) => setFamilyFilter(e.target.value)}>
+                    <option value="">Toutes les familles</option>
+                    {familyOptions.map((family) => (
+                      <option key={family} value={family}>{family}</option>
+                    ))}
+                  </select>
+                </label>
+                <strong>{visibleItems.length} / {items.length} lignes</strong>
+              </div>
+              <div className="table-wrapper cvc-table-wrapper">
+                <table className="data-table cvc-inventory-table">
+                  <thead>
+                    <tr>
+                      <th>Equipement terrain</th>
+                      <th>Famille</th>
+                      <th>Localisation source</th>
+                      <th>Batiment patrimoine</th>
+                      <th>Duree de vie attachee</th>
+                      <th>DATE MES</th>
+                      <th>Mini / Ref. / Maxi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleItems.map((item) => (
+                      <InventoryRow
+                        key={item.id}
+                        item={item}
+                        buildings={buildingsQuery.data ?? []}
+                        references={references}
+                        saving={updateMutation.isPending && updateMutation.variables?.item.id === item.id}
+                        onPatch={(row, payload) => updateMutation.mutate({ item: row, payload })}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}

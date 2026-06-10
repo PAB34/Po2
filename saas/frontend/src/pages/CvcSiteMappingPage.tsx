@@ -231,7 +231,7 @@ export function CvcSiteMappingPage() {
   if (!token) {
     return (
       <section className="panel stack-lg">
-        <h2>Matching sites CVC</h2>
+        <h2>Matching bÃ¢timent CVC</h2>
         <p>Connecte-toi pour acceder a cette page.</p>
       </section>
     );
@@ -242,8 +242,8 @@ export function CvcSiteMappingPage() {
       <div className="panel-header">
         <div>
           <p className="eyebrow">Gestion technique</p>
-          <h2>Matching sites CVC</h2>
-          <p>Rapproche les sites du fichier importe avec les sites et batiments du patrimoine.</p>
+          <h2>Matching bÃ¢timent CVC</h2>
+          <p>Rapproche les batiments du fichier importe avec les batiments du patrimoine.</p>
         </div>
         <div className="buildings-header-actions">
           <Link className="secondary-link" to="/buildings/cvc-import">Retour inventaire</Link>
@@ -281,7 +281,7 @@ export function CvcSiteMappingPage() {
         <div className="section-block">
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {[
-              ["Sites source", matches.length],
+              ["Batiments source", matches.length],
               ["Matchs evidents", stats.clearlyMatched],
               ["Selections", stats.selected],
             ].map(([label, value]) => (
@@ -299,7 +299,7 @@ export function CvcSiteMappingPage() {
               <table className="data-table cvc-site-mapping-table">
                 <thead>
                   <tr>
-                    <th>Site source</th>
+                    <th>Batiment source</th>
                     <th>Suggestion site</th>
                     <th>Suggestion batiment</th>
                     <th>Site retenu</th>

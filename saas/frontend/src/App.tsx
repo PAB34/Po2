@@ -94,7 +94,7 @@ export default function App() {
             <p className="nav-section" style={navSectionStyle}>Administration</p>
             <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
             <Link to="/buildings/cvc-import">Import CVC terrain</Link>
-            <Link to="/buildings/cvc-import/sites">Matching sites CVC</Link>
+            <Link to="/buildings/cvc-import/batiment">Matching bÃ¢timent CVC</Link>
             <Link to="/energie/facturation">Configuration tarifaire</Link>
 
             <p className="nav-section" style={navSectionStyle}>Mon compte</p>
@@ -115,7 +115,8 @@ export default function App() {
             <Route path="/buildings/cvc-import" element={<CvcImportPage />} />
             <Route path="/buildings/cvc-fluides" element={<CvcRefrigerantsPage />} />
             <Route path="/buildings/cvc-rapport-technique" element={<CvcTechnicalReportPage />} />
-            <Route path="/buildings/cvc-import/sites" element={<CvcSiteMappingPage />} />
+            <Route path="/buildings/cvc-import/batiment" element={<CvcSiteMappingPage />} />
+            <Route path="/buildings/cvc-import/sites" element={<Navigate to="/buildings/cvc-import/batiment" replace />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
