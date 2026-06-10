@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../providers/AuthProvider";
 import {
-  fetchAllLocals,
   fetchBuildings,
   fetchCvcImportBatches,
   fetchCvcImportItems,
@@ -19,7 +18,6 @@ import {
   type CvcInventoryItem,
   type CvcPreviewResponse,
   type EquipmentReference,
-  type Local,
   type Site,
   type UpdateCvcInventoryItemPayload,
 } from "../lib/api";
@@ -244,21 +242,13 @@ type InventoryRowProps = {
   item: CvcInventoryItem;
   buildings: Building[];
   sites: Site[];
-  locals: Local[];
   references: EquipmentReference[];
   saving: boolean;
   onPatch: (item: CvcInventoryItem, payload: UpdateCvcInventoryItemPayload) => void;
 };
 
-function InventoryRow({ item, buildings, sites, locals, references, saving, onPatch }: InventoryRowProps) {
+function InventoryRow({ item, buildings, references, saving, onPatch }: InventoryRowProps) {
   const building = buildings.find((b) => b.id === item.building_id);
-  const site = sites.find((s) => s.id === item.site_id);
-  const localOptions = locals
-    .filter((local) => !item.building_id || local.building_id === item.building_id)
-    .map((local) => ({
-      id: local.id,
-      label: compactLabel([local.nom_local, local.niveau, local.type_local]),
-    }));
   const referenceOptions = references.map((ref) => ({ id: ref.id, label: referenceLabel(ref) }));
 
   return (
@@ -276,25 +266,10 @@ function InventoryRow({ item, buildings, sites, locals, references, saving, onPa
         </div>
       </td>
       <td>
-        <strong>{site?.nom_site ?? "-"}</strong>
-        <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
-          {site?.adresse ?? "A matcher dans Sites"}
-        </div>
-      </td>
-      <td>
         <strong>{building?.nom_batiment ?? (item.building_id ? `Batiment #${item.building_id}` : "-")}</strong>
         <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
           {building?.adresse_reconstituee ?? "A matcher dans Sites"}
         </div>
-      </td>
-      <td>
-        <RowSelect
-          value={item.local_id}
-          options={localOptions}
-          placeholder={building ? "Local optionnel" : "Choisir un batiment"}
-          disabled={saving || !item.building_id}
-          onChange={(local_id) => onPatch(item, { local_id })}
-        />
       </td>
       <td>
         <RowSelect
@@ -379,12 +354,6 @@ export function CvcImportPage() {
     enabled: !!token,
     staleTime: 0,
   });
-  const localsQuery = useQuery<Local[]>({
-    queryKey: ["locals", token],
-    queryFn: () => fetchAllLocals(token ?? ""),
-    enabled: !!token,
-    staleTime: 0,
-  });
   const referencesQuery = useQuery<EquipmentReference[]>({
     queryKey: ["equipment-references", token],
     queryFn: () => fetchEquipmentReferences(token ?? ""),
@@ -466,7 +435,6 @@ export function CvcImportPage() {
   function refreshPatrimoineLists() {
     queryClient.invalidateQueries({ queryKey: ["buildings"] });
     queryClient.invalidateQueries({ queryKey: ["sites"] });
-    queryClient.invalidateQueries({ queryKey: ["locals"] });
   }
 
   if (!token) {
@@ -619,9 +587,7 @@ export function CvcImportPage() {
                   <tr>
                     <th>Equipement terrain</th>
                     <th>Localisation source</th>
-                    <th>Site patrimoine</th>
                     <th>Batiment patrimoine</th>
-                    <th>Local patrimoine</th>
                     <th>Duree de vie attachee</th>
                     <th>DATE MES</th>
                     <th>Mini / Ref. / Maxi</th>
@@ -633,8 +599,6 @@ export function CvcImportPage() {
                       key={item.id}
                       item={item}
                       buildings={buildingsQuery.data ?? []}
-                      sites={sitesQuery.data ?? []}
-                      locals={localsQuery.data ?? []}
                       references={references}
                       saving={updateMutation.isPending && updateMutation.variables?.item.id === item.id}
                       onPatch={(row, payload) => updateMutation.mutate({ item: row, payload })}

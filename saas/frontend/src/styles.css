@@ -1336,16 +1336,19 @@ button:disabled {
 }
 
 .cvc-inventory-table th:nth-child(1) {
-  width: 17%;
+  width: 22%;
 }
 
 .cvc-inventory-table th:nth-child(2) {
-  width: 15%;
+  width: 18%;
 }
 
-.cvc-inventory-table th:nth-child(3),
+.cvc-inventory-table th:nth-child(3) {
+  width: 18%;
+}
+
 .cvc-inventory-table th:nth-child(4) {
-  width: 13%;
+  width: 22%;
 }
 
 .cvc-inventory-table th:nth-child(5) {
@@ -1353,15 +1356,7 @@ button:disabled {
 }
 
 .cvc-inventory-table th:nth-child(6) {
-  width: 18%;
-}
-
-.cvc-inventory-table th:nth-child(7) {
-  width: 12%;
-}
-
-.cvc-inventory-table th:nth-child(8) {
-  width: 12%;
+  width: 10%;
 }
 
 .cvc-site-mapping-table th:nth-child(1) {
