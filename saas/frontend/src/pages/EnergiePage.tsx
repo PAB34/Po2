@@ -345,7 +345,7 @@ function SyncPanel({ token }: { token: string }) {
               progress={consumptionProgress}
               actionLabel="Mise à jour incrémentale"
               backfillLabel="Backfill 3 ans"
-              onIncremental={() => consumptionMutation.mutate()}
+              onIncremental={() => consumptionMutation.mutate(undefined)}
               onBackfill={() => consumptionMutation.mutate({ historyDays: 1095 })}
               onTest={() => consumptionMutation.mutate({ historyDays: 30, prmLimit: 5 })}
             />
@@ -363,7 +363,7 @@ function SyncPanel({ token }: { token: string }) {
               progress={maxPowerProgress}
               actionLabel="Mise à jour incrémentale"
               backfillLabel="Backfill 3 ans"
-              onIncremental={() => maxPowerMutation.mutate()}
+              onIncremental={() => maxPowerMutation.mutate(undefined)}
               onBackfill={() => maxPowerMutation.mutate({ historyDays: 1095 })}
               onTest={() => maxPowerMutation.mutate({ historyDays: 30, prmLimit: 5 })}
             />
@@ -381,7 +381,7 @@ function SyncPanel({ token }: { token: string }) {
               progress={loadCurveProgress}
               actionLabel="Mise à jour incrémentale"
               backfillLabel="Backfill CDC complet"
-              onIncremental={() => loadCurveMutation.mutate()}
+              onIncremental={() => loadCurveMutation.mutate(undefined)}
               onBackfill={() => loadCurveMutation.mutate({ resetState: true })}
               onTest={() => loadCurveMutation.mutate({ historyDays: 7, prmLimit: 5 })}
               testLabel="Tester 5 PRM / 7j"
