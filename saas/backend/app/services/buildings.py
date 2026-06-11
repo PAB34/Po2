@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from app.models.building import Building
 from app.models.building_meter import BuildingMeterLink
 from app.models.city import City
+from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.local import Local
 from app.models.site import Site
 from app.models.user import User
-from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingMeterLinkCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, SiteCreate, SiteUpdate
+from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingMeterLinkCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, PatrimonyReclassifyPayload, PatrimonyReclassifyResult, SiteCreate, SiteUpdate
 from app.services.building_naming import _dedupe_candidate_dicts, build_building_payload
 from app.services.cities import get_city_by_id
 
@@ -502,6 +503,179 @@ def delete_site(db: Session, site: Site) -> None:
     """Supprime un site. Les batiments rattaches sont detaches (SET NULL, pas supprimes)."""
     db.delete(site)
     db.commit()
+
+
+def _default_city_name(db: Session, current_user: User) -> str:
+    if current_user.city_id is None:
+        return "Commune"
+    city = get_city_by_id(db, current_user.city_id)
+    return city.nom_commune if city else "Commune"
+
+
+def _assert_building_can_be_removed(db: Session, building: Building) -> None:
+    if db.scalar(select(Local.id).where(Local.building_id == building.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce batiment contient des locaux. Deplace ou supprime les locaux avant de le reclasser.",
+        )
+    if db.scalar(select(BuildingMeterLink.id).where(BuildingMeterLink.building_id == building.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce batiment a des compteurs rattaches. Le reclassement est bloque pour eviter de perdre les rattachements.",
+        )
+    if db.scalar(select(CvcInventoryItem.id).where(CvcInventoryItem.building_id == building.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce batiment a des equipements CVC rattaches. Retire ou deplace ces rattachements avant de le reclasser.",
+        )
+    if db.scalar(select(CvcRefrigerantItem.id).where(CvcRefrigerantItem.building_id == building.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce batiment a des fluides CVC rattaches. Retire ou deplace ces rattachements avant de le reclasser.",
+        )
+    if db.scalar(select(CvcSourceBuildingMapping.id).where(CvcSourceBuildingMapping.building_id == building.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce batiment est utilise dans le matching CVC. Retire ou deplace ce rattachement avant de le reclasser.",
+        )
+    cvc_mappings = db.scalars(select(CvcSourceBuildingMapping).where(CvcSourceBuildingMapping.building_ids_json.is_not(None)))
+    for mapping in cvc_mappings:
+        try:
+            building_ids = json.loads(mapping.building_ids_json or "[]")
+        except json.JSONDecodeError:
+            building_ids = []
+        if building.id in building_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ce batiment est utilise dans un matching CVC multi-batiments. Retire ou deplace ce rattachement avant de le reclasser.",
+            )
+
+
+def reclassify_site(
+    db: Session, site: Site, payload: PatrimonyReclassifyPayload, current_user: User
+) -> PatrimonyReclassifyResult:
+    if payload.target_type == "site":
+        return PatrimonyReclassifyResult(entity_type="site", entity_id=site.id)
+    if db.scalar(select(Building.id).where(Building.site_id == site.id).limit(1)) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce site contient des batiments. Detache ou deplace les batiments avant de le reclasser.",
+        )
+    name = (payload.name or site.nom_site).strip()
+    if payload.target_type == "building":
+        if payload.target_site_id is not None:
+            target_site = db.get(Site, payload.target_site_id)
+            if target_site is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent introuvable.")
+            if current_user.city_id is not None and target_site.city_id != current_user.city_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent hors perimetre.")
+        building = Building(
+            city_id=site.city_id,
+            site_id=payload.target_site_id,
+            nom_batiment=name,
+            nom_commune=_default_city_name(db, current_user),
+            adresse_reconstituee=site.adresse,
+            source_creation="RECLASSEMENT",
+            statut_geocodage="NON_FAIT",
+        )
+        db.add(building)
+        db.delete(site)
+        db.commit()
+        db.refresh(building)
+        return PatrimonyReclassifyResult(entity_type="building", entity_id=building.id)
+    if payload.target_type == "local":
+        if payload.target_building_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choisis un batiment parent.")
+        parent = db.get(Building, payload.target_building_id)
+        if parent is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent introuvable.")
+        if current_user.city_id is not None and parent.city_id != current_user.city_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent hors perimetre.")
+        local = Local(building_id=parent.id, nom_local=name, type_local="RECLASSEMENT")
+        db.add(local)
+        db.delete(site)
+        db.commit()
+        db.refresh(local)
+        return PatrimonyReclassifyResult(entity_type="local", entity_id=local.id)
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Categorie cible invalide.")
+
+
+def reclassify_building(
+    db: Session, building: Building, payload: PatrimonyReclassifyPayload, current_user: User
+) -> PatrimonyReclassifyResult:
+    if payload.target_type == "building":
+        return PatrimonyReclassifyResult(entity_type="building", entity_id=building.id)
+    _assert_building_can_be_removed(db, building)
+    name = (payload.name or building.nom_batiment or f"Batiment #{building.id}").strip()
+    if payload.target_type == "site":
+        site = Site(
+            city_id=building.city_id,
+            nom_site=name,
+            adresse=building.adresse_reconstituee,
+            source_file="RECLASSEMENT",
+        )
+        db.add(site)
+        db.delete(building)
+        db.commit()
+        db.refresh(site)
+        return PatrimonyReclassifyResult(entity_type="site", entity_id=site.id)
+    if payload.target_type == "local":
+        if payload.target_building_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choisis un batiment parent.")
+        parent = db.get(Building, payload.target_building_id)
+        if parent is None or parent.id == building.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent invalide.")
+        if current_user.city_id is not None and parent.city_id != current_user.city_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent hors perimetre.")
+        local = Local(building_id=parent.id, nom_local=name, type_local="RECLASSEMENT")
+        db.add(local)
+        db.delete(building)
+        db.commit()
+        db.refresh(local)
+        return PatrimonyReclassifyResult(entity_type="local", entity_id=local.id)
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Categorie cible invalide.")
+
+
+def reclassify_local(
+    db: Session, local: Local, payload: PatrimonyReclassifyPayload, current_user: User
+) -> PatrimonyReclassifyResult:
+    if payload.target_type == "local":
+        return PatrimonyReclassifyResult(entity_type="local", entity_id=local.id)
+    parent = db.get(Building, local.building_id)
+    name = (payload.name or local.nom_local).strip()
+    if payload.target_type == "site":
+        site = Site(
+            city_id=parent.city_id if parent else current_user.city_id,
+            nom_site=name,
+            source_file="RECLASSEMENT",
+        )
+        db.add(site)
+        db.delete(local)
+        db.commit()
+        db.refresh(site)
+        return PatrimonyReclassifyResult(entity_type="site", entity_id=site.id)
+    if payload.target_type == "building":
+        target_site_id = payload.target_site_id if payload.target_site_id is not None else (parent.site_id if parent else None)
+        if target_site_id is not None:
+            target_site = db.get(Site, target_site_id)
+            if target_site is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent introuvable.")
+            if current_user.city_id is not None and target_site.city_id != current_user.city_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent hors perimetre.")
+        building = Building(
+            city_id=parent.city_id if parent else current_user.city_id,
+            site_id=target_site_id,
+            nom_batiment=name,
+            nom_commune=parent.nom_commune if parent else _default_city_name(db, current_user),
+            source_creation="RECLASSEMENT",
+            statut_geocodage="NON_FAIT",
+        )
+        db.add(building)
+        db.delete(local)
+        db.commit()
+        db.refresh(building)
+        return PatrimonyReclassifyResult(entity_type="building", entity_id=building.id)
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Categorie cible invalide.")
 
 
 def list_building_meter_links(db: Session, building: Building) -> list[BuildingMeterLink]:

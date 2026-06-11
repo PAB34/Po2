@@ -372,6 +372,20 @@ export type UpdateLocalPayload = {
   commentaire?: string | null;
 };
 
+export type PatrimonyNodeType = "site" | "building" | "local";
+
+export type ReclassifyPatrimonyPayload = {
+  target_type: PatrimonyNodeType;
+  target_site_id?: number | null;
+  target_building_id?: number | null;
+  name?: string | null;
+};
+
+export type ReclassifyPatrimonyResult = {
+  entity_type: PatrimonyNodeType;
+  entity_id: number;
+};
+
 export type BuildingMeterLink = {
   id: number;
   building_id: number;
@@ -747,6 +761,49 @@ export async function updateLocalRequest(token: string, buildingId: number, loca
   });
 
   return parseResponse<Local>(response);
+}
+
+export async function reclassifySiteRequest(
+  token: string,
+  siteId: number,
+  payload: ReclassifyPatrimonyPayload,
+): Promise<ReclassifyPatrimonyResult> {
+  const response = await fetch(`${apiBaseUrl}/buildings/sites/${siteId}/reclassify`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<ReclassifyPatrimonyResult>(response);
+}
+
+export async function reclassifyBuildingRequest(
+  token: string,
+  buildingId: number,
+  payload: ReclassifyPatrimonyPayload,
+): Promise<ReclassifyPatrimonyResult> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/reclassify`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<ReclassifyPatrimonyResult>(response);
+}
+
+export async function reclassifyLocalRequest(
+  token: string,
+  buildingId: number,
+  localId: number,
+  payload: ReclassifyPatrimonyPayload,
+): Promise<ReclassifyPatrimonyResult> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/locals/${localId}/reclassify`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  return parseResponse<ReclassifyPatrimonyResult>(response);
 }
 
 export async function deleteAllBuildingsRequest(token: string): Promise<{ deleted: number }> {

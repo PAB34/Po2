@@ -27,6 +27,9 @@ import {
   fetchFreeAddressLookup,
   fetchNearbyDgfip,
   fetchSites,
+  reclassifyBuildingRequest,
+  reclassifyLocalRequest,
+  reclassifySiteRequest,
   updateBuildingRequest,
   updateLocalRequest,
   updateSiteRequest,
@@ -42,6 +45,9 @@ import {
   type Local,
   type NearbyDgfipResult,
   type NearbyDgfipRow,
+  type PatrimonyNodeType,
+  type ReclassifyPatrimonyPayload,
+  type ReclassifyPatrimonyResult,
   type Site,
   type UpdateBuildingPayload,
   type UpdateLocalPayload,
@@ -216,8 +222,10 @@ export function BuildingsListPage() {
   // Sélection
   const selectedSite = selectedNode?.type === "site" ? (sites.find((s) => s.id === selectedNode.id) ?? null) : null;
   const selectedBuilding = selectedNode?.type === "building" ? (buildings.find((b) => b.id === selectedNode.id) ?? null) : null;
+  const selectedBuildingParentSite = selectedBuilding?.site_id ? (sites.find((s) => s.id === selectedBuilding.site_id) ?? null) : null;
   const selectedLocal = selectedNode?.type === "local" ? (locals.find((l) => l.id === selectedNode.id) ?? null) : null;
   const selectedLocalParent = selectedLocal ? (buildings.find((b) => b.id === selectedLocal.building_id) ?? null) : null;
+  const selectedLocalParentSite = selectedLocalParent?.site_id ? (sites.find((s) => s.id === selectedLocalParent.site_id) ?? null) : null;
 
   // Carte
   const highlightedBuildingIds = useMemo(
@@ -276,6 +284,16 @@ export function BuildingsListPage() {
   const ignAttachedCount = buildings.filter((b) => b.statut_geocodage === "IGN_VALIDE").length;
   const totalCount = sites.length + buildings.length + locals.length;
 
+  function refreshPatrimonyQueries() {
+    queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] });
+    queryClient.invalidateQueries({ queryKey: ["buildings", token] });
+    queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
+  }
+
+  function selectReclassifiedNode(result: ReclassifyPatrimonyResult) {
+    selectAndExpand({ type: result.entity_type, id: result.entity_id });
+  }
+
   // ── Mutations ─────────────────────────────────────────────────────────────
   const deleteAllMutation = useMutation({
     mutationFn: () => deleteAllBuildingsRequest(token as string),
@@ -298,6 +316,39 @@ export function BuildingsListPage() {
     mutationFn: ({ buildingId, localId, payload }: { buildingId: number; localId: number; payload: UpdateLocalPayload }) =>
       updateLocalRequest(token as string, buildingId, localId, payload),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] }); setEditMode(false); },
+  });
+
+  const reclassifySiteMutation = useMutation({
+    mutationFn: ({ siteId, payload }: { siteId: number; payload: ReclassifyPatrimonyPayload }) =>
+      reclassifySiteRequest(token as string, siteId, payload),
+    onSuccess: (result) => {
+      refreshPatrimonyQueries();
+      setEditMode(false);
+      selectReclassifiedNode(result);
+    },
+    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Reclassement impossible."),
+  });
+
+  const reclassifyBuildingMutation = useMutation({
+    mutationFn: ({ buildingId, payload }: { buildingId: number; payload: ReclassifyPatrimonyPayload }) =>
+      reclassifyBuildingRequest(token as string, buildingId, payload),
+    onSuccess: (result) => {
+      refreshPatrimonyQueries();
+      setEditMode(false);
+      selectReclassifiedNode(result);
+    },
+    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Reclassement impossible."),
+  });
+
+  const reclassifyLocalMutation = useMutation({
+    mutationFn: ({ buildingId, localId, payload }: { buildingId: number; localId: number; payload: ReclassifyPatrimonyPayload }) =>
+      reclassifyLocalRequest(token as string, buildingId, localId, payload),
+    onSuccess: (result) => {
+      refreshPatrimonyQueries();
+      setEditMode(false);
+      selectReclassifiedNode(result);
+    },
+    onError: (err: unknown) => alert(err instanceof Error ? err.message : "Reclassement impossible."),
   });
 
   const createSiteMutation = useMutation({
@@ -649,8 +700,12 @@ export function BuildingsListPage() {
             <PatrimonyDetailPanel
               selectedSite={selectedSite}
               selectedBuilding={selectedBuilding}
+              selectedBuildingParentSite={selectedBuildingParentSite}
               selectedLocal={selectedLocal}
               selectedLocalParent={selectedLocalParent}
+              selectedLocalParentSite={selectedLocalParentSite}
+              sites={sites}
+              buildings={buildings}
               siteBuildings={selectedSite ? (buildingsBySiteId.get(selectedSite.id) ?? []) : []}
               buildingLocals={selectedBuilding ? (localsByBuildingId.get(selectedBuilding.id) ?? []) : []}
               editMode={editMode}
@@ -658,7 +713,11 @@ export function BuildingsListPage() {
               onSaveSite={(payload) => selectedSite && updateSiteMutation.mutate({ siteId: selectedSite.id, payload })}
               onSaveBuilding={(payload) => selectedBuilding && updateBuildingMutation.mutate({ buildingId: selectedBuilding.id, payload })}
               onSaveLocal={(payload) => selectedLocal && updateLocalMutation.mutate({ buildingId: selectedLocal.building_id, localId: selectedLocal.id, payload })}
+              onReclassifySite={(payload) => selectedSite && reclassifySiteMutation.mutate({ siteId: selectedSite.id, payload })}
+              onReclassifyBuilding={(payload) => selectedBuilding && reclassifyBuildingMutation.mutate({ buildingId: selectedBuilding.id, payload })}
+              onReclassifyLocal={(payload) => selectedLocal && reclassifyLocalMutation.mutate({ buildingId: selectedLocal.building_id, localId: selectedLocal.id, payload })}
               savePending={updateSiteMutation.isPending || updateBuildingMutation.isPending || updateLocalMutation.isPending}
+              reclassifyPending={reclassifySiteMutation.isPending || reclassifyBuildingMutation.isPending || reclassifyLocalMutation.isPending}
               onDeleteSite={(id) => { if (window.confirm("Supprimer ce site ? Les bâtiments rattachés seront détachés (non supprimés).")) deleteSiteMutation.mutate(id); }}
               onDeleteBuilding={(id) => { if (window.confirm("Supprimer ce bâtiment et tous ses locaux ?")) deleteBuildingMutation.mutate(id); }}
               onDeleteLocal={(buildingId, localId) => { if (window.confirm("Supprimer ce local ?")) deleteLocalMutation.mutate({ buildingId, localId }); }}
@@ -807,8 +866,12 @@ function CreateSection({
 type DetailPanelProps = {
   selectedSite: Site | null;
   selectedBuilding: Building | null;
+  selectedBuildingParentSite: Site | null;
   selectedLocal: Local | null;
   selectedLocalParent: Building | null;
+  selectedLocalParentSite: Site | null;
+  sites: Site[];
+  buildings: Building[];
   siteBuildings: Building[];
   buildingLocals: Local[];
   editMode: boolean;
@@ -816,7 +879,11 @@ type DetailPanelProps = {
   onSaveSite: (p: UpdateSitePayload) => void;
   onSaveBuilding: (p: UpdateBuildingPayload) => void;
   onSaveLocal: (p: UpdateLocalPayload) => void;
+  onReclassifySite: (p: ReclassifyPatrimonyPayload) => void;
+  onReclassifyBuilding: (p: ReclassifyPatrimonyPayload) => void;
+  onReclassifyLocal: (p: ReclassifyPatrimonyPayload) => void;
   savePending: boolean;
+  reclassifyPending: boolean;
   onDeleteSite: (id: number) => void;
   onDeleteBuilding: (id: number) => void;
   onDeleteLocal: (buildingId: number, localId: number) => void;
@@ -851,10 +918,14 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         key={`site-${selectedSite.id}`}
         site={selectedSite}
         childBuildings={props.siteBuildings}
+        sites={props.sites}
+        buildings={props.buildings}
         editMode={props.editMode}
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveSite}
+        onReclassify={props.onReclassifySite}
         savePending={props.savePending}
+        reclassifyPending={props.reclassifyPending}
         onDelete={() => onDeleteSite(selectedSite.id)}
         deletePending={deletePending}
       />
@@ -866,11 +937,16 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
       <BuildingDetail
         key={`building-${selectedBuilding.id}`}
         building={selectedBuilding}
+        parentSite={props.selectedBuildingParentSite}
+        sites={props.sites}
+        buildings={props.buildings}
         childLocals={props.buildingLocals}
         editMode={props.editMode}
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveBuilding}
+        onReclassify={props.onReclassifyBuilding}
         savePending={props.savePending}
+        reclassifyPending={props.reclassifyPending}
         onDelete={() => onDeleteBuilding(selectedBuilding.id)}
         deletePending={deletePending}
         attachMode={props.attachMode}
@@ -891,10 +967,15 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
         key={`local-${selectedLocal.id}`}
         local={selectedLocal}
         parent={selectedLocalParent}
+        parentSite={props.selectedLocalParentSite}
+        sites={props.sites}
+        buildings={props.buildings}
         editMode={props.editMode}
         onToggleEdit={props.onToggleEdit}
         onSave={props.onSaveLocal}
+        onReclassify={props.onReclassifyLocal}
         savePending={props.savePending}
+        reclassifyPending={props.reclassifyPending}
         onDelete={() => onDeleteLocal(selectedLocal.building_id, selectedLocal.id)}
         deletePending={deletePending}
       />
@@ -908,9 +989,99 @@ function PatrimonyDetailPanel(props: DetailPanelProps) {
 // Détail Site
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending }: {
-  site: Site; childBuildings: Building[]; editMode: boolean;
-  onToggleEdit: () => void; onSave: (p: UpdateSitePayload) => void; savePending: boolean;
+function ReclassifyControls({
+  currentType,
+  currentName,
+  sites,
+  buildings,
+  currentBuildingId,
+  defaultSiteId,
+  defaultBuildingId,
+  pending,
+  onReclassify,
+}: {
+  currentType: PatrimonyNodeType;
+  currentName: string;
+  sites: Site[];
+  buildings: Building[];
+  currentBuildingId?: number | null;
+  defaultSiteId?: number | null;
+  defaultBuildingId?: number | null;
+  pending: boolean;
+  onReclassify: (p: ReclassifyPatrimonyPayload) => void;
+}) {
+  const [targetType, setTargetType] = useState<PatrimonyNodeType>(currentType);
+  const [name, setName] = useState(currentName);
+  const [targetSiteId, setTargetSiteId] = useState<number | null>(defaultSiteId ?? null);
+  const [targetBuildingId, setTargetBuildingId] = useState<number | null>(defaultBuildingId ?? null);
+  const eligibleBuildings = buildings.filter((building) => building.id !== currentBuildingId);
+  const disabled = pending || targetType === currentType || (targetType === "local" && !targetBuildingId);
+
+  return (
+    <div className="section-block patrimony-reclassify-block">
+      <div className="section-heading">
+        <h4>Reclasser l'entite</h4>
+        <p>Transforme l'entite selectionnee en une autre categorie quand elle a ete importee au mauvais niveau.</p>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Nouvelle categorie</span>
+          <select value={targetType} onChange={(e) => setTargetType(e.target.value as PatrimonyNodeType)}>
+            <option value="site">Site</option>
+            <option value="building">Batiment</option>
+            <option value="local">Local</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Nom apres reclassement</span>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        {targetType === "building" && (
+          <label className="field">
+            <span>Site parent</span>
+            <select value={targetSiteId ?? ""} onChange={(e) => setTargetSiteId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Sans site</option>
+              {sites.map((site) => <option key={site.id} value={site.id}>{site.nom_site}</option>)}
+            </select>
+          </label>
+        )}
+        {targetType === "local" && (
+          <label className="field">
+            <span>Batiment parent *</span>
+            <select value={targetBuildingId ?? ""} onChange={(e) => setTargetBuildingId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Choisir un batiment</option>
+              {eligibleBuildings.map((building) => (
+                <option key={building.id} value={building.id}>{building.nom_batiment || `Batiment #${building.id}`}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      <div className="form-actions">
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={disabled}
+          onClick={() => {
+            if (!window.confirm("Confirmer le reclassement ? Cette action change la categorie de l'entite.")) return;
+            onReclassify({
+              target_type: targetType,
+              target_site_id: targetSiteId,
+              target_building_id: targetBuildingId,
+              name: name || null,
+            });
+          }}
+        >
+          {pending ? "Reclassement..." : "Reclasser"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SiteDetail({ site, childBuildings, sites, buildings, editMode, onToggleEdit, onSave, onReclassify, savePending, reclassifyPending, onDelete, deletePending }: {
+  site: Site; childBuildings: Building[]; sites: Site[]; buildings: Building[]; editMode: boolean;
+  onToggleEdit: () => void; onSave: (p: UpdateSitePayload) => void; onReclassify: (p: ReclassifyPatrimonyPayload) => void; savePending: boolean; reclassifyPending: boolean;
   onDelete: () => void; deletePending: boolean;
 }) {
   const [nomSite, setNomSite] = useState(site.nom_site);
@@ -951,6 +1122,14 @@ function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, save
               </ul>
             </div>
           )}
+          <ReclassifyControls
+            currentType="site"
+            currentName={site.nom_site}
+            sites={sites.filter((candidate) => candidate.id !== site.id)}
+            buildings={buildings}
+            pending={reclassifyPending}
+            onReclassify={onReclassify}
+          />
         </>
       )}
     </div>
@@ -962,13 +1141,13 @@ function SiteDetail({ site, childBuildings, editMode, onToggleEdit, onSave, save
 // ─────────────────────────────────────────────────────────────────────────────
 
 function BuildingDetail({
-  building, childLocals, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending,
+  building, parentSite, sites, buildings, childLocals, editMode, onToggleEdit, onSave, onReclassify, savePending, reclassifyPending, onDelete, deletePending,
   attachMode, attachSelectedFeatures, onEnterAttach, onExitAttach, onAttachSuccess,
   nearbyDgfipData, nearbyDgfipLoading, freeAddressLookupData,
 }: {
-  building: Building; childLocals: Local[];
+  building: Building; parentSite: Site | null; sites: Site[]; buildings: Building[]; childLocals: Local[];
   editMode: boolean; onToggleEdit: () => void;
-  onSave: (p: UpdateBuildingPayload) => void; savePending: boolean;
+  onSave: (p: UpdateBuildingPayload) => void; onReclassify: (p: ReclassifyPatrimonyPayload) => void; savePending: boolean; reclassifyPending: boolean;
   onDelete: () => void; deletePending: boolean;
   attachMode: AttachMode;
   attachSelectedFeatures: GeoJsonFeature[];
@@ -986,6 +1165,7 @@ function BuildingDetail({
   const [adresseReconstituee, setAdresseReconstituee] = useState(building.adresse_reconstituee ?? "");
   const [nomCommune, setNomCommune] = useState(building.nom_commune);
   const [codePostal, setCodePostal] = useState(building.code_postal ?? "");
+  const [siteId, setSiteId] = useState<number | null>(building.site_id ?? null);
 
   // Compteurs rattachés
   const meterLinksQuery = useQuery({
@@ -1155,9 +1335,16 @@ function BuildingDetail({
 
       {/* ── Formulaire d'édition ── */}
       {editMode ? (
-        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_batiment: nomBatiment || null, adresse_reconstituee: adresseReconstituee || null, nom_commune: nomCommune, code_postal: codePostal || null }); }}>
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); onSave({ nom_batiment: nomBatiment || null, adresse_reconstituee: adresseReconstituee || null, nom_commune: nomCommune, code_postal: codePostal || null, site_id: siteId }); }}>
           <div className="form-grid">
             <label className="field"><span>Nom du bâtiment</span><input type="text" value={nomBatiment} onChange={(e) => setNomBatiment(e.target.value)} /></label>
+            <label className="field">
+              <span>Site parent</span>
+              <select value={siteId ?? ""} onChange={(e) => setSiteId(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Sans site</option>
+                {sites.map((site) => <option key={site.id} value={site.id}>{site.nom_site}</option>)}
+              </select>
+            </label>
             <label className="field"><span>Commune</span><input type="text" value={nomCommune} onChange={(e) => setNomCommune(e.target.value)} required /></label>
             <label className="field"><span>Code postal</span><input type="text" value={codePostal} onChange={(e) => setCodePostal(e.target.value)} maxLength={10} /></label>
             <label className="field"><span>Adresse reconstituée</span><input type="text" value={adresseReconstituee} onChange={(e) => setAdresseReconstituee(e.target.value)} /></label>
@@ -1169,6 +1356,7 @@ function BuildingDetail({
           {/* ── Fiche complète ── */}
           <div className="detail-grid">
             <div className="detail-card"><span>Nom</span><strong>{building.nom_batiment || "—"}</strong></div>
+            <div className="detail-card"><span>Site parent</span><strong>{parentSite?.nom_site ?? "Sans site"}</strong></div>
             <div className="detail-card"><span>Adresse</span><strong>{buildAddressLine(building)}</strong></div>
             <div className="detail-card"><span>Commune</span><strong>{building.nom_commune}</strong></div>
             <div className="detail-card"><span>Code postal</span><strong>{building.code_postal || "—"}</strong></div>
@@ -1267,6 +1455,16 @@ function BuildingDetail({
               </ul>
             </div>
           )}
+          <ReclassifyControls
+            currentType="building"
+            currentName={building.nom_batiment || `Batiment #${building.id}`}
+            sites={sites}
+            buildings={buildings}
+            currentBuildingId={building.id}
+            defaultSiteId={building.site_id}
+            pending={reclassifyPending}
+            onReclassify={onReclassify}
+          />
 
         </>
       )}
@@ -1278,9 +1476,9 @@ function BuildingDetail({
 // Détail Local
 // ─────────────────────────────────────────────────────────────────────────────
 
-function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePending, onDelete, deletePending }: {
-  local: Local; parent: Building; editMode: boolean;
-  onToggleEdit: () => void; onSave: (p: UpdateLocalPayload) => void; savePending: boolean;
+function LocalDetail({ local, parent, parentSite, sites, buildings, editMode, onToggleEdit, onSave, onReclassify, savePending, reclassifyPending, onDelete, deletePending }: {
+  local: Local; parent: Building; parentSite: Site | null; sites: Site[]; buildings: Building[]; editMode: boolean;
+  onToggleEdit: () => void; onSave: (p: UpdateLocalPayload) => void; onReclassify: (p: ReclassifyPatrimonyPayload) => void; savePending: boolean; reclassifyPending: boolean;
   onDelete: () => void; deletePending: boolean;
 }) {
   const [nomLocal, setNomLocal] = useState(local.nom_local);
@@ -1289,13 +1487,14 @@ function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePendin
   const [surfaceM2, setSurfaceM2] = useState(local.surface_m2?.toString() ?? "");
   const [usage, setUsage] = useState(local.usage ?? "");
   const [statutOccupation, setStatutOccupation] = useState(local.statut_occupation ?? "");
+  const [buildingId, setBuildingId] = useState(local.building_id);
 
   return (
     <div className="section-block">
       <div className="panel-header">
         <div className="section-heading">
           <h3>◇ Local sélectionné</h3>
-          <p>Bâtiment parent : <strong>{parent.nom_batiment || `#${parent.id}`}</strong></p>
+          <p>Site : <strong>{parentSite?.nom_site ?? "Sans site"}</strong> · Bâtiment : <strong>{parent.nom_batiment || `#${parent.id}`}</strong></p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" className="secondary-button" onClick={onToggleEdit}>{editMode ? "Annuler" : "Modifier"}</button>
@@ -1303,8 +1502,14 @@ function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePendin
         </div>
       </div>
       {editMode ? (
-        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); const s = surfaceM2.trim() ? Number(surfaceM2.replace(",", ".")) : null; onSave({ nom_local: nomLocal, type_local: typeLocal, niveau: niveau || null, surface_m2: Number.isFinite(s as number) ? (s as number) : null, usage: usage || null, statut_occupation: statutOccupation || null }); }}>
+        <form className="form" onSubmit={(e: FormEvent) => { e.preventDefault(); const s = surfaceM2.trim() ? Number(surfaceM2.replace(",", ".")) : null; onSave({ building_id: buildingId, nom_local: nomLocal, type_local: typeLocal, niveau: niveau || null, surface_m2: Number.isFinite(s as number) ? (s as number) : null, usage: usage || null, statut_occupation: statutOccupation || null }); }}>
           <div className="form-grid">
+            <label className="field">
+              <span>Bâtiment parent</span>
+              <select value={buildingId} onChange={(e) => setBuildingId(Number(e.target.value))}>
+                {buildings.map((building) => <option key={building.id} value={building.id}>{building.nom_batiment || `Batiment #${building.id}`}</option>)}
+              </select>
+            </label>
             <label className="field"><span>Nom</span><input type="text" value={nomLocal} onChange={(e) => setNomLocal(e.target.value)} required /></label>
             <label className="field"><span>Type</span><input type="text" value={typeLocal} onChange={(e) => setTypeLocal(e.target.value)} required /></label>
             <label className="field"><span>Niveau</span><input type="text" value={niveau} onChange={(e) => setNiveau(e.target.value)} /></label>
@@ -1315,8 +1520,11 @@ function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePendin
           <div className="form-actions"><button type="submit" disabled={savePending}>{savePending ? "Enregistrement..." : "Enregistrer"}</button></div>
         </form>
       ) : (
+        <>
         <div className="detail-grid">
           <div className="detail-card"><span>Nom</span><strong>{local.nom_local}</strong></div>
+          <div className="detail-card"><span>Site parent</span><strong>{parentSite?.nom_site ?? "Sans site"}</strong></div>
+          <div className="detail-card"><span>Bâtiment parent</span><strong>{parent.nom_batiment || `Batiment #${parent.id}`}</strong></div>
           <div className="detail-card"><span>Type</span><strong>{local.type_local}</strong></div>
           <div className="detail-card"><span>Niveau</span><strong>{local.niveau || "—"}</strong></div>
           <div className="detail-card"><span>Surface</span><strong>{local.surface_m2 ? `${local.surface_m2} m²` : "—"}</strong></div>
@@ -1324,6 +1532,17 @@ function LocalDetail({ local, parent, editMode, onToggleEdit, onSave, savePendin
           <div className="detail-card"><span>Statut occupation</span><strong>{local.statut_occupation || "—"}</strong></div>
           {local.commentaire && <div className="detail-card" style={{ gridColumn: "1/-1" }}><span>Commentaire</span><strong>{local.commentaire}</strong></div>}
         </div>
+        <ReclassifyControls
+          currentType="local"
+          currentName={local.nom_local}
+          sites={sites}
+          buildings={buildings}
+          defaultSiteId={parent.site_id}
+          defaultBuildingId={parent.id}
+          pending={reclassifyPending}
+          onReclassify={onReclassify}
+        />
+        </>
       )}
     </div>
   );

@@ -22,6 +22,8 @@ from app.schemas.building import (
     LocalUpdate,
     NearbyDgfipResult,
     NearbyDgfipRow,
+    PatrimonyReclassifyPayload,
+    PatrimonyReclassifyResult,
     SiteCreate,
     SiteRead,
     SiteUpdate,
@@ -55,6 +57,9 @@ from app.services.buildings import (
     list_building_meter_links,
     list_buildings,
     list_sites,
+    reclassify_building,
+    reclassify_local,
+    reclassify_site,
     update_site,
     update_building,
     update_local,
@@ -253,6 +258,17 @@ def remove_site(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/sites/{site_id}/reclassify", response_model=PatrimonyReclassifyResult)
+def post_site_reclassify(
+    site_id: int,
+    payload: PatrimonyReclassifyPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PatrimonyReclassifyResult:
+    site = get_site_or_404(db, site_id, current_user)
+    return reclassify_site(db, site, payload, current_user)
+
+
 @router.post("", response_model=BuildingRead, status_code=status.HTTP_201_CREATED)
 def post_building(
     payload: BuildingCreate,
@@ -294,6 +310,17 @@ def remove_building(
     building = get_building_or_404(db, building_id, current_user)
     delete_building(db, building)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{building_id}/reclassify", response_model=PatrimonyReclassifyResult)
+def post_building_reclassify(
+    building_id: int,
+    payload: PatrimonyReclassifyPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PatrimonyReclassifyResult:
+    building = get_building_or_404(db, building_id, current_user)
+    return reclassify_building(db, building, payload, current_user)
 
 
 @router.post("/{building_id}/geo-attachment", response_model=BuildingRead)
@@ -417,6 +444,19 @@ def remove_local(
     local = get_local_or_404(db, building, local_id)
     delete_local(db, local)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{building_id}/locals/{local_id}/reclassify", response_model=PatrimonyReclassifyResult)
+def post_local_reclassify(
+    building_id: int,
+    local_id: int,
+    payload: PatrimonyReclassifyPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PatrimonyReclassifyResult:
+    building = get_building_or_404(db, building_id, current_user)
+    local = get_local_or_404(db, building, local_id)
+    return reclassify_local(db, local, payload, current_user)
 
 
 @router.get("/{building_id}/meters", response_model=list[BuildingMeterLinkRead])

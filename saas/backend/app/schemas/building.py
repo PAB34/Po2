@@ -339,6 +339,18 @@ class LocalRead(BaseModel):
     updated_at: datetime
 
 
+class PatrimonyReclassifyPayload(BaseModel):
+    target_type: str = Field(pattern="^(site|building|local)$")
+    target_site_id: int | None = None
+    target_building_id: int | None = None
+    name: str | None = Field(default=None, max_length=255)
+
+
+class PatrimonyReclassifyResult(BaseModel):
+    entity_type: str
+    entity_id: int
+
+
 class BuildingMeterLinkCreate(BaseModel):
     fluid: str = Field(min_length=1, max_length=20)
     meter_identifier: str = Field(min_length=1, max_length=80)
