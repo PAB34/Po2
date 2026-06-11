@@ -251,6 +251,60 @@ async function fetchDpgfP1Imports(token: string): Promise<DpgfP1Import[]> {
   return resp.json() as Promise<DpgfP1Import[]>;
 }
 
+// ── État en vigueur + journal du marché ──────────────────────────────────────
+
+type ActiveSummary = {
+  has_data: boolean;
+  lot: number;
+  ref_year: number;
+  import_id: number | null;
+  filename: string | null;
+  import_date: string | null;
+  nb_sites: number | null;
+  nb_ape: number | null;
+  p1_gaz_ref_year_ht: number | null;
+  p1_elec_ref_year_ht: number | null;
+  p2_ref_year_ht: number | null;
+  p3_ref_year_ht: number | null;
+  marche_total_ht: number | null;
+};
+
+async function fetchActiveSummary(token: string, lot: number): Promise<ActiveSummary> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/active-summary?lot=${lot}`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<ActiveSummary>;
+}
+
+async function fetchAllImports(token: string): Promise<ImportBatch[]> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/all`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<ImportBatch[]>;
+}
+
+async function fetchAllDpgfImports(token: string): Promise<DpgfP1Import[]> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/imports/all`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<DpgfP1Import[]>;
+}
+
+// Entrée unifiée du journal (maître ou DPGF), triée par date.
+type JournalEntry = {
+  key: string;
+  kind: "base" | "avenant" | "dpgf";
+  lot: number;
+  title: string;
+  filename: string;
+  date: string;
+  is_active: boolean;
+  detail: string;
+};
+
 async function syncP1Reference(token: string, importId: number): Promise<SyncP1Result> {
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/sync-p1-reference`, {
     method: "POST",
@@ -290,6 +344,10 @@ export function CpeDalkiaImportPage() {
   const [syncP1Result, setSyncP1Result] = useState<{ id: number; res: SyncP1Result } | null>(null);
   const [sitesMsg, setSitesMsg] = useState<string | null>(null);
 
+  // Dossier de marché : lot affiché + filtre du journal
+  const [dossierLot, setDossierLot] = useState<1 | 2>(1);
+  const [journalFilter, setJournalFilter] = useState<"tous" | "avenant" | "dpgf">("tous");
+
   // DPGF P1 révisé (import séparé)
   const dpgfFileInputRef = useRef<HTMLInputElement | null>(null);
   const [dpgfFile, setDpgfFile] = useState<File | null>(null);
@@ -319,6 +377,24 @@ export function CpeDalkiaImportPage() {
     enabled: Boolean(token),
   });
 
+  const summaryQuery = useQuery({
+    queryKey: ["cpe-dalkia-active-summary", token, dossierLot],
+    queryFn: () => fetchActiveSummary(token as string, dossierLot),
+    enabled: Boolean(token),
+  });
+
+  const allImportsQuery = useQuery({
+    queryKey: ["cpe-dalkia-imports-all", token],
+    queryFn: () => fetchAllImports(token as string),
+    enabled: Boolean(token),
+  });
+
+  const allDpgfQuery = useQuery({
+    queryKey: ["cpe-dpgf-p1-imports-all", token],
+    queryFn: () => fetchAllDpgfImports(token as string),
+    enabled: Boolean(token),
+  });
+
   const dpgfImportsQuery = useQuery({
     queryKey: ["cpe-dpgf-p1-imports", token],
     queryFn: () => fetchDpgfP1Imports(token as string),
@@ -341,6 +417,7 @@ export function CpeDalkiaImportPage() {
     mutationFn: () => confirmDpgfP1(token as string, dpgfFile as File, dpgfLot),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cpe-dpgf-p1-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-dpgf-p1-imports-all"] });
       setDpgfPreview(null);
       setDpgfFile(null);
       if (dpgfFileInputRef.current) dpgfFileInputRef.current.value = "";
@@ -372,6 +449,8 @@ export function CpeDalkiaImportPage() {
     mutationFn: () => confirmDalkiaImport(token as string, selectedFile as File, lot),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cpe-dalkia-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-dalkia-imports-all"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-dalkia-active-summary"] });
       setPreview(null);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -391,8 +470,6 @@ export function CpeDalkiaImportPage() {
   }
 
   const imports = importsQuery.data ?? [];
-  const activeL1 = imports.find((i) => i.lot === 1 && i.is_active);
-  const activeL2 = imports.find((i) => i.lot === 2 && i.is_active);
 
   return (
     <section className="panel stack-lg">
@@ -400,11 +477,11 @@ export function CpeDalkiaImportPage() {
       <div className="panel-header">
         <div>
           <p className="eyebrow">CPE DALKIA</p>
-          <h2>Import du référentiel contractuel</h2>
+          <h2>Marché CPE DALKIA — dossier contractuel</h2>
           <p>
-            Importe les fichiers DALKIA (Lot 1 / Lot 2) pour mettre à jour les données de
-            référence : P2, P3, cibles GAZ/ELEC, P1 fourniture gaz, travaux APE. Ces données
-            servent de base de contrôle des factures.
+            L'état du marché en vigueur, le journal de tous les actes (offre finale, avenants,
+            DPGF P1), et les imports. Ces données servent de référence aux contrôles, au suivi
+            marché et à la performance.
           </p>
         </div>
         <Link className="secondary-link" to="/cpe">
@@ -412,25 +489,166 @@ export function CpeDalkiaImportPage() {
         </Link>
       </div>
 
-      {/* ── Statut des imports actifs ── */}
-      <div className="detail-grid">
-        <div className="detail-card">
-          <span>Référentiel actif — Lot 1 (écoles / sport)</span>
-          <strong>
-            {activeL1
-              ? `${activeL1.nb_sites} sites · importé le ${new Date(activeL1.import_date).toLocaleDateString("fr-FR")}`
-              : "Aucun import"}
-          </strong>
-        </div>
-        <div className="detail-card">
-          <span>Référentiel actif — Lot 2 (piscines)</span>
-          <strong>
-            {activeL2
-              ? `${activeL2.nb_sites} sites · importé le ${new Date(activeL2.import_date).toLocaleDateString("fr-FR")}`
-              : "Aucun import"}
-          </strong>
-        </div>
-      </div>
+      {/* ── 1 · État du marché en vigueur ── */}
+      {(() => {
+        const s = summaryQuery.data;
+        const lotLabel = dossierLot === 1 ? "Lot 1 — bâtiments" : "Lot 2 — piscines";
+        return (
+          <div className="section-block">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+              <h3 style={{ margin: 0 }}>1 · État du marché en vigueur</h3>
+              <div style={{ display: "inline-flex", border: "1px solid #d1d5db", borderRadius: 8, overflow: "hidden" }}>
+                {([1, 2] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => setDossierLot(l)}
+                    style={{
+                      padding: "5px 14px", fontSize: 13, border: "none", cursor: "pointer",
+                      background: dossierLot === l ? "#2563eb" : "white",
+                      color: dossierLot === l ? "white" : "#374151",
+                    }}
+                  >
+                    Lot {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {!s || !s.has_data ? (
+              <p style={{ color: "#9ca3af", fontSize: 13 }}>
+                Aucun référentiel actif pour le {lotLabel}. Importe le fichier maître dans le journal ci-dessous.
+              </p>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6b7280" }}>
+                  {lotLabel} · {s.filename} · en vigueur depuis le{" "}
+                  {s.import_date ? new Date(s.import_date).toLocaleDateString("fr-FR") : "—"} · lu par les contrôles, le suivi marché et la performance.
+                </p>
+                <div className="detail-grid">
+                  <div className="detail-card"><span>Sites</span><strong>{s.nb_sites ?? "—"}</strong></div>
+                  <div className="detail-card"><span>Marché 8 ans</span><strong>{formatEur(s.marche_total_ht)}</strong></div>
+                  <div className="detail-card"><span>P1 gaz {s.ref_year}</span><strong>{formatEur(s.p1_gaz_ref_year_ht)}</strong></div>
+                  {s.p1_elec_ref_year_ht ? (
+                    <div className="detail-card"><span>P1 élec {s.ref_year}</span><strong>{formatEur(s.p1_elec_ref_year_ht)}</strong></div>
+                  ) : null}
+                  <div className="detail-card"><span>P2 {s.ref_year}</span><strong>{formatEur(s.p2_ref_year_ht)}</strong></div>
+                  <div className="detail-card"><span>P3 {s.ref_year}</span><strong>{formatEur(s.p3_ref_year_ht)}</strong></div>
+                  <div className="detail-card"><span>Travaux APE</span><strong>{s.nb_ape ?? "—"}</strong></div>
+                </div>
+                {s.import_id ? (
+                  <div style={{ marginTop: 12 }}>
+                    <button type="button" className="secondary-button" onClick={() => setViewImportId(s.import_id)}>
+                      Explorer les sites du référentiel
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── 2 · Journal du marché ── */}
+      {(() => {
+        const masterAll = allImportsQuery.data ?? [];
+        const dpgfAll = allDpgfQuery.data ?? [];
+        const lotMasters = masterAll
+          .filter((i) => i.lot === dossierLot)
+          .sort((a, b) => new Date(a.import_date).getTime() - new Date(b.import_date).getTime());
+        const baseId = lotMasters[0]?.id;
+        let entries: JournalEntry[] = [
+          ...lotMasters.map((i) => ({
+            key: `m${i.id}`,
+            kind: (i.id === baseId ? "base" : "avenant") as JournalEntry["kind"],
+            lot: i.lot,
+            title: i.id === baseId ? "Offre finale (base)" : "Avenant — mise à jour du marché",
+            filename: i.filename,
+            date: i.import_date,
+            is_active: i.is_active,
+            detail: `${i.nb_sites} sites · P2/P3 ${i.nb_p2p3_rows} · APE ${i.nb_ape_rows}`,
+          })),
+          ...dpgfAll
+            .filter((i) => i.lot === dossierLot)
+            .map((i) => ({
+              key: `d${i.id}`,
+              kind: "dpgf" as JournalEntry["kind"],
+              lot: i.lot,
+              title: "DPGF P1 — révision de prix",
+              filename: i.filename,
+              date: i.import_date,
+              is_active: i.is_active,
+              detail: `${i.nb_lines} lignes (3 niveaux)`,
+            })),
+        ];
+        entries = entries
+          .filter((e) =>
+            journalFilter === "tous"
+              ? true
+              : journalFilter === "avenant"
+                ? e.kind === "base" || e.kind === "avenant"
+                : e.kind === "dpgf",
+          )
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        const KIND_BADGE: Record<JournalEntry["kind"], { label: string; color: string; bg: string }> = {
+          base: { label: "base", color: "#6b7280", bg: "#f3f4f6" },
+          avenant: { label: "avenant", color: "#92400e", bg: "#fef3c7" },
+          dpgf: { label: "DPGF", color: "#1d4ed8", bg: "#eff6ff" },
+        };
+
+        return (
+          <div className="section-block">
+            <h3 style={{ margin: "0 0 4px" }}>2 · Journal du marché</h3>
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7280" }}>
+              Tous les actes contractuels (Lot {dossierLot}), du plus récent au plus ancien. Les versions remplacées sont conservées pour l'audit.
+            </p>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+              {(["tous", "avenant", "dpgf"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setJournalFilter(f)}
+                  style={{
+                    padding: "4px 12px", fontSize: 12, borderRadius: 8, cursor: "pointer",
+                    border: journalFilter === f ? "none" : "1px solid #e5e7eb",
+                    background: journalFilter === f ? "#2563eb" : "white",
+                    color: journalFilter === f ? "white" : "#6b7280",
+                  }}
+                >
+                  {f === "tous" ? "Tous" : f === "avenant" ? "Avenants & base" : "DPGF P1"}
+                </button>
+              ))}
+            </div>
+            {entries.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun acte pour ce filtre. Importe un fichier ci-dessous.</p>
+            ) : (
+              <div>
+                {entries.map((e) => {
+                  const badge = KIND_BADGE[e.kind];
+                  return (
+                    <div key={e.key} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid #f3f4f6", opacity: e.is_active || e.kind === "base" ? 1 : 0.6 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14, fontWeight: 600 }}>{e.title}</span>
+                          <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
+                          {e.is_active ? (
+                            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#dcfce7", color: "#15803d" }}>en vigueur</span>
+                          ) : e.kind !== "base" ? (
+                            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>remplacé (conservé)</span>
+                          ) : null}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
+                          {new Date(e.date).toLocaleDateString("fr-FR")} · {e.filename} · {e.detail}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Action : initialiser les sites CPE depuis le référentiel ── */}
       <div className="section-block" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -448,14 +666,14 @@ export function CpeDalkiaImportPage() {
         </span>
       </div>
 
-      {/* ── Formulaire d'import ── */}
+      {/* ── Formulaire d'import (fichier maître) ── */}
       <div className="section-block">
         <div className="section-heading">
-          <h3>1. Sélectionner le fichier</h3>
+          <h3>Importer un fichier maître (offre finale / avenant)</h3>
           <p>
-            Fichier Excel DALKIA (format .xlsx ou .xlsm) — les deux onglets principaux sont
-            parsés : Annexe 3.1 P2, Annexe 4 P3, Annexe 5.1 Cibles GAZ, Annexe 5.2 Cibles ELEC,
-            Annexe 6 P1 GAZ, Annexe 2bis Travaux APE.
+            Fichier Excel DALKIA complet (.xlsx/.xlsm) — remplace le référentiel du lot et devient
+            l'état en vigueur (l'ancienne version est conservée au journal). Onglets parsés : P2/P3,
+            cibles GAZ/ELEC, P1 gaz, P1 élec (Lot 2), travaux APE, RECAP.
           </p>
         </div>
         <form
