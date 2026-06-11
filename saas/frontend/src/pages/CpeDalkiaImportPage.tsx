@@ -413,6 +413,15 @@ const KIND_BADGE: Record<JournalEntry["kind"], { label: string; color: string; b
   dpgf: { label: "DPGF P1", color: "#1d4ed8", bg: "#eff6ff" },
 };
 
+const IMPORT_CARD: React.CSSProperties = {
+  border: "1px solid rgba(148, 163, 184, 0.2)",
+  background: "rgba(30, 41, 59, 0.55)",
+  borderRadius: 16,
+  padding: "20px 22px",
+  display: "flex",
+  flexDirection: "column",
+};
+
 function Chip({ text }: { text: string }) {
   return (
     <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#f3f4f6", color: "#374151" }}>
@@ -929,135 +938,106 @@ export function CpeDalkiaImportPage() {
       </div>
 
       {/* ── 3 · Ajouter un acte au marché (2 colonnes) ── */}
-      <h3 style={{ margin: "0 0 8px" }}>3 · Ajouter un acte au marché</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 16, alignItems: "start" }}>
+      <h3 style={{ margin: "0 0 4px" }}>3 · Ajouter un acte au marché</h3>
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: "#94a3b8" }}>
+        Importe un fichier, puis qualifie-le dans le journal (type, libellé, date d'effet).
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 18, alignItems: "stretch" }}>
       {/* ── Formulaire d'import (fichier maître) ── */}
-      <div className="section-block" style={{ marginTop: 0 }}>
-        <div className="section-heading">
-          <h3>Fichier maître (offre finale / avenant)</h3>
-          <p>
-            Fichier Excel DALKIA complet (.xlsx/.xlsm) — remplace le référentiel du lot et devient
-            l'état en vigueur (l'ancienne version est conservée au journal). Onglets parsés : P2/P3,
-            cibles GAZ/ELEC, P1 gaz, P1 élec (Lot 2), travaux APE, RECAP.
-          </p>
+      <div style={IMPORT_CARD}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: "rgba(99,102,241,0.18)", color: "#a5b4fc" }}>FICHIER MAÎTRE</span>
         </div>
+        <h3 style={{ margin: "0 0 6px", fontSize: 16 }}>Fichier complet du marché</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#94a3b8", lineHeight: 1.5 }}>
+          Offre finale, mise au point ou avenant (.xlsx/.xlsm). Remplace le référentiel du lot et devient l'état en vigueur ; l'ancienne version reste au journal.
+        </p>
         <form
-          className="form"
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             if (selectedFile) previewMutation.mutate();
           }}
+          style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: "auto" }}
         >
-          <div className="form-grid">
-            <label className="field">
-              <span>Lot</span>
-              <select value={lot} onChange={(e: ChangeEvent<HTMLSelectElement>) => setLot(Number(e.target.value) as 1 | 2)}>
-                <option value={1}>Lot 1 — Écoles, sport (L1)</option>
-                <option value={2}>Lot 2 — Piscines (L2)</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Fichier Excel DALKIA</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xlsm"
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  setSelectedFile(e.target.files?.[0] ?? null);
-                  setPreview(null);
-                  setPreviewError(null);
-                }}
-              />
-            </label>
-          </div>
-          {previewError ? <p className="error-text">{previewError}</p> : null}
+          <label className="field">
+            <span>Lot</span>
+            <select value={lot} onChange={(e: ChangeEvent<HTMLSelectElement>) => setLot(Number(e.target.value) as 1 | 2)}>
+              <option value={1}>Lot 1 — Écoles, sport</option>
+              <option value={2}>Lot 2 — Piscines</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Fichier Excel (.xlsx / .xlsm)</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xlsm"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setSelectedFile(e.target.files?.[0] ?? null);
+                setPreview(null);
+                setPreviewError(null);
+              }}
+            />
+          </label>
+          {previewError ? <p className="error-text" style={{ margin: 0 }}>{previewError}</p> : null}
           {confirmMutation.isSuccess ? (
-            <p className="success-text">
-              ✓ Référentiel Lot {lot} importé avec succès. Les données de contrôle sont mises à jour.
-            </p>
+            <p className="success-text" style={{ margin: 0 }}>✓ Référentiel Lot {lot} importé. Données de contrôle à jour.</p>
           ) : null}
-          <div className="form-actions">
-            <button type="submit" className="secondary-button" disabled={!selectedFile || previewMutation.isPending}>
-              {previewMutation.isPending ? "Analyse en cours..." : "2. Analyser le fichier"}
-            </button>
-          </div>
+          <button type="submit" className="primary-button" style={{ alignSelf: "flex-start" }} disabled={!selectedFile || previewMutation.isPending}>
+            {previewMutation.isPending ? "Analyse en cours…" : "Analyser le fichier"}
+          </button>
         </form>
       </div>
 
       {/* ── Import DPGF P1 révisé (livrable séparé après OS) ── */}
-      <div className="section-block" style={{ marginTop: 0 }}>
-        <div className="section-heading">
-          <h3>DPGF P1 révisé (après OS)</h3>
-          <p>
-            Chemin <strong>séparé</strong> du fichier maître. Quand DALKIA livre un{" "}
-            <code>P1 - DPGF LOT x …xlsx</code> suite à un OS impactant le prix gaz, importe-le ici :
-            seul le P1 révisé du lot est mis à jour (3 niveaux : contrat / Rév Temp / Rév T° &amp; prix).
-            Cela <strong>ne modifie pas</strong> le référentiel maître (P2/P3/APE/cibles/RECAP) ni le
-            « prévu P1 » du suivi marché (qui reste au niveau contrat).
-          </p>
+      <div style={IMPORT_CARD}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 999, background: "rgba(59,130,246,0.18)", color: "#93c5fd" }}>DPGF P1</span>
         </div>
-
-        {/* Statut des DPGF P1 actifs */}
-        <div className="detail-grid">
-          {[1, 2].map((l) => {
-            const active = (dpgfImportsQuery.data ?? []).find((i) => i.lot === l && i.is_active);
-            return (
-              <div className="detail-card" key={l}>
-                <span>DPGF P1 actif — Lot {l}</span>
-                <strong>
-                  {active
-                    ? `${active.nb_lines} lignes · ${active.filename} · ${new Date(active.import_date).toLocaleDateString("fr-FR")}`
-                    : "Aucun DPGF P1 importé"}
-                </strong>
-              </div>
-            );
-          })}
-        </div>
-
+        <h3 style={{ margin: "0 0 6px", fontSize: 16 }}>Révision de prix (après OS)</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "#94a3b8", lineHeight: 1.5 }}>
+          Livrable <strong>séparé</strong> reçu après un OS sur le prix gaz. Met à jour uniquement le P1 révisé du lot (3 niveaux). Ne touche pas le référentiel maître ni le « prévu P1 » du suivi marché.
+        </p>
         <form
-          className="form"
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             if (dpgfFile) dpgfPreviewMutation.mutate();
           }}
+          style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: "auto" }}
         >
-          <div className="form-grid">
-            <label className="field">
-              <span>Lot</span>
-              <select
-                value={dpgfLot}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                  setDpgfLot(Number(e.target.value) as 1 | 2);
-                  setDpgfPreview(null);
-                }}
-              >
-                <option value={1}>Lot 1 — Écoles, sport (L1)</option>
-                <option value={2}>Lot 2 — Piscines (L2)</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Fichier DPGF P1 (.xlsx)</span>
-              <input
-                ref={dpgfFileInputRef}
-                type="file"
-                accept=".xlsx,.xlsm"
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  setDpgfFile(e.target.files?.[0] ?? null);
-                  setDpgfPreview(null);
-                  setDpgfError(null);
-                }}
-              />
-            </label>
-          </div>
-          {dpgfError ? <p className="error-text">{dpgfError}</p> : null}
+          <label className="field">
+            <span>Lot</span>
+            <select
+              value={dpgfLot}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                setDpgfLot(Number(e.target.value) as 1 | 2);
+                setDpgfPreview(null);
+              }}
+            >
+              <option value={1}>Lot 1 — Écoles, sport</option>
+              <option value={2}>Lot 2 — Piscines</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Fichier DPGF P1 (.xlsx)</span>
+            <input
+              ref={dpgfFileInputRef}
+              type="file"
+              accept=".xlsx,.xlsm"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                setDpgfFile(e.target.files?.[0] ?? null);
+                setDpgfPreview(null);
+                setDpgfError(null);
+              }}
+            />
+          </label>
+          {dpgfError ? <p className="error-text" style={{ margin: 0 }}>{dpgfError}</p> : null}
           {dpgfConfirmMutation.isSuccess ? (
-            <p className="success-text">✓ DPGF P1 Lot {dpgfLot} importé. Le P1 révisé est mis à jour.</p>
+            <p className="success-text" style={{ margin: 0 }}>✓ DPGF P1 Lot {dpgfLot} importé. Le P1 révisé est mis à jour.</p>
           ) : null}
-          <div className="form-actions">
-            <button type="submit" className="secondary-button" disabled={!dpgfFile || dpgfPreviewMutation.isPending}>
-              {dpgfPreviewMutation.isPending ? "Analyse en cours..." : "Analyser le DPGF P1"}
-            </button>
-          </div>
+          <button type="submit" className="primary-button" style={{ alignSelf: "flex-start" }} disabled={!dpgfFile || dpgfPreviewMutation.isPending}>
+            {dpgfPreviewMutation.isPending ? "Analyse en cours…" : "Analyser le DPGF P1"}
+          </button>
         </form>
 
         {/* Aperçu : totaux par niveau × année */}
