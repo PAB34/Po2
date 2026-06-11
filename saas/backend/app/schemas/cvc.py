@@ -82,6 +82,7 @@ class CvcApplySiteMappingsResult(BaseModel):
 
 class CvcImportBatchSummary(BaseModel):
     import_batch: str
+    provider: str = "DALKIA"
     imported: int
     mapped_items: int
     reference_mapped_items: int
@@ -117,19 +118,28 @@ class CvcInventoryItemRead(BaseModel):
     building_id: int | None = None
     local_id: int | None = None
     equipment_ref_id: int | None = None
+    provider: str = "DALKIA"
     site_raw: str | None = None
     batiment: str | None = None
     niveau: str | None = None
     local_name: str | None = None
     designation: str
+    type_equipement: str | None = None
     statut: str | None = None
     etat_sante: str | None = None
     quantite_relevee: int | None = None
     famille: str | None = None
     marque: str | None = None
     modele: str | None = None
+    numero_serie: str | None = None
+    puissance: str | None = None
+    puissance_frigorifique: float | None = None
+    puissance_calorifique: float | None = None
+    capacite: float | None = None
     date_mis_en_service: int | None = None
     duree_vie_restante: float | None = None
+    duree_vie_restante_source: str | None = None
+    duree_vie_restante_calculee: float | None = None
     lifecycle_age_years: float | None = None
     lifecycle_age_source: str = "missing"
     lifecycle_age_label: str | None = None
@@ -159,6 +169,7 @@ class CvcImportResult(BaseModel):
     skipped: int
     errors: list[str]
     import_batch: str
+    provider: str = "DALKIA"
     sypemi_matched: int
     sypemi_unmatched: int
 

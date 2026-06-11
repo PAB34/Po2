@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -241,15 +241,32 @@ type InventoryRowProps = {
   buildings: Building[];
   references: EquipmentReference[];
   saving: boolean;
+  showProvider?: boolean;
   onPatch: (item: CvcInventoryItem, payload: UpdateCvcInventoryItemPayload) => void;
 };
 
-function InventoryRow({ item, buildings, references, saving, onPatch }: InventoryRowProps) {
+function InventoryRow({ item, buildings, references, saving, showProvider, onPatch }: InventoryRowProps) {
   const building = buildings.find((b) => b.id === item.building_id);
   const referenceOptions = references.map((ref) => ({ id: ref.id, label: referenceLabel(ref) }));
 
   return (
     <tr>
+      {showProvider && (
+        <td>
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: 999,
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              background: item.provider === "SPIE" ? "rgba(168,85,247,0.18)" : "rgba(56,189,248,0.18)",
+              color: item.provider === "SPIE" ? "#c4b5fd" : "#7dd3fc",
+            }}
+          >
+            {item.provider}
+          </span>
+        </td>
+      )}
       <td>
         <strong>{item.designation}</strong>
         <div style={{ color: SUBTLE_TEXT, fontSize: "0.72rem" }}>
@@ -332,7 +349,8 @@ export function CvcImportPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<CvcPreviewResponse | null>(null);
-  const [activeBatch, setActiveBatch] = useState<string | null>(null);
+  const [providerView, setProviderView] = useState<"ALL" | "DALKIA" | "SPIE">("ALL");
+  const [uploadProvider, setUploadProvider] = useState<"AUTO" | "DALKIA" | "SPIE">("AUTO");
   const [familyFilter, setFamilyFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -341,10 +359,27 @@ export function CvcImportPage() {
     queryFn: () => fetchCvcImportBatches(token ?? ""),
     enabled: !!token,
   });
-  const itemsQuery = useQuery<CvcInventoryItem[]>({
-    queryKey: ["cvc-import-items", token, activeBatch],
-    queryFn: () => fetchCvcImportItems(token ?? "", activeBatch ?? ""),
-    enabled: !!token && !!activeBatch,
+
+  // Dernier lot importé pour chaque prestataire (DALKIA et SPIE coexistent).
+  const latestByProvider = useMemo(() => {
+    const map = new Map<string, CvcImportBatchSummary>();
+    for (const batch of batchesQuery.data ?? []) {
+      if (!map.has(batch.provider)) map.set(batch.provider, batch);
+    }
+    return map;
+  }, [batchesQuery.data]);
+  const dalkiaBatch = latestByProvider.get("DALKIA") ?? null;
+  const spieBatch = latestByProvider.get("SPIE") ?? null;
+
+  const dalkiaItemsQuery = useQuery<CvcInventoryItem[]>({
+    queryKey: ["cvc-import-items", token, dalkiaBatch?.import_batch],
+    queryFn: () => fetchCvcImportItems(token ?? "", dalkiaBatch?.import_batch ?? ""),
+    enabled: !!token && !!dalkiaBatch,
+  });
+  const spieItemsQuery = useQuery<CvcInventoryItem[]>({
+    queryKey: ["cvc-import-items", token, spieBatch?.import_batch],
+    queryFn: () => fetchCvcImportItems(token ?? "", spieBatch?.import_batch ?? ""),
+    enabled: !!token && !!spieBatch,
   });
   const buildingsQuery = useQuery<Building[]>({
     queryKey: ["buildings", token],
@@ -374,10 +409,11 @@ export function CvcImportPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!file || !token) throw new Error("Selectionne un fichier Excel avant l'import.");
-      return postCvcImport(token, file, []);
+      const provider = uploadProvider === "AUTO" ? undefined : uploadProvider;
+      return postCvcImport(token, file, [], undefined, provider);
     },
     onSuccess: (result) => {
-      setActiveBatch(result.import_batch);
+      setProviderView(result.provider === "SPIE" ? "SPIE" : "DALKIA");
       setFile(null);
       setPreview(null);
       setError(null);
@@ -419,8 +455,27 @@ export function CvcImportPage() {
     () => (referencesQuery.data ?? []).filter(isCvcRelevant),
     [referencesQuery.data],
   );
-  const latestBatch = batchesQuery.data?.[0] ?? null;
-  const items = itemsQuery.data ?? [];
+
+  const dalkiaItems = dalkiaItemsQuery.data ?? [];
+  const spieItems = spieItemsQuery.data ?? [];
+  // L'inventaire affiché dépend de la section active : DALKIA, SPIE, ou la somme des deux.
+  const items = useMemo<CvcInventoryItem[]>(() => {
+    if (providerView === "DALKIA") return dalkiaItems;
+    if (providerView === "SPIE") return spieItems;
+    return [...dalkiaItems, ...spieItems];
+  }, [providerView, dalkiaItems, spieItems]);
+  // Lot ciblé pour les actions par lot (recalcul, matching) — uniquement hors vue "somme".
+  const activeBatch =
+    providerView === "DALKIA"
+      ? dalkiaBatch?.import_batch ?? null
+      : providerView === "SPIE"
+        ? spieBatch?.import_batch ?? null
+        : null;
+  const itemsLoading =
+    (providerView !== "SPIE" && dalkiaItemsQuery.isLoading) ||
+    (providerView !== "DALKIA" && spieItemsQuery.isLoading);
+  const hasAnyInventory = !!dalkiaBatch || !!spieBatch;
+
   const familyOptions = useMemo(
     () => [...new Set(items.map((item) => item.famille?.trim()).filter((value): value is string => Boolean(value)))].sort(),
     [items],
@@ -432,11 +487,6 @@ export function CvcImportPage() {
   const mappedCount = items.filter((item) => item.building_id !== null).length;
   const refMappedCount = items.filter((item) => item.equipment_ref_id !== null).length;
   const computedFromHealthCount = items.filter((item) => item.lifecycle_age_source === "etat_sante").length;
-
-  useEffect(() => {
-    const batch = batchesQuery.data?.[0]?.import_batch ?? null;
-    setActiveBatch((current) => (current === batch ? current : batch));
-  }, [batchesQuery.data]);
 
   function refreshPatrimoineLists() {
     queryClient.invalidateQueries({ queryKey: ["buildings"] });
@@ -485,6 +535,17 @@ export function CvcImportPage() {
               }}
             />
           </label>
+          <label className="field" style={{ minWidth: 180, margin: 0 }}>
+            <span>Prestataire</span>
+            <select
+              value={uploadProvider}
+              onChange={(e) => setUploadProvider(e.target.value as "AUTO" | "DALKIA" | "SPIE")}
+            >
+              <option value="AUTO">Detection automatique</option>
+              <option value="DALKIA">DALKIA</option>
+              <option value="SPIE">SPIE</option>
+            </select>
+          </label>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
@@ -532,15 +593,8 @@ export function CvcImportPage() {
           <div>
             <h3>Inventaire courant</h3>
             <p style={{ color: SUBTLE_TEXT, fontSize: "0.86rem" }}>
-              Le dernier import remplace l'inventaire CVC terrain precedent.
+              Chaque prestataire a sa propre section ; le dernier import d'un prestataire remplace uniquement son inventaire.
             </p>
-            {latestBatch ? (
-              <p style={{ color: "#cbd5e1", fontSize: "0.84rem", marginTop: 6 }}>
-                {latestBatch.import_batch} - {latestBatch.imported} lignes - {latestBatch.mapped_items} rattachees
-              </p>
-            ) : (
-              <p style={{ color: SUBTLE_TEXT, fontSize: "0.84rem", marginTop: 6 }}>Aucun inventaire enregistre.</p>
-            )}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button type="button" className="secondary-button" onClick={refreshPatrimoineLists}>
@@ -563,9 +617,40 @@ export function CvcImportPage() {
             )}
           </div>
         </div>
+
+        <div className="cvc-provider-tabs" style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          {([
+            ["ALL", "Tous", (dalkiaBatch?.imported ?? 0) + (spieBatch?.imported ?? 0)],
+            ["DALKIA", "DALKIA", dalkiaBatch?.imported ?? 0],
+            ["SPIE", "SPIE", spieBatch?.imported ?? 0],
+          ] as const).map(([key, label, count]) => {
+            const disabled = key === "DALKIA" ? !dalkiaBatch : key === "SPIE" ? !spieBatch : !hasAnyInventory;
+            const active = providerView === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                className={active ? "primary-button" : "secondary-button"}
+                disabled={disabled}
+                onClick={() => setProviderView(key)}
+                style={{ opacity: disabled ? 0.5 : 1 }}
+              >
+                {label} ({count})
+              </button>
+            );
+          })}
+        </div>
+        {providerView === "ALL" && hasAnyInventory && (
+          <p style={{ color: SUBTLE_TEXT, fontSize: "0.8rem", marginTop: 8 }}>
+            Vue cumulee des deux inventaires. Selectionne un prestataire pour recalculer les references ou matcher les batiments.
+          </p>
+        )}
+        {!hasAnyInventory && (
+          <p style={{ color: SUBTLE_TEXT, fontSize: "0.84rem", marginTop: 8 }}>Aucun inventaire enregistre.</p>
+        )}
       </div>
 
-      {activeBatch && (
+      {hasAnyInventory && (
         <div className="section-block">
           {items.length > 0 && <CvcOverviewCharts items={items} />}
 
@@ -583,8 +668,8 @@ export function CvcImportPage() {
             ))}
           </div>
 
-          {itemsQuery.isLoading && <p>Chargement de l'inventaire...</p>}
-          {!itemsQuery.isLoading && items.length === 0 && <p>Aucune ligne trouvee pour cet import.</p>}
+          {itemsLoading && <p>Chargement de l'inventaire...</p>}
+          {!itemsLoading && items.length === 0 && <p>Aucune ligne trouvee pour cet import.</p>}
           {items.length > 0 && (
             <>
               <div className="cvc-table-filters">
@@ -603,6 +688,7 @@ export function CvcImportPage() {
                 <table className="data-table cvc-inventory-table">
                   <thead>
                     <tr>
+                      {providerView === "ALL" && <th>Prestataire</th>}
                       <th>Equipement terrain</th>
                       <th>Famille</th>
                       <th>Localisation source</th>
@@ -619,6 +705,7 @@ export function CvcImportPage() {
                         item={item}
                         buildings={buildingsQuery.data ?? []}
                         references={references}
+                        showProvider={providerView === "ALL"}
                         saving={updateMutation.isPending && updateMutation.variables?.item.id === item.id}
                         onPatch={(row, payload) => updateMutation.mutate({ item: row, payload })}
                       />

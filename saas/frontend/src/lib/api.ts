@@ -2791,19 +2791,28 @@ export type CvcInventoryItem = {
   building_id: number | null;
   local_id: number | null;
   equipment_ref_id: number | null;
+  provider: string;
   site_raw: string | null;
   batiment: string | null;
   niveau: string | null;
   local_name: string | null;
   designation: string;
+  type_equipement: string | null;
   statut: string | null;
   etat_sante: string | null;
   quantite_relevee: number | null;
   famille: string | null;
   marque: string | null;
   modele: string | null;
+  numero_serie: string | null;
+  puissance: string | null;
+  puissance_frigorifique: number | null;
+  puissance_calorifique: number | null;
+  capacite: number | null;
   date_mis_en_service: number | null;
   duree_vie_restante: number | null;
+  duree_vie_restante_source: string | null;
+  duree_vie_restante_calculee: number | null;
   lifecycle_age_years: number | null;
   lifecycle_age_source: string;
   lifecycle_age_label: string | null;
@@ -2821,6 +2830,7 @@ export type CvcInventoryItem = {
 
 export type CvcImportBatchSummary = {
   import_batch: string;
+  provider: string;
   imported: number;
   mapped_items: number;
   reference_mapped_items: number;
@@ -3040,6 +3050,7 @@ export type CvcImportResult = {
   skipped: number;
   errors: string[];
   import_batch: string;
+  provider: string;
   sypemi_matched: number;
   sypemi_unmatched: number;
 };
@@ -3072,11 +3083,13 @@ export async function postCvcImport(
   file: File,
   mapping: { site_raw: string; building_id: number }[] = [],
   importBatch?: string,
+  provider?: string,
 ): Promise<CvcImportResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("mapping_json", JSON.stringify(mapping));
   if (importBatch) form.append("import_batch", importBatch);
+  if (provider) form.append("provider", provider);
   const response = await fetch(`${apiBaseUrl}/cvc/import`, {
     method: "POST",
     headers: buildAuthHeaders(token),

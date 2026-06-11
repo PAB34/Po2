@@ -81,6 +81,7 @@ async def post_cvc_import(
     file: UploadFile = File(...),
     mapping_json: str = Form(default="[]"),
     import_batch: str | None = Form(default=None),
+    provider: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CvcImportResult:
@@ -91,7 +92,7 @@ async def post_cvc_import(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Mapping invalide : {e}")
     try:
-        return import_cvc_from_excel(db, raw, mappings, current_user.city_id, import_batch)
+        return import_cvc_from_excel(db, raw, mappings, current_user.city_id, import_batch, provider)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erreur import : {e}"

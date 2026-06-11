@@ -306,6 +306,50 @@ def _clean_cell(value) -> str | None:
     return cleaned or None
 
 
+PROVIDER_DALKIA = "DALKIA"
+PROVIDER_SPIE = "SPIE"
+
+# Colonnes caractéristiques de chaque format d'export terrain.
+_DALKIA_HEADER_MARKERS = ("site", "designation", "qte qte relevee")
+_SPIE_HEADER_MARKERS = ("nom du batiment", "nom complet de l equipement (type + complementaire)")
+
+
+def detect_inventory_provider(header: list[str]) -> str:
+    """Devine le prestataire à partir des en-têtes du fichier."""
+    normalized = {_normalize(col) for col in header if col}
+    if any(marker in normalized for marker in _SPIE_HEADER_MARKERS):
+        return PROVIDER_SPIE
+    return PROVIDER_DALKIA
+
+
+def _extract_building_name(raw: str | None) -> str | None:
+    """LR/34/SETE/<NOM>-MAIRIE → <NOM> (idempotent, tolère tab/espaces)."""
+    if not raw:
+        return None
+    name = str(raw).strip()
+    name = re.sub(r"^[A-Z]{2}/\d+/[A-Z]+/", "", name)
+    name = re.sub(r"\s*-\s*MAIRIE\s*$", "", name)
+    return name.strip() or None
+
+
+def _parse_mes_year(value) -> int | None:
+    """Extrait l'année d'une date hétérogène (MM/YYYY, YYYY, DD/MM/YYYY, datetime)."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.year
+    if isinstance(value, date):
+        return value.year
+    if isinstance(value, (int, float)):
+        year = int(value)
+        return year if 1900 <= year <= CURRENT_YEAR + 1 else None
+    match = re.search(r"(19|20)\d{2}", str(value))
+    if not match:
+        return None
+    year = int(match.group(0))
+    return year if 1900 <= year <= CURRENT_YEAR + 1 else None
+
+
 def _read_refrigerant_rows(raw_bytes: bytes) -> tuple[list[str], list[dict]]:
     wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     ws = wb.active
@@ -451,24 +495,36 @@ def _select_auto_refrigerant_candidate(
     return candidates[0]
 
 
-def _clear_current_cvc_inventory(db: Session, city_id: int | None) -> None:
+def _clear_current_cvc_inventory(db: Session, city_id: int | None, provider: str | None = None) -> None:
     inventory_stmt = select(CvcInventoryItem)
     mapping_stmt = select(CvcSourceBuildingMapping).where(CvcSourceBuildingMapping.source_type == "inventory")
     refrigerant_stmt = select(CvcRefrigerantItem)
+    if provider is not None:
+        inventory_stmt = inventory_stmt.where(CvcInventoryItem.provider == provider)
     if city_id is not None:
         inventory_stmt = inventory_stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
         mapping_stmt = mapping_stmt.where((CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None)))
         refrigerant_stmt = refrigerant_stmt.where((CvcRefrigerantItem.city_id == city_id) | (CvcRefrigerantItem.city_id.is_(None)))
 
+    items_to_delete = list(db.scalars(inventory_stmt))
+    deleted_item_ids = {item.id for item in items_to_delete}
+    deleted_batches = {item.import_batch for item in items_to_delete if item.import_batch}
+
     for refrigerant in db.scalars(refrigerant_stmt):
+        # Ne délier que les fluides rattachés aux items du provider purgé.
+        if provider is not None and refrigerant.cvc_inventory_item_id not in deleted_item_ids:
+            continue
         refrigerant.cvc_inventory_item_id = None
         refrigerant.match_status = "pending"
         refrigerant.match_method = None
         refrigerant.match_score = None
 
     for mapping in db.scalars(mapping_stmt):
+        # En purge ciblée, ne supprimer que les mappings des lots du provider.
+        if provider is not None and mapping.import_batch not in deleted_batches:
+            continue
         db.delete(mapping)
-    for item in db.scalars(inventory_stmt):
+    for item in items_to_delete:
         db.delete(item)
     db.flush()
 
@@ -531,10 +587,18 @@ def _latest_inventory_batch(items: list[CvcInventoryItem]) -> str | None:
 
 
 def _filter_latest_inventory_batch(items: list[CvcInventoryItem]) -> list[CvcInventoryItem]:
-    latest_batch = _latest_inventory_batch(items)
-    if latest_batch is None:
-        return []
-    return [item for item in items if item.import_batch == latest_batch]
+    """Garde le dernier lot importé pour CHAQUE provider (DALKIA et SPIE coexistent)."""
+    by_provider: dict[str, list[CvcInventoryItem]] = defaultdict(list)
+    for item in items:
+        by_provider[item.provider or PROVIDER_DALKIA].append(item)
+
+    kept: list[CvcInventoryItem] = []
+    for provider_items in by_provider.values():
+        latest_batch = _latest_inventory_batch(provider_items)
+        if latest_batch is None:
+            continue
+        kept.extend(item for item in provider_items if item.import_batch == latest_batch)
+    return kept
 
 
 def match_buildings_for_sites(
@@ -1288,7 +1352,18 @@ def _read_item(item: CvcInventoryItem, ref: EquipmentReference | None) -> CvcInv
         criticite_pct = min(100.0, round(lifecycle_age / sypemi_years * 100, 1))
 
     read = CvcInventoryItemRead.model_validate(item)
-    read.duree_vie_restante = remaining_life
+    # Décision : on garde la valeur fournie par le prestataire (SPIE) quand le calcul
+    # SYPEMI n'aboutit pas, et on expose le calcul indicatif quand il existe.
+    if remaining_life is not None:
+        read.duree_vie_restante = remaining_life
+        read.duree_vie_restante_source = "calcule"
+    elif item.duree_vie_restante is not None:
+        read.duree_vie_restante = item.duree_vie_restante
+        read.duree_vie_restante_source = item.duree_vie_restante_source or "fournie"
+        lifecycle_label = lifecycle_label or "Durée de vie fournie par le prestataire"
+    else:
+        read.duree_vie_restante = None
+    read.duree_vie_restante_calculee = remaining_life
     read.lifecycle_age_years = lifecycle_age
     read.lifecycle_age_source = lifecycle_source
     read.lifecycle_age_label = lifecycle_label
@@ -1301,84 +1376,156 @@ def _read_item(item: CvcInventoryItem, ref: EquipmentReference | None) -> CvcInv
     return read
 
 
+def _item_match_inputs(item: CvcInventoryItem) -> tuple[str | None, str]:
+    """Reproduit la combinaison type+catégorie/désignation utilisée à l'import (SPIE inclus)."""
+    if item.provider == PROVIDER_SPIE:
+        match_famille = " ".join(part for part in (item.type_equipement, item.famille) if part) or item.famille
+        match_designation = " ".join(part for part in (item.type_equipement, item.designation) if part)
+        return match_famille, match_designation
+    return item.famille, item.designation
+
+
+def _normalize_inventory_rows(rows: list[tuple], provider: str) -> list[dict]:
+    """Convertit les lignes brutes (format DALKIA ou SPIE) en dictionnaires homogènes."""
+    header = [str(c) if c is not None else "" for c in rows[0]]
+    lookup = _header_lookup(header)
+
+    def cell(row: tuple, name: str):
+        return _get_header_value(row, lookup, name)
+
+    parsed: list[dict] = []
+    for row in rows[1:]:
+        if not any(v is not None for v in row):
+            continue
+
+        if provider == PROVIDER_SPIE:
+            designation = _clean_cell(cell(row, "Nom complet de l'equipement (type + complementaire)"))
+            if not designation:
+                continue
+            categorie = _clean_cell(cell(row, "Categorie de l'equipement"))
+            type_equipement = _clean_cell(cell(row, "Type d'equipement"))
+            famille = categorie or type_equipement
+            # Matching SYPEMI : on combine type + catégorie + désignation pour plus de robustesse.
+            match_famille = " ".join(part for part in (type_equipement, categorie) if part) or famille
+            match_designation = " ".join(part for part in (type_equipement, designation) if part)
+            parsed.append(
+                {
+                    "site_raw": _extract_building_name(cell(row, "Nom du batiment")),
+                    "batiment": None,
+                    "niveau": _clean_cell(cell(row, "Niveau")),
+                    "local_name": _clean_cell(cell(row, "Local")),
+                    "designation": designation,
+                    "type_equipement": type_equipement,
+                    "statut": None,
+                    "etat_sante": None,
+                    "quantite_relevee": _parse_int(cell(row, "Quantite")),
+                    "famille": famille,
+                    "marque": _clean_cell(cell(row, "Marque")),
+                    "modele": _clean_cell(cell(row, "Modele")),
+                    "numero_serie": _clean_cell(cell(row, "N° de serie")),
+                    "puissance": _clean_cell(cell(row, "Puissance")),
+                    "puissance_frigorifique": _parse_float(cell(row, "Puissance frigorifique")),
+                    "puissance_calorifique": _parse_float(cell(row, "Puissance calorifique")),
+                    "capacite": _parse_float(cell(row, "Capacite")),
+                    "date_mes": _parse_mes_year(cell(row, "Date de mise en service")),
+                    "duree_vie_provided": _parse_float(cell(row, "Duree de vie restante")),
+                    "match_famille": match_famille,
+                    "match_designation": match_designation,
+                }
+            )
+        else:
+            designation = _clean_cell(cell(row, "DESIGNATION"))
+            if not designation:
+                continue
+            famille = _clean_cell(cell(row, "FAMILLE"))
+            parsed.append(
+                {
+                    "site_raw": _clean_cell(cell(row, "SITE")),
+                    "batiment": _clean_cell(cell(row, "BATIMENT")),
+                    "niveau": _clean_cell(cell(row, "NIVEAU")),
+                    "local_name": _clean_cell(cell(row, "LOCAL")),
+                    "designation": designation,
+                    "type_equipement": None,
+                    "statut": _clean_cell(cell(row, "STATUT")),
+                    "etat_sante": _clean_cell(cell(row, "ETAT SANTE")),
+                    "quantite_relevee": _parse_int(cell(row, "QTE QTE RELEVEE")),
+                    "famille": famille,
+                    "marque": _clean_cell(cell(row, "MARQUE")),
+                    "modele": _clean_cell(cell(row, "MODELE")),
+                    "numero_serie": None,
+                    "puissance": None,
+                    "puissance_frigorifique": None,
+                    "puissance_calorifique": None,
+                    "capacite": None,
+                    "date_mes": _parse_mes_year(cell(row, "DATE MES")),
+                    "duree_vie_provided": None,
+                    "match_famille": famille,
+                    "match_designation": designation,
+                }
+            )
+    return parsed
+
+
 def import_cvc_from_excel(
     db: Session,
     raw_bytes: bytes,
     building_mappings: list[CvcBuildingMapping],
     city_id: int | None,
     import_batch: str | None = None,
+    provider: str | None = None,
 ) -> CvcImportResult:
     mapping_dict = {m.site_raw: m.building_id for m in building_mappings}
-    batch_id = import_batch or f"import_{uuid.uuid4().hex[:8]}"
 
     wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
+    header = [str(c) if c is not None else "" for c in rows[0]] if rows else []
+    resolved_provider = provider or detect_inventory_provider(header)
+    prefix = "spie" if resolved_provider == PROVIDER_SPIE else "import"
+    batch_id = import_batch or f"{prefix}_{uuid.uuid4().hex[:8]}"
+
     if not rows:
         return CvcImportResult(
-            imported=0, skipped=0, errors=[], import_batch=batch_id, sypemi_matched=0, sypemi_unmatched=0
+            imported=0, skipped=0, errors=[], import_batch=batch_id,
+            provider=resolved_provider, sypemi_matched=0, sypemi_unmatched=0,
         )
 
-    header = [str(c) if c is not None else "" for c in rows[0]]
-    col_idx = {col: i for i, col in enumerate(header) if col}
-
-    def get_val(row: tuple, col_name: str):
-        idx = col_idx.get(col_name)
-        if idx is None or idx >= len(row):
-            return None
-        return row[idx]
-
+    parsed_rows = _normalize_inventory_rows(rows, resolved_provider)
     all_refs = list(db.scalars(select(EquipmentReference)))
     family_cache: dict = {}
 
-    _clear_current_cvc_inventory(db, city_id)
+    _clear_current_cvc_inventory(db, city_id, resolved_provider)
 
     imported = 0
-    skipped = 0
+    skipped = len([r for r in rows[1:] if any(v is not None for v in r)]) - len(parsed_rows)
     errors: list[str] = []
     sypemi_matched = 0
     sypemi_unmatched = 0
 
-    for row in rows[1:]:
-        if not any(v is not None for v in row):
-            continue
-
-        designation_raw = get_val(row, "DESIGNATION")
-        designation = str(designation_raw).strip() if designation_raw else ""
-        if not designation:
-            skipped += 1
-            continue
-
-        site_raw = get_val(row, "SITE")
-        site = str(site_raw).strip() if site_raw else ""
-        building_id = mapping_dict.get(site)
+    for data in parsed_rows:
+        site = data["site_raw"]
+        building_id = mapping_dict.get(site) if site else None
         building = db.get(Building, building_id) if building_id is not None else None
 
-        def clean(col: str) -> str | None:
-            v = get_val(row, col)
-            s = str(v).strip() if v is not None else ""
-            return s or None
+        ref = _resolve_family(
+            data["match_famille"],
+            all_refs,
+            family_cache,
+            data["match_designation"],
+            data["marque"],
+            data["modele"],
+        )
 
-        famille_raw = get_val(row, "FAMILLE")
-        famille = str(famille_raw).strip() if famille_raw else None
-        marque = clean("MARQUE")
-        modele = clean("MODELE")
-        ref = _resolve_family(famille, all_refs, family_cache, designation, marque, modele)
-
-        date_raw = get_val(row, "DATE MES")
-        try:
-            date_mes = int(date_raw) if date_raw is not None else None
-        except (ValueError, TypeError):
-            date_mes = None
-
-        etat_sante = clean("ETAT SANTE")
-        duree_vie_restante = _compute_remaining_life(date_mes, ref, etat_sante)
-
-        qte_raw = get_val(row, "QTE QTE RELEVEE")
-        try:
-            quantite_relevee = int(qte_raw) if qte_raw is not None else None
-        except (ValueError, TypeError):
-            quantite_relevee = None
+        computed_remaining = _compute_remaining_life(data["date_mes"], ref, data["etat_sante"])
+        if computed_remaining is not None:
+            duree_vie_restante = computed_remaining
+            duree_vie_source = "calcule"
+        elif data["duree_vie_provided"] is not None:
+            duree_vie_restante = data["duree_vie_provided"]
+            duree_vie_source = "fournie"
+        else:
+            duree_vie_restante = None
+            duree_vie_source = None
 
         item = CvcInventoryItem(
             city_id=city_id,
@@ -1386,19 +1533,27 @@ def import_cvc_from_excel(
             building_id=building_id,
             local_id=None,
             equipment_ref_id=ref.id if ref else None,
-            site_raw=site or None,
-            batiment=clean("BATIMENT"),
-            niveau=clean("NIVEAU"),
-            local_name=clean("LOCAL"),
-            designation=designation,
-            statut=clean("STATUT"),
-            etat_sante=etat_sante,
-            quantite_relevee=quantite_relevee,
-            famille=famille,
-            marque=marque,
-            modele=modele,
-            date_mis_en_service=date_mes,
+            provider=resolved_provider,
+            site_raw=site,
+            batiment=data["batiment"],
+            niveau=data["niveau"],
+            local_name=data["local_name"],
+            designation=data["designation"],
+            type_equipement=data["type_equipement"],
+            statut=data["statut"],
+            etat_sante=data["etat_sante"],
+            quantite_relevee=data["quantite_relevee"],
+            famille=data["famille"],
+            marque=data["marque"],
+            modele=data["modele"],
+            numero_serie=data["numero_serie"],
+            puissance=data["puissance"],
+            puissance_frigorifique=data["puissance_frigorifique"],
+            puissance_calorifique=data["puissance_calorifique"],
+            capacite=data["capacite"],
+            date_mis_en_service=data["date_mes"],
             duree_vie_restante=duree_vie_restante,
+            duree_vie_restante_source=duree_vie_source,
             quantite_fluide_frigorigene=None,
             import_batch=batch_id,
         )
@@ -1419,6 +1574,7 @@ def import_cvc_from_excel(
         skipped=skipped,
         errors=errors,
         import_batch=batch_id,
+        provider=resolved_provider,
         sypemi_matched=sypemi_matched,
         sypemi_unmatched=sypemi_unmatched,
     )
@@ -1445,6 +1601,7 @@ def list_cvc_import_batches(db: Session, city_id: int | None) -> list[CvcImportB
         summaries.append(
             CvcImportBatchSummary(
                 import_batch=batch,
+                provider=next((item.provider for item in batch_items if item.provider), PROVIDER_DALKIA),
                 imported=len(batch_items),
                 mapped_items=sum(1 for item in batch_items if item.building_id is not None),
                 reference_mapped_items=sum(1 for item in batch_items if item.equipment_ref_id is not None),
@@ -1480,11 +1637,12 @@ def recompute_cvc_references_for_batch(
     matched = 0
     unmatched = 0
     for item in items:
+        match_famille, match_designation = _item_match_inputs(item)
         next_ref = _resolve_family(
-            item.famille,
+            match_famille,
             all_refs,
             family_cache,
-            item.designation,
+            match_designation,
             item.marque,
             item.modele,
         )
