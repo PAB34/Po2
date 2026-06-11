@@ -82,7 +82,7 @@ a {
 }
 
 .panel {
-  max-width: 880px;
+  max-width: min(1280px, calc(100vw - 360px));
   padding: 28px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 20px;

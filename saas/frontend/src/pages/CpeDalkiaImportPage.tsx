@@ -297,13 +297,14 @@ async function fetchAllDpgfImports(token: string): Promise<DpgfP1Import[]> {
 type JournalEntry = {
   key: string;
   importId: number;
-  kind: "base" | "avenant" | "dpgf";
+  kind: "maitre" | "dpgf";
   lot: number;
   title: string;
   filename: string;
   date: string;
   is_active: boolean;
   detail: string;
+  nbVersions: number;
 };
 
 type MasterDiff = {
@@ -369,9 +370,8 @@ function formatMwh(v: number | null | undefined) {
 }
 
 const KIND_BADGE: Record<JournalEntry["kind"], { label: string; color: string; bg: string }> = {
-  base: { label: "base", color: "#6b7280", bg: "#f3f4f6" },
-  avenant: { label: "avenant", color: "#92400e", bg: "#fef3c7" },
-  dpgf: { label: "DPGF", color: "#1d4ed8", bg: "#eff6ff" },
+  maitre: { label: "fichier maître", color: "#3730a3", bg: "#eef2ff" },
+  dpgf: { label: "DPGF P1", color: "#1d4ed8", bg: "#eff6ff" },
 };
 
 function Chip({ text }: { text: string }) {
@@ -384,13 +384,12 @@ function Chip({ text }: { text: string }) {
 
 function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
   const [open, setOpen] = useState(false);
-  const isBase = entry.kind === "base";
   const isDpgf = entry.kind === "dpgf";
 
   const masterDiffQ = useQuery({
     queryKey: ["cpe-master-diff", entry.importId],
     queryFn: () => fetchMasterDiff(token, entry.importId),
-    enabled: !isBase && !isDpgf,
+    enabled: !isDpgf,
   });
   const dpgfDiffQ = useQuery({
     queryKey: ["cpe-dpgf-diff", entry.importId],
@@ -401,11 +400,12 @@ function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
   const badge = KIND_BADGE[entry.kind];
   const md = masterDiffQ.data;
   const dd = dpgfDiffQ.data;
-  const chips = isDpgf ? dd?.chips : md?.ok ? md.chips : undefined;
-  const hasDiff = !isBase;
+  const masterOk = !isDpgf && md?.ok === true;
+  const hasDiff = isDpgf ? true : masterOk; // un maître sans version antérieure n'a rien à comparer
+  const chips = isDpgf ? dd?.chips : masterOk ? md?.chips : undefined;
 
   return (
-    <div style={{ padding: "10px 0", borderTop: "1px solid #f3f4f6", opacity: entry.is_active || isBase ? 1 : 0.75 }}>
+    <div style={{ padding: "12px 0", borderTop: "1px solid #f3f4f6", opacity: entry.is_active ? 1 : 0.8 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -413,14 +413,15 @@ function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
             <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
             {entry.is_active ? (
               <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#dcfce7", color: "#15803d" }}>en vigueur</span>
-            ) : !isBase ? (
-              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>remplacé (conservé)</span>
-            ) : null}
+            ) : (
+              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>version antérieure</span>
+            )}
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
             {new Date(entry.date).toLocaleDateString("fr-FR")} · {entry.filename} · {entry.detail}
+            {entry.nbVersions > 1 ? ` · ${entry.nbVersions} imports de ce fichier` : ""}
           </div>
-          {hasDiff && chips && chips.length > 0 ? (
+          {chips && chips.length > 0 ? (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
               {chips.map((c, i) => (<Chip key={i} text={c} />))}
             </div>
@@ -525,7 +526,7 @@ export function CpeDalkiaImportPage() {
 
   // Dossier de marché : lot affiché + filtre du journal
   const [dossierLot, setDossierLot] = useState<1 | 2>(1);
-  const [journalFilter, setJournalFilter] = useState<"tous" | "avenant" | "dpgf">("tous");
+  const [journalFilter, setJournalFilter] = useState<"tous" | "maitre" | "dpgf">("tous");
 
   // DPGF P1 révisé (import séparé)
   const dpgfFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -729,56 +730,58 @@ export function CpeDalkiaImportPage() {
 
       {/* ── 2 · Journal du marché ── */}
       {(() => {
-        const masterAll = allImportsQuery.data ?? [];
-        const dpgfAll = allDpgfQuery.data ?? [];
-        const lotMasters = masterAll
-          .filter((i) => i.lot === dossierLot)
-          .sort((a, b) => new Date(a.import_date).getTime() - new Date(b.import_date).getTime());
-        const baseId = lotMasters[0]?.id;
+        // Dédoublonne par nom de fichier : un même fichier réimporté plusieurs fois = un seul acte
+        // (on garde l'import le plus récent + le nombre d'imports).
+        const dedup = <T extends { id: number; filename: string; import_date: string; is_active: boolean }>(arr: T[]) => {
+          const m = new Map<string, { latest: T; count: number }>();
+          for (const i of arr) {
+            const cur = m.get(i.filename);
+            if (!cur) m.set(i.filename, { latest: i, count: 1 });
+            else m.set(i.filename, { latest: new Date(i.import_date) > new Date(cur.latest.import_date) ? i : cur.latest, count: cur.count + 1 });
+          }
+          return [...m.values()];
+        };
+        const masterDistinct = dedup((allImportsQuery.data ?? []).filter((i) => i.lot === dossierLot));
+        const dpgfDistinct = dedup((allDpgfQuery.data ?? []).filter((i) => i.lot === dossierLot));
+
         let entries: JournalEntry[] = [
-          ...lotMasters.map((i) => ({
+          ...masterDistinct.map(({ latest: i, count }) => ({
             key: `m${i.id}`,
             importId: i.id,
-            kind: (i.id === baseId ? "base" : "avenant") as JournalEntry["kind"],
+            kind: "maitre" as JournalEntry["kind"],
             lot: i.lot,
-            title: i.id === baseId ? "Offre finale (base)" : "Avenant — mise à jour du marché",
+            title: "Référentiel maître",
             filename: i.filename,
             date: i.import_date,
             is_active: i.is_active,
             detail: `${i.nb_sites} sites · P2/P3 ${i.nb_p2p3_rows} · APE ${i.nb_ape_rows}`,
+            nbVersions: count,
           })),
-          ...dpgfAll
-            .filter((i) => i.lot === dossierLot)
-            .map((i) => ({
-              key: `d${i.id}`,
-              importId: i.id,
-              kind: "dpgf" as JournalEntry["kind"],
-              lot: i.lot,
-              title: "DPGF P1 — révision de prix",
-              filename: i.filename,
-              date: i.import_date,
-              is_active: i.is_active,
-              detail: `${i.nb_lines} lignes (3 niveaux)`,
-            })),
+          ...dpgfDistinct.map(({ latest: i, count }) => ({
+            key: `d${i.id}`,
+            importId: i.id,
+            kind: "dpgf" as JournalEntry["kind"],
+            lot: i.lot,
+            title: "DPGF P1 — révision de prix",
+            filename: i.filename,
+            date: i.import_date,
+            is_active: i.is_active,
+            detail: `${i.nb_lines} lignes (3 niveaux)`,
+            nbVersions: count,
+          })),
         ];
         entries = entries
-          .filter((e) =>
-            journalFilter === "tous"
-              ? true
-              : journalFilter === "avenant"
-                ? e.kind === "base" || e.kind === "avenant"
-                : e.kind === "dpgf",
-          )
+          .filter((e) => (journalFilter === "tous" ? true : e.kind === journalFilter))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         return (
           <div className="section-block">
             <h3 style={{ margin: "0 0 4px" }}>2 · Journal du marché</h3>
             <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7280" }}>
-              Tous les actes contractuels (Lot {dossierLot}), du plus récent au plus ancien. Les versions remplacées sont conservées pour l'audit.
+              Les fichiers du marché (Lot {dossierLot}), du plus récent au plus ancien. Un même fichier réimporté n'apparaît qu'une fois. Les versions antérieures sont conservées pour l'audit.
             </p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {(["tous", "avenant", "dpgf"] as const).map((f) => (
+              {(["tous", "maitre", "dpgf"] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
@@ -790,7 +793,7 @@ export function CpeDalkiaImportPage() {
                     color: journalFilter === f ? "white" : "#6b7280",
                   }}
                 >
-                  {f === "tous" ? "Tous" : f === "avenant" ? "Avenants & base" : "DPGF P1"}
+                  {f === "tous" ? "Tous" : f === "maitre" ? "Fichier maître" : "DPGF P1"}
                 </button>
               ))}
             </div>
@@ -823,10 +826,13 @@ export function CpeDalkiaImportPage() {
         </span>
       </div>
 
+      {/* ── 3 · Ajouter un acte au marché (2 colonnes) ── */}
+      <h3 style={{ margin: "0 0 8px" }}>3 · Ajouter un acte au marché</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 16, alignItems: "start" }}>
       {/* ── Formulaire d'import (fichier maître) ── */}
-      <div className="section-block">
+      <div className="section-block" style={{ marginTop: 0 }}>
         <div className="section-heading">
-          <h3>Importer un fichier maître (offre finale / avenant)</h3>
+          <h3>Fichier maître (offre finale / avenant)</h3>
           <p>
             Fichier Excel DALKIA complet (.xlsx/.xlsm) — remplace le référentiel du lot et devient
             l'état en vigueur (l'ancienne version est conservée au journal). Onglets parsés : P2/P3,
@@ -877,9 +883,9 @@ export function CpeDalkiaImportPage() {
       </div>
 
       {/* ── Import DPGF P1 révisé (livrable séparé après OS) ── */}
-      <div className="section-block">
+      <div className="section-block" style={{ marginTop: 0 }}>
         <div className="section-heading">
-          <h3>Importer un DPGF P1 révisé (après OS)</h3>
+          <h3>DPGF P1 révisé (après OS)</h3>
           <p>
             Chemin <strong>séparé</strong> du fichier maître. Quand DALKIA livre un{" "}
             <code>P1 - DPGF LOT x …xlsx</code> suite à un OS impactant le prix gaz, importe-le ici :
@@ -1013,6 +1019,7 @@ export function CpeDalkiaImportPage() {
             </div>
           </>
         ) : null}
+      </div>
       </div>
 
       {/* ── Rapport d'analyse (preview) ── */}
