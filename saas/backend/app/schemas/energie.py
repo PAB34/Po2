@@ -7,6 +7,7 @@ class EnergieKpis(BaseModel):
     sous_dimensionnes: int
     proche_seuil: int
     sur_souscrits: int
+    calibration_inconnue: int = 0
 
 
 class SupplierDistributionItem(BaseModel):

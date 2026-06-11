@@ -195,6 +195,32 @@ def _upsert_csv(rows: list[dict[str, Any]], csv_path: Path) -> int:
     return new_count
 
 
+def _json_error(resp: requests.Response) -> tuple[str, str]:
+    try:
+        body = resp.json()
+    except Exception:
+        return "", resp.text[:300]
+    if not isinstance(body, dict):
+        return "", resp.text[:300]
+    code = str(body.get("code") or body.get("error") or "")
+    message = str(body.get("message") or body.get("error_description") or body.get("detail") or "")
+    return code, message
+
+
+def _classify_metering_error(resp: requests.Response, fallback: str = "error_technical") -> str:
+    code, message = _json_error(resp)
+    msg_lower = message.lower()
+    if resp.status_code == 403 or code == "403" or "aucun service souscrit" in msg_lower:
+        return "access_not_subscribed"
+    if resp.status_code == 404:
+        return "not_found"
+    if resp.status_code == 429:
+        return "quota_exceeded"
+    if resp.status_code == 400:
+        return "invalid_request"
+    return fallback
+
+
 # ---------------------------------------------------------------------------
 # Daily consumption fetch (one PRM at a time, parallel)
 # ---------------------------------------------------------------------------
@@ -260,15 +286,9 @@ def _fetch_one_prm(
                 continue
         return rows, ("ok_data" if rows else "ok_empty")
 
-    if resp.status_code == 403:
-        return [], "forbidden"
-    if resp.status_code == 404:
-        return [], "not_found"
-    if resp.status_code == 429:
-        return [], "quota_exceeded"
-
-    LOG.warning("PRM %s → HTTP %d : %s", prm, resp.status_code, resp.text[:200])
-    return [], "error_technical"
+    outcome = _classify_metering_error(resp)
+    LOG.warning("PRM %s metering HTTP %d (%s): %s", prm, resp.status_code, outcome, resp.text[:200])
+    return [], outcome
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +525,15 @@ def _save_mp_state(last_date: str) -> None:
 
 
 _OUTCOME_RANK: dict[str, int] = {
-    "ok_data": 0, "ok_empty": 1, "not_found": 2, "forbidden": 3, "quota_exceeded": 4, "error": 5,
+    "ok_data": 0,
+    "ok_empty": 1,
+    "access_not_subscribed": 2,
+    "not_found": 3,
+    "forbidden": 4,
+    "invalid_request": 5,
+    "quota_exceeded": 6,
+    "error": 7,
+    "error_technical": 7,
 }
 
 
@@ -594,13 +622,9 @@ def _fetch_one_max_power(
                 continue
         return rows, ("ok_data" if rows else "ok_empty")
 
-    if resp.status_code == 403:
-        return [], "forbidden"
-    if resp.status_code == 404:
-        return [], "not_found"
-
-    LOG.warning("PRM %s [max_power] → HTTP %d : %s", prm, resp.status_code, resp.text[:200])
-    return [], "error"
+    outcome = _classify_metering_error(resp, fallback="error")
+    LOG.warning("PRM %s [max_power] HTTP %d (%s): %s", prm, resp.status_code, outcome, resp.text[:200])
+    return [], outcome
 
 
 def run_max_power_sync(history_days: int | None = None, prm_limit: int | None = None) -> None:
@@ -952,6 +976,15 @@ def _classify_lc_error(status: int, body: str) -> str:
     if status >= 500:
         return "error_technical"
     if status == 400:
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            parsed = {}
+        if isinstance(parsed, dict):
+            code = str(parsed.get("code") or parsed.get("error") or "")
+            message = str(parsed.get("message") or parsed.get("error_description") or "")
+            if code == "403" or "aucun service souscrit" in message.lower():
+                return "access_not_subscribed"
         if "ADAM-ERR0069" in body:
             return "cdc_inactive"
         if "ADAM-ERR0023" in body:
@@ -1077,16 +1110,17 @@ def _generate_lc_report(
         c = ce + timedelta(days=1)
 
     _OK_RANK = {
-        "ok_data": 0, "ok_empty": 1, "cdc_inactive": 2, "not_eligible": 3,
-        "forbidden": 4, "not_found": 5, "invalid_period": 6,
-        "quota_exceeded": 7, "error_technical": 8,
+        "ok_data": 0, "ok_empty": 1, "access_not_subscribed": 2,
+        "cdc_inactive": 3, "not_eligible": 4,
+        "forbidden": 5, "not_found": 6, "invalid_period": 7,
+        "quota_exceeded": 8, "error_technical": 9,
     }
     prm_best: dict[str, str] = {p: "error_technical" for p in prms}
     for (prm, _, _), (outcome, _) in results.items():
         if _OK_RANK.get(outcome, 8) < _OK_RANK.get(prm_best.get(prm, "error_technical"), 8):
             prm_best[prm] = outcome
 
-    _PERMANENT = {"forbidden", "not_found", "not_eligible", "cdc_inactive", "invalid_period"}
+    _PERMANENT = {"access_not_subscribed", "forbidden", "not_found", "not_eligible", "cdc_inactive", "invalid_period"}
     missing_chunks: list[dict] = []
     retry_list: list[dict] = []
     for prm in prms:
@@ -1111,6 +1145,7 @@ def _generate_lc_report(
             "prms_total": len(prms),
             "prms_ok_data": len(prms_by_outcome.get("ok_data", [])),
             "prms_ok_empty": len(prms_by_outcome.get("ok_empty", [])),
+            "prms_access_not_subscribed": len(prms_by_outcome.get("access_not_subscribed", [])),
             "prms_cdc_inactive": len(prms_by_outcome.get("cdc_inactive", [])),
             "prms_not_eligible": len(prms_by_outcome.get("not_eligible", [])),
             "prms_forbidden": len(prms_by_outcome.get("forbidden", [])),

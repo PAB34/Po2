@@ -857,6 +857,7 @@ export type EnergieKpis = {
   sous_dimensionnes: number;
   proche_seuil: number;
   sur_souscrits: number;
+  calibration_inconnue: number;
 };
 
 export type SupplierDistributionItem = {
@@ -1373,12 +1374,15 @@ export type MeterProfile = "non_powered" | "non_communicant" | "communicant_clos
 export type EnedisOutcome =
   | "ok_data"
   | "ok_empty"
+  | "access_not_subscribed"
   | "forbidden"
   | "not_found"
   | "not_eligible"
   | "cdc_inactive"
   | "invalid_period"
+  | "invalid_request"
   | "quota_exceeded"
+  | "error"
   | "error_technical"
   | null;
 

@@ -353,8 +353,11 @@ def get_data_audit() -> dict[str, Any]:
 
             for source_key in missing_sources:
                 outcome = enedis_outcomes.get(source_key)
-                if outcome in ("forbidden", "not_found"):
-                    actions.append(f"Verifier droits API ENEDIS ({source_key})")
+                if outcome in ("access_not_subscribed", "forbidden", "not_found"):
+                    actions.append(f"Verifier service/droits API ENEDIS ({source_key})")
+                    correctable["api_rights_issue"] += 1
+                elif outcome == "invalid_request":
+                    actions.append(f"Verifier eligibilite/profil ENEDIS ou periode demandee ({source_key})")
                     correctable["api_rights_issue"] += 1
                 elif outcome in ("error_technical", "quota_exceeded"):
                     actions.append(f"Relancer le backfill {source_key} (erreur technique au dernier essai)")
@@ -670,6 +673,7 @@ def get_energie_overview() -> dict[str, Any]:
             "sous_dimensionnes": calibration_counts["sous_dimensionne"],
             "proche_seuil": calibration_counts["proche_seuil"],
             "sur_souscrits": calibration_counts["sur_souscrit"],
+            "calibration_inconnue": calibration_counts["inconnu"],
         },
         "supplier_distribution": supplier_distribution,
         "prms": prms,

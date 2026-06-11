@@ -49,23 +49,29 @@ const PROFILE_LABEL: Record<string, string> = {
 const OUTCOME_LABEL: Record<string, string> = {
   ok_data: "OK",
   ok_empty: "Vide",
+  access_not_subscribed: "Acces non souscrit",
   forbidden: "403 Refusé",
   not_found: "404 Introuvable",
   not_eligible: "Non éligible",
   cdc_inactive: "CDC inactive",
   invalid_period: "Période invalide",
+  invalid_request: "Requete invalide",
   quota_exceeded: "Quota atteint",
+  error: "Erreur",
   error_technical: "Erreur tech.",
 };
 const OUTCOME_CLASS: Record<string, string> = {
   ok_data: "badge-green",
   ok_empty: "badge-gray",
+  access_not_subscribed: "badge-orange",
   forbidden: "badge-orange",
   not_found: "badge-orange",
   not_eligible: "badge-gray",
   cdc_inactive: "badge-orange",
   invalid_period: "badge-orange",
+  invalid_request: "badge-orange",
   quota_exceeded: "badge-red",
+  error: "badge-red",
   error_technical: "badge-red",
 };
 const AUDIT_FILTER_LABEL: Record<string, string> = {
@@ -753,7 +759,7 @@ export function EnergiePage() {
         <>
           <div className="kpi-row">
             <div className="kpi-card">
-              <span className="kpi-label">PRMs actifs</span>
+              <span className="kpi-label">PRMs contractuels</span>
               <span className="kpi-value">{data.kpis.total_prms}</span>
             </div>
             <div className="kpi-card">
@@ -776,6 +782,12 @@ export function EnergiePage() {
               <div className="kpi-card kpi-card--info">
                 <span className="kpi-label">Sur-souscrits</span>
                 <span className="kpi-value">{data.kpis.sur_souscrits}</span>
+              </div>
+            )}
+            {data.kpis.calibration_inconnue > 0 && (
+              <div className="kpi-card">
+                <span className="kpi-label">Calibrage inconnu</span>
+                <span className="kpi-value">{data.kpis.calibration_inconnue}</span>
               </div>
             )}
           </div>
