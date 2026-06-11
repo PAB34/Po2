@@ -176,6 +176,7 @@ function SubSyncRow({
 
 function SyncPanel({ token }: { token: string }) {
   const [expanded, setExpanded] = useState(true);
+  const [customerRefreshUntil, setCustomerRefreshUntil] = useState(0);
 
   const { data: consumptionStatus, refetch: refetchConsumption } = useQuery({
     queryKey: ["sync-consumption-status"],
@@ -201,11 +202,15 @@ function SyncPanel({ token }: { token: string }) {
     refetchInterval: (query) => (query.state.data as DjuSyncStatus | undefined)?.status === "running" ? 2000 : false,
   });
 
-  const { data: customerStatus, refetch: refetchCustomer } = useQuery({
+  const customerQuery = useQuery({
     queryKey: ["sync-customer-status"],
     queryFn: () => fetchCustomerSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as CustomerSyncStatus | undefined)?.status === "running" ? 5000 : false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as CustomerSyncStatus | undefined)?.status;
+      return status === "running" || Date.now() < customerRefreshUntil ? 2500 : false;
+    },
   });
+  const { data: customerStatus, refetch: refetchCustomer } = customerQuery;
 
   const djuMutation = useMutation({
     mutationFn: () => startDjuSync(token),
@@ -214,7 +219,12 @@ function SyncPanel({ token }: { token: string }) {
 
   const customerMutation = useMutation({
     mutationFn: () => startCustomerSync(token),
-    onSuccess: () => { setTimeout(() => refetchCustomer(), 500); },
+    onSuccess: () => {
+      setCustomerRefreshUntil(Date.now() + 60_000);
+      setTimeout(() => refetchCustomer(), 250);
+      setTimeout(() => refetchCustomer(), 1500);
+      setTimeout(() => refetchCustomer(), 4000);
+    },
   });
 
   const consumptionMutation = useMutation({
@@ -235,6 +245,11 @@ function SyncPanel({ token }: { token: string }) {
   const customerProgress = customerStatus && customerStatus.sources_total > 0
     ? Math.round((customerStatus.sources_done / customerStatus.sources_total) * 100)
     : null;
+  const customerDisplayStatus = customerMutation.isPending ? "running" : customerStatus?.status;
+  const customerDisplayError =
+    customerStatus?.error ??
+    (customerMutation.isError ? (customerMutation.error as Error).message : null) ??
+    (customerQuery.isError ? (customerQuery.error as Error).message : null);
 
   const consumptionProgress = consumptionStatus && consumptionStatus.prms_total > 0
     ? Math.round((consumptionStatus.prms_done / consumptionStatus.prms_total) * 100)
@@ -283,12 +298,12 @@ function SyncPanel({ token }: { token: string }) {
             <SubSyncRow
               label="Référentiel contractuel ENEDIS"
               description="Récupère les PRM en contrat, adresses, raccordements, puissances souscrites et niveaux de service. Les collectes ci-dessous partent ensuite de cette liste."
-              status={customerStatus?.status}
+              status={customerDisplayStatus}
               lastDate={customerStatus?.last_sync_at}
               rowsAdded={customerStatus?.changes_detected}
-              error={customerStatus?.error}
+              error={customerDisplayError}
               log={customerStatus?.log}
-              isRunning={customerStatus?.status === "running"}
+              isRunning={customerDisplayStatus === "running"}
               isPending={customerMutation.isPending || anyBusy}
               progress={customerProgress}
               actionLabel="Mettre à jour les contrats"
@@ -328,7 +343,7 @@ function SyncPanel({ token }: { token: string }) {
               </div>
               <div>
                 <strong>Ordre logique</strong>
-                <span>Contrats ENEDIS, puis consommation, puissance max, puis CDC si nécessaire.</span>
+                <span>Contrats ENEDIS, puis consommation et P max. La CDC reste à réserver aux profils fins, car elle est beaucoup plus longue.</span>
               </div>
             </div>
 
@@ -352,7 +367,7 @@ function SyncPanel({ token }: { token: string }) {
 
             <SubSyncRow
               label="Puissances max journalières"
-              description="Alimente enedis_max_power.csv, cœur du calibrage de puissance souscrite."
+              description="Alimente enedis_max_power.csv. C'est le chemin léger à privilégier pour récupérer les pics historiques sans collecter toute la courbe de charge."
               status={maxPowerStatus?.status}
               lastDate={maxPowerStatus?.last_sync_date}
               rowsAdded={maxPowerStatus?.rows_added}
@@ -370,7 +385,7 @@ function SyncPanel({ token }: { token: string }) {
 
             <SubSyncRow
               label="Courbes de charge"
-              description="Collecte fine par pas de mesure, plus coûteuse côté quota car découpée en fenêtres de 7 jours."
+              description="Collecte fine par pas de mesure. Utile pour analyser les profils, mais à lancer seulement si la Pmax et la conso journalière ne suffisent pas."
               status={loadCurveStatus?.status}
               lastDate={loadCurveStatus?.last_sync_date}
               rowsAdded={loadCurveStatus?.rows_added}
