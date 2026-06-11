@@ -314,6 +314,18 @@ def get_active_dpgf_p1_imports(db: Session, current_user: User) -> list[CpeDpgfP
     return list(db.scalars(stmt.order_by(CpeDpgfP1Import.lot, CpeDpgfP1Import.import_date.desc())))
 
 
+def get_all_dpgf_p1_imports(
+    db: Session, current_user: User, *, lot: int | None = None
+) -> list[CpeDpgfP1Import]:
+    """Tous les imports DPGF P1 (actifs ET remplaces conserves) — pour le journal du marche."""
+    stmt = select(CpeDpgfP1Import)
+    if current_user.city_id is not None:
+        stmt = stmt.where(CpeDpgfP1Import.city_id == current_user.city_id)
+    if lot is not None:
+        stmt = stmt.where(CpeDpgfP1Import.lot == lot)
+    return list(db.scalars(stmt.order_by(CpeDpgfP1Import.import_date.desc())))
+
+
 def get_dpgf_p1_levels(
     db: Session,
     city_id: int | None,

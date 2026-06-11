@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.services.cpe_dalkia_db import (
+    build_active_market_summary,
     get_active_imports,
+    get_all_imports,
     get_ape_for_import,
     get_bpu_for_import,
     get_cibles_for_import,
@@ -23,6 +25,7 @@ from app.services.cpe_dalkia_db import (
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
 from app.services.cpe_dpgf_p1 import (
     get_active_dpgf_p1_imports,
+    get_all_dpgf_p1_imports,
     parse_dpgf_p1_file,
     persist_dpgf_p1_import,
 )
@@ -233,6 +236,55 @@ def list_imports(
     ]
 
 
+class ActiveMarketSummary(BaseModel):
+    has_data: bool
+    lot: int
+    ref_year: int
+    import_id: int | None = None
+    filename: str | None = None
+    import_date: str | None = None
+    nb_sites: int | None = None
+    nb_ape: int | None = None
+    p1_gaz_ref_year_ht: float | None = None
+    p1_elec_ref_year_ht: float | None = None
+    p2_ref_year_ht: float | None = None
+    p3_ref_year_ht: float | None = None
+    marche_total_ht: float | None = None
+
+
+@router.get("/imports/all", response_model=list[ImportBatchResponse])
+def list_all_imports(
+    lot: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ImportBatchResponse]:
+    """Journal des imports maitres : toutes les versions (actives ET remplacees conservees)."""
+    return [
+        ImportBatchResponse(
+            id=b.id, lot=b.lot, filename=b.filename, import_date=b.import_date.isoformat(),
+            nb_sites=b.nb_sites, nb_p2p3_rows=b.nb_p2p3_rows, nb_cibles_rows=b.nb_cibles_rows,
+            nb_p1_gaz_rows=b.nb_p1_gaz_rows, nb_ape_rows=b.nb_ape_rows, nb_recap_rows=b.nb_recap_rows,
+            is_active=b.is_active, notes=b.notes,
+        )
+        for b in get_all_imports(db, current_user, lot=lot)
+    ]
+
+
+@router.get("/active-summary", response_model=ActiveMarketSummary)
+def active_summary(
+    lot: int = 1,
+    ref_year: int = 2026,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ActiveMarketSummary:
+    """Synthese de l'etat du marche en vigueur (import maitre actif d'un lot)."""
+    if lot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Le lot doit etre 1 ou 2.")
+    return ActiveMarketSummary.model_validate(
+        build_active_market_summary(db, current_user, lot, ref_year)
+    )
+
+
 @router.get("/imports/{import_id}/sites", response_model=list[SiteResponse])
 def get_sites(
     import_id: int,
@@ -435,24 +487,30 @@ async def confirm_dpgf_p1(
     )
 
 
+def _dpgf_resp(b) -> "DpgfP1ImportResponse":
+    return DpgfP1ImportResponse(
+        id=b.id, lot=b.lot, filename=b.filename, import_date=b.import_date.isoformat(),
+        nb_lines=b.nb_lines, is_active=b.is_active, notes=b.notes,
+    )
+
+
 @router.get("/dpgf-p1/imports", response_model=list[DpgfP1ImportResponse])
 def list_dpgf_p1_imports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[DpgfP1ImportResponse]:
     """Liste les imports DPGF P1 actifs (un par lot au plus)."""
-    return [
-        DpgfP1ImportResponse(
-            id=b.id,
-            lot=b.lot,
-            filename=b.filename,
-            import_date=b.import_date.isoformat(),
-            nb_lines=b.nb_lines,
-            is_active=b.is_active,
-            notes=b.notes,
-        )
-        for b in get_active_dpgf_p1_imports(db, current_user)
-    ]
+    return [_dpgf_resp(b) for b in get_active_dpgf_p1_imports(db, current_user)]
+
+
+@router.get("/dpgf-p1/imports/all", response_model=list[DpgfP1ImportResponse])
+def list_all_dpgf_p1_imports(
+    lot: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[DpgfP1ImportResponse]:
+    """Journal des DPGF P1 : toutes les versions (actives ET remplacees conservees)."""
+    return [_dpgf_resp(b) for b in get_all_dpgf_p1_imports(db, current_user, lot=lot)]
 
 
 @router.post("/imports/{import_id}/sync-p1-reference")

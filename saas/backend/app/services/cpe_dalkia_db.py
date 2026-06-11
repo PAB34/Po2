@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.cpe import CpeContractReference, CpeSite
@@ -30,6 +30,64 @@ def get_active_imports(db: Session, current_user: User) -> list[CpeDalkiaRefImpo
     if current_user.city_id is not None:
         stmt = stmt.where(CpeDalkiaRefImport.city_id == current_user.city_id)
     return list(db.scalars(stmt.order_by(CpeDalkiaRefImport.import_date.desc())))
+
+
+def get_all_imports(
+    db: Session, current_user: User, *, lot: int | None = None
+) -> list[CpeDalkiaRefImport]:
+    """Tous les imports maitres (actifs ET remplaces conserves) — pour le journal du marche."""
+    stmt = select(CpeDalkiaRefImport)
+    if current_user.city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == current_user.city_id)
+    if lot is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.lot == lot)
+    return list(db.scalars(stmt.order_by(CpeDalkiaRefImport.import_date.desc())))
+
+
+def build_active_market_summary(
+    db: Session, current_user: User, lot: int, ref_year: int = 2026
+) -> dict:
+    """Synthese de l'etat du marche en vigueur (import maitre actif d'un lot).
+
+    KPIs lus dans les tables de reference de l'import actif : nb sites, APE, montants
+    P1 gaz/elec/P2/P3 de l'annee de reference, et montant global du marche (toutes annees).
+    """
+    stmt = select(CpeDalkiaRefImport).where(
+        CpeDalkiaRefImport.is_active.is_(True), CpeDalkiaRefImport.lot == lot
+    )
+    if current_user.city_id is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.city_id == current_user.city_id)
+    imp = db.scalars(stmt).first()
+    if imp is None:
+        return {"has_data": False, "lot": lot, "ref_year": ref_year}
+
+    def _sum(model, col: str, year: int | None = None) -> float:
+        s = select(func.sum(getattr(model, col))).where(model.import_id == imp.id)
+        if year is not None:
+            s = s.where(model.period_year == year)
+        return db.scalar(s) or 0.0
+
+    marche_total = (
+        _sum(CpeDalkiaRefP1Gaz, "p10_total_ht")
+        + _sum(CpeDalkiaRefP1Elec, "p10_total_ht")
+        + _sum(CpeDalkiaRefP2P3, "p2_total_ht")
+        + _sum(CpeDalkiaRefP2P3, "p3_total_ht")
+    )
+    return {
+        "has_data": True,
+        "lot": lot,
+        "ref_year": ref_year,
+        "import_id": imp.id,
+        "filename": imp.filename,
+        "import_date": imp.import_date.isoformat(),
+        "nb_sites": imp.nb_sites,
+        "nb_ape": imp.nb_ape_rows,
+        "p1_gaz_ref_year_ht": round(_sum(CpeDalkiaRefP1Gaz, "p10_total_ht", ref_year), 2),
+        "p1_elec_ref_year_ht": round(_sum(CpeDalkiaRefP1Elec, "p10_total_ht", ref_year), 2),
+        "p2_ref_year_ht": round(_sum(CpeDalkiaRefP2P3, "p2_total_ht", ref_year), 2),
+        "p3_ref_year_ht": round(_sum(CpeDalkiaRefP2P3, "p3_total_ht", ref_year), 2),
+        "marche_total_ht": round(marche_total, 2),
+    }
 
 
 def get_import_by_id(db: Session, import_id: int, current_user: User) -> CpeDalkiaRefImport | None:
