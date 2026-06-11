@@ -1,4 +1,15 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-11 (reprise collecte ENEDIS synchrone de secours)
+> **Etat code local** : UI `/energie` restructuree pour distinguer collecte synchrone et collecte async ENEDIS.
+>
+> Le moteur ENEDIS synchrone etait encore present mais partiellement masque cote front. La page Energie expose
+> maintenant un panneau "Collecte de donnees ENEDIS" avec deux etapes : prerequis/referentiels (sync contractuelle
+> ENEDIS + DJU) puis collecte synchrone de secours (conso journaliere, puissance max, courbe de charge). Les endpoints
+> synchrones acceptent un `prm_limit` pour tester sur les 5 premiers PRM avant une reprise large ; ce mode test
+> n'avance pas l'etat global de reprise. La courbe de charge synchrone evite maintenant les doublons en n'ajoutant
+> que les points PRM/horodatage absents. Validation locale : `python -m compileall app` OK. Build frontend non execute
+> localement : `npm` absent et `node_modules` absent ; validation CI requise.
+>
 > **Mise a jour complementaire** : 2026-06-09 (controle factures ENGIE vs BPU canonique)
 > **Etat code local** : controle BPU facture recale sur `extraction_tarifs_electricite_BPU.xlsx`.
 >

@@ -18,6 +18,9 @@
 - 3 pipelines : `run_daily_consumption_sync`, `run_max_power_sync`, `run_load_curve_sync`
 - Rate limiting commun : 5 req/s, 5 concurrent, 950 req/h max (cf. `enedis_common.py::RateLimiter`)
 - Token OAuth2 partagé : `enedis_common.py::TokenManager` (thread-safe, refresh auto)
+- Depuis 2026-06-11 : les routes de lancement acceptent `prm_limit` pour tester sur un petit echantillon
+  (ex. 5 premiers PRM contractuels) sans avancer l'etat global de reprise. La CDC synchrone n'ajoute que
+  les points PRM/horodatage absents pour eviter les doublons lors des relances.
 - Sortie : CSVs dans `saas/energie/output/`
   - `enedis_data.csv` (conso quotidienne)
   - `enedis_max_power.csv` (P max quotidienne)

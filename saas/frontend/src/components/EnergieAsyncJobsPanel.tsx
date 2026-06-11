@@ -176,7 +176,7 @@ export function EnergieAsyncJobsPanel({ token }: { token: string }) {
   return (
     <div className="data-coverage-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <strong>Backfill async ENEDIS / FTP</strong>
+        <strong>Collecte asynchrone ENEDIS / FTP</strong>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <span className="badge badge-gray">Total : {counters.total}</span>
           <span className="badge badge-gray">Succès : {counters.success}</span>

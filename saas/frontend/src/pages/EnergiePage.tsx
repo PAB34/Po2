@@ -4,10 +4,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   fetchEnergieOverview,
+  fetchSyncStatus, startSync,
+  fetchMaxPowerSyncStatus, startMaxPowerSync,
+  fetchLoadCurveSyncStatus, startLoadCurveSync,
   fetchDjuSyncStatus, startDjuSync,
   fetchCustomerSyncStatus, startCustomerSync,
   fetchDataRanges, fetchDataAudit,
-  PrmListItem, SupplierDistributionItem, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
+  PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
@@ -74,6 +77,7 @@ const AUDIT_FILTER_LABEL: Record<string, string> = {
 
 function SubSyncRow({
   label,
+  description,
   status,
   lastDate,
   rowsAdded,
@@ -83,11 +87,15 @@ function SubSyncRow({
   isPending,
   progress,
   actionLabel = "Sync incrémentale",
+  backfillLabel = "Backfill 3 ans",
   resultLabel = "nouvelles lignes intégrées",
   onIncremental,
   onBackfill,
+  onTest,
+  testLabel = "Tester 5 PRM",
 }: {
   label: string;
+  description?: string;
   status: string | undefined;
   lastDate: string | null | undefined;
   rowsAdded?: number;
@@ -97,14 +105,20 @@ function SubSyncRow({
   isPending: boolean;
   progress?: number | null;
   actionLabel?: string;
+  backfillLabel?: string;
   resultLabel?: string;
   onIncremental: () => void;
   onBackfill?: () => void;
+  onTest?: () => void;
+  testLabel?: string;
 }) {
   return (
     <div className="sync-sub-row">
       <div className="sync-sub-header">
-        <span className="sync-sub-label">{label}</span>
+        <div>
+          <span className="sync-sub-label">{label}</span>
+          {description && <p className="sync-sub-description">{description}</p>}
+        </div>
         <div className="sync-panel-meta">
           {status && (
             <span className={`badge ${STATUS_CLASS[status] ?? "badge-gray"}`}>
@@ -134,12 +148,22 @@ function SubSyncRow({
             className="btn-secondary"
             disabled={isRunning || isPending}
             onClick={() => {
-              if (lastDate && !window.confirm(`Des données existent déjà (dernière sync : ${lastDate}).\n\nRelancer le backfill 3 ans va re-télécharger tout l'historique. Continuer ?`)) return;
+              if (lastDate && !window.confirm(`Des données existent déjà (dernière sync : ${lastDate}).\n\nRelancer ${backfillLabel.toLowerCase()} va re-télécharger l'historique demandé. Continuer ?`)) return;
               onBackfill();
             }}
-            title="Backfill complet sur 3 ans"
+            title={backfillLabel}
           >
-            Backfill 3 ans
+            {backfillLabel}
+          </button>
+        )}
+        {onTest && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={isRunning || isPending}
+            onClick={onTest}
+          >
+            {testLabel}
           </button>
         )}
       </div>
@@ -151,7 +175,25 @@ function SubSyncRow({
 }
 
 function SyncPanel({ token }: { token: string }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+
+  const { data: consumptionStatus, refetch: refetchConsumption } = useQuery({
+    queryKey: ["sync-consumption-status"],
+    queryFn: () => fetchSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 3000 : false,
+  });
+
+  const { data: maxPowerStatus, refetch: refetchMaxPower } = useQuery({
+    queryKey: ["sync-max-power-status"],
+    queryFn: () => fetchMaxPowerSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 3000 : false,
+  });
+
+  const { data: loadCurveStatus, refetch: refetchLoadCurve } = useQuery({
+    queryKey: ["sync-load-curve-status"],
+    queryFn: () => fetchLoadCurveSyncStatus(token),
+    refetchInterval: (query) => (query.state.data as LoadCurveSyncStatus | undefined)?.status === "running" ? 5000 : false,
+  });
 
   const { data: djuStatus, refetch: refetchDju } = useQuery({
     queryKey: ["sync-dju-status"],
@@ -175,16 +217,56 @@ function SyncPanel({ token }: { token: string }) {
     onSuccess: () => { setTimeout(() => refetchCustomer(), 500); },
   });
 
+  const consumptionMutation = useMutation({
+    mutationFn: (options?: { historyDays?: number; prmLimit?: number }) => startSync(token, options),
+    onSuccess: () => { setTimeout(() => refetchConsumption(), 500); },
+  });
+
+  const maxPowerMutation = useMutation({
+    mutationFn: (options?: { historyDays?: number; prmLimit?: number }) => startMaxPowerSync(token, options),
+    onSuccess: () => { setTimeout(() => refetchMaxPower(), 500); },
+  });
+
+  const loadCurveMutation = useMutation({
+    mutationFn: (options?: { historyDays?: number; prmLimit?: number; resetState?: boolean }) => startLoadCurveSync(token, options),
+    onSuccess: () => { setTimeout(() => refetchLoadCurve(), 500); },
+  });
+
   const customerProgress = customerStatus && customerStatus.sources_total > 0
     ? Math.round((customerStatus.sources_done / customerStatus.sources_total) * 100)
     : null;
 
-  const anyRunning = djuStatus?.status === "running" || customerStatus?.status === "running";
+  const consumptionProgress = consumptionStatus && consumptionStatus.prms_total > 0
+    ? Math.round((consumptionStatus.prms_done / consumptionStatus.prms_total) * 100)
+    : null;
+  const maxPowerProgress = maxPowerStatus && maxPowerStatus.prms_total > 0
+    ? Math.round((maxPowerStatus.prms_done / maxPowerStatus.prms_total) * 100)
+    : null;
+  const loadCurveProgress = loadCurveStatus && loadCurveStatus.chunks_total > 0
+    ? Math.round((loadCurveStatus.chunks_done / loadCurveStatus.chunks_total) * 100)
+    : null;
+
+  const anyRunning =
+    djuStatus?.status === "running" ||
+    customerStatus?.status === "running" ||
+    consumptionStatus?.status === "running" ||
+    maxPowerStatus?.status === "running" ||
+    loadCurveStatus?.status === "running";
+  const anyPending =
+    djuMutation.isPending ||
+    customerMutation.isPending ||
+    consumptionMutation.isPending ||
+    maxPowerMutation.isPending ||
+    loadCurveMutation.isPending;
+  const anyBusy = anyRunning || anyPending;
 
   return (
-    <div className="sync-panel">
+    <div className="sync-panel sync-panel--collection">
       <div className="sync-panel-header" onClick={() => setExpanded((v) => !v)}>
-        <span className="sync-panel-title">Synchronisations de référence</span>
+        <div>
+          <span className="sync-panel-title">Collecte de données ENEDIS</span>
+          <p className="sync-panel-subtitle">Mode synchrone de secours pour avancer malgré le blocage async côté ENEDIS.</p>
+        </div>
         <div className="sync-panel-meta">
           {anyRunning && <span className="badge badge-blue">En cours…</span>}
           <span className="sync-toggle">{expanded ? "▲" : "▼"}</span>
@@ -193,33 +275,118 @@ function SyncPanel({ token }: { token: string }) {
 
       {expanded && (
         <div className="sync-panel-body">
-          <SubSyncRow
-            label="Référentiel contractuel ENEDIS"
-            status={customerStatus?.status}
-            lastDate={customerStatus?.last_sync_at}
-            rowsAdded={customerStatus?.changes_detected}
-            error={customerStatus?.error}
-            log={customerStatus?.log}
-            isRunning={customerStatus?.status === "running"}
-            isPending={customerMutation.isPending}
-            progress={customerProgress}
-            actionLabel="Mettre à jour"
-            resultLabel="changement(s) détecté(s)"
-            onIncremental={() => customerMutation.mutate()}
-          />
+          <div className="sync-section">
+            <div className="sync-section-heading">
+              <span>1. Prérequis et référentiels</span>
+              <small>À lancer avant une reprise large si le périmètre des contrats a changé.</small>
+            </div>
+            <SubSyncRow
+              label="Référentiel contractuel ENEDIS"
+              description="Récupère les PRM en contrat, adresses, raccordements, puissances souscrites et niveaux de service. Les collectes ci-dessous partent ensuite de cette liste."
+              status={customerStatus?.status}
+              lastDate={customerStatus?.last_sync_at}
+              rowsAdded={customerStatus?.changes_detected}
+              error={customerStatus?.error}
+              log={customerStatus?.log}
+              isRunning={customerStatus?.status === "running"}
+              isPending={customerMutation.isPending || anyBusy}
+              progress={customerProgress}
+              actionLabel="Mettre à jour les contrats"
+              resultLabel="changement(s) détecté(s)"
+              onIncremental={() => customerMutation.mutate()}
+            />
 
-          <SubSyncRow
-            label="DJU météo (Open-Meteo — Sète)"
-            status={djuStatus?.status}
-            lastDate={djuStatus?.last_sync_date}
-            rowsAdded={djuStatus?.rows_added}
-            error={djuStatus?.error}
-            log={djuStatus?.log}
-            isRunning={djuStatus?.status === "running"}
-            isPending={djuMutation.isPending}
-            actionLabel="Synchroniser"
-            onIncremental={() => djuMutation.mutate()}
-          />
+            <SubSyncRow
+              label="DJU météo"
+              description="Met à jour les degrés-jours utiles aux analyses conso x météo."
+              status={djuStatus?.status}
+              lastDate={djuStatus?.last_sync_date}
+              rowsAdded={djuStatus?.rows_added}
+              error={djuStatus?.error}
+              log={djuStatus?.log}
+              isRunning={djuStatus?.status === "running"}
+              isPending={djuMutation.isPending || anyBusy}
+              actionLabel="Synchroniser les DJU"
+              onIncremental={() => djuMutation.mutate()}
+            />
+          </div>
+
+          <div className="sync-section sync-section--primary">
+            <div className="sync-section-heading">
+              <span>2. Collecte synchrone de secours</span>
+              <small>Conso et P max écrivent en upsert par PRM/date ; la courbe de charge ajoute seulement les points manquants.</small>
+            </div>
+
+            <div className="sync-guidance-grid">
+              <div>
+                <strong>Test conseillé</strong>
+                <span>Utiliser “Tester 5 PRM” sur 30 jours pour valider les droits et la forme des réponses sans lancer tout le parc.</span>
+              </div>
+              <div>
+                <strong>Reprise historique</strong>
+                <span>Conso et P max remplacent les lignes existantes ; la CDC évite les doublons. En mode test, l’état global de reprise n’est pas avancé.</span>
+              </div>
+              <div>
+                <strong>Ordre logique</strong>
+                <span>Contrats ENEDIS, puis consommation, puissance max, puis CDC si nécessaire.</span>
+              </div>
+            </div>
+
+            <SubSyncRow
+              label="Consommations journalières"
+              description="Alimente enedis_data.csv, utilisé par les pages énergie, les factures et les préconisations."
+              status={consumptionStatus?.status}
+              lastDate={consumptionStatus?.last_sync_date}
+              rowsAdded={consumptionStatus?.rows_added}
+              error={consumptionStatus?.error}
+              log={consumptionStatus?.log}
+              isRunning={consumptionStatus?.status === "running"}
+              isPending={consumptionMutation.isPending || anyBusy}
+              progress={consumptionProgress}
+              actionLabel="Mise à jour incrémentale"
+              backfillLabel="Backfill 3 ans"
+              onIncremental={() => consumptionMutation.mutate()}
+              onBackfill={() => consumptionMutation.mutate({ historyDays: 1095 })}
+              onTest={() => consumptionMutation.mutate({ historyDays: 30, prmLimit: 5 })}
+            />
+
+            <SubSyncRow
+              label="Puissances max journalières"
+              description="Alimente enedis_max_power.csv, cœur du calibrage de puissance souscrite."
+              status={maxPowerStatus?.status}
+              lastDate={maxPowerStatus?.last_sync_date}
+              rowsAdded={maxPowerStatus?.rows_added}
+              error={maxPowerStatus?.error}
+              log={maxPowerStatus?.log}
+              isRunning={maxPowerStatus?.status === "running"}
+              isPending={maxPowerMutation.isPending || anyBusy}
+              progress={maxPowerProgress}
+              actionLabel="Mise à jour incrémentale"
+              backfillLabel="Backfill 3 ans"
+              onIncremental={() => maxPowerMutation.mutate()}
+              onBackfill={() => maxPowerMutation.mutate({ historyDays: 1095 })}
+              onTest={() => maxPowerMutation.mutate({ historyDays: 30, prmLimit: 5 })}
+            />
+
+            <SubSyncRow
+              label="Courbes de charge"
+              description="Collecte fine par pas de mesure, plus coûteuse côté quota car découpée en fenêtres de 7 jours."
+              status={loadCurveStatus?.status}
+              lastDate={loadCurveStatus?.last_sync_date}
+              rowsAdded={loadCurveStatus?.rows_added}
+              error={loadCurveStatus?.error}
+              log={loadCurveStatus?.log}
+              isRunning={loadCurveStatus?.status === "running"}
+              isPending={loadCurveMutation.isPending || anyBusy}
+              progress={loadCurveProgress}
+              actionLabel="Mise à jour incrémentale"
+              backfillLabel="Backfill CDC complet"
+              onIncremental={() => loadCurveMutation.mutate()}
+              onBackfill={() => loadCurveMutation.mutate({ resetState: true })}
+              onTest={() => loadCurveMutation.mutate({ historyDays: 7, prmLimit: 5 })}
+              testLabel="Tester 5 PRM / 7j"
+            />
+          </div>
         </div>
       )}
     </div>

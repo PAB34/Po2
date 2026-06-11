@@ -1206,9 +1206,15 @@ export async function fetchSyncStatus(token: string): Promise<SyncStatus> {
   return parseResponse<SyncStatus>(response);
 }
 
-export async function startSync(token: string, historyDays?: number): Promise<{ message: string }> {
-  const params = historyDays ? `?history_days=${historyDays}` : "";
-  const response = await fetch(`${apiBaseUrl}/energie/sync/start${params}`, {
+export async function startSync(
+  token: string,
+  options?: { historyDays?: number; prmLimit?: number },
+): Promise<{ message: string }> {
+  const params = new URLSearchParams();
+  if (options?.historyDays) params.set("history_days", String(options.historyDays));
+  if (options?.prmLimit) params.set("prm_limit", String(options.prmLimit));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/start${qs}`, {
     method: "POST",
     headers: buildHeaders(token),
   });
@@ -1222,9 +1228,15 @@ export async function fetchMaxPowerSyncStatus(token: string): Promise<SyncStatus
   return parseResponse<SyncStatus>(response);
 }
 
-export async function startMaxPowerSync(token: string, historyDays?: number): Promise<{ message: string }> {
-  const params = historyDays ? `?history_days=${historyDays}` : "";
-  const response = await fetch(`${apiBaseUrl}/energie/sync/max-power/start${params}`, {
+export async function startMaxPowerSync(
+  token: string,
+  options?: { historyDays?: number; prmLimit?: number },
+): Promise<{ message: string }> {
+  const params = new URLSearchParams();
+  if (options?.historyDays) params.set("history_days", String(options.historyDays));
+  if (options?.prmLimit) params.set("prm_limit", String(options.prmLimit));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/max-power/start${qs}`, {
     method: "POST",
     headers: buildHeaders(token),
   });
@@ -1290,8 +1302,16 @@ export async function fetchLoadCurveSyncStatus(token: string): Promise<LoadCurve
   return parseResponse<LoadCurveSyncStatus>(response);
 }
 
-export async function startLoadCurveSync(token: string): Promise<{ message: string }> {
-  const response = await fetch(`${apiBaseUrl}/energie/sync/load-curve/start`, {
+export async function startLoadCurveSync(
+  token: string,
+  options?: { historyDays?: number; prmLimit?: number; resetState?: boolean },
+): Promise<{ message: string }> {
+  const params = new URLSearchParams();
+  if (options?.historyDays) params.set("history_days", String(options.historyDays));
+  if (options?.prmLimit) params.set("prm_limit", String(options.prmLimit));
+  if (options?.resetState) params.set("reset_state", "true");
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiBaseUrl}/energie/sync/load-curve/start${qs}`, {
     method: "POST",
     headers: buildHeaders(token),
   });

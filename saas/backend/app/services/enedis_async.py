@@ -491,7 +491,7 @@ def _upsert_daily_csv(rows: list[dict[str, Any]], csv_path: Path) -> int:
 
 
 def _append_cdc_csv(rows: list[dict[str, Any]], csv_path: Path) -> int:
-    """Append dans enedis_load_curve.csv. Cf. enedis_sync._append_lc_csv."""
+    """Append dans enedis_load_curve.csv."""
     if not rows:
         return 0
     fieldnames = ["usage_point_id", "datetime", "value_w", "unit", "quality", "_ingested_at_utc"]

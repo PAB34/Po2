@@ -134,7 +134,7 @@ def _get_token() -> str:
 # PRM list — from existing enedis_contracts.csv
 # ---------------------------------------------------------------------------
 
-def _load_prms() -> list[str]:
+def _load_prms(prm_limit: int | None = None) -> list[str]:
     csv_path = Path(settings.energie_dir) / "enedis_contracts.csv"
     if not csv_path.exists():
         raise RuntimeError(f"enedis_contracts.csv introuvable dans {settings.energie_dir}")
@@ -146,7 +146,10 @@ def _load_prms() -> list[str]:
                 prms.append(uid)
     if not prms:
         raise RuntimeError("Aucun PRM valide trouvé dans enedis_contracts.csv")
-    return sorted(set(prms))
+    unique_prms = sorted(set(prms))
+    if prm_limit is not None:
+        return unique_prms[:prm_limit]
+    return unique_prms
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +275,7 @@ def _fetch_one_prm(
 # Main sync orchestration
 # ---------------------------------------------------------------------------
 
-def run_daily_consumption_sync(history_days: int | None = None) -> None:
+def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int | None = None) -> None:
     """
     Background task: fetches daily consumption for all PRMs and upserts enedis_data.csv.
     Designed to run in a FastAPI BackgroundTasks context.
@@ -294,9 +297,11 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
 
     try:
         _log("Démarrage de la synchronisation ENEDIS — consommation journalière")
+        if prm_limit is not None:
+            _log(f"Mode test : collecte limitée aux {prm_limit} premiers PRM du référentiel contractuel.")
 
         # 1. Charger les PRMs
-        prms = _load_prms()
+        prms = _load_prms(prm_limit)
         with _SYNC_LOCK:
             _SYNC_STATE["prms_total"] = len(prms)
         _log(f"{len(prms)} PRMs chargés depuis enedis_contracts.csv")
@@ -382,7 +387,10 @@ def run_daily_consumption_sync(history_days: int | None = None) -> None:
                     pass  # Keep existing token
 
         # 5. Persister l'état + diagnostic + invalider les caches
-        _save_persistent_state(end_str)
+        if prm_limit is None:
+            _save_persistent_state(end_str)
+        else:
+            _log("Mode test : état global non avancé, seules les lignes collectées sont upsertées.")
         try:
             diag_path = Path(settings.energie_dir) / "enedis_data_diagnostic.json"
             diag_path.write_text(
@@ -595,7 +603,7 @@ def _fetch_one_max_power(
     return [], "error"
 
 
-def run_max_power_sync(history_days: int | None = None) -> None:
+def run_max_power_sync(history_days: int | None = None, prm_limit: int | None = None) -> None:
     """Background task : récupère la puissance max journalière pour tous les PRMs."""
     with _MP_LOCK:
         if _MP_STATE["status"] == "running":
@@ -613,8 +621,10 @@ def run_max_power_sync(history_days: int | None = None) -> None:
 
     try:
         _mp_log("Démarrage sync puissance max ENEDIS")
+        if prm_limit is not None:
+            _mp_log(f"Mode test : collecte limitée aux {prm_limit} premiers PRM du référentiel contractuel.")
 
-        prms = _load_prms()
+        prms = _load_prms(prm_limit)
         with _MP_LOCK:
             _MP_STATE["prms_total"] = len(prms)
         _mp_log(f"{len(prms)} PRMs chargés")
@@ -694,7 +704,10 @@ def run_max_power_sync(history_days: int | None = None) -> None:
             _mp_log(f"  Chunk OK — {new_rows} nouvelles lignes ({total_new} total)")
             chunk_start = chunk_end + timedelta(days=1)
 
-        _save_mp_state(end_str)
+        if prm_limit is None:
+            _save_mp_state(end_str)
+        else:
+            _mp_log("Mode test : état global non avancé, seules les lignes collectées sont upsertées.")
         try:
             diag_path = Path(settings.energie_dir) / "enedis_mp_diagnostic.json"
             diag_path.write_text(
@@ -804,8 +817,31 @@ def _save_lc_state(last_date: str) -> None:
     p.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _append_lc_csv(rows: list[dict], csv_path: Path) -> int:
+def _upsert_lc_csv(rows: list[dict], csv_path: Path) -> int:
+    """Append only new load-curve rows by PRM + timestamp.
+
+    CDC files can become large; avoiding a full rewrite on every 7-day chunk keeps
+    repeated backfills usable while preventing duplicate points.
+    """
     if not rows:
+        return 0
+    key_cols = ("usage_point_id", "datetime")
+    existing_keys: set[tuple[str, str]] = set()
+    if csv_path.exists() and csv_path.stat().st_size > 0:
+        with open(csv_path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                existing_keys.add(tuple(row.get(k, "") for k in key_cols))
+
+    new_rows: list[dict[str, Any]] = []
+    for row in rows:
+        key = tuple(str(row.get(k, "")) for k in key_cols)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        new_rows.append(row)
+
+    if not new_rows:
         return 0
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     write_header = not csv_path.exists() or csv_path.stat().st_size == 0
@@ -813,9 +849,9 @@ def _append_lc_csv(rows: list[dict], csv_path: Path) -> int:
         writer = csv.DictWriter(f, fieldnames=_LC_FIELDNAMES, extrasaction="ignore")
         if write_header:
             writer.writeheader()
-        for row in rows:
+        for row in new_rows:
             writer.writerow({k: "" if row.get(k) is None else str(row[k]) for k in _LC_FIELDNAMES})
-    return len(rows)
+    return len(new_rows)
 
 
 # --- Utilitaires CDC : rate limiter et token manager ---
@@ -1103,7 +1139,11 @@ def _generate_lc_report(
     )
 
 
-def run_load_curve_sync(reset_state: bool = False) -> None:
+def run_load_curve_sync(
+    reset_state: bool = False,
+    prm_limit: int | None = None,
+    history_days: int | None = None,
+) -> None:
     """
     Background task : courbe de charge 30 min pour tous les PRMs.
     Respecte les contraintes API ENEDIS sync (1 PRM/appel, 7j max, rate limits).
@@ -1128,6 +1168,8 @@ def run_load_curve_sync(reset_state: bool = False) -> None:
 
     try:
         _lc_log("Démarrage sync courbe de charge 30 min")
+        if prm_limit is not None:
+            _lc_log(f"Mode test : collecte limitée aux {prm_limit} premiers PRM du référentiel contractuel.")
 
         if reset_state:
             try:
@@ -1137,7 +1179,7 @@ def run_load_curve_sync(reset_state: bool = False) -> None:
                 LOG.warning("Reset state CDC échoué : %s", exc)
                 _lc_log(f"Reset state CDC échoué : {exc}")
 
-        prms = _load_prms()
+        prms = _load_prms(prm_limit)
         _lc_log(f"{len(prms)} PRMs chargés")
 
         persistent = _load_lc_state()
@@ -1145,7 +1187,10 @@ def run_load_curve_sync(reset_state: bool = False) -> None:
         today = date.today()
         end_d = today - timedelta(days=1)
 
-        if last_sync:
+        if history_days is not None:
+            start_d = today - timedelta(days=history_days)
+            _lc_log(f"Fenêtre explicite : reprise sur les {history_days} derniers jours.")
+        elif last_sync:
             start_d = date.fromisoformat(last_sync) + timedelta(days=1)
             _lc_log(f"Reprise depuis {start_d} (données jusqu'au {last_sync})")
         else:
@@ -1216,12 +1261,13 @@ def run_load_curve_sync(reset_state: bool = False) -> None:
             )
             _lc_log(f"  → {ok_n} avec données, {empty_n} vides, {err_n} erreurs techniques")
 
-            appended = _append_lc_csv(chunk_rows, csv_path)
-            total_rows += appended
-            _save_lc_state(ce)
+            new_rows = _upsert_lc_csv(chunk_rows, csv_path)
+            total_rows += new_rows
+            if prm_limit is None:
+                _save_lc_state(ce)
             with _LC_LOCK:
                 _LC_STATE.update({"chunks_done": chunk_idx, "rows_added": total_rows, "last_sync_date": ce})
-            _lc_log(f"  Chunk OK — {appended} pts écrits ({total_rows} total)")
+            _lc_log(f"  Chunk OK — {new_rows} nouveaux pts ({total_rows} total)")
 
             chunk_start = chunk_end + timedelta(days=1)
 
@@ -1236,7 +1282,10 @@ def run_load_curve_sync(reset_state: bool = False) -> None:
         except Exception:
             pass
 
-        _lc_log(f"Terminé — {total_rows} points écrits, date max : {end_d.isoformat()}")
+        if prm_limit is not None:
+            _lc_log("Mode test : état global non avancé, seules les lignes collectées sont upsertées.")
+
+        _lc_log(f"Terminé — {total_rows} nouveaux points, date max : {end_d.isoformat()}")
         with _LC_LOCK:
             _LC_STATE.update({
                 "status": "success",

@@ -2291,10 +2291,14 @@ button:disabled {
 /* ---- Sync panel ---- */
 
 .sync-panel {
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(15, 23, 42, 0.7);
   overflow: hidden;
+}
+
+.sync-panel--collection {
+  border-color: rgba(37, 99, 235, 0.28);
 }
 
 .sync-panel-header {
@@ -2315,6 +2319,12 @@ button:disabled {
   font-weight: 600;
   font-size: 0.95rem;
   color: #cbd5e1;
+}
+
+.sync-panel-subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
 }
 
 .sync-panel-meta {
@@ -2338,7 +2348,66 @@ button:disabled {
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.sync-section {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.sync-section--primary {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(30, 41, 59, 0.35);
+}
+
+.sync-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sync-section-heading span {
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.sync-section-heading small {
+  color: #94a3b8;
+}
+
+.sync-guidance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.sync-guidance-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.sync-guidance-grid strong {
+  color: #bfdbfe;
+  font-size: 0.82rem;
+}
+
+.sync-guidance-grid span {
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .sync-progress-row {
@@ -2486,7 +2555,14 @@ button:disabled {
   font-weight: 600;
   color: #94a3b8;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+}
+
+.sync-sub-description {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 /* ---- Data coverage bar ---- */

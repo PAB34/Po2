@@ -79,12 +79,14 @@ def sync_status(current_user: User = Depends(get_current_user)) -> SyncStatus:
 def sync_start(
     background_tasks: BackgroundTasks,
     history_days: int | None = Query(default=None, ge=1, le=1110),
+    prm_limit: int | None = Query(default=None, ge=1, le=50),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     if is_sync_running():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation est déjà en cours.")
-    background_tasks.add_task(run_daily_consumption_sync, history_days)
-    return {"message": "Synchronisation consommation démarrée."}
+    background_tasks.add_task(run_daily_consumption_sync, history_days, prm_limit)
+    suffix = f" sur les {prm_limit} premiers PRM" if prm_limit else ""
+    return {"message": f"Synchronisation consommation démarrée{suffix}."}
 
 
 # ---------------------------------------------------------------------------
@@ -100,12 +102,14 @@ def max_power_status(current_user: User = Depends(get_current_user)) -> SyncStat
 def max_power_start(
     background_tasks: BackgroundTasks,
     history_days: int | None = Query(default=None, ge=1, le=1110),
+    prm_limit: int | None = Query(default=None, ge=1, le=50),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     if is_max_power_running():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation puissance max est déjà en cours.")
-    background_tasks.add_task(run_max_power_sync, history_days)
-    return {"message": "Synchronisation puissance max démarrée."}
+    background_tasks.add_task(run_max_power_sync, history_days, prm_limit)
+    suffix = f" sur les {prm_limit} premiers PRM" if prm_limit else ""
+    return {"message": f"Synchronisation puissance max démarrée{suffix}."}
 
 
 # ---------------------------------------------------------------------------
@@ -135,14 +139,20 @@ def load_curve_status(current_user: User = Depends(get_current_user)) -> LoadCur
 def load_curve_start(
     background_tasks: BackgroundTasks,
     reset_state: bool = Query(default=False),
+    history_days: int | None = Query(default=None, ge=1, le=730),
+    prm_limit: int | None = Query(default=None, ge=1, le=50),
     current_user: User = Depends(get_current_user),
 ) -> dict:
     if is_load_curve_running():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Une synchronisation courbe de charge est déjà en cours.")
-    background_tasks.add_task(run_load_curve_sync, reset_state)
+    background_tasks.add_task(run_load_curve_sync, reset_state, prm_limit, history_days)
     msg = "Synchronisation courbe de charge démarrée"
+    if prm_limit:
+        msg += f" sur les {prm_limit} premiers PRM"
     if reset_state:
         msg += " (backfill complet depuis enedis_load_curve_start)."
+    elif history_days:
+        msg += f" ({history_days} derniers jours)."
     else:
         msg += " (incrémentale depuis last_sync_date)."
     return {"message": msg}
