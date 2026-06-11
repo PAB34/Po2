@@ -14,10 +14,11 @@ que le P1 revise du lot concerne (P2/P3/APE/cibles/RECAP du maitre restent intac
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -55,6 +56,9 @@ class CpeDpgfP1Import(Base):
     nb_lines: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acte_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    acte_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    date_effet: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class CpeDpgfP1Line(Base):

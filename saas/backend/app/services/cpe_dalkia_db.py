@@ -90,6 +90,23 @@ def build_active_market_summary(
     }
 
 
+def update_import_acte(
+    db: Session, import_id: int, current_user: User, *,
+    acte_type: str | None, acte_label: str | None, date_effet,
+) -> CpeDalkiaRefImport | None:
+    """Qualifie un import maître (type / libellé / date d'effet de l'acte) — éditable a posteriori."""
+    imp = get_import_by_id(db, import_id, current_user)
+    if imp is None:
+        return None
+    imp.acte_type = acte_type
+    imp.acte_label = acte_label
+    imp.date_effet = date_effet
+    db.add(imp)
+    db.commit()
+    db.refresh(imp)
+    return imp
+
+
 def get_import_by_id(db: Session, import_id: int, current_user: User) -> CpeDalkiaRefImport | None:
     stmt = select(CpeDalkiaRefImport).where(CpeDalkiaRefImport.id == import_id)
     if current_user.city_id is not None:
@@ -159,6 +176,10 @@ def persist_dalkia_import(
     result: DalkiaParseResult,
     current_user: User,
     deactivate_previous: bool = True,
+    *,
+    acte_type: str | None = None,
+    acte_label: str | None = None,
+    date_effet=None,
 ) -> CpeDalkiaRefImport:
     """
     Persiste un import DALKIA en base.
@@ -194,6 +215,9 @@ def persist_dalkia_import(
         nb_recap_rows=len(result.recap_rows),
         is_active=True,
         notes=f"Warnings: {len(result.warnings)}" if result.warnings else None,
+        acte_type=acte_type,
+        acte_label=acte_label,
+        date_effet=date_effet,
     )
     db.add(batch)
     db.flush()  # obtenir batch.id

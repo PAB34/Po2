@@ -1,6 +1,8 @@
 """Routes pour l'import et la consultation des references contractuelles DALKIA CPE."""
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -21,6 +23,7 @@ from app.services.cpe_dalkia_db import (
     persist_dalkia_import,
     sync_cpe_sites_from_dalkia,
     sync_p1_reference_from_recap,
+    update_import_acte,
 )
 from app.services.cpe_dalkia_diff import build_dpgf_summary, build_master_diff
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
@@ -29,6 +32,7 @@ from app.services.cpe_dpgf_p1 import (
     get_all_dpgf_p1_imports,
     parse_dpgf_p1_file,
     persist_dpgf_p1_import,
+    update_dpgf_p1_acte,
 )
 
 router = APIRouter(prefix="/cpe/dalkia-ref", tags=["cpe-dalkia"])
@@ -66,6 +70,26 @@ class ImportBatchResponse(BaseModel):
     nb_recap_rows: int
     is_active: bool
     notes: str | None
+    acte_type: str | None = None
+    acte_label: str | None = None
+    date_effet: str | None = None
+
+
+def _import_resp(b) -> ImportBatchResponse:
+    return ImportBatchResponse(
+        id=b.id, lot=b.lot, filename=b.filename, import_date=b.import_date.isoformat(),
+        nb_sites=b.nb_sites, nb_p2p3_rows=b.nb_p2p3_rows, nb_cibles_rows=b.nb_cibles_rows,
+        nb_p1_gaz_rows=b.nb_p1_gaz_rows, nb_ape_rows=b.nb_ape_rows, nb_recap_rows=b.nb_recap_rows,
+        is_active=b.is_active, notes=b.notes,
+        acte_type=b.acte_type, acte_label=b.acte_label,
+        date_effet=b.date_effet.isoformat() if b.date_effet else None,
+    )
+
+
+class ActeUpdate(BaseModel):
+    acte_type: str | None = None
+    acte_label: str | None = None
+    date_effet: str | None = None
 
 
 class RecapRow(BaseModel):
@@ -175,15 +199,27 @@ async def preview_import(
     )
 
 
+def _parse_date_effet(value: str | None):
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
 @router.post("/confirm", response_model=ImportBatchResponse, status_code=status.HTTP_201_CREATED)
 async def confirm_import(
     file: UploadFile = File(...),
     lot: int = Form(...),
+    acte_type: str | None = Form(None),
+    acte_label: str | None = Form(None),
+    date_effet: str | None = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ImportBatchResponse:
     """
-    Parse et persiste le fichier DALKIA.
+    Parse et persiste le fichier DALKIA, qualifie par l'acte (type / libelle / date d'effet).
     Les imports precedents du meme lot sont marques inactifs.
     """
     if lot not in (1, 2):
@@ -194,21 +230,11 @@ async def confirm_import(
         result = parse_dalkia_file(raw, filename, lot)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    batch = persist_dalkia_import(db, result, current_user, deactivate_previous=True)
-    return ImportBatchResponse(
-        id=batch.id,
-        lot=batch.lot,
-        filename=batch.filename,
-        import_date=batch.import_date.isoformat(),
-        nb_sites=batch.nb_sites,
-        nb_p2p3_rows=batch.nb_p2p3_rows,
-        nb_cibles_rows=batch.nb_cibles_rows,
-        nb_p1_gaz_rows=batch.nb_p1_gaz_rows,
-        nb_ape_rows=batch.nb_ape_rows,
-        nb_recap_rows=batch.nb_recap_rows,
-        is_active=batch.is_active,
-        notes=batch.notes,
+    batch = persist_dalkia_import(
+        db, result, current_user, deactivate_previous=True,
+        acte_type=acte_type, acte_label=acte_label, date_effet=_parse_date_effet(date_effet),
     )
+    return _import_resp(batch)
 
 
 @router.get("/imports", response_model=list[ImportBatchResponse])
@@ -217,24 +243,25 @@ def list_imports(
     current_user: User = Depends(get_current_user),
 ) -> list[ImportBatchResponse]:
     """Liste tous les imports actifs."""
-    batches = get_active_imports(db, current_user)
-    return [
-        ImportBatchResponse(
-            id=b.id,
-            lot=b.lot,
-            filename=b.filename,
-            import_date=b.import_date.isoformat(),
-            nb_sites=b.nb_sites,
-            nb_p2p3_rows=b.nb_p2p3_rows,
-            nb_cibles_rows=b.nb_cibles_rows,
-            nb_p1_gaz_rows=b.nb_p1_gaz_rows,
-            nb_ape_rows=b.nb_ape_rows,
-            nb_recap_rows=b.nb_recap_rows,
-            is_active=b.is_active,
-            notes=b.notes,
-        )
-        for b in batches
-    ]
+    return [_import_resp(b) for b in get_active_imports(db, current_user)]
+
+
+@router.patch("/imports/{import_id}/acte", response_model=ImportBatchResponse)
+def patch_import_acte(
+    import_id: int,
+    payload: ActeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ImportBatchResponse:
+    """Qualifie a posteriori un import maître (type / libellé / date d'effet de l'acte)."""
+    imp = update_import_acte(
+        db, import_id, current_user,
+        acte_type=payload.acte_type, acte_label=payload.acte_label,
+        date_effet=_parse_date_effet(payload.date_effet),
+    )
+    if imp is None:
+        raise HTTPException(status_code=404, detail="Import introuvable.")
+    return _import_resp(imp)
 
 
 class ActiveMarketSummary(BaseModel):
@@ -260,15 +287,7 @@ def list_all_imports(
     current_user: User = Depends(get_current_user),
 ) -> list[ImportBatchResponse]:
     """Journal des imports maitres : toutes les versions (actives ET remplacees conservees)."""
-    return [
-        ImportBatchResponse(
-            id=b.id, lot=b.lot, filename=b.filename, import_date=b.import_date.isoformat(),
-            nb_sites=b.nb_sites, nb_p2p3_rows=b.nb_p2p3_rows, nb_cibles_rows=b.nb_cibles_rows,
-            nb_p1_gaz_rows=b.nb_p1_gaz_rows, nb_ape_rows=b.nb_ape_rows, nb_recap_rows=b.nb_recap_rows,
-            is_active=b.is_active, notes=b.notes,
-        )
-        for b in get_all_imports(db, current_user, lot=lot)
-    ]
+    return [_import_resp(b) for b in get_all_imports(db, current_user, lot=lot)]
 
 
 @router.get("/active-summary", response_model=ActiveMarketSummary)
@@ -447,6 +466,9 @@ class DpgfP1ImportResponse(BaseModel):
     nb_lines: int
     is_active: bool
     notes: str | None
+    acte_type: str | None = None
+    acte_label: str | None = None
+    date_effet: str | None = None
 
 
 def _dpgf_totals_str_keys(totals: dict[int, dict]) -> dict[str, dict[str, float]]:
@@ -483,6 +505,8 @@ async def preview_dpgf_p1(
 async def confirm_dpgf_p1(
     file: UploadFile = File(...),
     lot: int = Form(...),
+    acte_label: str | None = Form(None),
+    date_effet: str | None = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> DpgfP1ImportResponse:
@@ -499,23 +523,36 @@ async def confirm_dpgf_p1(
         result = parse_dpgf_p1_file(raw, filename, lot)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    batch = persist_dpgf_p1_import(db, result, current_user)
-    return DpgfP1ImportResponse(
-        id=batch.id,
-        lot=batch.lot,
-        filename=batch.filename,
-        import_date=batch.import_date.isoformat(),
-        nb_lines=batch.nb_lines,
-        is_active=batch.is_active,
-        notes=batch.notes,
+    batch = persist_dpgf_p1_import(
+        db, result, current_user, acte_label=acte_label, date_effet=_parse_date_effet(date_effet),
     )
+    return _dpgf_resp(batch)
 
 
 def _dpgf_resp(b) -> "DpgfP1ImportResponse":
     return DpgfP1ImportResponse(
         id=b.id, lot=b.lot, filename=b.filename, import_date=b.import_date.isoformat(),
         nb_lines=b.nb_lines, is_active=b.is_active, notes=b.notes,
+        acte_type=b.acte_type, acte_label=b.acte_label,
+        date_effet=b.date_effet.isoformat() if b.date_effet else None,
     )
+
+
+@router.patch("/dpgf-p1/imports/{import_id}/acte", response_model=DpgfP1ImportResponse)
+def patch_dpgf_acte(
+    import_id: int,
+    payload: ActeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> DpgfP1ImportResponse:
+    """Qualifie a posteriori un import DPGF P1 (libellé / date d'effet)."""
+    imp = update_dpgf_p1_acte(
+        db, import_id, current_user,
+        acte_label=payload.acte_label, date_effet=_parse_date_effet(payload.date_effet),
+    )
+    if imp is None:
+        raise HTTPException(status_code=404, detail="DPGF introuvable.")
+    return _dpgf_resp(imp)
 
 
 @router.get("/dpgf-p1/imports", response_model=list[DpgfP1ImportResponse])

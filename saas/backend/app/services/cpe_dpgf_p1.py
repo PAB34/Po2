@@ -248,6 +248,8 @@ def persist_dpgf_p1_import(
     current_user: User,
     *,
     deactivate_previous: bool = True,
+    acte_label: str | None = None,
+    date_effet=None,
 ) -> CpeDpgfP1Import:
     """Persiste un import DPGF P1 dans sa lignee propre.
 
@@ -275,6 +277,9 @@ def persist_dpgf_p1_import(
         nb_lines=len(result.lines),
         is_active=True,
         notes=f"Warnings: {len(result.warnings)}" if result.warnings else None,
+        acte_type="dpgf",
+        acte_label=acte_label,
+        date_effet=date_effet,
     )
     db.add(batch)
     db.flush()  # batch.id
@@ -305,6 +310,25 @@ def persist_dpgf_p1_import(
 # ─────────────────────────────────────────────────────────────────────────────
 # Lecture
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def update_dpgf_p1_acte(
+    db: Session, import_id: int, current_user: User, *,
+    acte_label: str | None, date_effet,
+) -> CpeDpgfP1Import | None:
+    """Qualifie un import DPGF P1 (libellé / date d'effet) — éditable a posteriori."""
+    stmt = select(CpeDpgfP1Import).where(CpeDpgfP1Import.id == import_id)
+    if current_user.city_id is not None:
+        stmt = stmt.where(CpeDpgfP1Import.city_id == current_user.city_id)
+    imp = db.scalars(stmt).first()
+    if imp is None:
+        return None
+    imp.acte_label = acte_label
+    imp.date_effet = date_effet
+    db.add(imp)
+    db.commit()
+    db.refresh(imp)
+    return imp
 
 
 def get_active_dpgf_p1_imports(db: Session, current_user: User) -> list[CpeDpgfP1Import]:

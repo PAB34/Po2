@@ -75,3 +75,21 @@ def test_active_summary_includes_p1_elec(db_session, user):
 def test_active_summary_no_data(db_session, user):
     s = build_active_market_summary(db_session, user, lot=1, ref_year=2026)
     assert s["has_data"] is False
+
+
+def test_update_import_acte(db_session, user):
+    from datetime import date
+    from app.services.cpe_dalkia_db import update_import_acte
+    imp = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True)
+    db_session.add(imp)
+    db_session.commit()
+    out = update_import_acte(
+        db_session, imp.id, user,
+        acte_type="avenant", acte_label="Avenant n°1 — entrée école X", date_effet=date(2026, 3, 15),
+    )
+    assert out is not None
+    assert out.acte_type == "avenant"
+    assert out.acte_label == "Avenant n°1 — entrée école X"
+    assert out.date_effet == date(2026, 3, 15)
+    # import introuvable -> None
+    assert update_import_acte(db_session, 9999, user, acte_type="x", acte_label=None, date_effet=None) is None

@@ -5,10 +5,11 @@ Ces tables sont alimentees par l'import du fichier contractuel DALKIA
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -41,6 +42,10 @@ class CpeDalkiaRefImport(Base):
     nb_recap_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Qualification de l'acte contractuel (saisie utilisateur, journal du marche)
+    acte_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    acte_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    date_effet: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class CpeDalkiaRefSite(Base):
