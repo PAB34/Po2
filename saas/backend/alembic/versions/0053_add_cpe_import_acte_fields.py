@@ -1,7 +1,7 @@
 """add acte qualification fields (type/label/date_effet) sur les imports DALKIA & DPGF P1
 
-Revision ID: 0046
-Revises: 0045
+Revision ID: 0053
+Revises: 0052
 Create Date: 2026-06-11
 """
 from __future__ import annotations
@@ -9,8 +9,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0046"
-down_revision = "0045"
+revision = "0053"
+down_revision = "0052"
 branch_labels = None
 depends_on = None
 
