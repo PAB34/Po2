@@ -296,6 +296,7 @@ async function fetchAllDpgfImports(token: string): Promise<DpgfP1Import[]> {
 // Entrée unifiée du journal (maître ou DPGF), triée par date.
 type JournalEntry = {
   key: string;
+  importId: number;
   kind: "base" | "avenant" | "dpgf";
   lot: number;
   title: string;
@@ -304,6 +305,42 @@ type JournalEntry = {
   is_active: boolean;
   detail: string;
 };
+
+type MasterDiff = {
+  ok: boolean;
+  reason?: string;
+  message?: string;
+  chips?: string[];
+  sites_entres?: string[];
+  sites_sortis?: string[];
+  postes?: { poste: string; from_ht: number; to_ht: number; delta_ht: number }[];
+  marche_delta_ht?: number;
+  cibles_gaz_modifiees?: number;
+  cibles_elec_modifiees?: number;
+  from_import?: { filename: string };
+};
+
+type DpgfSummary = {
+  ok: boolean;
+  chips?: string[];
+  by_year?: { year: number; contrat: number; rev_temp: number; rev_temp_prix: number; delta_rev_temp: number; delta_rev_temp_prix: number }[];
+};
+
+async function fetchMasterDiff(token: string, importId: number): Promise<MasterDiff> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/diff`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<MasterDiff>;
+}
+
+async function fetchDpgfSummary(token: string, importId: number): Promise<DpgfSummary> {
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/imports/${importId}/diff`, {
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+  });
+  if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+  return resp.json() as Promise<DpgfSummary>;
+}
 
 async function syncP1Reference(token: string, importId: number): Promise<SyncP1Result> {
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/sync-p1-reference`, {
@@ -329,6 +366,148 @@ function formatEur(v: number | null | undefined) {
 function formatMwh(v: number | null | undefined) {
   if (v == null) return "—";
   return v.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " MWh";
+}
+
+const KIND_BADGE: Record<JournalEntry["kind"], { label: string; color: string; bg: string }> = {
+  base: { label: "base", color: "#6b7280", bg: "#f3f4f6" },
+  avenant: { label: "avenant", color: "#92400e", bg: "#fef3c7" },
+  dpgf: { label: "DPGF", color: "#1d4ed8", bg: "#eff6ff" },
+};
+
+function Chip({ text }: { text: string }) {
+  return (
+    <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#f3f4f6", color: "#374151" }}>
+      {text}
+    </span>
+  );
+}
+
+function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
+  const [open, setOpen] = useState(false);
+  const isBase = entry.kind === "base";
+  const isDpgf = entry.kind === "dpgf";
+
+  const masterDiffQ = useQuery({
+    queryKey: ["cpe-master-diff", entry.importId],
+    queryFn: () => fetchMasterDiff(token, entry.importId),
+    enabled: !isBase && !isDpgf,
+  });
+  const dpgfDiffQ = useQuery({
+    queryKey: ["cpe-dpgf-diff", entry.importId],
+    queryFn: () => fetchDpgfSummary(token, entry.importId),
+    enabled: isDpgf,
+  });
+
+  const badge = KIND_BADGE[entry.kind];
+  const md = masterDiffQ.data;
+  const dd = dpgfDiffQ.data;
+  const chips = isDpgf ? dd?.chips : md?.ok ? md.chips : undefined;
+  const hasDiff = !isBase;
+
+  return (
+    <div style={{ padding: "10px 0", borderTop: "1px solid #f3f4f6", opacity: entry.is_active || isBase ? 1 : 0.75 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{entry.title}</span>
+            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
+            {entry.is_active ? (
+              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#dcfce7", color: "#15803d" }}>en vigueur</span>
+            ) : !isBase ? (
+              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>remplacé (conservé)</span>
+            ) : null}
+          </div>
+          <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
+            {new Date(entry.date).toLocaleDateString("fr-FR")} · {entry.filename} · {entry.detail}
+          </div>
+          {hasDiff && chips && chips.length > 0 ? (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              {chips.map((c, i) => (<Chip key={i} text={c} />))}
+            </div>
+          ) : null}
+        </div>
+        {hasDiff ? (
+          <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setOpen((v) => !v)}>
+            {open ? "Masquer" : "Comparer"}
+          </button>
+        ) : null}
+      </div>
+
+      {open && hasDiff ? (
+        <div style={{ marginTop: 10, padding: 12, background: "#fafafa", borderRadius: 8, fontSize: 12.5 }}>
+          {isDpgf ? (
+            dd?.ok && dd.by_year ? (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ color: "#6b7280", textAlign: "right" }}>
+                    <th style={{ textAlign: "left", padding: "4px 8px" }}>Année</th>
+                    <th style={{ padding: "4px 8px" }}>Contrat</th>
+                    <th style={{ padding: "4px 8px" }}>Rév Temp</th>
+                    <th style={{ padding: "4px 8px" }}>Rév T° &amp; prix</th>
+                    <th style={{ padding: "4px 8px" }}>Δ Rév Temp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dd.by_year.map((r) => (
+                    <tr key={r.year} style={{ borderTop: "1px solid #eee", textAlign: "right" }}>
+                      <td style={{ textAlign: "left", padding: "4px 8px" }}>{r.year}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatEur(r.contrat)}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatEur(r.rev_temp)}</td>
+                      <td style={{ padding: "4px 8px" }}>{formatEur(r.rev_temp_prix)}</td>
+                      <td style={{ padding: "4px 8px", color: r.delta_rev_temp >= 0 ? "#b45309" : "#15803d", fontWeight: 600 }}>
+                        {r.delta_rev_temp >= 0 ? "+" : ""}{formatEur(r.delta_rev_temp)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <span style={{ color: "#9ca3af" }}>Chargement…</span>
+            )
+          ) : md?.ok ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ color: "#6b7280" }}>vs {md.from_import?.filename}</div>
+              {(md.sites_entres?.length || md.sites_sortis?.length) ? (
+                <div>
+                  {md.sites_entres?.length ? <div><span style={{ color: "#15803d", fontWeight: 600 }}>Entrés :</span> {md.sites_entres.join(", ")}</div> : null}
+                  {md.sites_sortis?.length ? <div><span style={{ color: "#b91c1c", fontWeight: 600 }}>Sortis :</span> {md.sites_sortis.join(", ")}</div> : null}
+                </div>
+              ) : null}
+              {md.postes && md.postes.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ color: "#6b7280", textAlign: "right" }}>
+                      <th style={{ textAlign: "left", padding: "4px 8px" }}>Poste</th>
+                      <th style={{ padding: "4px 8px" }}>Avant</th>
+                      <th style={{ padding: "4px 8px" }}>Après</th>
+                      <th style={{ padding: "4px 8px" }}>Écart</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {md.postes.map((p) => (
+                      <tr key={p.poste} style={{ borderTop: "1px solid #eee", textAlign: "right" }}>
+                        <td style={{ textAlign: "left", padding: "4px 8px" }}>{p.poste}</td>
+                        <td style={{ padding: "4px 8px" }}>{formatEur(p.from_ht)}</td>
+                        <td style={{ padding: "4px 8px" }}>{formatEur(p.to_ht)}</td>
+                        <td style={{ padding: "4px 8px", color: p.delta_ht > 0 ? "#b45309" : p.delta_ht < 0 ? "#15803d" : "#6b7280", fontWeight: 600 }}>
+                          {p.delta_ht >= 0 ? "+" : ""}{formatEur(p.delta_ht)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+              <div style={{ color: "#6b7280" }}>
+                Cibles modifiées : gaz {md.cibles_gaz_modifiees ?? 0} · élec {md.cibles_elec_modifiees ?? 0} · marché {md.marche_delta_ht != null ? (md.marche_delta_ht >= 0 ? "+" : "") + formatEur(md.marche_delta_ht) : "—"}
+              </div>
+            </div>
+          ) : (
+            <span style={{ color: "#9ca3af" }}>{md?.message ?? "Chargement…"}</span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function CpeDalkiaImportPage() {
@@ -559,6 +738,7 @@ export function CpeDalkiaImportPage() {
         let entries: JournalEntry[] = [
           ...lotMasters.map((i) => ({
             key: `m${i.id}`,
+            importId: i.id,
             kind: (i.id === baseId ? "base" : "avenant") as JournalEntry["kind"],
             lot: i.lot,
             title: i.id === baseId ? "Offre finale (base)" : "Avenant — mise à jour du marché",
@@ -571,6 +751,7 @@ export function CpeDalkiaImportPage() {
             .filter((i) => i.lot === dossierLot)
             .map((i) => ({
               key: `d${i.id}`,
+              importId: i.id,
               kind: "dpgf" as JournalEntry["kind"],
               lot: i.lot,
               title: "DPGF P1 — révision de prix",
@@ -589,12 +770,6 @@ export function CpeDalkiaImportPage() {
                 : e.kind === "dpgf",
           )
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        const KIND_BADGE: Record<JournalEntry["kind"], { label: string; color: string; bg: string }> = {
-          base: { label: "base", color: "#6b7280", bg: "#f3f4f6" },
-          avenant: { label: "avenant", color: "#92400e", bg: "#fef3c7" },
-          dpgf: { label: "DPGF", color: "#1d4ed8", bg: "#eff6ff" },
-        };
 
         return (
           <div className="section-block">
@@ -623,27 +798,9 @@ export function CpeDalkiaImportPage() {
               <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun acte pour ce filtre. Importe un fichier ci-dessous.</p>
             ) : (
               <div>
-                {entries.map((e) => {
-                  const badge = KIND_BADGE[e.kind];
-                  return (
-                    <div key={e.key} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderTop: "1px solid #f3f4f6", opacity: e.is_active || e.kind === "base" ? 1 : 0.6 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 14, fontWeight: 600 }}>{e.title}</span>
-                          <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
-                          {e.is_active ? (
-                            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#dcfce7", color: "#15803d" }}>en vigueur</span>
-                          ) : e.kind !== "base" ? (
-                            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>remplacé (conservé)</span>
-                          ) : null}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
-                          {new Date(e.date).toLocaleDateString("fr-FR")} · {e.filename} · {e.detail}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {entries.map((e) => (
+                  <JournalRow key={e.key} entry={e} token={token as string} />
+                ))}
               </div>
             )}
           </div>
