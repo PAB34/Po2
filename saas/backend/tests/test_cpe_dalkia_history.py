@@ -60,6 +60,36 @@ def test_active_market_summary(db_session, user):
     assert s["marche_total_ht"] == round(317775.0 + 200000.0 + 274000.0 + 689000.0, 2)
 
 
+def test_active_summary_combined_and_ape(db_session, user):
+    from app.models.cpe_dalkia import CpeDalkiaRefApe
+    # Lot 1 actif (sites 72, P2 274k 2026) + APE 9815 ; Lot 2 actif (sites 3, P1 elec 94936 2026)
+    imp1 = CpeDalkiaRefImport(city_id=1, lot=1, filename="L1.xlsx", is_active=True, nb_sites=72, nb_ape_rows=31)
+    imp2 = CpeDalkiaRefImport(city_id=1, lot=2, filename="L2.xlsx", is_active=True, nb_sites=3, nb_ape_rows=2)
+    db_session.add_all([imp1, imp2])
+    db_session.flush()
+    db_session.add(CpeDalkiaRefP2P3(import_id=imp1.id, city_id=1, code_site="S1", period_idx=2,
+                                    period_label="2026", period_year=2026, p2_total_ht=274000.0, p3_total_ht=0.0))
+    db_session.add(CpeDalkiaRefP1Elec(import_id=imp2.id, city_id=1, code_site="VDS-PSC-01", period_idx=2,
+                                      period_label="2026", period_year=2026, p10_total_ht=94936.4))
+    db_session.add(CpeDalkiaRefApe(import_id=imp1.id, city_id=1, code_site="S1", montant_ape_ht=9815.0))
+    db_session.add(CpeDalkiaRefApe(import_id=imp1.id, city_id=1, code_site="S2", montant_ape_ht=5000.0))
+    db_session.commit()
+
+    # Cumulé (lot=None) : sites 75, APE montant 14815, import_ids les deux
+    c = build_active_market_summary(db_session, user, lot=None, ref_year=2026)
+    assert c["has_data"] is True and c["lot"] is None
+    assert c["nb_sites"] == 75
+    assert c["ape_montant_ht"] == 14815.0
+    assert set(c["import_ids"]) == {imp1.id, imp2.id}
+    assert c["import_id"] is None  # pas d'import unique en mode cumulé
+    # marché = P2 274k (L1) + P1 élec 94936 (L2)
+    assert c["marche_total_ht"] == round(274000.0 + 94936.4, 2)
+
+    # Lot 1 seul : APE montant 14815 (les 2 APE sont sur L1), sites 72
+    l1 = build_active_market_summary(db_session, user, lot=1, ref_year=2026)
+    assert l1["nb_sites"] == 72 and l1["ape_montant_ht"] == 14815.0 and l1["import_id"] == imp1.id
+
+
 def test_active_summary_includes_p1_elec(db_session, user):
     imp = CpeDalkiaRefImport(city_id=1, lot=2, filename="L2.xlsx", is_active=True, nb_sites=3)
     db_session.add(imp)

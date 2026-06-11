@@ -45,24 +45,28 @@ def get_all_imports(
 
 
 def build_active_market_summary(
-    db: Session, current_user: User, lot: int, ref_year: int = 2026
+    db: Session, current_user: User, lot: int | None = None, ref_year: int = 2026
 ) -> dict:
-    """Synthese de l'etat du marche en vigueur (import maitre actif d'un lot).
+    """Synthese de l'etat du marche en vigueur (imports maitres actifs).
 
-    KPIs lus dans les tables de reference de l'import actif : nb sites, APE, montants
-    P1 gaz/elec/P2/P3 de l'annee de reference, et montant global du marche (toutes annees).
+    ``lot`` = 1 ou 2 pour un lot precis ; ``None`` = cumule (les deux lots). KPIs agreges
+    sur le(s) import(s) actif(s) : nb sites, montant APE (table dediee), montants P1 gaz/elec/
+    P2/P3 de l'annee de reference, et redevances P1+P2+P3 sur 8 ans. ``import_ids`` permet
+    d'explorer les sites de tous les referentiels concernes.
     """
-    stmt = select(CpeDalkiaRefImport).where(
-        CpeDalkiaRefImport.is_active.is_(True), CpeDalkiaRefImport.lot == lot
-    )
+    stmt = select(CpeDalkiaRefImport).where(CpeDalkiaRefImport.is_active.is_(True))
     if current_user.city_id is not None:
         stmt = stmt.where(CpeDalkiaRefImport.city_id == current_user.city_id)
-    imp = db.scalars(stmt).first()
-    if imp is None:
-        return {"has_data": False, "lot": lot, "ref_year": ref_year}
+    if lot is not None:
+        stmt = stmt.where(CpeDalkiaRefImport.lot == lot)
+    imports = list(db.scalars(stmt.order_by(CpeDalkiaRefImport.lot)))
+    if not imports:
+        return {"has_data": False, "lot": lot, "ref_year": ref_year, "import_ids": []}
+
+    import_ids = [i.id for i in imports]
 
     def _sum(model, col: str, year: int | None = None) -> float:
-        s = select(func.sum(getattr(model, col))).where(model.import_id == imp.id)
+        s = select(func.sum(getattr(model, col))).where(model.import_id.in_(import_ids))
         if year is not None:
             s = s.where(model.period_year == year)
         return db.scalar(s) or 0.0
@@ -73,15 +77,18 @@ def build_active_market_summary(
         + _sum(CpeDalkiaRefP2P3, "p2_total_ht")
         + _sum(CpeDalkiaRefP2P3, "p3_total_ht")
     )
+    single = imports[0] if len(imports) == 1 else None
     return {
         "has_data": True,
         "lot": lot,
         "ref_year": ref_year,
-        "import_id": imp.id,
-        "filename": imp.filename,
-        "import_date": imp.import_date.isoformat(),
-        "nb_sites": imp.nb_sites,
-        "nb_ape": imp.nb_ape_rows,
+        "import_id": single.id if single else None,
+        "import_ids": import_ids,
+        "filename": single.filename if single else None,
+        "import_date": single.import_date.isoformat() if single else None,
+        "nb_sites": sum(i.nb_sites for i in imports),
+        "nb_ape": sum(i.nb_ape_rows for i in imports),
+        "ape_montant_ht": round(_sum(CpeDalkiaRefApe, "montant_ape_ht"), 2),
         "p1_gaz_ref_year_ht": round(_sum(CpeDalkiaRefP1Gaz, "p10_total_ht", ref_year), 2),
         "p1_elec_ref_year_ht": round(_sum(CpeDalkiaRefP1Elec, "p10_total_ht", ref_year), 2),
         "p2_ref_year_ht": round(_sum(CpeDalkiaRefP2P3, "p2_total_ht", ref_year), 2),

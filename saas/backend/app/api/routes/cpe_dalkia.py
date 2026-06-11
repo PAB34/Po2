@@ -266,13 +266,15 @@ def patch_import_acte(
 
 class ActiveMarketSummary(BaseModel):
     has_data: bool
-    lot: int
+    lot: int | None = None
     ref_year: int
     import_id: int | None = None
+    import_ids: list[int] = []
     filename: str | None = None
     import_date: str | None = None
     nb_sites: int | None = None
     nb_ape: int | None = None
+    ape_montant_ht: float | None = None
     p1_gaz_ref_year_ht: float | None = None
     p1_elec_ref_year_ht: float | None = None
     p2_ref_year_ht: float | None = None
@@ -292,14 +294,14 @@ def list_all_imports(
 
 @router.get("/active-summary", response_model=ActiveMarketSummary)
 def active_summary(
-    lot: int = 1,
+    lot: int | None = None,
     ref_year: int = 2026,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ActiveMarketSummary:
-    """Synthese de l'etat du marche en vigueur (import maitre actif d'un lot)."""
-    if lot not in (1, 2):
-        raise HTTPException(status_code=400, detail="Le lot doit etre 1 ou 2.")
+    """Synthese de l'etat du marche en vigueur. ``lot`` 1/2 = un lot ; absent = cumule (les deux)."""
+    if lot is not None and lot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Le lot doit etre 1, 2 ou absent (cumule).")
     return ActiveMarketSummary.model_validate(
         build_active_market_summary(db, current_user, lot, ref_year)
     )
