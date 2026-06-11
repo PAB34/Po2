@@ -96,7 +96,12 @@ type ImportBatch = {
   nb_recap_rows: number;
   is_active: boolean;
   notes: string | null;
+  acte_type: string | null;
+  acte_label: string | null;
+  date_effet: string | null;
 };
+
+type Acte = { acte_type?: string; acte_label?: string; date_effet?: string };
 
 type SiteRow = {
   code_site: string;
@@ -130,10 +135,13 @@ async function previewDalkiaImport(token: string, file: File, lot: number): Prom
   return resp.json() as Promise<ImportPreview>;
 }
 
-async function confirmDalkiaImport(token: string, file: File, lot: number): Promise<ImportBatch> {
+async function confirmDalkiaImport(token: string, file: File, lot: number, acte?: Acte): Promise<ImportBatch> {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("lot", String(lot));
+  if (acte?.acte_type) fd.append("acte_type", acte.acte_type);
+  if (acte?.acte_label) fd.append("acte_label", acte.acte_label);
+  if (acte?.date_effet) fd.append("date_effet", acte.date_effet);
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/confirm`, {
     method: "POST",
     headers: buildAuthHeaders(token),
@@ -203,6 +211,9 @@ type DpgfP1Import = {
   nb_lines: number;
   is_active: boolean;
   notes: string | null;
+  acte_type: string | null;
+  acte_label: string | null;
+  date_effet: string | null;
 };
 
 const DPGF_LEVEL_LABELS: Record<string, string> = {
@@ -227,10 +238,12 @@ async function previewDpgfP1(token: string, file: File, lot: number): Promise<Dp
   return resp.json() as Promise<DpgfP1Preview>;
 }
 
-async function confirmDpgfP1(token: string, file: File, lot: number): Promise<DpgfP1Import> {
+async function confirmDpgfP1(token: string, file: File, lot: number, acte?: Acte): Promise<DpgfP1Import> {
   const fd = new FormData();
   fd.append("file", file);
   fd.append("lot", String(lot));
+  if (acte?.acte_label) fd.append("acte_label", acte.acte_label);
+  if (acte?.date_effet) fd.append("date_effet", acte.date_effet);
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/confirm`, {
     method: "POST",
     headers: buildAuthHeaders(token),
@@ -242,6 +255,30 @@ async function confirmDpgfP1(token: string, file: File, lot: number): Promise<Dp
   }
   return resp.json() as Promise<DpgfP1Import>;
 }
+
+async function patchImportActe(token: string, importId: number, acte: Acte, dpgf: boolean): Promise<void> {
+  const path = dpgf
+    ? `${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/imports/${importId}/acte`
+    : `${apiBaseUrl}/cpe/dalkia-ref/imports/${importId}/acte`;
+  const resp = await fetch(path, {
+    method: "PATCH",
+    headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(acte),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail ?? `Erreur ${resp.status}`);
+  }
+}
+
+const ACTE_TYPE_LABELS: Record<string, string> = {
+  offre_finale: "Offre finale",
+  mise_au_point: "Mise au point",
+  avenant: "Avenant",
+  os: "Ordre de service",
+  dpgf: "DPGF P1",
+  autre: "Autre",
+};
 
 async function fetchDpgfP1Imports(token: string): Promise<DpgfP1Import[]> {
   const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/dpgf-p1/imports`, {
@@ -305,6 +342,8 @@ type JournalEntry = {
   is_active: boolean;
   detail: string;
   nbVersions: number;
+  acteType: string | null;
+  acteLabel: string | null;
 };
 
 type MasterDiff = {
@@ -383,8 +422,13 @@ function Chip({ text }: { text: string }) {
 }
 
 function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const isDpgf = entry.kind === "dpgf";
+  const [editType, setEditType] = useState(entry.acteType ?? (isDpgf ? "dpgf" : "avenant"));
+  const [editLabel, setEditLabel] = useState(entry.acteLabel ?? "");
+  const [editDate, setEditDate] = useState((entry.date ?? "").slice(0, 10));
 
   const masterDiffQ = useQuery({
     queryKey: ["cpe-master-diff", entry.importId],
@@ -397,25 +441,46 @@ function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
     enabled: isDpgf,
   });
 
-  const badge = KIND_BADGE[entry.kind];
+  const saveActe = useMutation({
+    mutationFn: () =>
+      patchImportActe(
+        token,
+        entry.importId,
+        { acte_type: isDpgf ? "dpgf" : editType, acte_label: editLabel || undefined, date_effet: editDate || undefined },
+        isDpgf,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-dalkia-imports-all"] });
+      qc.invalidateQueries({ queryKey: ["cpe-dpgf-p1-imports-all"] });
+      qc.invalidateQueries({ queryKey: ["cpe-dalkia-active-summary"] });
+      setEditing(false);
+    },
+  });
+
   const md = masterDiffQ.data;
   const dd = dpgfDiffQ.data;
   const masterOk = !isDpgf && md?.ok === true;
   const hasDiff = isDpgf ? true : masterOk; // un maître sans version antérieure n'a rien à comparer
   const chips = isDpgf ? dd?.chips : masterOk ? md?.chips : undefined;
 
+  const typeLabel = entry.acteType ? ACTE_TYPE_LABELS[entry.acteType] ?? entry.acteType : KIND_BADGE[entry.kind].label;
+  const title = entry.acteLabel || (entry.acteType ? typeLabel : entry.title);
+
   return (
     <div style={{ padding: "12px 0", borderTop: "1px solid #f3f4f6", opacity: entry.is_active ? 1 : 0.8 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{entry.title}</span>
-            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: badge.bg, color: badge.color }}>{badge.label}</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
+            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: KIND_BADGE[entry.kind].bg, color: KIND_BADGE[entry.kind].color }}>{typeLabel}</span>
             {entry.is_active ? (
               <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#dcfce7", color: "#15803d" }}>en vigueur</span>
             ) : (
               <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#f3f4f6", color: "#6b7280" }}>version antérieure</span>
             )}
+            {!entry.acteLabel ? (
+              <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 6, background: "#fef3c7", color: "#92400e" }}>à qualifier</span>
+            ) : null}
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
             {new Date(entry.date).toLocaleDateString("fr-FR")} · {entry.filename} · {entry.detail}
@@ -427,12 +492,45 @@ function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
             </div>
           ) : null}
         </div>
-        {hasDiff ? (
-          <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setOpen((v) => !v)}>
-            {open ? "Masquer" : "Comparer"}
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setEditing((v) => !v)}>
+            {editing ? "Annuler" : "Qualifier"}
           </button>
-        ) : null}
+          {hasDiff ? (
+            <button type="button" className="secondary-button" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setOpen((v) => !v)}>
+              {open ? "Masquer" : "Comparer"}
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {editing ? (
+        <div style={{ marginTop: 10, padding: 12, background: "#fafafa", borderRadius: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          {!isDpgf ? (
+            <label className="field" style={{ minWidth: 150 }}>
+              <span>Type d'acte</span>
+              <select value={editType} onChange={(e) => setEditType(e.target.value)}>
+                <option value="offre_finale">Offre finale</option>
+                <option value="mise_au_point">Mise au point</option>
+                <option value="avenant">Avenant</option>
+                <option value="os">Ordre de service</option>
+                <option value="autre">Autre</option>
+              </select>
+            </label>
+          ) : null}
+          <label className="field" style={{ flex: 1, minWidth: 220 }}>
+            <span>Libellé de l'acte</span>
+            <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="ex. Avenant n°1 — entrée école X" />
+          </label>
+          <label className="field" style={{ minWidth: 150 }}>
+            <span>Date d'effet</span>
+            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+          </label>
+          <button type="button" className="primary-button" disabled={saveActe.isPending} onClick={() => saveActe.mutate()}>
+            {saveActe.isPending ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </div>
+      ) : null}
 
       {open && hasDiff ? (
         <div style={{ marginTop: 10, padding: 12, background: "#fafafa", borderRadius: 8, fontSize: 12.5 }}>
@@ -752,10 +850,12 @@ export function CpeDalkiaImportPage() {
             lot: i.lot,
             title: "Référentiel maître",
             filename: i.filename,
-            date: i.import_date,
+            date: i.date_effet || i.import_date,
             is_active: i.is_active,
             detail: `${i.nb_sites} sites · P2/P3 ${i.nb_p2p3_rows} · APE ${i.nb_ape_rows}`,
             nbVersions: count,
+            acteType: i.acte_type,
+            acteLabel: i.acte_label,
           })),
           ...dpgfDistinct.map(({ latest: i, count }) => ({
             key: `d${i.id}`,
@@ -764,10 +864,12 @@ export function CpeDalkiaImportPage() {
             lot: i.lot,
             title: "DPGF P1 — révision de prix",
             filename: i.filename,
-            date: i.import_date,
+            date: i.date_effet || i.import_date,
             is_active: i.is_active,
             detail: `${i.nb_lines} lignes (3 niveaux)`,
             nbVersions: count,
+            acteType: i.acte_type,
+            acteLabel: i.acte_label,
           })),
         ];
         entries = entries
