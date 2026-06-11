@@ -201,6 +201,18 @@
             <div id="profileMsg" class="msg"></div>
           </div>
 
+          <div class="viewHead"><h2 style="font-size:20px">Mot de passe</h2></div>
+          <div class="panel">
+            <div class="formGrid">
+              <div class="field"><label for="currentPassword">Mot de passe actuel</label><input id="currentPassword" type="password" autocomplete="current-password" minlength="8"></div>
+              <div class="field"><label for="newPassword">Nouveau mot de passe</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" placeholder="8 caractères minimum"></div>
+              <div class="field"><label for="newPasswordConfirm">Confirmer le nouveau mot de passe</label><input id="newPasswordConfirm" type="password" autocomplete="new-password" minlength="8"></div>
+              <div class="hint">Utilise ce bloc si tu connais ton mot de passe actuel. Sinon, passe par « Mot de passe oublié ? » sur l'écran de connexion.</div>
+            </div>
+            <div class="formActions"><button class="btn block" onclick="savePassword()">Modifier mon mot de passe</button></div>
+            <div id="passwordMsg" class="msg"></div>
+          </div>
+
           <div class="viewHead"><h2 style="font-size:20px">Affichage</h2></div>
           <div class="panel">
             <div class="modeToggle" id="modeToggle">

@@ -192,6 +192,13 @@ def reset_password(db: Session, token: str, password: str) -> bool:
     return True
 
 
+def change_player_password(db: Session, player: PronosticsPlayer, *, current_password: str, new_password: str) -> None:
+    if not verify_password(current_password, player.password_hash):
+        raise ValueError("INVALID_PASSWORD")
+    player.password_hash = get_password_hash(new_password)
+    db.commit()
+
+
 def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 

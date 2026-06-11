@@ -9,6 +9,7 @@ from app.core.security import decode_token
 from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
 from app.models.user import User
 from app.schemas.pronostics import (
+    PronosticsChangePasswordRequest,
     PronosticsLoginRequest,
     PronosticsMatchRead,
     PronosticsForgotPasswordRequest,
@@ -27,6 +28,7 @@ from app.services.football_data import build_pronostics_model_feed
 from app.services.pronostics import (
     authenticate_player,
     calculate_ranking,
+    change_player_password,
     create_player,
     create_player_token,
     ensure_matches,
@@ -127,6 +129,21 @@ def update_me(
         return _player_read(update_player(db, player, **payload.model_dump()))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce pseudo est déjà utilisé.") from exc
+
+
+@router.post("/me/password", response_model=PronosticsMessageRead)
+def change_my_password(
+    payload: PronosticsChangePasswordRequest,
+    db: Session = Depends(get_db),
+    player: PronosticsPlayer = Depends(get_current_player),
+) -> PronosticsMessageRead:
+    try:
+        change_player_password(db, player, **payload.model_dump())
+    except ValueError as exc:
+        if str(exc) == "INVALID_PASSWORD":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Mot de passe actuel invalide.") from exc
+        raise
+    return PronosticsMessageRead(message="Ton mot de passe a ete modifie.")
 
 
 @router.get("/matches", response_model=list[PronosticsMatchRead])

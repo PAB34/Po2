@@ -751,6 +751,22 @@ function saveProfile(){
     .updateProfile({email:state.player.email, pseudo:pseudo, service:service});
 }
 
+function savePassword(){
+  if(!state.player){ msg('passwordMsg','Connecte-toi d\u2019abord.','err'); return; }
+  var current=$('currentPassword').value, next=$('newPassword').value, confirm=$('newPasswordConfirm').value;
+  if(!current||!next||!confirm){ msg('passwordMsg','Renseigne les trois champs.','err'); return; }
+  if(next.length<8){ msg('passwordMsg','Le nouveau mot de passe doit contenir au moins 8 caractères.','err'); return; }
+  if(next!==confirm){ msg('passwordMsg','Les deux nouveaux mots de passe ne correspondent pas.','err'); return; }
+  msg('passwordMsg','Modification en cours…','info');
+  google.script.run
+    .withSuccessHandler(function(res){
+      $('currentPassword').value=''; $('newPassword').value=''; $('newPasswordConfirm').value='';
+      msg('passwordMsg',(res&&res.message)||'Mot de passe mis à jour.','ok');
+    })
+    .withFailureHandler(function(e){ msg('passwordMsg', fmtError(e),'err'); })
+    .changePassword({currentPassword:current, newPassword:next});
+}
+
 /* ===================================================================
    INSTALLATION (PWA / raccourci écran d'accueil)
    =================================================================== */

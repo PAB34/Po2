@@ -12,6 +12,7 @@ from app.services.pronostics import (
     _score_prediction,
     authenticate_player,
     calculate_ranking,
+    change_player_password,
     create_player,
     ensure_matches,
     fifa_rank,
@@ -171,6 +172,35 @@ def test_password_reset_token_is_single_use(monkeypatch):
         assert not reset_password(db, captured["token"], "encoreunnouveau")
 
     with Session(engine) as db:
+        assert authenticate_player(db, email="joueur@example.com", password="nouveaumotdepasse")
+        assert not authenticate_player(db, email="joueur@example.com", password="ancienmotdepasse")
+
+
+def test_change_player_password_requires_current_password():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        player = create_player(db, email="joueur@example.com", password="ancienmotdepasse", pseudo="Joueur", service="CTM")
+
+        try:
+            change_player_password(
+                db,
+                player,
+                current_password="mauvaismotdepasse",
+                new_password="nouveaumotdepasse",
+            )
+        except ValueError as exc:
+            assert str(exc) == "INVALID_PASSWORD"
+        else:
+            raise AssertionError("Le mot de passe actuel invalide aurait du etre refuse.")
+
+        change_player_password(
+            db,
+            player,
+            current_password="ancienmotdepasse",
+            new_password="nouveaumotdepasse",
+        )
+
         assert authenticate_player(db, email="joueur@example.com", password="nouveaumotdepasse")
         assert not authenticate_player(db, email="joueur@example.com", password="ancienmotdepasse")
 

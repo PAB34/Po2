@@ -31,6 +31,14 @@ async function nativeResetPassword(token, password) {
   });
 }
 
+async function nativeChangePassword(currentPassword, newPassword) {
+  return nativeRequest("/me/password", {
+    method: "POST",
+    headers: nativeHeaders(true),
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
 function nativeMatch(match) {
   return {
     id: match.id, group: match.group, team1: match.team1, team2: match.team2,
@@ -106,6 +114,9 @@ async function nativeCall(method, payload) {
     });
     return nativePlayerData(player);
   }
+  if (method === "changePassword") {
+    return nativeChangePassword(payload.currentPassword, payload.newPassword);
+  }
   throw new Error(`Méthode native inconnue : ${method}`);
 }
 
@@ -116,7 +127,7 @@ function nativeRunner() {
     withSuccessHandler(callback) { success = callback; return runner; },
     withFailureHandler(callback) { failure = callback; return runner; },
   };
-  for (const method of ["getPlayerData", "loginOrRegister", "savePredictions", "getRanking", "getParticipantsPublic", "updateProfile"]) {
+  for (const method of ["getPlayerData", "loginOrRegister", "savePredictions", "getRanking", "getParticipantsPublic", "updateProfile", "changePassword"]) {
     runner[method] = (payload) => { nativeCall(method, payload).then(success).catch(failure); };
   }
   return runner;
