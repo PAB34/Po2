@@ -292,13 +292,15 @@ async function fetchDpgfP1Imports(token: string): Promise<DpgfP1Import[]> {
 
 type ActiveSummary = {
   has_data: boolean;
-  lot: number;
+  lot: number | null;
   ref_year: number;
   import_id: number | null;
+  import_ids: number[];
   filename: string | null;
   import_date: string | null;
   nb_sites: number | null;
   nb_ape: number | null;
+  ape_montant_ht: number | null;
   p1_gaz_ref_year_ht: number | null;
   p1_elec_ref_year_ht: number | null;
   p2_ref_year_ht: number | null;
@@ -306,12 +308,20 @@ type ActiveSummary = {
   marche_total_ht: number | null;
 };
 
-async function fetchActiveSummary(token: string, lot: number): Promise<ActiveSummary> {
-  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/active-summary?lot=${lot}`, {
+type DossierLot = 1 | 2 | "tous";
+
+async function fetchActiveSummary(token: string, lot: DossierLot): Promise<ActiveSummary> {
+  const q = lot === "tous" ? "" : `?lot=${lot}`;
+  const resp = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/active-summary${q}`, {
     headers: { ...buildAuthHeaders(token), "Content-Type": "application/json" },
   });
   if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
   return resp.json() as Promise<ActiveSummary>;
+}
+
+async function fetchSitesForImports(token: string, ids: number[]): Promise<SiteRow[]> {
+  const lists = await Promise.all(ids.map((id) => fetchImportSites(token, id)));
+  return lists.flat();
 }
 
 async function fetchAllImports(token: string): Promise<ImportBatch[]> {
@@ -492,7 +502,7 @@ function JournalRow({ entry, token }: { entry: JournalEntry; token: string }) {
             ) : null}
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", margin: "3px 0 0" }}>
-            {new Date(entry.date).toLocaleDateString("fr-FR")} · {entry.filename} · {entry.detail}
+            Lot {entry.lot} · {new Date(entry.date).toLocaleDateString("fr-FR")} · {entry.filename} · {entry.detail}
             {entry.nbVersions > 1 ? ` · ${entry.nbVersions} imports de ce fichier` : ""}
           </div>
           {chips && chips.length > 0 ? (
@@ -631,9 +641,10 @@ export function CpeDalkiaImportPage() {
   const [syncP1Result, setSyncP1Result] = useState<{ id: number; res: SyncP1Result } | null>(null);
   const [sitesMsg, setSitesMsg] = useState<string | null>(null);
 
-  // Dossier de marché : lot affiché + filtre du journal
-  const [dossierLot, setDossierLot] = useState<1 | 2>(1);
+  // Dossier de marché : lot affiché (1 / 2 / cumulé) + filtre du journal + exploration sites
+  const [dossierLot, setDossierLot] = useState<DossierLot>("tous");
   const [journalFilter, setJournalFilter] = useState<"tous" | "maitre" | "dpgf">("tous");
+  const [exploreIds, setExploreIds] = useState<number[] | null>(null);
 
   // DPGF P1 révisé (import séparé)
   const dpgfFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -668,6 +679,12 @@ export function CpeDalkiaImportPage() {
     queryKey: ["cpe-dalkia-active-summary", token, dossierLot],
     queryFn: () => fetchActiveSummary(token as string, dossierLot),
     enabled: Boolean(token),
+  });
+
+  const exploreSitesQuery = useQuery({
+    queryKey: ["cpe-explore-sites", exploreIds],
+    queryFn: () => fetchSitesForImports(token as string, exploreIds as number[]),
+    enabled: Boolean(token) && exploreIds !== null && exploreIds.length > 0,
   });
 
   const allImportsQuery = useQuery({
@@ -779,54 +796,113 @@ export function CpeDalkiaImportPage() {
       {/* ── 1 · État du marché en vigueur ── */}
       {(() => {
         const s = summaryQuery.data;
-        const lotLabel = dossierLot === 1 ? "Lot 1 — bâtiments" : "Lot 2 — piscines";
+        const lotLabel =
+          dossierLot === "tous" ? "Les deux lots (cumulé)" : dossierLot === 1 ? "Lot 1 — bâtiments" : "Lot 2 — piscines";
+        const exploring = exploreIds !== null;
+        const exploreSites = exploreSitesQuery.data ?? [];
         return (
           <div className="section-block">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
               <h3 style={{ margin: 0 }}>1 · État du marché en vigueur</h3>
               <div style={{ display: "inline-flex", border: "1px solid #d1d5db", borderRadius: 8, overflow: "hidden" }}>
-                {([1, 2] as const).map((l) => (
+                {([1, 2, "tous"] as const).map((l) => (
                   <button
                     key={l}
                     type="button"
-                    onClick={() => setDossierLot(l)}
+                    onClick={() => { setDossierLot(l); setExploreIds(null); }}
                     style={{
                       padding: "5px 14px", fontSize: 13, border: "none", cursor: "pointer",
                       background: dossierLot === l ? "#2563eb" : "white",
                       color: dossierLot === l ? "white" : "#374151",
                     }}
                   >
-                    Lot {l}
+                    {l === "tous" ? "Les deux" : `Lot ${l}`}
                   </button>
                 ))}
               </div>
             </div>
             {!s || !s.has_data ? (
               <p style={{ color: "#9ca3af", fontSize: 13 }}>
-                Aucun référentiel actif pour le {lotLabel}. Importe le fichier maître dans le journal ci-dessous.
+                Aucun référentiel actif pour {lotLabel}. Importe le fichier maître ci-dessous.
               </p>
             ) : (
               <>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6b7280" }}>
-                  {lotLabel} · {s.filename} · en vigueur depuis le{" "}
-                  {s.import_date ? new Date(s.import_date).toLocaleDateString("fr-FR") : "—"} · lu par les contrôles, le suivi marché et la performance.
+                  {lotLabel}
+                  {s.filename ? ` · ${s.filename}` : ""}
+                  {s.import_date ? ` · en vigueur depuis le ${new Date(s.import_date).toLocaleDateString("fr-FR")}` : ""}
+                  {" "}· lu par les contrôles, le suivi marché et la performance.
                 </p>
                 <div className="detail-grid">
                   <div className="detail-card"><span>Sites</span><strong>{s.nb_sites ?? "—"}</strong></div>
-                  <div className="detail-card"><span>Marché 8 ans</span><strong>{formatEur(s.marche_total_ht)}</strong></div>
+                  <div className="detail-card"><span>Marché 8 ans (P1+P2+P3)</span><strong>{formatEur(s.marche_total_ht)}</strong></div>
                   <div className="detail-card"><span>P1 gaz {s.ref_year}</span><strong>{formatEur(s.p1_gaz_ref_year_ht)}</strong></div>
                   {s.p1_elec_ref_year_ht ? (
                     <div className="detail-card"><span>P1 élec {s.ref_year}</span><strong>{formatEur(s.p1_elec_ref_year_ht)}</strong></div>
                   ) : null}
                   <div className="detail-card"><span>P2 {s.ref_year}</span><strong>{formatEur(s.p2_ref_year_ht)}</strong></div>
                   <div className="detail-card"><span>P3 {s.ref_year}</span><strong>{formatEur(s.p3_ref_year_ht)}</strong></div>
-                  <div className="detail-card"><span>Travaux APE</span><strong>{s.nb_ape ?? "—"}</strong></div>
+                  <div className="detail-card">
+                    <span>Travaux APE{s.nb_ape ? ` (${s.nb_ape})` : ""}</span>
+                    <strong>{formatEur(s.ape_montant_ht)}</strong>
+                  </div>
                 </div>
-                {s.import_id ? (
-                  <div style={{ marginTop: 12 }}>
-                    <button type="button" className="secondary-button" onClick={() => setViewImportId(s.import_id)}>
-                      Explorer les sites du référentiel
+                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#6b7280" }}>
+                  « Marché 8 ans » = redevances P1+P2+P3 (hors APE). Les travaux APE sont une enveloppe d'investissement séparée.
+                </p>
+                <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setExploreIds(exploring ? null : s.import_ids)}
+                    disabled={!s.import_ids.length}
+                  >
+                    {exploring ? "Masquer les sites" : `Explorer les sites${s.import_ids.length > 1 ? " (cumulé)" : ""}`}
+                  </button>
+                  {s.import_id ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={syncP1Mutation.isPending}
+                      onClick={() => syncP1Mutation.mutate(s.import_id as number)}
+                      title="Met à jour la référence d'acompte P1 gaz (contrôle de factures) depuis le RECAP de ce référentiel"
+                    >
+                      {syncP1Mutation.isPending ? "Synchronisation…" : "Synchroniser la réf. P1"}
                     </button>
+                  ) : null}
+                </div>
+                {syncP1Result ? (
+                  <p style={{ fontSize: 12, marginTop: 8, color: syncP1Result.res.ok ? "#15803d" : "#b45309" }}>
+                    {syncP1Result.res.ok ? "✓ " : "⚠ "}{syncP1Result.res.message}
+                  </p>
+                ) : null}
+                {exploring ? (
+                  <div style={{ marginTop: 12, overflowX: "auto" }}>
+                    {exploreSitesQuery.isLoading ? <p>Chargement des sites…</p> : null}
+                    {exploreSites.length > 0 ? (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.2)" }}>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Lot</th>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Code site</th>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Bâtiment</th>
+                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Entité</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {exploreSites.map((site) => (
+                            <tr key={`${site.lot}-${site.code_site}`} style={{ borderBottom: "1px solid rgba(148,163,184,0.08)" }}>
+                              <td style={{ padding: "3px 8px", color: "#6b7280" }}>{site.lot}</td>
+                              <td style={{ padding: "3px 8px", fontFamily: "monospace" }}>{site.code_site}</td>
+                              <td style={{ padding: "3px 8px", color: "#cbd5e1" }}>{site.nom_batiment}</td>
+                              <td style={{ padding: "3px 8px", color: "#6b7280" }}>{site.entite ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : exploreSitesQuery.isLoading ? null : (
+                      <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun site.</p>
+                    )}
                   </div>
                 ) : null}
               </>
@@ -848,8 +924,9 @@ export function CpeDalkiaImportPage() {
           }
           return [...m.values()];
         };
-        const masterDistinct = dedup((allImportsQuery.data ?? []).filter((i) => i.lot === dossierLot));
-        const dpgfDistinct = dedup((allDpgfQuery.data ?? []).filter((i) => i.lot === dossierLot));
+        const inLot = (l: number) => dossierLot === "tous" || l === dossierLot;
+        const masterDistinct = dedup((allImportsQuery.data ?? []).filter((i) => inLot(i.lot)));
+        const dpgfDistinct = dedup((allDpgfQuery.data ?? []).filter((i) => inLot(i.lot)));
 
         let entries: JournalEntry[] = [
           ...masterDistinct.map(({ latest: i, count }) => ({
@@ -889,7 +966,7 @@ export function CpeDalkiaImportPage() {
           <div className="section-block">
             <h3 style={{ margin: "0 0 4px" }}>2 · Journal du marché</h3>
             <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b7280" }}>
-              Les fichiers du marché (Lot {dossierLot}), du plus récent au plus ancien. Un même fichier réimporté n'apparaît qu'une fois. Les versions antérieures sont conservées pour l'audit.
+              Les fichiers du marché ({dossierLot === "tous" ? "les deux lots" : `Lot ${dossierLot}`}), du plus récent au plus ancien. Un même fichier réimporté n'apparaît qu'une fois. Les versions antérieures sont conservées pour l'audit.
             </p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {(["tous", "maitre", "dpgf"] as const).map((f) => (
@@ -1268,109 +1345,6 @@ export function CpeDalkiaImportPage() {
         </div>
       ) : null}
 
-      {/* ── Historique des imports ── */}
-      <div className="section-block">
-        <div className="section-heading">
-          <h3>Historique des imports</h3>
-          <p>Seul le dernier import de chaque lot est actif (référentiel courant).</p>
-        </div>
-        {importsQuery.isLoading ? <p>Chargement...</p> : null}
-        {imports.length === 0 && !importsQuery.isLoading ? (
-          <p style={{ color: "#94a3b8" }}>Aucun import enregistré.</p>
-        ) : null}
-        <div className="resource-list">
-          {imports.map((imp) => (
-            <article key={imp.id} className={`resource-card${imp.is_active ? "" : " resource-card-inactive"}`}>
-              <div className="resource-card-header">
-                <div>
-                  <h3>
-                    Lot {imp.lot} — {imp.filename}
-                    {imp.is_active ? <span style={{ color: "#15803d", marginLeft: 8, fontSize: 12 }}>● Actif</span> : null}
-                  </h3>
-                  <p>{new Date(imp.import_date).toLocaleString("fr-FR")}</p>
-                </div>
-              </div>
-              <dl className="resource-metadata">
-                <div><dt>Sites</dt><dd>{imp.nb_sites}</dd></div>
-                <div><dt>P2/P3</dt><dd>{imp.nb_p2p3_rows} lignes</dd></div>
-                <div><dt>Cibles énergie</dt><dd>{imp.nb_cibles_rows} lignes</dd></div>
-                <div><dt>P1 gaz</dt><dd>{imp.nb_p1_gaz_rows} lignes</dd></div>
-                <div><dt>APE</dt><dd>{imp.nb_ape_rows} lignes</dd></div>
-              </dl>
-              {imp.notes ? <p style={{ color: "#f59e0b", fontSize: 12 }}>⚠ {imp.notes}</p> : null}
-              {imp.is_active ? (
-                <div className="resource-card-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setViewImportId(viewImportId === imp.id ? null : imp.id)}
-                  >
-                    {viewImportId === imp.id ? "Masquer les sites" : "Voir les sites"}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    disabled={syncP1Mutation.isPending}
-                    onClick={() => syncP1Mutation.mutate(imp.id)}
-                    title="Met à jour la référence d'acompte P1 gaz (contrôle de factures) depuis le RECAP de cet import"
-                  >
-                    {syncP1Mutation.isPending && syncP1Mutation.variables === imp.id
-                      ? "Synchronisation..."
-                      : "Synchroniser la réf. P1"}
-                  </button>
-                </div>
-              ) : null}
-              {syncP1Result && syncP1Result.id === imp.id ? (
-                <p
-                  style={{
-                    fontSize: 12,
-                    marginTop: 8,
-                    color: syncP1Result.res.ok ? "#15803d" : "#b45309",
-                  }}
-                >
-                  {syncP1Result.res.ok ? "✓ " : "⚠ "}
-                  {syncP1Result.res.message}
-                  {syncP1Result.res.ok && syncP1Result.res.amounts_by_year ? (
-                    <>
-                      {" "}
-                      ({Object.entries(syncP1Result.res.amounts_by_year)
-                        .map(([y, v]) => `${y}: ${Number(v).toLocaleString("fr-FR")} €`)
-                        .join(" · ")})
-                    </>
-                  ) : null}
-                </p>
-              ) : null}
-              {viewImportId === imp.id ? (
-                <div style={{ marginTop: 12 }}>
-                  {sitesQuery.isLoading ? <p>Chargement des sites...</p> : null}
-                  {(sitesQuery.data ?? []).length > 0 ? (
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                        <thead>
-                          <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.2)" }}>
-                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Code site</th>
-                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Bâtiment</th>
-                            <th style={{ textAlign: "left", padding: "4px 8px" }}>Entité</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(sitesQuery.data ?? []).map((s) => (
-                            <tr key={s.code_site} style={{ borderBottom: "1px solid rgba(148,163,184,0.08)" }}>
-                              <td style={{ padding: "3px 8px", fontFamily: "monospace" }}>{s.code_site}</td>
-                              <td style={{ padding: "3px 8px", color: "#cbd5e1" }}>{s.nom_batiment}</td>
-                              <td style={{ padding: "3px 8px", color: "#6b7280" }}>{s.entite ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }
