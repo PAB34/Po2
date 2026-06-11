@@ -22,6 +22,7 @@ from app.services.cpe_dalkia_db import (
     sync_cpe_sites_from_dalkia,
     sync_p1_reference_from_recap,
 )
+from app.services.cpe_dalkia_diff import build_dpgf_summary, build_master_diff
 from app.services.cpe_dalkia_import import build_import_preview, parse_dalkia_file
 from app.services.cpe_dpgf_p1 import (
     get_active_dpgf_p1_imports,
@@ -283,6 +284,29 @@ def active_summary(
     return ActiveMarketSummary.model_validate(
         build_active_market_summary(db, current_user, lot, ref_year)
     )
+
+
+@router.get("/imports/{import_id}/diff")
+def master_diff(
+    import_id: int,
+    from_id: int | None = None,
+    ref_year: int = 2026,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Synthèse des modifications d'un import maître vs un autre (défaut = base du lot)."""
+    return build_master_diff(db, current_user, import_id, from_id, ref_year)
+
+
+@router.get("/dpgf-p1/imports/{import_id}/diff")
+def dpgf_diff(
+    import_id: int,
+    ref_year: int = 2026,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Synthèse d'un DPGF P1 : niveaux par année + écart de révision vs contrat."""
+    return build_dpgf_summary(db, current_user, import_id, ref_year)
 
 
 @router.get("/imports/{import_id}/sites", response_model=list[SiteResponse])
