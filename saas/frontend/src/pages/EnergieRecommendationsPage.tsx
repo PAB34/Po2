@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchPowerRecommendations } from "../lib/api";
 import type { PrmPowerRecommendation } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
+import { PowerCalibrationChart } from "../components/PowerCalibrationChart";
 
 const ACTION_LABEL: Record<string, string> = {
   increase: "Hausse",
@@ -267,6 +268,13 @@ export function EnergieRecommendationsPage() {
 
       {recommendationsQuery.isLoading && <p className="loading-text">Chargement des preconisations...</p>}
       {recommendationsQuery.isError && <p className="error-text">{(recommendationsQuery.error as Error).message}</p>}
+
+      {!recommendationsQuery.isLoading && recommendations.length > 0 && (
+        <PowerCalibrationChart
+          recommendations={filtered}
+          onSelect={(prmId) => navigate(`/energie/${prmId}`)}
+        />
+      )}
 
       {!recommendationsQuery.isLoading && recommendations.length > 0 && (
         <section className="impact-balance-panel">
