@@ -8,12 +8,38 @@ class EnergieKpis(BaseModel):
     proche_seuil: int
     sur_souscrits: int
     calibration_inconnue: int = 0
+    annual_consumption_kwh: float | None = None
+    annual_consumption_prms: int = 0
+    annual_consumption_start: str | None = None
+    annual_consumption_end: str | None = None
 
 
 class SupplierDistributionItem(BaseModel):
     supplier: str
     total_kva: float
     prm_count: int
+
+
+class EnergyPowerBandItem(BaseModel):
+    band: str
+    label: str
+    prm_count: int
+    total_kva: float
+    annual_consumption_kwh: float | None
+
+
+class EnergyCalibrationDistributionItem(BaseModel):
+    status: str
+    label: str
+    prm_count: int
+
+
+class EnergyTopConsumerItem(BaseModel):
+    usage_point_id: str
+    name: str
+    contractor: str | None
+    subscribed_power_kva: float | None
+    annual_consumption_kwh: float
 
 
 class PrmListItem(BaseModel):
@@ -34,6 +60,9 @@ class PrmListItem(BaseModel):
 class EnergieOverview(BaseModel):
     kpis: EnergieKpis
     supplier_distribution: list[SupplierDistributionItem]
+    power_bands: list[EnergyPowerBandItem] = []
+    calibration_distribution: list[EnergyCalibrationDistributionItem] = []
+    top_consumers: list[EnergyTopConsumerItem] = []
     prms: list[PrmListItem]
 
 

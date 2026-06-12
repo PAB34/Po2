@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   fetchEnergieOverview,
   fetchSyncStatus, startSync,
@@ -10,7 +10,7 @@ import {
   fetchDjuSyncStatus, startDjuSync,
   fetchCustomerSyncStatus, startCustomerSync,
   fetchDataRanges, fetchDataAudit,
-  PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
+  EnergyCalibrationDistributionItem, EnergyPowerBandItem, EnergyTopConsumerItem, PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
@@ -449,6 +449,132 @@ function SupplierPieChart({ data }: { data: SupplierDistributionItem[] }) {
   );
 }
 
+function formatKwh(value: number | null | undefined): string {
+  if (value == null) return "—";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} GWh`;
+  if (value >= 1_000) return `${(value / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} MWh`;
+  return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kWh`;
+}
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleDateString("fr-FR");
+  } catch {
+    return value;
+  }
+}
+
+function PowerBandChart({ data }: { data: EnergyPowerBandItem[] }) {
+  return (
+    <div className="dashboard-card dashboard-card--wide">
+      <div className="dashboard-card-header">
+        <div>
+          <h3>Puissances souscrites et énergie consommée</h3>
+          <p>Répartition du parc par tranches de puissance, avec consommation annuelle glissante.</p>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis yAxisId="left" tick={{ fontSize: 11 }} width={62} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} width={74} />
+          <Tooltip
+            formatter={(value: number, name: string) =>
+              name === "Conso annuelle"
+                ? [formatKwh(value), "Conso annuelle"]
+                : [value.toLocaleString("fr-FR"), name === "total_kva" ? "kVA souscrits" : "PRM"]
+            }
+          />
+          <Legend />
+          <Bar yAxisId="left" dataKey="prm_count" name="PRM" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+          <Bar yAxisId="left" dataKey="total_kva" name="kVA souscrits" fill="#22c55e" radius={[4, 4, 0, 0]} />
+          <Bar yAxisId="right" dataKey="annual_consumption_kwh" name="Conso annuelle" fill="#f97316" radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function SupplierDashboardChart({ data }: { data: SupplierDistributionItem[] }) {
+  const pieData = data.slice(0, 7).map((s) => ({ name: s.supplier, value: s.total_kva, count: s.prm_count }));
+  return (
+    <div className="dashboard-card">
+      <div className="dashboard-card-header">
+        <h3>Fournisseurs par kVA</h3>
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <PieChart>
+          <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={52} outerRadius={90} paddingAngle={2}>
+            {pieData.map((_, i) => <Cell key={i} fill={SUPPLIER_COLORS[i % SUPPLIER_COLORS.length]} />)}
+          </Pie>
+          <Tooltip
+            formatter={(value: number, name: string, props) => [
+              `${value.toLocaleString("fr-FR")} kVA - ${(props.payload as { count: number }).count} PRM`,
+              name,
+            ]}
+          />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function CalibrationChart({ data }: { data: EnergyCalibrationDistributionItem[] }) {
+  const colors: Record<string, string> = {
+    sous_dimensionne: "#ef4444",
+    proche_seuil: "#f97316",
+    bien_calibre: "#22c55e",
+    sur_souscrit: "#38bdf8",
+    inconnu: "#94a3b8",
+  };
+  return (
+    <div className="dashboard-card">
+      <div className="dashboard-card-header">
+        <h3>Calibrage des abonnements</h3>
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <PieChart>
+          <Pie data={data} dataKey="prm_count" nameKey="label" innerRadius={58} outerRadius={92} paddingAngle={2}>
+            {data.map((item) => <Cell key={item.status} fill={colors[item.status] ?? "#64748b"} />)}
+          </Pie>
+          <Tooltip formatter={(value: number, name: string) => [`${value.toLocaleString("fr-FR")} PRM`, name]} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function TopConsumersTable({ data, onOpen }: { data: EnergyTopConsumerItem[]; onOpen: (prmId: string) => void }) {
+  return (
+    <div className="dashboard-card">
+      <div className="dashboard-card-header">
+        <h3>Sites les plus consommateurs</h3>
+      </div>
+      <div className="dashboard-ranking">
+        {data.map((item, index) => (
+          <button
+            type="button"
+            key={item.usage_point_id}
+            className="dashboard-ranking-row"
+            onClick={() => onOpen(item.usage_point_id)}
+          >
+            <span className="dashboard-rank">{index + 1}</span>
+            <span>
+              <strong>{item.name}</strong>
+              <small>{item.subscribed_power_kva ?? "—"} kVA · {item.contractor ?? "Fournisseur inconnu"}</small>
+            </span>
+            <b>{formatKwh(item.annual_consumption_kwh)}</b>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function connectionBadge(state: string | null): string {
   if (!state) return "";
   if (state.toLowerCase().includes("non alimenté")) return "badge-red";
@@ -710,6 +836,165 @@ function DataCoverageBar({ token }: { token: string }) {
 export function EnergiePage() {
   const { token } = useAuth();
   const navigate = useNavigate();
+
+  const { data, isLoading, error, dataUpdatedAt } = useQuery({
+    queryKey: ["energie-overview"],
+    queryFn: () => fetchEnergieOverview(token!),
+    enabled: !!token,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: ranges } = useQuery({
+    queryKey: ["energie-data-ranges"],
+    queryFn: () => fetchDataRanges(token!),
+    enabled: !!token,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: audit } = useQuery({
+    queryKey: ["energie-data-audit"],
+    queryFn: () => fetchDataAudit(token!),
+    enabled: !!token,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const dashboardPrms = data?.prms ?? [];
+  const activePrms = audit?.profile_counts.communicant_open ?? 0;
+  const dataCoverage = data && audit ? Math.round((audit.summary.all_sources / data.kpis.total_prms) * 100) : null;
+
+  return (
+    <div className="page energy-dashboard-page">
+      <div className="energy-dashboard-hero">
+        <div>
+          <p className="eyebrow">Exploitation energie</p>
+          <h2>Tableau de bord energie</h2>
+          <p>
+            Vue rapide du parc ENEDIS : puissances souscrites, consommations collectees,
+            calibrage des abonnements et qualite de couverture.
+          </p>
+          <div className="dashboard-hero-actions">
+            <button type="button" className="btn-primary" onClick={() => navigate("/energie/preconisations")}>
+              Voir les preconisations
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => navigate("/energie/donnees")}>
+              Acquisition & qualite donnees
+            </button>
+          </div>
+        </div>
+        <div className="energy-dashboard-freshness">
+          <span>Derniere lecture interface</span>
+          <strong>{dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString("fr-FR") : "—"}</strong>
+          <small>Rafraichissement automatique toutes les 60 secondes</small>
+        </div>
+      </div>
+
+      {isLoading && <p>Chargement...</p>}
+      {error && <p className="error-text">{(error as Error).message}</p>}
+
+      {data && (
+        <>
+          <div className="dashboard-kpi-grid">
+            <div className="dashboard-kpi-card">
+              <span>PRM contractuels</span>
+              <strong>{data.kpis.total_prms.toLocaleString("fr-FR")}</strong>
+              <small>{activePrms.toLocaleString("fr-FR")} communicants ouverts</small>
+            </div>
+            <div className="dashboard-kpi-card">
+              <span>Puissance souscrite</span>
+              <strong>{data.kpis.total_subscribed_kva.toLocaleString("fr-FR")} kVA</strong>
+              <small>{data.supplier_distribution.length} fournisseurs</small>
+            </div>
+            <div className="dashboard-kpi-card dashboard-kpi-card--energy">
+              <span>Conso annuelle collectee</span>
+              <strong>{formatKwh(data.kpis.annual_consumption_kwh)}</strong>
+              <small>
+                {data.kpis.annual_consumption_prms.toLocaleString("fr-FR")} PRM couverts
+                {data.kpis.annual_consumption_start && data.kpis.annual_consumption_end
+                  ? ` · ${formatDate(data.kpis.annual_consumption_start)} - ${formatDate(data.kpis.annual_consumption_end)}`
+                  : ""}
+              </small>
+            </div>
+            <div className="dashboard-kpi-card">
+              <span>Couverture complete</span>
+              <strong>{dataCoverage != null ? `${dataCoverage}%` : "—"}</strong>
+              <small>{audit ? `${audit.summary.all_sources}/${audit.contracts_count} PRM complets` : "Audit en chargement"}</small>
+            </div>
+            <div className="dashboard-kpi-card dashboard-kpi-card--warn">
+              <span>A surveiller</span>
+              <strong>{(data.kpis.sous_dimensionnes + data.kpis.proche_seuil).toLocaleString("fr-FR")}</strong>
+              <small>Sous-dimensionnes ou proches du seuil</small>
+            </div>
+          </div>
+
+          <div className="dashboard-grid">
+            <PowerBandChart data={data.power_bands} />
+            <SupplierDashboardChart data={data.supplier_distribution} />
+            <CalibrationChart data={data.calibration_distribution} />
+            <TopConsumersTable data={data.top_consumers} onOpen={(prmId) => navigate(`/energie/${prmId}`)} />
+          </div>
+
+          <div className="dashboard-grid dashboard-grid--three">
+            <div className="dashboard-card">
+              <h3>Qualite des donnees</h3>
+              {audit ? (
+                <div className="dashboard-quality-list">
+                  <span><b>{audit.summary.all_sources}</b> PRM complets</span>
+                  <span><b>{audit.summary.partial_sources}</b> PRM partiels</span>
+                  <span><b>{audit.summary.critical}</b> anomalies critiques</span>
+                  <span><b>{audit.summary.info}</b> vides normaux</span>
+                </div>
+              ) : <p>Chargement audit...</p>}
+            </div>
+            <div className="dashboard-card">
+              <h3>Fraicheur collecte</h3>
+              <div className="dashboard-quality-list">
+                <span>Conso : <b>{formatDate(ranges?.consumption.last_date)}</b></span>
+                <span>P max : <b>{formatDate(ranges?.max_power.last_date)}</b></span>
+                <span>CDC : <b>{formatDate(ranges?.load_curve.last_date)}</b></span>
+                <span>DJU : <b>{formatDate(ranges?.dju.last_date)}</b></span>
+              </div>
+            </div>
+            <div className="dashboard-card">
+              <h3>Acces rapides</h3>
+              <div className="dashboard-link-list">
+                <button type="button" onClick={() => navigate("/energie/donnees")}>Piloter les collectes ENEDIS</button>
+                <button type="button" onClick={() => navigate("/energie/factures")}>Controler les factures</button>
+                <button type="button" onClick={() => navigate("/energie/gaz")}>Suivre le gaz GRDF</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="dashboard-card dashboard-card--wide">
+            <div className="dashboard-card-header">
+              <div>
+                <h3>Exploration rapide des PRM</h3>
+                <p>{dashboardPrms.length.toLocaleString("fr-FR")} compteurs visibles dans le referentiel.</p>
+              </div>
+              <button type="button" className="btn-secondary" onClick={() => navigate("/energie/donnees")}>
+                Voir audit complet
+              </button>
+            </div>
+            <div className="dashboard-prm-strip">
+              {dashboardPrms.slice(0, 12).map((prm) => (
+                <button type="button" key={prm.usage_point_id} onClick={() => navigate(`/energie/${prm.usage_point_id}`)}>
+                  <strong>{prm.name}</strong>
+                  <span>{prm.subscribed_power_kva ?? "—"} kVA · {prm.peak_kva_3y ?? "—"} kVA pic</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function EnergieDataOpsPage() {
+  const { token } = useAuth();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [calibFilter, setCalibFilter] = useState<string>("all");
 
@@ -735,10 +1020,13 @@ export function EnergiePage() {
     <div className="page">
       <div className="page-header page-header-row">
         <div>
-          <h2>Énergie</h2>
-          <p className="page-subtitle">Électricité ENEDIS — Points de livraison (PRMs)</p>
+          <h2>Acquisition & qualite des donnees energie</h2>
+          <p className="page-subtitle">Collectes ENEDIS, audit PRM et controle de couverture des donnees.</p>
         </div>
         <div className="page-header-actions">
+          <button type="button" className="secondary-button" onClick={() => navigate("/energie")}>
+            Dashboard energie
+          </button>
           <button type="button" className="secondary-button" onClick={() => navigate("/energie/preconisations")}>
             Preconisations
           </button>

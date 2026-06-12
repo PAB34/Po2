@@ -1954,8 +1954,219 @@ button:disabled {
   color: #cbd5e1;
 }
 
+/* ---- Energy dashboard ---- */
+
+.energy-dashboard-page {
+  gap: 18px;
+}
+
+.energy-dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 20px;
+  align-items: stretch;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(8, 47, 73, 0.72));
+}
+
+.energy-dashboard-hero h2 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.energy-dashboard-hero p {
+  max-width: 780px;
+  margin: 8px 0 0;
+  color: #cbd5e1;
+}
+
+.dashboard-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.energy-dashboard-freshness {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.52);
+  color: #94a3b8;
+}
+
+.energy-dashboard-freshness strong {
+  color: #f8fafc;
+  font-size: 1.55rem;
+}
+
+.dashboard-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-kpi-card,
+.dashboard-card {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.52);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.18);
+}
+
+.dashboard-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+}
+
+.dashboard-kpi-card span,
+.dashboard-kpi-card small,
+.dashboard-card p,
+.dashboard-ranking small {
+  color: #94a3b8;
+}
+
+.dashboard-kpi-card strong {
+  color: #f8fafc;
+  font-size: 1.55rem;
+}
+
+.dashboard-kpi-card--energy {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.dashboard-kpi-card--warn {
+  border-color: rgba(249, 115, 22, 0.35);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr 1fr 1.25fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dashboard-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-card {
+  padding: 18px;
+}
+
+.dashboard-card--wide {
+  grid-column: span 1;
+}
+
+.dashboard-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.dashboard-card h3,
+.dashboard-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+
+.dashboard-card-header p {
+  margin: 4px 0 0;
+}
+
+.dashboard-ranking,
+.dashboard-quality-list,
+.dashboard-link-list,
+.dashboard-prm-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dashboard-ranking-row,
+.dashboard-link-list button,
+.dashboard-prm-strip button {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.3);
+  color: #e2e8f0;
+  text-align: left;
+}
+
+.dashboard-ranking-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+}
+
+.dashboard-ranking-row span,
+.dashboard-prm-strip button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-rank {
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.dashboard-quality-list span {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+.dashboard-quality-list b {
+  color: #f8fafc;
+}
+
+.dashboard-link-list button,
+.dashboard-prm-strip button {
+  padding: 10px 12px;
+}
+
+.dashboard-prm-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-prm-strip span {
+  color: #94a3b8;
+}
+
 @media (max-width: 900px) {
   .energie-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .energy-dashboard-hero,
+  .dashboard-grid,
+  .dashboard-grid--three,
+  .dashboard-kpi-grid,
+  .dashboard-prm-strip {
     grid-template-columns: 1fr;
   }
 }

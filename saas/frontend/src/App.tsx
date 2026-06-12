@@ -21,7 +21,7 @@ import { EnergieDetailPage } from "./pages/EnergieDetailPage";
 import { EnergieGazPage } from "./pages/EnergieGazPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
 import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
-import { EnergiePage } from "./pages/EnergiePage";
+import { EnergieDataOpsPage, EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -77,7 +77,8 @@ export default function App() {
             <Link to="/buildings">Carte du patrimoine</Link>
 
             <p className="nav-section" style={navSectionStyle}>Énergie</p>
-            <Link to="/energie">Vue d'ensemble</Link>
+            <Link to="/energie">Dashboard energie</Link>
+            <Link to="/energie/donnees">Acquisition & donnees</Link>
             <Link to="/energie/factures">Factures fournisseurs</Link>
             <Link to="/energie/preconisations">Préconisations</Link>
             <Link to="/energie/bpu">Prix et TURPE</Link>
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/buildings/cvc-import/batiments" element={<CvcSiteMappingPage />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />
+            <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
             <Route path="/energie/factures" element={<EnergieInvoicesPage />} />
             <Route path="/energie/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />

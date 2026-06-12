@@ -599,6 +599,36 @@ def _peak_kva_3y(prm_id: str) -> float | None:
     return round(max(p["value_va"] for p in points) / 1000, 2)
 
 
+def _power_band(kva: float | None) -> tuple[str, str]:
+    if kva is None or kva <= 0:
+        return "unknown", "Puissance inconnue"
+    if kva <= 3:
+        return "0_3", "0-3 kVA"
+    if kva <= 6:
+        return "3_6", "3-6 kVA"
+    if kva <= 12:
+        return "6_12", "6-12 kVA"
+    if kva <= 36:
+        return "12_36", "12-36 kVA"
+    if kva <= 250:
+        return "36_250", "36-250 kVA"
+    return "250_plus", ">250 kVA"
+
+
+def _rolling_annual_kwh(prm_id: str) -> tuple[float | None, str | None, str | None, int]:
+    points = _daily_consumption_index().get(prm_id, [])
+    if not points:
+        return None, None, None, 0
+    end = date.fromisoformat(points[-1]["date"])
+    start = end - timedelta(days=364)
+    start_str = start.isoformat()
+    selected = [point for point in points if point["date"] >= start_str]
+    if not selected:
+        return None, None, None, 0
+    kwh = round(sum(point["value_wh"] for point in selected) / 1000, 1)
+    return kwh, selected[0]["date"], selected[-1]["date"], len({point["date"] for point in selected})
+
+
 _DATA_SOURCE_LABELS = {
     "consumption": "Consommation journaliere",
     "max_power": "Puissance maximale journaliere",
@@ -755,6 +785,12 @@ def get_energie_overview() -> dict[str, Any]:
     }
     supplier_kva: dict[str, float] = {}
     supplier_count: dict[str, int] = {}
+    band_stats: dict[str, dict[str, Any]] = {}
+    top_consumers: list[dict[str, Any]] = []
+    total_annual_kwh = 0.0
+    total_annual_prms = 0
+    annual_start: str | None = None
+    annual_end: str | None = None
 
     for uid, contract in contracts.items():
         kva = _safe_float(contract.get("0_subscribed_power_value"))
@@ -773,6 +809,40 @@ def get_energie_overview() -> dict[str, Any]:
             calibration_counts[calibration_status] = calibration_counts.get(calibration_status, 0) + 1
         else:
             calibration_counts["inconnu"] += 1
+
+        annual_kwh, prm_annual_start, prm_annual_end, annual_days = _rolling_annual_kwh(uid)
+        if annual_kwh is not None:
+            total_annual_kwh += annual_kwh
+            total_annual_prms += 1
+            if prm_annual_start and (annual_start is None or prm_annual_start < annual_start):
+                annual_start = prm_annual_start
+            if prm_annual_end and (annual_end is None or prm_annual_end > annual_end):
+                annual_end = prm_annual_end
+            top_consumers.append(
+                {
+                    "usage_point_id": uid,
+                    "name": contract.get("0_organization_commercial_name") or contract.get("0_organization_name") or uid,
+                    "contractor": supplier,
+                    "subscribed_power_kva": kva,
+                    "annual_consumption_kwh": annual_kwh,
+                }
+            )
+
+        band_key, band_label = _power_band(kva)
+        band = band_stats.setdefault(
+            band_key,
+            {
+                "band": band_key,
+                "label": band_label,
+                "prm_count": 0,
+                "total_kva": 0.0,
+                "annual_consumption_kwh": 0.0,
+            },
+        )
+        band["prm_count"] += 1
+        band["total_kva"] += kva or 0.0
+        if annual_kwh is not None:
+            band["annual_consumption_kwh"] += annual_kwh
 
         addr = addresses.get(uid)
         conn = connections.get(uid)
@@ -795,6 +865,7 @@ def get_energie_overview() -> dict[str, Any]:
         )
 
     prms.sort(key=lambda x: (x["name"] or "").lower())
+    top_consumers.sort(key=lambda item: item["annual_consumption_kwh"], reverse=True)
 
     supplier_distribution = [
         {
@@ -803,6 +874,29 @@ def get_energie_overview() -> dict[str, Any]:
             "prm_count": supplier_count[s],
         }
         for s in sorted(supplier_kva, key=lambda k: -supplier_kva[k])
+    ]
+    band_order = ["0_3", "3_6", "6_12", "12_36", "36_250", "250_plus", "unknown"]
+    power_bands = []
+    for key in band_order:
+        if key not in band_stats:
+            continue
+        item = band_stats[key]
+        power_bands.append(
+            {
+                "band": item["band"],
+                "label": item["label"],
+                "prm_count": item["prm_count"],
+                "total_kva": round(item["total_kva"], 1),
+                "annual_consumption_kwh": round(item["annual_consumption_kwh"], 1) if item["annual_consumption_kwh"] else None,
+            }
+        )
+
+    calibration_distribution = [
+        {"status": "sous_dimensionne", "label": "Sous-dimensionnes", "prm_count": calibration_counts["sous_dimensionne"]},
+        {"status": "proche_seuil", "label": "Proches du seuil", "prm_count": calibration_counts["proche_seuil"]},
+        {"status": "bien_calibre", "label": "Bien calibres", "prm_count": calibration_counts["bien_calibre"]},
+        {"status": "sur_souscrit", "label": "Sur-souscrits", "prm_count": calibration_counts["sur_souscrit"]},
+        {"status": "inconnu", "label": "Inconnus", "prm_count": calibration_counts["inconnu"]},
     ]
 
     return {
@@ -813,8 +907,15 @@ def get_energie_overview() -> dict[str, Any]:
             "proche_seuil": calibration_counts["proche_seuil"],
             "sur_souscrits": calibration_counts["sur_souscrit"],
             "calibration_inconnue": calibration_counts["inconnu"],
+            "annual_consumption_kwh": round(total_annual_kwh, 1) if total_annual_prms else None,
+            "annual_consumption_prms": total_annual_prms,
+            "annual_consumption_start": annual_start,
+            "annual_consumption_end": annual_end,
         },
         "supplier_distribution": supplier_distribution,
+        "power_bands": power_bands,
+        "calibration_distribution": calibration_distribution,
+        "top_consumers": top_consumers[:8],
         "prms": prms,
     }
 

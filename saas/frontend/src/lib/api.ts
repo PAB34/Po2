@@ -858,12 +858,38 @@ export type EnergieKpis = {
   proche_seuil: number;
   sur_souscrits: number;
   calibration_inconnue: number;
+  annual_consumption_kwh: number | null;
+  annual_consumption_prms: number;
+  annual_consumption_start: string | null;
+  annual_consumption_end: string | null;
 };
 
 export type SupplierDistributionItem = {
   supplier: string;
   total_kva: number;
   prm_count: number;
+};
+
+export type EnergyPowerBandItem = {
+  band: string;
+  label: string;
+  prm_count: number;
+  total_kva: number;
+  annual_consumption_kwh: number | null;
+};
+
+export type EnergyCalibrationDistributionItem = {
+  status: string;
+  label: string;
+  prm_count: number;
+};
+
+export type EnergyTopConsumerItem = {
+  usage_point_id: string;
+  name: string;
+  contractor: string | null;
+  subscribed_power_kva: number | null;
+  annual_consumption_kwh: number;
 };
 
 export type PrmListItem = {
@@ -884,6 +910,9 @@ export type PrmListItem = {
 export type EnergieOverview = {
   kpis: EnergieKpis;
   supplier_distribution: SupplierDistributionItem[];
+  power_bands: EnergyPowerBandItem[];
+  calibration_distribution: EnergyCalibrationDistributionItem[];
+  top_consumers: EnergyTopConsumerItem[];
   prms: PrmListItem[];
 };
 
