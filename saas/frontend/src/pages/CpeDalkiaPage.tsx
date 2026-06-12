@@ -1273,7 +1273,7 @@ function DjuBand({ dju }: { dju: CpeDju }) {
     <div className="card" style={{ padding: 12, overflowX: "auto" }}>
       <h4 style={{ margin: "0 0 4px", fontSize: 14 }}>Rigueur climatique (DJU chauffage base 18 °C)</h4>
       <p style={{ margin: "0 0 8px", color: "#6b7280", fontSize: 12 }}>
-        <strong>Informatif</strong> : compare les DJU réels de Sète à la référence contractuelle de{" "}
+        <strong>Informatif</strong> : compare les DJU réels du profil DALKIA à la référence contractuelle de{" "}
         <strong>{Math.round(dju.reference)} DJU</strong>. N'entre pas dans les montants ci-dessus, mais aide à
         lire un P1 reçu élevé (un hiver plus rigoureux → plus de consommation gaz). Source : {dju.source}.
       </p>
@@ -1309,7 +1309,7 @@ function DjuBand({ dju }: { dju: CpeDju }) {
         </tbody>
       </table>
       {dju.by_year.some((d) => d.dju_real != null && !d.complete) ? (
-        <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>* année incomplète (moins de 12 mois de données) — ratio indicatif.</p>
+        <p style={{ margin: "6px 0 0", color: "#9ca3af", fontSize: 11 }}>* année incomplète (moins de 8 mois contractuels octobre-mai) — ratio indicatif.</p>
       ) : null}
     </div>
   );

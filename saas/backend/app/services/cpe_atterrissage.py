@@ -34,15 +34,12 @@ from app.services.cpe import (
     get_sites,
     resolve_nb_for_year_detailed,
 )
+from app.services.dju_profiles import DALKIA_CONTRACT_PROFILE, aggregate_dju_monthly, is_dalkia_heating_month
 
 
 def _real_dju_by_month(annee: int) -> dict[int, float]:
-    """DJU chauffage réel (base 18°C) par mois de l'année, depuis le CSV Open-Meteo."""
-    try:
-        from app.services.energie import get_dju_monthly  # noqa: PLC0415 (lazy : lit un CSV)
-        monthly = get_dju_monthly()
-    except Exception:  # noqa: BLE001
-        return {}
+    """DJU chauffage réel DALKIA par mois, depuis le profil Montpellier dédié."""
+    monthly = aggregate_dju_monthly(DALKIA_CONTRACT_PROFILE)
     out: dict[int, float] = {}
     for row in monthly:
         ym = row.get("month", "")
@@ -52,7 +49,7 @@ def _real_dju_by_month(annee: int) -> dict[int, float]:
             y, m = int(ym[:4]), int(ym[5:7])
         except ValueError:
             continue
-        if y == annee:
+        if y == annee and is_dalkia_heating_month(m):
             out[m] = row.get("dju_chauffe", 0.0) or 0.0
     return out
 
@@ -63,11 +60,7 @@ def _normal_dju_profile(annee: int) -> dict[int, float]:
     Sert à estimer les DJU des mois restants (météo future inconnue). Calculé sur toutes les
     années disponibles dans le CSV, l'année en cours exclue.
     """
-    try:
-        from app.services.energie import get_dju_monthly  # noqa: PLC0415
-        monthly = get_dju_monthly()
-    except Exception:  # noqa: BLE001
-        return {}
+    monthly = aggregate_dju_monthly(DALKIA_CONTRACT_PROFILE)
     sums: dict[int, float] = {}
     counts: dict[int, int] = {}
     for row in monthly:
@@ -78,7 +71,7 @@ def _normal_dju_profile(annee: int) -> dict[int, float]:
             y, m = int(ym[:4]), int(ym[5:7])
         except ValueError:
             continue
-        if y == annee:
+        if y == annee or not is_dalkia_heating_month(m):
             continue
         sums[m] = sums.get(m, 0.0) + (row.get("dju_chauffe", 0.0) or 0.0)
         counts[m] = counts.get(m, 0) + 1

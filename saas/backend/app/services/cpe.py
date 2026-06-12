@@ -11,16 +11,13 @@ Les DJU réels sont lus depuis le CSV produit par dju_sync (Open-Meteo → COSTI
 """
 from __future__ import annotations
 
-import csv
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.cpe import CpeConsoReleve, CpeGazReleve, CpePrixGaz, CpeResultatAnnuel, CpeSite
 from app.models.cpe_dalkia import CpeDalkiaRefCible, CpeDalkiaRefImport, CpeDalkiaRefP2P3
 from app.schemas.cpe import (
@@ -38,11 +35,18 @@ from app.schemas.cpe import (
     CpeSiteOut,
     CpeSiteUpdate,
 )
-from app.services.dju_profiles import DALKIA_CONTRACT_PROFILE, dju_profile_payload
+from app.services.dju_profiles import (
+    DALKIA_CONTRACT_PROFILE,
+    dju_heating_column,
+    dju_profile_payload,
+    is_dalkia_heating_month,
+    read_dju_rows,
+    safe_float,
+)
 
 LOG = logging.getLogger(__name__)
 
-DJU_COL = "dju_chauffage_base_18"
+DJU_COL = dju_heating_column(DALKIA_CONTRACT_PROFILE)
 DJU_REFERENCE = DALKIA_CONTRACT_PROFILE.reference_dju or 1426.0
 
 # Seuils de révision NB (CCTPM)
@@ -119,38 +123,39 @@ def calcul_interessement(n_prime_b: float, nc: float, pu: float) -> dict[str, An
         }
 
 
-# ── Lecture DJU depuis CSV dju_sete.csv ──────────────────────────────────────
+# ── Lecture DJU depuis le profil DALKIA ──────────────────────────────────────
 
 def get_dju_annuel(annee: int) -> CpeDjuAnnuel:
-    """Retourne le cumul annuel de DJU chauffage base 18°C pour Sète.
+    """Retourne les DJU chauffage du profil DALKIA pour l'exercice demandé.
 
-    Lit le fichier DJU/dju_sete.csv produit par dju_sync (Open-Meteo → méthode COSTIC).
-    Pour l'intéressement contractuel, on utilise les DJU de la saison de chauffe
-    correspondant à l'exercice (01/01/N → 31/12/N, approche calendaire).
+    Le contrat fixe Montpellier / METEOCLIM COSTIC, base 18°C et référence 1 426 DJU
+    (octobre-mai). Tant que la source METEOCLIM n'est pas branchée, le CSV dédié est
+    alimenté par Open-Meteo Montpellier et reste marqué non opposable.
     """
-    csv_path = Path(settings.energie_dir) / "DJU" / "dju_sete.csv"
     profile = dju_profile_payload(DALKIA_CONTRACT_PROFILE)
-    if not csv_path.exists():
+    rows = read_dju_rows(DALKIA_CONTRACT_PROFILE)
+    if not rows:
         return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="fichier_absent", **profile)
 
     total = 0.0
     nb_jours = 0
-    prefix = str(annee)
 
     try:
-        with open(csv_path, encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                date_str = row.get("date", "")
-                if not date_str.startswith(prefix):
-                    continue
-                val = row.get(DJU_COL, "")
-                if val not in ("", None):
-                    try:
-                        total += float(val)
-                        nb_jours += 1
-                    except ValueError:
-                        pass
+        for row in rows:
+            date_str = row.get("date", "")
+            if len(date_str) < 10:
+                continue
+            try:
+                y = int(date_str[:4])
+                month = int(date_str[5:7])
+            except ValueError:
+                continue
+            if y != annee or not is_dalkia_heating_month(month):
+                continue
+            val = safe_float(row.get(DJU_COL))
+            if val is not None:
+                total += val
+                nb_jours += 1
     except Exception as exc:
         LOG.warning("Erreur lecture DJU CSV : %s", exc)
         return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="erreur_lecture", **profile)
@@ -159,7 +164,7 @@ def get_dju_annuel(annee: int) -> CpeDjuAnnuel:
         annee=annee,
         dju_total=round(total, 2),
         nb_jours=nb_jours,
-        source="open_meteo_sete_costic_indicatif",
+        source="open_meteo_montpellier_costic_indicatif",
         **profile,
     )
 
@@ -661,7 +666,7 @@ def calculer_resultat_site(
 ) -> CpeResultatAnnuel:
     """Calcule et persiste le résultat annuel d'intéressement pour un site.
 
-    Si dju_reels non fourni, lit depuis dju_sete.csv.
+    Si dju_reels non fourni, lit les DJU du profil contractuel DALKIA.
     Si pu_mwh non fourni, lit depuis cpe_prix_gaz.
     """
     site = db.get(CpeSite, site_id)

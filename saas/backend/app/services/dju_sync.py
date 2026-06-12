@@ -1,6 +1,6 @@
 """
 DJU sync service — météo Open-Meteo → DJU chauffage (COSTIC) + froid (Météo-France).
-Incrémental : reprend depuis la dernière date connue dans DJU/dju_sete.csv.
+Incrémental : reprend depuis la dernière date connue dans chaque CSV de profil DJU.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from typing import Any
 
 import requests
 
-from app.core.config import settings
+from app.services.dju_profiles import DALKIA_CONTRACT_PROFILE, EXPLOITATION_SETE_PROFILE, DjuProfile, dju_csv_path
 
 LOG = logging.getLogger(__name__)
 
@@ -27,11 +27,8 @@ _STATE: dict[str, Any] = {
 }
 _MAX_LOG = 30
 
-_CITY = "Sète"
-_COUNTRY = "FR"
-_BASE_H = 18.0
-_BASE_C = 22.0
 _HISTORY_START = "2015-01-01"
+_PROFILES = [EXPLOITATION_SETE_PROFILE, DALKIA_CONTRACT_PROFILE]
 
 _GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 _ARCH_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -55,18 +52,22 @@ def is_dju_running() -> bool:
         return _STATE["status"] == "running"
 
 
-def _csv_path() -> Path:
-    return Path(settings.energie_dir) / "DJU" / "dju_sete.csv"
+def _csv_path(profile: DjuProfile) -> Path:
+    return dju_csv_path(profile)
 
 
-def _get_location() -> tuple[float, float, str]:
+def _get_location(profile: DjuProfile) -> tuple[float, float, str]:
     r = requests.get(_GEO_URL, params={
-        "name": _CITY, "count": 1, "language": "fr", "format": "json", "countryCode": _COUNTRY,
+        "name": profile.city,
+        "count": 1,
+        "language": "fr",
+        "format": "json",
+        "countryCode": profile.country,
     }, timeout=30)
     r.raise_for_status()
     locs = r.json().get("results", [])
     if not locs:
-        raise RuntimeError(f"Localisation introuvable : {_CITY} ({_COUNTRY})")
+        raise RuntimeError(f"Localisation introuvable : {profile.city} ({profile.country})")
     loc = locs[0]
     return loc["latitude"], loc["longitude"], loc.get("timezone", "Europe/Paris")
 
@@ -90,24 +91,24 @@ def _get_archive(lat: float, lon: float, tz: str, start: str, end: str) -> list[
     ]
 
 
-def _h_costic(tmin: float | None, tmax: float | None) -> float | None:
+def _h_costic(tmin: float | None, tmax: float | None, base: float) -> float | None:
     if tmin is None or tmax is None:
         return None
-    if _BASE_H >= tmax:
-        return round(_BASE_H - (tmin + tmax) / 2, 2)
-    if _BASE_H <= tmin:
+    if base >= tmax:
+        return round(base - (tmin + tmax) / 2, 2)
+    if base <= tmin:
         return 0.0
     a = tmax - tmin
     if a == 0:
         return 0.0
-    b = (_BASE_H - tmin) / a
+    b = (base - tmin) / a
     return round(a * b * (0.08 + 0.42 * b), 2)
 
 
-def _c_mean(tmin: float | None, tmax: float | None) -> float | None:
-    if tmin is None or tmax is None:
+def _c_mean(tmin: float | None, tmax: float | None, base: float | None) -> float | None:
+    if tmin is None or tmax is None or base is None:
         return None
-    return round(max((tmin + tmax) / 2 - _BASE_C, 0), 2)
+    return round(max((tmin + tmax) / 2 - base, 0), 2)
 
 
 def _season_h(ds: str) -> str:
@@ -144,61 +145,76 @@ def _upsert(new_rows: list[dict], path: Path) -> int:
     return added
 
 
+def _sync_profile(profile: DjuProfile) -> tuple[str | None, int]:
+    path = _csv_path(profile)
+    today = date.today()
+    end_d = today - timedelta(days=1)
+
+    start_d = date.fromisoformat(_HISTORY_START)
+    if path.exists() and path.stat().st_size > 0:
+        max_d: str | None = None
+        with open(path, encoding="utf-8", newline="") as f:
+            for r in _csv.DictReader(f):
+                d = r.get("date", "")
+                if d and (max_d is None or d > max_d):
+                    max_d = d
+        if max_d:
+            start_d = date.fromisoformat(max_d) + timedelta(days=1)
+            _log(f"{profile.label}: reprise depuis {start_d} (données jusqu'au {max_d})")
+
+    if start_d > end_d:
+        _log(f"{profile.label}: DJU déjà à jour.")
+        return end_d.isoformat(), 0
+
+    _log(f"{profile.label}: collecte Open-Meteo {start_d} → {end_d} pour {profile.city}")
+    lat, lon, tz = _get_location(profile)
+    raw = _get_archive(lat, lon, tz, start_d.isoformat(), end_d.isoformat())
+    _log(f"{profile.label}: {len(raw)} jours récupérés")
+
+    h_col = f"dju_chauffage_base_{int(profile.heating_base_c)}"
+    c_col = f"dju_froid_base_{int(profile.cooling_base_c)}" if profile.cooling_base_c is not None else None
+    rows = []
+    for r in raw:
+        tmin = float(r["tmin_c"]) if r["tmin_c"] not in (None, "") else None
+        tmax = float(r["tmax_c"]) if r["tmax_c"] not in (None, "") else None
+        tmoy = round((tmin + tmax) / 2, 2) if tmin is not None and tmax is not None else None
+        row = {
+            "date": r["date"],
+            "tmin_c": tmin,
+            "tmax_c": tmax,
+            "tmoy_c": tmoy,
+            h_col: _h_costic(tmin, tmax, profile.heating_base_c),
+            "saison_chauffe": _season_h(r["date"]),
+            "saison_froid": _season_c(r["date"]),
+            "source_profile": profile.code,
+            "source_city": profile.city,
+            "source_label": "Open-Meteo archive",
+            "expected_source_label": profile.source_label,
+            "contractual": str(profile.contractual).lower(),
+            "compliant_source": str(profile.compliant_source).lower(),
+        }
+        if c_col:
+            row[c_col] = _c_mean(tmin, tmax, profile.cooling_base_c)
+        rows.append(row)
+
+    added = _upsert(rows, path)
+    _log(f"{profile.label}: OK — {added} nouveaux jours ({len(rows)} traités)")
+    return end_d.isoformat(), added
+
+
 def run_dju_sync() -> None:
-    """Background task : Open-Meteo → calcul DJU → upsert DJU/dju_sete.csv."""
+    """Background task : Open-Meteo → calcul DJU → upsert des CSV DJU par profil."""
     with _LOCK:
         if _STATE["status"] == "running":
             return
         _STATE.update({"status": "running", "error": None, "log": [], "rows_added": 0})
 
     try:
-        path = _csv_path()
-        today = date.today()
-        end_d = today - timedelta(days=1)
-
-        start_d = date.fromisoformat(_HISTORY_START)
-        if path.exists() and path.stat().st_size > 0:
-            max_d: str | None = None
-            with open(path, encoding="utf-8", newline="") as f:
-                for r in _csv.DictReader(f):
-                    d = r.get("date", "")
-                    if d and (max_d is None or d > max_d):
-                        max_d = d
-            if max_d:
-                start_d = date.fromisoformat(max_d) + timedelta(days=1)
-                _log(f"Reprise depuis {start_d} (données jusqu'au {max_d})")
-
-        if start_d > end_d:
-            _log("DJU déjà à jour.")
-            with _LOCK:
-                _STATE["status"] = "success"
-            return
-
-        _log(f"Collecte Open-Meteo : {start_d} → {end_d} pour {_CITY}")
-        lat, lon, tz = _get_location()
-        raw = _get_archive(lat, lon, tz, start_d.isoformat(), end_d.isoformat())
-        _log(f"{len(raw)} jours récupérés")
-
-        h_col = f"dju_chauffage_base_{int(_BASE_H)}"
-        c_col = f"dju_froid_base_{int(_BASE_C)}"
-        rows = []
-        for r in raw:
-            tmin = float(r["tmin_c"]) if r["tmin_c"] not in (None, "") else None
-            tmax = float(r["tmax_c"]) if r["tmax_c"] not in (None, "") else None
-            tmoy = round((tmin + tmax) / 2, 2) if tmin is not None and tmax is not None else None
-            rows.append({
-                "date": r["date"],
-                "tmin_c": tmin,
-                "tmax_c": tmax,
-                "tmoy_c": tmoy,
-                h_col: _h_costic(tmin, tmax),
-                c_col: _c_mean(tmin, tmax),
-                "saison_chauffe": _season_h(r["date"]),
-                "saison_froid": _season_c(r["date"]),
-            })
-
-        added = _upsert(rows, path)
-        _log(f"OK — {added} nouveaux jours ({len(rows)} traités)")
+        last_sync_date = None
+        total_added = 0
+        for profile in _PROFILES:
+            last_sync_date, added = _sync_profile(profile)
+            total_added += added
 
         try:
             from app.services.energie import _dju_monthly_index, _dju_rows, get_data_ranges  # noqa: PLC0415
@@ -210,7 +226,7 @@ def run_dju_sync() -> None:
             pass
 
         with _LOCK:
-            _STATE.update({"status": "success", "last_sync_date": end_d.isoformat(), "rows_added": added})
+            _STATE.update({"status": "success", "last_sync_date": last_sync_date, "rows_added": total_added})
 
     except Exception as exc:
         msg = str(exc)

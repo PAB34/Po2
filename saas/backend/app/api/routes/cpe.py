@@ -719,10 +719,10 @@ def get_dju(
     annee: int,
     current_user: User = Depends(get_current_user),
 ) -> CpeDjuAnnuel:
-    """Retourne le cumul de DJU chauffage base 18°C (méthode COSTIC) pour l'exercice demandé.
+    """Retourne les DJU chauffage base 18°C du profil DALKIA pour l'exercice demandé.
 
-    Source : Open-Meteo (station la plus proche de Sète), mis à jour quotidiennement.
-    Référence contractuelle : 1 426 DJU (Montpellier, 1981-2010).
+    Référence contractuelle : 1 426 DJU (Montpellier, 1981-2010, octobre-mai).
+    Tant que METEOCLIM COSTIC n'est pas branché, la source Montpellier Open-Meteo reste indicative.
     """
     return svc.get_dju_annuel(annee)
 

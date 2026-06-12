@@ -40,6 +40,7 @@ from app.services.cpe_accounting import (
 )
 from app.services.cpe_dalkia_db import normalize_p2p3_poste
 from app.services.cpe_dpgf_p1 import get_dpgf_p1_levels
+from app.services.dju_profiles import DALKIA_CONTRACT_PROFILE, aggregate_dju_monthly, is_dalkia_heating_month
 
 # Le numero de lot est encode dans le billed_item des references de perimetre
 # (kind cpe_contract_scope), ex. "CPE_VILLE_LOT_1" / "CPE_VILLE_LOT_2".
@@ -69,8 +70,11 @@ INSTALLMENTS_PER_YEAR = 4
 
 # DJU de reference contractuel (base 18°C, station Montpellier 1981-2010). Fallback si aucun
 # dju_reference en base. Le DJU reel (CSV Open-Meteo) est aussi en base 18 -> comparable.
-DJU_REFERENCE_DEFAULT = 1426.0
-DJU_SOURCE_LABEL = "DJU chauffage base 18°C — Open-Meteo / COSTIC (DJU/dju_sete.csv)"
+DJU_REFERENCE_DEFAULT = DALKIA_CONTRACT_PROFILE.reference_dju or 1426.0
+DJU_SOURCE_LABEL = (
+    "DJU chauffage base 18°C — profil DALKIA Montpellier indicatif "
+    "(Open-Meteo, en attente METEOCLIM COSTIC)"
+)
 
 
 def _classify_received_poste(line: CpeFinanceLine) -> str | None:
@@ -305,14 +309,10 @@ def _dju_block(db: Session, city_id: int | None, years: list[int]) -> dict[str, 
 
     Purement explicatif (n'entre PAS dans le calcul prevu/recu en euros). Permet de
     contextualiser un P1 recu eleve par un hiver plus rigoureux. Le DJU reel vient du CSV
-    Open-Meteo (base 18°C, meme base que la reference contractuelle). Une annee incomplete
-    (< 12 mois de donnees) est marquee ``complete=false`` et son ratio est indicatif.
+    Open-Meteo Montpellier (base 18°C, meme base que la reference contractuelle). Une annee incomplete
+    (< 8 mois contractuels octobre-mai) est marquee ``complete=false`` et son ratio est indicatif.
     """
-    try:
-        from app.services.energie import get_dju_monthly  # noqa: PLC0415 (lazy : lit un CSV)
-        monthly = get_dju_monthly()
-    except Exception:  # noqa: BLE001 — pas de CSV / source indispo -> bandeau absent
-        monthly = []
+    monthly = aggregate_dju_monthly(DALKIA_CONTRACT_PROFILE)
 
     if not monthly:
         return {"reference": _dju_reference(db, city_id), "source": DJU_SOURCE_LABEL,
@@ -327,9 +327,10 @@ def _dju_block(db: Session, city_id: int | None, years: list[int]) -> dict[str, 
             continue
         try:
             y = int(ym[:4])
+            m = int(ym[5:7])
         except ValueError:
             continue
-        if y not in year_set:
+        if y not in year_set or not is_dalkia_heating_month(m):
             continue
         sums[y] += row.get("dju_chauffe", 0.0) or 0.0
         months[y] += 1
@@ -344,7 +345,7 @@ def _dju_block(db: Session, city_id: int | None, years: list[int]) -> dict[str, 
             continue
         has_data = True
         dju_real = round(sums[y], 1)
-        complete = m >= 12
+        complete = m >= 8
         ratio = round(dju_real / reference, 4) if reference else None
         by_year.append({"year": y, "dju_real": dju_real, "months": m, "complete": complete, "ratio": ratio})
 
