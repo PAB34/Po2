@@ -726,6 +726,61 @@ function ContractInsightsPanel({ data }: { data: {
   );
 }
 
+function isUnclearPrmName(prm: PrmListItem): boolean {
+  const name = (prm.name ?? "").trim();
+  if (!name) return true;
+  const compactName = name.replace(/\s+/g, "");
+  const compactPrm = prm.usage_point_id.replace(/\s+/g, "");
+  if (compactName === compactPrm || compactName.includes(compactPrm)) return true;
+  if (/^\d{6,}$/.test(compactName)) return true;
+  if (/^(PRM|PDL|COMPTEUR|SITE)?[-_\s]*\d{6,}$/i.test(name)) return true;
+  return false;
+}
+
+function UnclearPrmNamesPanel({ prms, onOpen }: { prms: PrmListItem[]; onOpen: (prmId: string) => void }) {
+  if (prms.length === 0) return null;
+  return (
+    <div className="dashboard-card dashboard-card--wide">
+      <div className="dashboard-card-header">
+        <div>
+          <h3>PRM a identifier en priorite</h3>
+          <p>
+            Ces compteurs ont une designation vide, numerique, ou assimilee au numero de PRM.
+            Ils doivent etre renommes pour fiabiliser l'exploitation.
+          </p>
+        </div>
+        <span className="badge badge-orange">{prms.length.toLocaleString("fr-FR")} PRM</span>
+      </div>
+      <div className="data-audit-table-wrapper" style={{ maxHeight: 360 }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>PRM</th>
+              <th>Designation actuelle</th>
+              <th>Adresse</th>
+              <th>Contrat</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prms.map((prm) => (
+              <tr key={prm.usage_point_id}>
+                <td>
+                  <button type="button" className="secondary-button compact-button" onClick={() => onOpen(prm.usage_point_id)}>
+                    {prm.usage_point_id}
+                  </button>
+                </td>
+                <td>{prm.name || "Designation vide"}</td>
+                <td>{prm.address || "-"}</td>
+                <td>{prm.contractor ?? "-"} | {prm.subscribed_power_kva ?? "-"} kVA</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function connectionBadge(state: string | null): string {
   if (!state) return "";
   if (state.toLowerCase().includes("non alimenté")) return "badge-red";
@@ -1014,6 +1069,7 @@ export function EnergiePage() {
 
   const activePrms = audit?.profile_counts.communicant_open ?? 0;
   const dataCoverage = data && audit ? Math.round((audit.summary.all_sources / data.kpis.total_prms) * 100) : null;
+  const unclearNamePrms = (data?.prms ?? []).filter(isUnclearPrmName);
 
   return (
     <div className="page energy-dashboard-page">
@@ -1121,6 +1177,7 @@ export function EnergiePage() {
             </div>
           </div>
 
+          <UnclearPrmNamesPanel prms={unclearNamePrms} onOpen={(prmId) => navigate(`/energie/${prmId}`)} />
         </>
       )}
     </div>
