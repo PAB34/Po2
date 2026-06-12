@@ -508,6 +508,115 @@ def _run_engie_xlsx_import_job(
         db.close()
 
 
+@router.post(
+    "/invoices/imports/edf-csv",
+    response_model=EnergyInvoiceBatchDetailOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def upload_edf_csv_export(
+    file: UploadFile = File(...),
+    force_update: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload de l'export CSV de facturation EDF (un fichier = N factures)."""
+    city_id = _require_city(current_user)
+    filename = file.filename or ""
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Format attendu : fichier .csv EDF.",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fichier vide.")
+    batch = EnergyInvoiceBatch(
+        city_id=city_id,
+        uploaded_by_user_id=current_user.id,
+        source="edf_csv_export",
+        status="processing",
+        file_count=1,
+    )
+    batch.items.append(
+        EnergyInvoiceBatchItem(
+            original_filename=filename,
+            content_type=file.content_type,
+            file_size_bytes=len(content),
+            sha256=sha256(content).hexdigest(),
+            status="processing",
+            message="Analyse CSV EDF lancee en arriere-plan.",
+        )
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+
+    worker = Thread(
+        target=_run_edf_csv_import_job,
+        args=(batch.id, city_id, current_user.id, content, filename, file.content_type, force_update),
+        daemon=True,
+    )
+    worker.start()
+    return batch
+
+
+def _run_edf_csv_import_job(
+    batch_id: int,
+    city_id: int,
+    user_id: int,
+    file_bytes: bytes,
+    original_filename: str,
+    content_type: str | None,
+    force_update: bool,
+) -> None:
+    from app.services.edf_csv_import import import_edf_csv
+
+    db = SessionLocal()
+    try:
+        batch = db.query(EnergyInvoiceBatch).filter_by(id=batch_id, city_id=city_id).first()
+        item = batch.items[0] if batch and batch.items else None
+        if item is not None:
+            item.message = "Analyse CSV EDF en cours : lecture et controle des factures."
+            db.commit()
+        try:
+            summary = import_edf_csv(
+                db,
+                city_id=city_id,
+                user_id=user_id,
+                file_bytes=file_bytes,
+                original_filename=original_filename,
+                content_type=content_type,
+                force_update=force_update,
+            )
+        except Exception as exc:
+            if batch is not None:
+                batch.status = "completed_with_errors"
+                batch.error_count = 1
+                if item is not None:
+                    item.status = "error"
+                    item.message = f"Analyse CSV EDF impossible : {exc}"
+                db.commit()
+            return
+
+        if batch is not None:
+            batch.status = "completed_with_errors" if summary["errors"] else "completed"
+            batch.file_count = summary["total_bordereaux"]
+            batch.imported_count = summary["created"] + summary["updated"]
+            batch.duplicate_count = summary["duplicates"]
+            batch.error_count = summary["errors"]
+            batch.ignored_count = 0
+            if item is not None:
+                item.status = "imported" if summary["errors"] == 0 else "error"
+                item.message = (
+                    f"CSV EDF traite : {summary['total_bordereaux']} facture(s), "
+                    f"{summary['created']} cree(s), {summary['updated']} mis a jour, "
+                    f"{summary['duplicates']} doublon(s), {summary['errors']} erreur(s)."
+                )
+            db.commit()
+    finally:
+        db.close()
+
+
 @router.delete("/invoices/imports/{invoice_import_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_energy_invoice_import(
     invoice_import_id: int,

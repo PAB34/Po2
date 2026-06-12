@@ -2133,6 +2133,22 @@ export async function uploadEngieXlsxExport(
   return parseResponse<EnergyInvoiceBatchDetail>(response);
 }
 
+export async function uploadEdfCsvExport(
+  token: string,
+  file: File,
+  options?: { forceUpdate?: boolean },
+): Promise<EnergyInvoiceBatchDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const qs = options?.forceUpdate ? "?force_update=true" : "";
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/edf-csv${qs}`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: formData,
+  });
+  return parseResponse<EnergyInvoiceBatchDetail>(response);
+}
+
 export async function uploadEnergyInvoiceBatch(token: string, files: File[]): Promise<EnergyInvoiceBatchDetail> {
   const formData = new FormData();
   for (const file of files) {

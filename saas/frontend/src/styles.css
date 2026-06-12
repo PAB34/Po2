@@ -4485,6 +4485,12 @@ button:disabled {
   background: rgba(15, 23, 42, 0.42);
 }
 
+.invoice-upload-divider {
+  height: 1px;
+  margin: 6px 0 2px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
 /* ---- Bandeau fournisseurs (Facturation) ---- */
 
 .invoice-supplier-strip {

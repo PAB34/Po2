@@ -23,6 +23,7 @@ import {
   fetchTurpeVersions,
   uploadEnergyInvoiceBatch,
   uploadEngieXlsxExport,
+  uploadEdfCsvExport,
 } from "../lib/api";
 import type { EnergyInvoiceImport, EnergyInvoiceMonthlyConsumptionPoint } from "../lib/api";
 import { InvoiceSupplierReport } from "../components/InvoiceSupplierReport";
@@ -127,7 +128,7 @@ const SUPPLIER_CATALOG: {
   supported: boolean;
 }[] = [
   { key: "ENGIE", label: "ENGIE", energyLabel: "Electricite", distributor: "ENEDIS", scope: "Batiments ville", supported: true },
-  { key: "EDF", label: "EDF", energyLabel: "Electricite", distributor: "ENEDIS", scope: "Eclairage public", supported: false },
+  { key: "EDF", label: "EDF", energyLabel: "Electricite", distributor: "ENEDIS", scope: "Eclairage public", supported: true },
   { key: "TOTALENERGIES", label: "TotalEnergies", energyLabel: "Gaz", distributor: "GRDF", scope: "Gaz batiments", supported: false },
 ];
 
@@ -367,6 +368,10 @@ export function EnergieInvoicesPage() {
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxSummary, setXlsxSummary] = useState<string | null>(null);
   const [xlsxForceUpdate, setXlsxForceUpdate] = useState(false);
+  const edfInputRef = useRef<HTMLInputElement | null>(null);
+  const [edfFile, setEdfFile] = useState<File | null>(null);
+  const [edfSummary, setEdfSummary] = useState<string | null>(null);
+  const [edfForceUpdate, setEdfForceUpdate] = useState(false);
   const [deleteAllSummary, setDeleteAllSummary] = useState<string | null>(null);
 
   // Tri du tableau factures : { column, direction }. Cycle clic : asc → desc → none.
@@ -782,6 +787,22 @@ export function EnergieInvoicesPage() {
     },
   });
 
+  const edfUploadMut = useMutation({
+    mutationFn: (args: { file: File; forceUpdate: boolean }) =>
+      uploadEdfCsvExport(token!, args.file, { forceUpdate: args.forceUpdate }),
+    onSuccess: (batch) => {
+      setEdfSummary(`Analyse CSV EDF lancee en arriere-plan (lot #${batch.id}). Les factures apparaitront automatiquement.`);
+      setEdfFile(null);
+      setEdfForceUpdate(false);
+      if (edfInputRef.current) edfInputRef.current.value = "";
+      setSelectedBatchId(batch.id);
+      qc.setQueryData(["energy-invoice-batch", batch.id], batch);
+      qc.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-batches"] });
+      qc.invalidateQueries({ queryKey: ["energy-invoice-monthly-consumption"] });
+    },
+  });
+
   const analyzeMut = useMutation({
     mutationFn: (invoiceImport: EnergyInvoiceImport) => analyzeEnergyInvoiceImport(token!, invoiceImport.id),
     onSuccess: () => {
@@ -1093,6 +1114,44 @@ export function EnergieInvoicesPage() {
         )}
         {xlsxSummary && <p className="sync-result-ok">{xlsxSummary}</p>}
         {xlsxUploadMut.isError && <p className="error-text">{(xlsxUploadMut.error as Error).message}</p>}
+
+        <div className="invoice-upload-divider" />
+        <div>
+          <p className="field-label">EDF — eclairage public (electricite)</p>
+          <p className="page-subtitle">
+            Depose l'export <strong>CSV</strong> de facturation EDF (un fichier = plusieurs factures).
+          </p>
+        </div>
+        <div className="invoice-upload-actions">
+          <input
+            ref={edfInputRef}
+            type="file"
+            accept=".csv"
+            onChange={(e) => setEdfFile(e.target.files?.[0] ?? null)}
+            className="form-input"
+          />
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={edfFile === null || edfUploadMut.isPending}
+            onClick={() => edfFile && edfUploadMut.mutate({ file: edfFile, forceUpdate: edfForceUpdate })}
+          >
+            {edfUploadMut.isPending
+              ? (edfForceUpdate ? "Mise à jour en cours..." : "Analyse en cours...")
+              : (edfForceUpdate ? "Importer et mettre à jour" : "Importer le CSV EDF")}
+          </button>
+        </div>
+        <label className="invoice-upload-checkbox" title="Re-analyse les factures EDF déjà présentes avec les données du nouveau fichier. La décision utilisateur est préservée.">
+          <input
+            type="checkbox"
+            checked={edfForceUpdate}
+            onChange={(e) => setEdfForceUpdate(e.target.checked)}
+          />
+          <span>Forcer la mise à jour des factures EDF déjà importées <em>(préserve les décisions utilisateur)</em></span>
+        </label>
+        {edfFile && <p className="invoice-upload-selection">Fichier sélectionné : {edfFile.name}</p>}
+        {edfSummary && <p className="sync-result-ok">{edfSummary}</p>}
+        {edfUploadMut.isError && <p className="error-text">{(edfUploadMut.error as Error).message}</p>}
       </section>
 
       {/* Section "Lots d'import" désactivée depuis le passage XLSX-only (mai 2026).

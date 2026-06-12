@@ -28,7 +28,7 @@ class SupplierProfile:
     energy: str         # ELECTRICITY | GAS
     distributor: str | None  # référentiel de contrôle (ENEDIS / GRDF)
     scope_hint: str     # périmètre métier indicatif
-    xlsx_supported: bool  # un parseur d'import existe-t-il déjà ?
+    import_supported: bool  # un parseur d'import existe-t-il déjà ?
 
 
 SUPPLIERS: dict[str, SupplierProfile] = {
@@ -38,7 +38,7 @@ SUPPLIERS: dict[str, SupplierProfile] = {
         energy=ELECTRICITY,
         distributor="ENEDIS",
         scope_hint="Électricité bâtiments ville",
-        xlsx_supported=True,
+        import_supported=True,
     ),
     "EDF": SupplierProfile(
         code="EDF",
@@ -46,7 +46,7 @@ SUPPLIERS: dict[str, SupplierProfile] = {
         energy=ELECTRICITY,
         distributor="ENEDIS",
         scope_hint="Électricité éclairage public",
-        xlsx_supported=False,
+        import_supported=True,
     ),
     "TOTALENERGIES": SupplierProfile(
         code="TOTALENERGIES",
@@ -54,7 +54,7 @@ SUPPLIERS: dict[str, SupplierProfile] = {
         energy=GAS,
         distributor="GRDF",
         scope_hint="Gaz bâtiments ville",
-        xlsx_supported=False,
+        import_supported=False,
     ),
 }
 
