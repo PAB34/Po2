@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.services import load_curve_store
 
 
 def _energie_path(*parts: str) -> Path:
@@ -566,30 +567,13 @@ def _load_curve_index() -> dict[str, list[dict[str, Any]]]:
 
 @lru_cache(maxsize=64)
 def _load_curve_points_for_prm(prm_id: str) -> list[dict[str, Any]]:
-    """Points de courbe de charge d'UN seul PRM, lus en streaming.
+    """Points de courbe de charge d'UN seul PRM, via l'index SQLite.
 
-    Evite de charger toute la courbe de charge en memoire (cf.
-    _load_curve_index) : on parcourt le CSV une fois et on ne conserve que les
-    points du PRM demande. Memoire bornee a un PRM, quel que soit le volume total.
+    Delegue a load_curve_store (index `(prm_id, dt)` construit depuis le CSV) :
+    seules les lignes du PRM demande sont lues. Memoire bornee a un PRM, quel
+    que soit le volume total de la courbe de charge.
     """
-    path = _energie_path("enedis_load_curve.csv")
-    if not path.exists():
-        return []
-    points: list[dict[str, Any]] = []
-    with open(path, encoding="utf-8-sig", newline="") as f:
-        for r in csv.DictReader(f):
-            if r.get("usage_point_id", "") != prm_id:
-                continue
-            raw = r.get("value_w")
-            if not raw:
-                continue
-            try:
-                fval = float(raw)
-            except ValueError:
-                continue
-            points.append({"datetime": r["datetime"], "value_w": fval})
-    points.sort(key=lambda x: x["datetime"])
-    return points
+    return load_curve_store.points_for_prm(prm_id)
 
 
 @lru_cache(maxsize=1)
@@ -683,7 +667,7 @@ def _source_has_data(prm_id: str, source: str) -> bool:
     if source == "max_power":
         return bool(_max_power_index().get(prm_id))
     if source == "load_curve":
-        return bool(_load_curve_points_for_prm(prm_id))
+        return load_curve_store.has_data(prm_id)
     return False
 
 

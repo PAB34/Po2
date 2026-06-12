@@ -14,7 +14,8 @@ from app.models.billing import BillingBpuLine, BillingConfig
 from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.billing_bpu_sync import build_current_lines_for_supplier
-from app.services.energie import _contracts, _daily_consumption_index, _load_curve_index, _max_power_index, _safe_float
+from app.services import load_curve_store
+from app.services.energie import _contracts, _daily_consumption_index, _max_power_index, _safe_float
 from app.services.invoice_bpu import load_historical_bpu_prices, resolve_historical_bpu_price
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
 from app.services.invoice_normalization import replace_normalized_invoice
@@ -877,7 +878,6 @@ def _check_consumption_against_enedis(
     consumption_summary: dict[str, int],
 ) -> None:
     daily_consumption = _daily_consumption_index()
-    load_curve = _load_curve_index()
 
     for site in sites:
         scope = _site_scope(site)
@@ -906,7 +906,9 @@ def _check_consumption_against_enedis(
                 )
             continue
 
-        load_curve_metrics = _load_curve_metrics(load_curve.get(prm_id, []), start, end)
+        load_curve_metrics = _load_curve_metrics(
+            load_curve_store.points_for_prm(prm_id, start, end), start, end
+        )
         if load_curve_metrics is not None and load_curve_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
             consumption_summary["checked_sites"] += 1
             enedis_kwh = load_curve_metrics["energy_kwh"]
@@ -958,7 +960,6 @@ def _check_power_controls(
 ) -> None:
     contracts = _contracts()
     max_power = _max_power_index()
-    load_curve = _load_curve_index()
 
     for site in sites:
         scope = _site_scope(site)
@@ -1005,7 +1006,9 @@ def _check_power_controls(
             power_summary["overruns"] += 1
             issue("warning", "POWER_OVERRUN_BILLED", f"Depassement de puissance facture sur {scope}: {billed_overrun:.2f} EUR HT.", scope)
 
-        load_curve_metrics = _load_curve_metrics(load_curve.get(prm_id, []), start, end)
+        load_curve_metrics = _load_curve_metrics(
+            load_curve_store.points_for_prm(prm_id, start, end), start, end
+        )
         if load_curve_metrics is not None and load_curve_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
             power_summary["load_curve_checks"] += 1
             enedis_peak = load_curve_metrics["peak_kva"]
