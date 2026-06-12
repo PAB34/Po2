@@ -929,6 +929,16 @@ export type PrmCalibration = {
   recommendation: string | null;
 };
 
+export type PrmDataDiagnostic = {
+  source: string;
+  label: string;
+  has_data: boolean;
+  outcome: string | null;
+  severity: string;
+  message: string;
+  action: string | null;
+};
+
 export type PowerRecommendationDataQuality = {
   status: string;
   max_power_days: number;
@@ -1002,6 +1012,7 @@ export type PrmDetail = {
   connection: PrmConnection;
   summary: PrmSummary;
   calibration: PrmCalibration;
+  data_diagnostics: Record<string, PrmDataDiagnostic>;
 };
 
 export type MaxPowerPoint = {

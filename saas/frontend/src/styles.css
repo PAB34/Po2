@@ -1840,6 +1840,32 @@ button:disabled {
   font-style: italic;
 }
 
+.missing-data-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.32);
+  color: #cbd5e1;
+}
+
+.missing-data-notice__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.missing-data-notice p {
+  margin: 0;
+}
+
+.missing-data-notice small {
+  color: #94a3b8;
+}
+
 /* ---- Badges ---- */
 
 .badge {

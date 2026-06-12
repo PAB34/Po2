@@ -134,6 +134,16 @@ class PrmCalibration(BaseModel):
     recommendation: str | None
 
 
+class PrmDataDiagnostic(BaseModel):
+    source: str
+    label: str
+    has_data: bool
+    outcome: str | None = None
+    severity: str
+    message: str
+    action: str | None = None
+
+
 class PrmDetail(BaseModel):
     usage_point_id: str
     contract: PrmContract
@@ -141,6 +151,7 @@ class PrmDetail(BaseModel):
     connection: PrmConnection
     summary: PrmSummary
     calibration: PrmCalibration
+    data_diagnostics: dict[str, PrmDataDiagnostic]
 
 
 class MaxPowerPoint(BaseModel):

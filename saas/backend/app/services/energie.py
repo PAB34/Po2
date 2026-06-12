@@ -599,6 +599,145 @@ def _peak_kva_3y(prm_id: str) -> float | None:
     return round(max(p["value_va"] for p in points) / 1000, 2)
 
 
+_DATA_SOURCE_LABELS = {
+    "consumption": "Consommation journaliere",
+    "max_power": "Puissance maximale journaliere",
+    "load_curve": "Courbe de charge",
+}
+
+
+def _source_has_data(prm_id: str, source: str) -> bool:
+    if source == "consumption":
+        return bool(_daily_consumption_index().get(prm_id))
+    if source == "max_power":
+        return bool(_max_power_index().get(prm_id))
+    if source == "load_curve":
+        return bool(_load_curve_index().get(prm_id))
+    return False
+
+
+def _diagnostic_outcomes() -> dict[str, dict[str, str]]:
+    return {
+        "consumption": _load_diagnostic("enedis_data_diagnostic.json"),
+        "max_power": _load_diagnostic("enedis_mp_diagnostic.json"),
+        "load_curve": _load_lc_outcomes(),
+    }
+
+
+def _data_diagnostic(
+    prm_id: str,
+    source: str,
+    meter_profile: str,
+    outcome: str | None,
+) -> dict[str, Any]:
+    has_data = _source_has_data(prm_id, source)
+    label = _DATA_SOURCE_LABELS[source]
+    if has_data:
+        return {
+            "source": source,
+            "label": label,
+            "has_data": True,
+            "outcome": outcome or "ok_data",
+            "severity": "ok",
+            "message": f"{label} disponible pour ce PRM.",
+            "action": None,
+        }
+
+    if meter_profile == "non_powered":
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "info",
+            "message": "PRM non alimente : l'absence de mesures est normale tant que le point n'est pas remis en service.",
+            "action": "Verifier l'etat d'alimentation si ce PRM devrait etre actif.",
+        }
+
+    if meter_profile == "non_communicant" and source in {"max_power", "load_curve"}:
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "info",
+            "message": "Compteur non communicant : ce flux n'est pas attendu structurellement.",
+            "action": "Utiliser la consommation journaliere lorsqu'elle est disponible.",
+        }
+
+    if meter_profile == "communicant_closed" and source == "load_curve":
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "warning",
+            "message": "Compteur communicant non ouvert aux services : la courbe de charge peut etre bloquee par l'activation ENEDIS.",
+            "action": "Demander l'activation de l'acces courbe de charge aupres d'ENEDIS.",
+        }
+
+    if outcome == "access_not_subscribed":
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "warning",
+            "message": "ENEDIS indique qu'aucun service d'acces a la donnee n'est souscrit pour la periode demandee.",
+            "action": "Verifier le perimetre de droits/services ENEDIS pour ce PRM et cette periode.",
+        }
+    if outcome == "invalid_request":
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "warning",
+            "message": "ENEDIS repond que la demande est non valide pour ce PRM.",
+            "action": "Verifier l'eligibilite du PRM, son profil compteur et les dates autorisees par ENEDIS.",
+        }
+    if outcome in {"forbidden", "not_found"}:
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "warning",
+            "message": "ENEDIS ne donne pas acces a ce flux pour ce PRM.",
+            "action": "Verifier les droits API ou la presence du PRM dans le perimetre ENEDIS.",
+        }
+    if outcome in {"cdc_inactive", "not_eligible"}:
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "warning",
+            "message": "ENEDIS indique que ce flux n'est pas actif ou pas eligible pour ce PRM.",
+            "action": "Verifier l'activation du service et l'eligibilite compteur.",
+        }
+    if outcome in {"quota_exceeded", "error", "error_technical"}:
+        return {
+            "source": source,
+            "label": label,
+            "has_data": False,
+            "outcome": outcome,
+            "severity": "error",
+            "message": "La derniere collecte n'a pas abouti pour ce flux.",
+            "action": "Relancer un backfill cible apres verification des quotas ENEDIS.",
+        }
+
+    return {
+        "source": source,
+        "label": label,
+        "has_data": False,
+        "outcome": outcome,
+        "severity": "warning",
+        "message": "Aucune donnee disponible pour ce flux dans les exports ENEDIS collectes.",
+        "action": "Lancer ou relancer un backfill cible si ce flux est attendu pour ce PRM.",
+    }
+
+
 def get_energie_overview() -> dict[str, Any]:
     contracts = _contracts()
     addresses = _addresses()
@@ -691,6 +830,12 @@ def get_prm_detail(prm_id: str) -> dict[str, Any] | None:
 
     subscribed_kva = _safe_float(contract.get("0_subscribed_power_value"))
     peak = _peak_kva_3y(prm_id)
+    meter_profile = _meter_profile(summary.get("services_level"), conn.get("connection_state"))
+    outcomes = _diagnostic_outcomes()
+    data_diagnostics = {
+        source: _data_diagnostic(prm_id, source, meter_profile, outcomes[source].get(prm_id))
+        for source in ("consumption", "max_power", "load_curve")
+    }
     calibration_status = None
     calibration_ratio = None
     calibration_recommendation = None
@@ -743,6 +888,7 @@ def get_prm_detail(prm_id: str) -> dict[str, Any] | None:
             "status": calibration_status,
             "recommendation": calibration_recommendation,
         },
+        "data_diagnostics": data_diagnostics,
     }
 
 

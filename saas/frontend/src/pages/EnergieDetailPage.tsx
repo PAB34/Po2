@@ -29,6 +29,7 @@ import {
   PrmDjuSeasonal,
   DjuSeasonData,
   AnnualYearProfile,
+  PrmDataDiagnostic,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -131,6 +132,46 @@ const PRECON_CONFIDENCE_LABEL: Record<string, string> = {
   low: "confiance faible",
   insufficient: "confiance insuffisante",
 };
+
+const DIAGNOSTIC_CLASS: Record<string, string> = {
+  ok: "badge-green",
+  info: "badge-gray",
+  warning: "badge-orange",
+  error: "badge-red",
+};
+
+const OUTCOME_LABEL: Record<string, string> = {
+  ok_data: "OK",
+  ok_empty: "Vide ENEDIS",
+  access_not_subscribed: "Acces non souscrit",
+  invalid_request: "Requete invalide",
+  forbidden: "Acces refuse",
+  not_found: "PRM introuvable",
+  not_eligible: "Non eligible",
+  cdc_inactive: "CDC inactive",
+  invalid_period: "Periode invalide",
+  quota_exceeded: "Quota atteint",
+  error: "Erreur collecte",
+  error_technical: "Erreur technique",
+};
+
+function MissingDataNotice({ diagnostic, fallback }: { diagnostic?: PrmDataDiagnostic; fallback: string }) {
+  if (!diagnostic) {
+    return <p className="cell-empty">{fallback}</p>;
+  }
+  return (
+    <div className="missing-data-notice">
+      <div className="missing-data-notice__header">
+        <span className={`badge ${DIAGNOSTIC_CLASS[diagnostic.severity] ?? "badge-gray"}`}>
+          {diagnostic.outcome ? OUTCOME_LABEL[diagnostic.outcome] ?? diagnostic.outcome : "Non collecte"}
+        </span>
+        <strong>{diagnostic.label}</strong>
+      </div>
+      <p>{diagnostic.message}</p>
+      {diagnostic.action && <small>{diagnostic.action}</small>}
+    </div>
+  );
+}
 
 function PowerRecommendationCard({ recommendation }: { recommendation: PrmPowerRecommendation }) {
   return (
@@ -503,7 +544,10 @@ export function EnergieDetailPage() {
           </ResponsiveContainer>
         ) : (
           !dailyConsumptionQuery.isLoading && (
-            <p className="cell-empty">Aucune donnée de consommation journalière disponible.</p>
+            <MissingDataNotice
+              diagnostic={detail?.data_diagnostics?.consumption}
+              fallback="Aucune donnee de consommation journaliere disponible."
+            />
           )
         )}
       </div>
@@ -520,10 +564,17 @@ export function EnergieDetailPage() {
         {annualProfileQuery.isLoading && <p>Chargement du graphique…</p>}
         {annualProfileQuery.error && <p className="error-text">{(annualProfileQuery.error as Error).message}</p>}
         {annualProfileQuery.data && (
-          <AnnualProfileChart
-            profiles={annualProfileQuery.data.profiles}
-            subscribedKva={annualProfileQuery.data.subscribed_kva}
-          />
+          annualProfileQuery.data.profiles.length > 0 ? (
+            <AnnualProfileChart
+              profiles={annualProfileQuery.data.profiles}
+              subscribedKva={annualProfileQuery.data.subscribed_kva}
+            />
+          ) : (
+            <MissingDataNotice
+              diagnostic={detail?.data_diagnostics?.max_power}
+              fallback="Aucune donnee de profil annuel."
+            />
+          )
         )}
       </div>
 
@@ -565,7 +616,10 @@ export function EnergieDetailPage() {
           </ResponsiveContainer>
         )}
         {!maxPowerQuery.isLoading && maxPowerPoints.length === 0 && (
-          <p className="cell-empty">Aucune donnée de puissance maximale disponible.</p>
+          <MissingDataNotice
+            diagnostic={detail?.data_diagnostics?.max_power}
+            fallback="Aucune donnee de puissance maximale disponible."
+          />
         )}
       </div>
 
@@ -599,7 +653,10 @@ export function EnergieDetailPage() {
           </ResponsiveContainer>
         )}
         {!loadCurveQuery.isLoading && loadCurvePoints.length === 0 && (
-          <p className="cell-empty">Aucune courbe de charge disponible.</p>
+          <MissingDataNotice
+            diagnostic={detail?.data_diagnostics?.load_curve}
+            fallback="Aucune courbe de charge disponible."
+          />
         )}
       </div>
     </div>
