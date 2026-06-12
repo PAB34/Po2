@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
@@ -191,7 +191,22 @@ def _string(value: Any) -> str | None:
 
 
 def _date(value: Any) -> date | None:
-    return value if isinstance(value, date) else None
+    # Le parser PDF produit des objets date ; le parser XLSX ENGIE produit des
+    # chaines ISO (ex. "2026-03-10"). On accepte les deux pour que les periodes
+    # normalisees (EnergyInvoicePeriod.period_start/end) soient renseignees.
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            return None
+    return None
 
 
 def _number(value: Any) -> float | None:
