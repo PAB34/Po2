@@ -1006,6 +1006,19 @@ export type PowerRecommendationEconomicEstimate = {
   reason: string;
 };
 
+export type RealPowerCosts = {
+  available: boolean;
+  penalties_eur: number;
+  penalty_periods: number;
+  fixed_routing_eur: number | null;
+  invoices_count: number;
+  period_start: string | null;
+  period_end: string | null;
+  max_reached_power_kva: number | null;
+  subscribed_power_kva: number | null;
+  reason: string;
+};
+
 export type PrmPowerRecommendation = {
   usage_point_id: string;
   name: string;
@@ -1028,6 +1041,7 @@ export type PrmPowerRecommendation = {
   data_quality: PowerRecommendationDataQuality;
   scenarios: PowerRecommendationScenario[];
   economic_estimate: PowerRecommendationEconomicEstimate;
+  real_costs: RealPowerCosts | null;
   justification: string;
   priority_score: number;
 };

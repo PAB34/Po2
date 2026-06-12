@@ -2403,7 +2403,7 @@ button:disabled {
 
 .impact-balance-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2444,6 +2444,18 @@ button:disabled {
 
 .impact-balance-card--cost {
   border-color: rgba(249, 115, 22, 0.3);
+}
+
+.impact-balance-card--real {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.impact-balance-footnote {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 /* ---- Carte de calibrage (Preconisations) ---- */

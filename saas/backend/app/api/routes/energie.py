@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.energie import (
     DjuMonthPoint,
@@ -30,6 +31,7 @@ from app.services.energie import (
     get_prm_max_power,
 )
 from app.services.power_recommendations import get_power_recommendations, get_prm_power_recommendation
+from app.services.power_real_costs import attach_real_costs, get_real_power_costs_by_prm
 
 router = APIRouter(prefix="/energie", tags=["energie"])
 
@@ -62,18 +64,25 @@ def get_dju(
 @router.get("/preconisations", response_model=PowerRecommendationOverview)
 def get_preconisations(
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> PowerRecommendationOverview:
-    return PowerRecommendationOverview.model_validate(get_power_recommendations())
+    overview = get_power_recommendations()
+    costs = get_real_power_costs_by_prm(db, current_user.city_id)
+    attach_real_costs(overview["recommendations"], costs)
+    return PowerRecommendationOverview.model_validate(overview)
 
 
 @router.get("/{prm_id}/preconisation", response_model=PrmPowerRecommendation)
 def get_preconisation(
     prm_id: str,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> PrmPowerRecommendation:
     recommendation = get_prm_power_recommendation(prm_id)
     if recommendation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PRM introuvable")
+    costs = get_real_power_costs_by_prm(db, current_user.city_id)
+    attach_real_costs([recommendation], costs)
     return PrmPowerRecommendation.model_validate(recommendation)
 
 

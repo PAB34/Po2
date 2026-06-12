@@ -329,6 +329,21 @@ class PowerRecommendationEconomicEstimate(BaseModel):
     reason: str
 
 
+class RealPowerCosts(BaseModel):
+    """Coûts de puissance réellement facturés (12 mois), issus des factures."""
+
+    available: bool
+    penalties_eur: float
+    penalty_periods: int
+    fixed_routing_eur: float | None
+    invoices_count: int
+    period_start: str | None
+    period_end: str | None
+    max_reached_power_kva: float | None
+    subscribed_power_kva: float | None
+    reason: str
+
+
 class PrmPowerRecommendation(BaseModel):
     usage_point_id: str
     name: str
@@ -351,6 +366,7 @@ class PrmPowerRecommendation(BaseModel):
     data_quality: PowerRecommendationDataQuality
     scenarios: list[PowerRecommendationScenario]
     economic_estimate: PowerRecommendationEconomicEstimate
+    real_costs: RealPowerCosts | None = None
     justification: str
     priority_score: float
 

@@ -203,6 +203,31 @@ function ScenarioChips({ item }: { item: PrmPowerRecommendation }) {
   );
 }
 
+function realCostsCell(item: PrmPowerRecommendation) {
+  const rc = item.real_costs;
+  if (!rc || !rc.available) {
+    return (
+      <div className="recommendation-power-cell">
+        <span className="badge badge-gray">Pas de facture</span>
+        <small>Reimporter les factures pour le reel</small>
+      </div>
+    );
+  }
+  const hasPenalty = rc.penalties_eur > 0;
+  return (
+    <div className="recommendation-power-cell">
+      <span className={`badge ${hasPenalty ? "badge-red" : "badge-green"}`}>
+        {hasPenalty ? `${formatCurrency(rc.penalties_eur)} penalites` : "0 penalite"}
+      </span>
+      {rc.fixed_routing_eur !== null && <span>Part fixe {formatCurrency(rc.fixed_routing_eur)}</span>}
+      <small>
+        {rc.invoices_count} facture{rc.invoices_count !== 1 ? "s" : ""}
+        {rc.max_reached_power_kva !== null ? ` | pic facture ${formatKva(rc.max_reached_power_kva)}` : ""}
+      </small>
+    </div>
+  );
+}
+
 export function EnergieRecommendationsPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -220,6 +245,21 @@ export function EnergieRecommendationsPage() {
 
   const recommendations = recommendationsQuery.data?.recommendations ?? [];
   const impactSummary = useMemo(() => buildImpactSummary(recommendations), [recommendations]);
+  const realCostsSummary = useMemo(() => {
+    let penaltiesTotal = 0;
+    let prmWithPenalties = 0;
+    let prmWithData = 0;
+    for (const item of recommendations) {
+      const rc = item.real_costs;
+      if (!rc?.available) continue;
+      prmWithData += 1;
+      if (rc.penalties_eur > 0) {
+        penaltiesTotal += rc.penalties_eur;
+        prmWithPenalties += 1;
+      }
+    }
+    return { penaltiesTotal, prmWithPenalties, prmWithData };
+  }, [recommendations]);
   const supplierImpactSummaries = useMemo(() => buildSupplierImpactSummaries(recommendations), [recommendations]);
   const suppliers = useMemo(() => {
     return Array.from(new Set(recommendations.map((item) => item.contractor).filter(Boolean) as string[])).sort((a, b) =>
@@ -321,7 +361,20 @@ export function EnergieRecommendationsPage() {
               <strong>{impactSummary.unavailableCount}</strong>
               <small>Tarif, donnees ou formule non exploitables pour l'estimation.</small>
             </div>
+            <div className="impact-balance-card impact-balance-card--real">
+              <span>Penalites reelles payees (12 mois)</span>
+              <strong>{formatCurrency(realCostsSummary.penaltiesTotal)}</strong>
+              <small>
+                {realCostsSummary.prmWithData > 0
+                  ? `${realCostsSummary.prmWithPenalties} PRM en depassement, issu des factures importees`
+                  : "Aucune facture exploitable : reimporter les factures ENGIE"}
+              </small>
+            </div>
           </div>
+          <p className="impact-balance-footnote">
+            Les economies/surcouts ci-dessus sont theoriques (part fixe TURPE). Les penalites reelles et le
+            cout d'acheminement par site proviennent des factures importees, sur 12 mois glissants.
+          </p>
           {supplierImpactSummaries.length > 0 && (
             <div className="impact-supplier-table-wrapper">
               <div className="impact-supplier-heading">
@@ -459,7 +512,8 @@ export function EnergieRecommendationsPage() {
               <th>Recommandation</th>
               <th>Scenarios</th>
               <th>Confiance</th>
-              <th>Impact</th>
+              <th>Impact theorique</th>
+              <th>Reel (12 mois)</th>
             </tr>
           </thead>
           <tbody>
@@ -525,11 +579,12 @@ export function EnergieRecommendationsPage() {
                     <small>{item.economic_estimate.reason}</small>
                   </div>
                 </td>
+                <td>{realCostsCell(item)}</td>
               </tr>
             ))}
             {!recommendationsQuery.isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="cell-empty">Aucune preconisation</td>
+                <td colSpan={8} className="cell-empty">Aucune preconisation</td>
               </tr>
             )}
           </tbody>

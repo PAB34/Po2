@@ -106,6 +106,9 @@ COLUMN_NAMES = {
     "cg_amount": "Composante de gestion  (€)",
     "cc_amount": "Composantes de comptage (€)",
     "soutirage_fixed": "Composante de Soutirage part fixe (€)",
+    # Dépassement de puissance (pénalités CMDPS — segments mesurés C2/C3/C4)
+    "overrun_power_amount": "Dépassement de puissance souscrite (€)",
+    "overrun_quadratic_amount": "Montant total Dépassement Quadratique (€)",
     # Taxes
     "cspe_total": "Total CSPE (€)",
     "ticfe_total": "Total TICFE (€)",
@@ -503,6 +506,43 @@ def _build_delivery_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dic
     return lines
 
 
+def _build_power_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dict[str, Any]]:
+    """Lignes liées à la puissance souscrite : pénalités de dépassement et total
+    de la part fixe acheminement.
+
+    Ces postes alimentent le couplage théorique/réel de /energie/preconisations :
+      - `network_overrun` / `network_overrun_quadratic` : pénalités réellement
+        facturées quand le pic dépasse la puissance souscrite (segments mesurés) ;
+      - `network_fixed_total` : coût réel de la part fixe acheminement, qui varie
+        avec la puissance souscrite et sert de référence pour chiffrer une baisse.
+    """
+    lines: list[dict[str, Any]] = []
+    for key, label, comp, raw in [
+        ("overrun_power_amount", "Dépassement de puissance souscrite", "network_overrun", "overrun"),
+        (
+            "overrun_quadratic_amount",
+            "Dépassement quadratique",
+            "network_overrun_quadratic",
+            "overrun_quadratic",
+        ),
+        ("delivery_fixed_part", "Total part fixe acheminement", "network_fixed_total", "fixed_total"),
+    ]:
+        amount = _coerce_float(_cell(ws, row, idx, key))
+        if amount is None:
+            continue
+        lines.append(
+            {
+                "family": "network",
+                "label": label,
+                "normalized_component": comp,
+                "poste": None,
+                "amount_ht": amount,
+                "raw_line": f"XLSX:network:{raw}",
+            }
+        )
+    return lines
+
+
 def _build_tax_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dict[str, Any]]:
     """Lignes taxes : CSPE, TICFE, CTA Elec, taxes communales/départementales."""
     lines: list[dict[str, Any]] = []
@@ -601,6 +641,7 @@ def _parse_row(ws: Worksheet, row: int, idx: ColumnIndex) -> dict[str, Any] | No
     invoice_lines.extend(_build_renewable_line(ws, row, idx))
     invoice_lines.extend(_build_cee_lines(ws, row, idx))
     invoice_lines.extend(_build_delivery_lines(ws, row, idx))
+    invoice_lines.extend(_build_power_lines(ws, row, idx))
     invoice_lines.extend(_build_tax_lines(ws, row, idx))
     site["invoice_lines"] = invoice_lines
 
