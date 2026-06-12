@@ -21,6 +21,7 @@ class EnergyInvoiceImportOut(BaseModel):
     file_size_bytes: int
     sha256: str
     supplier_guess: str | None
+    energy_type: str = "electricity"
     invoice_number: str | None
     invoice_date: date | None
     period_start: date | None

@@ -69,6 +69,7 @@ class EnergyInvoiceImport(Base):
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     supplier_guess: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    energy_type: Mapped[str] = mapped_column(String(20), nullable=False, default="electricity", server_default="electricity")
     invoice_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -200,6 +201,7 @@ class EnergyInvoice(Base):
         ForeignKey("energy_invoice_imports.id", ondelete="CASCADE"), nullable=False, index=True
     )
     supplier: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    energy_type: Mapped[str] = mapped_column(String(20), nullable=False, default="electricity", server_default="electricity")
     invoice_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
     invoice_number: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)

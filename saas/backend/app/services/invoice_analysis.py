@@ -14,7 +14,7 @@ from app.models.billing import BillingBpuLine, BillingConfig
 from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.billing_bpu_sync import build_current_lines_for_supplier
-from app.services import load_curve_store
+from app.services import load_curve_store, supplier_registry
 from app.services.energie import _contracts, _daily_consumption_index, _max_power_index, _safe_float
 from app.services.invoice_bpu import load_historical_bpu_prices, resolve_historical_bpu_price
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
@@ -89,6 +89,9 @@ def apply_parsed_to_invoice_import(
 
     invoice = parsed.get("invoice", {})
     invoice_import.supplier_guess = parsed.get("supplier") or invoice_import.supplier_guess
+    invoice_import.energy_type = supplier_registry.energy_for(
+        invoice_import.supplier_guess, default=invoice_import.energy_type or "electricity"
+    )
     invoice_import.invoice_number = invoice.get("invoice_number")
     invoice_import.invoice_date = invoice.get("invoice_date")
     invoice_import.period_start = invoice.get("period_start")

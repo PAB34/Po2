@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.invoice import EnergyInvoiceImport
+from app.services import supplier_registry
 from app.services.invoice_analysis import apply_parsed_to_invoice_import
 from app.services.invoice_parsers.engie_xlsx import parse_engie_xlsx
 
@@ -35,6 +36,7 @@ LOG = logging.getLogger(__name__)
 
 XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SOURCE_TAG = "engie_xlsx_export"
+_ENGIE = supplier_registry.SUPPLIERS["ENGIE"]
 
 
 def import_engie_xlsx(
@@ -135,7 +137,8 @@ def import_engie_xlsx(
             existing_import.content_type = content_type or XLSX_CONTENT_TYPE
             existing_import.file_size_bytes = file_size
             existing_import.sha256 = sha256_hex
-            existing_import.supplier_guess = "ENGIE"
+            existing_import.supplier_guess = _ENGIE.code
+            existing_import.energy_type = _ENGIE.energy
             existing_import.analysis_status = "pending"
             db.flush()
             try:
@@ -174,7 +177,8 @@ def import_engie_xlsx(
             content_type=content_type or XLSX_CONTENT_TYPE,
             file_size_bytes=file_size,
             sha256=sha256_hex,
-            supplier_guess="ENGIE",
+            supplier_guess=_ENGIE.code,
+            energy_type=_ENGIE.energy,
             status="imported",
             analysis_status="pending",
         )

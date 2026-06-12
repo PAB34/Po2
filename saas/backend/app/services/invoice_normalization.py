@@ -31,6 +31,7 @@ def replace_normalized_invoice(
         city_id=invoice_import.city_id,
         import_id=invoice_import.id,
         supplier=_string(parsed.get("supplier") or invoice_import.supplier_guess),
+        energy_type=invoice_import.energy_type or "electricity",
         invoice_type=_string(parsed.get("document_type")),
         invoice_number=_string(invoice_payload.get("invoice_number") or invoice_import.invoice_number),
         invoice_date=_date(invoice_payload.get("invoice_date") or invoice_import.invoice_date),
