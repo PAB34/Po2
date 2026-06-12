@@ -125,6 +125,7 @@
     <div class="topProg"><i class="js-progBar"></i></div>
     <nav class="topTabs">
       <button data-nav="pronos" class="active" onclick="go('pronos')"><span class="tabInner"><span class="ico">⚽</span><span class="lbl">Pronos</span></span></button>
+      <button data-nav="calendrier" onclick="go('calendrier')"><span class="tabInner"><span class="ico">🗓️</span><span class="lbl">Calendrier</span></span></button>
       <button data-nav="classement" onclick="go('classement')"><span class="tabInner"><span class="ico">🏆</span><span class="lbl">Classement</span></span></button>
       <button data-nav="joueurs" onclick="go('joueurs')"><span class="tabInner"><span class="ico">👥</span><span class="lbl">Joueurs</span></span></button>
       <button data-nav="profil" onclick="go('profil')"><span class="tabInner"><span class="ico">👤</span><span class="lbl">Profil</span></span></button>
@@ -142,6 +143,7 @@
       </div>
       <nav class="sideNav">
         <button data-nav="pronos" class="active" onclick="go('pronos')"><span class="ico">⚽</span> Mes pronostics</button>
+        <button data-nav="calendrier" onclick="go('calendrier')"><span class="ico">🗓️</span> Calendrier match</button>
         <button data-nav="classement" onclick="go('classement')"><span class="ico">🏆</span> Classement</button>
         <button data-nav="joueurs" onclick="go('joueurs')"><span class="ico">👥</span> Les joueurs</button>
         <button data-nav="profil" onclick="go('profil')"><span class="ico">👤</span> Mon profil</button>
@@ -174,6 +176,12 @@
             <button class="btn ghost sm" onclick="randomCrazyFill()" title="Remplit les matchs visibles avec une version plus audacieuse : surprises, festivals, matchs pièges et gros écarts si le diagnostic le permet.">🤪 Tirage expert fou</button>
           </div>
           <div id="matchGrid" class="matchGrid"></div>
+        </section>
+
+        <!-- VUE CALENDRIER -->
+        <section data-view="calendrier" class="hidden">
+          <div class="viewHead"><h2>Calendrier match</h2><span class="meta" id="calendarMeta"></span></div>
+          <div id="calendarList" class="calendarList"></div>
         </section>
 
         <!-- VUE CLASSEMENT -->

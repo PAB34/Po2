@@ -243,13 +243,13 @@ function openGuest(view){
   $('mobilePlayer').style.display='none';
   $('guestBack').classList.remove('hidden');
   $('guestNote').style.display='';
-  // masque pronos + profil dans les deux navs
-  toggleNav('pronos', false); toggleNav('profil', false);
+  // masque les vues personnelles dans les deux navs
+  toggleNav('pronos', false); toggleNav('calendrier', false); toggleNav('profil', false);
   go(view||'classement');
 }
 function quitGuest(){
   state.guest=false;
-  toggleNav('pronos', true); toggleNav('profil', true);
+  toggleNav('pronos', true); toggleNav('calendrier', true); toggleNav('profil', true);
   $('guestBack').classList.add('hidden');
   $('screen-app').classList.add('hidden'); $('screen-login').classList.remove('hidden');
   window.scrollTo({top:0,behavior:'smooth'});
@@ -275,6 +275,7 @@ function go(view){
   for(var i=0;i<sections.length;i++) sections[i].classList.toggle('hidden', sections[i].getAttribute('data-view')!==view);
   var navs=document.querySelectorAll('[data-nav]');
   for(var j=0;j<navs.length;j++) navs[j].classList.toggle('active', navs[j].getAttribute('data-nav')===view);
+  if(view==='calendrier') renderCalendar();
   if(view==='classement') loadRanking();
   if(view==='joueurs') loadJoueurs();
   if(view==='profil' && state.player){ $('profilePseudo').value=state.player.pseudo||''; $('profileService').value=state.player.service||''; }
@@ -353,6 +354,53 @@ function teamLine(name, rank, id, side, val, dis){
       '<button class="stepBtn" data-step="1" '+dis+' aria-label="plus">+</button>'+
     '</span>'+
   '</div>';
+}
+
+/* calendrier chronologique */
+function calendarDayLabel(value){
+  var d=new Date(value);
+  if(isNaN(d.getTime())) return 'Date à confirmer';
+  return new Intl.DateTimeFormat('fr-FR',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Paris'}).format(d);
+}
+function calendarDayKey(value){
+  var d=new Date(value);
+  if(isNaN(d.getTime())) return '9999-99-99';
+  return new Intl.DateTimeFormat('fr-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Europe/Paris'}).format(d);
+}
+function renderCalendar(){
+  var list=$('calendarList'); if(!list) return;
+  var rows=(state.matches||[]).slice().sort(function(a,b){
+    var da=new Date(a.date||0).getTime(), db=new Date(b.date||0).getTime();
+    if(da!==db) return da-db;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  var filled=rows.filter(isFilled).length;
+  $('calendarMeta').textContent = rows.length ? (filled+'/'+rows.length+' pronostiqués') : '';
+  if(!rows.length){ list.innerHTML='<div class="empty">Aucun match chargé.</div>'; return; }
+
+  var html='', cur='';
+  rows.forEach(function(m){
+    var key=calendarDayKey(m.date);
+    if(key!==cur){
+      cur=key;
+      var dayRows=rows.filter(function(x){return calendarDayKey(x.date)===key;});
+      html+='<div class="calendarDay"><b>'+escapeHtml(calendarDayLabel(m.date))+'</b><small>'+dayRows.length+' match'+(dayRows.length>1?'s':'')+'</small></div>';
+    }
+    var hasProno=isFilled(m);
+    var score=hasProno ? escapeHtml(m.prono1)+'<span>–</span>'+escapeHtml(m.prono2) : '<em>À saisir</em>';
+    var real=(m.real1!=null && m.real2!=null) ? '<span class="calendarReal">Réel '+escapeHtml(m.real1)+'–'+escapeHtml(m.real2)+'</span>' : '';
+    html+=''+
+      '<article class="calendarMatch '+(hasProno?'filled':'missing')+'">'+
+        '<div class="calendarTime"><b>'+escapeHtml(fmtDate(m.date))+'</b><span>Groupe '+escapeHtml(m.group)+' · '+escapeHtml(m.id)+'</span></div>'+
+        '<div class="calendarTeams">'+
+          '<div><span class="flag">'+flag(m.team1)+'</span><strong>'+escapeHtml(m.team1)+'</strong></div>'+
+          '<div><span class="flag">'+flag(m.team2)+'</span><strong>'+escapeHtml(m.team2)+'</strong></div>'+
+        '</div>'+
+        '<div class="calendarScore '+(hasProno?'ok':'todo')+'">'+score+'</div>'+
+        '<div class="calendarPlace">'+escapeHtml(m.stadium||'Stade à confirmer')+real+'</div>'+
+      '</article>';
+  });
+  list.innerHTML=html;
 }
 
 /* délégation d'événements sur la grille de matchs */
