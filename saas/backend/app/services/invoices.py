@@ -61,6 +61,7 @@ def list_invoice_batches(db: Session, city_id: int) -> list[EnergyInvoiceBatch]:
         .order_by(EnergyInvoiceBatch.created_at.desc(), EnergyInvoiceBatch.id.desc())
         .all()
     )
+    return batches
 
 
 def get_monthly_invoice_consumption(
