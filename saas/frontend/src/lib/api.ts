@@ -923,6 +923,7 @@ export type EnergieOverview = {
   segment_distribution: EnergyDistributionItem[];
   tariff_distribution: EnergyDistributionItem[];
   connection_state_distribution: EnergyDistributionItem[];
+  dju_seasonal: PrmDjuSeasonal | null;
   prms: PrmListItem[];
 };
 

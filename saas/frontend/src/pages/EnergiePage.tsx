@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   fetchEnergieOverview,
   fetchSyncStatus, startSync,
@@ -10,12 +10,13 @@ import {
   fetchDjuSyncStatus, startDjuSync,
   fetchCustomerSyncStatus, startCustomerSync,
   fetchDataRanges, fetchDataAudit,
-  EnergyCalibrationDistributionItem, EnergyDistributionItem, EnergyPowerBandItem, EnergyTopConsumerItem, PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
+  DjuSeasonData, EnergyCalibrationDistributionItem, EnergyDistributionItem, EnergyPowerBandItem, EnergyTopConsumerItem, PrmDjuSeasonal, PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
 
 const SUPPLIER_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899"];
+const DJU_YEAR_COLORS = ["#38bdf8", "#f97316", "#22c55e", "#a855f7", "#eab308", "#ec4899"];
 
 const STATUS_LABEL: Record<string, string> = { idle: "En attente", running: "En cours…", success: "Succès", error: "Erreur" };
 const STATUS_CLASS: Record<string, string> = { idle: "badge-gray", running: "badge-blue", success: "badge-green", error: "badge-red" };
@@ -463,6 +464,102 @@ function formatDate(value: string | null | undefined): string {
   } catch {
     return value;
   }
+}
+
+function PortfolioDjuSeasonChart({ season, title }: { season: DjuSeasonData; title: string }) {
+  if (!season.has_data) {
+    return (
+      <div className="dashboard-dju-empty">
+        Donnees insuffisantes pour analyser la performance DJU du patrimoine.
+      </div>
+    );
+  }
+
+  const years = season.years.map((y) => y.label);
+  const byMonth: Record<string, Record<string, number>> = {};
+  for (const year of season.years) {
+    for (const point of year.months) {
+      if (!byMonth[point.month_num]) byMonth[point.month_num] = {};
+      byMonth[point.month_num][year.label] = point.ratio;
+    }
+  }
+
+  const chartData = season.months_order.map((monthNum, index) => ({
+    month: season.months_labels[index],
+    month_num: monthNum,
+    cible: season.cible_by_month[monthNum] ?? undefined,
+    ...byMonth[monthNum],
+  }));
+  const ecart = season.current_ecart_percent;
+  const ecartPositive = ecart != null && ecart > 0;
+
+  return (
+    <div className="dashboard-dju-chart">
+      <div className="dashboard-dju-chart-header">
+        <h4>{title}</h4>
+        {ecart != null ? (
+          <div className="dashboard-dju-ecart">
+            <span>Saison {season.current_label}</span>
+            <strong className={ecartPositive ? "is-bad" : "is-good"}>
+              {ecartPositive ? "+" : ""}{ecart}%
+            </strong>
+            <small>{ecartPositive ? "depassement vs cible" : "economie vs cible"}</small>
+          </div>
+        ) : (
+          <span className="dashboard-dju-pending">Saison {season.current_label ?? "en cours"} incomplete</span>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.22)" />
+          <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#cbd5e1" }} />
+          <YAxis tick={{ fontSize: 11, fill: "#cbd5e1" }} unit=" kWh/DJU" width={92} />
+          <Tooltip
+            formatter={(value: number, name: string) =>
+              name === "cible"
+                ? [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Cible patrimoine"]
+                : [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, `Saison ${name}`]
+            }
+            labelFormatter={(label) => `Mois : ${label}`}
+          />
+          <Legend formatter={(value) => value === "cible" ? "Cible tendance" : `Saison ${value}`} />
+          {years.map((year, index) => (
+            <Bar key={year} dataKey={year} fill={DJU_YEAR_COLORS[index % DJU_YEAR_COLORS.length]} maxBarSize={18} />
+          ))}
+          <Line
+            type="monotone"
+            dataKey="cible"
+            stroke="#22c55e"
+            strokeDasharray="6 3"
+            strokeWidth={2}
+            dot={{ r: 4, fill: "#22c55e" }}
+            connectNulls={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function PortfolioDjuSeasonalSection({ data }: { data: PrmDjuSeasonal | null }) {
+  if (!data) return null;
+  return (
+    <div className="dashboard-card dashboard-dju-main">
+      <div className="dashboard-card-header">
+        <div>
+          <h3>Performance DJU du patrimoine</h3>
+          <p>
+            Ratios kWh/DJU calcules sur les consommations mensuelles agregees du parc.
+            La ligne verte est la cible historique avec correction de tendance.
+          </p>
+        </div>
+      </div>
+      <div className="dashboard-dju-grid">
+        <PortfolioDjuSeasonChart season={data.winter} title="Hiver - chauffage (oct. a avr.)" />
+        <PortfolioDjuSeasonChart season={data.summer} title="Ete - froid (mai a sep.)" />
+      </div>
+    </div>
+  );
 }
 
 function PowerBandChart({ data }: { data: EnergyPowerBandItem[] }) {
@@ -946,6 +1043,8 @@ export function EnergiePage() {
 
       {data && (
         <>
+          <PortfolioDjuSeasonalSection data={data.dju_seasonal} />
+
           <div className="dashboard-kpi-grid">
             <div className="dashboard-kpi-card">
               <span>PRM contractuels</span>

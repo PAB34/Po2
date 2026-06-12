@@ -940,6 +940,7 @@ def get_energie_overview() -> dict[str, Any]:
         "segment_distribution": distribution(segment_stats),
         "tariff_distribution": distribution(tariff_stats),
         "connection_state_distribution": distribution(connection_state_stats),
+        "dju_seasonal": get_portfolio_dju_seasonal(),
         "prms": prms,
     }
 
@@ -1267,13 +1268,12 @@ def _summer_label(year: int) -> str:
     return str(year)
 
 
-def get_prm_dju_seasonal(prm_id: str) -> dict[str, Any]:
+def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[str, float]) -> dict[str, Any]:
     """
     Performance kWh/DJU par saison (Hiver Oct→Avr, Été Mai→Sep), multi-années.
     Cible par mois = moyenne historique avec correction de tendance linéaire.
     """
     dju_idx = _dju_monthly_index()
-    conso_idx = _consumption_by_month().get(prm_id, {})
     current_ym = date.today().strftime("%Y-%m")
     today = date.today()
 
@@ -1364,7 +1364,28 @@ def get_prm_dju_seasonal(prm_id: str) -> dict[str, Any]:
         }
 
     return {
-        "usage_point_id": prm_id,
+        "usage_point_id": usage_point_id,
         "winter": _build_season(winter_by_season, _WINTER_MONTHS, _WINTER_LABELS, current_winter_label),
         "summer": _build_season(summer_by_season, _SUMMER_MONTHS, _SUMMER_LABELS, current_summer_label),
     }
+
+
+def _portfolio_consumption_by_month() -> dict[str, float]:
+    """Returns monthly kWh summed across all PRM with daily consumption."""
+    result: dict[str, float] = {}
+    for conso_idx in _consumption_by_month().values():
+        for ym, kwh in conso_idx.items():
+            result[ym] = result.get(ym, 0.0) + kwh
+    return {ym: round(kwh, 2) for ym, kwh in result.items()}
+
+
+def get_portfolio_dju_seasonal() -> dict[str, Any]:
+    """
+    Performance kWh/DJU du patrimoine complet.
+    Les kWh sont additionnes avant calcul du ratio afin de ponderer naturellement par la consommation.
+    """
+    return _build_dju_seasonal_from_consumption("portfolio", _portfolio_consumption_by_month())
+
+
+def get_prm_dju_seasonal(prm_id: str) -> dict[str, Any]:
+    return _build_dju_seasonal_from_consumption(prm_id, _consumption_by_month().get(prm_id, {}))

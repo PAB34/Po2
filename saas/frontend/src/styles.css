@@ -2084,6 +2084,74 @@ button:disabled {
   margin: 4px 0 0;
 }
 
+.dashboard-dju-main {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.64));
+}
+
+.dashboard-dju-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-dju-chart {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.dashboard-dju-chart-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.dashboard-dju-chart h4 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.dashboard-dju-ecart {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.dashboard-dju-ecart strong {
+  font-size: 1.15rem;
+}
+
+.dashboard-dju-ecart .is-good {
+  color: #22c55e;
+}
+
+.dashboard-dju-ecart .is-bad {
+  color: #f87171;
+}
+
+.dashboard-dju-ecart small,
+.dashboard-dju-pending,
+.dashboard-dju-empty {
+  color: #94a3b8;
+}
+
+.dashboard-dju-empty {
+  padding: 42px 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  text-align: center;
+}
+
 .dashboard-ranking,
 .dashboard-quality-list,
 .dashboard-link-list {
@@ -2232,6 +2300,7 @@ button:disabled {
   .energy-dashboard-hero,
   .dashboard-grid,
   .dashboard-grid--three,
+  .dashboard-dju-grid,
   .dashboard-kpi-grid,
   .dashboard-contract-grid {
     grid-template-columns: 1fr;
