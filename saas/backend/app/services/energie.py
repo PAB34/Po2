@@ -787,19 +787,42 @@ def get_energie_overview() -> dict[str, Any]:
     supplier_count: dict[str, int] = {}
     band_stats: dict[str, dict[str, Any]] = {}
     top_consumers: list[dict[str, Any]] = []
+    service_level_stats: dict[str, dict[str, Any]] = {}
+    segment_stats: dict[str, dict[str, Any]] = {}
+    tariff_stats: dict[str, dict[str, Any]] = {}
+    connection_state_stats: dict[str, dict[str, Any]] = {}
     total_annual_kwh = 0.0
     total_annual_prms = 0
     annual_start: str | None = None
     annual_end: str | None = None
 
+    def add_distribution(stats: dict[str, dict[str, Any]], label: str | None, kva_value: float | None) -> None:
+        key = (label or "Inconnu").strip() or "Inconnu"
+        item = stats.setdefault(key, {"label": key, "prm_count": 0, "total_kva": 0.0})
+        item["prm_count"] += 1
+        item["total_kva"] += kva_value or 0.0
+
+    def distribution(stats: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {"label": item["label"], "prm_count": item["prm_count"], "total_kva": round(item["total_kva"], 1)}
+            for item in sorted(stats.values(), key=lambda value: (-value["prm_count"], value["label"]))
+        ]
+
     for uid, contract in contracts.items():
         kva = _safe_float(contract.get("0_subscribed_power_value"))
+        addr = addresses.get(uid)
+        conn = connections.get(uid)
+        summary = summaries.get(uid)
         if kva:
             total_kva += kva
 
         supplier = contract.get("0_contractor") or "Inconnu"
         supplier_kva[supplier] = supplier_kva.get(supplier, 0.0) + (kva or 0.0)
         supplier_count[supplier] = supplier_count.get(supplier, 0) + 1
+        add_distribution(service_level_stats, summary.get("services_level") if summary else None, kva)
+        add_distribution(segment_stats, contract.get("0_segment"), kva)
+        add_distribution(tariff_stats, contract.get("0_distribution_tariff"), kva)
+        add_distribution(connection_state_stats, conn.get("connection_state") if conn else None, kva)
 
         peak = _peak_kva_3y(uid)
         calibration_status: str | None = None
@@ -844,9 +867,6 @@ def get_energie_overview() -> dict[str, Any]:
         if annual_kwh is not None:
             band["annual_consumption_kwh"] += annual_kwh
 
-        addr = addresses.get(uid)
-        conn = connections.get(uid)
-        summary = summaries.get(uid)
         prms.append(
             {
                 "usage_point_id": uid,
@@ -915,7 +935,11 @@ def get_energie_overview() -> dict[str, Any]:
         "supplier_distribution": supplier_distribution,
         "power_bands": power_bands,
         "calibration_distribution": calibration_distribution,
-        "top_consumers": top_consumers[:8],
+        "top_consumers": top_consumers,
+        "service_level_distribution": distribution(service_level_stats),
+        "segment_distribution": distribution(segment_stats),
+        "tariff_distribution": distribution(tariff_stats),
+        "connection_state_distribution": distribution(connection_state_stats),
         "prms": prms,
     }
 

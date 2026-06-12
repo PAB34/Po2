@@ -10,7 +10,7 @@ import {
   fetchDjuSyncStatus, startDjuSync,
   fetchCustomerSyncStatus, startCustomerSync,
   fetchDataRanges, fetchDataAudit,
-  EnergyCalibrationDistributionItem, EnergyPowerBandItem, EnergyTopConsumerItem, PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
+  EnergyCalibrationDistributionItem, EnergyDistributionItem, EnergyPowerBandItem, EnergyTopConsumerItem, PrmListItem, SupplierDistributionItem, SyncStatus, LoadCurveSyncStatus, DjuSyncStatus, CustomerSyncStatus, DataRanges, EnergyDataAudit,
 } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieAsyncJobsPanel } from "../components/EnergieAsyncJobsPanel";
@@ -535,15 +535,22 @@ function CalibrationChart({ data }: { data: EnergyCalibrationDistributionItem[] 
       <div className="dashboard-card-header">
         <h3>Calibrage des abonnements</h3>
       </div>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={180}>
         <PieChart>
-          <Pie data={data} dataKey="prm_count" nameKey="label" innerRadius={58} outerRadius={92} paddingAngle={2}>
+          <Pie data={data} dataKey="prm_count" nameKey="label" innerRadius={46} outerRadius={74} paddingAngle={2}>
             {data.map((item) => <Cell key={item.status} fill={colors[item.status] ?? "#64748b"} />)}
           </Pie>
           <Tooltip formatter={(value: number, name: string) => [`${value.toLocaleString("fr-FR")} PRM`, name]} />
-          <Legend />
         </PieChart>
       </ResponsiveContainer>
+      <div className="dashboard-legend dashboard-legend--wrap">
+        {data.map((item) => (
+          <span key={item.status}>
+            <i style={{ background: colors[item.status] ?? "#64748b" }} />
+            {item.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -552,9 +559,12 @@ function TopConsumersTable({ data, onOpen }: { data: EnergyTopConsumerItem[]; on
   return (
     <div className="dashboard-card">
       <div className="dashboard-card-header">
-        <h3>Sites les plus consommateurs</h3>
+        <div>
+          <h3>Sites les plus consommateurs</h3>
+          <p>{data.length.toLocaleString("fr-FR")} sites classes du plus au moins consommateur.</p>
+        </div>
       </div>
-      <div className="dashboard-ranking">
+      <div className="dashboard-ranking dashboard-ranking--scroll">
         {data.map((item, index) => (
           <button
             type="button"
@@ -570,6 +580,47 @@ function TopConsumersTable({ data, onOpen }: { data: EnergyTopConsumerItem[]; on
             <b>{formatKwh(item.annual_consumption_kwh)}</b>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ContractDistributionList({ title, data }: { title: string; data: EnergyDistributionItem[] }) {
+  const rows = data.slice(0, 5);
+  return (
+    <div className="dashboard-contract-list">
+      <h4>{title}</h4>
+      {rows.map((item) => (
+        <div key={item.label} className="dashboard-contract-row">
+          <span>{item.label}</span>
+          <strong>{item.prm_count.toLocaleString("fr-FR")} PRM</strong>
+          {item.total_kva != null && <small>{item.total_kva.toLocaleString("fr-FR")} kVA</small>}
+        </div>
+      ))}
+      {data.length > rows.length && <small>+ {(data.length - rows.length).toLocaleString("fr-FR")} autres categories</small>}
+    </div>
+  );
+}
+
+function ContractInsightsPanel({ data }: { data: {
+  service_level_distribution: EnergyDistributionItem[];
+  segment_distribution: EnergyDistributionItem[];
+  tariff_distribution: EnergyDistributionItem[];
+  connection_state_distribution: EnergyDistributionItem[];
+} }) {
+  return (
+    <div className="dashboard-card dashboard-card--wide">
+      <div className="dashboard-card-header">
+        <div>
+          <h3>Referentiel contractuel ENEDIS</h3>
+          <p>Niveaux de service, segments, tarifs et etats de raccordement issus des API contrats.</p>
+        </div>
+      </div>
+      <div className="dashboard-contract-grid">
+        <ContractDistributionList title="Services" data={data.service_level_distribution} />
+        <ContractDistributionList title="Segments" data={data.segment_distribution} />
+        <ContractDistributionList title="Tarifs" data={data.tariff_distribution} />
+        <ContractDistributionList title="Raccordement" data={data.connection_state_distribution} />
       </div>
     </div>
   );
@@ -861,7 +912,6 @@ export function EnergiePage() {
     refetchOnWindowFocus: true,
   });
 
-  const dashboardPrms = data?.prms ?? [];
   const activePrms = audit?.profile_counts.communicant_open ?? 0;
   const dataCoverage = data && audit ? Math.round((audit.summary.all_sources / data.kpis.total_prms) * 100) : null;
 
@@ -936,6 +986,8 @@ export function EnergiePage() {
             <TopConsumersTable data={data.top_consumers} onOpen={(prmId) => navigate(`/energie/${prmId}`)} />
           </div>
 
+          <ContractInsightsPanel data={data} />
+
           <div className="dashboard-grid dashboard-grid--three">
             <div className="dashboard-card">
               <h3>Qualite des donnees</h3>
@@ -967,25 +1019,6 @@ export function EnergiePage() {
             </div>
           </div>
 
-          <div className="dashboard-card dashboard-card--wide">
-            <div className="dashboard-card-header">
-              <div>
-                <h3>Exploration rapide des PRM</h3>
-                <p>{dashboardPrms.length.toLocaleString("fr-FR")} compteurs visibles dans le referentiel.</p>
-              </div>
-              <button type="button" className="btn-secondary" onClick={() => navigate("/energie/donnees")}>
-                Voir audit complet
-              </button>
-            </div>
-            <div className="dashboard-prm-strip">
-              {dashboardPrms.slice(0, 12).map((prm) => (
-                <button type="button" key={prm.usage_point_id} onClick={() => navigate(`/energie/${prm.usage_point_id}`)}>
-                  <strong>{prm.name}</strong>
-                  <span>{prm.subscribed_power_kva ?? "—"} kVA · {prm.peak_kva_3y ?? "—"} kVA pic</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </>
       )}
     </div>

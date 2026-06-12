@@ -892,6 +892,12 @@ export type EnergyTopConsumerItem = {
   annual_consumption_kwh: number;
 };
 
+export type EnergyDistributionItem = {
+  label: string;
+  prm_count: number;
+  total_kva: number | null;
+};
+
 export type PrmListItem = {
   usage_point_id: string;
   name: string;
@@ -913,6 +919,10 @@ export type EnergieOverview = {
   power_bands: EnergyPowerBandItem[];
   calibration_distribution: EnergyCalibrationDistributionItem[];
   top_consumers: EnergyTopConsumerItem[];
+  service_level_distribution: EnergyDistributionItem[];
+  segment_distribution: EnergyDistributionItem[];
+  tariff_distribution: EnergyDistributionItem[];
+  connection_state_distribution: EnergyDistributionItem[];
   prms: PrmListItem[];
 };
 

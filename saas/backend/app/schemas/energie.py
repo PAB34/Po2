@@ -42,6 +42,12 @@ class EnergyTopConsumerItem(BaseModel):
     annual_consumption_kwh: float
 
 
+class EnergyDistributionItem(BaseModel):
+    label: str
+    prm_count: int
+    total_kva: float | None = None
+
+
 class PrmListItem(BaseModel):
     usage_point_id: str
     name: str
@@ -63,6 +69,10 @@ class EnergieOverview(BaseModel):
     power_bands: list[EnergyPowerBandItem] = []
     calibration_distribution: list[EnergyCalibrationDistributionItem] = []
     top_consumers: list[EnergyTopConsumerItem] = []
+    service_level_distribution: list[EnergyDistributionItem] = []
+    segment_distribution: list[EnergyDistributionItem] = []
+    tariff_distribution: list[EnergyDistributionItem] = []
+    connection_state_distribution: list[EnergyDistributionItem] = []
     prms: list[PrmListItem]
 
 
