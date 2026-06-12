@@ -2152,6 +2152,39 @@ button:disabled {
   text-align: center;
 }
 
+.dashboard-dju-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dashboard-dju-diagnostic {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.dashboard-dju-diagnostic span,
+.dashboard-dju-diagnostic small {
+  color: #94a3b8;
+}
+
+.dashboard-dju-diagnostic strong {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.dashboard-dju-diagnostic--warning {
+  border-color: rgba(249, 115, 22, 0.38);
+  background: rgba(249, 115, 22, 0.08);
+}
+
 .dashboard-ranking,
 .dashboard-quality-list,
 .dashboard-link-list {
@@ -2301,6 +2334,7 @@ button:disabled {
   .dashboard-grid,
   .dashboard-grid--three,
   .dashboard-dju-grid,
+  .dashboard-dju-diagnostics,
   .dashboard-kpi-grid,
   .dashboard-contract-grid {
     grid-template-columns: 1fr;

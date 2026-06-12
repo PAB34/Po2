@@ -466,6 +466,80 @@ function formatDate(value: string | null | undefined): string {
   }
 }
 
+type DjuDiagnosticItem = {
+  key: string;
+  title: string;
+  value: string;
+  detail: string;
+  severity: "warning" | "info";
+};
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function strongestDjuSignal(season: DjuSeasonData, label: string): DjuDiagnosticItem | null {
+  const points = season.years.flatMap((year) =>
+    year.months.map((month) => ({
+      season: year.label,
+      monthLabel: season.months_labels[season.months_order.indexOf(month.month_num)] ?? month.month_num,
+      ...month,
+    })),
+  );
+  if (points.length === 0) return null;
+
+  const ratioMedian = median(points.map((point) => point.ratio).filter((value) => value > 0));
+  const kwhMedian = median(points.map((point) => point.kwh).filter((value) => value > 0));
+  const strongest = [...points].sort((a, b) => b.ratio - a.ratio)[0];
+  const ratioMultiplier = ratioMedian && ratioMedian > 0 ? strongest.ratio / ratioMedian : null;
+  const kwhMultiplier = kwhMedian && kwhMedian > 0 ? strongest.kwh / kwhMedian : null;
+
+  const reasons = [];
+  if (strongest.dju <= 50) reasons.push("DJU faibles, donc ratio tres sensible");
+  if (kwhMultiplier != null && kwhMultiplier >= 1.5) reasons.push("kWh nettement au-dessus de la mediane");
+  if (ratioMultiplier != null && ratioMultiplier >= 1.8) {
+    reasons.push(`ratio x${ratioMultiplier.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} vs mediane`);
+  }
+  if (reasons.length === 0) reasons.push("mois le plus atypique de la serie");
+
+  return {
+    key: `${label}-${strongest.season}-${strongest.month_num}`,
+    title: `${label} : ${strongest.monthLabel} ${strongest.season}`,
+    value: `${strongest.ratio.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kWh/DJU`,
+    detail: `${formatKwh(strongest.kwh)} / ${strongest.dju.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} DJU. ${reasons.join(" ; ")}.`,
+    severity: ratioMultiplier != null && ratioMultiplier >= 1.8 ? "warning" : "info",
+  };
+}
+
+function PortfolioDjuDiagnostics({ data }: { data: PrmDjuSeasonal }) {
+  const signals = [
+    strongestDjuSignal(data.winter, "Hiver"),
+    strongestDjuSignal(data.summer, "Ete"),
+    {
+      key: "winter-september",
+      title: "Pourquoi septembre n'apparait pas en hiver ?",
+      value: "Periode hiver = octobre a avril",
+      detail: "Ce n'est pas une absence de donnee : le graphique chauffage exclut septembre car c'est un mois de transition. On pourra le rendre reglable pour piloter les dates d'allumage/arret.",
+      severity: "info" as const,
+    },
+  ].filter((item): item is DjuDiagnosticItem => item != null);
+
+  return (
+    <div className="dashboard-dju-diagnostics">
+      {signals.map((item) => (
+        <div key={item.key} className={`dashboard-dju-diagnostic dashboard-dju-diagnostic--${item.severity}`}>
+          <span>{item.title}</span>
+          <strong>{item.value}</strong>
+          <small>{item.detail}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PortfolioDjuSeasonChart({ season, title }: { season: DjuSeasonData; title: string }) {
   if (!season.has_data) {
     return (
@@ -561,6 +635,7 @@ function PortfolioDjuSeasonalSection({ data }: { data: PrmDjuSeasonal | null }) 
         <PortfolioDjuSeasonChart season={data.winter} title="Hiver - chauffage (oct. a avr.)" />
         <PortfolioDjuSeasonChart season={data.summer} title="Ete - froid (mai a sep.)" />
       </div>
+      <PortfolioDjuDiagnostics data={data} />
     </div>
   );
 }
