@@ -67,6 +67,9 @@ class DjuSeasonData(BaseModel):
     cible_by_month: dict[str, float | None]
     current_label: str | None
     current_ecart_percent: float | None
+    current_months_count: int = 0
+    expected_months_count: int = 0
+    current_is_complete: bool = False
     has_data: bool
 
 

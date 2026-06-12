@@ -199,7 +199,7 @@ function PowerRecommendationCard({ recommendation }: { recommendation: PrmPowerR
   );
 }
 
-const YEAR_COLORS = ["#2563eb", "#f97316", "#16a34a"];
+const YEAR_COLORS = ["#2563eb", "#f97316", "#16a34a", "#a855f7", "#06b6d4", "#eab308", "#ec4899", "#64748b"];
 const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
 function AnnualProfileChart({
@@ -285,6 +285,9 @@ function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title:
 
   const ecart = season.current_ecart_percent;
   const ecartPositif = ecart != null && ecart > 0;
+  const completenessLabel = season.current_is_complete
+    ? "tous mois completes"
+    : `${season.current_months_count}/${season.expected_months_count} mois exploitables`;
 
   return (
     <div className="dju-season-block">
@@ -292,7 +295,7 @@ function DjuSeasonChart({ season, title, icon }: { season: DjuSeasonData; title:
         <h4 className="dju-tab-title">{icon} {title}</h4>
         {ecart != null ? (
           <div className="dju-season-ecart">
-            <span className="dju-ecart-label">Bilan saison {season.current_label} (tous mois complétés, pondéré DJU) :</span>
+            <span className="dju-ecart-label">Bilan saison {season.current_label} ({completenessLabel}, pondere DJU) :</span>
             <span className={`badge badge-lg ${ecartPositif ? "badge-red" : "badge-green"}`}>
               {ecartPositif ? "+" : ""}{ecart}%
             </span>

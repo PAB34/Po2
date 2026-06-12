@@ -1235,6 +1235,9 @@ export type DjuSeasonData = {
   cible_by_month: Record<string, number | null>;
   current_label: string | null;
   current_ecart_percent: number | null;
+  current_months_count: number;
+  expected_months_count: number;
+  current_is_complete: boolean;
   has_data: boolean;
 };
 

@@ -1155,6 +1155,8 @@ def _consumption_by_month() -> dict[str, dict[str, float]]:
 
 _DJU_HEATING_MIN = 10.0
 _DJU_COOLING_MIN = 5.0
+_DJU_SEASONAL_HEATING_MIN = 20.0
+_DJU_SEASONAL_COOLING_MIN = 20.0
 _DJU_PERF_TOLERANCE = 0.10   # ±10 % = "dans la cible"
 _DJU_PERF_MIN_MONTHS = 3
 
@@ -1295,13 +1297,13 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
 
         if mn in _WINTER_MONTHS:
             dju = dju_vals.get("dju_chauffe", 0.0)
-            if dju > 0:
+            if dju >= _DJU_SEASONAL_HEATING_MIN:
                 lbl = _winter_label(y, m)
                 winter_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
 
         if mn in _SUMMER_MONTHS:
             dju = dju_vals.get("dju_froid", 0.0)
-            if dju > 0:
+            if dju >= _DJU_SEASONAL_COOLING_MIN:
                 lbl = _summer_label(y)
                 summer_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
 
@@ -1360,6 +1362,9 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
             "cible_by_month": cible_by_month,
             "current_label": current_label,
             "current_ecart_percent": current_ecart,
+            "current_months_count": len(current_data),
+            "expected_months_count": len(months_order),
+            "current_is_complete": len(current_data) == len(months_order),
             "has_data": len(years_data) > 0,
         }
 

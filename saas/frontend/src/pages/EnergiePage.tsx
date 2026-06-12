@@ -492,6 +492,9 @@ function PortfolioDjuSeasonChart({ season, title }: { season: DjuSeasonData; tit
   }));
   const ecart = season.current_ecart_percent;
   const ecartPositive = ecart != null && ecart > 0;
+  const completenessLabel = season.current_is_complete
+    ? "tous mois completes"
+    : `${season.current_months_count}/${season.expected_months_count} mois exploitables`;
 
   return (
     <div className="dashboard-dju-chart">
@@ -499,7 +502,7 @@ function PortfolioDjuSeasonChart({ season, title }: { season: DjuSeasonData; tit
         <h4>{title}</h4>
         {ecart != null ? (
           <div className="dashboard-dju-ecart">
-            <span>Saison {season.current_label}</span>
+            <span>Saison {season.current_label} - {completenessLabel}</span>
             <strong className={ecartPositive ? "is-bad" : "is-good"}>
               {ecartPositive ? "+" : ""}{ecart}%
             </strong>
