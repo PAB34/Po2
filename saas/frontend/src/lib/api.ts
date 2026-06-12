@@ -1789,6 +1789,7 @@ export type EnergyInvoiceImport = {
   file_size_bytes: number;
   sha256: string;
   supplier_guess: string | null;
+  energy_type: string;
   invoice_number: string | null;
   invoice_date: string | null;
   period_start: string | null;

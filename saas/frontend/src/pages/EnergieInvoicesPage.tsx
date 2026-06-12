@@ -114,6 +114,31 @@ function formatKwh(value: number | null | undefined) {
   return `${Math.round(value).toLocaleString("fr-FR")} kWh`;
 }
 
+type SupplierKey = "ENGIE" | "EDF" | "TOTALENERGIES";
+
+// Reflet du registre back (services/supplier_registry.py) : qui facture quoi.
+// Le distributeur (ENEDIS / GRDF) est une reference de controle, pas un payeur.
+const SUPPLIER_CATALOG: {
+  key: SupplierKey;
+  label: string;
+  energyLabel: string;
+  distributor: string;
+  scope: string;
+  supported: boolean;
+}[] = [
+  { key: "ENGIE", label: "ENGIE", energyLabel: "Electricite", distributor: "ENEDIS", scope: "Batiments ville", supported: true },
+  { key: "EDF", label: "EDF", energyLabel: "Electricite", distributor: "ENEDIS", scope: "Eclairage public", supported: false },
+  { key: "TOTALENERGIES", label: "TotalEnergies", energyLabel: "Gaz", distributor: "GRDF", scope: "Gaz batiments", supported: false },
+];
+
+function supplierKeyOf(invoiceImport: EnergyInvoiceImport): SupplierKey | null {
+  const value = (invoiceImport.supplier_guess ?? "").toUpperCase();
+  if (value.includes("ENGIE")) return "ENGIE";
+  if (value.includes("EDF") || value.includes("ELECTRICITE DE FRANCE")) return "EDF";
+  if (value.includes("TOTAL")) return "TOTALENERGIES";
+  return null;
+}
+
 function formatCount(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "-";
   return `${Math.round(value).toLocaleString("fr-FR")} ${unit}`;
@@ -477,6 +502,18 @@ export function EnergieInvoicesPage() {
   });
 
   const imports = importsQuery.data ?? [];
+  const supplierSummary = useMemo(() => {
+    const acc: Record<string, { count: number; total: number }> = {};
+    for (const invoiceImport of imports) {
+      const key = supplierKeyOf(invoiceImport);
+      if (!key) continue;
+      const entry = acc[key] ?? { count: 0, total: 0 };
+      entry.count += 1;
+      entry.total += invoiceImport.total_ttc ?? 0;
+      acc[key] = entry;
+    }
+    return acc;
+  }, [imports]);
   const batches = batchesQuery.data ?? [];
   const xlsxBatches = batches.filter((batch) => batch.source === "engie_xlsx_export");
   const activeTurpeVersion = turpeVersionsQuery.data?.[0];
@@ -834,11 +871,44 @@ export function EnergieInvoicesPage() {
         </div>
       </div>
 
+      <section className="invoice-supplier-strip">
+        <div className="invoice-supplier-strip-head">
+          <h3>Fournisseurs d'energie</h3>
+          <span>Le distributeur (ENEDIS / GRDF) sert de reference de controle, pas de payeur.</span>
+        </div>
+        <div className="invoice-supplier-cards">
+          {SUPPLIER_CATALOG.map((supplier) => {
+            const summary = supplierSummary[supplier.key];
+            const count = summary?.count ?? 0;
+            return (
+              <div
+                key={supplier.key}
+                className={`invoice-supplier-card${supplier.supported ? "" : " invoice-supplier-card--soon"}`}
+              >
+                <div className="invoice-supplier-card-top">
+                  <strong>{supplier.label}</strong>
+                  <span className={`badge ${supplier.supported ? "badge-green" : "badge-gray"}`}>
+                    {supplier.supported ? "Actif" : "A integrer"}
+                  </span>
+                </div>
+                <span className="invoice-supplier-meta">
+                  {supplier.energyLabel} · {supplier.distributor} · {supplier.scope}
+                </span>
+                <div className="invoice-supplier-figures">
+                  <span>{count} facture{count !== 1 ? "s" : ""}</span>
+                  {summary && summary.total > 0 && <strong>{formatCurrency(summary.total)} TTC</strong>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="invoice-consumption-panel">
         <header className="invoice-consumption-header">
           <div>
-            <p className="field-label">Suivi mensuel de facturation</p>
-            <h3>ENGIE facture vs ENEDIS releve - {currentYear}</h3>
+            <p className="field-label">Controle conso : facture fournisseur vs releve distributeur</p>
+            <h3>Facture vs releve ENEDIS - {currentYear}</h3>
             <span>Janvier a decembre, avec les filtres facture actifs.</span>
           </div>
           {monthlyConsumptionQuery.data && (
