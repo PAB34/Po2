@@ -533,8 +533,21 @@ def _daily_consumption_index() -> dict[str, list[dict[str, Any]]]:
     return index
 
 
+# La courbe de charge agrege tous les PRM au pas 30 min sur plusieurs annees :
+# le CSV peut depasser le Go. Materialiser TOUT l'index en RAM fait exploser la
+# memoire (OOM, worker tue). Au-dela de ce seuil on renonce a l'index global ;
+# les lecteurs par PRM (_load_curve_points_for_prm, en streaming) prennent le relais.
+_LOAD_CURVE_MAX_FULL_INDEX_BYTES = 150 * 1024 * 1024
+
+
 @lru_cache(maxsize=1)
 def _load_curve_index() -> dict[str, list[dict[str, Any]]]:
+    path = _energie_path("enedis_load_curve.csv")
+    if path.exists() and path.stat().st_size > _LOAD_CURVE_MAX_FULL_INDEX_BYTES:
+        # Trop volumineux pour un index global en memoire : on degrade proprement.
+        # Les controles facture (courbe de charge) sautent ce volet sans planter,
+        # et la fiche PRM lit la courbe via _load_curve_points_for_prm.
+        return {}
     index: dict[str, list[dict[str, Any]]] = {}
     for r in _csv_rows("enedis_load_curve.csv"):
         uid = r.get("usage_point_id", "")
@@ -549,6 +562,34 @@ def _load_curve_index() -> dict[str, list[dict[str, Any]]]:
     for uid in index:
         index[uid].sort(key=lambda x: x["datetime"])
     return index
+
+
+@lru_cache(maxsize=64)
+def _load_curve_points_for_prm(prm_id: str) -> list[dict[str, Any]]:
+    """Points de courbe de charge d'UN seul PRM, lus en streaming.
+
+    Evite de charger toute la courbe de charge en memoire (cf.
+    _load_curve_index) : on parcourt le CSV une fois et on ne conserve que les
+    points du PRM demande. Memoire bornee a un PRM, quel que soit le volume total.
+    """
+    path = _energie_path("enedis_load_curve.csv")
+    if not path.exists():
+        return []
+    points: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        for r in csv.DictReader(f):
+            if r.get("usage_point_id", "") != prm_id:
+                continue
+            raw = r.get("value_w")
+            if not raw:
+                continue
+            try:
+                fval = float(raw)
+            except ValueError:
+                continue
+            points.append({"datetime": r["datetime"], "value_w": fval})
+    points.sort(key=lambda x: x["datetime"])
+    return points
 
 
 @lru_cache(maxsize=1)
@@ -642,7 +683,7 @@ def _source_has_data(prm_id: str, source: str) -> bool:
     if source == "max_power":
         return bool(_max_power_index().get(prm_id))
     if source == "load_curve":
-        return bool(_load_curve_index().get(prm_id))
+        return bool(_load_curve_points_for_prm(prm_id))
     return False
 
 
@@ -1081,7 +1122,7 @@ def get_prm_max_power(prm_id: str) -> dict[str, Any]:
 
 
 def get_prm_load_curve(prm_id: str, days: int | None = None) -> dict[str, Any]:
-    points = list(_load_curve_index().get(prm_id, []))
+    points = list(_load_curve_points_for_prm(prm_id))
     if days and points:
         try:
             end_date = date.fromisoformat(points[-1]["datetime"][:10])

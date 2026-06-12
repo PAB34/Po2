@@ -828,12 +828,14 @@ def _invalidate_energie_caches() -> None:
             _daily_consumption_index,
             _consumption_by_month,
             _load_curve_index,
+            _load_curve_points_for_prm,
             get_data_audit,
             get_data_ranges,
         )
         _daily_consumption_index.cache_clear()
         _consumption_by_month.cache_clear()
         _load_curve_index.cache_clear()
+        _load_curve_points_for_prm.cache_clear()
         get_data_audit.cache_clear()
         get_data_ranges.cache_clear()
     except Exception:

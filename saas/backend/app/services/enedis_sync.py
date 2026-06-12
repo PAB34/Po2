@@ -1309,8 +1309,9 @@ def run_load_curve_sync(
         _generate_lc_report(prms, all_results, start_str, end_str)
 
         try:
-            from app.services.energie import _load_curve_index, get_data_audit, get_data_ranges  # noqa: PLC0415
+            from app.services.energie import _load_curve_index, _load_curve_points_for_prm, get_data_audit, get_data_ranges  # noqa: PLC0415
             _load_curve_index.cache_clear()
+            _load_curve_points_for_prm.cache_clear()
             get_data_audit.cache_clear()
             get_data_ranges.cache_clear()
             _lc_log("Cache courbe de charge invalidé.")
