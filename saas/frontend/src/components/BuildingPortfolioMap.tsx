@@ -101,6 +101,15 @@ function buildAddressLine(
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
 }
 
+function toCoordinate(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function ensureStylesheet(documentRef: Document, href: string) {
   const existing = Array.from(documentRef.querySelectorAll("link")).find(
     (node) => node.getAttribute("href") === href,
@@ -233,9 +242,11 @@ export function BuildingPortfolioMap({
 
   const mappableBuildings = useMemo(
     () =>
-      buildings.filter(
-        (b): b is MappableBuilding => typeof b.latitude === "number" && typeof b.longitude === "number",
-      ),
+      buildings.flatMap((building) => {
+        const latitude = toCoordinate(building.latitude);
+        const longitude = toCoordinate(building.longitude);
+        return latitude == null || longitude == null ? [] : [{ ...building, latitude, longitude } as MappableBuilding];
+      }),
     [buildings],
   );
 
@@ -266,24 +277,12 @@ export function BuildingPortfolioMap({
       const map = runtime
         .map(containerRef.current, { zoomControl: true, attributionControl: true, preferCanvas: false })
         .setView([43.4028, 3.6928], 13);
-      if (runtime.tileLayer.wms) {
-        runtime.tileLayer
-          .wms("https://data.geopf.fr/wms-r?", {
-            layers: "GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2",
-            format: "image/png",
-            transparent: false,
-            version: "1.3.0",
-            attribution: "&copy; IGN Géoplateforme",
-          })
-          .addTo(map);
-      } else {
-        runtime
-          .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 22,
-            attribution: "&copy; OpenStreetMap contributors",
-          })
-          .addTo(map);
-      }
+      runtime
+        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 22,
+          attribution: "&copy; OpenStreetMap contributors",
+        })
+        .addTo(map);
       mapRef.current = map;
       setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
