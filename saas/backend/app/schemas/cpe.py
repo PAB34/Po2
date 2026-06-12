@@ -808,6 +808,18 @@ class CpeDjuAnnuel(BaseModel):
     dju_total: float
     nb_jours: int
     source: str
+    profile_code: str | None = None
+    profile_label: str | None = None
+    station_label: str | None = None
+    source_label: str | None = None
+    heating_base_c: float | None = None
+    cooling_base_c: float | None = None
+    reference_dju: float | None = None
+    reference_period: str | None = None
+    heating_period: str | None = None
+    contractual: bool = False
+    compliant_source: bool = False
+    notes: str | None = None
 
 
 # ── Devis petits travaux P3 (type P6 DALKIA) ─────────────────────────────────

@@ -3517,6 +3517,18 @@ export type CpeDjuAnnuel = {
   dju_total: number;
   nb_jours: number;
   source: string;
+  profile_code?: string | null;
+  profile_label?: string | null;
+  station_label?: string | null;
+  source_label?: string | null;
+  heating_base_c?: number | null;
+  cooling_base_c?: number | null;
+  reference_dju?: number | null;
+  reference_period?: string | null;
+  heating_period?: string | null;
+  contractual?: boolean;
+  compliant_source?: boolean;
+  notes?: string | null;
 };
 
 export type CpeImportResult = {

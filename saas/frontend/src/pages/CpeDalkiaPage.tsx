@@ -569,6 +569,11 @@ export default function CpeDalkiaPage() {
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
   const dju = djuQ.data;
+  const djuReference = dju?.reference_dju ?? 1426;
+  const djuProfileLabel = dju?.profile_label ?? "DALKIA contractuel";
+  const djuStationLabel = dju?.station_label ?? "Montpellier";
+  const djuReferencePeriod = dju?.reference_period ?? "1981-2010";
+  const djuSourceWarning = Boolean(dju?.contractual && dju.compliant_source === false);
   const consoSynthese = consoSyntheseQ.data;
 
   // prix_tarifs depuis le bilan (T1/T2/T3 pré-chargés par OS N°3)
@@ -691,8 +696,8 @@ export default function CpeDalkiaPage() {
         <KpiCard
           label="DJU réels"
           value={dju ? `${fmt(dju.dju_total, 0)} DJU` : "—"}
-          sub={`Réf. contractuelle : 1 426 DJU`}
-          color={dju && dju.dju_total < 1426 ? "#f97316" : "#16a34a"}
+          sub={`Ref. ${djuProfileLabel} : ${fmt(djuReference, 0)} DJU`}
+          color={dju && dju.dju_total < djuReference ? "#f97316" : "#16a34a"}
         />
         <KpiCard
           label="Prix gaz (OS N°3)"
@@ -875,7 +880,7 @@ export default function CpeDalkiaPage() {
 
             <dt style={{ fontWeight: 700 }}>N'B corrigé</dt>
             <dd style={{ margin: 0 }}>
-              Cible recalée du climat réel : <strong>N'B = NB × (DJU réels / 1426)</strong>. Un hiver plus froid (DJU élevés)
+              Cible recalée du climat réel : <strong>N'B = NB × (DJU réels / {fmt(djuReference, 0)})</strong>. Un hiver plus froid (DJU élevés)
               relève la cible ; un hiver doux l'abaisse. C'est la cible « juste » à comparer au réel.
             </dd>
 
@@ -983,13 +988,21 @@ export default function CpeDalkiaPage() {
       {/* ── Note DJU ── */}
       {dju && (
         <div style={{ marginTop: 24, padding: 12, background: "#f9fafb", borderRadius: 8, fontSize: 12, color: "#6b7280" }}>
-          <strong>DJU {annee} :</strong> {fmt(dju.dju_total, 0)} DJU chauffage base 18°C (méthode COSTIC, Open-Meteo) •{" "}
-          {dju.nb_jours} jours collectés • Référence contractuelle : 1 426 DJU (Montpellier 1981-2010)
-          {dju.dju_total < 1426 ? (
+          <strong>DJU {annee} :</strong> {fmt(dju.dju_total, 0)} DJU chauffage base 18°C •{" "}
+          {dju.nb_jours} jours collectés • Profil : {djuProfileLabel} • Source attendue : {djuStationLabel} /{" "}
+          {dju.source_label ?? dju.source} • Référence : {fmt(djuReference, 0)} DJU ({djuReferencePeriod})
+          {dju.dju_total < djuReference ? (
             <span style={{ color: "#f97316" }}> → Hiver doux : N'B sera inférieur à NB</span>
           ) : (
             <span style={{ color: "#16a34a" }}> → Hiver rigoureux : N'B sera supérieur à NB</span>
           )}
+          {djuSourceWarning && (
+            <p style={{ margin: "8px 0 0", color: "#b45309", fontWeight: 600 }}>
+              Attention : ce profil est contractuel, mais la source actuellement calculee est indicative ({dju.source}).
+              Avant usage opposable DALKIA, il faut brancher la station/source contractuelle Montpellier / METEOCLIM COSTIC.
+            </p>
+          )}
+          {dju.notes && <p style={{ margin: "6px 0 0" }}>{dju.notes}</p>}
         </div>
       )}
 

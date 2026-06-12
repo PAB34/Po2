@@ -38,11 +38,12 @@ from app.schemas.cpe import (
     CpeSiteOut,
     CpeSiteUpdate,
 )
+from app.services.dju_profiles import DALKIA_CONTRACT_PROFILE, dju_profile_payload
 
 LOG = logging.getLogger(__name__)
 
 DJU_COL = "dju_chauffage_base_18"
-DJU_REFERENCE = 1426.0
+DJU_REFERENCE = DALKIA_CONTRACT_PROFILE.reference_dju or 1426.0
 
 # Seuils de révision NB (CCTPM)
 SEUIL_REVISION_1 = 0.08   # > 8% → déclenchement sur 2 saisons
@@ -128,8 +129,9 @@ def get_dju_annuel(annee: int) -> CpeDjuAnnuel:
     correspondant à l'exercice (01/01/N → 31/12/N, approche calendaire).
     """
     csv_path = Path(settings.energie_dir) / "DJU" / "dju_sete.csv"
+    profile = dju_profile_payload(DALKIA_CONTRACT_PROFILE)
     if not csv_path.exists():
-        return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="fichier_absent")
+        return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="fichier_absent", **profile)
 
     total = 0.0
     nb_jours = 0
@@ -151,13 +153,14 @@ def get_dju_annuel(annee: int) -> CpeDjuAnnuel:
                         pass
     except Exception as exc:
         LOG.warning("Erreur lecture DJU CSV : %s", exc)
-        return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="erreur_lecture")
+        return CpeDjuAnnuel(annee=annee, dju_total=0.0, nb_jours=0, source="erreur_lecture", **profile)
 
     return CpeDjuAnnuel(
         annee=annee,
         dju_total=round(total, 2),
         nb_jours=nb_jours,
-        source="open_meteo_costic",
+        source="open_meteo_sete_costic_indicatif",
+        **profile,
     )
 
 
