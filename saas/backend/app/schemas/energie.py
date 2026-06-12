@@ -60,6 +60,16 @@ class DjuSeasonYear(BaseModel):
     months: list[DjuSeasonMonthPoint]
 
 
+class DjuSeasonMonthDiagnostic(BaseModel):
+    season_label: str
+    month_num: str
+    month_label: str
+    status: str
+    reason: str
+    dju: float | None = None
+    kwh: float | None = None
+
+
 class DjuSeasonData(BaseModel):
     months_order: list[str]
     months_labels: list[str]
@@ -70,6 +80,7 @@ class DjuSeasonData(BaseModel):
     current_months_count: int = 0
     expected_months_count: int = 0
     current_is_complete: bool = False
+    month_diagnostics: list[DjuSeasonMonthDiagnostic] = []
     has_data: bool
 
 

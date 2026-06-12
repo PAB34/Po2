@@ -515,28 +515,53 @@ function strongestDjuSignal(season: DjuSeasonData, label: string): DjuDiagnostic
 }
 
 function PortfolioDjuDiagnostics({ data }: { data: PrmDjuSeasonal }) {
+  const excludedMonths = [...data.winter.month_diagnostics, ...data.summer.month_diagnostics]
+    .filter((item) => item.status !== "displayed")
+    .sort((a, b) => `${b.season_label}-${b.month_num}`.localeCompare(`${a.season_label}-${a.month_num}`));
+  const septemberSummer = data.summer.month_diagnostics.find((item) => item.season_label === "2024" && item.month_num === "09");
   const signals = [
     strongestDjuSignal(data.winter, "Hiver"),
     strongestDjuSignal(data.summer, "Ete"),
-    {
-      key: "winter-september",
-      title: "Pourquoi septembre n'apparait pas en hiver ?",
-      value: "Periode hiver = octobre a avril",
-      detail: "Ce n'est pas une absence de donnee : le graphique chauffage exclut septembre car c'est un mois de transition. On pourra le rendre reglable pour piloter les dates d'allumage/arret.",
-      severity: "info" as const,
-    },
+    septemberSummer
+      ? {
+          key: "summer-september-2024",
+          title: "Septembre 2024 en ete",
+          value: septemberSummer.status === "displayed" ? "Mois affiche" : "Mois exclu",
+          detail: septemberSummer.status === "displayed"
+            ? `Le mois est exploite : ${formatKwh(septemberSummer.kwh)} / ${septemberSummer.dju?.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) ?? "-"} DJU.`
+            : septemberSummer.reason,
+          severity: septemberSummer.status === "displayed" ? "info" as const : "warning" as const,
+        }
+      : null,
   ].filter((item): item is DjuDiagnosticItem => item != null);
 
   return (
-    <div className="dashboard-dju-diagnostics">
-      {signals.map((item) => (
-        <div key={item.key} className={`dashboard-dju-diagnostic dashboard-dju-diagnostic--${item.severity}`}>
-          <span>{item.title}</span>
-          <strong>{item.value}</strong>
-          <small>{item.detail}</small>
+    <>
+      <div className="dashboard-dju-diagnostics">
+        {signals.map((item) => (
+          <div key={item.key} className={`dashboard-dju-diagnostic dashboard-dju-diagnostic--${item.severity}`}>
+            <span>{item.title}</span>
+            <strong>{item.value}</strong>
+            <small>{item.detail}</small>
+          </div>
+        ))}
+      </div>
+      {excludedMonths.length > 0 && (
+        <div className="dashboard-dju-missing">
+          <strong>Mois non affiches dans les graphiques</strong>
+          <div>
+            {excludedMonths.slice(0, 10).map((item) => (
+              <span key={`${item.season_label}-${item.month_num}-${item.status}`} className="badge badge-gray">
+                {item.month_label} {item.season_label} : {item.reason}
+              </span>
+            ))}
+            {excludedMonths.length > 10 && (
+              <span className="badge badge-gray">+ {excludedMonths.length - 10} autres mois filtres</span>
+            )}
+          </div>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }
 

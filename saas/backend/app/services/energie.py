@@ -1284,6 +1284,43 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
 
     winter_by_season: dict[str, dict[str, dict[str, float]]] = {}
     summer_by_season: dict[str, dict[str, dict[str, float]]] = {}
+    winter_diagnostics: list[dict[str, Any]] = []
+    summer_diagnostics: list[dict[str, Any]] = []
+
+    def add_month_diagnostic(
+        target: list[dict[str, Any]],
+        *,
+        season_label: str,
+        month_num: str,
+        month_label: str,
+        dju: float,
+        kwh: float | None,
+        threshold: float,
+    ) -> bool:
+        if kwh is None:
+            status = "missing_consumption"
+            reason = "Consommation ENEDIS absente pour ce mois."
+        elif kwh <= 0:
+            status = "zero_consumption"
+            reason = "Consommation ENEDIS nulle pour ce mois."
+        elif dju < threshold:
+            status = "low_dju"
+            reason = f"DJU insuffisants ({round(dju, 1)} < {threshold:g}) : mois filtre pour eviter un ratio instable."
+        else:
+            status = "displayed"
+            reason = "Mois affiche dans le graphique."
+        target.append(
+            {
+                "season_label": season_label,
+                "month_num": month_num,
+                "month_label": month_label,
+                "status": status,
+                "reason": reason,
+                "dju": round(dju, 1),
+                "kwh": round(kwh, 1) if kwh is not None else None,
+            }
+        )
+        return status == "displayed"
 
     for ym in sorted(dju_idx.keys()):
         if ym >= current_ym:
@@ -1291,20 +1328,34 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
         y, m = int(ym[:4]), int(ym[5:7])
         mn = f"{m:02d}"
         kwh = conso_idx.get(ym)
-        if kwh is None or kwh <= 0:
-            continue
         dju_vals = dju_idx[ym]
 
         if mn in _WINTER_MONTHS:
             dju = dju_vals.get("dju_chauffe", 0.0)
-            if dju >= _DJU_SEASONAL_HEATING_MIN:
-                lbl = _winter_label(y, m)
+            lbl = _winter_label(y, m)
+            if add_month_diagnostic(
+                winter_diagnostics,
+                season_label=lbl,
+                month_num=mn,
+                month_label=_WINTER_LABELS[_WINTER_MONTHS.index(mn)],
+                dju=dju,
+                kwh=kwh,
+                threshold=_DJU_SEASONAL_HEATING_MIN,
+            ):
                 winter_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
 
         if mn in _SUMMER_MONTHS:
             dju = dju_vals.get("dju_froid", 0.0)
-            if dju >= _DJU_SEASONAL_COOLING_MIN:
-                lbl = _summer_label(y)
+            lbl = _summer_label(y)
+            if add_month_diagnostic(
+                summer_diagnostics,
+                season_label=lbl,
+                month_num=mn,
+                month_label=_SUMMER_LABELS[_SUMMER_MONTHS.index(mn)],
+                dju=dju,
+                kwh=kwh,
+                threshold=_DJU_SEASONAL_COOLING_MIN,
+            ):
                 summer_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
 
     def _build_season(
@@ -1312,6 +1363,7 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
         months_order: list[str],
         months_labels: list[str],
         current_label: str,
+        month_diagnostics: list[dict[str, Any]],
     ) -> dict[str, Any]:
         ratio_history: dict[str, list[tuple[float, float]]] = {mn: [] for mn in months_order}
         years_data: list[dict[str, Any]] = []
@@ -1365,13 +1417,14 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
             "current_months_count": len(current_data),
             "expected_months_count": len(months_order),
             "current_is_complete": len(current_data) == len(months_order),
+            "month_diagnostics": month_diagnostics,
             "has_data": len(years_data) > 0,
         }
 
     return {
         "usage_point_id": usage_point_id,
-        "winter": _build_season(winter_by_season, _WINTER_MONTHS, _WINTER_LABELS, current_winter_label),
-        "summer": _build_season(summer_by_season, _SUMMER_MONTHS, _SUMMER_LABELS, current_summer_label),
+        "winter": _build_season(winter_by_season, _WINTER_MONTHS, _WINTER_LABELS, current_winter_label, winter_diagnostics),
+        "summer": _build_season(summer_by_season, _SUMMER_MONTHS, _SUMMER_LABELS, current_summer_label, summer_diagnostics),
     }
 
 

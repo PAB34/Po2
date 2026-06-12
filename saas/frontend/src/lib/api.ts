@@ -1242,6 +1242,16 @@ export type DjuSeasonYear = {
   months: DjuSeasonMonthPoint[];
 };
 
+export type DjuSeasonMonthDiagnostic = {
+  season_label: string;
+  month_num: string;
+  month_label: string;
+  status: string;
+  reason: string;
+  dju: number | null;
+  kwh: number | null;
+};
+
 export type DjuSeasonData = {
   months_order: string[];
   months_labels: string[];
@@ -1252,6 +1262,7 @@ export type DjuSeasonData = {
   current_months_count: number;
   expected_months_count: number;
   current_is_complete: boolean;
+  month_diagnostics: DjuSeasonMonthDiagnostic[];
   has_data: boolean;
 };
 
