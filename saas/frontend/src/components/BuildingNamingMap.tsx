@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Leaflet from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 import type { GeoJsonFeatureCollection } from "../lib/api";
 
@@ -120,6 +122,10 @@ function ensureScript(documentRef: Document, src: string): Promise<void> {
 }
 
 function ensureLeafletRuntime(): Promise<LeafletRuntime> {
+  if (Leaflet) {
+    return Promise.resolve(Leaflet as unknown as LeafletRuntime);
+  }
+
   const runtimeWindow = window as WindowWithLeaflet;
   if (runtimeWindow.L) {
     return Promise.resolve(runtimeWindow.L);
