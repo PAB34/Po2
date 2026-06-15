@@ -111,3 +111,56 @@ def test_bpu_supplier_and_segment_normalization_stays_conservative() -> None:
     assert normalize_bpu_supplier("ENGIE Entreprises") == "ENGIE"
     assert historical_segment_code_for_site({"segment": "C5", "site_name": "Eclairage public centre"}) == "C5_EP"
     assert historical_segment_code_for_site({"segment": "C5", "site_name": "Gymnase"}) is None
+
+
+def test_normalize_bpu_supplier_recognizes_totalenergies() -> None:
+    assert normalize_bpu_supplier("TotalEnergies") == "TOTALENERGIES"
+    assert normalize_bpu_supplier("TOTALENERGIES") == "TOTALENERGIES"
+    assert normalize_bpu_supplier("Total Energies Gaz") == "TOTALENERGIES"
+    assert normalize_bpu_supplier(None) is None
+    assert normalize_bpu_supplier("inconnu") is None
+
+
+def test_historical_segment_code_recognizes_gas_profiles() -> None:
+    assert historical_segment_code_for_site({"segment": "T1"}) == "T1"
+    assert historical_segment_code_for_site({"segment": "T2"}) == "T2"
+    assert historical_segment_code_for_site({"segment": "T3"}) == "T3"
+    assert historical_segment_code_for_site({"segment": "T4"}) == "T4"
+    assert historical_segment_code_for_site({"segment": "t2"}) == "T2"
+    assert historical_segment_code_for_site({"segment": "T5"}) is None
+
+
+def test_resolve_historical_bpu_price_gas_lot7() -> None:
+    reference = HistoricalBpuPrice(
+        document_id=10,
+        supplier="TOTALENERGIES",
+        valid_year=2026,
+        lot_number=7,
+        segment_code="T2",
+        period_code="BASE",
+        component_type="cee_precarite",
+        price_eur_per_mwh=Decimal("3.06"),
+        pdf_filename="BPU_2026_Lots_1_2_et_7.xlsx",
+    )
+    site = {"segment": "T2", "period_start": date(2026, 3, 1)}
+
+    resolved = resolve_historical_bpu_price(
+        [reference],
+        site,
+        {"normalized_component": "cee_precarite", "poste": "base"},
+    )
+    assert resolved == reference
+
+    # Un autre profil ne doit pas matcher
+    assert resolve_historical_bpu_price(
+        [reference],
+        {"segment": "T1", "period_start": date(2026, 3, 1)},
+        {"normalized_component": "cee_precarite", "poste": "base"},
+    ) is None
+
+    # Une année hors validité ne doit pas matcher
+    assert resolve_historical_bpu_price(
+        [reference],
+        {"segment": "T2", "period_start": date(2025, 3, 1)},
+        {"normalized_component": "cee_precarite", "poste": "base"},
+    ) is None

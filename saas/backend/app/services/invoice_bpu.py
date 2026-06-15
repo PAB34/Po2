@@ -25,6 +25,8 @@ INVOICE_COMPONENT_TO_BPU_COMPONENT = {
     "capacity": "capacite",
     "cee": "cee",
     "green_energy": "go",
+    "cee_precarite": "cee_precarite",
+    "cpb": "cpb",
 }
 
 POSTE_TO_BPU_PERIOD = {
@@ -162,6 +164,8 @@ def normalize_bpu_supplier(supplier: str | None) -> str | None:
         return "ENGIE"
     if "EDF" in upper or "ELECTRICITE DE FRANCE" in upper:
         return "EDF"
+    if "TOTAL" in upper:
+        return "TOTALENERGIES"
     return None
 
 
@@ -177,6 +181,10 @@ def historical_segment_code_for_site(site: dict[str, Any]) -> str | None:
         ).upper()
         if "ECLAIRAGE" in labels or "ÉCLAIRAGE" in labels:
             return "C5_EP"
+
+    # Profils gaz TotalEnergies Lot 7 (Hérault Énergie)
+    if segment in {"T1", "T2", "T3", "T4"}:
+        return segment
 
     return None
 
