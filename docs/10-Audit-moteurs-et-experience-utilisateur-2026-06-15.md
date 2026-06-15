@@ -315,7 +315,7 @@ Gaz (Total/GRDF) puis eau (SUEZ) dans le contrôle factures ; travaux P3/APE ; c
 
 | Étape | Contenu | Statut |
 |---|---|---|
-| **A — Moteur de matching** (priorité) | écrans de rapprochement séparés : compteurs↔bâtiment, sites CPE↔patrimoine, sites SPIE↔patrimoine (CVC↔bâtiment existe déjà) | **à démarrer** |
+| **A — Moteur de matching** (priorité) | écrans de rapprochement séparés : **compteurs↔bâtiment livré** (`/buildings/compteurs`, PRM+PCE) ; restent sites CPE↔patrimoine, sites SPIE↔patrimoine (CVC↔bâtiment existe déjà) | **en cours** |
 | B — Navigation par moteur | sidebar 6 domaines + sous-nav ; SPIE ajouté sous Marchés et contrats | après A |
 | C — Fiche patrimoine convergente | onglets agrégeant énergie/factures/technique/contrats | après A |
 | D — Compléter moteurs | gaz (Total/GRDF), **eau (SUEZ)**, travaux P3/APE | en continu |

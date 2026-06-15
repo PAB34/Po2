@@ -38,6 +38,20 @@
   (25 pages, GRDF gaz, CVC fluides/SPIE, EDF EP, acquisition ENEDIS), audit écran par écran, navigation cible
   par moteur, plan de refonte en 4 phases, questions à arbitrer.
 
+### Chantier 3 — Écran de matching compteurs ↔ bâtiment (moteur de matching, étape A)
+
+- Commit `1e407dd` (poussé) : `feat(patrimoine): ecran de rapprochement compteurs energie -> batiment`.
+- Backend : `services/meter_matching.py` (`list_meter_matches` + `apply_meter_mappings`), schemas `Meter*`
+  dans `schemas/building.py`, routes `GET /api/buildings/meters/matching` + `POST .../apply`. Sources :
+  PRM (snapshots ENEDIS via `energie._contracts()/_addresses()`) + PCE (`gas_pces`). Lien canonique =
+  `BuildingMeterLink` ; pour le gaz, sync aussi `GasPce.building_id`. Matcher flou réutilisé de `services/cvc.py`.
+  Tests `tests/test_meter_matching.py` (3) OK + boot OK.
+- Frontend : page `/buildings/compteurs` (`MeterMatchingPage`), `lib/api.ts` (`fetchMeterMatches`/
+  `applyMeterMappings`), lien sidebar sous Patrimoine.
+- Décisions de cadrage actées dans [[10-Audit-moteurs-et-experience-utilisateur-2026-06-15]] §10 :
+  SPIE = marché à part entière, matching = écrans séparés, priorité matching d'abord, eau à travailler,
+  Pronostics hors plateforme.
+
 ## 🚧 Ce qui reste à faire / handoff
 
 ### Priorité 1 — Valider l'audit puis attaquer Phase 1 (navigation)
