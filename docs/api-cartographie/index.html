@@ -3,317 +3,680 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cartographie API — Po2</title>
+<title>Cartographie API Po2</title>
 <style>
   :root {
-    --bg: #0f172a; --panel: #111c34; --panel2: #16233f; --line: rgba(148,163,184,.22);
-    --txt: #e2e8f0; --muted: #94a3b8; --faint: #64748b;
-    --blue:#378add; --green:#639922; --amber:#ba7517; --red:#e24b4a; --purple:#7f77dd; --gray:#5f5e5a;
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --panel-soft: #f1f5f9;
+    --line: #d7dde8;
+    --text: #172033;
+    --muted: #64748b;
+    --blue: #2563eb;
+    --blue-soft: #dbeafe;
+    --green: #15803d;
+    --amber: #b45309;
+    --red: #b91c1c;
+    --violet: #6d28d9;
   }
   * { box-sizing: border-box; }
-  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--txt); font-size:14px; }
-  a { color:#85b7eb; }
-  header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  header h1 { font-size:16px; font-weight:500; margin:0; }
-  header .eyebrow { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); }
-  .grow { flex:1; }
-  .stats { display:flex; gap:14px; flex-wrap:wrap; }
-  .stat { font-size:12px; color:var(--muted); } .stat b { color:var(--txt); font-weight:500; }
-  button { font-family:inherit; font-size:13px; color:var(--txt); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; }
-  button:hover { border-color:#3b82f6; }
-  button.primary { background:#1d4ed8; border-color:#1d4ed8; }
-  button.ghost { background:transparent; }
-  input, select, textarea { font-family:inherit; font-size:13px; color:var(--txt); background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:7px 9px; width:100%; }
-  textarea { resize:vertical; min-height:64px; }
-  .tabs { display:flex; gap:6px; padding:10px 18px 0; }
-  .tab { padding:7px 14px; border-radius:7px 7px 0 0; color:var(--muted); cursor:pointer; border:1px solid transparent; border-bottom:none; }
-  .tab.active { color:var(--txt); background:var(--panel); border-color:var(--line); }
-  main { display:grid; grid-template-columns: 1fr 1.05fr; gap:14px; padding:14px 18px 40px; align-items:start; }
-  @media (max-width: 900px){ main{ grid-template-columns:1fr; } }
-  .col { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .col-head { padding:10px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
-  .tree { max-height:72vh; overflow:auto; }
-  .router { border-bottom:1px solid var(--line); }
-  .router-head { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; }
-  .router-head:hover { background:var(--panel2); }
-  .router-head .name { font-weight:500; }
-  .router-head .pref { color:var(--faint); font-size:12px; }
-  .router-head .cnt { margin-left:auto; color:var(--muted); font-size:12px; }
-  .eps { display:none; } .router.open .eps { display:block; }
-  .ep { display:flex; align-items:center; gap:8px; padding:7px 12px 7px 22px; cursor:pointer; border-top:1px solid rgba(148,163,184,.08); }
-  .ep:hover { background:var(--panel2); }
-  .ep.sel { background:#16335e; }
-  .m { font-size:10px; font-weight:600; padding:2px 6px; border-radius:5px; min-width:46px; text-align:center; color:#06121f; }
-  .m.GET{background:#85b7eb;} .m.POST{background:#97c459;} .m.PATCH,.m.PUT{background:#ef9f27;} .m.DELETE{background:#f09595;}
-  .ep .p { font-family: ui-monospace, "Cascadia Code", monospace; font-size:12px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ep .dot { margin-left:auto; width:9px; height:9px; border-radius:50%; flex:0 0 auto; background:var(--gray); }
-  .dot.keep{background:var(--green);} .dot.review{background:var(--amber);} .dot.remove{background:var(--red);} .dot.planned{background:var(--purple);}
-  .vbadge { font-size:10px; color:#cbb6ff; border:1px solid #5b4ea8; border-radius:4px; padding:1px 4px; }
-  .detail { padding:14px; min-height:300px; }
-  .detail .ph { color:var(--muted); }
-  .field { margin:12px 0; }
-  .field > label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
-  .seg { display:flex; gap:6px; flex-wrap:wrap; }
-  .seg button { font-size:12px; padding:5px 10px; }
-  .seg button.on { background:#1d4ed8; border-color:#1d4ed8; }
-  .seg button.on.no { background:var(--red); border-color:var(--red); }
-  .seg button.on.maybe { background:var(--amber); border-color:var(--amber); }
-  .row { display:flex; gap:8px; flex-wrap:wrap; }
-  .doc { background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:9px 11px; font-size:12.5px; color:#cbd5e1; white-space:pre-wrap; max-height:160px; overflow:auto; }
-  .pathmono { font-family: ui-monospace, monospace; font-size:13px; word-break:break-all; }
-  .friction { border:1px solid var(--line); border-radius:9px; padding:12px 14px; margin:12px 0; background:var(--panel2); }
-  .friction h3 { margin:0 0 4px; font-size:14px; font-weight:500; color:#fbbf24; }
-  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
-  .chip { font-size:11px; color:#cbd5e1; background:#1e2c49; border:1px solid var(--line); border-radius:999px; padding:2px 9px; }
-  .muted { color:var(--muted); } .small { font-size:12px; }
-  .hint { padding:10px 18px; color:var(--faint); font-size:12px; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  h1 { margin: 0; font-size: 18px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .grow { flex: 1; }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--blue); }
+  button.primary { background: var(--blue); border-color: var(--blue); color: white; }
+  button.danger { color: var(--red); }
+  input, select, textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 8px 9px;
+  }
+  textarea { min-height: 82px; resize: vertical; }
+  code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    padding: 7px 12px;
+    border-radius: 7px;
+    color: var(--muted);
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--blue); border-color: var(--blue-soft); background: var(--blue-soft); }
+  .pill { font-size: 12px; color: var(--muted); }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    height: calc(100vh - 117px);
+  }
+  #network {
+    min-height: 480px;
+    border-right: 1px solid var(--line);
+    background:
+      linear-gradient(rgba(37, 99, 235, .04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37, 99, 235, .04) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  aside {
+    background: var(--panel);
+    overflow: auto;
+  }
+  .side-section { padding: 14px; border-bottom: 1px solid var(--line); }
+  .side-section h2 { margin: 0 0 10px; font-size: 14px; }
+  .field { margin: 10px 0; }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .small { font-size: 12px; color: var(--muted); }
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; }
+  .legend span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; background: var(--panel-soft); }
+  .hidden { display: none; }
+  .list {
+    height: calc(100vh - 117px);
+    overflow: auto;
+    background: var(--panel);
+  }
+  .router { border-bottom: 1px solid var(--line); }
+  .router summary { cursor: pointer; padding: 10px 16px; font-weight: 650; }
+  .endpoint { display: grid; grid-template-columns: 62px 1fr 90px; gap: 8px; padding: 8px 18px; border-top: 1px solid #edf0f5; cursor: pointer; }
+  .endpoint:hover { background: var(--panel-soft); }
+  .method { font-weight: 700; font-size: 12px; }
+  .method.GET { color: #075985; }
+  .method.POST { color: var(--green); }
+  .method.PATCH, .method.PUT { color: var(--amber); }
+  .method.DELETE { color: var(--red); }
+  .status { font-size: 12px; color: var(--muted); text-align: right; }
+  .friction { margin: 10px 0; padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+  .friction h3 { margin: 0 0 4px; font-size: 14px; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    #network { height: 62vh; border-right: none; border-bottom: 1px solid var(--line); }
+    aside { max-height: none; }
+  }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <div class="eyebrow">Patrimoineaucarré · Po2</div>
-    <h1>Cartographie API — gouvernance des endpoints</h1>
+    <h1>Cartographie API Po2</h1>
+    <div class="sub">Diagramme éditable Routeur -> Préfixe -> Endpoints</div>
   </div>
   <div class="grow"></div>
-  <div class="stats" id="stats"></div>
-  <div class="row">
-    <button class="ghost" onclick="addEndpoint()">+ Endpoint</button>
-    <button class="ghost" onclick="exportJson()">Exporter</button>
-    <button class="ghost" onclick="document.getElementById('imp').click()">Importer</button>
-    <input id="imp" type="file" accept="application/json" style="display:none" onchange="importJson(event)" />
-  </div>
+  <div class="pill" id="stats"></div>
+  <button onclick="exportJson()">Exporter</button>
+  <button onclick="document.getElementById('importFile').click()">Importer</button>
+  <input id="importFile" class="hidden" type="file" accept="application/json" onchange="importJson(event)" />
 </header>
 
-<div class="tabs">
-  <div class="tab active" data-view="catalog" onclick="setView('catalog')">Catalogue</div>
-  <div class="tab" data-view="frictions" onclick="setView('frictions')">Frictions structurelles</div>
+<div class="toolbar">
+  <div class="tabs">
+    <div class="tab active" data-view="graph" onclick="setView('graph')">Diagramme</div>
+    <div class="tab" data-view="list" onclick="setView('list')">Liste</div>
+    <div class="tab" data-view="frictions" onclick="setView('frictions')">Frictions</div>
+  </div>
+  <div class="grow"></div>
+  <input id="search" style="max-width:340px" placeholder="Filtrer routeur, préfixe, endpoint..." oninput="setSearch(this.value)" />
+  <button onclick="fitGraph()">Centrer</button>
+  <button onclick="addNode()">+ Nœud</button>
+  <button onclick="startAddEdge()">+ Relation</button>
+  <button onclick="resetLayout()">Réinitialiser le graphe</button>
 </div>
 
-<div id="app"></div>
-<div class="hint" id="genhint"></div>
+<div id="graphView" class="layout">
+  <div id="network"></div>
+  <aside id="inspector"></aside>
+</div>
+<div id="listView" class="list hidden"></div>
+<div id="frictionsView" class="list hidden"></div>
 
 <script src="api_catalog.js"></script>
+<script src="vendor/vis-network.min.js"></script>
 <script>
-const KEY = "po2-api-cartographie-v1";
-const CAT = (window.API_CATALOG || {endpoints:[], routers:[]});
+const STORAGE_KEY = "po2-api-cartographie-graph-v2";
+const OLD_KEY = "po2-api-cartographie-v1";
+const CAT = window.API_CATALOG || { endpoints: [], routers: [] };
 const FRICTIONS = [
-  {id:"sites", title:"3 représentations de « site »", detail:"Site (patrimoine) / CpeSite (opérationnel) / CpeDalkiaRefSite (contractuel) — non reliées.", routers:["buildings","cpe","cpe_dalkia"]},
+  {id:"sites", title:"3 représentations de site", detail:"Site patrimoine / CpeSite opérationnel / CpeDalkiaRefSite contractuel.", routers:["buildings","cpe","cpe-dalkia"]},
   {id:"meters", title:"3 surfaces de lien compteur", detail:"BuildingMeterLink / GasPce.building_id / EnergyInvoiceSite.prm.", routers:["buildings","grdf","billing"]},
-  {id:"prix", title:"2 référentiels de prix", detail:"bpu_* (historique) vs BillingConfig/BillingBpuLine (courant).", routers:["bpu","billing"]},
-  {id:"inventaire", title:"2 inventaires techniques", detail:"BuildingEquipment (SYPEMI) vs CvcInventoryItem (terrain).", routers:["equipment","cvc"]},
-  {id:"matching_cpe", title:"Matching sites CPE absent", detail:"Le plus gros marché (CPE) n'est pas relié au patrimoine.", routers:["cpe","buildings"]},
-  {id:"engie_proxy", title:"Proxy ENGIE non câblé", detail:"/engie : 24 endpoints sans appel front identifié.", routers:["engie"]},
-  {id:"pronostics", title:"Module hors périmètre", detail:"/pronostics : jeu Coupe du Monde, sans lien produit.", routers:["pronostics"]},
+  {id:"prix", title:"2 référentiels de prix", detail:"bpu_* historique vs BillingConfig/BillingBpuLine courant.", routers:["bpu","billing"]},
+  {id:"inventaire", title:"2 inventaires techniques", detail:"BuildingEquipment SYPEMI vs CvcInventoryItem terrain.", routers:["equipment","cvc"]},
+  {id:"matching_cpe", title:"Matching sites CPE absent", detail:"Le marché CPE n'est pas encore relié au patrimoine.", routers:["cpe","buildings"]},
+  {id:"engie_proxy", title:"Proxy ENGIE non câblé", detail:"Endpoints /engie sans usage front identifié.", routers:["engie"]},
+  {id:"pronostics", title:"Module hors périmètre", detail:"Jeu de pronostics sans lien avec la plateforme métier.", routers:["pronostics"]},
 ];
 
-let store = load();
-let state = { view:"catalog", search:"", sel:null, open:{} };
+let store = loadStore();
+let state = { view: "graph", search: "", selectedNode: null, selectedEdge: null };
+let network = null;
+let nodes = new vis.DataSet();
+let edges = new vis.DataSet();
 
-function load(){
-  try { return Object.assign({annotations:{}, virtual:[], frictionNotes:{}}, JSON.parse(localStorage.getItem(KEY)||"{}")); }
-  catch(e){ return {annotations:{}, virtual:[], frictionNotes:{}}; }
-}
-function save(){ localStorage.setItem(KEY, JSON.stringify(store)); }
-
-function allEps(){ return CAT.endpoints.concat(store.virtual||[]); }
-function anno(id){ return store.annotations[id] || {}; }
-function setAnno(id, patch, rerender){
-  store.annotations[id] = Object.assign({}, store.annotations[id], patch);
-  save(); if(rerender) render();
-}
-
-function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
-
-function setView(v){ state.view=v; document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===v)); render(); }
-
-function statsHtml(){
-  const eps = allEps(); let keep=0,review=0,remove=0,planned=0,audited=0;
-  eps.forEach(e=>{ const a=anno(e.id); if(a.status==="keep")keep++; else if(a.status==="review")review++; else if(a.status==="remove")remove++; else if(a.status==="planned")planned++; if(a.front||a.back||a.status||a.comment)audited++; });
-  return `<span class="stat"><b>${eps.length}</b> endpoints</span>
-    <span class="stat"><b>${CAT.router_count||CAT.routers.length}</b> routeurs</span>
-    <span class="stat" style="color:#9fe1cb"><b>${keep}</b> garder</span>
-    <span class="stat" style="color:#facc15"><b>${review}</b> revoir</span>
-    <span class="stat" style="color:#f09595"><b>${remove}</b> retirer</span>
-    <span class="stat" style="color:#c4b5fd"><b>${planned}</b> planifiés</span>
-    <span class="stat"><b>${audited}</b>/${eps.length} annotés</span>`;
+function defaultStore() {
+  return {
+    annotations: {},
+    virtual: [],
+    nodeOverrides: {},
+    edgeOverrides: {},
+    deletedNodes: {},
+    deletedEdges: {},
+    customNodes: {},
+    customEdges: {},
+    frictionNotes: {}
+  };
 }
 
-function render(){
-  document.getElementById("stats").innerHTML = statsHtml();
-  const g = CAT.generated_at ? `Catalogue généré le ${esc(CAT.generated_at)} · ${CAT.endpoint_count} endpoints. Régénérer : python -m app.scripts.build_api_catalog` : "";
-  document.getElementById("genhint").textContent = g;
-  document.getElementById("app").innerHTML = state.view==="catalog" ? catalogHtml() : frictionsHtml();
+function loadStore() {
+  const base = defaultStore();
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    Object.assign(base, saved);
+  } catch {}
+  try {
+    const old = JSON.parse(localStorage.getItem(OLD_KEY) || "{}");
+    if (old.annotations && !Object.keys(base.annotations).length) base.annotations = old.annotations;
+    if (old.virtual && !base.virtual.length) base.virtual = old.virtual;
+    if (old.frictionNotes && !Object.keys(base.frictionNotes).length) base.frictionNotes = old.frictionNotes;
+  } catch {}
+  return base;
 }
 
-function catalogHtml(){
-  return `<main>
-    <div class="col">
-      <div class="col-head"><input id="search" placeholder="Filtrer : chemin, fonction, mot-clé..." value="${esc(state.search)}" oninput="onSearch(this.value)" /></div>
-      <div class="tree" id="tree">${treeHtml()}</div>
-    </div>
-    <div class="col"><div class="detail" id="detail">${detailHtml()}</div></div>
-  </main>`;
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
-function groupByRouter(){
-  const map = {};
-  allEps().forEach(e=>{ (map[e.router]=map[e.router]||[]).push(e); });
-  return map;
+function endpointId(e) {
+  return e.id || `${e.method} ${e.path}`;
 }
-function matches(e){
-  const q = state.search.trim().toLowerCase(); if(!q) return true;
-  return (e.path+" "+e.fn+" "+e.summary+" "+e.router+" "+(anno(e.id).comment||"")+" "+(anno(e.id).tags||"")).toLowerCase().includes(q);
+
+function allEndpoints() {
+  return (CAT.endpoints || []).concat(store.virtual || []);
 }
-function treeHtml(){
-  const groups = groupByRouter(); const names = Object.keys(groups).sort();
-  let html = "";
-  names.forEach(name=>{
-    const eps = groups[name].filter(matches);
-    if(state.search && eps.length===0) return;
-    const open = state.search ? true : !!state.open[name];
-    const pref = (groups[name][0]||{}).prefix || "";
-    html += `<div class="router ${open?'open':''}">
-      <div class="router-head" onclick="toggle('${esc(name)}')">
-        <span class="name">${esc(name)}</span><span class="pref">${esc(pref)}</span>
-        <span class="cnt">${eps.length}/${groups[name].length}</span>
-      </div>
-      <div class="eps">${eps.map(epRow).join("")}
-        <div class="ep" style="padding-left:22px" onclick="cloneGroup('${esc(name)}')"><span class="muted small">＋ Cloner ce groupe vers un nouveau préfixe…</span></div>
-      </div></div>`;
+
+function esc(s) {
+  return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;" }[c]));
+}
+
+function nodeLabelForEndpoint(e) {
+  const id = endpointId(e);
+  const o = store.nodeOverrides["endpoint:" + id] || {};
+  const method = o.method || e.method;
+  const path = o.path || e.path;
+  return `${method} ${path.replace(/^\/api/, "")}`;
+}
+
+function baseGraph() {
+  const n = {};
+  const ed = {};
+  for (const e of allEndpoints()) {
+    const eid = endpointId(e);
+    const epNode = "endpoint:" + eid;
+    const routerName = (store.nodeOverrides[epNode] || {}).router || e.router || "(sans tag)";
+    const prefixName = (store.nodeOverrides[epNode] || {}).prefix || e.prefix || "/";
+    const routerNode = "router:" + routerName;
+    const prefixNode = `prefix:${routerName}:${prefixName}`;
+    n[routerNode] = { id: routerNode, label: routerName, type: "router", router: routerName };
+    n[prefixNode] = { id: prefixNode, label: prefixName, type: "prefix", router: routerName, prefix: prefixName };
+    n[epNode] = {
+      id: epNode,
+      label: nodeLabelForEndpoint(e),
+      type: "endpoint",
+      endpointId: eid,
+      method: e.method,
+      path: e.path,
+      router: routerName,
+      prefix: prefixName,
+      fn: e.fn || "",
+      doc: e.doc || e.summary || "",
+      virtual: !!e.virtual
+    };
+    ed[`edge:${routerNode}->${prefixNode}`] = { id: `edge:${routerNode}->${prefixNode}`, from: routerNode, to: prefixNode, label: "préfixe" };
+    ed[`edge:${prefixNode}->${epNode}`] = { id: `edge:${prefixNode}->${epNode}`, from: prefixNode, to: epNode, label: "endpoint" };
+  }
+  Object.assign(n, store.customNodes || {});
+  Object.assign(ed, store.customEdges || {});
+  return { nodes: n, edges: ed };
+}
+
+function decorateNode(raw) {
+  const o = store.nodeOverrides[raw.id] || {};
+  const merged = Object.assign({}, raw, o);
+  const status = merged.type === "endpoint" ? (store.annotations[merged.endpointId] || {}).status : merged.status;
+  const colors = {
+    router: { background: "#dbeafe", border: "#2563eb" },
+    prefix: { background: "#ecfdf5", border: "#15803d" },
+    endpoint: { background: "#ffffff", border: "#94a3b8" },
+    custom: { background: "#fef3c7", border: "#b45309" }
+  };
+  const statusBorder = { keep: "#15803d", review: "#b45309", remove: "#b91c1c", planned: "#6d28d9" };
+  return {
+    id: merged.id,
+    label: merged.label,
+    title: mergedTitle(merged),
+    shape: merged.type === "endpoint" ? "box" : "ellipse",
+    color: {
+      background: (colors[merged.type] || colors.custom).background,
+      border: statusBorder[status] || (colors[merged.type] || colors.custom).border
+    },
+    borderWidth: status ? 3 : 1,
+    font: { color: "#172033", face: "system-ui", size: merged.type === "endpoint" ? 13 : 15 },
+    margin: merged.type === "endpoint" ? 8 : 12,
+    type: merged.type
+  };
+}
+
+function mergedTitle(n) {
+  if (n.type !== "endpoint") return esc(n.label);
+  const a = store.annotations[n.endpointId] || {};
+  return esc(`${n.method || ""} ${n.path || ""}\n${n.fn || ""}\n${a.comment || ""}`);
+}
+
+function visibleGraph() {
+  const graph = baseGraph();
+  const q = state.search.trim().toLowerCase();
+  const keepNodes = new Set();
+  const resultNodes = [];
+  const resultEdges = [];
+
+  for (const raw of Object.values(graph.nodes)) {
+    if (store.deletedNodes[raw.id]) continue;
+    const merged = Object.assign({}, raw, store.nodeOverrides[raw.id] || {});
+    const hay = [merged.label, merged.router, merged.prefix, merged.path, merged.method, merged.fn, merged.doc].join(" ").toLowerCase();
+    if (!q || hay.includes(q)) {
+      keepNodes.add(raw.id);
+      if (merged.type === "endpoint") {
+        keepNodes.add(`prefix:${merged.router}:${merged.prefix}`);
+        keepNodes.add(`router:${merged.router}`);
+      }
+      if (merged.type === "prefix") keepNodes.add(`router:${merged.router}`);
+    }
+  }
+
+  for (const raw of Object.values(graph.nodes)) {
+    if (!keepNodes.has(raw.id) || store.deletedNodes[raw.id]) continue;
+    resultNodes.push(decorateNode(raw));
+  }
+  for (const raw of Object.values(graph.edges)) {
+    if (store.deletedEdges[raw.id]) continue;
+    const merged = Object.assign({}, raw, store.edgeOverrides[raw.id] || {});
+    if (keepNodes.has(merged.from) && keepNodes.has(merged.to)) {
+      resultEdges.push({
+        id: merged.id,
+        from: merged.from,
+        to: merged.to,
+        label: merged.label || "",
+        arrows: "to",
+        color: { color: "#94a3b8" },
+        font: { align: "middle", color: "#64748b", size: 11 },
+        smooth: { type: "cubicBezier", roundness: 0.25 }
+      });
+    }
+  }
+  return { nodes: resultNodes, edges: resultEdges };
+}
+
+function initNetwork() {
+  const container = document.getElementById("network");
+  const data = visibleGraph();
+  nodes = new vis.DataSet(data.nodes);
+  edges = new vis.DataSet(data.edges);
+  network = new vis.Network(container, { nodes, edges }, {
+    layout: { hierarchical: { enabled: true, direction: "LR", sortMethod: "directed", levelSeparation: 190, nodeSpacing: 120 } },
+    physics: false,
+    interaction: { hover: true, multiselect: true, navigationButtons: true, keyboard: true },
+    manipulation: {
+      enabled: false,
+      addEdge: function(edgeData, callback) {
+        if (edgeData.from === edgeData.to) return callback(null);
+        const label = prompt("Libellé de la relation :", "relie");
+        const id = `custom-edge:${Date.now()}`;
+        const edge = { id, from: edgeData.from, to: edgeData.to, label: label || "relie" };
+        store.customEdges[id] = edge;
+        save();
+        callback(edge);
+        network.disableEditMode();
+      }
+    }
   });
-  return html || `<div style="padding:14px" class="muted">Aucun endpoint ne correspond.</div>`;
+  network.on("selectNode", params => {
+    state.selectedNode = params.nodes[0] || null;
+    state.selectedEdge = null;
+    renderInspector();
+  });
+  network.on("selectEdge", params => {
+    state.selectedEdge = params.edges[0] || null;
+    if (!params.nodes.length) state.selectedNode = null;
+    renderInspector();
+  });
+  network.on("deselectNode", params => {
+    if (!params.nodes.length && !params.edges.length) {
+      state.selectedNode = null;
+      state.selectedEdge = null;
+      renderInspector();
+    }
+  });
 }
-function epRow(e){
-  const a = anno(e.id);
-  const sel = state.sel===e.id ? "sel" : "";
-  const v = e.virtual ? `<span class="vbadge">plan</span>` : "";
-  return `<div class="ep ${sel}" onclick="select('${esc(e.id)}')">
-    <span class="m ${e.method}">${e.method}</span>
-    <span class="p" title="${esc(e.path)}">${esc(e.path)}</span> ${v}
-    <span class="dot ${a.status||''}" title="${a.status||'non statué'}"></span>
+
+function refreshGraph() {
+  if (!network) return;
+  const data = visibleGraph();
+  nodes.clear();
+  edges.clear();
+  nodes.add(data.nodes);
+  edges.add(data.edges);
+  renderInspector();
+  renderStats();
+}
+
+function rawNode(id) {
+  const graph = baseGraph();
+  return graph.nodes[id] ? Object.assign({}, graph.nodes[id], store.nodeOverrides[id] || {}) : null;
+}
+
+function rawEdge(id) {
+  const graph = baseGraph();
+  return graph.edges[id] ? Object.assign({}, graph.edges[id], store.edgeOverrides[id] || {}) : null;
+}
+
+function renderInspector() {
+  const el = document.getElementById("inspector");
+  if (state.selectedEdge) {
+    const e = rawEdge(state.selectedEdge);
+    if (!e) return el.innerHTML = emptyInspector();
+    el.innerHTML = edgeInspector(e);
+    return;
+  }
+  if (!state.selectedNode) {
+    el.innerHTML = emptyInspector();
+    return;
+  }
+  const n = rawNode(state.selectedNode);
+  if (!n) return el.innerHTML = emptyInspector();
+  el.innerHTML = nodeInspector(n);
+}
+
+function emptyInspector() {
+  return `<div class="side-section">
+    <h2>Sélection</h2>
+    <p class="small">Clique un nœud ou une relation pour modifier son libellé, son type, son statut ou ses liens.</p>
+    <div class="legend">
+      <span>Routeur</span><span>Préfixe</span><span>Endpoint</span><span>Relation</span>
+    </div>
+  </div>
+  <div class="side-section">
+    <h2>Mode d'emploi</h2>
+    <p class="small">Double-clic possible pour zoomer. Utilise <b>+ Relation</b>, puis clique deux nœuds pour créer un lien. Les suppressions et renommages restent dans ton navigateur jusqu'à export.</p>
   </div>`;
 }
-function toggle(name){ state.open[name]=!state.open[name]; document.getElementById("tree").innerHTML=treeHtml(); }
-function onSearch(v){ state.search=v; document.getElementById("tree").innerHTML=treeHtml(); }
-function select(id){ state.sel=id; render(); }
 
-function segBtn(id, field, val, label, cls){
-  const cur = anno(id)[field]||"";
-  return `<button class="${cur===val?'on '+(cls||''):''}" onclick="setAnno('${id}',{${field}:'${cur===val?'':val}'},true)">${label}</button>`;
-}
-function detailHtml(){
-  if(!state.sel) return `<p class="ph">Sélectionne un endpoint à gauche pour l'auditer : utilité front/back, statut, commentaires, clonage.</p>`;
-  const e = allEps().find(x=>x.id===state.sel);
-  if(!e) return `<p class="ph">Endpoint introuvable.</p>`;
-  const a = anno(e.id);
-  return `
-    <div class="row" style="align-items:center">
-      <span class="m ${e.method}">${e.method}</span>
-      <span class="pathmono">${esc(e.path)}</span>
-      ${e.virtual?'<span class="vbadge">planifié</span>':''}
-    </div>
-    <div class="small muted" style="margin-top:6px">routeur <b>${esc(e.router)}</b> · fonction <code>${esc(e.fn)||'—'}</code></div>
-    ${e.summary?`<div class="field"><label>Description (depuis le code)</label><div class="doc">${esc(e.doc||e.summary)}</div></div>`:''}
-
-    <div class="field"><label>Utile en front ?</label><div class="seg">
-      ${segBtn(e.id,'front','yes','Oui')} ${segBtn(e.id,'front','no','Non','no')} ${segBtn(e.id,'front','maybe','À vérifier','maybe')}
-    </div></div>
-    <div class="field"><label>Utile en back ?</label><div class="seg">
-      ${segBtn(e.id,'back','yes','Oui')} ${segBtn(e.id,'back','no','Non','no')} ${segBtn(e.id,'back','maybe','À vérifier','maybe')}
-    </div></div>
-    <div class="field"><label>Statut</label><div class="seg">
-      ${segBtn(e.id,'status','keep','À garder')} ${segBtn(e.id,'status','review','À revoir','maybe')} ${segBtn(e.id,'status','remove','À retirer','no')} ${segBtn(e.id,'status','planned','Planifié')}
-    </div></div>
-    <div class="field"><label>Étiquettes</label><input value="${esc(a.tags||'')}" oninput="setAnno('${e.id}',{tags:this.value},false)" placeholder="ex. moteur:cpe, prioritaire" /></div>
-    <div class="field"><label>Commentaire</label><textarea oninput="setAnno('${e.id}',{comment:this.value},false)" placeholder="Note, décision, contexte...">${esc(a.comment||'')}</textarea></div>
-
+function nodeInspector(n) {
+  const a = n.endpointId ? (store.annotations[n.endpointId] || {}) : {};
+  return `<div class="side-section">
+    <h2>Nœud</h2>
+    <div class="field"><label>Libellé</label><input value="${esc(n.label)}" oninput="updateNode('${esc(n.id)}', {label:this.value})" /></div>
+    <div class="field"><label>Type</label><select onchange="updateNode('${esc(n.id)}', {type:this.value})">${options(["router","prefix","endpoint","custom"], n.type)}</select></div>
+    ${n.type === "endpoint" ? endpointFields(n, a) : ""}
+    <div class="field"><label>Commentaire</label><textarea oninput="updateNodeComment('${esc(n.id)}', this.value)">${esc(a.comment || n.comment || "")}</textarea></div>
     <div class="row">
-      <button onclick="cloneOne('${e.id}')">Cloner cet endpoint…</button>
-      ${e.virtual?`<button class="ghost" onclick="delVirtual('${e.id}')">Supprimer (planifié)</button>`:''}
+      <button class="danger" onclick="deleteNode('${esc(n.id)}')">Supprimer le nœud</button>
+      <button onclick="duplicateNode('${esc(n.id)}')">Dupliquer</button>
+    </div>
+  </div>`;
+}
+
+function endpointFields(n, a) {
+  return `<div class="row">
+      <div class="field"><label>Méthode</label><input value="${esc(n.method || "")}" oninput="updateNode('${esc(n.id)}', {method:this.value.toUpperCase()})" /></div>
+      <div class="field"><label>Statut</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {status:this.value})">${options(["","keep","review","remove","planned"], a.status || "")}</select></div>
+    </div>
+    <div class="field"><label>Chemin</label><input value="${esc(n.path || "")}" oninput="updateNode('${esc(n.id)}', {path:this.value, label:(('${esc(n.method || "")}'||'')+' '+this.value.replace(/^\\/api/,''))})" /></div>
+    <div class="row">
+      <div class="field"><label>Routeur</label><input value="${esc(n.router || "")}" oninput="updateNode('${esc(n.id)}', {router:this.value})" /></div>
+      <div class="field"><label>Préfixe</label><input value="${esc(n.prefix || "")}" oninput="updateNode('${esc(n.id)}', {prefix:this.value})" /></div>
+    </div>
+    <div class="field"><label>Fonction backend</label><input value="${esc(n.fn || "")}" oninput="updateNode('${esc(n.id)}', {fn:this.value})" /></div>
+    <div class="row">
+      <div class="field"><label>Utile front</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {front:this.value})">${options(["","yes","no","maybe"], a.front || "")}</select></div>
+      <div class="field"><label>Utile back</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {back:this.value})">${options(["","yes","no","maybe"], a.back || "")}</select></div>
     </div>`;
 }
 
-function toggleStatus(){}
-
-function cloneOne(id){
-  const e = allEps().find(x=>x.id===id); if(!e) return;
-  const np = prompt("Nouveau chemin pour le clone :", e.path.replace(/dalkia/gi,"spie"));
-  if(!np) return;
-  addVirtual({method:e.method, path:np.trim(), router:e.router+" (planifié)", fn:e.fn, summary:e.summary, doc:e.doc, source:e.id});
-}
-function cloneGroup(name){
-  const eps = groupByRouter()[name]||[]; if(!eps.length) return;
-  const from = prompt("Cloner le groupe « "+name+" » en remplaçant, dans les chemins :\n\nTexte à remplacer (ex. dalkia) :", "dalkia");
-  if(from===null) return;
-  const to = prompt("…par (ex. spie) :", "spie");
-  if(to===null) return;
-  let n=0;
-  eps.filter(e=>!e.virtual).forEach(e=>{
-    const np = e.path.split(from).join(to);
-    if(np===e.path) return;
-    addVirtual({method:e.method, path:np, router:name+"→"+to+" (planifié)", fn:e.fn, summary:e.summary, doc:e.doc, source:e.id}, true);
-    n++;
-  });
-  save(); render();
-  alert(n+" endpoint(s) planifié(s) créés pour « "+to+" ».");
-}
-function addEndpoint(){
-  const path = prompt("Chemin du nouvel endpoint (ex. /api/cpe/spie-ref/imports) :","/api/");
-  if(!path) return;
-  const method = (prompt("Méthode (GET/POST/PATCH/DELETE) :","GET")||"GET").toUpperCase();
-  const router = prompt("Routeur / groupe :","(planifié)")||"(planifié)";
-  addVirtual({method, path:path.trim(), router, fn:"", summary:"(planifié)", doc:""});
-}
-function addVirtual(o, silent){
-  const e = Object.assign({virtual:true}, o);
-  e.id = e.method+" "+e.path+" #"+Math.random().toString(36).slice(2,7);
-  store.virtual.push(e);
-  store.annotations[e.id] = Object.assign({status:"planned"}, store.annotations[e.id]);
-  if(!silent){ save(); state.sel=e.id; render(); }
-}
-function delVirtual(id){
-  store.virtual = store.virtual.filter(e=>e.id!==id);
-  delete store.annotations[id];
-  if(state.sel===id) state.sel=null;
-  save(); render();
+function edgeInspector(e) {
+  return `<div class="side-section">
+    <h2>Relation</h2>
+    <div class="field"><label>Libellé</label><input value="${esc(e.label || "")}" oninput="updateEdge('${esc(e.id)}', {label:this.value})" /></div>
+    <div class="field"><label>Depuis</label><input value="${esc(e.from)}" oninput="updateEdge('${esc(e.id)}', {from:this.value})" /></div>
+    <div class="field"><label>Vers</label><input value="${esc(e.to)}" oninput="updateEdge('${esc(e.id)}', {to:this.value})" /></div>
+    <button class="danger" onclick="deleteEdge('${esc(e.id)}')">Supprimer la relation</button>
+  </div>`;
 }
 
-function frictionsHtml(){
-  return `<main style="grid-template-columns:1fr"><div>
-    <p class="muted small" style="margin:0 0 8px">Frictions structurelles (dette de liaison) issues de l'analyse backend — annote chaque point avec ta décision.</p>
-    ${FRICTIONS.map(f=>`
-      <div class="friction">
-        <h3>${esc(f.title)}</h3>
-        <div class="small muted">${esc(f.detail)}</div>
-        <div class="chips">${f.routers.map(r=>`<span class="chip">${esc(r)}</span>`).join("")}</div>
-        <textarea placeholder="Décision / plan de résorption..." oninput="setFriction('${f.id}', this.value)">${esc(store.frictionNotes[f.id]||"")}</textarea>
-      </div>`).join("")}
-  </div></main>`;
-}
-function setFriction(id,v){ store.frictionNotes[id]=v; save(); }
-
-function exportJson(){
-  const blob = new Blob([JSON.stringify({exported_at:new Date().toISOString(), store}, null, 2)], {type:"application/json"});
-  const a = document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download = "api_cartographie_annotations.json"; a.click();
-}
-function importJson(ev){
-  const f = ev.target.files[0]; if(!f) return;
-  const r = new FileReader();
-  r.onload = ()=>{ try {
-      const d = JSON.parse(r.result); const s = d.store||d;
-      store.annotations = Object.assign({}, store.annotations, s.annotations||{});
-      store.frictionNotes = Object.assign({}, store.frictionNotes, s.frictionNotes||{});
-      const ids = new Set(store.virtual.map(e=>e.id));
-      (s.virtual||[]).forEach(e=>{ if(!ids.has(e.id)) store.virtual.push(e); });
-      save(); render(); alert("Annotations importées.");
-    } catch(e){ alert("Fichier invalide : "+e.message); } };
-  r.readAsText(f);
-  ev.target.value="";
+function options(values, current) {
+  const labels = { keep:"garder", review:"revoir", remove:"retirer", planned:"planifié", yes:"oui", no:"non", maybe:"à vérifier", "":"" };
+  return values.map(v => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(labels[v] || v)}</option>`).join("");
 }
 
-render();
+function updateNode(id, patch) {
+  store.nodeOverrides[id] = Object.assign({}, store.nodeOverrides[id] || {}, patch);
+  save();
+  refreshGraph();
+}
+
+function updateNodeComment(id, value) {
+  const n = rawNode(id);
+  if (n && n.endpointId) updateAnnotation(n.endpointId, { comment: value });
+  else updateNode(id, { comment: value });
+}
+
+function updateAnnotation(id, patch) {
+  store.annotations[id] = Object.assign({}, store.annotations[id] || {}, patch);
+  save();
+  refreshGraph();
+}
+
+function updateEdge(id, patch) {
+  store.edgeOverrides[id] = Object.assign({}, store.edgeOverrides[id] || {}, patch);
+  save();
+  refreshGraph();
+}
+
+function deleteNode(id) {
+  if (!confirm("Supprimer ce nœud du diagramme ?")) return;
+  store.deletedNodes[id] = true;
+  for (const e of Object.values(baseGraph().edges)) {
+    if (e.from === id || e.to === id) store.deletedEdges[e.id] = true;
+  }
+  state.selectedNode = null;
+  save();
+  refreshGraph();
+}
+
+function deleteEdge(id) {
+  if (!confirm("Supprimer cette relation du diagramme ?")) return;
+  store.deletedEdges[id] = true;
+  state.selectedEdge = null;
+  save();
+  refreshGraph();
+}
+
+function duplicateNode(id) {
+  const n = rawNode(id);
+  if (!n) return;
+  const newId = `custom-node:${Date.now()}`;
+  store.customNodes[newId] = Object.assign({}, n, { id: newId, label: n.label + " copie", type: n.type || "custom", endpointId: undefined });
+  save();
+  refreshGraph();
+}
+
+function addNode() {
+  const label = prompt("Libellé du nouveau nœud :", "Nouveau nœud");
+  if (!label) return;
+  const type = prompt("Type (router, prefix, endpoint, custom) :", "custom") || "custom";
+  const id = `custom-node:${Date.now()}`;
+  store.customNodes[id] = { id, label, type, router: "", prefix: "", method: "", path: "", fn: "", doc: "" };
+  save();
+  refreshGraph();
+}
+
+function startAddEdge() {
+  network.addEdgeMode();
+}
+
+function fitGraph() {
+  if (network) network.fit({ animation: true });
+}
+
+function resetLayout() {
+  if (!confirm("Réinitialiser suppressions, nœuds personnalisés et relations personnalisées ? Les annotations d'audit sont conservées.")) return;
+  store.nodeOverrides = {};
+  store.edgeOverrides = {};
+  store.deletedNodes = {};
+  store.deletedEdges = {};
+  store.customNodes = {};
+  store.customEdges = {};
+  save();
+  refreshGraph();
+}
+
+function setSearch(v) {
+  state.search = v;
+  refreshGraph();
+  renderList();
+}
+
+function setView(view) {
+  state.view = view;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view));
+  document.getElementById("graphView").classList.toggle("hidden", view !== "graph");
+  document.getElementById("listView").classList.toggle("hidden", view !== "list");
+  document.getElementById("frictionsView").classList.toggle("hidden", view !== "frictions");
+  if (view === "list") renderList();
+  if (view === "frictions") renderFrictions();
+  if (view === "graph") setTimeout(() => network && network.redraw(), 0);
+}
+
+function renderStats() {
+  const eps = allEndpoints();
+  const annotated = eps.filter(e => Object.keys(store.annotations[endpointId(e)] || {}).length).length;
+  document.getElementById("stats").textContent = `${eps.length} endpoints · ${CAT.router_count || CAT.routers.length} routeurs · ${annotated} annotés`;
+}
+
+function renderList() {
+  const q = state.search.trim().toLowerCase();
+  const groups = {};
+  for (const e of allEndpoints()) {
+    const id = endpointId(e);
+    const n = rawNode("endpoint:" + id) || e;
+    const text = [n.router || e.router, n.prefix || e.prefix, n.method || e.method, n.path || e.path, n.fn || e.fn].join(" ").toLowerCase();
+    if (q && !text.includes(q)) continue;
+    const router = n.router || e.router || "(sans tag)";
+    (groups[router] = groups[router] || []).push({ e, n });
+  }
+  const html = Object.keys(groups).sort().map(router => `<details class="router" open>
+    <summary>${esc(router)} <span class="small">${groups[router].length} endpoints</span></summary>
+    ${groups[router].map(({e,n}) => {
+      const id = endpointId(e);
+      const a = store.annotations[id] || {};
+      return `<div class="endpoint" onclick="selectEndpoint('${esc(id)}')">
+        <span class="method ${esc(n.method || e.method)}">${esc(n.method || e.method)}</span>
+        <code>${esc(n.path || e.path)}</code>
+        <span class="status">${esc(a.status || "")}</span>
+      </div>`;
+    }).join("")}
+  </details>`).join("");
+  document.getElementById("listView").innerHTML = html || `<p style="padding:16px" class="small">Aucun résultat.</p>`;
+}
+
+function selectEndpoint(id) {
+  setView("graph");
+  const nodeId = "endpoint:" + id;
+  state.selectedNode = nodeId;
+  state.selectedEdge = null;
+  network.selectNodes([nodeId]);
+  network.focus(nodeId, { scale: 1.1, animation: true });
+  renderInspector();
+}
+
+function renderFrictions() {
+  document.getElementById("frictionsView").innerHTML = `<div style="max-width:860px;padding:16px">
+    ${FRICTIONS.map(f => `<div class="friction">
+      <h3>${esc(f.title)}</h3>
+      <div class="small">${esc(f.detail)}</div>
+      <div class="small">Routeurs : ${f.routers.map(esc).join(", ")}</div>
+      <div class="field"><textarea oninput="store.frictionNotes['${esc(f.id)}']=this.value; save()">${esc(store.frictionNotes[f.id] || "")}</textarea></div>
+    </div>`).join("")}
+  </div>`;
+}
+
+function exportJson() {
+  const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), store }, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "api_cartographie_graph.json";
+  a.click();
+}
+
+function importJson(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const payload = JSON.parse(reader.result);
+      const incoming = payload.store || payload;
+      store = Object.assign(defaultStore(), store, incoming);
+      save();
+      refreshGraph();
+      renderList();
+      renderFrictions();
+      alert("Import terminé.");
+    } catch (err) {
+      alert("Import impossible : " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = "";
+}
+
+renderStats();
+initNetwork();
+renderInspector();
 </script>
 </body>
 </html>

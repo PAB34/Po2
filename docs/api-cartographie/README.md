@@ -1,34 +1,61 @@
-# Cartographie API — outil de gouvernance des endpoints
+# Cartographie API - outil de gouvernance des endpoints
 
-Outil **autonome** (aucun serveur) pour cartographier, auditer et planifier la surface d'API du backend Po2.
+Outil autonome pour cartographier, annoter et restructurer la surface d'API du backend Po2.
 
 ## Ouvrir
-Double-clique sur **`index.html`** (s'ouvre dans le navigateur). Il lit `api_catalog.js` (même dossier).
 
-## À quoi ça sert
-- **Catalogue** : arbre Routeur → Préfixe → Endpoints, régénéré depuis le code (source de vérité).
-- **Audit de pertinence** : pour chaque endpoint, marquer *utile en front ?* / *utile en back ?* et un **statut**
-  (à garder / à revoir / à retirer / planifié).
-- **Planification** : créer un endpoint, **cloner** un endpoint, ou **cloner tout un groupe vers un nouveau
-  préfixe** (ex. répliquer le contrat DALKIA en SPIE : remplacer `dalkia` → `spie` dans les chemins).
-- **Frictions structurelles** : onglet dédié à la dette de liaison (3 « sites », 3 liens compteur, 2 prix,
-  2 inventaires…) avec une note de décision par point.
-- **Commentaires / étiquettes** par endpoint.
+Double-cliquer sur `index.html`. Il lit `api_catalog.js` et `vendor/vis-network.min.js` dans le meme dossier.
 
-## Où vont mes annotations
-- Stockées dans le **navigateur** (`localStorage`) — elles **survivent à la régénération** du catalogue.
-- **Exporter** → télécharge `api_cartographie_annotations.json` (à versionner dans Git si tu veux les partager
-  ou les sauvegarder). **Importer** → recharge/fusionne un export.
+Pour une verification navigateur plus stricte, servir temporairement le dossier :
 
-## Régénérer le catalogue (après évolution du backend)
+```bash
+python -m http.server 8765 --bind 127.0.0.1 --directory docs/api-cartographie
+```
+
+Puis ouvrir `http://127.0.0.1:8765/index.html`.
+
+## A quoi ca sert
+
+- **Diagramme dynamique** : graphe Routeur -> Prefixe -> Endpoints, base sur le catalogue genere depuis FastAPI.
+- **Edition directe** : renommer un noeud, modifier son type, son chemin, son routeur/prefixe, son statut, ses notes.
+- **Relations editables** : ajouter une relation entre deux noeuds, modifier son libelle, supprimer une relation.
+- **Suppressions locales** : masquer un noeud ou une relation du diagramme sans toucher au code backend.
+- **Audit de pertinence** : marquer *utile front*, *utile back*, statut `keep/review/remove/planned`, commentaire.
+- **Liste de secours** : vue Liste pour retrouver rapidement un endpoint et le selectionner dans le graphe.
+- **Frictions structurelles** : onglet dedie a la dette de liaison (sites, compteurs, prix, inventaires, ENGIE, pronostics).
+
+## Ou vont les modifications
+
+Les annotations et modifications de graphe sont stockees dans le navigateur (`localStorage`) sous
+`po2-api-cartographie-graph-v2`.
+
+Le bouton **Exporter** telecharge `api_cartographie_graph.json`, qui contient :
+
+- annotations d'audit ;
+- endpoints planifies importes de l'ancien outil ;
+- renommages de noeuds ;
+- relations personnalisees ;
+- noeuds masques ;
+- notes de frictions.
+
+Le bouton **Importer** fusionne un export. Les anciens exports `po2-api-cartographie-v1` restent partiellement
+compatibles : annotations, endpoints planifies et notes de frictions sont repris.
+
+## Regenerer le catalogue
+
 Depuis `saas/backend` :
+
 ```bash
 DATABASE_URL="sqlite:///:memory:" python -m app.scripts.build_api_catalog
 ```
-Réécrit `docs/api-cartographie/api_catalog.js` (≈ 279 endpoints). Tes annotations locales sont conservées
-(elles sont indexées par `méthode + chemin`).
+
+La commande reecrit `docs/api-cartographie/api_catalog.js`. Les annotations locales sont conservees car elles vivent
+dans le navigateur/export JSON, pas dans le catalogue genere.
 
 ## Fichiers
-- `index.html` — l'outil (autoportant).
-- `api_catalog.js` — données générées (`window.API_CATALOG`). **Ne pas éditer à la main.**
-- `../11-Analyse-backend-et-socle-refonte-UX.md` — l'analyse qui fonde cette cartographie.
+
+- `index.html` - interface graphe editable.
+- `api_catalog.js` - donnees generees (`window.API_CATALOG`), ne pas editer a la main.
+- `vendor/vis-network.min.js` - moteur de graphe embarque pour usage offline.
+- `propositions_claude.json` - premiere passe de propositions importables.
+- `../11-Analyse-backend-et-socle-refonte-UX.md` - analyse qui fonde cette cartographie.

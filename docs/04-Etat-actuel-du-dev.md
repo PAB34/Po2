@@ -1,4 +1,14 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-15 (cartographie API en diagramme editable)
+> **Etat code local** : outil `docs/api-cartographie/index.html` transforme en graphe dynamique Routeur -> Prefixe -> Endpoints.
+>
+> Reprise de la cartographie livree par l'IA precedente : l'ancienne vue arbre/liste est remplacee par un diagramme
+> `vis-network` offline, avec edition des noeuds (libelle, type, chemin, routeur, prefixe, statut, commentaire),
+> edition/suppression des relations, creation de noeuds/relations, vue Liste de secours, onglet Frictions conserve
+> et export/import JSON `api_cartographie_graph.json`. Validation locale : dossier servi temporairement sur
+> `http://127.0.0.1:8765/index.html`, chargement OK (279 endpoints / 17 routeurs), canvas present, vue Liste OK,
+> selection d'un endpoint OK, aucune erreur console.
+>
 > **Mise a jour complementaire** : 2026-06-11 (reprise collecte ENEDIS synchrone de secours)
 > **Etat code local** : UI `/energie` restructuree pour distinguer collecte synchrone et collecte async ENEDIS.
 >
