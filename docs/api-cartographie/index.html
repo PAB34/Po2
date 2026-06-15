@@ -264,6 +264,13 @@ function baseGraph() {
       prefix: prefixName,
       fn: e.fn || "",
       doc: e.doc || e.summary || "",
+      route_file: e.route_file || "",
+      route_line: e.route_line || "",
+      source_module: e.source_module || "",
+      service_modules: e.service_modules || [],
+      feature_current: e.feature_current || "",
+      target_domain: e.target_domain || "",
+      target_prefix: e.target_prefix || "",
       virtual: !!e.virtual
     };
     ed[`edge:${routerNode}->${prefixNode}`] = { id: `edge:${routerNode}->${prefixNode}`, from: routerNode, to: prefixNode, label: "préfixe" };
@@ -317,7 +324,21 @@ function visibleGraph() {
   for (const raw of Object.values(graph.nodes)) {
     if (store.deletedNodes[raw.id]) continue;
     const merged = Object.assign({}, raw, store.nodeOverrides[raw.id] || {});
-    const hay = [merged.label, merged.router, merged.prefix, merged.path, merged.method, merged.fn, merged.doc].join(" ").toLowerCase();
+    const hay = [
+      merged.label,
+      merged.router,
+      merged.prefix,
+      merged.path,
+      merged.method,
+      merged.fn,
+      merged.doc,
+      merged.route_file,
+      merged.source_module,
+      merged.feature_current,
+      merged.target_domain,
+      merged.target_prefix,
+      (merged.service_modules || []).join(" ")
+    ].join(" ").toLowerCase();
     if (!q || hay.includes(q)) {
       keepNodes.add(raw.id);
       if (merged.type === "endpoint") {
@@ -471,6 +492,13 @@ function endpointFields(n, a) {
       <div class="field"><label>Préfixe</label><input value="${esc(n.prefix || "")}" oninput="updateNode('${esc(n.id)}', {prefix:this.value})" /></div>
     </div>
     <div class="field"><label>Fonction backend</label><input value="${esc(n.fn || "")}" oninput="updateNode('${esc(n.id)}', {fn:this.value})" /></div>
+    <div class="field"><label>Fonctionnalité actuelle</label><input value="${esc(n.feature_current || "")}" oninput="updateNode('${esc(n.id)}', {feature_current:this.value})" /></div>
+    <div class="row">
+      <div class="field"><label>Domaine cible</label><input value="${esc(n.target_domain || "")}" oninput="updateNode('${esc(n.id)}', {target_domain:this.value})" /></div>
+      <div class="field"><label>Préfixe cible</label><input value="${esc(n.target_prefix || "")}" oninput="updateNode('${esc(n.id)}', {target_prefix:this.value})" /></div>
+    </div>
+    <div class="field"><label>Code source</label><code>${esc(n.route_file || "")}${n.route_line ? ":" + esc(n.route_line) : ""}</code></div>
+    <div class="field"><label>Services détectés</label><div class="small">${esc((n.service_modules || []).join(", ") || "—")}</div></div>
     <div class="row">
       <div class="field"><label>Utile front</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {front:this.value})">${options(["","yes","no","maybe"], a.front || "")}</select></div>
       <div class="field"><label>Utile back</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {back:this.value})">${options(["","yes","no","maybe"], a.back || "")}</select></div>
@@ -603,7 +631,17 @@ function renderList() {
   for (const e of allEndpoints()) {
     const id = endpointId(e);
     const n = rawNode("endpoint:" + id) || e;
-    const text = [n.router || e.router, n.prefix || e.prefix, n.method || e.method, n.path || e.path, n.fn || e.fn].join(" ").toLowerCase();
+    const text = [
+      n.router || e.router,
+      n.prefix || e.prefix,
+      n.method || e.method,
+      n.path || e.path,
+      n.fn || e.fn,
+      n.route_file || e.route_file,
+      n.feature_current || e.feature_current,
+      n.target_domain || e.target_domain,
+      n.target_prefix || e.target_prefix
+    ].join(" ").toLowerCase();
     if (q && !text.includes(q)) continue;
     const router = n.router || e.router || "(sans tag)";
     (groups[router] = groups[router] || []).push({ e, n });
