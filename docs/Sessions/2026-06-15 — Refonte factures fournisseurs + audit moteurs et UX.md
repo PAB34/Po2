@@ -52,6 +52,17 @@
   SPIE = marché à part entière, matching = écrans séparés, priorité matching d'abord, eau à travailler,
   Pronostics hors plateforme.
 
+### Chantier 4 — Analyse backend approfondie (doc 11)
+
+- Nouveau document [[11-Analyse-backend-et-socle-refonte-UX]] (indexé) : lecture **partant du backend** pour
+  fonder la refonte frontend. Surface fonctionnelle (279 endpoints, poids par domaine : CPE 56, billing 38,
+  buildings 31, engie 24, bpu 22, cpe_dalkia 21, cvc 20), cartographie par capacité (services/modèles),
+  **graphe de relations** (jointures partagées DJU/BPU/compteurs/sites ; dette de liaison : 3 sites, 3 liens
+  compteur, 2 prix, 2 inventaires), **regroupement sous items** (table à valider) et direction UX/UI.
+- Maquette visuelle du tableau de bord cible (cockpit à files de travail par moteur) présentée dans le fil.
+- Questions ouvertes (doc 11 §6) : valider le regroupement sous items ; choisir les 5–6 files prioritaires ;
+  résorber la dette de liaison maintenant ou après l'UX ; descendre au niveau endpoint sur un domaine précis ?
+
 ## 🚧 Ce qui reste à faire / handoff
 
 ### Priorité 1 — Valider l'audit puis attaquer Phase 1 (navigation)
