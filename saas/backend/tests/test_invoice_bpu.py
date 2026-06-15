@@ -110,7 +110,48 @@ def test_bpu_supplier_and_segment_normalization_stays_conservative() -> None:
     assert normalize_bpu_supplier("Electricite de France") == "EDF"
     assert normalize_bpu_supplier("ENGIE Entreprises") == "ENGIE"
     assert historical_segment_code_for_site({"segment": "C5", "site_name": "Eclairage public centre"}) == "C5_EP"
-    assert historical_segment_code_for_site({"segment": "C5", "site_name": "Gymnase"}) is None
+    # R2 : C5 hors EP → BATIMENT (correspondance avec le segment_code en base issu du BPU historique)
+    assert historical_segment_code_for_site({"segment": "C5", "site_name": "Gymnase"}) == "BATIMENT"
+
+
+def test_historical_segment_code_c5_batiment_resolves_to_batiment() -> None:
+    # R2 : tous les C5 hors éclairage public → "BATIMENT" (segment stocké en base
+    # pour le BPU ENGIE Lot 1 2026 via _normalize_segment("Bâtiment", ...))
+    assert historical_segment_code_for_site({"segment": "C5"}) == "BATIMENT"
+    assert historical_segment_code_for_site({"segment": "c5", "site_name": "Salle polyvalente"}) == "BATIMENT"
+    assert historical_segment_code_for_site({"segment": "C5", "tariff_option_label": "CU4"}) == "BATIMENT"
+    # EP reste inchangé
+    assert historical_segment_code_for_site({"segment": "C5", "regroupement": "Eclairage public"}) == "C5_EP"
+    assert historical_segment_code_for_site({"segment": "C5", "tariff_option_label": "Éclairage public"}) == "C5_EP"
+
+
+def test_resolve_historical_bpu_price_c5_batiment() -> None:
+    # Le moteur doit résoudre un prix ENGIE 2026 C5 Bâtiment / HPH / fourniture
+    reference = HistoricalBpuPrice(
+        document_id=20,
+        supplier="ENGIE",
+        valid_year=2026,
+        lot_number=1,
+        segment_code="BATIMENT",
+        period_code="HPH",
+        component_type="fourniture",
+        price_eur_per_mwh=Decimal("105.91"),
+        pdf_filename="2025_18_MS1_BPU_ENGIE_LOT_1.pdf",
+    )
+    site = {"segment": "C5", "period_start": date(2026, 2, 1)}
+    resolved = resolve_historical_bpu_price(
+        [reference],
+        site,
+        {"normalized_component": "supply", "poste": "hph"},
+    )
+    assert resolved == reference
+
+    # Un site éclairage public ne doit pas matcher le segment BATIMENT
+    assert resolve_historical_bpu_price(
+        [reference],
+        {"segment": "C5", "site_name": "Eclairage public centre", "period_start": date(2026, 2, 1)},
+        {"normalized_component": "supply", "poste": "hph"},
+    ) is None
 
 
 def test_normalize_bpu_supplier_recognizes_totalenergies() -> None:

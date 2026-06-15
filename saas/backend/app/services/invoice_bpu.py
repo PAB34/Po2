@@ -181,6 +181,9 @@ def historical_segment_code_for_site(site: dict[str, Any]) -> str | None:
         ).upper()
         if "ECLAIRAGE" in labels or "ÉCLAIRAGE" in labels:
             return "C5_EP"
+        # C5 bâtiment (hors éclairage public) → segment "BATIMENT" dans le BPU historique
+        # (code produit par import_bpu_xlsx._normalize_segment via le label "Bâtiment")
+        return "BATIMENT"
 
     # Profils gaz TotalEnergies Lot 7 (Hérault Énergie)
     if segment in {"T1", "T2", "T3", "T4"}:
