@@ -24,6 +24,16 @@ from app.main import app
 _SKIP_METHODS = {"HEAD", "OPTIONS"}
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
+_VALIDATION_STATUS_ORDER = [
+    "inventorié",
+    "import app OK",
+    "test service OK",
+    "test endpoint HTTP OK",
+    "validé front",
+    "validé prod",
+    "à corriger",
+]
+
 _TARGETS = {
     "auth": ("Administration / socle", "/api/auth", "connexion, profil, mot de passe"),
     "billing": ("Energie / finance", "/api/energie/factures", "factures fournisseurs, controles, decisions, export finance"),
@@ -84,6 +94,7 @@ def build_endpoints() -> list[dict[str, object]]:
                     "feature_current": feature_current,
                     "target_domain": target_domain,
                     "target_prefix": target_prefix,
+                    **_validation_for(method, path, router),
                 }
             )
     rows.sort(key=lambda r: (r["router"], r["path"], r["method"]))
@@ -143,6 +154,125 @@ def _prefix_of(path: str) -> str:
     return "/" + "/".join(parts[:2]) if len(parts) >= 2 else "/" + parts[0]
 
 
+def _validation_for(method: str, path: str, router: str) -> dict[str, str]:
+    """Niveau de preuve connu pour la matrice.
+
+    Cette annotation reste volontairement prudente : elle atteste seulement la
+    meilleure preuve locale versionnee connue, pas une validation production.
+    """
+    if router == "health":
+        return _validation(
+            "import app OK",
+            "`saas/backend/tests/test_app_boot.py` verifie que `/api/health` est enregistre dans l'application.",
+        )
+
+    if router == "billing":
+        return _billing_validation(method, path)
+
+    if router == "bpu":
+        if path in {"/api/bpu/import-xlsx", "/api/bpu/timeline", "/api/bpu/formula"} or path.startswith("/api/bpu/"):
+            return _validation(
+                "test service OK",
+                "`saas/backend/tests/test_billing_bpu_sync.py` valide le mapping BPU XLSX -> prix courants ; test HTTP endpoint a creer.",
+            )
+
+    if router == "cpe":
+        return _cpe_validation(path)
+
+    return _validation(
+        "inventorié",
+        "Endpoint detecte par introspection FastAPI ; preuve fonctionnelle a ajouter avant reaffectation.",
+    )
+
+
+def _billing_validation(method: str, path: str) -> dict[str, str]:
+    if path.startswith("/api/billing/accounting/"):
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_energie_accounting.py` couvre import codification, mappings, resolution comptable et liaison XLSX ; test HTTP a creer.",
+        )
+    if path.endswith("/liaison.xlsx") or path.endswith("/codification"):
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_energie_accounting.py` couvre la codification facture et la generation XLSX finance ; test HTTP a creer.",
+        )
+    if path.endswith("/decision"):
+        return _validation(
+            "import app OK",
+            "Route chargee par l'application ; test service/HTTP de decision facture a creer.",
+        )
+    if path.endswith("/analyze"):
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_invoice_analysis_bpu_mapping.py` et `test_billing_bpu_sync.py` couvrent des briques de controle BPU ; test bout-en-bout a creer.",
+        )
+    if path.endswith("/xlsx"):
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_engie_xlsx_parser.py` couvre le parsing ENGIE XLSX ; test HTTP import a creer.",
+        )
+    if path.endswith("/edf-csv"):
+        return _validation(
+            "inventorié",
+            "Import EDF CSV inventorie ; preuve service/HTTP specifique a ajouter.",
+        )
+    if "/api/billing/invoices/batches" in path:
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_invoice_batches.py` couvre les lots et archives ; test HTTP a creer.",
+        )
+    if "/api/billing/invoices/imports" in path:
+        return _validation(
+            "import app OK",
+            "Route facture chargee par l'application ; preuve fonctionnelle detaillee a completer selon action.",
+        )
+    if "/api/billing/configs" in path or path == "/api/billing/turpe/versions":
+        return _validation(
+            "inventorié",
+            "Referentiel facture/prix inventorie ; preuve service/HTTP a ajouter avant migration.",
+        )
+    return _validation(
+        "inventorié",
+        "Endpoint billing inventorie ; preuve fonctionnelle a ajouter.",
+    )
+
+
+def _cpe_validation(path: str) -> dict[str, str]:
+    failing = {
+        "/api/cpe/accounting/import-codification": "`saas/backend/tests/test_cpe_accounting_import.py::test_enriched_codification_matches_finance_export_lines` echoue localement : 2047 lignes attendues, 0 matchee.",
+        "/api/cpe/bilan/{annee}/atterrissage": "`saas/backend/tests/test_cpe_atterrissage.py` echoue localement sur DJU/interessement.",
+        "/api/cpe/dju/{annee}": "`saas/backend/tests/test_cpe_atterrissage.py` et le suivi marche signalent des donnees DJU a corriger.",
+        "/api/cpe/finances/market-tracking": "`saas/backend/tests/test_cpe_market_tracking.py::test_dju_block_real_vs_reference` echoue localement : bloc DJU sans donnees.",
+    }
+    if path in failing:
+        return _validation("à corriger", failing[path])
+    if path.startswith("/api/cpe/accounting/"):
+        return _validation(
+            "test service OK",
+            "`saas/backend/tests/test_cpe_accounting_import.py` couvre plusieurs briques comptables CPE, avec un cas enrichi encore a corriger.",
+        )
+    if path.endswith("/liaison.xlsx") or "/controls" in path:
+        return _validation(
+            "test service OK",
+            "Suites CPE comptables et controles facture presentes ; test HTTP bout-en-bout a creer.",
+        )
+    if "/api/cpe/finances/" in path:
+        return _validation(
+            "import app OK",
+            "Route finances CPE chargee par l'application ; validation parcours facture -> decision -> export a completer.",
+        )
+    return _validation(
+        "inventorié",
+        "Endpoint CPE inventorie ; preuve fonctionnelle a completer selon priorite metier.",
+    )
+
+
+def _validation(status: str, evidence: str) -> dict[str, str]:
+    if status not in _VALIDATION_STATUS_ORDER:
+        raise ValueError(f"Statut validation inconnu: {status}")
+    return {"validation_status": status, "validation_evidence": evidence}
+
+
 def main() -> None:
     rows = build_endpoints()
     routers: dict[str, int] = {}
@@ -182,8 +312,20 @@ def _matrix_markdown(payload: dict[str, object]) -> str:
         "",
         "## 1. Objectif",
         "",
-        "Attacher chaque endpoint existant a son code, sa fonctionnalite actuelle, son domaine cible et son prefixe cible.",
+        "Attacher chaque endpoint existant a son code, sa fonctionnalite actuelle, son domaine cible, son prefixe cible et son niveau de preuve.",
         "Cette matrice sert a preparer la refonte progressive de l'API et de l'UX sans perdre ce qui a deja ete developpe.",
+        "",
+        "Statuts de validation utilises :",
+        "",
+        "| Statut | Signification |",
+        "|---|---|",
+        "| `inventorié` | Endpoint repere par introspection, sans preuve fonctionnelle suffisante. |",
+        "| `import app OK` | L'application FastAPI importe et enregistre la route. |",
+        "| `test service OK` | Une ou plusieurs briques service sont couvertes par des tests versionnes. |",
+        "| `test endpoint HTTP OK` | Un test HTTP appelle l'endpoint. |",
+        "| `validé front` | Le parcours est verifie depuis l'interface. |",
+        "| `validé prod` | Le parcours est verifie en production. |",
+        "| `à corriger` | Une preuve locale indique un probleme a traiter. |",
         "",
         "## 2. Synthese par routeur",
         "",
@@ -211,8 +353,8 @@ def _matrix_markdown(payload: dict[str, object]) -> str:
                 [
                     f"### `{router}`",
                     "",
-                    "| Endpoint | Code | Services detectes | Fonctionnalite actuelle | Domaine cible | Prefixe cible |",
-                    "|---|---|---|---|---|---|",
+                    "| Endpoint | Code | Services detectes | Fonctionnalite actuelle | Domaine cible | Prefixe cible | Statut validation | Preuve |",
+                    "|---|---|---|---|---|---|---|---|",
                 ]
             )
         service_values = row.get("service_modules", [])  # type: ignore[union-attr]
@@ -227,7 +369,9 @@ def _matrix_markdown(payload: dict[str, object]) -> str:
             f"{services or '-'} | "
             f"{row.get('feature_current', '')} | "
             f"{row.get('target_domain', '')} | "
-            f"`{row.get('target_prefix', '')}` |"
+            f"`{row.get('target_prefix', '')}` | "
+            f"`{row.get('validation_status', '')}` | "
+            f"{row.get('validation_evidence', '')} |"
         )
         next_router = str(rows[index + 1]["router"]) if index + 1 < len(rows) else None
         if next_router != router:
@@ -240,6 +384,7 @@ def _matrix_markdown(payload: dict[str, object]) -> str:
             "- Ne pas renommer les endpoints en masse.",
             "- Utiliser cette matrice pour decider parcours par parcours.",
             "- Commencer par les endpoints du controle facture, de la decision et de l'export finance.",
+            "- Faire monter le statut de preuve par parcours : service -> endpoint HTTP -> front -> prod.",
             "- Creer des facades cible si necessaire, puis migrer le front progressivement.",
             "- Supprimer seulement les endpoints confirmes sans usage produit, sans script, sans front et sans cible.",
         ]

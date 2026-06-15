@@ -1,4 +1,29 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-15 (preuves de validation API P0)
+> **Etat documentation/outillage local** : `docs/13-Matrice-routes-fonctionnalites-refonte-api.md` contient maintenant
+> les colonnes `Statut validation` et `Preuve`, generees par `saas/backend/app/scripts/build_api_catalog.py`.
+>
+> Les statuts possibles sont : `inventorié`, `import app OK`, `test service OK`, `test endpoint HTTP OK`,
+> `validé front`, `validé prod`, `à corriger`. Le diagramme `docs/api-cartographie/index.html` affiche aussi
+> ces champs dans l'inspecteur endpoint et la liste.
+>
+> Premier perimetre P0 documente dans `docs/15-Validation-P0-factures-finance.md` :
+> facture energie -> controle BPU/TURPE -> decision -> matrice comptable -> export XLSX finance.
+> Validation locale ciblee : `python -m pytest tests/test_energie_accounting.py tests/test_engie_xlsx_parser.py
+> tests/test_invoice_batches.py tests/test_invoice_analysis_bpu_mapping.py tests/test_billing_bpu_sync.py` = 21 tests OK.
+> La decision facture energie reste seulement `import app OK` faute de test dedie. Plusieurs endpoints CPE/DJU/codification
+> restent marques `à corriger`.
+>
+> **Mise a jour complementaire** : 2026-06-15 (catalogue fonctionnel commente)
+> **Etat documentation locale** : ajout de `docs/14-Catalogue-fonctionnalites-commentees-et-reaffectation.md`.
+>
+> La cartographie technique `Routeur -> Prefixe -> Endpoints` est completee par une lecture metier :
+> utilite de chaque fonctionnalite developpee, decision aidee, utilisateurs concernes, code/routes actuels,
+> reaffectation cible dans la navigation (`Tableau de bord`, `Patrimoine`, `Energie`, `Marches & contrats`,
+> `Technique`, `Administration`) et niveau de confiance. Le document rappelle que la matrice d'endpoints sert
+> a organiser la refonte, mais ne certifie pas encore le fonctionnement de chaque API ; les echecs de tests
+> CPE/DJU/codification observes localement restent a traiter avant migration.
+>
 > **Mise a jour complementaire** : 2026-06-15 (cartographie API en diagramme editable)
 > **Etat code local** : outil `docs/api-cartographie/index.html` transforme en graphe dynamique Routeur -> Prefixe -> Endpoints.
 >

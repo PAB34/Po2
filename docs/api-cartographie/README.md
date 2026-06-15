@@ -21,6 +21,7 @@ Puis ouvrir `http://127.0.0.1:8765/index.html`.
 - **Relations editables** : ajouter une relation entre deux noeuds, modifier son libelle, supprimer une relation.
 - **Suppressions locales** : masquer un noeud ou une relation du diagramme sans toucher au code backend.
 - **Audit de pertinence** : marquer *utile front*, *utile back*, statut `keep/review/remove/planned`, commentaire.
+- **Preuve de validation** : afficher le `Statut validation` et la `Preuve` generes depuis la matrice API.
 - **Liste de secours** : vue Liste pour retrouver rapidement un endpoint et le selectionner dans le graphe.
 - **Frictions structurelles** : onglet dedie a la dette de liaison (sites, compteurs, prix, inventaires, ENGIE, pronostics).
 
@@ -51,6 +52,14 @@ DATABASE_URL="sqlite:///:memory:" python -m app.scripts.build_api_catalog
 
 La commande reecrit `docs/api-cartographie/api_catalog.js`. Les annotations locales sont conservees car elles vivent
 dans le navigateur/export JSON, pas dans le catalogue genere.
+
+La commande regenere aussi `docs/13-Matrice-routes-fonctionnalites-refonte-api.md` avec les colonnes :
+
+- `Statut validation`
+- `Preuve`
+
+Ces statuts sont produits par `saas/backend/app/scripts/build_api_catalog.py`. Ne pas les corriger a la main dans
+le Markdown genere : modifier le generateur ou ajouter la preuve de test correspondante.
 
 ## Fichiers
 

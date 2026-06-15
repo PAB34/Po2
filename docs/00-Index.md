@@ -22,6 +22,8 @@
 - [[11-Analyse-backend-et-socle-refonte-UX]] — Analyse backend approfondie (capacites par domaine, 279 endpoints, graphe de relations/dependances) + regroupement sous items + direction UX/UI. Socle de la refonte frontend
 - [[12-Plan-plateforme-cible-et-tri-endpoints]] — Plan produit cible issu des arbitrages utilisateur : cockpit principal, navigation metier, priorite factures/finance, rattachements patrimoine et tri Routeur -> Prefixe -> Endpoints
 - [[13-Matrice-routes-fonctionnalites-refonte-api]] — Matrice generee des 279 endpoints : routeur, prefixe, code source, services detectes, fonctionnalite actuelle, domaine et prefixe cible
+- [[14-Catalogue-fonctionnalites-commentees-et-reaffectation]] — Commentaire metier des fonctionnalites developpees : utilite, decision aidee, utilisateurs, code actuel, reaffectation cible et niveau de confiance
+- [[15-Validation-P0-factures-finance]] — Première couche de preuve du parcours facture -> controle -> decision -> export XLSX finance, avec statuts de validation par endpoint prioritaire
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)

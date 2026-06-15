@@ -115,7 +115,7 @@
   }
   .router { border-bottom: 1px solid var(--line); }
   .router summary { cursor: pointer; padding: 10px 16px; font-weight: 650; }
-  .endpoint { display: grid; grid-template-columns: 62px 1fr 90px; gap: 8px; padding: 8px 18px; border-top: 1px solid #edf0f5; cursor: pointer; }
+  .endpoint { display: grid; grid-template-columns: 62px 1fr 120px 90px; gap: 8px; padding: 8px 18px; border-top: 1px solid #edf0f5; cursor: pointer; }
   .endpoint:hover { background: var(--panel-soft); }
   .method { font-weight: 700; font-size: 12px; }
   .method.GET { color: #075985; }
@@ -271,6 +271,8 @@ function baseGraph() {
       feature_current: e.feature_current || "",
       target_domain: e.target_domain || "",
       target_prefix: e.target_prefix || "",
+      validation_status: e.validation_status || "",
+      validation_evidence: e.validation_evidence || "",
       virtual: !!e.virtual
     };
     ed[`edge:${routerNode}->${prefixNode}`] = { id: `edge:${routerNode}->${prefixNode}`, from: routerNode, to: prefixNode, label: "préfixe" };
@@ -311,7 +313,7 @@ function decorateNode(raw) {
 function mergedTitle(n) {
   if (n.type !== "endpoint") return esc(n.label);
   const a = store.annotations[n.endpointId] || {};
-  return esc(`${n.method || ""} ${n.path || ""}\n${n.fn || ""}\n${a.comment || ""}`);
+  return esc(`${n.method || ""} ${n.path || ""}\n${n.fn || ""}\nValidation: ${n.validation_status || "inventorié"}\n${n.validation_evidence || ""}\n${a.comment || ""}`);
 }
 
 function visibleGraph() {
@@ -337,6 +339,8 @@ function visibleGraph() {
       merged.feature_current,
       merged.target_domain,
       merged.target_prefix,
+      merged.validation_status,
+      merged.validation_evidence,
       (merged.service_modules || []).join(" ")
     ].join(" ").toLowerCase();
     if (!q || hay.includes(q)) {
@@ -499,6 +503,8 @@ function endpointFields(n, a) {
     </div>
     <div class="field"><label>Code source</label><code>${esc(n.route_file || "")}${n.route_line ? ":" + esc(n.route_line) : ""}</code></div>
     <div class="field"><label>Services détectés</label><div class="small">${esc((n.service_modules || []).join(", ") || "—")}</div></div>
+    <div class="field"><label>Statut validation</label><div class="small"><code>${esc(n.validation_status || "inventorié")}</code></div></div>
+    <div class="field"><label>Preuve</label><div class="small">${esc(n.validation_evidence || "Preuve fonctionnelle à ajouter.")}</div></div>
     <div class="row">
       <div class="field"><label>Utile front</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {front:this.value})">${options(["","yes","no","maybe"], a.front || "")}</select></div>
       <div class="field"><label>Utile back</label><select onchange="updateAnnotation('${esc(n.endpointId)}', {back:this.value})">${options(["","yes","no","maybe"], a.back || "")}</select></div>
@@ -640,7 +646,9 @@ function renderList() {
       n.route_file || e.route_file,
       n.feature_current || e.feature_current,
       n.target_domain || e.target_domain,
-      n.target_prefix || e.target_prefix
+      n.target_prefix || e.target_prefix,
+      n.validation_status || e.validation_status,
+      n.validation_evidence || e.validation_evidence
     ].join(" ").toLowerCase();
     if (q && !text.includes(q)) continue;
     const router = n.router || e.router || "(sans tag)";
@@ -654,6 +662,7 @@ function renderList() {
       return `<div class="endpoint" onclick="selectEndpoint('${esc(id)}')">
         <span class="method ${esc(n.method || e.method)}">${esc(n.method || e.method)}</span>
         <code>${esc(n.path || e.path)}</code>
+        <span class="status">${esc(n.validation_status || e.validation_status || "inventorié")}</span>
         <span class="status">${esc(a.status || "")}</span>
       </div>`;
     }).join("")}
