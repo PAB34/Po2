@@ -236,8 +236,8 @@ Notes d'évolution vs §12 de [[09...]] :
 - **Rapprochements** devient un **vrai moteur de matching unifié** (compteurs + sites), généralisant le
   pattern réussi de `/buildings/cvc-import/batiments`.
 - **Technique** assume explicitement les **2 sources DALKIA/SPIE** (filtre/onglet de provenance).
-- **SPIE** est un futur **marché de maintenance** : il a vocation à apparaître aussi sous *Marchés et contrats*
-  (volet maintenance), pas seulement comme source d'inventaire — à arbitrer (cf. §10).
+- **SPIE** est un **marché de maintenance à part entière** (acté §10) : entrée sous *Marchés et contrats*
+  (symétrique du CPE DALKIA), en plus de sa dimension *source d'inventaire* qui reste filtrable dans Technique.
 
 ### 7.3 La fiche patrimoine, point de convergence
 
@@ -297,7 +297,28 @@ Gaz (Total/GRDF) puis eau (SUEZ) dans le contrôle factures ; travaux P3/APE ; c
 4. **Eau** : périmètre attendu (fournisseur, format de facture, distributeur) pour cadrer l'intégration ?
 5. **Pronostics** : on le sort officiellement du périmètre produit (et de ce dépôt à terme) ?
 
----
+### Décisions actées (2026-06-15)
 
-> Prochaine action proposée : valider §7.2 (navigation cible) et §10, puis attaquer la **Phase 1**
-> (recomposition de la sidebar en domaines + sous-nav) qui est à faible risque et rend le reste lisible.
+1. **SPIE = marché de maintenance à part entière** (pas seulement une source d'inventaire) → entrée sous
+   **« Marchés et contrats »**, symétrique du CPE DALKIA. La dimension *inventaire* reste dans Technique
+   (filtre source DALKIA/SPIE) ; la dimension *marché* (contrat, prestations, suivi) vit sous Marchés et contrats.
+2. **Matching = écrans séparés par moteur** (pas de console unifiée) : un écran de rapprochement par moteur,
+   réutilisant le **pattern** de `/buildings/cvc-import/batiments` mais sans tout fusionner.
+3. **Ordre : commencer par le moteur de matching** (ex-Phase 2) avant la refonte navigation (ex-Phase 1).
+   C'est le maillon faible structurant : on le traite en premier.
+4. **Eau : à travailler** (fournisseur / format / distributeur à préciser ultérieurement).
+5. **Pronostics** : module **personnel hors plateforme** (jeu Coupe du Monde avec les agents de la
+   collectivité). Sans rapport avec énergie/maintenance/patrimoine → ne pas l'intégrer au récit produit ;
+   le laisser de côté (pas de travail dessus).
+
+### Plan révisé (ordre acté)
+
+| Étape | Contenu | Statut |
+|---|---|---|
+| **A — Moteur de matching** (priorité) | écrans de rapprochement séparés : compteurs↔bâtiment, sites CPE↔patrimoine, sites SPIE↔patrimoine (CVC↔bâtiment existe déjà) | **à démarrer** |
+| B — Navigation par moteur | sidebar 6 domaines + sous-nav ; SPIE ajouté sous Marchés et contrats | après A |
+| C — Fiche patrimoine convergente | onglets agrégeant énergie/factures/technique/contrats | après A |
+| D — Compléter moteurs | gaz (Total/GRDF), **eau (SUEZ)**, travaux P3/APE | en continu |
+
+> Prochaine action : cadrer l'**écran de matching à construire en premier** (cf. §A) puis l'implémenter
+> en réutilisant le pattern `CvcSiteMappingPage`.
