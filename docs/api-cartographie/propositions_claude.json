@@ -1,0 +1,555 @@
+{
+  "exported_at": "2026-06-15 (propositions Claude)",
+  "store": {
+    "annotations": {
+      "GET /api/engie/consommations": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/consommations/foisonne": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/consommations/site/{site_id}/index": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/consommations/site/{uid}/courbe-de-charge": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/consommations/site/{uid}/energie-reactive": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/consommations/site/{uid}/puissance-souscrite": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/contrats": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/contrats/{uid}/sites": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/demandes": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/demandes/categories": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/demandes/{uid}": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/factures": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/factures/{uid}": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/factures/{uid}/details": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/factures/{uid}/fichier": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/groupes": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/groupes/{uid}": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/profil": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/profils": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/sites": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/sites/{uid}": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/sites/{uid}/details": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/sites/{uid}/details-v2": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/engie/sites/{uid}/programmation-horaire": {
+        "front": "no",
+        "back": "maybe",
+        "status": "review",
+        "comment": "Proxy ENGIE non cable cote front (403 abonnement). Confirmer la strategie API ENGIE avant de garder/retirer."
+      },
+      "GET /api/pronostics/admin/model-feed": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/admin/sync-scores": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/forgot-password": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/login": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "GET /api/pronostics/matches": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "GET /api/pronostics/me": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "PATCH /api/pronostics/me": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/me/password": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "GET /api/pronostics/participants": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "PUT /api/pronostics/predictions": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "GET /api/pronostics/ranking": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/register": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "POST /api/pronostics/reset-password": {
+        "front": "no",
+        "back": "no",
+        "status": "remove",
+        "comment": "Jeu Coupe du Monde — hors perimetre produit (decide 2026-06-15). Candidat a sortir du depot."
+      },
+      "GET /api/cpe/spie-ref/active-summary #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/confirm #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/dpgf-p1/confirm #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/dpgf-p1/imports #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/dpgf-p1/imports/all #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "PATCH /api/cpe/spie-ref/dpgf-p1/imports/{import_id}/acte #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/dpgf-p1/imports/{import_id}/diff #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/dpgf-p1/preview #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/all #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "PATCH /api/cpe/spie-ref/imports/{import_id}/acte #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/ape #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/bpu #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/cibles #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/diff #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/p2p3 #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/recap #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "GET /api/cpe/spie-ref/imports/{import_id}/sites #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/imports/{import_id}/sync-p1-reference #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/preview #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      },
+      "POST /api/cpe/spie-ref/sync-cpe-sites #spie": {
+        "status": "planned",
+        "comment": "Clone du contrat DALKIA. A ADAPTER : SPIE = marche de maintenance (pas de performance/intessement) -> garder import/referentiel/factures, retirer NB/cibles/atterrissage."
+      }
+    },
+    "virtual": [
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/active-summary #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/active-summary",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "active_summary",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Synthese de l'etat du marche en vigueur. ``lot`` 1/2 = un lot ; absent = cumule (les deux).",
+        "source": "GET /api/cpe/dalkia-ref/active-summary"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/confirm #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/confirm",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "confirm_import",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Parse et persiste le fichier DALKIA, qualifie par l'acte (type / libelle / date d'effet).\nLes imports precedents du meme lot sont marques inactifs.",
+        "source": "POST /api/cpe/dalkia-ref/confirm"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/dpgf-p1/confirm #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/dpgf-p1/confirm",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "confirm_dpgf_p1",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Persiste un DPGF P1 revise dans sa lignee propre.\n\nNe desactive que le DPGF P1 precedent du meme lot ; ne touche jamais le referentiel maitre\n(P2/P3/APE/cibles/RECAP) ni cpe_contract_references.",
+        "source": "POST /api/cpe/dalkia-ref/dpgf-p1/confirm"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/dpgf-p1/imports #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/dpgf-p1/imports",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "list_dpgf_p1_imports",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Liste les imports DPGF P1 actifs (un par lot au plus).",
+        "source": "GET /api/cpe/dalkia-ref/dpgf-p1/imports"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/dpgf-p1/imports/all #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/dpgf-p1/imports/all",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "list_all_dpgf_p1_imports",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Journal des DPGF P1 : toutes les versions (actives ET remplacees conservees).",
+        "source": "GET /api/cpe/dalkia-ref/dpgf-p1/imports/all"
+      },
+      {
+        "virtual": true,
+        "id": "PATCH /api/cpe/spie-ref/dpgf-p1/imports/{import_id}/acte #spie",
+        "method": "PATCH",
+        "path": "/api/cpe/spie-ref/dpgf-p1/imports/{import_id}/acte",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "patch_dpgf_acte",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Qualifie a posteriori un import DPGF P1 (libellé / date d'effet).",
+        "source": "PATCH /api/cpe/dalkia-ref/dpgf-p1/imports/{import_id}/acte"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/dpgf-p1/imports/{import_id}/diff #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/dpgf-p1/imports/{import_id}/diff",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "dpgf_diff",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Synthèse d'un DPGF P1 : niveaux par année + écart de révision vs contrat.",
+        "source": "GET /api/cpe/dalkia-ref/dpgf-p1/imports/{import_id}/diff"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/dpgf-p1/preview #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/dpgf-p1/preview",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "preview_dpgf_p1",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Parse un DPGF P1 revise et renvoie un apercu (totaux par niveau x annee) sans rien ecrire.",
+        "source": "POST /api/cpe/dalkia-ref/dpgf-p1/preview"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "list_imports",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Liste tous les imports actifs.",
+        "source": "GET /api/cpe/dalkia-ref/imports"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/all #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/all",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "list_all_imports",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Journal des imports maitres : toutes les versions (actives ET remplacees conservees).",
+        "source": "GET /api/cpe/dalkia-ref/imports/all"
+      },
+      {
+        "virtual": true,
+        "id": "PATCH /api/cpe/spie-ref/imports/{import_id}/acte #spie",
+        "method": "PATCH",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/acte",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "patch_import_acte",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Qualifie a posteriori un import maître (type / libellé / date d'effet de l'acte).",
+        "source": "PATCH /api/cpe/dalkia-ref/imports/{import_id}/acte"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/ape #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/ape",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_ape",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/ape"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/bpu #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/bpu",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_bpu",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/bpu"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/cibles #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/cibles",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_cibles",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/cibles"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/diff #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/diff",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "master_diff",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Synthèse des modifications d'un import maître vs un autre (défaut = base du lot).",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/diff"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/p2p3 #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/p2p3",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_p2p3",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/p2p3"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/recap #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/recap",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_recap",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/recap"
+      },
+      {
+        "virtual": true,
+        "id": "GET /api/cpe/spie-ref/imports/{import_id}/sites #spie",
+        "method": "GET",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/sites",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "get_sites",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "",
+        "source": "GET /api/cpe/dalkia-ref/imports/{import_id}/sites"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/imports/{import_id}/sync-p1-reference #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/imports/{import_id}/sync-p1-reference",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "sync_p1_reference",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Met a jour la reference d'acompte P1 gaz (cpe_contract_references) depuis le RECAP de l'import.\n\nLe controle d'acompte P1 lit cette reference : la synchro le rend auto-adaptatif aux avenants.",
+        "source": "POST /api/cpe/dalkia-ref/imports/{import_id}/sync-p1-reference"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/preview #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/preview",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "preview_import",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Parse le fichier DALKIA et retourne un apercu sans rien sauvegarder.\nAppeler cet endpoint avant /confirm pour valider le contenu.",
+        "source": "POST /api/cpe/dalkia-ref/preview"
+      },
+      {
+        "virtual": true,
+        "id": "POST /api/cpe/spie-ref/sync-cpe-sites #spie",
+        "method": "POST",
+        "path": "/api/cpe/spie-ref/sync-cpe-sites",
+        "router": "cpe-dalkia->spie (planifie)",
+        "fn": "sync_cpe_sites",
+        "summary": "Squelette SPIE (clone DALKIA)",
+        "doc": "Initialise / met à jour les sites CPE (cpe_sites) depuis le référentiel DALKIA actif.\n\nAlimente le volet performance/intéressement (bilan, NB par année). Réexécutable après avenant.",
+        "source": "POST /api/cpe/dalkia-ref/sync-cpe-sites"
+      }
+    ],
+    "frictionNotes": {
+      "sites": "Resorber via matching sites (etape A). Ne PAS fusionner Site/CpeSite/CpeDalkiaRefSite : cycles de vie differents, relier par FK.",
+      "meters": "BuildingMeterLink = registre canonique. Matching compteurs livre (/buildings/compteurs) synchronise GasPce.building_id.",
+      "prix": "Coexistence assumee (controle facture utilise les deux). Documenter la convergence, pas de suppression a court terme.",
+      "inventaire": "Garder les deux (synthese SYPEMI vs releve terrain). Definir si le terrain alimente ou seulement suggere.",
+      "matching_cpe": "Prochain ecran de matching (apres compteurs). Bloque par cpe_sites vide en prod -> coupler avec init des sites CPE.",
+      "engie_proxy": "Decision en attente : confirmer abonnement ENGIE ou archiver les 24 endpoints.",
+      "pronostics": "Sortir du perimetre produit (decide 2026-06-15)."
+    }
+  }
+}
