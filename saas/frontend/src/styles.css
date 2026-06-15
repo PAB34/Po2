@@ -5037,3 +5037,217 @@ button:disabled {
     break-inside: avoid;
   }
 }
+
+/* ── Factures fournisseurs : bandeau marches, sources, onglets fluide/etapes ── */
+
+.market-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.market-banner-item {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  text-decoration: none;
+  color: inherit;
+}
+
+.market-banner-item strong {
+  color: #f8fafc;
+  font-size: 0.98rem;
+}
+
+.market-banner-item span {
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.market-banner-tag {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.68rem !important;
+  color: #64748b !important;
+}
+
+.market-banner-item--active {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(22, 101, 52, 0.18);
+}
+
+.market-banner-item--link {
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.market-banner-item--link:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(30, 58, 138, 0.2);
+}
+
+.invoice-sources {
+  margin-bottom: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.invoice-sources > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.invoice-sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 4px 16px 16px;
+}
+
+.invoice-sources-grid strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #f8fafc;
+  font-size: 0.84rem;
+}
+
+.invoice-sources-grid ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.fluid-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.fluid-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.45);
+  color: #cbd5e1;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.fluid-tab:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.fluid-tab--active {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(37, 99, 235, 0.22);
+  color: #f8fafc;
+}
+
+.step-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.step-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  color: #94a3b8;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.step-tab:hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #cbd5e1;
+}
+
+.step-tab--active {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(37, 99, 235, 0.18);
+  color: #f8fafc;
+}
+
+.step-tab-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+  font-size: 0.78rem;
+}
+
+.step-tab--active .step-tab-index {
+  background: rgba(59, 130, 246, 0.85);
+  color: #fff;
+}
+
+.invoice-placeholder,
+.invoice-step-panel {
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.invoice-placeholder h3,
+.invoice-step-panel h3 {
+  margin: 2px 0 6px;
+  color: #f8fafc;
+}
+
+.invoice-placeholder p {
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  max-width: 70ch;
+}
+
+.invoice-step-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.invoice-step-panel-head span {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 0.86rem;
+  max-width: 70ch;
+}
+
+.invoice-step-hint {
+  margin: 12px 0 0;
+  color: #94a3b8;
+  font-size: 0.84rem;
+}

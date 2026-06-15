@@ -181,15 +181,22 @@ type QueueSortKey =
   | "due_date"
   | "invoice_status";
 
-const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string }> = [
-  { id: "imports", label: "Imports", detail: "Codification et exports finance" },
-  { id: "sites", label: "Sites", detail: "VDS, CCAS et rattachements" },
-  { id: "rules", label: "Matrice", detail: "Contrat, poste, nature" },
-  { id: "references", label: "Références", detail: "DPGF, formules, tolérances" },
-  { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources" },
-  { id: "invoices", label: "Factures", detail: "Suivi marché : prévu vs reçu" },
-  { id: "p3-devis", label: "Factures petits travaux P3", detail: "Devis P3/P6 et atterrissage" },
-  { id: "controls", label: "Contrôle factures", detail: "Audit global et anomalies" },
+type CpeFinancePhase = "donnees" | "controle";
+
+const CPE_FINANCE_PHASES: Array<{ id: CpeFinancePhase; label: string }> = [
+  { id: "donnees", label: "1 · Données & référentiel" },
+  { id: "controle", label: "2 · Contrôle factures & liaison finance" },
+];
+
+const CPE_FINANCE_SECTIONS: Array<{ id: CpeFinanceSection; label: string; detail: string; phase: CpeFinancePhase }> = [
+  { id: "imports", label: "Imports", detail: "Codification et exports finance", phase: "donnees" },
+  { id: "sites", label: "Sites", detail: "VDS, CCAS et rattachements", phase: "donnees" },
+  { id: "rules", label: "Matrice", detail: "Contrat, poste, nature", phase: "donnees" },
+  { id: "references", label: "Références", detail: "DPGF, formules, tolérances", phase: "donnees" },
+  { id: "indices", label: "Formules et indices", detail: "Révisions, preuves PDF et sources", phase: "donnees" },
+  { id: "invoices", label: "Factures", detail: "Suivi marché : prévu vs reçu", phase: "controle" },
+  { id: "p3-devis", label: "Factures petits travaux P3", detail: "Devis P3/P6 et atterrissage", phase: "controle" },
+  { id: "controls", label: "Contrôle factures", detail: "Audit global, anomalies et liaison finance", phase: "controle" },
 ];
 
 const CPE_WORKSTREAMS = [
@@ -2437,6 +2444,39 @@ function CpeFinanceReference({
 
   return (
     <>
+      <section
+        aria-label="Objectif du referentiel finance CPE"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 16,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 20,
+          padding: "14px 16px",
+          border: "1px solid #e5e7eb",
+          borderRadius: 10,
+          background: "#f8fafc",
+        }}
+      >
+        <div style={{ maxWidth: "60ch" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: "#64748b" }}>
+            Marche CPE DALKIA - batiments dans le CPE
+          </p>
+          <p style={{ margin: 0, color: "#374151", fontSize: 14 }}>
+            Meme metier que les factures fournisseurs, applique au marche DALKIA : <strong>Donnees &amp; referentiel</strong> →{" "}
+            <strong>Controle factures</strong> → <strong>Rapport</strong> → <strong>Liaison finance comptable</strong>.
+          </p>
+        </div>
+        <Link
+          to="/energie/factures"
+          className="secondary-button"
+          style={{ whiteSpace: "nowrap", textDecoration: "none" }}
+        >
+          ← Factures fournisseurs (hors CPE)
+        </Link>
+      </section>
+
       <section style={{ marginBottom: 24 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
           <KpiCard label="Sites codifies" value={String(siteMappings.length)} sub="Lignes du referentiel finance" color="#2563eb" />
@@ -2453,26 +2493,42 @@ function CpeFinanceReference({
         </div>
       </section>
 
-      <nav
-        aria-label="Navigation referentiel finance CPE"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-          gap: 10,
-          marginBottom: 24,
-        }}
-      >
-        {CPE_FINANCE_SECTIONS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={section === item.id ? "primary-button" : "secondary-button"}
-            onClick={() => setSection(item.id)}
-            style={{ display: "grid", gap: 2, justifyItems: "start", minHeight: 58, textAlign: "left" }}
-          >
-            <span>{item.label}</span>
-            <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.72 }}>{item.detail}</span>
-          </button>
+      <nav aria-label="Navigation referentiel finance CPE" style={{ marginBottom: 24 }}>
+        {CPE_FINANCE_PHASES.map((phase) => (
+          <div key={phase.id} style={{ marginBottom: 14 }}>
+            <p
+              style={{
+                margin: "0 0 8px",
+                fontSize: 12,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                color: "#64748b",
+              }}
+            >
+              {phase.label}
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+                gap: 10,
+              }}
+            >
+              {CPE_FINANCE_SECTIONS.filter((item) => item.phase === phase.id).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={section === item.id ? "primary-button" : "secondary-button"}
+                  onClick={() => setSection(item.id)}
+                  style={{ display: "grid", gap: 2, justifyItems: "start", minHeight: 58, textAlign: "left" }}
+                >
+                  <span>{item.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.72 }}>{item.detail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

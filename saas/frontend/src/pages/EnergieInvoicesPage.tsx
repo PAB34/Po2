@@ -358,6 +358,62 @@ function InvoiceMultiFilter<T extends string>({
   );
 }
 
+type FluidKey = "elec" | "gaz" | "eau";
+type ControlStep = "data" | "control" | "report" | "liaison";
+
+// Onglet de selection du fluide (Electricite / Gaz / Eau). Gaz et Eau sont
+// presents mais "a integrer" tant que les parsers ne sont pas developpes.
+function FluidTab({
+  active,
+  soon,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  soon?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`fluid-tab${active ? " fluid-tab--active" : ""}`}
+      onClick={onClick}
+    >
+      {children}
+      {soon && <span className="badge badge-gray">A integrer</span>}
+    </button>
+  );
+}
+
+// Onglet d'etape du parcours : Donnees & import -> Controle -> Rapport -> Liaison finance.
+function StepTab({
+  active,
+  index,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  index: number;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`step-tab${active ? " step-tab--active" : ""}`}
+      onClick={onClick}
+    >
+      <span className="step-tab-index">{index}</span>
+      <span>{children}</span>
+    </button>
+  );
+}
+
 export function EnergieInvoicesPage() {
   const { token } = useAuth();
   const qc = useQueryClient();
@@ -416,6 +472,10 @@ export function EnergieInvoicesPage() {
   const [isSupplierReportOpen, setIsSupplierReportOpen] = useState(false);
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
   const [isAccountingOpen, setIsAccountingOpen] = useState(false);
+
+  // Fluide affiche (multi-fluides ready) et etape du parcours de controle.
+  const [fluid, setFluid] = useState<FluidKey>("elec");
+  const [step, setStep] = useState<ControlStep>("data");
 
   function resetInvoiceFilters() {
     setControlFilters([]);
@@ -862,13 +922,85 @@ export function EnergieInvoicesPage() {
 
   return (
     <div className="page">
-      <div className="page-header page-header-row">
+      <div className="page-header">
         <div>
-          <h2>Factures energie</h2>
-          <p className="page-subtitle">Import manuel des factures fournisseur avant controle et validation.</p>
+          <h2>Controle des factures fournisseurs</h2>
+          <p className="page-subtitle">
+            Marche Herault Energie - batiments hors CPE. Verifier chaque facture selon les modalites
+            contractuelles (BPU, TURPE), produire un rapport fournisseur, puis la fiche de liaison comptable
+            vers le service finance.
+          </p>
         </div>
       </div>
 
+      <div className="market-banner">
+        <div className="market-banner-item market-banner-item--active">
+          <span className="market-banner-tag">Marche en cours</span>
+          <strong>Fournisseurs · Herault Energie</strong>
+          <span>EDF · ENGIE · TotalEnergies - batiments hors CPE</span>
+        </div>
+        <Link to="/cpe" className="market-banner-item market-banner-item--link">
+          <span className="market-banner-tag">Autre marche</span>
+          <strong>CPE DALKIA →</strong>
+          <span>P1 gaz, P2, P3 - batiments dans le CPE</span>
+        </Link>
+      </div>
+
+      <details className="invoice-sources">
+        <summary>Comment ca marche - sources de donnees et livrables</summary>
+        <div className="invoice-sources-grid">
+          <div>
+            <strong>Donnees en entree</strong>
+            <ul>
+              <li>Factures fournisseur (export XLSX ENGIE, CSV EDF)</li>
+              <li>Referentiel de prix BPU (<Link to="/energie/bpu">Prix et TURPE</Link>)</li>
+              <li>Referentiel TURPE (acheminement)</li>
+              <li>Releves distributeur ENEDIS / GRDF (controle des quantites)</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Controle</strong>
+            <ul>
+              <li>Prix facture vs BPU contractuel</li>
+              <li>Acheminement vs TURPE</li>
+              <li>Quantites vs releves distributeur</li>
+              <li>Coherence des periodes facturees</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Livrables</strong>
+            <ul>
+              <li>Decision par facture (valider / contester)</li>
+              <li>Rapport fournisseur (points a clarifier)</li>
+              <li>Fiche de liaison Excel → service finance (matrice comptable)</li>
+            </ul>
+          </div>
+        </div>
+      </details>
+
+      <div className="fluid-tabs" role="tablist" aria-label="Fluide">
+        <FluidTab active={fluid === "elec"} onClick={() => setFluid("elec")}>Electricite</FluidTab>
+        <FluidTab active={fluid === "gaz"} soon onClick={() => setFluid("gaz")}>Gaz</FluidTab>
+        <FluidTab active={fluid === "eau"} soon onClick={() => setFluid("eau")}>Eau</FluidTab>
+      </div>
+
+      {fluid !== "elec" && (
+        <section className="invoice-placeholder">
+          <h3>{fluid === "gaz" ? "Gaz - a integrer" : "Eau - a integrer"}</h3>
+          <p>
+            {fluid === "gaz"
+              ? "Le controle des factures gaz TotalEnergies (compteurs PCE, distributeur GRDF) s'appuiera sur le BPU gaz lot 7 Herault Energie. Le parser facture gaz et le rapprochement PCE restent a developper."
+              : "Le controle des factures d'eau SUEZ (consommation + tarif) est prevu dans une prochaine iteration."}
+          </p>
+          <p className="page-subtitle">
+            Cette page est concue pour accueillir les trois fluides. Le parcours sera identique : Donnees &amp; import →
+            Controle contractuel → Rapport → Liaison finance.
+          </p>
+        </section>
+      )}
+
+      {fluid === "elec" && (
+        <>
       <div className="kpi-row">
         <div className="kpi-card">
           <span className="kpi-label">Factures importees</span>
@@ -892,6 +1024,15 @@ export function EnergieInvoicesPage() {
         </div>
       </div>
 
+      <div className="step-tabs" role="tablist" aria-label="Etapes du controle">
+        <StepTab active={step === "data"} index={1} onClick={() => setStep("data")}>Donnees &amp; import</StepTab>
+        <StepTab active={step === "control"} index={2} onClick={() => setStep("control")}>Controle contractuel</StepTab>
+        <StepTab active={step === "report"} index={3} onClick={() => setStep("report")}>Rapport fournisseur</StepTab>
+        <StepTab active={step === "liaison"} index={4} onClick={() => setStep("liaison")}>Liaison finance</StepTab>
+      </div>
+
+      {step === "data" && (
+      <>
       <section className="invoice-supplier-strip">
         <div className="invoice-supplier-strip-head">
           <h3>Fournisseurs d'energie</h3>
@@ -1249,6 +1390,11 @@ export function EnergieInvoicesPage() {
       </details>
       )}
 
+      </>
+      )}
+
+      {step === "control" && (
+      <>
       <section className="invoice-control-workbench">
         <div className="invoice-control-workbench-header">
           <div>
@@ -1328,16 +1474,16 @@ export function EnergieInvoicesPage() {
             type="button"
             className="btn-secondary btn-compact"
             disabled={supplierReportImports.length === 0}
-            onClick={() => setIsSupplierReportOpen(true)}
+            onClick={() => setStep("report")}
           >
-            Editer rapport
+            Aller au rapport
           </button>
           <button
             type="button"
             className="btn-secondary btn-compact"
-            onClick={() => setIsAccountingOpen(true)}
+            onClick={() => setStep("liaison")}
           >
-            Matrice comptable
+            Aller a la liaison finance
           </button>
         </div>
 
@@ -1463,7 +1609,10 @@ export function EnergieInvoicesPage() {
         </details>
       </section>
 
-      {activeTurpeVersion && (
+      </>
+      )}
+
+      {step === "data" && activeTurpeVersion && (
         <section className="turpe-reference-panel">
           <div className="turpe-reference-main">
             <p className="field-label">Referentiel TURPE</p>
@@ -1485,6 +1634,8 @@ export function EnergieInvoicesPage() {
       {importsQuery.isLoading && <p className="loading-text">Chargement des imports...</p>}
       {importsQuery.isError && <p className="error-text">{(importsQuery.error as Error).message}</p>}
 
+      {step === "control" && (
+      <>
       <section className="invoice-timeline-panel">
         <header className="invoice-timeline-panel-header">
           <div>
@@ -1631,6 +1782,63 @@ export function EnergieInvoicesPage() {
           </tbody>
         </table>
       </div>
+
+      </>
+      )}
+
+      {step === "report" && (
+        <section className="invoice-step-panel">
+          <div className="invoice-step-panel-head">
+            <div>
+              <p className="field-label">Etape 3 - Rapport fournisseur</p>
+              <h3>Construire le rapport a transmettre au fournisseur</h3>
+              <span>
+                Le rapport reprend les points a clarifier (ecarts de prix BPU, periodes, TURPE) sur le perimetre
+                filtre a l'etape Controle. {supplierReportImports.length} facture{supplierReportImports.length > 1 ? "s" : ""} retenue{supplierReportImports.length > 1 ? "s" : ""}.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={supplierReportImports.length === 0}
+              onClick={() => setIsSupplierReportOpen(true)}
+            >
+              Editer le rapport fournisseur
+            </button>
+          </div>
+          <p className="invoice-step-hint">
+            Affinez d'abord le perimetre a l'etape{" "}
+            <button type="button" className="btn-secondary btn-compact" onClick={() => setStep("control")}>
+              Controle contractuel
+            </button>{" "}
+            (filtres, factures a contester), puis revenez ici.
+          </p>
+        </section>
+      )}
+
+      {step === "liaison" && (
+        <section className="invoice-step-panel">
+          <div className="invoice-step-panel-head">
+            <div>
+              <p className="field-label">Etape 4 - Liaison finance comptable</p>
+              <h3>Generer la fiche de liaison vers le service finance</h3>
+              <span>
+                La matrice comptable associe chaque site (PRM) et chaque poste de facture a une nature comptable.
+                Elle alimente l'export Excel de liaison transmis au service finance.
+              </span>
+            </div>
+            <button type="button" className="btn-primary" onClick={() => setIsAccountingOpen(true)}>
+              Ouvrir la matrice comptable
+            </button>
+          </div>
+          <p className="invoice-step-hint">
+            La matrice (codification sites + natures comptables par poste) et l'export de la fiche de liaison
+            s'ouvrent dans une fenetre dediee.
+          </p>
+        </section>
+      )}
+        </>
+      )}
 
       {isSupplierReportOpen && (
         <InvoiceSupplierReport
