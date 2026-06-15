@@ -41,6 +41,7 @@ class EnergyInvoiceImportOut(BaseModel):
     decision_comment: str | None
     decision_by_user_id: int | None
     decision_updated_at: datetime | None
+    finance_exported_at: datetime | None = None
     control_issues: list[EnergyInvoiceControlIssueOut]
     error_message: str | None
     created_at: datetime

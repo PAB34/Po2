@@ -97,12 +97,23 @@ Le parametrage est teste au niveau service. Il faut ajouter un test HTTP et veri
 
 | Endpoint | Statut actuel | Preuve |
 |---|---|---|
-| `GET /api/billing/invoices/imports/{invoice_import_id}/liaison.xlsx` | `test service OK` | `test_energie_accounting.py::test_build_liaison_workbook` verifie la generation XLSX. |
+| `GET /api/billing/invoices/imports/{invoice_import_id}/liaison.xlsx` | `test service OK` | `test_energie_accounting.py::test_build_liaison_workbook` + `::test_liaison_is_tier_agnostic_and_marks_export`. |
+
+Increment P0-a (2026-06-15) livre :
+
+```text
+- Liaison tier-agnostique : titre + nom de fichier suivent le fournisseur (ENGIE/EDF/TotalEnergies)
+  via supplier_registry, au lieu d'un "ENGIE" code en dur. Meta inclut deja HT et TTC.
+- Tracabilite : nouveau champ EnergyInvoiceImport.finance_exported_at (migration 0055), pose a l'export
+  (mark_energy_liaison_exported, parite avec mark_finance_liaison_exported cote DALKIA).
+- Front : "Transmise finance le ..." sur le detail facture + compteur "X/N transmises" sur l'etape Liaison.
+```
 
 Limite :
 
 ```text
-Le fichier XLSX est genere en service, mais pas encore valide en HTTP, front, ni avec un cas reel utilisateur.
+Pas encore de test HTTP ni de validation front ; export consolide par periode (P0-c) et historique de
+decision (P0-b) restent a faire.
 ```
 
 ### 3.5 Decision facture energie

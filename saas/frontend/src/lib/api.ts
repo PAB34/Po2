@@ -1819,6 +1819,7 @@ export type EnergyInvoiceImport = {
   decision_comment: string | null;
   decision_by_user_id: number | null;
   decision_updated_at: string | null;
+  finance_exported_at: string | null;
   control_issues: Array<{
     severity: string;
     code: string;

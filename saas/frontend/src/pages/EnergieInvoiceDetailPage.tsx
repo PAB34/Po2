@@ -553,7 +553,9 @@ export function EnergieInvoiceDetailPage() {
                       token!,
                       invoiceImportId,
                       invoiceImport.invoice_number ?? String(invoiceImportId),
-                    ).catch((e) => setLiaisonError((e as Error).message));
+                    )
+                      .then(() => qc.invalidateQueries({ queryKey: ["energy-invoice-import", invoiceImportId] }))
+                      .catch((e) => setLiaisonError((e as Error).message));
                   }}
                 >
                   Exporter la fiche de liaison (xlsx)
@@ -562,6 +564,11 @@ export function EnergieInvoiceDetailPage() {
                   Ouvrir la matrice comptable
                 </Link>
               </div>
+              {invoiceImport.finance_exported_at && (
+                <p style={{ fontSize: 13, color: "#15803d", margin: "0 0 10px" }}>
+                  Transmise finance le {new Date(invoiceImport.finance_exported_at).toLocaleString("fr-FR")}
+                </p>
+              )}
               {liaisonError && <p className="error-text">{liaisonError}</p>}
               <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>

@@ -828,8 +828,9 @@ def export_invoice_liaison(
     if invoice_import is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
     content = accounting_svc.build_energy_liaison_workbook(db, invoice_import)
+    accounting_svc.mark_energy_liaison_exported(db, invoice_import)
     label = invoice_import.invoice_number or str(invoice_import.id)
-    filename = f"fiche-liaison-engie-{label}.xlsx"
+    filename = f"fiche-liaison-{accounting_svc.liaison_supplier_slug(invoice_import)}-{label}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

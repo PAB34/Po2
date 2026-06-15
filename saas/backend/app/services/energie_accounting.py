@@ -17,6 +17,7 @@ import io
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 import openpyxl
@@ -29,6 +30,36 @@ from app.models.invoice import (
     EnergyAccountingSiteMapping,
     EnergyInvoiceImport,
 )
+from app.services import supplier_registry
+
+
+def _supplier_candidate(invoice_import: EnergyInvoiceImport) -> str | None:
+    """Meilleur indice fournisseur : supplier_guess de l'import, sinon facture normalisée."""
+    invoice = getattr(invoice_import, "normalized_invoice", None)
+    return invoice_import.supplier_guess or (invoice.supplier if invoice else None)
+
+
+def supplier_label(invoice_import: EnergyInvoiceImport) -> str:
+    """Libellé fournisseur (tier-agnostique) pour la fiche de liaison."""
+    candidate = _supplier_candidate(invoice_import)
+    profile = supplier_registry.get(candidate)
+    if profile:
+        return profile.label
+    return candidate or "Fournisseur"
+
+
+def liaison_supplier_slug(invoice_import: EnergyInvoiceImport) -> str:
+    """Slug fournisseur pour le nom de fichier (engie / edf / totalenergies / fournisseur)."""
+    return (supplier_registry.normalize_code(_supplier_candidate(invoice_import)) or "fournisseur").lower()
+
+
+def mark_energy_liaison_exported(db: Session, invoice_import: EnergyInvoiceImport) -> EnergyInvoiceImport:
+    """Horodate la transmission de la fiche de liaison au service finance."""
+    invoice_import.finance_exported_at = datetime.now(timezone.utc)
+    db.add(invoice_import)
+    db.commit()
+    db.refresh(invoice_import)
+    return invoice_import
 
 
 # ---------------------------------------------------------------------------
@@ -451,11 +482,12 @@ def build_energy_liaison_workbook(db: Session, invoice_import: EnergyInvoiceImpo
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Fiche liaison"
-    ws["A1"] = "Fiche de liaison finance ENGIE"
+    label = supplier_label(invoice_import)
+    ws["A1"] = f"Fiche de liaison finance {label}"
     ws["A1"].font = Font(bold=True, size=15)
     meta = [
         ("Facture", invoice_import.invoice_number or (invoice.invoice_number if invoice else None)),
-        ("Fournisseur", (invoice.supplier if invoice else None) or invoice_import.supplier_guess or "ENGIE"),
+        ("Fournisseur", (invoice.supplier if invoice else None) or label),
         ("Période", f"{invoice_import.period_start or '-'} au {invoice_import.period_end or '-'}"),
         ("Total HT", invoice.total_ht if invoice else None),
         ("Total TTC", invoice_import.total_ttc),

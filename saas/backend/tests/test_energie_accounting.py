@@ -115,3 +115,22 @@ def test_build_liaison_workbook(db):
         for r in range(14, ws.max_row + 1)
     )
     assert found
+
+
+def test_liaison_is_tier_agnostic_and_marks_export(db):
+    svc.import_codification_workbook(db, _codification_xlsx(), filename="codif.xlsx", city_id=1)
+    imp = _make_invoice(db)
+    imp.supplier_guess = "EDF"  # eclairage public : tier different d'ENGIE
+    db.commit()
+
+    # Titre + slug refletent le tier (EDF), pas un ENGIE code en dur.
+    assert svc.supplier_label(imp) == "EDF"
+    assert svc.liaison_supplier_slug(imp) == "edf"
+    content = svc.build_energy_liaison_workbook(db, imp)
+    ws = openpyxl.load_workbook(io.BytesIO(content)).active
+    assert ws["A1"].value == "Fiche de liaison finance EDF"
+
+    # L'export horodate la transmission finance.
+    assert imp.finance_exported_at is None
+    svc.mark_energy_liaison_exported(db, imp)
+    assert imp.finance_exported_at is not None

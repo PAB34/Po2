@@ -1832,8 +1832,10 @@ export function EnergieInvoicesPage() {
             </button>
           </div>
           <p className="invoice-step-hint">
-            La matrice (codification sites + natures comptables par poste) et l'export de la fiche de liaison
-            s'ouvrent dans une fenetre dediee.
+            <strong>{imports.filter((i) => i.finance_exported_at).length}</strong> / {imports.length} facture
+            {imports.length > 1 ? "s" : ""} transmise{imports.length > 1 ? "s" : ""} au service finance.
+            L'export de la fiche de liaison (par facture) horodate la transmission ; il s'ouvre depuis le detail
+            de chaque facture, et la matrice (codification sites + postes) dans une fenetre dediee.
           </p>
         </section>
       )}

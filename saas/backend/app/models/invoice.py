@@ -87,6 +87,7 @@ class EnergyInvoiceImport(Base):
     decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     decision_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     decision_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finance_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     analysis_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     control_report_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
