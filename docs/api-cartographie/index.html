@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cartographie API — Po2</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #111c34; --panel2: #16233f; --line: rgba(148,163,184,.22);
+    --txt: #e2e8f0; --muted: #94a3b8; --faint: #64748b;
+    --blue:#378add; --green:#639922; --amber:#ba7517; --red:#e24b4a; --purple:#7f77dd; --gray:#5f5e5a;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--txt); font-size:14px; }
+  a { color:#85b7eb; }
+  header { padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:16px; font-weight:500; margin:0; }
+  header .eyebrow { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); }
+  .grow { flex:1; }
+  .stats { display:flex; gap:14px; flex-wrap:wrap; }
+  .stat { font-size:12px; color:var(--muted); } .stat b { color:var(--txt); font-weight:500; }
+  button { font-family:inherit; font-size:13px; color:var(--txt); background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; }
+  button:hover { border-color:#3b82f6; }
+  button.primary { background:#1d4ed8; border-color:#1d4ed8; }
+  button.ghost { background:transparent; }
+  input, select, textarea { font-family:inherit; font-size:13px; color:var(--txt); background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:7px 9px; width:100%; }
+  textarea { resize:vertical; min-height:64px; }
+  .tabs { display:flex; gap:6px; padding:10px 18px 0; }
+  .tab { padding:7px 14px; border-radius:7px 7px 0 0; color:var(--muted); cursor:pointer; border:1px solid transparent; border-bottom:none; }
+  .tab.active { color:var(--txt); background:var(--panel); border-color:var(--line); }
+  main { display:grid; grid-template-columns: 1fr 1.05fr; gap:14px; padding:14px 18px 40px; align-items:start; }
+  @media (max-width: 900px){ main{ grid-template-columns:1fr; } }
+  .col { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .col-head { padding:10px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+  .tree { max-height:72vh; overflow:auto; }
+  .router { border-bottom:1px solid var(--line); }
+  .router-head { display:flex; align-items:center; gap:8px; padding:9px 12px; cursor:pointer; }
+  .router-head:hover { background:var(--panel2); }
+  .router-head .name { font-weight:500; }
+  .router-head .pref { color:var(--faint); font-size:12px; }
+  .router-head .cnt { margin-left:auto; color:var(--muted); font-size:12px; }
+  .eps { display:none; } .router.open .eps { display:block; }
+  .ep { display:flex; align-items:center; gap:8px; padding:7px 12px 7px 22px; cursor:pointer; border-top:1px solid rgba(148,163,184,.08); }
+  .ep:hover { background:var(--panel2); }
+  .ep.sel { background:#16335e; }
+  .m { font-size:10px; font-weight:600; padding:2px 6px; border-radius:5px; min-width:46px; text-align:center; color:#06121f; }
+  .m.GET{background:#85b7eb;} .m.POST{background:#97c459;} .m.PATCH,.m.PUT{background:#ef9f27;} .m.DELETE{background:#f09595;}
+  .ep .p { font-family: ui-monospace, "Cascadia Code", monospace; font-size:12px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ep .dot { margin-left:auto; width:9px; height:9px; border-radius:50%; flex:0 0 auto; background:var(--gray); }
+  .dot.keep{background:var(--green);} .dot.review{background:var(--amber);} .dot.remove{background:var(--red);} .dot.planned{background:var(--purple);}
+  .vbadge { font-size:10px; color:#cbb6ff; border:1px solid #5b4ea8; border-radius:4px; padding:1px 4px; }
+  .detail { padding:14px; min-height:300px; }
+  .detail .ph { color:var(--muted); }
+  .field { margin:12px 0; }
+  .field > label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+  .seg { display:flex; gap:6px; flex-wrap:wrap; }
+  .seg button { font-size:12px; padding:5px 10px; }
+  .seg button.on { background:#1d4ed8; border-color:#1d4ed8; }
+  .seg button.on.no { background:var(--red); border-color:var(--red); }
+  .seg button.on.maybe { background:var(--amber); border-color:var(--amber); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .doc { background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:9px 11px; font-size:12.5px; color:#cbd5e1; white-space:pre-wrap; max-height:160px; overflow:auto; }
+  .pathmono { font-family: ui-monospace, monospace; font-size:13px; word-break:break-all; }
+  .friction { border:1px solid var(--line); border-radius:9px; padding:12px 14px; margin:12px 0; background:var(--panel2); }
+  .friction h3 { margin:0 0 4px; font-size:14px; font-weight:500; color:#fbbf24; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+  .chip { font-size:11px; color:#cbd5e1; background:#1e2c49; border:1px solid var(--line); border-radius:999px; padding:2px 9px; }
+  .muted { color:var(--muted); } .small { font-size:12px; }
+  .hint { padding:10px 18px; color:var(--faint); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">Patrimoineaucarré · Po2</div>
+    <h1>Cartographie API — gouvernance des endpoints</h1>
+  </div>
+  <div class="grow"></div>
+  <div class="stats" id="stats"></div>
+  <div class="row">
+    <button class="ghost" onclick="addEndpoint()">+ Endpoint</button>
+    <button class="ghost" onclick="exportJson()">Exporter</button>
+    <button class="ghost" onclick="document.getElementById('imp').click()">Importer</button>
+    <input id="imp" type="file" accept="application/json" style="display:none" onchange="importJson(event)" />
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-view="catalog" onclick="setView('catalog')">Catalogue</div>
+  <div class="tab" data-view="frictions" onclick="setView('frictions')">Frictions structurelles</div>
+</div>
+
+<div id="app"></div>
+<div class="hint" id="genhint"></div>
+
+<script src="api_catalog.js"></script>
+<script>
+const KEY = "po2-api-cartographie-v1";
+const CAT = (window.API_CATALOG || {endpoints:[], routers:[]});
+const FRICTIONS = [
+  {id:"sites", title:"3 représentations de « site »", detail:"Site (patrimoine) / CpeSite (opérationnel) / CpeDalkiaRefSite (contractuel) — non reliées.", routers:["buildings","cpe","cpe_dalkia"]},
+  {id:"meters", title:"3 surfaces de lien compteur", detail:"BuildingMeterLink / GasPce.building_id / EnergyInvoiceSite.prm.", routers:["buildings","grdf","billing"]},
+  {id:"prix", title:"2 référentiels de prix", detail:"bpu_* (historique) vs BillingConfig/BillingBpuLine (courant).", routers:["bpu","billing"]},
+  {id:"inventaire", title:"2 inventaires techniques", detail:"BuildingEquipment (SYPEMI) vs CvcInventoryItem (terrain).", routers:["equipment","cvc"]},
+  {id:"matching_cpe", title:"Matching sites CPE absent", detail:"Le plus gros marché (CPE) n'est pas relié au patrimoine.", routers:["cpe","buildings"]},
+  {id:"engie_proxy", title:"Proxy ENGIE non câblé", detail:"/engie : 24 endpoints sans appel front identifié.", routers:["engie"]},
+  {id:"pronostics", title:"Module hors périmètre", detail:"/pronostics : jeu Coupe du Monde, sans lien produit.", routers:["pronostics"]},
+];
+
+let store = load();
+let state = { view:"catalog", search:"", sel:null, open:{} };
+
+function load(){
+  try { return Object.assign({annotations:{}, virtual:[], frictionNotes:{}}, JSON.parse(localStorage.getItem(KEY)||"{}")); }
+  catch(e){ return {annotations:{}, virtual:[], frictionNotes:{}}; }
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(store)); }
+
+function allEps(){ return CAT.endpoints.concat(store.virtual||[]); }
+function anno(id){ return store.annotations[id] || {}; }
+function setAnno(id, patch, rerender){
+  store.annotations[id] = Object.assign({}, store.annotations[id], patch);
+  save(); if(rerender) render();
+}
+
+function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
+function setView(v){ state.view=v; document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===v)); render(); }
+
+function statsHtml(){
+  const eps = allEps(); let keep=0,review=0,remove=0,planned=0,audited=0;
+  eps.forEach(e=>{ const a=anno(e.id); if(a.status==="keep")keep++; else if(a.status==="review")review++; else if(a.status==="remove")remove++; else if(a.status==="planned")planned++; if(a.front||a.back||a.status||a.comment)audited++; });
+  return `<span class="stat"><b>${eps.length}</b> endpoints</span>
+    <span class="stat"><b>${CAT.router_count||CAT.routers.length}</b> routeurs</span>
+    <span class="stat" style="color:#9fe1cb"><b>${keep}</b> garder</span>
+    <span class="stat" style="color:#facc15"><b>${review}</b> revoir</span>
+    <span class="stat" style="color:#f09595"><b>${remove}</b> retirer</span>
+    <span class="stat" style="color:#c4b5fd"><b>${planned}</b> planifiés</span>
+    <span class="stat"><b>${audited}</b>/${eps.length} annotés</span>`;
+}
+
+function render(){
+  document.getElementById("stats").innerHTML = statsHtml();
+  const g = CAT.generated_at ? `Catalogue généré le ${esc(CAT.generated_at)} · ${CAT.endpoint_count} endpoints. Régénérer : python -m app.scripts.build_api_catalog` : "";
+  document.getElementById("genhint").textContent = g;
+  document.getElementById("app").innerHTML = state.view==="catalog" ? catalogHtml() : frictionsHtml();
+}
+
+function catalogHtml(){
+  return `<main>
+    <div class="col">
+      <div class="col-head"><input id="search" placeholder="Filtrer : chemin, fonction, mot-clé..." value="${esc(state.search)}" oninput="onSearch(this.value)" /></div>
+      <div class="tree" id="tree">${treeHtml()}</div>
+    </div>
+    <div class="col"><div class="detail" id="detail">${detailHtml()}</div></div>
+  </main>`;
+}
+
+function groupByRouter(){
+  const map = {};
+  allEps().forEach(e=>{ (map[e.router]=map[e.router]||[]).push(e); });
+  return map;
+}
+function matches(e){
+  const q = state.search.trim().toLowerCase(); if(!q) return true;
+  return (e.path+" "+e.fn+" "+e.summary+" "+e.router+" "+(anno(e.id).comment||"")+" "+(anno(e.id).tags||"")).toLowerCase().includes(q);
+}
+function treeHtml(){
+  const groups = groupByRouter(); const names = Object.keys(groups).sort();
+  let html = "";
+  names.forEach(name=>{
+    const eps = groups[name].filter(matches);
+    if(state.search && eps.length===0) return;
+    const open = state.search ? true : !!state.open[name];
+    const pref = (groups[name][0]||{}).prefix || "";
+    html += `<div class="router ${open?'open':''}">
+      <div class="router-head" onclick="toggle('${esc(name)}')">
+        <span class="name">${esc(name)}</span><span class="pref">${esc(pref)}</span>
+        <span class="cnt">${eps.length}/${groups[name].length}</span>
+      </div>
+      <div class="eps">${eps.map(epRow).join("")}
+        <div class="ep" style="padding-left:22px" onclick="cloneGroup('${esc(name)}')"><span class="muted small">＋ Cloner ce groupe vers un nouveau préfixe…</span></div>
+      </div></div>`;
+  });
+  return html || `<div style="padding:14px" class="muted">Aucun endpoint ne correspond.</div>`;
+}
+function epRow(e){
+  const a = anno(e.id);
+  const sel = state.sel===e.id ? "sel" : "";
+  const v = e.virtual ? `<span class="vbadge">plan</span>` : "";
+  return `<div class="ep ${sel}" onclick="select('${esc(e.id)}')">
+    <span class="m ${e.method}">${e.method}</span>
+    <span class="p" title="${esc(e.path)}">${esc(e.path)}</span> ${v}
+    <span class="dot ${a.status||''}" title="${a.status||'non statué'}"></span>
+  </div>`;
+}
+function toggle(name){ state.open[name]=!state.open[name]; document.getElementById("tree").innerHTML=treeHtml(); }
+function onSearch(v){ state.search=v; document.getElementById("tree").innerHTML=treeHtml(); }
+function select(id){ state.sel=id; render(); }
+
+function segBtn(id, field, val, label, cls){
+  const cur = anno(id)[field]||"";
+  return `<button class="${cur===val?'on '+(cls||''):''}" onclick="setAnno('${id}',{${field}:'${cur===val?'':val}'},true)">${label}</button>`;
+}
+function detailHtml(){
+  if(!state.sel) return `<p class="ph">Sélectionne un endpoint à gauche pour l'auditer : utilité front/back, statut, commentaires, clonage.</p>`;
+  const e = allEps().find(x=>x.id===state.sel);
+  if(!e) return `<p class="ph">Endpoint introuvable.</p>`;
+  const a = anno(e.id);
+  return `
+    <div class="row" style="align-items:center">
+      <span class="m ${e.method}">${e.method}</span>
+      <span class="pathmono">${esc(e.path)}</span>
+      ${e.virtual?'<span class="vbadge">planifié</span>':''}
+    </div>
+    <div class="small muted" style="margin-top:6px">routeur <b>${esc(e.router)}</b> · fonction <code>${esc(e.fn)||'—'}</code></div>
+    ${e.summary?`<div class="field"><label>Description (depuis le code)</label><div class="doc">${esc(e.doc||e.summary)}</div></div>`:''}
+
+    <div class="field"><label>Utile en front ?</label><div class="seg">
+      ${segBtn(e.id,'front','yes','Oui')} ${segBtn(e.id,'front','no','Non','no')} ${segBtn(e.id,'front','maybe','À vérifier','maybe')}
+    </div></div>
+    <div class="field"><label>Utile en back ?</label><div class="seg">
+      ${segBtn(e.id,'back','yes','Oui')} ${segBtn(e.id,'back','no','Non','no')} ${segBtn(e.id,'back','maybe','À vérifier','maybe')}
+    </div></div>
+    <div class="field"><label>Statut</label><div class="seg">
+      ${segBtn(e.id,'status','keep','À garder')} ${segBtn(e.id,'status','review','À revoir','maybe')} ${segBtn(e.id,'status','remove','À retirer','no')} ${segBtn(e.id,'status','planned','Planifié')}
+    </div></div>
+    <div class="field"><label>Étiquettes</label><input value="${esc(a.tags||'')}" oninput="setAnno('${e.id}',{tags:this.value},false)" placeholder="ex. moteur:cpe, prioritaire" /></div>
+    <div class="field"><label>Commentaire</label><textarea oninput="setAnno('${e.id}',{comment:this.value},false)" placeholder="Note, décision, contexte...">${esc(a.comment||'')}</textarea></div>
+
+    <div class="row">
+      <button onclick="cloneOne('${e.id}')">Cloner cet endpoint…</button>
+      ${e.virtual?`<button class="ghost" onclick="delVirtual('${e.id}')">Supprimer (planifié)</button>`:''}
+    </div>`;
+}
+
+function toggleStatus(){}
+
+function cloneOne(id){
+  const e = allEps().find(x=>x.id===id); if(!e) return;
+  const np = prompt("Nouveau chemin pour le clone :", e.path.replace(/dalkia/gi,"spie"));
+  if(!np) return;
+  addVirtual({method:e.method, path:np.trim(), router:e.router+" (planifié)", fn:e.fn, summary:e.summary, doc:e.doc, source:e.id});
+}
+function cloneGroup(name){
+  const eps = groupByRouter()[name]||[]; if(!eps.length) return;
+  const from = prompt("Cloner le groupe « "+name+" » en remplaçant, dans les chemins :\n\nTexte à remplacer (ex. dalkia) :", "dalkia");
+  if(from===null) return;
+  const to = prompt("…par (ex. spie) :", "spie");
+  if(to===null) return;
+  let n=0;
+  eps.filter(e=>!e.virtual).forEach(e=>{
+    const np = e.path.split(from).join(to);
+    if(np===e.path) return;
+    addVirtual({method:e.method, path:np, router:name+"→"+to+" (planifié)", fn:e.fn, summary:e.summary, doc:e.doc, source:e.id}, true);
+    n++;
+  });
+  save(); render();
+  alert(n+" endpoint(s) planifié(s) créés pour « "+to+" ».");
+}
+function addEndpoint(){
+  const path = prompt("Chemin du nouvel endpoint (ex. /api/cpe/spie-ref/imports) :","/api/");
+  if(!path) return;
+  const method = (prompt("Méthode (GET/POST/PATCH/DELETE) :","GET")||"GET").toUpperCase();
+  const router = prompt("Routeur / groupe :","(planifié)")||"(planifié)";
+  addVirtual({method, path:path.trim(), router, fn:"", summary:"(planifié)", doc:""});
+}
+function addVirtual(o, silent){
+  const e = Object.assign({virtual:true}, o);
+  e.id = e.method+" "+e.path+" #"+Math.random().toString(36).slice(2,7);
+  store.virtual.push(e);
+  store.annotations[e.id] = Object.assign({status:"planned"}, store.annotations[e.id]);
+  if(!silent){ save(); state.sel=e.id; render(); }
+}
+function delVirtual(id){
+  store.virtual = store.virtual.filter(e=>e.id!==id);
+  delete store.annotations[id];
+  if(state.sel===id) state.sel=null;
+  save(); render();
+}
+
+function frictionsHtml(){
+  return `<main style="grid-template-columns:1fr"><div>
+    <p class="muted small" style="margin:0 0 8px">Frictions structurelles (dette de liaison) issues de l'analyse backend — annote chaque point avec ta décision.</p>
+    ${FRICTIONS.map(f=>`
+      <div class="friction">
+        <h3>${esc(f.title)}</h3>
+        <div class="small muted">${esc(f.detail)}</div>
+        <div class="chips">${f.routers.map(r=>`<span class="chip">${esc(r)}</span>`).join("")}</div>
+        <textarea placeholder="Décision / plan de résorption..." oninput="setFriction('${f.id}', this.value)">${esc(store.frictionNotes[f.id]||"")}</textarea>
+      </div>`).join("")}
+  </div></main>`;
+}
+function setFriction(id,v){ store.frictionNotes[id]=v; save(); }
+
+function exportJson(){
+  const blob = new Blob([JSON.stringify({exported_at:new Date().toISOString(), store}, null, 2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download = "api_cartographie_annotations.json"; a.click();
+}
+function importJson(ev){
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try {
+      const d = JSON.parse(r.result); const s = d.store||d;
+      store.annotations = Object.assign({}, store.annotations, s.annotations||{});
+      store.frictionNotes = Object.assign({}, store.frictionNotes, s.frictionNotes||{});
+      const ids = new Set(store.virtual.map(e=>e.id));
+      (s.virtual||[]).forEach(e=>{ if(!ids.has(e.id)) store.virtual.push(e); });
+      save(); render(); alert("Annotations importées.");
+    } catch(e){ alert("Fichier invalide : "+e.message); } };
+  r.readAsText(f);
+  ev.target.value="";
+}
+
+render();
+</script>
+</body>
+</html>

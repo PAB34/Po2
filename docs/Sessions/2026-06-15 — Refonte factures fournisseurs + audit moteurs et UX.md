@@ -63,6 +63,17 @@
 - Questions ouvertes (doc 11 §6) : valider le regroupement sous items ; choisir les 5–6 files prioritaires ;
   résorber la dette de liaison maintenant ou après l'UX ; descendre au niveau endpoint sur un domaine précis ?
 
+### Chantier 5 — Cartographie API éditable (outil de gouvernance)
+
+- Outil autonome `docs/api-cartographie/` : `index.html` (autoportant, double-clic) + `api_catalog.js`
+  (généré) + `README.md`. Générateur `saas/backend/app/scripts/build_api_catalog.py` (introspecte
+  `app.main:app` → 279 endpoints / 17 routeurs).
+- Fonctions : arbre Routeur→Préfixe→Endpoints, audit *utile front/back* + statut (garder/revoir/retirer/
+  planifié), commentaires/étiquettes, **clonage d'endpoint et de groupe vers un nouveau préfixe**
+  (ex. DALKIA→SPIE), onglet **Frictions structurelles** (dette de liaison), export/import JSON (annotations
+  en localStorage, régénération non destructive).
+- Régénérer : `DATABASE_URL="sqlite:///:memory:" python -m app.scripts.build_api_catalog`.
+
 ## 🚧 Ce qui reste à faire / handoff
 
 ### Priorité 1 — Valider l'audit puis attaquer Phase 1 (navigation)
