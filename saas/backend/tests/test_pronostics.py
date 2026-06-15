@@ -16,6 +16,7 @@ from app.services.pronostics import (
     create_player,
     ensure_matches,
     fifa_rank,
+    is_match_locked,
     save_predictions,
     request_password_reset,
     reset_password,
@@ -265,13 +266,48 @@ def test_ensure_matches_updates_existing_schedule_without_scores():
     assert (match.real_score1, match.real_score2, match.locked) == (2, 1, True)
 
 
+def test_match_locks_at_kickoff_time():
+    match = PronosticsMatch(
+        id="TEST",
+        group_name="A",
+        team1="A",
+        team2="B",
+        match_at=datetime(2026, 6, 11, 19, 0, tzinfo=timezone.utc),
+        stadium="Test",
+    )
+
+    assert not is_match_locked(match, datetime(2026, 6, 11, 18, 59, tzinfo=timezone.utc))
+    assert is_match_locked(match, datetime(2026, 6, 11, 19, 0, tzinfo=timezone.utc))
+
+
+def test_save_predictions_ignores_matches_after_kickoff():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        ensure_matches(db)
+        player = create_player(db, email="joueur@example.com", password="motdepasse123", pseudo="Joueur", service="CTM")
+        save_predictions(
+            db,
+            player,
+            [PronosticsPredictionWrite(match_id="M001", score1=2, score2=1)],
+            now=datetime(2026, 6, 11, 19, 1, tzinfo=timezone.utc),
+        )
+
+        assert calculate_ranking(db)[0].predictions_count == 0
+
+
 def test_ranking_recalculates_points_from_real_scores():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         ensure_matches(db)
         player = create_player(db, email="joueur@example.com", password="motdepasse123", pseudo="Joueur", service="CTM")
-        save_predictions(db, player, [PronosticsPredictionWrite(match_id="M001", score1=2, score2=1)])
+        save_predictions(
+            db,
+            player,
+            [PronosticsPredictionWrite(match_id="M001", score1=2, score2=1)],
+            now=datetime(2026, 6, 11, 18, 59, tzinfo=timezone.utc),
+        )
         match = db.get(PronosticsMatch, "M001")
         assert match is not None
         match.real_score1 = 2

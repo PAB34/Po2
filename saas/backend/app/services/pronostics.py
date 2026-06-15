@@ -27,8 +27,10 @@ TEAM_ALIASES = {
     "belgium": "belgique",
     "brazil": "bresil",
     "bosnia and herzegovina": "bosnie herzegovine",
+    "bosnia herzegovina": "bosnie herzegovine",
     "canada": "canada",
     "cape verde": "cap vert",
+    "cape verde islands": "cap vert",
     "colombia": "colombie",
     "congo dr": "rd congo",
     "dr congo": "rd congo",
@@ -244,7 +246,23 @@ def fifa_rank(team: str) -> int | None:
     return FIFA_RANKINGS.get(_normalize_team(team))
 
 
-def save_predictions(db: Session, player: PronosticsPlayer, rows: list[PronosticsPredictionWrite]) -> None:
+def is_match_locked(match: PronosticsMatch, now: datetime | None = None) -> bool:
+    if match.locked or match.real_score1 is not None or match.real_score2 is not None:
+        return True
+    current = now or datetime.now(timezone.utc)
+    match_at = match.match_at
+    if match_at.tzinfo is None:
+        match_at = match_at.replace(tzinfo=timezone.utc)
+    return match_at <= current
+
+
+def save_predictions(
+    db: Session,
+    player: PronosticsPlayer,
+    rows: list[PronosticsPredictionWrite],
+    *,
+    now: datetime | None = None,
+) -> None:
     ensure_matches(db)
     matches = {match.id: match for match in db.scalars(select(PronosticsMatch)).all()}
     existing = {
@@ -255,7 +273,7 @@ def save_predictions(db: Session, player: PronosticsPlayer, rows: list[Pronostic
     }
     for row in rows:
         match = matches.get(row.match_id)
-        if match is None or match.locked or match.real_score1 is not None or match.real_score2 is not None:
+        if match is None or is_match_locked(match, now):
             continue
         prediction = existing.get(row.match_id)
         if prediction is None:
