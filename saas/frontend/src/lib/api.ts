@@ -3258,6 +3258,57 @@ export async function applyCvcImportSiteMappings(
   return parseResponse<CvcApplySiteMappingsResult>(response);
 }
 
+// --- Rapprochement compteur energie -> batiment (matching) ---
+
+export type MeterBuildingSuggestion = {
+  building_id: number;
+  nom_batiment: string | null;
+  adresse: string | null;
+  score: number;
+};
+
+export type MeterMatchResult = {
+  fluid: string;
+  meter_identifier: string;
+  label: string | null;
+  address: string | null;
+  current_building_id: number | null;
+  current_building_name: string | null;
+  suggestions: MeterBuildingSuggestion[];
+  auto_building_id: number | null;
+};
+
+export type MeterMappingPayload = {
+  fluid: string;
+  meter_identifier: string;
+  building_id: number | null;
+  meter_label?: string | null;
+};
+
+export type MeterMappingApplyResult = {
+  applied: number;
+  updated: number;
+};
+
+export async function fetchMeterMatches(token: string): Promise<MeterMatchResult[]> {
+  const response = await fetch(`${apiBaseUrl}/buildings/meters/matching`, {
+    headers: buildHeaders(token),
+  });
+  return (await parseResponse<{ matches: MeterMatchResult[] }>(response)).matches;
+}
+
+export async function applyMeterMappings(
+  token: string,
+  mappings: MeterMappingPayload[],
+): Promise<MeterMappingApplyResult> {
+  const response = await fetch(`${apiBaseUrl}/buildings/meters/matching/apply`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ mappings }),
+  });
+  return parseResponse<MeterMappingApplyResult>(response);
+}
+
 export async function recomputeCvcImportReferences(
   token: string,
   importBatch: string,

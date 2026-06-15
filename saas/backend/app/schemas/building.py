@@ -387,3 +387,44 @@ class BuildingMeterLinkRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+# --- Rapprochement compteur energie -> batiment (matching) ---
+
+
+class MeterBuildingSuggestion(BaseModel):
+    building_id: int
+    nom_batiment: str | None
+    adresse: str | None
+    score: float
+
+
+class MeterMatchResult(BaseModel):
+    fluid: str
+    meter_identifier: str
+    label: str | None = None
+    address: str | None = None
+    current_building_id: int | None = None
+    current_building_name: str | None = None
+    suggestions: list[MeterBuildingSuggestion] = Field(default_factory=list)
+    auto_building_id: int | None = None
+
+
+class MeterMatchResponse(BaseModel):
+    matches: list[MeterMatchResult]
+
+
+class MeterMapping(BaseModel):
+    fluid: str = Field(min_length=1, max_length=20)
+    meter_identifier: str = Field(min_length=1, max_length=80)
+    building_id: int | None = None
+    meter_label: str | None = Field(default=None, max_length=255)
+
+
+class MeterMappingApplyRequest(BaseModel):
+    mappings: list[MeterMapping]
+
+
+class MeterMappingApplyResult(BaseModel):
+    applied: int
+    updated: int

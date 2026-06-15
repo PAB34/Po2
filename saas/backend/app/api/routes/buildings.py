@@ -11,6 +11,9 @@ from app.schemas.building import (
     BuildingMeterLinkCreate,
     BuildingMeterLinkRead,
     BuildingNamingDataset,
+    MeterMappingApplyRequest,
+    MeterMappingApplyResult,
+    MeterMatchResponse,
     BuildingNamingLookupRead,
     BuildingNamingSelectionPayload,
     BuildingRead,
@@ -65,6 +68,7 @@ from app.services.buildings import (
     update_local,
 )
 from app.services.cities import get_city_by_id
+from app.services.meter_matching import apply_meter_mappings, list_meter_matches
 
 router = APIRouter(prefix="/buildings", tags=["buildings"])
 
@@ -457,6 +461,25 @@ def post_local_reclassify(
     building = get_building_or_404(db, building_id, current_user)
     local = get_local_or_404(db, building, local_id)
     return reclassify_local(db, local, payload, current_user)
+
+
+@router.get("/meters/matching", response_model=MeterMatchResponse)
+def get_meter_matching(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MeterMatchResponse:
+    """Vue d'ensemble des compteurs (PRM/PCE) avec statut de rattachement et suggestion de batiment."""
+    return MeterMatchResponse(matches=list_meter_matches(db, current_user))
+
+
+@router.post("/meters/matching/apply", response_model=MeterMappingApplyResult)
+def post_meter_matching_apply(
+    payload: MeterMappingApplyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MeterMappingApplyResult:
+    """Applique en masse les rattachements compteur -> batiment."""
+    return apply_meter_mappings(db, current_user, payload.mappings)
 
 
 @router.get("/{building_id}/meters", response_model=list[BuildingMeterLinkRead])

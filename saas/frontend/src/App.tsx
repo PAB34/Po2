@@ -12,6 +12,7 @@ import { CvcImportPage } from "./pages/CvcImportPage";
 import { CvcRefrigerantsPage } from "./pages/CvcRefrigerantsPage";
 import { CvcSiteMappingPage } from "./pages/CvcSiteMappingPage";
 import { CvcTechnicalReportPage } from "./pages/CvcTechnicalReportPage";
+import MeterMatchingPage from "./pages/MeterMatchingPage";
 import { EnergieBillingPage } from "./pages/EnergieBillingPage";
 import CpeDalkiaPage from "./pages/CpeDalkiaPage";
 import { CpeDalkiaImportPage } from "./pages/CpeDalkiaImportPage";
@@ -75,6 +76,7 @@ export default function App() {
             <p className="nav-section" style={navSectionStyle}>Patrimoine</p>
             <Link to="/buildings/list">Sites et bâtiments</Link>
             <Link to="/buildings">Carte du patrimoine</Link>
+            <Link to="/buildings/compteurs">Rapprochement compteurs</Link>
 
             <p className="nav-section" style={navSectionStyle}>Énergie</p>
             <Link to="/energie">Dashboard energie</Link>
@@ -117,6 +119,7 @@ export default function App() {
             <Route path="/buildings/cvc-fluides" element={<CvcRefrigerantsPage />} />
             <Route path="/buildings/cvc-rapport-technique" element={<CvcTechnicalReportPage />} />
             <Route path="/buildings/cvc-import/batiments" element={<CvcSiteMappingPage />} />
+            <Route path="/buildings/compteurs" element={<MeterMatchingPage />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />
