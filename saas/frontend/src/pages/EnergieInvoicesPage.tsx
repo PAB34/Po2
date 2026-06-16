@@ -1374,7 +1374,7 @@ export function EnergieInvoicesPage() {
                     <td>{item.message ?? "-"}</td>
                     <td>
                       {item.invoice_import_id ? (
-                        <Link to={`/energie/factures/${item.invoice_import_id}`} className="btn-secondary btn-compact">
+                        <Link to={`/factures/${item.invoice_import_id}`} className="btn-secondary btn-compact">
                           Detail
                         </Link>
                       ) : (
@@ -1755,7 +1755,7 @@ export function EnergieInvoicesPage() {
                         ? "Analyser"
                         : "Relancer"}
                     </button>
-                    <Link to={`/energie/factures/${invoiceImport.id}`} className="btn-secondary btn-compact">
+                    <Link to={`/factures/${invoiceImport.id}`} className="btn-secondary btn-compact">
                       Detail
                     </Link>
                     <button

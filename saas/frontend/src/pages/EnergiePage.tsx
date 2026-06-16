@@ -1271,7 +1271,7 @@ export function EnergiePage() {
               <h3>Acces rapides</h3>
               <div className="dashboard-link-list">
                 <button type="button" onClick={() => navigate("/energie/donnees")}>Piloter les collectes ENEDIS</button>
-                <button type="button" onClick={() => navigate("/energie/factures")}>Controler les factures</button>
+                <button type="button" onClick={() => navigate("/factures")}>Controler les factures</button>
                 <button type="button" onClick={() => navigate("/energie/gaz")}>Suivre le gaz GRDF</button>
               </div>
             </div>
@@ -1322,7 +1322,7 @@ export function EnergieDataOpsPage() {
           <button type="button" className="secondary-button" onClick={() => navigate("/energie/preconisations")}>
             Preconisations
           </button>
-          <button type="button" className="secondary-button" onClick={() => navigate("/energie/factures")}>
+          <button type="button" className="secondary-button" onClick={() => navigate("/factures")}>
             Factures
           </button>
         </div>

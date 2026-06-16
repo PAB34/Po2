@@ -2469,7 +2469,7 @@ function CpeFinanceReference({
           </p>
         </div>
         <Link
-          to="/energie/factures"
+          to="/factures"
           className="secondary-button"
           style={{ whiteSpace: "nowrap", textDecoration: "none" }}
         >

@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./providers/AuthProvider";
 
@@ -43,68 +42,176 @@ function RequireAuth() {
   return <Outlet />;
 }
 
-const navSectionStyle: CSSProperties = {
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#94a3b8",
-  fontWeight: 700,
-  margin: "16px 0 4px",
+type NavLink = { to: string; label: string };
+type Pillar = "energie" | "maintenance" | "patrimoine";
+type NavDomain = {
+  key: string;
+  label: string;
+  primaryTo: string;
+  pillar?: Pillar;
+  prefixes: string[];
+  links: NavLink[];
 };
+
+const DOMAINS: NavDomain[] = [
+  { key: "dashboard", label: "Tableau de bord", primaryTo: "/", prefixes: [], links: [] },
+  {
+    key: "patrimoine",
+    label: "Patrimoine",
+    primaryTo: "/buildings/list",
+    pillar: "patrimoine",
+    prefixes: ["/buildings/list", "/buildings/compteurs", "/buildings/create-edit", "/buildings"],
+    links: [
+      { to: "/buildings/list", label: "Sites et bâtiments" },
+      { to: "/buildings", label: "Carte du patrimoine" },
+      { to: "/buildings/compteurs", label: "Rapprochement compteurs" },
+    ],
+  },
+  {
+    key: "energie",
+    label: "Énergie",
+    primaryTo: "/energie",
+    pillar: "energie",
+    prefixes: ["/energie", "/factures"],
+    links: [
+      { to: "/energie", label: "Dashboard énergie" },
+      { to: "/energie/donnees", label: "Acquisition & données" },
+      { to: "/factures", label: "Factures fournisseurs" },
+      { to: "/energie/preconisations", label: "Préconisations" },
+      { to: "/energie/bpu", label: "Prix et TURPE" },
+      { to: "/energie/gaz", label: "Gaz GRDF" },
+    ],
+  },
+  {
+    key: "marches",
+    label: "Marchés & contrats",
+    primaryTo: "/cpe",
+    pillar: "maintenance",
+    prefixes: ["/cpe"],
+    links: [{ to: "/cpe", label: "CPE DALKIA" }],
+  },
+  {
+    key: "technique",
+    label: "Technique",
+    primaryTo: "/buildings/technique",
+    pillar: "maintenance",
+    prefixes: ["/buildings/technique", "/buildings/cvc-fluides", "/buildings/cvc-rapport-technique"],
+    links: [
+      { to: "/buildings/technique", label: "Inventaire & CVC" },
+      { to: "/buildings/cvc-fluides", label: "Fluides frigorigènes & ESP" },
+      { to: "/buildings/cvc-rapport-technique", label: "Rapport technique CVC" },
+    ],
+  },
+  {
+    key: "admin",
+    label: "Administration",
+    primaryTo: "/energie/facturation",
+    prefixes: ["/cpe/dalkia-import", "/buildings/cvc-import", "/energie/facturation", "/account"],
+    links: [
+      { to: "/cpe/dalkia-import", label: "Import référentiel DALKIA" },
+      { to: "/buildings/cvc-import", label: "Import CVC terrain" },
+      { to: "/buildings/cvc-import/batiments", label: "Matching bâtiment CVC" },
+      { to: "/energie/facturation", label: "Configuration tarifaire" },
+      { to: "/account", label: "Mon compte" },
+    ],
+  },
+];
+
+const PILLARS: { key: Pillar; label: string; to: string }[] = [
+  { key: "energie", label: "Énergie", to: "/energie" },
+  { key: "maintenance", label: "Maintenance", to: "/cpe" },
+  { key: "patrimoine", label: "Patrimoine", to: "/buildings/list" },
+];
+
+function matchesPrefix(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function activeDomain(path: string): NavDomain {
+  if (path === "/") return DOMAINS[0];
+  let best: NavDomain = DOMAINS[0];
+  let bestLen = -1;
+  for (const domain of DOMAINS) {
+    for (const prefix of domain.prefixes) {
+      if (matchesPrefix(path, prefix) && prefix.length > bestLen) {
+        best = domain;
+        bestLen = prefix.length;
+      }
+    }
+  }
+  return best;
+}
+
+function activeLinkTo(path: string, links: NavLink[]): string | null {
+  let best: string | null = null;
+  let bestLen = -1;
+  for (const link of links) {
+    if (matchesPrefix(path, link.to) && link.to.length > bestLen) {
+      best = link.to;
+      bestLen = link.to.length;
+    }
+  }
+  return best;
+}
 
 export default function App() {
   const { logout, user } = useAuth();
+  const location = useLocation();
+  const current = activeDomain(location.pathname);
+  const currentLink = activeLinkTo(location.pathname, current.links);
 
   return (
     <div className="app-shell">
       {user && (
-        <aside className="sidebar">
-          <div>
-            <p className="eyebrow">PatrimoineOp</p>
-            <h1>Socle MVP</h1>
-          </div>
-          <div className="session-card">
-            <strong>{`${user.prenom} ${user.nom}`}</strong>
-            <span>{user.email}</span>
-            <button type="button" className="secondary-button" onClick={logout}>
-              Se déconnecter
-            </button>
-          </div>
-          <nav>
-            <Link to="/">Tableau de bord</Link>
+        <>
+          <header className="topbar">
+            <Link to="/" className="topbar-brand">
+              <span className="topbar-brand-eyebrow">Patrimoineaucarré</span>
+              <strong>Po2</strong>
+            </Link>
+            <div className="topbar-pills">
+              {PILLARS.map((pillar) => (
+                <Link key={pillar.key} to={pillar.to} className={`topbar-pill topbar-pill--${pillar.key}`}>
+                  {pillar.label}
+                </Link>
+              ))}
+            </div>
+            <div className="topbar-session">
+              <span className="topbar-user">{`${user.prenom} ${user.nom}`}</span>
+              <button type="button" className="secondary-button" onClick={logout}>
+                Se déconnecter
+              </button>
+            </div>
+          </header>
 
-            <p className="nav-section" style={navSectionStyle}>Patrimoine</p>
-            <Link to="/buildings/list">Sites et bâtiments</Link>
-            <Link to="/buildings">Carte du patrimoine</Link>
-            <Link to="/buildings/compteurs">Rapprochement compteurs</Link>
-
-            <p className="nav-section" style={navSectionStyle}>Énergie</p>
-            <Link to="/energie">Dashboard energie</Link>
-            <Link to="/energie/donnees">Acquisition & donnees</Link>
-            <Link to="/energie/factures">Factures fournisseurs</Link>
-            <Link to="/energie/preconisations">Préconisations</Link>
-            <Link to="/energie/bpu">Prix et TURPE</Link>
-            <Link to="/energie/gaz">Gaz GRDF</Link>
-
-            <p className="nav-section" style={navSectionStyle}>Marchés et contrats</p>
-            <Link to="/cpe">CPE DALKIA</Link>
-
-            <p className="nav-section" style={navSectionStyle}>Technique</p>
-            <Link to="/buildings/technique">Inventaire &amp; CVC</Link>
-            <Link to="/buildings/cvc-fluides">Fluides frigorigenes &amp; ESP</Link>
-            <Link to="/buildings/cvc-rapport-technique">Rapport technique CVC</Link>
-
-            <p className="nav-section" style={navSectionStyle}>Administration</p>
-            <Link to="/cpe/dalkia-import">Import référentiel DALKIA</Link>
-            <Link to="/buildings/cvc-import">Import CVC terrain</Link>
-            <Link to="/buildings/cvc-import/batiments">Matching b&acirc;timent CVC</Link>
-            <Link to="/energie/facturation">Configuration tarifaire</Link>
-
-            <p className="nav-section" style={navSectionStyle}>Mon compte</p>
-            <Link to="/account">Compte</Link>
+          <nav className="topnav" aria-label="Navigation principale">
+            {DOMAINS.map((domain) => (
+              <Link
+                key={domain.key}
+                to={domain.primaryTo}
+                className={`topnav-tab${domain.key === current.key ? " topnav-tab--active" : ""}`}
+              >
+                {domain.label}
+              </Link>
+            ))}
           </nav>
-        </aside>
+
+          {current.links.length > 0 && (
+            <nav className="subnav" aria-label={`Navigation ${current.label}`}>
+              {current.links.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`subnav-link${link.to === currentLink ? " subnav-link--active" : ""}`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+        </>
       )}
+
       <main className="content">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -124,8 +231,13 @@ export default function App() {
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
-            <Route path="/energie/factures" element={<EnergieInvoicesPage />} />
-            <Route path="/energie/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
+            <Route path="/factures" element={<EnergieInvoicesPage />} />
+            <Route path="/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
+            <Route path="/energie/factures" element={<Navigate to="/factures" replace />} />
+            <Route
+              path="/energie/factures/:invoiceImportId"
+              element={<LegacyInvoiceRedirect />}
+            />
             <Route path="/energie/facturation" element={<EnergieBillingPage />} />
             <Route path="/energie/bpu" element={<EnergieBpuPage />} />
             <Route path="/energie/gaz" element={<EnergieGazPage />} />
@@ -140,4 +252,10 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function LegacyInvoiceRedirect() {
+  const location = useLocation();
+  const target = location.pathname.replace("/energie/factures", "/factures");
+  return <Navigate to={target} replace />;
 }

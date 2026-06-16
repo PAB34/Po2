@@ -147,7 +147,7 @@ export function HomePage() {
               : "Connecte-toi pour accéder à ton périmètre."}
           </p>
         </div>
-        <Link className="primary-link" to="/energie/factures">
+        <Link className="primary-link" to="/factures">
           Contrôler les factures
         </Link>
       </div>
@@ -163,13 +163,13 @@ export function HomePage() {
         <KpiCard
           label="Factures importées"
           value={formatInt(billing.total)}
-          to="/energie/factures"
+          to="/factures"
         />
         <KpiCard
           label="Montant TTC importé"
           value={formatEur(billing.amount)}
           hint="cumul des factures"
-          to="/energie/factures"
+          to="/factures"
         />
       </div>
 
@@ -183,7 +183,7 @@ export function HomePage() {
           badge={billing.inBpuGap > 0 ? `${formatInt(billing.inBpuGap)} en écart BPU` : undefined}
           badgeTone="danger"
           action="Traiter"
-          to="/energie/factures"
+          to="/factures"
         />
         <QueueCard
           domain="energie"
@@ -193,7 +193,7 @@ export function HomePage() {
           badge="alertes non bloquantes"
           badgeTone="warn"
           action="Revoir"
-          to="/energie/factures"
+          to="/factures"
         />
         <QueueCard
           domain="energie"
@@ -203,7 +203,7 @@ export function HomePage() {
           badge={billing.toExport > 0 ? "prêtes" : undefined}
           badgeTone="ok"
           action="Transmettre"
-          to="/energie/factures"
+          to="/factures"
         />
         <QueueCard
           domain="energie"

@@ -481,7 +481,7 @@ export function EnergieInvoiceDetailPage() {
   if (invoiceQuery.isError || !invoiceImport) {
     return (
       <div className="page">
-        <Link to="/energie/factures" className="secondary-link">
+        <Link to="/factures" className="secondary-link">
           Retour aux factures
         </Link>
         <p className="error-text">{invoiceQuery.isError ? (invoiceQuery.error as Error).message : "Facture introuvable."}</p>
@@ -493,7 +493,7 @@ export function EnergieInvoiceDetailPage() {
     <div className="page">
       <div className="page-header page-header-row">
         <div>
-          <Link to="/energie/factures" className="secondary-link">
+          <Link to="/factures" className="secondary-link">
             Retour aux factures
           </Link>
           <h2>Facture {invoiceImport.invoice_number ?? invoiceImport.original_filename}</h2>
@@ -617,7 +617,7 @@ export function EnergieInvoiceDetailPage() {
                 >
                   Exporter la fiche de liaison (xlsx)
                 </button>
-                <Link to="/energie/factures" className="btn-secondary btn-compact">
+                <Link to="/factures" className="btn-secondary btn-compact">
                   Ouvrir la matrice comptable
                 </Link>
               </div>
