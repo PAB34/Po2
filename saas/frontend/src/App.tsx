@@ -72,15 +72,21 @@ const DOMAINS: NavDomain[] = [
     label: "Énergie",
     primaryTo: "/energie",
     pillar: "energie",
-    prefixes: ["/energie", "/factures"],
+    prefixes: ["/energie"],
     links: [
       { to: "/energie", label: "Dashboard énergie" },
       { to: "/energie/donnees", label: "Acquisition & données" },
-      { to: "/factures", label: "Factures fournisseurs" },
       { to: "/energie/preconisations", label: "Préconisations" },
       { to: "/energie/bpu", label: "Prix et TURPE" },
       { to: "/energie/gaz", label: "Gaz GRDF" },
     ],
+  },
+  {
+    key: "facturation",
+    label: "Facturation",
+    primaryTo: "/factures",
+    prefixes: ["/factures"],
+    links: [],
   },
   {
     key: "marches",
