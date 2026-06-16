@@ -115,7 +115,7 @@ function formatKwh(value: number | null | undefined) {
   return `${Math.round(value).toLocaleString("fr-FR")} kWh`;
 }
 
-type SupplierKey = "ENGIE" | "EDF" | "TOTALENERGIES";
+export type SupplierKey = "ENGIE" | "EDF" | "TOTALENERGIES";
 
 // Reflet du registre back (services/supplier_registry.py) : qui facture quoi.
 // Le distributeur (ENEDIS / GRDF) est une reference de controle, pas un payeur.
@@ -414,7 +414,7 @@ function StepTab({
   );
 }
 
-export function EnergieInvoicesPage() {
+export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: SupplierKey } = {}) {
   const { token } = useAuth();
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -566,7 +566,10 @@ export function EnergieInvoicesPage() {
     enabled: !!token,
   });
 
-  const imports = importsQuery.data ?? [];
+  const allImports = importsQuery.data ?? [];
+  const imports = supplierFilter
+    ? allImports.filter((invoiceImport) => supplierKeyOf(invoiceImport) === supplierFilter)
+    : allImports;
   const supplierSummary = useMemo(() => {
     const acc: Record<string, { count: number; total: number }> = {};
     for (const invoiceImport of imports) {

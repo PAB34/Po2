@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { fetchCpeFinanceInvoices, fetchEnergyInvoiceImports } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
-import { EnergieInvoicesPage } from "./EnergieInvoicesPage";
+import { EnergieInvoicesPage, type SupplierKey } from "./EnergieInvoicesPage";
 
 type Market = "herault" | "dalkia" | "spie";
 
@@ -195,14 +195,7 @@ export default function FacturesPage() {
         ))}
       </div>
 
-      {market === "herault" && (
-        <div className="fct-market-body">
-          <HeraultEtatLoader />
-          <div className="fct-embed">
-            <EnergieInvoicesPage />
-          </div>
-        </div>
-      )}
+      {market === "herault" && <HeraultSection />}
 
       {market === "dalkia" && (
         <div className="fct-market-body">
@@ -226,6 +219,44 @@ export default function FacturesPage() {
         </div>
       )}
     </section>
+  );
+}
+
+type HeraultSub = "etat" | SupplierKey;
+
+const HERAULT_SUBS: { key: HeraultSub; label: string }[] = [
+  { key: "etat", label: "État" },
+  { key: "ENGIE", label: "ENGIE" },
+  { key: "EDF", label: "EDF" },
+  { key: "TOTALENERGIES", label: "TotalEnergies" },
+];
+
+function HeraultSection() {
+  const [sub, setSub] = useState<HeraultSub>("etat");
+  return (
+    <div className="fct-market-body">
+      <div className="fct-subtabs" role="tablist" aria-label="Hérault Énergie">
+        {HERAULT_SUBS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={sub === item.key}
+            className={`fct-subtab${sub === item.key ? " fct-subtab--active" : ""}`}
+            onClick={() => setSub(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {sub === "etat" ? (
+        <HeraultEtatLoader />
+      ) : (
+        <div className="fct-embed">
+          <EnergieInvoicesPage supplierFilter={sub} />
+        </div>
+      )}
+    </div>
   );
 }
 
