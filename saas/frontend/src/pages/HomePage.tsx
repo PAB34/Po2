@@ -27,7 +27,7 @@ function formatEur(value: number | null | undefined): string {
 type Domain = "energie" | "patrimoine" | "marches" | "technique";
 
 const DOMAIN_LABEL: Record<Domain, string> = {
-  energie: "Énergie",
+  energie: "Fluides",
   patrimoine: "Patrimoine",
   marches: "Marchés",
   technique: "Technique",

@@ -474,9 +474,9 @@
     const sections = {
       "Tableau de bord": ["Cockpit", "Files a traiter", "Indicateurs direction"],
       "Patrimoine": ["Vue d'ensemble", "Sites et batiments", "Rattachements", "Imports patrimoine"],
-      "Energie": ["Vue d'ensemble", "Electricite", "Gaz", "Prix contractuels", "Preconisations", "Donnees distributeurs"],
+      "Fluides & consommations": ["Vue d'ensemble", "Electricite", "Gaz", "Eau", "Prix contractuels", "Preconisations", "Donnees distributeurs"],
       "Marches & contrats": ["Vue d'ensemble", "Factures marche", "CPE DALKIA", "CPE DALKIA - Factures", "CPE DALKIA - Performance", "CPE DALKIA - Referentiel", "CPE DALKIA - Travaux", "SPIE"],
-      "Technique": ["Vue d'ensemble", "Inventaire CVC", "Rattachement CVC", "Equipements", "Fluides et conformite", "Rapport technique"],
+      "Technique": ["Vue d'ensemble", "Inventaire CVC", "Rattachement CVC", "Equipements", "F-Gaz / ESP", "Rapport technique"],
       "Administration": ["Vue d'ensemble", "Imports", "Connecteurs", "Referentiels", "Matrices comptables", "Compte utilisateur", "Diagnostics"],
       "Hors produit": ["A sortir", "A archiver", "A cadrer plus tard"]
     };
@@ -523,7 +523,7 @@
       {
         id: "meter-matching",
         title: "Rattachement compteurs PRM/PCE/eau",
-        currentDomain: "Patrimoine / Energie",
+        currentDomain: "Patrimoine / Fluides",
         description: "Relier les compteurs au bon site, batiment ou local.",
         code: "MeterMatchingPage, meter_matching",
         priority: "P0",
@@ -535,19 +535,19 @@
       {
         id: "enedis-overview",
         title: "Portefeuille PRM et donnees electriques",
-        currentDomain: "Energie",
+        currentDomain: "Fluides",
         description: "Vue PRM, consommations, puissances, courbes et couverture.",
         code: "EnergiePage, EnergieDetailPage, /api/energie",
         priority: "P1",
         status: "Fonctionnel",
-        targetSection: "Energie",
+        targetSection: "Fluides & consommations",
         targetSubsection: "Electricite",
         action: "Brancher"
       },
       {
         id: "enedis-ops",
         title: "Acquisition ENEDIS sync/async",
-        currentDomain: "Energie",
+        currentDomain: "Fluides",
         description: "Sync, jobs FTP/AES, controle de couverture et reprise de donnees.",
         code: "EnergieDataOpsPage, /api/energie/sync",
         priority: "P1",
@@ -559,31 +559,31 @@
       {
         id: "grdf",
         title: "GRDF, PCE et consommations gaz",
-        currentDomain: "Energie gaz",
+        currentDomain: "Fluides gaz",
         description: "PCE, consommations mensuelles, enrichissement contractuel, rapprochement P1.",
         code: "EnergieGazPage, /api/grdf",
         priority: "P1",
         status: "En consolidation",
-        targetSection: "Energie",
+        targetSection: "Fluides & consommations",
         targetSubsection: "Gaz",
         action: "Brancher"
       },
       {
         id: "bpu-turpe",
         title: "BPU et TURPE",
-        currentDomain: "Energie / Prix",
+        currentDomain: "Fluides / Prix",
         description: "Prix contractuels, evolution TURPE, edition BPU, reference pour controle facture.",
         code: "EnergieBpuPage, /api/bpu, /api/billing/turpe",
         priority: "P0",
         status: "Fonctionnel",
-        targetSection: "Energie",
+        targetSection: "Fluides & consommations",
         targetSubsection: "Prix contractuels",
         action: "Refondre"
       },
       {
         id: "billing-config",
         title: "Configuration tarifaire fournisseurs",
-        currentDomain: "Energie / Prix",
+        currentDomain: "Fluides / Prix",
         description: "Configuration de repli pour prix, postes, HP/HC et lignes BPU.",
         code: "EnergieBillingPage, BillingConfig",
         priority: "P0",
@@ -595,7 +595,7 @@
       {
         id: "invoice-import",
         title: "Import factures fournisseurs ENGIE / EDF",
-        currentDomain: "Factures energie",
+        currentDomain: "Factures marche",
         description: "Chargement XLSX ENGIE, CSV EDF, imports persistants et lots.",
         code: "FacturesPage, EnergieInvoicesPage, uploadEngieXlsxExport, uploadEdfCsvExport",
         priority: "P0",
@@ -607,7 +607,7 @@
       {
         id: "invoice-control",
         title: "Controle facture fournisseur",
-        currentDomain: "Factures energie",
+        currentDomain: "Factures marche",
         description: "Controle BPU, TURPE, quantites ENEDIS, periodes, decisions.",
         code: "invoice_analysis, invoice_bpu, EnergieInvoiceDetailPage",
         priority: "P0",
@@ -618,8 +618,8 @@
       },
       {
         id: "invoice-finance",
-        title: "Matrice comptable et liaison XLSX energie",
-        currentDomain: "Factures energie / Finance",
+        title: "Matrice comptable et liaison XLSX marche",
+        currentDomain: "Factures marche / Finance",
         description: "Codification, preview et export finance pour factures de fourniture.",
         code: "energie_accounting, downloadInvoiceLiaison",
         priority: "P0",
@@ -631,12 +631,12 @@
       {
         id: "power-reco",
         title: "Preconisations puissance",
-        currentDomain: "Energie",
+        currentDomain: "Fluides",
         description: "Sous/sur-souscription, couts reels, recommandations et economies potentielles.",
         code: "EnergieRecommendationsPage, power_recommendations",
         priority: "P1",
         status: "Fonctionnel",
-        targetSection: "Energie",
+        targetSection: "Fluides & consommations",
         targetSubsection: "Preconisations",
         action: "Brancher"
       },
@@ -745,7 +745,7 @@
         priority: "P1",
         status: "Fonctionnel",
         targetSection: "Technique",
-        targetSubsection: "Fluides et conformite",
+        targetSubsection: "F-Gaz / ESP",
         action: "Brancher"
       },
       {
@@ -810,6 +810,149 @@
       ]))
     };
 
+    const targetProposals = {
+      "Tableau de bord::Cockpit": {
+        wanted: "Une page d'arrivee orientee decisions : files a traiter, compteurs de priorite, acces direct aux parcours factures marche, patrimoine, fluides, CPE et technique. Pas une page decorative.",
+        decision: "Savoir quoi traiter maintenant et ouvrir directement le bon ecran.",
+        notes: "Mettre en avant les anomalies et les travaux en attente plutot que les menus techniques."
+      },
+      "Tableau de bord::Files a traiter": {
+        wanted: "Files separees : factures marche a controler, compteurs non rattaches, donnees distributeurs incompletes, sites marche non relies, alertes CVC/fluides.",
+        decision: "Prioriser les actions quotidiennes.",
+        notes: "Chaque file doit avoir un lien d'action vers la section correspondante."
+      },
+      "Patrimoine::Sites et batiments": {
+        wanted: "Conserver le contenu actuel de /buildings/list : recherche, filtres, hierarchie site/batiment/local, rattachements visibles, actions rapides vers fiche detaillee.",
+        decision: "Identifier le bon objet patrimonial et verifier s'il est exploitable par les modules fluides, marches et technique.",
+        notes: "Page jugee utile en l'etat : eviter une refonte lourde."
+      },
+      "Patrimoine::Rattachements": {
+        wanted: "Console claire pour rattacher PRM, PCE, eau, sites marche et sites CVC au patrimoine. Montrer les propositions, le niveau de confiance et l'action de validation.",
+        decision: "Relier une donnee externe au bon site, batiment ou local.",
+        notes: "Separer les moteurs de rapprochement, mais garder une experience commune."
+      },
+      "Fluides & consommations::Vue d'ensemble": {
+        wanted: "Synthese des fluides sans les factures : electricite, gaz, eau, qualite des donnees, tendances de consommation, points a surveiller.",
+        decision: "Comprendre l'etat des consommations global et choisir entre analyse electricite, gaz, eau ou preconisations.",
+        notes: "Les factures sortent de Fluides & consommations et vont dans Marches & contrats > Factures marche."
+      },
+      "Fluides & consommations::Electricite": {
+        wanted: "Dashboard electricite : PRM, consommations, puissance souscrite/max, couverture ENEDIS, courbes et anomalies.",
+        decision: "Identifier les PRM a analyser, les donnees manquantes et les puissances a recalibrer.",
+        notes: "S'inspirer du dashboard fluides actuel, mais centre electricite uniquement."
+      },
+      "Fluides & consommations::Gaz": {
+        wanted: "Dashboard gaz : PCE, consommations GRDF, qualite de couverture, tendances mensuelles, liens avec fourniture TotalEnergies et P1 DALKIA.",
+        decision: "Comprendre les consommations gaz et distinguer fourniture gaz hors CPE et gaz P1 CPE.",
+        notes: "Meme logique que l'electricite, mais adaptee aux PCE/GRDF."
+      },
+      "Fluides & consommations::Eau": {
+        wanted: "Dashboard eau : compteurs ou points de livraison disponibles, consommations, alertes de pertes, anomalies et future integration SUEZ.",
+        decision: "Identifier les consommations eau anormales, les pertes possibles et les donnees manquantes.",
+        notes: "A cadrer progressivement selon les donnees et factures eau disponibles."
+      },
+      "Fluides & consommations::Prix contractuels": {
+        wanted: "Vue metier des prix : BPU fournisseur, TURPE informatif, historique et source de verite utilisee par les controles.",
+        decision: "Comprendre quel prix sert au controle et pourquoi un ecart apparait.",
+        notes: "Separateur important : lecture metier ici, parametrage technique dans Administration > Referentiels."
+      },
+      "Fluides & consommations::Preconisations": {
+        wanted: "Pour chaque fluide : recommandations de puissance, pertes ou derivees, cout estime, economie potentielle et justification par donnees.",
+        decision: "Decider quels contrats ou points de consommation recalibrer ou investiguer.",
+        notes: "Electricite d'abord, puis gaz/eau quand les donnees seront assez fiables."
+      },
+      "Marches & contrats::Vue d'ensemble": {
+        wanted: "Vue des marches actifs : Herault Energie, CPE DALKIA, SPIE, alertes, factures a traiter, referentiels manquants, sites non relies.",
+        decision: "Choisir quel marche ou quel lot traiter.",
+        notes: "Le domaine Marches & contrats devient le point d'entree des factures."
+      },
+      "Marches & contrats::Factures marche": {
+        wanted: "Ecran transversal des factures par marche et lot : ENGIE, EDF, TotalEnergies, DALKIA P1/P2/P3, SPIE P2/P3. Chaque lot a import, controle, anomalies, decision et export finance.",
+        decision: "Valider, contester, completer ou transmettre une facture au service finance.",
+        notes: "Remplace l'ancienne idee de factures fournisseurs dans Fluides. La matrice comptable doit etre multi-lots."
+      },
+      "Marches & contrats::CPE DALKIA": {
+        wanted: "Entree dediee CPE : vue marche, sites, bilan, consommations, factures, performance, referentiel et travaux.",
+        decision: "Piloter le marche CPE sans le reduire a une simple facture.",
+        notes: "DALKIA reste un moteur specifique avec ses propres controles P1/P2/P3."
+      },
+      "Marches & contrats::CPE DALKIA - Factures": {
+        wanted: "Parcours facture CPE : import, lecture facture, controles P1/P2/P3, indices, ecarts, decision, liaison finance.",
+        decision: "Dire si une facture DALKIA est payable, contestable ou incomplete.",
+        notes: "A traiter comme P0, pas comme simple ecran expert."
+      },
+      "Marches & contrats::CPE DALKIA - Performance": {
+        wanted: "Consommations multi-fluides, cibles, DJU, interessement, atterrissage et ecarts par site.",
+        decision: "Comprendre la performance du CPE et preparer le pilotage directionnel.",
+        notes: "Garder le bon contenu existant, en separant synthese et detail technique."
+      },
+      "Marches & contrats::CPE DALKIA - Referentiel": {
+        wanted: "Acte d'engagement, DPGF, cibles, versions, diff, indices extraits des factures et preuves PDF.",
+        decision: "Savoir quelle reference contractuelle alimente les controles.",
+        notes: "Les indices officiels externes ne sont pas disponibles pour l'instant : commencer par les indices extraits des factures DALKIA."
+      },
+      "Marches & contrats::CPE DALKIA - Travaux": {
+        wanted: "Import manuel des devis P3 recus par mail, analyse du devis selon les pieces contractuelles et BPU/DPGF du marche.",
+        decision: "Valider ou contester un devis P3.",
+        notes: "Ne pas parler de P6 pour l'instant."
+      },
+      "Marches & contrats::SPIE": {
+        wanted: "A cadrer : marche maintenance P2/P3, documents de reference, batiments contractuels, futures factures et liens avec inventaires CVC.",
+        decision: "Comprendre le perimetre SPIE avant de construire le controle facture.",
+        notes: "SPIE n'est pas un clone de DALKIA."
+      },
+      "Technique::Vue d'ensemble": {
+        wanted: "Synthese technique : inventaires DALKIA/SPIE, equipements, rattachements au patrimoine, fluides/conformite et couverture rapport.",
+        decision: "Identifier les zones techniques incompletes ou a traiter.",
+        notes: "Ne pas cacher la technique sous DALKIA."
+      },
+      "Technique::Inventaire CVC": {
+        wanted: "Inventaires CVC separes par source DALKIA/SPIE, avec vue globale ensuite. Afficher equipements, batiments de reference marche et etat de rapprochement.",
+        decision: "Exploiter l'inventaire terrain et identifier ce qui manque ou ce qui est mal rattache.",
+        notes: "Gros chantier : commencer par documents de reference marche avant l'inventaire terrain fin."
+      },
+      "Technique::Rattachement CVC": {
+        wanted: "Workflow en deux etapes : batiment reference marche -> batiment patrimoine, puis equipements/inventaires -> batiment reference marche.",
+        decision: "Valider les correspondances entre marche technique et patrimoine.",
+        notes: "DALKIA et SPIE doivent pouvoir avoir leurs propres referentiels de batiments."
+      },
+      "Technique::Equipements": {
+        wanted: "Referentiel SYPEMI, equipements par batiment, resume et edition simple.",
+        decision: "Verifier les equipements rattaches et leur coherence.",
+        notes: "Fonctionnalite jugee tres utile."
+      },
+      "Technique::F-Gaz / ESP": {
+        wanted: "Vue simple des fluides F-Gaz/ESP : equipements concernes, seuils, echeances, alertes et actions.",
+        decision: "Savoir quoi surveiller sans entrer dans une complexite excessive.",
+        notes: "Sujet important mais a garder lisible."
+      },
+      "Technique::Rapport technique": {
+        wanted: "Rapport de couverture technique : batiments couverts, sources, donnees manquantes, anomalies.",
+        decision: "Mesurer la qualite de la base technique.",
+        notes: "A brancher comme lecture de synthese."
+      },
+      "Administration::Connecteurs": {
+        wanted: "Connecteurs ENEDIS, GRDF et ENGIE API potentiel : etat, logs, dernieres synchronisations, erreurs.",
+        decision: "Diagnostiquer la collecte sans exposer ces outils dans les parcours quotidiens.",
+        notes: "ENGIE API direct reste cache tant que l'utilite produit n'est pas prouvee."
+      },
+      "Administration::Referentiels": {
+        wanted: "Parametrage technique : BillingConfig, BPU/TURPE de reference, referentiels fournisseur/prestataire, tables de secours.",
+        decision: "Maintenir les sources de prix et references utilisees par les controles.",
+        notes: "Ne pas confondre avec Fluides & consommations > Prix contractuels qui est une lecture metier."
+      },
+      "Administration::Matrices comptables": {
+        wanted: "Matrice comptable transverse multi-lots : ENGIE, EDF, TotalEnergies, DALKIA P1/P2/P3, SPIE P2/P3 et futurs marches.",
+        decision: "Garantir que chaque poste facture peut produire une liaison finance correcte.",
+        notes: "Ne pas limiter cette matrice aux fluides."
+      },
+      "Administration::Compte utilisateur": {
+        wanted: "Profil, informations utilisateur, changement de mot de passe.",
+        decision: "Gerer son compte.",
+        notes: "Sans enjeu metier particulier."
+      }
+    };
+
     let state = loadState();
     let activeTab = "existing";
 
@@ -852,17 +995,65 @@
         if (mapping.targetSection === "Energie" && mapping.targetSubsection === "Factures de fourniture") {
           mapping.targetSection = "Marches & contrats";
           mapping.targetSubsection = "Factures marche";
+        } else if (mapping.targetSection === "Energie") {
+          mapping.targetSection = "Fluides & consommations";
         }
+      });
+      Object.keys(nextState.targets).forEach((targetId) => {
+        if (!targetId.startsWith("Energie::")) return;
+        const nextId = targetId.replace("Energie::", "Fluides & consommations::");
+        nextState.targets[nextId] = {
+          ...(nextState.targets[nextId] || { wanted: "", decision: "", notes: "" }),
+          ...nextState.targets[targetId]
+        };
+        delete nextState.targets[targetId];
+      });
+      Object.keys(nextState.targets).forEach((targetId) => {
+        if (targetId !== "Technique::Fluides et conformite") return;
+        nextState.targets["Technique::F-Gaz / ESP"] = {
+          ...(nextState.targets["Technique::F-Gaz / ESP"] || { wanted: "", decision: "", notes: "" }),
+          ...nextState.targets[targetId]
+        };
+        delete nextState.targets[targetId];
+      });
+      Object.entries(nextState.targets).forEach(([targetId, target]) => {
+        if (!targetId.startsWith("Fluides & consommations::")) return;
+        target.wanted = migrateFluidesText(target.wanted);
+        target.decision = migrateFluidesText(target.decision);
+        target.notes = migrateFluidesText(target.notes);
+      });
+      Object.entries(targetProposals).forEach(([targetId, proposal]) => {
+        if (!nextState.targets[targetId]) {
+          nextState.targets[targetId] = { wanted: "", decision: "", notes: "" };
+        }
+        nextState.targets[targetId].wanted ||= proposal.wanted;
+        nextState.targets[targetId].decision ||= proposal.decision;
+        nextState.targets[targetId].notes ||= proposal.notes;
       });
       return nextState;
     }
 
+    function migrateFluidesText(value) {
+      return String(value || "")
+        .replaceAll("Synthese energie", "Synthese fluides")
+        .replaceAll("Synthèse énergie", "Synthèse fluides")
+        .replaceAll("l'etat energetique", "l'etat des consommations")
+        .replaceAll("l’état énergétique", "l’état des consommations")
+        .replaceAll("Dashboard energie", "Dashboard fluides")
+        .replaceAll("dashboard energie", "dashboard fluides")
+        .replaceAll("Les factures sortent d'Energie", "Les factures sortent de Fluides & consommations")
+        .replaceAll("Les factures sortent d’Énergie", "Les factures sortent de Fluides & consommations")
+        .replaceAll("Energie > Prix contractuels", "Fluides & consommations > Prix contractuels")
+        .replaceAll("Énergie > Prix contractuels", "Fluides & consommations > Prix contractuels");
+    }
+
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state, null, 2));
-      elements.saveState.textContent = "Sauvegarde";
+      const savedAt = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      elements.saveState.textContent = `Sauvegarde a ${savedAt}`;
       setTimeout(() => {
         elements.saveState.textContent = "Modifiable";
-      }, 1200);
+      }, 2400);
     }
 
     function markDirty() {

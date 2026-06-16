@@ -52,7 +52,7 @@ Navigation principale recommandee :
 |---|---|---|
 | Tableau de bord | `/` | cockpit des files a traiter |
 | Patrimoine | `/patrimoine` | sites, batiments, locaux, fiches et rattachements |
-| Energie | `/energie` | consommations, donnees distributeurs, prix |
+| Fluides & consommations | `/energie` | electricite, gaz, eau, donnees distributeurs, prix |
 | Marches & contrats | `/marches` | CPE DALKIA, SPIE, contrats, factures marche |
 | Technique | `/technique` | inventaires CVC, equipements, fluides, rapport technique |
 | Administration | `/administration` | imports experts, connecteurs, referentiels, diagnostics |
@@ -71,8 +71,8 @@ Les routes actuelles peuvent rester comme alias ou sous-routes pendant la migrat
 
 | Ecran cible | Fonctionnalites a raccorder | Code actuel | Action |
 |---|---|---|---|
-| Cockpit principal | KPI patrimoine, energie, factures, preconisations, rattachements, CPE | `HomePage`, `fetchEnergieOverview`, `fetchEnergyInvoiceImports`, `fetchMeterMatches`, fonctions CPE | Refondre |
-| File factures energie a controler | imports factures, decisions, ecarts | `FacturesPage`, `EnergieInvoicesPage`, `/api/billing/invoices/*` | Brancher |
+| Cockpit principal | KPI patrimoine, fluides, factures marche, preconisations, rattachements, CPE | `HomePage`, `fetchEnergieOverview`, `fetchEnergyInvoiceImports`, `fetchMeterMatches`, fonctions CPE | Refondre |
+| File factures marche a controler | imports factures, decisions, ecarts | `FacturesPage`, `EnergieInvoicesPage`, `/api/billing/invoices/*` | Brancher |
 | File factures CPE bloquees | controles finance CPE, rapport global | `CpeDalkiaPage`, `fetchCpeFinanceControlReport` | Brancher |
 | File compteurs non rattaches | matching PRM/PCE/eau | `MeterMatchingPage`, `fetchMeterMatches` | Brancher |
 | File donnees distributeur incompletes | audit ENEDIS, GRDF status | `EnergiePage`, `EnergieDataOpsPage`, `EnergieGazPage` | Brancher |
@@ -86,24 +86,25 @@ Decision UX : le tableau de bord doit devenir une vraie table de travail. Chaque
 |---|---|---|---|
 | Patrimoine > Vue d'ensemble | synthese sites, batiments, locaux, qualite de base | `BuildingsLandingPage`, `BuildingsListPage` | Refondre |
 | Patrimoine > Sites et batiments | liste, recherche, filtres, fiche | `BuildingsListPage`, `BuildingDetailPage`, `fetchBuildings`, `fetchSites`, `fetchAllLocals` | Brancher |
-| Patrimoine > Fiche site/batiment/local | infos, locaux, compteurs, equipements, liens energie/contrats | `BuildingDetailPage`, `fetchBuilding`, `fetchBuildingLocals`, `fetchBuildingMeterLinks`, equipements | Refondre |
+| Patrimoine > Fiche site/batiment/local | infos, locaux, compteurs, equipements, liens fluides/contrats | `BuildingDetailPage`, `fetchBuilding`, `fetchBuildingLocals`, `fetchBuildingMeterLinks`, equipements | Refondre |
 | Patrimoine > Rattachements compteurs | PRM/PCE/eau non rattaches, application de mappings | `MeterMatchingPage`, `fetchMeterMatches`, `applyMeterMappings` | Brancher |
 | Patrimoine > Imports patrimoine | import hierarchique, DGFiP/IGN/OSM, creation/correction | `BuildingCreateEditPage`, `building_naming`, import endpoints | Garder expert |
 
 Point d'accord a valider : l'import patrimoine doit etre accessible, mais il ne doit pas etre l'entree principale du domaine Patrimoine.
 
-### 4.3 Energie
+### 4.3 Fluides & consommations
 
 | Ecran cible | Fonctionnalites a raccorder | Code actuel | Action |
 |---|---|---|---|
-| Energie > Vue d'ensemble | portefeuille PRM, couverture, conso, anomalies | `EnergiePage`, `fetchEnergieOverview`, `fetchDataAudit` | Refondre |
-| Energie > Electricite | detail PRM, conso, courbes, puissance max, DJU | `EnergieDetailPage`, fonctions `fetchPrm*`, `fetchDju*` | Brancher |
-| Energie > Gaz | PCE, GRDF, conso mensuelle, rapprochement P1 | `EnergieGazPage`, fonctions `fetchGrdf*` | Brancher/P1 |
-| Energie > Donnees distributeurs | sync ENEDIS, async FTP/AES, GRDF sync, qualite des donnees | `EnergieDataOpsPage`, `fetchSyncStatus`, `fetchEnedisAsyncJobs`, `fetchGrdfConsoStatus` | Garder expert |
-| Energie > Preconisations | puissance souscrite, couts reels, recommandations | `EnergieRecommendationsPage`, `fetchPowerRecommendations` | Brancher |
-| Energie > Prix contractuels | BPU, TURPE, timeline, edition | `EnergieBpuPage`, `EnergieBillingPage`, fonctions `fetchBpu*`, `fetchTurpeVersions`, billing config | Refondre |
+| Fluides > Vue d'ensemble | portefeuille PRM/PCE/eau, couverture, conso, anomalies | `EnergiePage`, `fetchEnergieOverview`, `fetchDataAudit` | Refondre |
+| Fluides > Electricite | detail PRM, conso, courbes, puissance max, DJU | `EnergieDetailPage`, fonctions `fetchPrm*`, `fetchDju*` | Brancher |
+| Fluides > Gaz | PCE, GRDF, conso mensuelle, rapprochement P1 | `EnergieGazPage`, fonctions `fetchGrdf*` | Brancher/P1 |
+| Fluides > Eau | consommations eau, pertes possibles, futur SUEZ | a cadrer | A cadrer |
+| Fluides > Donnees distributeurs | sync ENEDIS, async FTP/AES, GRDF sync, qualite des donnees | `EnergieDataOpsPage`, `fetchSyncStatus`, `fetchEnedisAsyncJobs`, `fetchGrdfConsoStatus` | Garder expert |
+| Fluides > Preconisations | puissance, pertes, couts reels, recommandations | `EnergieRecommendationsPage`, `fetchPowerRecommendations` | Brancher |
+| Fluides > Prix contractuels | BPU, TURPE, timeline, edition | `EnergieBpuPage`, `EnergieBillingPage`, fonctions `fetchBpu*`, `fetchTurpeVersions`, billing config | Refondre |
 
-Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF) et `prix contractuels`. Les factures sont un parcours marche transversal, pas un sous-bloc Energie.
+Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF/eau) et `prix contractuels`. Les factures sont un parcours marche transversal, pas un sous-bloc Fluides.
 
 ### 4.4 Marches & contrats > Factures marche
 
@@ -118,7 +119,7 @@ Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF) et `prix contr
 | Factures marche > Detail facture | lignes, checks, decision, liaison XLSX | `EnergieInvoiceDetailPage`, `fetchEnergyInvoiceImport`, `downloadInvoiceLiaison` | Refondre/P0 |
 | Factures marche > Export finance | matrice comptable multi-lots, liaison Excel | `fetchInvoiceCodification`, `downloadInvoiceLiaison`, `energie_accounting`, `cpe_accounting` | Refondre/P0 |
 
-Decision UX : ce parcours sort d'Energie et devient un parcours marche transversal. Le nouvel ecran doit guider `importer -> controler -> comprendre -> decider -> exporter` pour les lots fournisseurs et prestataires.
+Decision UX : ce parcours sort de Fluides & consommations et devient un parcours marche transversal. Le nouvel ecran doit guider `importer -> controler -> comprendre -> decider -> exporter` pour les lots fournisseurs et prestataires.
 
 ### 4.5 Marches & contrats
 
@@ -143,7 +144,7 @@ Decision UX : DALKIA reste un moteur complet. SPIE aura son propre parcours main
 | Technique > Inventaire CVC | import terrain DALKIA/SPIE, items, edition | `CvcImportPage`, `fetchCvcImportItems`, `updateCvcItem` | Brancher/P1 |
 | Technique > Rattachement sites CVC | mapping source terrain -> patrimoine | `CvcSiteMappingPage`, `fetchCvcImportSiteMatches`, `applyCvcImportSiteMappings` | Brancher/P1 |
 | Technique > Equipements | referentiel SYPEMI, equipements batiment | `BuildingTechniquePage`, fonctions `fetchEquipment*` | Brancher/P1 |
-| Technique > Fluides et conformite | F-Gaz, ESP, CO2eq, plan action | `CvcRefrigerantsPage`, `fetchCvcRefrigerantDashboard`, `fetchCvcRefrigerantItems` | Brancher/P1 |
+| Technique > F-Gaz / ESP | F-Gaz, ESP, CO2eq, plan action | `CvcRefrigerantsPage`, `fetchCvcRefrigerantDashboard`, `fetchCvcRefrigerantItems` | Brancher/P1 |
 | Technique > Rapport | couverture technique par batiment/source | `CvcTechnicalReportPage`, `fetchCvcTechnicalCoverageReport` | Brancher/P1 |
 
 Decision UX : la technique sort de `buildings/*` visuellement. Les anciennes routes peuvent rester en alias, mais la navigation doit dire `Technique`.
@@ -155,7 +156,7 @@ Decision UX : la technique sort de `buildings/*` visuellement. Les anciennes rou
 | Administration > Profil | compte utilisateur, mot de passe | `AccountPage`, `fetchMe`, `updateMeRequest`, `changePasswordRequest` | Brancher |
 | Administration > Imports | patrimoine, BPU, DALKIA ref, CVC, codifications | pages existantes d'import, fonctions import | Garder expert |
 | Administration > Connecteurs | ENEDIS sync/async, GRDF, ENGIE API potentiel | `EnergieDataOpsPage`, `EnergieGazPage`, routes `/api/engie/*` | Garder expert / cacher ENGIE API |
-| Administration > Referentiels | prix, TURPE, matrices comptables energie/CPE | `EnergieBpuPage`, `EnergieBillingPage`, accounting CPE/energie | Garder expert |
+| Administration > Referentiels | prix, TURPE, matrices comptables fluides/CPE | `EnergieBpuPage`, `EnergieBillingPage`, accounting CPE/energie | Garder expert |
 | Administration > Diagnostics | health, jobs, erreurs techniques | `/api/health`, jobs async | Cacher ou expert |
 | Administration > Ville | city/tenant | `fetchCities`, `city_id` backend | Cacher pour mono-admin actuel |
 
@@ -180,7 +181,7 @@ Livrable recommande :
 | Nouvelle config navigation | domaines, sous-domaines, routes cibles, aliases actuels |
 | Nouveau shell | topbar/sidebar produit, layout stable, titres de domaine |
 | Cockpit | files a traiter branchees sur donnees deja disponibles |
-| Pages conteneurs | Patrimoine, Energie, Marches, Technique, Administration |
+| Pages conteneurs | Patrimoine, Fluides & consommations, Marches, Technique, Administration |
 | Redirections/aliases | anciennes routes conservees |
 
 Definition de fini :
@@ -188,7 +189,7 @@ Definition de fini :
 - l'utilisateur voit la nouvelle logique produit des la connexion ;
 - aucune ancienne fonctionnalite utile ne disparait ;
 - chaque domaine a au moins une page conteneur claire ;
-- les premiers raccordements visibles sont `factures energie`, `CPE DALKIA`, `patrimoine`, `rattachements compteurs`.
+- les premiers raccordements visibles sont `factures marche`, `CPE DALKIA`, `patrimoine`, `rattachements compteurs`.
 
 ## 6. Paquet de refonte numero 2
 

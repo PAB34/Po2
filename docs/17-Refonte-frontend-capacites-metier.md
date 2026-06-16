@@ -91,8 +91,8 @@ La navigation cible doit rester lisible en six domaines.
 | Domaine | Role produit | A ne pas faire |
 |---|---|---|
 | Tableau de bord | cockpit des urgences, files a traiter, indicateurs transverses | page d'accueil decorative |
-| Patrimoine | base maitre sites, batiments, locaux, compteurs, rattachements | annuaire isole sans liens energie/contrats |
-| Energie | consommations, distributeurs, prix, TURPE, preconisations | melanger donnees mesurees et factures marche |
+| Patrimoine | base maitre sites, batiments, locaux, compteurs, rattachements | annuaire isole sans liens fluides/contrats |
+| Fluides & consommations | electricite, gaz, eau, distributeurs, prix, TURPE, preconisations | melanger donnees mesurees et factures marche |
 | Marches & contrats | CPE DALKIA, SPIE, contrats, factures marche, atterrissages | cloner DALKIA pour tous les marches |
 | Technique | inventaires CVC, equipements, F-Gaz, ESP, rapport technique | cacher le terrain dans Administration |
 | Administration | imports experts, referentiels, connecteurs, diagnostics | y mettre les parcours quotidiens |
@@ -103,16 +103,17 @@ La navigation cible doit rester lisible en six domaines.
 |---|---|---|---|
 | Patrimoine site -> batiment -> local | savoir sur quoi porte une facture, une conso, un contrat ou un equipement | Patrimoine > Sites et batiments | quotidien |
 | Rattachement compteurs PRM/PCE/eau | relier les donnees aux bons sites | Patrimoine > Rattachements | quotidien/P0 |
-| ENEDIS | prouver les consommations electriques et la couverture des donnees | Energie > Donnees electricite | quotidien + expert collecte |
-| GRDF | prouver les consommations gaz et alimenter les analyses P1/fourniture gaz | Energie > Donnees gaz | quotidien + expert collecte |
-| BPU / TURPE | verifier les prix contractuels | Energie > Prix contractuels | expert, mais visible depuis controle facture |
+| ENEDIS | prouver les consommations electriques et la couverture des donnees | Fluides & consommations > Electricite | quotidien + expert collecte |
+| GRDF | prouver les consommations gaz et alimenter les analyses P1/fourniture gaz | Fluides & consommations > Gaz | quotidien + expert collecte |
+| Eau | suivre consommations, pertes et futurs controles eau | Fluides & consommations > Eau | a cadrer |
+| BPU / TURPE | comprendre les prix contractuels et les composants de facture | Fluides & consommations > Prix contractuels | expert, mais visible depuis controle facture |
 | Factures fournisseurs et prestataires | controler, decider, exporter finance | Marches & contrats > Factures marche | quotidien/P0 |
-| Preconisations puissance | ajuster contrats et economies | Energie > Optimisations | metier/P1 |
+| Preconisations fluides | ajuster contrats, puissances, pertes et economies | Fluides & consommations > Preconisations | metier/P1 |
 | CPE DALKIA | piloter P1/P2/P3, controles, cibles, finances | Marches & contrats > CPE DALKIA | quotidien/P0 |
 | Referentiel DALKIA | transformer l'acte d'engagement en moteur de controle | CPE DALKIA > Referentiel + Administration > Imports | expert/P0 |
 | P3/P6 travaux | controler devis, BPU, engagements | CPE DALKIA > Travaux | metier/P0 |
 | CVC / equipements | exploiter l'inventaire technique terrain DALKIA/SPIE | Technique > Inventaire CVC | metier/P1 |
-| F-Gaz / ESP | suivre obligations et risques techniques | Technique > Fluides et conformite | metier/P1 |
+| F-Gaz / ESP | suivre obligations et risques techniques | Technique > F-Gaz / ESP | metier/P1 |
 | Connecteur ENGIE API | potentiel connecteur direct, non prouve comme usage produit actif | Administration > Connecteurs | cache/veille |
 | Pronostics | hors plateforme PatrimoineOp | hors produit | ne pas integrer |
 
@@ -128,9 +129,9 @@ Files a remonter :
 |---|---|---|
 | Factures marche a controler | Marches & contrats | ouvrir le controle factures marche |
 | Factures CPE DALKIA bloquees | Marches & contrats | ouvrir le controle CPE |
-| Compteurs non rattaches | Patrimoine / Energie | rattacher PRM/PCE/eau |
+| Compteurs non rattaches | Patrimoine / Fluides | rattacher PRM/PCE/eau |
 | Sites marche non relies | Patrimoine / Marches | relier DALKIA/SPIE au patrimoine |
-| Donnees distributeur incompletes | Energie | verifier ENEDIS/GRDF |
+| Donnees distributeur incompletes | Fluides & consommations | verifier ENEDIS/GRDF/eau |
 | Alertes techniques fluides | Technique | traiter F-Gaz/ESP |
 
 ### 7.2 Controle factures marche
@@ -290,7 +291,7 @@ Objectif : reposer la partie terrain et maintenance.
 Livrable front :
 
 - Technique > Inventaire CVC ;
-- Technique > Fluides et conformite ;
+- Technique > F-Gaz / ESP ;
 - Marches & contrats > SPIE ;
 - Administration nettoyee.
 

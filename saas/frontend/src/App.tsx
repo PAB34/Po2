@@ -71,12 +71,12 @@ const DOMAINS: NavDomain[] = [
   },
   {
     key: "energie",
-    label: "Énergie",
+    label: "Fluides & consommations",
     primaryTo: "/energie",
     pillar: "energie",
     prefixes: ["/energie"],
     links: [
-      { to: "/energie", label: "Dashboard énergie" },
+      { to: "/energie", label: "Vue d'ensemble" },
       { to: "/energie/donnees", label: "Acquisition & données" },
       { to: "/energie/preconisations", label: "Préconisations" },
       { to: "/energie/bpu", label: "Prix et TURPE" },
@@ -132,7 +132,7 @@ const DOMAINS: NavDomain[] = [
 ];
 
 const PILLARS: { key: Pillar; label: string; to: string }[] = [
-  { key: "energie", label: "Énergie", to: "/energie" },
+  { key: "energie", label: "Fluides", to: "/energie" },
   { key: "maintenance", label: "Maintenance", to: "/marches" },
   { key: "patrimoine", label: "Patrimoine", to: "/patrimoine" },
 ];
