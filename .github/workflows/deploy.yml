@@ -69,6 +69,10 @@ jobs:
               exit 1
             fi
 
+            # Reseau partage prod <-> staging (le Caddy prod y est rattache pour
+            # router staging.*). Idempotent ; requis car declare `external` dans le compose.
+            docker network create po2-edge 2>/dev/null || true
+
             COMPOSE="docker compose -f $APP_DIR/infra/docker-compose.prod.yml --project-directory $APP_DIR/infra --env-file $ENV_FILE"
 
             $COMPOSE up -d --build

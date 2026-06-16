@@ -54,9 +54,19 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # `default` = reseau implicite du projet (prod). `edge` = reseau partage avec
+    # le projet staging pour router staging.* vers backend-staging / frontend-staging.
+    networks:
+      - default
+      - edge
 
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
   invoice_data:
+
+networks:
+  edge:
+    external: true
+    name: po2-edge

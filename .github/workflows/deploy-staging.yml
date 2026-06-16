@@ -1,0 +1,78 @@
+name: Deploy staging
+
+# Declenchement MANUEL uniquement : on choisit la branche a deployer sur le
+# sous-domaine staging. Permet de tester n'importe quelle PR sans merger dans main
+# et sans toucher la prod.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branche ou commit a deployer sur staging"
+        required: true
+        default: main
+
+# Un seul deploy staging a la fois.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            TARGET_DIR="${{ secrets.VPS_APP_PATH }}-staging"
+            REPO_URL="${{ secrets.REPO_SSH_URL }}"
+            BRANCH_REF="origin/${{ github.event.inputs.ref }}"
+
+            mkdir -p "$TARGET_DIR"
+
+            if [ -d "$TARGET_DIR/.git" ]; then
+              REPO_DIR="$TARGET_DIR"
+            elif [ -d "$TARGET_DIR/repo/.git" ]; then
+              REPO_DIR="$TARGET_DIR/repo"
+            else
+              git clone "$REPO_URL" "$TARGET_DIR/repo"
+              REPO_DIR="$TARGET_DIR/repo"
+            fi
+
+            cd "$REPO_DIR"
+            git fetch --all
+            git reset --hard "$BRANCH_REF"
+
+            if [ -f "$REPO_DIR/saas/infra/docker-compose.staging.yml" ]; then
+              APP_DIR="$REPO_DIR/saas"
+            elif [ -f "$REPO_DIR/infra/docker-compose.staging.yml" ]; then
+              APP_DIR="$REPO_DIR"
+            else
+              echo "docker-compose.staging.yml introuvable depuis $REPO_DIR" >&2
+              exit 1
+            fi
+
+            ENV_FILE="$APP_DIR/.env.staging"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo ".env.staging introuvable dans $APP_DIR (a creer une fois sur le VPS)" >&2
+              exit 1
+            fi
+
+            # Reseau partage avec le Caddy prod (idempotent).
+            docker network create po2-edge 2>/dev/null || true
+
+            COMPOSE="docker compose -p po2-staging -f $APP_DIR/infra/docker-compose.staging.yml --project-directory $APP_DIR/infra --env-file $ENV_FILE"
+
+            $COMPOSE up -d --build
+
+            # Migrations Alembic sur la base staging.
+            sleep 5
+            $COMPOSE exec -T backend alembic upgrade head
+
+            # Le Caddy prod cache l'IP des upstreams : on le redemarre pour qu'il
+            # reresolve backend-staging / frontend-staging apres un rebuild.
+            docker restart infra-caddy-1 2>/dev/null || true

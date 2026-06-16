@@ -51,6 +51,22 @@ Conséquence : l'essentiel du stepper existait déjà ; le livrable réel est la
   `total_ttc`/`finance_exported_at` déjà utilisés ailleurs sur `EnergyInvoiceImport`).
 - **Validation à faire via GitHub Actions (CI `npm run build`) après push.**
 
+## Suite : environnement de staging (branche `chore/staging-environment`)
+
+Pour tester les refontes sans écraser la prod, cadrage + implémentation d'un staging
+sur le même VPS (ADR `[[Decisions/009-environnement-staging]]`). Arbitrages utilisateur :
+base staging = copie de la prod (basic-auth), déclenchement manuel par branche.
+
+Fichiers ajoutés/modifiés :
+- `saas/infra/docker-compose.staging.yml` (projet isolé `po2-staging`, base séparée, réseau `po2-edge`) ;
+- `saas/infra/docker-compose.prod.yml` (Caddy rejoint `po2-edge`) ;
+- `saas/infra/caddy/Caddyfile` (bloc `{$STAGING_SITE_ADDRESS}` → `*-staging`) ;
+- `.github/workflows/deploy-staging.yml` (manuel, input `ref`) + `deploy.yml` (création réseau) ;
+- `saas/.env.staging.example`.
+
+Actions utilisateur restantes : DNS `staging`, `.env.staging` sur le VPS,
+`STAGING_SITE_ADDRESS` dans le `.env` prod, merge dans `main`, restore dump prod → base staging.
+
 ## Reste à faire / handoff
 
 1. Vérifier le build CI puis l'écran `/factures` > `Consolidation finances` en prod.
