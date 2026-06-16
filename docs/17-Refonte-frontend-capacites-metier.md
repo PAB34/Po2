@@ -60,7 +60,7 @@ Chaque fonctionnalite doit etre classee selon quatre niveaux.
 |---|---|---|
 | Capacite backend | Que sait faire le systeme ? | analyser une facture, lire un BPU, calculer un ecart |
 | Parcours metier | Pourquoi l'utilisateur s'en sert ? | controler une facture avant mandatement |
-| Ecran cible | Ou l'utilisateur agit ? | Energie > Factures de fourniture |
+| Ecran cible | Ou l'utilisateur agit ? | Marches & contrats > Factures marche |
 | Niveau d'exposition | Est-ce quotidien, expert, cache ? | quotidien pour controle, expert pour import BPU |
 
 Regle durable :
@@ -92,7 +92,7 @@ La navigation cible doit rester lisible en six domaines.
 |---|---|---|
 | Tableau de bord | cockpit des urgences, files a traiter, indicateurs transverses | page d'accueil decorative |
 | Patrimoine | base maitre sites, batiments, locaux, compteurs, rattachements | annuaire isole sans liens energie/contrats |
-| Energie | consommations, distributeurs, factures de fourniture, prix, TURPE, preconisations | melanger fourniture, CPE et maintenance |
+| Energie | consommations, distributeurs, prix, TURPE, preconisations | melanger donnees mesurees et factures marche |
 | Marches & contrats | CPE DALKIA, SPIE, contrats, factures marche, atterrissages | cloner DALKIA pour tous les marches |
 | Technique | inventaires CVC, equipements, F-Gaz, ESP, rapport technique | cacher le terrain dans Administration |
 | Administration | imports experts, referentiels, connecteurs, diagnostics | y mettre les parcours quotidiens |
@@ -106,7 +106,7 @@ La navigation cible doit rester lisible en six domaines.
 | ENEDIS | prouver les consommations electriques et la couverture des donnees | Energie > Donnees electricite | quotidien + expert collecte |
 | GRDF | prouver les consommations gaz et alimenter les analyses P1/fourniture gaz | Energie > Donnees gaz | quotidien + expert collecte |
 | BPU / TURPE | verifier les prix contractuels | Energie > Prix contractuels | expert, mais visible depuis controle facture |
-| Factures fournisseurs Herault Energie | controler, decider, exporter finance | Energie > Factures de fourniture | quotidien/P0 |
+| Factures fournisseurs et prestataires | controler, decider, exporter finance | Marches & contrats > Factures marche | quotidien/P0 |
 | Preconisations puissance | ajuster contrats et economies | Energie > Optimisations | metier/P1 |
 | CPE DALKIA | piloter P1/P2/P3, controles, cibles, finances | Marches & contrats > CPE DALKIA | quotidien/P0 |
 | Referentiel DALKIA | transformer l'acte d'engagement en moteur de controle | CPE DALKIA > Referentiel + Administration > Imports | expert/P0 |
@@ -126,16 +126,16 @@ Files a remonter :
 
 | File | Domaine | Action attendue |
 |---|---|---|
-| Factures energie a controler | Energie | ouvrir le controle fournisseur |
+| Factures marche a controler | Marches & contrats | ouvrir le controle factures marche |
 | Factures CPE DALKIA bloquees | Marches & contrats | ouvrir le controle CPE |
 | Compteurs non rattaches | Patrimoine / Energie | rattacher PRM/PCE/eau |
 | Sites marche non relies | Patrimoine / Marches | relier DALKIA/SPIE au patrimoine |
 | Donnees distributeur incompletes | Energie | verifier ENEDIS/GRDF |
 | Alertes techniques fluides | Technique | traiter F-Gaz/ESP |
 
-### 7.2 Controle factures de fourniture Herault Energie
+### 7.2 Controle factures marche
 
-Ecran cible : `Energie > Factures de fourniture`.
+Ecran cible : `Marches & contrats > Factures marche`.
 
 Sous-ecrans utiles :
 
@@ -145,6 +145,8 @@ Sous-ecrans utiles :
 | ENGIE | controle electricite batiments : BPU, TURPE, ENEDIS, decisions |
 | EDF | controle eclairage public, CSV, regles propres |
 | TotalEnergies / gaz | a preparer : PCE, GRDF, BPU gaz si disponible |
+| DALKIA | CPE P1/P2/P3, controles specifiques, liaison finance |
+| SPIE | maintenance P2/P3, a cadrer |
 | Prix & references | acces expert BPU/TURPE utilise par le controle |
 | Export finance | fiche de liaison et matrice comptable |
 
@@ -266,7 +268,7 @@ Objectif : transformer la valeur backend la plus concrete en experience lisible.
 
 Livrable front :
 
-- `Energie > Factures de fourniture` reconstruit ;
+- `Marches & contrats > Factures marche` reconstruit ;
 - `Marches & contrats > CPE DALKIA > Factures` reconstruit ;
 - decision utilisateur explicite ;
 - export finance visible et controle.

@@ -53,8 +53,9 @@ const DOMAINS: Record<DomainKey, DomainConfig> = {
     primary: { title: "CPE DALKIA", meta: "P1, P2, P3, factures, performance", to: "/cpe", tone: "marches" },
     sections: [
       {
-        title: "CPE DALKIA",
+        title: "Pilotage marche",
         actions: [
+          { title: "Factures marche", meta: "ENGIE, EDF, TotalEnergies, DALKIA, SPIE", to: "/factures", tone: "marches" },
           { title: "Vue marche", meta: "sites, bilan, atterrissage", to: "/cpe", tone: "marches" },
           { title: "Factures et controle", meta: "decision, liaison finance", to: "/cpe", tone: "marches" },
           { title: "Sites CPE", meta: "consommations et detail site", to: "/cpe", tone: "marches" },

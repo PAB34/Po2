@@ -74,10 +74,9 @@ const DOMAINS: NavDomain[] = [
     label: "Énergie",
     primaryTo: "/energie",
     pillar: "energie",
-    prefixes: ["/energie", "/factures"],
+    prefixes: ["/energie"],
     links: [
       { to: "/energie", label: "Dashboard énergie" },
-      { to: "/factures", label: "Factures de fourniture" },
       { to: "/energie/donnees", label: "Acquisition & données" },
       { to: "/energie/preconisations", label: "Préconisations" },
       { to: "/energie/bpu", label: "Prix et TURPE" },
@@ -89,9 +88,10 @@ const DOMAINS: NavDomain[] = [
     label: "Marchés & contrats",
     primaryTo: "/marches",
     pillar: "maintenance",
-    prefixes: ["/marches", "/cpe"],
+    prefixes: ["/marches", "/factures", "/cpe"],
     links: [
       { to: "/marches", label: "Vue d'ensemble" },
+      { to: "/factures", label: "Factures marché" },
       { to: "/cpe", label: "CPE DALKIA" },
       { to: "/cpe/dalkia-import", label: "Référentiel DALKIA" },
     ],

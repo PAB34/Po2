@@ -52,7 +52,7 @@ Navigation principale recommandee :
 |---|---|---|
 | Tableau de bord | `/` | cockpit des files a traiter |
 | Patrimoine | `/patrimoine` | sites, batiments, locaux, fiches et rattachements |
-| Energie | `/energie` | consommations, donnees distributeurs, factures de fourniture, prix |
+| Energie | `/energie` | consommations, donnees distributeurs, prix |
 | Marches & contrats | `/marches` | CPE DALKIA, SPIE, contrats, factures marche |
 | Technique | `/technique` | inventaires CVC, equipements, fluides, rapport technique |
 | Administration | `/administration` | imports experts, connecteurs, referentiels, diagnostics |
@@ -103,20 +103,22 @@ Point d'accord a valider : l'import patrimoine doit etre accessible, mais il ne 
 | Energie > Preconisations | puissance souscrite, couts reels, recommandations | `EnergieRecommendationsPage`, `fetchPowerRecommendations` | Brancher |
 | Energie > Prix contractuels | BPU, TURPE, timeline, edition | `EnergieBpuPage`, `EnergieBillingPage`, fonctions `fetchBpu*`, `fetchTurpeVersions`, billing config | Refondre |
 
-Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF), `factures` et `prix contractuels`.
+Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF) et `prix contractuels`. Les factures sont un parcours marche transversal, pas un sous-bloc Energie.
 
-### 4.4 Energie > Factures de fourniture
+### 4.4 Marches & contrats > Factures marche
 
 | Ecran cible | Fonctionnalites a raccorder | Code actuel | Action |
 |---|---|---|---|
-| Factures > Etat | imports, lots, montants, ecarts, decisions | `FacturesPage`, `EnergieInvoicesPage`, `fetchEnergyInvoiceImports`, `fetchEnergyInvoiceBatches` | Refondre/P0 |
-| Factures > ENGIE | import XLSX, controle BPU/TURPE/ENEDIS, decision | `uploadEngieXlsxExport`, `analyzeEnergyInvoiceImport`, `updateEnergyInvoiceDecision` | Brancher/P0 |
-| Factures > EDF | import CSV eclairage public, controles dedies | `uploadEdfCsvExport` | Brancher/P0 |
-| Factures > Gaz / TotalEnergies | PCE, GRDF, fourniture gaz Herault Energie | `EnergieGazPage`, `fetchGrdf*`, BPU gaz partiel | A cadrer |
-| Factures > Detail facture | lignes, checks, decision, liaison XLSX | `EnergieInvoiceDetailPage`, `fetchEnergyInvoiceImport`, `downloadInvoiceLiaison` | Refondre/P0 |
-| Factures > Export finance | matrice comptable, liaison Excel | `fetchInvoiceCodification`, `downloadInvoiceLiaison`, `energie_accounting` | Brancher/P0 |
+| Factures marche > Etat | imports, lots, montants, ecarts, decisions | `FacturesPage`, `EnergieInvoicesPage`, `fetchEnergyInvoiceImports`, `fetchEnergyInvoiceBatches` | Refondre/P0 |
+| Factures marche > ENGIE | import XLSX, controle BPU/TURPE/ENEDIS, decision | `uploadEngieXlsxExport`, `analyzeEnergyInvoiceImport`, `updateEnergyInvoiceDecision` | Brancher/P0 |
+| Factures marche > EDF | import CSV eclairage public, controles dedies | `uploadEdfCsvExport` | Brancher/P0 |
+| Factures marche > TotalEnergies gaz | PCE, GRDF, fourniture gaz Herault Energie | `EnergieGazPage`, `fetchGrdf*`, BPU gaz partiel | A cadrer |
+| Factures marche > DALKIA | P1/P2/P3, controle CPE, liaison finance | `CpeDalkiaPage`, fonctions `fetchCpeFinance*` | Refondre/P0 |
+| Factures marche > SPIE | P2/P3 maintenance, a construire | inventaires/reference SPIE a cadrer | A cadrer |
+| Factures marche > Detail facture | lignes, checks, decision, liaison XLSX | `EnergieInvoiceDetailPage`, `fetchEnergyInvoiceImport`, `downloadInvoiceLiaison` | Refondre/P0 |
+| Factures marche > Export finance | matrice comptable multi-lots, liaison Excel | `fetchInvoiceCodification`, `downloadInvoiceLiaison`, `energie_accounting`, `cpe_accounting` | Refondre/P0 |
 
-Decision UX : ce parcours est le premier a rendre complet. Le nouvel ecran doit guider `importer -> controler -> comprendre -> decider -> exporter`.
+Decision UX : ce parcours sort d'Energie et devient un parcours marche transversal. Le nouvel ecran doit guider `importer -> controler -> comprendre -> decider -> exporter` pour les lots fournisseurs et prestataires.
 
 ### 4.5 Marches & contrats
 
@@ -212,7 +214,7 @@ Sous-parcours :
 1. Valider les six domaines de navigation.
 2. Confirmer que `/` devient le cockpit metier.
 3. Confirmer que les imports experts partent dans Administration, avec resume dans les domaines metier.
-4. Confirmer que `Factures de fourniture` et `CPE DALKIA > Factures` sont les deux parcours finance P0.
+4. Confirmer que `Factures marche` et `CPE DALKIA > Factures` sont les deux parcours finance P0.
 5. Confirmer que les anciennes routes restent accessibles pendant la migration.
 
 Recommandation :
