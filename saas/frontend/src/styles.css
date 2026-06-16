@@ -2427,6 +2427,111 @@ button:disabled {
   border-color: rgba(56, 189, 248, 0.45);
 }
 
+/* ── Page Factures (par marché) ─────────────────────────────────── */
+.fct {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.fct-markets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  padding-bottom: 0;
+}
+
+.fct-market-tab {
+  padding: 10px 18px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 2px solid transparent;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+
+.fct-market-tab:hover {
+  color: #e2e8f0;
+}
+
+.fct-market-tab--active {
+  color: #f8fafc;
+  background: rgba(30, 41, 59, 0.6);
+  border-bottom-color: #38bdf8;
+}
+
+.fct-market-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.fct-etat {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.fct-etat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.fct-etat-head strong {
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.fct-etat-meta {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.fct-etat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.fct-etat-table th {
+  text-align: left;
+  font-weight: 500;
+  color: #64748b;
+  font-size: 0.76rem;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.fct-etat-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+}
+
+.fct-etat-muted {
+  color: #94a3b8;
+}
+
+.fct-etat-note {
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.fct-embed {
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding-top: 4px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1.7fr 1fr 1fr 1.25fr;

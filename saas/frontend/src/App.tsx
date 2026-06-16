@@ -20,7 +20,7 @@ import EnergieBpuPage from "./pages/EnergieBpuPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
 import { EnergieGazPage } from "./pages/EnergieGazPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
-import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
+import FacturesPage from "./pages/FacturesPage";
 import { EnergieDataOpsPage, EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
 import { HomePage } from "./pages/HomePage";
@@ -231,7 +231,7 @@ export default function App() {
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
-            <Route path="/factures" element={<EnergieInvoicesPage />} />
+            <Route path="/factures" element={<FacturesPage />} />
             <Route path="/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
             <Route path="/energie/factures" element={<Navigate to="/factures" replace />} />
             <Route
