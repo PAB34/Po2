@@ -16,7 +16,12 @@ from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.billing_bpu_sync import build_current_lines_for_supplier
 from app.services import load_curve_store, supplier_registry
 from app.services.energie import _contracts, _daily_consumption_index, _max_power_index, _safe_float
-from app.services.invoice_bpu import load_historical_bpu_prices, resolve_historical_bpu_price
+from app.services.invoice_bpu import (
+    load_bpu_fixed_charges,
+    load_historical_bpu_prices,
+    resolve_fixed_charge,
+    resolve_historical_bpu_price,
+)
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
 from app.services.invoice_normalization import replace_normalized_invoice
 from app.services.turpe import evaluate_invoice_turpe
@@ -24,6 +29,7 @@ from app.services.turpe import evaluate_invoice_turpe
 
 PRICE_TOLERANCE_EUR_MWH = Decimal("0.05")
 AMOUNT_TOLERANCE_EUR = Decimal("0.05")
+FIXED_CHARGE_TOLERANCE_EUR = Decimal("0.50")
 TAX_TOTAL_TOLERANCE_EUR = Decimal("0.10")
 VAT_RECALC_TOLERANCE_EUR = Decimal("0.50")
 CONSUMPTION_TOLERANCE_RATIO = Decimal("0.05")
@@ -166,6 +172,11 @@ def _build_control_report(
         # produire le récapitulatif chiffré sans parser le message texte.
         "mismatches_detail": [],
     }
+    fixed_charges_summary: dict[str, Any] = {
+        "checked_lines": 0,
+        "mismatches": 0,
+        "contract_charges": [],
+    }
     turpe_summary: dict[str, Any] = {}
     taxes_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0}
     period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "missing_references": 0}
@@ -189,6 +200,7 @@ def _build_control_report(
     _check_perimeter(sites, issue)
     _check_arithmetic(invoice, sites, issue)
     _check_bpu(db, invoice_import.city_id, parsed, issue, bpu_summary)
+    _check_bpu_fixed_charges(db, parsed, issue, fixed_charges_summary)
     _check_turpe(parsed, issue, turpe_summary)
     _check_tax_and_vat(invoice, sites, issue, taxes_summary)
     _check_period_continuity(db, invoice_import, sites, issue, period_summary)
@@ -207,6 +219,7 @@ def _build_control_report(
         "warning_count": warning_count,
         "issues": issues,
         "bpu": bpu_summary,
+        "fixed_charges": fixed_charges_summary,
         "turpe": turpe_summary,
         "taxes": taxes_summary,
         "periods": period_summary,
@@ -481,7 +494,9 @@ def _check_bpu(
     bpu_summary: dict[str, Any],
 ) -> None:
     historical_prices = load_historical_bpu_prices(db, parsed.get("supplier"))
-    historical_documents: set[tuple[int, str, str, int, int]] = set()
+    historical_documents: set[
+        tuple[int, str, str, int, int, int | None, date | None, date | None]
+    ] = set()
     canonical_bpu = build_current_lines_for_supplier(parsed.get("supplier"))
     canonical_bpu_lines = [
         SimpleNamespace(**line)
@@ -539,6 +554,9 @@ def _check_bpu(
                         historical_price.pdf_filename,
                         historical_price.valid_year,
                         historical_price.lot_number,
+                        historical_price.amendment_number,
+                        historical_price.valid_from,
+                        historical_price.valid_to,
                     )
                 )
                 bpu_summary["checked_lines"] += 1
@@ -704,8 +722,13 @@ def _check_bpu(
             "filename": filename,
             "valid_year": valid_year,
             "lot_number": lot_number,
+            "amendment_number": amendment_number,
+            "valid_from": valid_from.isoformat() if valid_from else None,
+            "valid_to": valid_to.isoformat() if valid_to else None,
         }
-        for document_id, supplier, filename, valid_year, lot_number in sorted(historical_documents)
+        for document_id, supplier, filename, valid_year, lot_number, amendment_number, valid_from, valid_to in sorted(
+            historical_documents, key=lambda item: item[:5]
+        )
     ]
 
     bpu_summary["fallback_source"] = _resolve_bpu_fallback_source(
@@ -736,6 +759,79 @@ def _resolve_bpu_fallback_source(
     if used_configured:
         return configured_source
     return None
+
+
+def _classify_invoice_fixed_charge(label: str | None) -> str | None:
+    """Détecte un frais fixe contractuel sur une ligne facture, par libellé.
+
+    Conservateur : on ne reconnaît que les frais fixes explicitement listés dans
+    les BPU (branchement provisoire, contrat temporaire). On évite volontairement
+    le terme générique "abonnement" qui recouvre aussi la part fixe TURPE (déjà
+    contrôlée ailleurs) et produirait des faux positifs.
+    """
+    normalized = _strip_accents(str(label or "")).lower()
+    if "branchement provisoire" in normalized:
+        return "branchement_provisoire"
+    if "contrat temporaire" in normalized:
+        return "contrat_temporaire"
+    return None
+
+
+def _check_bpu_fixed_charges(
+    db: Session,
+    parsed: dict[str, Any],
+    issue,
+    summary: dict[str, Any],
+) -> None:
+    """Contrôle les frais fixes facturés (branchement provisoire, contrat
+    temporaire) contre les montants du BPU contractuel.
+
+    Non bloquant : ces frais sont marginaux et la détection est par libellé. On
+    expose aussi les frais fixes du contrat pour la traçabilité.
+    """
+    references = load_bpu_fixed_charges(db, parsed.get("supplier"))
+    summary["contract_charges"] = [
+        {
+            "charge_type": reference.charge_type,
+            "charge_label": reference.charge_label,
+            "value_eur_per_month": float(reference.value_eur_per_month),
+            "supplier": reference.supplier,
+            "pdf_filename": reference.pdf_filename,
+            "valid_from": reference.valid_from.isoformat() if reference.valid_from else None,
+            "valid_to": reference.valid_to.isoformat() if reference.valid_to else None,
+        }
+        for reference in references
+    ]
+    if not references:
+        return
+
+    for site in parsed.get("sites", []):
+        scope = _site_scope(site)
+        billed_on = _date_value(site.get("period_start"))
+        for line in site.get("invoice_lines", []):
+            charge_type = _classify_invoice_fixed_charge(line.get("label") or line.get("raw_line"))
+            if charge_type is None:
+                continue
+            reference = resolve_fixed_charge(references, charge_type, billed_on)
+            if reference is None:
+                continue
+            billed = _decimal(line.get("unit_price_ht"))
+            if billed is None:
+                continue
+            summary["checked_lines"] += 1
+            delta = abs(billed - reference.value_eur_per_month)
+            if delta > FIXED_CHARGE_TOLERANCE_EUR:
+                summary["mismatches"] += 1
+                issue(
+                    "warning",
+                    "BPU_FIXED_CHARGE_MISMATCH",
+                    (
+                        f"Frais fixe facture {billed:.2f} EUR/mois different du BPU "
+                        f"{reference.value_eur_per_month:.2f} EUR/mois "
+                        f"({reference.charge_label or charge_type}) sur {scope}."
+                    ),
+                    scope,
+                )
 
 
 def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
@@ -1181,6 +1277,11 @@ def _bpu_component_field(component: str | None) -> str | None:
         "capacity": "pu_capacite",
         "cee": "pu_cee",
         "green_energy": "pu_go",
+        # Composantes gaz lot 7 (TotalEnergies) — contrôlables uniquement via le
+        # BPU historique (BillingBpuLine ne porte pas ces colonnes). Pour l'élec
+        # ces composantes n'existent pas, donc aucun impact sur le parcours ENGIE.
+        "cee_precarite": "pu_cee_precarite",
+        "cpb": "pu_cpb",
     }.get(component or "")
 
 

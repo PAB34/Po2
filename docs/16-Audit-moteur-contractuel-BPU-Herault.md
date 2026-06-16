@@ -71,13 +71,21 @@ Le contrôle expose désormais `bpu.fallback_source` (`historical` / `canonical_
 avec le nombre de lignes par source et la liste des documents historiques. `bpu_*` reste la source de vérité
 prioritaire, `BillingConfig` le repli explicite et tracé.
 
-**R4 — Compléter composantes + frais fixes.** *(à faire)*
-Mapper CEE précarité / CPB côté **élec** ; ajouter le contrôle des abonnements (`BpuFixedCharge`) vs lignes
-d'abonnement facturées.
+**R4 — Compléter composantes + frais fixes. ✅ FAIT.**
+- *Composantes* : `_bpu_component_field` mappe désormais `cee_precarite`/`cpb` → la chaîne de contrôle laisse
+  passer ces composantes vers le BPU historique. Note : `BillingBpuLine` ne porte pas ces colonnes, donc le
+  contrôle ne passe que par l'historique `bpu_*` ; côté **élec** ces composantes n'existent pas (gaz lot 7
+  uniquement) → readiness sans impact ENGIE.
+- *Frais fixes* : nouveau `load_bpu_fixed_charges` + `resolve_fixed_charge` (abstention si montants divergents,
+  respect de la fenêtre de validité). `_check_bpu_fixed_charges` détecte par libellé les seuls frais fixes
+  listés au BPU (branchement provisoire, contrat temporaire — pas l'« abonnement » générique = part fixe
+  TURPE), compare le €/mois facturé (`BPU_FIXED_CHARGE_MISMATCH`, non bloquant) et **expose les frais fixes
+  du contrat** (`fixed_charges.contract_charges`) pour la traçabilité.
+  ⚠️ Détection par libellé à valider sur une vraie facture comportant un branchement provisoire.
 
-**R5 — Traçabilité de la référence contractuelle.** *(partiellement couvert par R3)*
-R3 affiche déjà fournisseur/année/lot/fichier. Reste à exposer l'avenant et la fenêtre de validité (du … au …)
-dans le rapport.
+**R5 — Traçabilité de la référence contractuelle. ✅ FAIT.**
+`historical_documents` expose désormais `amendment_number`, `valid_from`, `valid_to`. Le détail de facture
+affiche « <fournisseur> <année> lot <n> avenant <n> (valide du … au …) — <fichier> » par document mobilisé.
 
 ## 6. Arbitrages tranchés
 1. **Ordre** : R1 gaz traité en premier (débloque le P0 gaz Hérault), puis R2, puis R3. ✅

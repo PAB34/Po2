@@ -1,12 +1,21 @@
 from datetime import date
 from decimal import Decimal
 
-from app.models.bpu import BpuDocument, BpuPriceComponent, BpuSegment, BpuTimePeriod
+from app.models.bpu import (
+    BpuDocument,
+    BpuFixedCharge,
+    BpuPriceComponent,
+    BpuSegment,
+    BpuTimePeriod,
+)
 from app.services.invoice_bpu import (
+    FixedChargeReference,
     HistoricalBpuPrice,
+    fixed_charge_references_from_rows,
     historical_bpu_prices_from_rows,
     historical_segment_code_for_site,
     normalize_bpu_supplier,
+    resolve_fixed_charge,
     resolve_historical_bpu_price,
 )
 
@@ -205,3 +214,70 @@ def test_resolve_historical_bpu_price_gas_lot7() -> None:
         {"segment": "T2", "period_start": date(2025, 3, 1)},
         {"normalized_component": "cee_precarite", "poste": "base"},
     ) is None
+
+
+def test_fixed_charge_references_from_rows() -> None:
+    references = fixed_charge_references_from_rows(
+        [
+            (
+                BpuDocument(
+                    id=3,
+                    supplier="EDF",
+                    valid_year=2025,
+                    lot_number=1,
+                    pdf_filename="EDF_MS1_LOT_1_AVENANT_6_BPU_2025.pdf",
+                ),
+                BpuFixedCharge(
+                    document_id=3,
+                    charge_type="branchement_provisoire",
+                    charge_label="Abonnement Branchement Provisoire",
+                    charge_value=Decimal("120"),
+                    charge_unit="€HT/BP/Mois",
+                    charge_value_eur_per_month=Decimal("120"),
+                    applicable_from=date(2023, 1, 1),
+                    applicable_to=date(2025, 12, 31),
+                ),
+            )
+        ]
+    )
+    assert references == [
+        FixedChargeReference(
+            document_id=3,
+            supplier="EDF",
+            charge_type="branchement_provisoire",
+            charge_label="Abonnement Branchement Provisoire",
+            value_eur_per_month=Decimal("120"),
+            pdf_filename="EDF_MS1_LOT_1_AVENANT_6_BPU_2025.pdf",
+            valid_from=date(2023, 1, 1),
+            valid_to=date(2025, 12, 31),
+        )
+    ]
+
+
+def test_resolve_fixed_charge_respects_validity_and_ambiguity() -> None:
+    ref = FixedChargeReference(
+        document_id=3,
+        supplier="EDF",
+        charge_type="branchement_provisoire",
+        charge_label="Abonnement Branchement Provisoire",
+        value_eur_per_month=Decimal("120"),
+        valid_from=date(2023, 1, 1),
+        valid_to=date(2025, 12, 31),
+    )
+    assert resolve_fixed_charge([ref], "branchement_provisoire", date(2024, 6, 1)) == ref
+    # Hors fenêtre de validité
+    assert resolve_fixed_charge([ref], "branchement_provisoire", date(2026, 6, 1)) is None
+    # Mauvais type
+    assert resolve_fixed_charge([ref], "contrat_temporaire", date(2024, 6, 1)) is None
+
+    # Deux documents avec des montants différents pour la même date → abstention
+    ref_other = FixedChargeReference(
+        document_id=4,
+        supplier="EDF",
+        charge_type="branchement_provisoire",
+        charge_label="Abonnement Branchement Provisoire",
+        value_eur_per_month=Decimal("150"),
+        valid_from=date(2023, 1, 1),
+        valid_to=date(2025, 12, 31),
+    )
+    assert resolve_fixed_charge([ref, ref_other], "branchement_provisoire", date(2024, 6, 1)) is None

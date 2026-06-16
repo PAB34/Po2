@@ -134,11 +134,27 @@ type BpuHistoricalDocument = {
   filename?: string;
   valid_year?: number;
   lot_number?: number;
+  amendment_number?: number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
 };
 
 function recordHistoricalDocuments(record: Record<string, unknown> | undefined): BpuHistoricalDocument[] {
   const value = record?.historical_documents;
   return Array.isArray(value) ? (value as BpuHistoricalDocument[]) : [];
+}
+
+type BpuContractCharge = {
+  charge_type?: string;
+  charge_label?: string;
+  value_eur_per_month?: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
+};
+
+function recordContractCharges(record: Record<string, unknown> | undefined): BpuContractCharge[] {
+  const value = record?.contract_charges;
+  return Array.isArray(value) ? (value as BpuContractCharge[]) : [];
 }
 
 const BPU_FALLBACK_SOURCE_LABEL: Record<string, string> = {
@@ -151,7 +167,11 @@ const BPU_FALLBACK_SOURCE_LABEL: Record<string, string> = {
 function bpuHistoricalDocumentLabel(doc: BpuHistoricalDocument): string {
   const parts = [doc.supplier, doc.valid_year ? `${doc.valid_year}` : null];
   if (doc.lot_number != null) parts.push(`lot ${doc.lot_number}`);
-  const head = parts.filter(Boolean).join(" ");
+  if (doc.amendment_number != null) parts.push(`avenant ${doc.amendment_number}`);
+  let head = parts.filter(Boolean).join(" ");
+  if (doc.valid_from || doc.valid_to) {
+    head += ` (valide ${doc.valid_from ?? "?"} → ${doc.valid_to ?? "?"})`;
+  }
   return doc.filename ? `${head} — ${doc.filename}` : head;
 }
 
@@ -392,6 +412,7 @@ export function EnergieInvoiceDetailPage() {
   const sites = invoiceImport?.analysis_result?.sites ?? [];
   const issues = invoiceImport?.control_report?.issues ?? invoiceImport?.control_issues ?? [];
   const bpuSummary = invoiceImport?.control_report?.bpu;
+  const fixedChargesSummary = invoiceImport?.control_report?.fixed_charges;
   const turpeSummary = invoiceImport?.control_report?.turpe;
   const taxesSummary = invoiceImport?.control_report?.taxes;
   const periodsSummary = invoiceImport?.control_report?.periods;
@@ -768,6 +789,33 @@ export function EnergieInvoiceDetailPage() {
                   ))}
                 </ul>
               )}
+            </div>
+          );
+        })()}
+        {(() => {
+          const contractCharges = recordContractCharges(fixedChargesSummary);
+          if (contractCharges.length === 0) return null;
+          const checked = recordNumber(fixedChargesSummary, "checked_lines") ?? 0;
+          const mismatches = recordNumber(fixedChargesSummary, "mismatches") ?? 0;
+          return (
+            <div className="invoice-bpu-source">
+              <div className="invoice-bpu-source-head">
+                <strong>Frais fixes contractuels (BPU)</strong>
+                <span className="invoice-bpu-source-tag">
+                  {formatNumber(checked)} contrôlé(s) · {formatNumber(mismatches)} écart(s)
+                </span>
+              </div>
+              <ul className="invoice-bpu-source-docs">
+                {contractCharges.map((charge, index) => (
+                  <li key={`${charge.charge_type ?? "charge"}-${index}`}>
+                    {charge.charge_label ?? charge.charge_type} :{" "}
+                    {formatNumber(charge.value_eur_per_month, " €/mois")}
+                    {charge.valid_from || charge.valid_to
+                      ? ` (${charge.valid_from ?? "?"} → ${charge.valid_to ?? "?"})`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         })()}

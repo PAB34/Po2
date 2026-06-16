@@ -12,6 +12,7 @@ from app.models.bpu import (
     EXTRACTION_OCR_OK,
     EXTRACTION_OK,
     BpuDocument,
+    BpuFixedCharge,
     BpuPriceComponent,
     BpuSegment,
     BpuTimePeriod,
@@ -156,6 +157,92 @@ def document_applies_to_date(reference: HistoricalBpuPrice, billed_on: date) -> 
     if reference.valid_from is not None or reference.valid_to is not None:
         return True
     return reference.valid_year == billed_on.year
+
+
+@dataclass(frozen=True)
+class FixedChargeReference:
+    document_id: int
+    supplier: str
+    charge_type: str
+    charge_label: str | None
+    value_eur_per_month: Decimal
+    pdf_filename: str | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+
+def load_bpu_fixed_charges(db: Session, supplier: str | None) -> list[FixedChargeReference]:
+    normalized_supplier = normalize_bpu_supplier(supplier)
+    if normalized_supplier is None:
+        return []
+
+    rows = (
+        db.query(BpuDocument, BpuFixedCharge)
+        .join(BpuFixedCharge, BpuFixedCharge.document_id == BpuDocument.id)
+        .filter(BpuDocument.supplier == normalized_supplier)
+        .filter(BpuDocument.extraction_status.in_(SUPPORTED_BPU_EXTRACTION_STATUSES))
+        .filter(BpuFixedCharge.charge_value_eur_per_month.isnot(None))
+        .all()
+    )
+    return fixed_charge_references_from_rows(rows)
+
+
+def fixed_charge_references_from_rows(
+    rows: Iterable[tuple[BpuDocument, BpuFixedCharge]],
+) -> list[FixedChargeReference]:
+    references: list[FixedChargeReference] = []
+    for document, charge in rows:
+        value = _decimal(charge.charge_value_eur_per_month)
+        if value is None:
+            continue
+        references.append(
+            FixedChargeReference(
+                document_id=document.id,
+                supplier=document.supplier,
+                charge_type=charge.charge_type,
+                charge_label=charge.charge_label,
+                value_eur_per_month=value,
+                pdf_filename=document.pdf_filename,
+                valid_from=charge.applicable_from,
+                valid_to=charge.applicable_to,
+            )
+        )
+    return references
+
+
+def resolve_fixed_charge(
+    references: Iterable[FixedChargeReference],
+    charge_type: str,
+    billed_on: date | None,
+) -> FixedChargeReference | None:
+    """Choisit le frais fixe contractuel applicable à une date pour un type donné.
+
+    Abstention si plusieurs documents donnent un montant différent pour la même
+    date (cohérent avec resolve_historical_bpu_price) — évite un faux contrôle.
+    """
+    matches = [
+        reference
+        for reference in references
+        if reference.charge_type == charge_type
+        and _fixed_charge_applies_to_date(reference, billed_on)
+    ]
+    if not matches:
+        return None
+    distinct_values = {reference.value_eur_per_month for reference in matches}
+    if len(distinct_values) > 1:
+        return None
+    return matches[0]
+
+
+def _fixed_charge_applies_to_date(reference: FixedChargeReference, billed_on: date | None) -> bool:
+    if billed_on is None:
+        # Sans date de référence, on n'applique que si la charge n'a pas de fenêtre.
+        return reference.valid_from is None and reference.valid_to is None
+    if reference.valid_from is not None and billed_on < reference.valid_from:
+        return False
+    if reference.valid_to is not None and billed_on > reference.valid_to:
+        return False
+    return True
 
 
 def normalize_bpu_supplier(supplier: str | None) -> str | None:

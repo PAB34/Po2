@@ -1883,6 +1883,7 @@ export type EnergyInvoiceControlReport = {
   warning_count?: number;
   issues?: EnergyInvoiceImport["control_issues"];
   bpu?: Record<string, unknown>;
+  fixed_charges?: Record<string, unknown>;
   turpe?: Record<string, unknown>;
   taxes?: Record<string, unknown>;
   periods?: Record<string, unknown>;
