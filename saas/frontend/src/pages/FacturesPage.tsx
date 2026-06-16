@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { fetchCpeFinanceInvoices, fetchEnergyInvoiceImports } from "../lib/api";
+import { fetchCpeFinanceInvoices, fetchCpeMarketTracking, fetchEnergyInvoiceImports } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import { EnergieInvoicesPage, type SupplierKey } from "./EnergieInvoicesPage";
@@ -118,52 +118,173 @@ function HeraultEtat({ invoices }: { invoices: EnergyInvoiceImport[] }) {
   );
 }
 
-function DalkiaEtat() {
+function ecartBadge(ecart: number) {
+  const tone = ecart > 0 ? "danger" : "ok";
+  const sign = ecart > 0 ? "+" : "";
+  return <span className={`cockpit-badge cockpit-badge--${tone}`}>{sign}{formatEur(ecart)}</span>;
+}
+
+type DalkiaSub = "etat" | "global" | "poste" | "destinataire";
+
+const DALKIA_SUBS: { key: DalkiaSub; label: string }[] = [
+  { key: "etat", label: "État" },
+  { key: "global", label: "Global" },
+  { key: "poste", label: "Poste" },
+  { key: "destinataire", label: "Destinataire" },
+];
+
+function DalkiaSection() {
   const { token } = useAuth();
+  const [sub, setSub] = useState<DalkiaSub>("etat");
+  const yearTo = new Date().getFullYear();
+  const yearFrom = yearTo - 2;
+
+  const trackingQuery = useQuery({
+    queryKey: ["factures-dalkia-tracking", yearFrom, yearTo],
+    queryFn: () => fetchCpeMarketTracking(token!, yearFrom, yearTo),
+    enabled: !!token,
+  });
   const invoicesQuery = useQuery({
-    queryKey: ["factures-dalkia"],
+    queryKey: ["factures-dalkia-invoices"],
     queryFn: () => fetchCpeFinanceInvoices(token!),
     enabled: !!token,
   });
 
-  const summary = useMemo(() => {
-    const invoices = invoicesQuery.data ?? [];
-    const recipients = new Set(
-      invoices.map((i) => (i.recipient_reference_1 || i.customer_name || "").trim()).filter(Boolean),
-    );
-    return { count: invoices.length, recipients: recipients.size };
-  }, [invoicesQuery.data]);
+  const tracking = trackingQuery.data;
+  const invoices = invoicesQuery.data ?? [];
+
+  const byRecipient = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const inv of invoices) {
+      const key = (inv.recipient_reference_1 || inv.customer_name || "—").trim() || "—";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [invoices]);
 
   return (
-    <div className="fct-etat">
-      <div className="fct-etat-head">
-        <strong>État — DALKIA (CPE)</strong>
-        <Link to="/cpe" className="cockpit-queue-action">
-          Ouvrir le suivi DALKIA <span aria-hidden="true">↗</span>
-        </Link>
+    <div className="fct-market-body">
+      <div className="fct-subtabs" role="tablist" aria-label="DALKIA">
+        {DALKIA_SUBS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={sub === item.key}
+            className={`fct-subtab${sub === item.key ? " fct-subtab--active" : ""}`}
+            onClick={() => setSub(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
-      <table className="fct-etat-table">
-        <thead>
-          <tr>
-            <th>Indicateur</th>
-            <th>Valeur</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Factures CPE importées</td>
-            <td>{invoicesQuery.isLoading ? "…" : formatInt(summary.count)}</td>
-          </tr>
-          <tr>
-            <td>Destinataires distincts</td>
-            <td>{invoicesQuery.isLoading ? "…" : formatInt(summary.recipients)}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p className="fct-etat-note">
-        Détail par poste (P1/P2/P3), par destinataire et atterrissage (cibles contractuelles) : prochaine étape.
-        Le contrôle finances DALKIA reste accessible via « Ouvrir le suivi DALKIA ».
-      </p>
+
+      {sub === "etat" && (
+        <div className="fct-etat">
+          <div className="fct-etat-head">
+            <strong>État — DALKIA (CPE)</strong>
+            <Link to="/cpe" className="cockpit-queue-action">
+              Ouvrir le suivi DALKIA <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
+          <table className="fct-etat-table">
+            <thead>
+              <tr><th>Indicateur</th><th>Valeur</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Factures CPE importées</td><td>{formatInt(invoices.length)}</td></tr>
+              <tr><td>Destinataires distincts</td><td>{formatInt(byRecipient.length)}</td></tr>
+              <tr><td>Prévu (cumul)</td><td>{formatEur(tracking?.grand_total.prevu)}</td></tr>
+              <tr><td>Reçu / facturé (cumul)</td><td>{formatEur(tracking?.grand_total.recu)}</td></tr>
+              <tr>
+                <td>Écart cumulé</td>
+                <td>{tracking ? ecartBadge(tracking.grand_total.ecart) : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="fct-etat-note">
+            « Prévu » = cibles/échéancier contractuel ; « reçu » = facturé. Le détail (atterrissage par cible,
+            intéressement) est dans l'onglet Poste et sur le suivi DALKIA.
+          </p>
+        </div>
+      )}
+
+      {sub === "global" && (
+        <div className="fct-etat">
+          <div className="fct-etat-head"><strong>Global — prévu / facturé par année</strong></div>
+          {tracking && tracking.totals_by_year.length > 0 ? (
+            <table className="fct-etat-table">
+              <thead>
+                <tr><th>Année</th><th>Prévu</th><th>Facturé</th><th>Écart</th><th>Taux</th></tr>
+              </thead>
+              <tbody>
+                {tracking.totals_by_year.map((cell) => (
+                  <tr key={cell.year}>
+                    <td>{cell.year}</td>
+                    <td>{formatEur(cell.prevu)}</td>
+                    <td>{formatEur(cell.recu)}</td>
+                    <td>{ecartBadge(cell.ecart)}</td>
+                    <td className="fct-etat-muted">{cell.taux != null ? `${Math.round(cell.taux * 100)} %` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="fct-etat-note">{trackingQuery.isLoading ? "Chargement…" : "Aucune référence de suivi disponible."}</p>
+          )}
+        </div>
+      )}
+
+      {sub === "poste" && (
+        <div className="fct-etat">
+          <div className="fct-etat-head"><strong>Poste — P1 / P2 / P3</strong></div>
+          {tracking && tracking.postes.length > 0 ? (
+            <table className="fct-etat-table">
+              <thead>
+                <tr><th>Poste</th><th>Prévu</th><th>Facturé</th><th>Écart</th></tr>
+              </thead>
+              <tbody>
+                {tracking.postes.map((poste) => (
+                  <tr key={poste.poste}>
+                    <td>{poste.poste} · {poste.label}</td>
+                    <td>{formatEur(poste.total.prevu)}</td>
+                    <td>{formatEur(poste.total.recu)}</td>
+                    <td>{ecartBadge(poste.total.ecart)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="fct-etat-note">{trackingQuery.isLoading ? "Chargement…" : "Aucune donnée par poste."}</p>
+          )}
+        </div>
+      )}
+
+      {sub === "destinataire" && (
+        <div className="fct-etat">
+          <div className="fct-etat-head"><strong>Destinataire — REF DESTINATAIRE 1 / nom client</strong></div>
+          {byRecipient.length > 0 ? (
+            <table className="fct-etat-table">
+              <thead>
+                <tr><th>Destinataire</th><th>Factures</th></tr>
+              </thead>
+              <tbody>
+                {byRecipient.map(([recipient, count]) => (
+                  <tr key={recipient}>
+                    <td>{recipient}</td>
+                    <td>{formatInt(count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="fct-etat-note">{invoicesQuery.isLoading ? "Chargement…" : "Aucune facture DALKIA importée."}</p>
+          )}
+          <p className="fct-etat-note">
+            Le périmètre Ville est filtré sur le destinataire (« Commune de Sète » retenu) côté contrôle finances.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -197,11 +318,7 @@ export default function FacturesPage() {
 
       {market === "herault" && <HeraultSection />}
 
-      {market === "dalkia" && (
-        <div className="fct-market-body">
-          <DalkiaEtat />
-        </div>
-      )}
+      {market === "dalkia" && <DalkiaSection />}
 
       {market === "spie" && (
         <div className="fct-market-body">
