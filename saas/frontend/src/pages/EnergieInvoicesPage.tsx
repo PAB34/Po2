@@ -570,6 +570,10 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
   const imports = supplierFilter
     ? allImports.filter((invoiceImport) => supplierKeyOf(invoiceImport) === supplierFilter)
     : allImports;
+  // Mode "dédié" : embarqué sous l'onglet d'un fournisseur (ex. ENGIE) dans /factures.
+  // On masque le décor multi-fournisseurs (bandeau marché, onglets fluide, cartes
+  // fournisseurs) pour ne garder que le parcours de contrôle du fournisseur ciblé.
+  const focused = Boolean(supplierFilter);
   const supplierSummary = useMemo(() => {
     const acc: Record<string, { count: number; total: number }> = {};
     for (const invoiceImport of imports) {
@@ -925,31 +929,35 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
 
   return (
     <div className="page">
-      <div className="page-header">
-        <div>
-          <h2>Controle des factures fournisseurs</h2>
-          <p className="page-subtitle">
-            Marche Herault Energie - batiments hors CPE. Verifier chaque facture selon les modalites
-            contractuelles (BPU, TURPE), produire un rapport fournisseur, puis la fiche de liaison comptable
-            vers le service finance.
-          </p>
+      {!focused && (
+        <div className="page-header">
+          <div>
+            <h2>Controle des factures fournisseurs</h2>
+            <p className="page-subtitle">
+              Marche Herault Energie - batiments hors CPE. Verifier chaque facture selon les modalites
+              contractuelles (BPU, TURPE), produire un rapport fournisseur, puis la fiche de liaison comptable
+              vers le service finance.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="market-banner">
-        <div className="market-banner-item market-banner-item--active">
-          <span className="market-banner-tag">Marche en cours</span>
-          <strong>Fournisseurs · Herault Energie</strong>
-          <span>EDF · ENGIE · TotalEnergies - batiments hors CPE</span>
+      {!focused && (
+        <div className="market-banner">
+          <div className="market-banner-item market-banner-item--active">
+            <span className="market-banner-tag">Marche en cours</span>
+            <strong>Fournisseurs · Herault Energie</strong>
+            <span>EDF · ENGIE · TotalEnergies - batiments hors CPE</span>
+          </div>
+          <Link to="/cpe" className="market-banner-item market-banner-item--link">
+            <span className="market-banner-tag">Autre marche</span>
+            <strong>CPE DALKIA →</strong>
+            <span>P1 gaz, P2, P3 - batiments dans le CPE</span>
+          </Link>
         </div>
-        <Link to="/cpe" className="market-banner-item market-banner-item--link">
-          <span className="market-banner-tag">Autre marche</span>
-          <strong>CPE DALKIA →</strong>
-          <span>P1 gaz, P2, P3 - batiments dans le CPE</span>
-        </Link>
-      </div>
+      )}
 
-      <details className="invoice-sources">
+      <details className="invoice-sources" hidden={focused}>
         <summary>Comment ca marche - sources de donnees et livrables</summary>
         <div className="invoice-sources-grid">
           <div>
@@ -981,13 +989,15 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
         </div>
       </details>
 
-      <div className="fluid-tabs" role="tablist" aria-label="Fluide">
-        <FluidTab active={fluid === "elec"} onClick={() => setFluid("elec")}>Electricite</FluidTab>
-        <FluidTab active={fluid === "gaz"} soon onClick={() => setFluid("gaz")}>Gaz</FluidTab>
-        <FluidTab active={fluid === "eau"} soon onClick={() => setFluid("eau")}>Eau</FluidTab>
-      </div>
+      {!focused && (
+        <div className="fluid-tabs" role="tablist" aria-label="Fluide">
+          <FluidTab active={fluid === "elec"} onClick={() => setFluid("elec")}>Electricite</FluidTab>
+          <FluidTab active={fluid === "gaz"} soon onClick={() => setFluid("gaz")}>Gaz</FluidTab>
+          <FluidTab active={fluid === "eau"} soon onClick={() => setFluid("eau")}>Eau</FluidTab>
+        </div>
+      )}
 
-      {fluid !== "elec" && (
+      {!focused && fluid !== "elec" && (
         <section className="invoice-placeholder">
           <h3>{fluid === "gaz" ? "Gaz - a integrer" : "Eau - a integrer"}</h3>
           <p>
@@ -1036,6 +1046,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
 
       {step === "data" && (
       <>
+      {!focused && (
       <section className="invoice-supplier-strip">
         <div className="invoice-supplier-strip-head">
           <h3>Fournisseurs d'energie</h3>
@@ -1068,6 +1079,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
           })}
         </div>
       </section>
+      )}
 
       <section className="invoice-consumption-panel">
         <header className="invoice-consumption-header">
