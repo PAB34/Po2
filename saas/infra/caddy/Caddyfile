@@ -36,3 +36,43 @@
         }
     }
 }
+
+# Pre-production (staging) — meme Caddy, sous-domaine distinct, route vers les
+# conteneurs du projet `po2-staging` via le reseau partage `po2-edge`.
+# Active uniquement quand le DNS staging pointe vers ce VPS (sinon l'emission du
+# certificat ACME echoue et reessaie sans impacter la prod).
+{$STAGING_SITE_ADDRESS:staging.patrimoineaucarre.com} {
+    handle_path /pronostics* {
+        reverse_proxy pronostics-staging:80
+    }
+
+    handle /api/auth/register {
+        route {
+            forward_auth backend-staging:8000 {
+                uri /api/internal/basic-auth
+            }
+            reverse_proxy backend-staging:8000
+        }
+    }
+
+    handle /api/internal/* {
+        respond 404
+    }
+
+    handle /api/* {
+        reverse_proxy backend-staging:8000 {
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    handle {
+        route {
+            forward_auth backend-staging:8000 {
+                uri /api/internal/basic-auth
+            }
+            reverse_proxy frontend-staging:80
+        }
+    }
+}

@@ -56,6 +56,7 @@
 - [[Decisions/006-secrets-jamais-en-chat-IA]]
 - [[Decisions/007-bpu-schema-on-read-vs-parser]]
 - [[Decisions/008-referentiel-patrimoine-et-rapprochements]]
+- [[Decisions/009-environnement-staging]]
 - Template : [[Decisions/_template]]
 
 ### 📅 Journal des sessions

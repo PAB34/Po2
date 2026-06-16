@@ -1,0 +1,76 @@
+# Environnement de pre-production (staging) — tourne sur le MEME VPS que la prod,
+# mais totalement isole : projet docker distinct (`-p po2-staging`), base de
+# donnees separee, volumes prefixes par le projet.
+#
+# Pas de service Caddy ici : c'est le Caddy de la prod qui route le sous-domaine
+# staging.* vers ces conteneurs via le reseau externe partage `po2-edge`.
+# Les services exposes (backend, frontend, pronostics) rejoignent ce reseau avec
+# un alias stable pour que le Caddy prod les resolve par nom.
+#
+# Deploiement : .github/workflows/deploy-staging.yml (declenchement manuel par branche).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ../.env.staging
+    depends_on:
+      - db
+    volumes:
+      - ../../:/workspace:ro
+      - invoice_data:/app/storage/invoices
+    networks:
+      internal: {}
+      edge:
+        aliases:
+          - backend-staging
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      internal: {}
+      edge:
+        aliases:
+          - frontend-staging
+
+  pronostics:
+    build:
+      context: ../pronostics
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      internal: {}
+      edge:
+        aliases:
+          - pronostics-staging
+
+volumes:
+  postgres_data:
+  invoice_data:
+
+networks:
+  internal:
+    driver: bridge
+  edge:
+    external: true
+    name: po2-edge
