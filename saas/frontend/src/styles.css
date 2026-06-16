@@ -2524,6 +2524,40 @@ button:disabled {
   color: #64748b;
 }
 
+.fct-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.fct-overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.fct-overview-card span {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.fct-overview-card strong {
+  color: #f8fafc;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.fct-overview-card small {
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
 .fct-etat-table {
   width: 100%;
   border-collapse: collapse;
@@ -5657,6 +5691,55 @@ button:disabled {
 .market-banner-item--link:hover {
   border-color: rgba(59, 130, 246, 0.5);
   background: rgba(30, 58, 138, 0.2);
+}
+
+.supplier-focus-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.44);
+}
+
+.supplier-focus-header h2 {
+  margin: 2px 0 6px;
+  color: #f8fafc;
+  font-size: 1.4rem;
+}
+
+.supplier-focus-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 420px;
+}
+
+.supplier-focus-meta span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.5);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .fct-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .supplier-focus-header {
+    flex-direction: column;
+  }
+
+  .supplier-focus-meta {
+    justify-content: flex-start;
+  }
 }
 
 .invoice-sources {

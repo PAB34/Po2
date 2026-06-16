@@ -54,7 +54,13 @@ type SupplierStat = {
   exported: number;
 };
 
-function HeraultEtat({ invoices }: { invoices: EnergyInvoiceImport[] }) {
+function HeraultEtat({
+  invoices,
+  onSelectSupplier,
+}: {
+  invoices: EnergyInvoiceImport[];
+  onSelectSupplier: (supplier: HeraultSupplier) => void;
+}) {
   const stats = useMemo<SupplierStat[]>(() => {
     const order: HeraultSupplier[] = ["ENGIE", "EDF", "TOTALENERGIES"];
     return order.map((supplier) => {
@@ -73,12 +79,32 @@ function HeraultEtat({ invoices }: { invoices: EnergyInvoiceImport[] }) {
     const dates = invoices.map((i) => i.created_at).filter(Boolean).sort();
     return dates.length ? dates[dates.length - 1] : null;
   }, [invoices]);
+  const totalTtc = stats.reduce((sum, stat) => sum + stat.ttc, 0);
+  const totalGaps = stats.reduce((sum, stat) => sum + stat.gaps, 0);
+  const totalExported = stats.reduce((sum, stat) => sum + stat.exported, 0);
 
   return (
     <div className="fct-etat">
       <div className="fct-etat-head">
         <strong>État — Hérault Énergie</strong>
         <span className="fct-etat-meta">dernier import {formatDate(lastImport)}</span>
+      </div>
+      <div className="fct-overview-grid">
+        <div className="fct-overview-card">
+          <span>Factures importees</span>
+          <strong>{formatInt(invoices.length)}</strong>
+          <small>ENGIE, EDF et gaz a venir</small>
+        </div>
+        <div className="fct-overview-card">
+          <span>Ecarts a traiter</span>
+          <strong>{formatInt(totalGaps)}</strong>
+          <small>Controle BPU, TURPE, periodes</small>
+        </div>
+        <div className="fct-overview-card">
+          <span>Montant TTC suivi</span>
+          <strong>{formatEur(totalTtc)}</strong>
+          <small>{formatInt(totalExported)} transmise(s) finance</small>
+        </div>
       </div>
       <table className="fct-etat-table">
         <thead>
@@ -88,6 +114,7 @@ function HeraultEtat({ invoices }: { invoices: EnergyInvoiceImport[] }) {
             <th>Écarts</th>
             <th>Montant TTC</th>
             <th>Transmises finance</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
@@ -105,6 +132,15 @@ function HeraultEtat({ invoices }: { invoices: EnergyInvoiceImport[] }) {
               <td>{formatEur(stat.ttc)}</td>
               <td className="fct-etat-muted">
                 {formatInt(stat.exported)} / {formatInt(stat.count)}
+              </td>
+              <td>
+                {stat.supplier === "TOTALENERGIES" ? (
+                  <span className="cockpit-badge cockpit-badge--neutral">a preparer</span>
+                ) : (
+                  <button type="button" className="btn-secondary btn-compact" onClick={() => onSelectSupplier(stat.supplier)}>
+                    Ouvrir
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -367,7 +403,19 @@ function HeraultSection() {
         ))}
       </div>
       {sub === "etat" ? (
-        <HeraultEtatLoader />
+        <HeraultEtatLoader onSelectSupplier={setSub} />
+      ) : sub === "TOTALENERGIES" ? (
+        <div className="fct-etat">
+          <div className="fct-etat-head">
+            <strong>TotalEnergies - gaz batiments</strong>
+            <span className="cockpit-badge cockpit-badge--neutral">a preparer</span>
+          </div>
+          <p className="fct-etat-note">
+            Cette sous-section doit controler les factures gaz du marche Herault Energie avec les PCE, les releves GRDF
+            et le BPU gaz lot 7. Le moteur de prix gaz est documente, mais la page facture gaz ne doit pas etre ouverte
+            tant que le parser et le rapprochement PCE ne sont pas finalises.
+          </p>
+        </div>
       ) : (
         <div className="fct-embed">
           <EnergieInvoicesPage supplierFilter={sub} />
@@ -377,12 +425,12 @@ function HeraultSection() {
   );
 }
 
-function HeraultEtatLoader() {
+function HeraultEtatLoader({ onSelectSupplier }: { onSelectSupplier: (supplier: HeraultSupplier) => void }) {
   const { token } = useAuth();
   const invoicesQuery = useQuery({
     queryKey: ["factures-herault-etat"],
     queryFn: () => fetchEnergyInvoiceImports(token!),
     enabled: !!token,
   });
-  return <HeraultEtat invoices={invoicesQuery.data ?? []} />;
+  return <HeraultEtat invoices={invoicesQuery.data ?? []} onSelectSupplier={onSelectSupplier} />;
 }

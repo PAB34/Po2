@@ -574,6 +574,9 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
   // On masque le décor multi-fournisseurs (bandeau marché, onglets fluide, cartes
   // fournisseurs) pour ne garder que le parcours de contrôle du fournisseur ciblé.
   const focused = Boolean(supplierFilter);
+  const focusedSupplier = supplierFilter ? SUPPLIER_CATALOG.find((supplier) => supplier.key === supplierFilter) : null;
+  const showEngieWorkflow = !focused || supplierFilter === "ENGIE";
+  const showEdfWorkflow = !focused || supplierFilter === "EDF";
   const supplierSummary = useMemo(() => {
     const acc: Record<string, { count: number; total: number }> = {};
     for (const invoiceImport of imports) {
@@ -929,6 +932,23 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
 
   return (
     <div className="page">
+      {focusedSupplier && (
+        <div className="supplier-focus-header">
+          <div>
+            <p className="cockpit-eyebrow">Herault Energie</p>
+            <h2>Controle des factures {focusedSupplier.label}</h2>
+            <p className="page-subtitle">
+              {focusedSupplier.energyLabel} - distributeur {focusedSupplier.distributor} - {focusedSupplier.scope}.
+            </p>
+          </div>
+          <div className="supplier-focus-meta" aria-label="Perimetre du controle">
+            <span>{focusedSupplier.label}</span>
+            <span>{focusedSupplier.distributor}</span>
+            <span>{focusedSupplier.scope}</span>
+          </div>
+        </div>
+      )}
+
       {!focused && (
         <div className="page-header">
           <div>
@@ -1081,6 +1101,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
       </section>
       )}
 
+      {showEngieWorkflow && (
       <section className="invoice-consumption-panel">
         <header className="invoice-consumption-header">
           <div>
@@ -1219,6 +1240,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
           </>
         )}
       </section>
+      )}
 
       {/*
         Pipeline PDF désactivé côté UI depuis le passage à l'import XLSX (mai 2026).
@@ -1229,6 +1251,8 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
       */}
 
       <section className="invoice-upload-panel">
+        {showEngieWorkflow && (
+          <>
         <div>
           <p className="field-label">Import export ENGIE (XLSX)</p>
           <p className="invoice-upload-copy">
@@ -1270,8 +1294,12 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
         )}
         {xlsxSummary && <p className="sync-result-ok">{xlsxSummary}</p>}
         {xlsxUploadMut.isError && <p className="error-text">{(xlsxUploadMut.error as Error).message}</p>}
+          </>
+        )}
 
-        <div className="invoice-upload-divider" />
+        {showEngieWorkflow && showEdfWorkflow && <div className="invoice-upload-divider" />}
+        {showEdfWorkflow && (
+          <>
         <div>
           <p className="field-label">EDF — eclairage public (electricite)</p>
           <p className="page-subtitle">
@@ -1308,11 +1336,13 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
         {edfFile && <p className="invoice-upload-selection">Fichier sélectionné : {edfFile.name}</p>}
         {edfSummary && <p className="sync-result-ok">{edfSummary}</p>}
         {edfUploadMut.isError && <p className="error-text">{(edfUploadMut.error as Error).message}</p>}
+          </>
+        )}
       </section>
 
       {/* Section "Lots d'import" désactivée depuis le passage XLSX-only (mai 2026).
           Conservée en code pour pouvoir réafficher l'historique des dépôts PDF si besoin. */}
-      {xlsxBatches.length > 0 && (
+      {showEngieWorkflow && xlsxBatches.length > 0 && (
       <details className="invoice-detail-section invoice-batch-disclosure">
         <summary className="invoice-batch-summary">
           <div>
@@ -1683,6 +1713,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
             <span className="text-muted"> · trié par {sortColumn} {sortDir === "asc" ? "↑" : "↓"}</span>
           )}
         </div>
+        {!focused && (
         <div className="invoice-action-cell">
           {deleteAllSummary && <span className="sync-result-ok">{deleteAllSummary}</span>}
           <button
@@ -1694,6 +1725,7 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
             {deleteAllMut.isPending ? "Suppression en cours..." : "Tout supprimer"}
           </button>
         </div>
+        )}
       </div>
 
       <div className="table-wrapper">
