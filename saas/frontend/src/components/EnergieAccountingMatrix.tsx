@@ -27,7 +27,13 @@ const SITE_COLS: { key: keyof EnergyAccountingSiteMapping; label: string }[] = [
   { key: "manager", label: "Gestionnaire" },
 ];
 
-export default function EnergieAccountingMatrix({ onClose }: { onClose: () => void }) {
+export default function EnergieAccountingMatrix({
+  onClose,
+  variant = "modal",
+}: {
+  onClose?: () => void;
+  variant?: "modal" | "inline";
+}) {
   const { token } = useAuth();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -100,16 +106,23 @@ export default function EnergieAccountingMatrix({ onClose }: { onClose: () => vo
   const sites = sitesQuery.data ?? [];
   const natures = naturesQuery.data ?? [];
 
+  const isInline = variant === "inline";
+
   return (
-    <div style={overlay} onClick={onClose}>
-      <div style={panel} onClick={(e) => e.stopPropagation()}>
+    <div style={isInline ? inlineOverlay : overlay} onClick={isInline ? undefined : onClose}>
+      <div style={isInline ? inlinePanel : panel} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>Matrice comptable ENGIE</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>✕</button>
+          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
+            {isInline ? "Matrice comptable — consolidation finances" : "Matrice comptable ENGIE"}
+          </h2>
+          {!isInline && (
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8" }}>✕</button>
+          )}
         </div>
         <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 12px" }}>
           Codification utilisée pour la fiche de liaison finances : PRM → codes analytiques
-          (Service/Fonction/Antenne/Opération) et poste facturé → nature comptable.
+          (Service/Fonction/Antenne/Opération) et poste facturé → nature comptable. La colonne
+          « Marché » rend la matrice transversale (ENGIE, EDF, et marchés à venir).
         </p>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
@@ -185,6 +198,8 @@ export default function EnergieAccountingMatrix({ onClose }: { onClose: () => vo
 
 const overlay: CSSProperties = { position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 };
 const panel: CSSProperties = { background: "#fff", borderRadius: 12, padding: 20, width: "min(1100px, 96vw)", height: "min(80vh, 760px)", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" };
+const inlineOverlay: CSSProperties = {};
+const inlinePanel: CSSProperties = { background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 20, display: "flex", flexDirection: "column", maxHeight: 720 };
 const inputStyle: CSSProperties = { width: "100%", border: "1px solid #e2e8f0", borderRadius: 4, padding: "3px 6px", fontSize: 12 };
 const table: CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 12 };
 const th: CSSProperties = { position: "sticky", top: 0, background: "#f1f5f9", textAlign: "left", padding: "6px 8px", borderBottom: "1px solid #e2e8f0", fontWeight: 600, whiteSpace: "nowrap" };

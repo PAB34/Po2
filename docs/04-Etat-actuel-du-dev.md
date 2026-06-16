@@ -1,4 +1,16 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-16 (parcours Factures marché : consolidation finances transversale)
+> **Branche** : `codex/refonte-frontend-shell` (suite PR #13). Build frontend non exécuté localement (npm absent) -> validation CI.
+>
+> Refonte du parcours `Marchés & contrats > Factures marché`. Constat : le stepper
+> `importer -> contrôler -> comprendre -> décider` existait déjà dans `EnergieInvoicesPage`
+> (`StepTab` / `ControlStep` : Données & import, Contrôle contractuel, Rapport fournisseur, Liaison finance).
+> Livrable de la session = sortir la consolidation/export finances au niveau supérieur (arbitrage utilisateur) :
+> - `EnergieAccountingMatrix` : nouveau mode `variant="inline"` (en plus du modal existant) ;
+> - `FacturesPage` : onglet transversal `Consolidation finances` (au-dessus des marchés) avec cartes de suivi,
+>   tableau de transmission par marché et matrice comptable partagée inline.
+> Détail : `docs/Sessions/2026-06-16 - Parcours Factures marche et consolidation finances.md`.
+>
 > **Mise a jour complementaire** : 2026-06-16 (refonte frontend : shell produit + atelier de cartographie)
 > **Etat PR** : PR #13 verte dans GitHub Actions, branche `codex/refonte-frontend-shell`.
 >
