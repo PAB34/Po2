@@ -574,6 +574,9 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
   // On masque le décor multi-fournisseurs (bandeau marché, onglets fluide, cartes
   // fournisseurs) pour ne garder que le parcours de contrôle du fournisseur ciblé.
   const focused = Boolean(supplierFilter);
+  const focusedSupplier = supplierFilter
+    ? SUPPLIER_CATALOG.find((supplier) => supplier.key === supplierFilter)
+    : null;
   const supplierSummary = useMemo(() => {
     const acc: Record<string, { count: number; total: number }> = {};
     for (const invoiceImport of imports) {
@@ -929,6 +932,19 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
 
   return (
     <div className="page">
+      {focusedSupplier && (
+        <div className="page-header">
+          <div>
+            <p className="field-label">Herault Energie - {focusedSupplier.energyLabel}</p>
+            <h2>Controle des factures {focusedSupplier.label}</h2>
+            <p className="page-subtitle">
+              {focusedSupplier.label} - distributeur {focusedSupplier.distributor} - perimetre {focusedSupplier.scope}.
+              Import, controle contractuel, rapport fournisseur et liaison finance sont limites a ce fournisseur.
+            </p>
+          </div>
+        </div>
+      )}
+
       {!focused && (
         <div className="page-header">
           <div>
@@ -1271,6 +1287,8 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
         {xlsxSummary && <p className="sync-result-ok">{xlsxSummary}</p>}
         {xlsxUploadMut.isError && <p className="error-text">{(xlsxUploadMut.error as Error).message}</p>}
 
+        {!focused && (
+          <>
         <div className="invoice-upload-divider" />
         <div>
           <p className="field-label">EDF — eclairage public (electricite)</p>
@@ -1308,6 +1326,8 @@ export function EnergieInvoicesPage({ supplierFilter }: { supplierFilter?: Suppl
         {edfFile && <p className="invoice-upload-selection">Fichier sélectionné : {edfFile.name}</p>}
         {edfSummary && <p className="sync-result-ok">{edfSummary}</p>}
         {edfUploadMut.isError && <p className="error-text">{(edfUploadMut.error as Error).message}</p>}
+          </>
+        )}
       </section>
 
       {/* Section "Lots d'import" désactivée depuis le passage XLSX-only (mai 2026).

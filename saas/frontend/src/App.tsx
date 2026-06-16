@@ -20,6 +20,7 @@ import EnergieBpuPage from "./pages/EnergieBpuPage";
 import { EnergieDetailPage } from "./pages/EnergieDetailPage";
 import { EnergieGazPage } from "./pages/EnergieGazPage";
 import { EnergieInvoiceDetailPage } from "./pages/EnergieInvoiceDetailPage";
+import { EnergieInvoicesPage } from "./pages/EnergieInvoicesPage";
 import FacturesPage from "./pages/FacturesPage";
 import { EnergieDataOpsPage, EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
@@ -238,6 +239,8 @@ export default function App() {
             <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />
             <Route path="/energie/preconisations" element={<EnergieRecommendationsPage />} />
             <Route path="/factures" element={<FacturesPage />} />
+            <Route path="/factures/herault/engie" element={<EnergieInvoicesPage supplierFilter="ENGIE" />} />
+            <Route path="/factures/herault/edf" element={<EnergieInvoicesPage supplierFilter="EDF" />} />
             <Route path="/factures/:invoiceImportId" element={<EnergieInvoiceDetailPage />} />
             <Route path="/energie/factures" element={<Navigate to="/factures" replace />} />
             <Route
