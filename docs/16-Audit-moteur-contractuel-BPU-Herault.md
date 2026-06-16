@@ -55,27 +55,34 @@ Prudence : si plusieurs documents revendiquent la même clé pour la même date 
 
 ## 5. Plan de renforcement proposé (priorisé)
 
-**R1 — Brancher le gaz sur le contrôle BPU (P0).**
-Étendre `normalize_bpu_supplier` + le mapping segment/composante au gaz (profils T1–T4 du lot 7, composantes
-fourniture ferme/CEE/CEE précarité/CPB/GO). Rendre `resolve_historical_bpu_price` opérant pour TotalEnergies.
+**R1 — Brancher le gaz sur le contrôle BPU (P0). ✅ FAIT (commit 724db4d).**
+`normalize_bpu_supplier` reconnaît désormais `TOTAL*` → `TOTALENERGIES` ; `historical_segment_code_for_site`
+mappe les profils T1–T4 ; `INVOICE_COMPONENT_TO_BPU_COMPONENT` couvre `cee_precarite` et `cpb`.
+`resolve_historical_bpu_price` est opérant pour TotalEnergies (T*/BASE). Fichier BPU historique unifié local
+(`extraction_tarifs_BPU_herault.xlsx`) = élec + gaz lot 7.
 
-**R2 — Couvrir le C5 « bâtiment ».**
-Étendre `historical_segment_code_for_site` au C5 hors éclairage (mapping vers le bon segment BPU), pour sortir
-ce parc du repli `BillingConfig`.
+**R2 — Couvrir le C5 « bâtiment ». ✅ FAIT (commit cc87b1d).**
+`historical_segment_code_for_site` retourne `BATIMENT` pour tout C5 hors éclairage public → match avec le
+segment_code stocké en base (ENGIE Lot 1 2026). L'éclairage public (C5_EP) reste inchangé.
 
-**R3 — Clarifier les deux sources.**
-Décider la convergence `bpu_*` ↔ `BillingBpuLine` : faire de `bpu_*` la source unique de vérité, `BillingConfig`
-ne servant qu'au calcul courant ; et **exposer dans le contrôle quelle référence (doc/lot/avenant) a servi**.
+**R3 — Clarifier les deux sources. ✅ FAIT.**
+Le contrôle expose désormais `bpu.fallback_source` (`historical` / `canonical_xlsx` / `configured` / `mixed`)
++ `historical_documents` enrichis du fournisseur. Le détail de facture affiche « Référence prix BPU utilisée »
+avec le nombre de lignes par source et la liste des documents historiques. `bpu_*` reste la source de vérité
+prioritaire, `BillingConfig` le repli explicite et tracé.
 
-**R4 — Compléter composantes + frais fixes.**
-Mapper CEE précarité / CPB ; ajouter le contrôle des abonnements (`BpuFixedCharge`) vs lignes d'abonnement facturées.
+**R4 — Compléter composantes + frais fixes.** *(à faire)*
+Mapper CEE précarité / CPB côté **élec** ; ajouter le contrôle des abonnements (`BpuFixedCharge`) vs lignes
+d'abonnement facturées.
 
-**R5 — Traçabilité de la référence contractuelle.**
-Afficher sur la facture/le rapport la preuve : « contrôlé avec BPU <fournisseur> <lot> <avenant> valide du … au … ».
+**R5 — Traçabilité de la référence contractuelle.** *(partiellement couvert par R3)*
+R3 affiche déjà fournisseur/année/lot/fichier. Reste à exposer l'avenant et la fenêtre de validité (du … au …)
+dans le rapport.
 
-## 6. À arbitrer
-1. **R1 gaz** : on attaque d'abord le branchement gaz (débloque le P0 gaz Hérault), ou d'abord R2 (C5 bâtiment, gros volume élec) ?
-2. **R3 convergence des 2 sources** : on acte `bpu_*` comme source unique de vérité dès maintenant, ou on documente et on garde le repli encore un temps ?
-3. **Profils gaz lot 7** : confirmer la grille (T1–T4, composantes) attendue pour le contrôle gaz Total.
+## 6. Arbitrages tranchés
+1. **Ordre** : R1 gaz traité en premier (débloque le P0 gaz Hérault), puis R2, puis R3. ✅
+2. **Convergence des 2 sources** : on garde le repli `BillingConfig` mais on le **trace explicitement** (R3) ;
+   `bpu_*` reste prioritaire. Bascule vers source unique reportée tant que l'historique n'est pas exhaustif.
+3. **Profils gaz lot 7** : confirmés T1–T4, composantes fourniture/CEE/CEE précarité/CPB/GO (cf. fichier source). ✅
 
 > Suite : même audit pour le **moteur DPGF DALKIA** (doc 17), puis cadrage du **moteur eau SUEZ** (à créer).

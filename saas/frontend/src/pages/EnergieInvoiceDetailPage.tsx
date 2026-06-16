@@ -123,6 +123,38 @@ function recordNumber(record: Record<string, unknown> | undefined, key: string) 
   return typeof value === "number" ? value : null;
 }
 
+function recordString(record: Record<string, unknown> | undefined, key: string) {
+  const value = record?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+type BpuHistoricalDocument = {
+  document_id?: number;
+  supplier?: string;
+  filename?: string;
+  valid_year?: number;
+  lot_number?: number;
+};
+
+function recordHistoricalDocuments(record: Record<string, unknown> | undefined): BpuHistoricalDocument[] {
+  const value = record?.historical_documents;
+  return Array.isArray(value) ? (value as BpuHistoricalDocument[]) : [];
+}
+
+const BPU_FALLBACK_SOURCE_LABEL: Record<string, string> = {
+  historical: "BPU historique (référence contractuelle exacte)",
+  canonical_xlsx: "Grille BPU courante (XLSX canonique)",
+  configured: "Grille BPU courante (paramétrage)",
+  mixed: "BPU historique + grille courante (selon les lignes)",
+};
+
+function bpuHistoricalDocumentLabel(doc: BpuHistoricalDocument): string {
+  const parts = [doc.supplier, doc.valid_year ? `${doc.valid_year}` : null];
+  if (doc.lot_number != null) parts.push(`lot ${doc.lot_number}`);
+  const head = parts.filter(Boolean).join(" ");
+  return doc.filename ? `${head} — ${doc.filename}` : head;
+}
+
 function hasFamilyIssue(issues: ControlIssue[], family: IssueFamily) {
   return issues.some((issue) => issueFamily(issue) === family);
 }
@@ -230,9 +262,13 @@ function buildOkItems(
 
   const bpuLines = recordNumber(summaries.bpu, "checked_lines");
   if (bpuLines && bpuLines > 0 && !hasFamilyIssue(issues, "bpu")) {
+    const fallbackSource = recordString(summaries.bpu, "fallback_source");
+    const sourceLabel = fallbackSource ? BPU_FALLBACK_SOURCE_LABEL[fallbackSource] ?? fallbackSource : null;
     okItems.push({
       title: "Prix BPU controles",
-      detail: `${formatNumber(bpuLines)} ligne(s) rapprochee(s) sans ecart bloquant.`,
+      detail: sourceLabel
+        ? `${formatNumber(bpuLines)} ligne(s) rapprochee(s) sans ecart bloquant. Reference : ${sourceLabel}.`
+        : `${formatNumber(bpuLines)} ligne(s) rapprochee(s) sans ecart bloquant.`,
       tone: "ok",
     });
   }
@@ -705,6 +741,36 @@ export function EnergieInvoiceDetailPage() {
             </span>
           </div>
         </div>
+        {(() => {
+          const fallbackSource = recordString(bpuSummary, "fallback_source");
+          if (!fallbackSource) return null;
+          const historicalDocs = recordHistoricalDocuments(bpuSummary);
+          const historicalLines = recordNumber(bpuSummary, "historical_checked_lines") ?? 0;
+          const configuredLines = recordNumber(bpuSummary, "configured_checked_lines") ?? 0;
+          return (
+            <div className="invoice-bpu-source">
+              <div className="invoice-bpu-source-head">
+                <strong>Référence prix BPU utilisée</strong>
+                <span className={`invoice-bpu-source-tag invoice-bpu-source-tag--${fallbackSource}`}>
+                  {BPU_FALLBACK_SOURCE_LABEL[fallbackSource] ?? fallbackSource}
+                </span>
+              </div>
+              <p className="invoice-bpu-source-detail">
+                {formatNumber(historicalLines)} ligne(s) sur BPU historique · {formatNumber(configuredLines)} ligne(s)
+                sur grille courante.
+              </p>
+              {historicalDocs.length > 0 && (
+                <ul className="invoice-bpu-source-docs">
+                  {historicalDocs.map((doc, index) => (
+                    <li key={`${doc.filename ?? "doc"}-${doc.document_id ?? index}`}>
+                      {bpuHistoricalDocumentLabel(doc)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })()}
         {issues.length > 0 ? (
           <div className="invoice-issue-list">
             {issues.map((issue, index) => (

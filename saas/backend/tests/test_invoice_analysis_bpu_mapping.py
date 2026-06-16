@@ -1,4 +1,13 @@
-from app.services.invoice_analysis import _tariff_code_for_site
+from app.services.invoice_analysis import _resolve_bpu_fallback_source, _tariff_code_for_site
+
+
+def test_fallback_source_prefers_historical_then_configured() -> None:
+    # R3 : tracer la source de prix réellement utilisée par le contrôle BPU
+    assert _resolve_bpu_fallback_source(3, 0, "configured") == "historical"
+    assert _resolve_bpu_fallback_source(0, 5, "configured") == "configured"
+    assert _resolve_bpu_fallback_source(0, 5, "canonical_xlsx") == "canonical_xlsx"
+    assert _resolve_bpu_fallback_source(2, 4, "canonical_xlsx") == "mixed"
+    assert _resolve_bpu_fallback_source(0, 0, "configured") is None
 
 
 def test_xlsx_c5_cu_with_four_periods_maps_to_cu4() -> None:

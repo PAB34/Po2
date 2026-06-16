@@ -160,6 +160,7 @@ def _build_control_report(
         "mismatches": 0,
         "missing_references": 0,
         "historical_documents": [],
+        "fallback_source": None,
         # Détail structuré de chaque mismatch BPU_PRICE_MISMATCH : prix facture, prix BPU,
         # delta, quantité MWh rattachée, écart total HT estimé. Permet au frontend de
         # produire le récapitulatif chiffré sans parser le message texte.
@@ -480,7 +481,7 @@ def _check_bpu(
     bpu_summary: dict[str, Any],
 ) -> None:
     historical_prices = load_historical_bpu_prices(db, parsed.get("supplier"))
-    historical_documents: set[tuple[int, str, int, int]] = set()
+    historical_documents: set[tuple[int, str, str, int, int]] = set()
     canonical_bpu = build_current_lines_for_supplier(parsed.get("supplier"))
     canonical_bpu_lines = [
         SimpleNamespace(**line)
@@ -534,6 +535,7 @@ def _check_bpu(
                 historical_documents.add(
                     (
                         historical_price.document_id,
+                        historical_price.supplier,
                         historical_price.pdf_filename,
                         historical_price.valid_year,
                         historical_price.lot_number,
@@ -698,12 +700,42 @@ def _check_bpu(
     bpu_summary["historical_documents"] = [
         {
             "document_id": document_id,
+            "supplier": supplier,
             "filename": filename,
             "valid_year": valid_year,
             "lot_number": lot_number,
         }
-        for document_id, filename, valid_year, lot_number in sorted(historical_documents)
+        for document_id, supplier, filename, valid_year, lot_number in sorted(historical_documents)
     ]
+
+    bpu_summary["fallback_source"] = _resolve_bpu_fallback_source(
+        bpu_summary["historical_checked_lines"],
+        bpu_summary["configured_checked_lines"],
+        bpu_source,
+    )
+
+
+def _resolve_bpu_fallback_source(
+    historical_checked_lines: int,
+    configured_checked_lines: int,
+    configured_source: str,
+) -> str | None:
+    """Quelle référence de prix a réellement servi au contrôle BPU ?
+
+    - "historical"     : BPU historique exact (bpu_*) — preuve contractuelle la plus forte.
+    - "canonical_xlsx" / "configured" : repli sur la grille courante (BillingConfig).
+    - "mixed"          : les deux sources ont servi selon les lignes facturées.
+    - None             : aucune ligne contrôlée.
+    """
+    used_historical = historical_checked_lines > 0
+    used_configured = configured_checked_lines > 0
+    if used_historical and used_configured:
+        return "mixed"
+    if used_historical:
+        return "historical"
+    if used_configured:
+        return configured_source
+    return None
 
 
 def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
