@@ -1,9 +1,16 @@
 # 009 — Environnement de staging sur le même VPS
 
-> **Statut** : Accepté
+> **Statut** : Accepté — **EN SERVICE** depuis le 2026-06-16
 > **Date** : 2026-06-16
 > **Décideur(s)** : PAB34 + Claude (Opus 4.8)
 > **Session liée** : `[[Sessions/2026-06-16 - Parcours Factures marche et consolidation finances]]`
+
+> **URL staging** : <https://staging.135-125-152-112.sslip.io> (sslip.io = résolution auto
+> vers l'IP du VPS, aucun DNS à gérer ; HTTPS auto ; accès protégé par le mot de passe
+> du site, login = identifiants prod car base = copie prod).
+> **Redéployer une branche** : GitHub → Actions → « Deploy staging » → saisir la branche.
+> Le projet docker `po2-staging` (base séparée) tourne sur le même VPS que la prod ;
+> repo VPS : `/home/ubuntu/Po2-staging/repo`, env : `saas/.env.staging` (secrets sur le VPS).
 
 ## Contexte
 

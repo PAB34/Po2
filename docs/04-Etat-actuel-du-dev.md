@@ -1,4 +1,11 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-16 (environnement de staging EN SERVICE)
+> Staging operationnel sur le meme VPS, isole (projet docker `po2-staging`, base = copie prod) :
+> <https://staging.135-125-152-112.sslip.io> (sslip.io, aucun DNS a gerer ; protege par mot de passe).
+> Redeploy d'une branche : GitHub Actions -> « Deploy staging » -> saisir la branche.
+> Detail : `[[Decisions/009-environnement-staging]]`. Permet desormais de tester toute branche sans toucher la prod.
+> PR #14 mergee dans main ; factures (consolidation finances) deployee en prod via PR #13.
+>
 > **Mise a jour complementaire** : 2026-06-16 (parcours Factures marché : consolidation finances transversale)
 > **Branche** : `codex/refonte-frontend-shell` (suite PR #13). Build frontend non exécuté localement (npm absent) -> validation CI.
 >
