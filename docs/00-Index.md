@@ -25,6 +25,8 @@
 - [[14-Catalogue-fonctionnalites-commentees-et-reaffectation]] — Commentaire metier des fonctionnalites developpees : utilite, decision aidee, utilisateurs, code actuel, reaffectation cible et niveau de confiance
 - [[15-Validation-P0-factures-finance]] — Première couche de preuve du parcours facture -> controle -> decision -> export XLSX finance, avec statuts de validation par endpoint prioritaire
 - [[16-Audit-moteur-contractuel-BPU-Herault]] — Audit du moteur de reference BPU (Herault Energie EDF/ENGIE/gaz lot 7) : ce qu'il extrait, ce que le controle facture en consomme, ecarts (gaz non branche, C5 batiment non couvert, 2 sources de prix) et plan de renforcement
+- [[17-Refonte-frontend-capacites-metier]] - Cadrage de la refonte totale du frontend : capacites backend -> parcours metier -> ecrans cibles -> ordre de chantier
+- [[18-Registre-raccordement-frontend]] - Plan de cablage de la nouvelle interface : ecrans cibles -> fonctionnalites deja developpees -> code actuel -> action de refonte
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)

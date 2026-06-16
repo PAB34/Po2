@@ -1083,6 +1083,12 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .product-domain-hero,
+  .product-domain-grid,
+  .product-domain-actions {
+    grid-template-columns: 1fr;
+  }
+
   .buildings-entry-grid {
     grid-template-columns: 1fr;
   }
@@ -2425,6 +2431,127 @@ button:disabled {
 .cockpit-queue-action:hover {
   background: rgba(37, 99, 235, 0.18);
   border-color: rgba(56, 189, 248, 0.45);
+}
+
+.product-domain {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 1280px;
+}
+
+.product-domain-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  gap: 20px;
+  align-items: stretch;
+  padding: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+}
+
+.product-domain-eyebrow {
+  margin-bottom: 8px;
+  color: #7dd3fc;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.product-domain-hero h2 {
+  margin-bottom: 10px;
+  color: #f8fafc;
+  font-size: 1.9rem;
+}
+
+.product-domain-hero p {
+  color: #cbd5e1;
+  max-width: 760px;
+}
+
+.product-domain-primary,
+.product-domain-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 112px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.74);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.product-domain-primary:hover,
+.product-domain-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(125, 211, 252, 0.42);
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.product-domain-primary span,
+.product-domain-card span {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.product-domain-primary strong,
+.product-domain-card strong {
+  color: #f8fafc;
+  font-size: 1.05rem;
+}
+
+.product-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.product-domain-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.product-domain-section h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 1rem;
+}
+
+.product-domain-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.product-domain-card--energie {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.product-domain-card--patrimoine {
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.product-domain-card--marches {
+  border-color: rgba(234, 179, 8, 0.28);
+}
+
+.product-domain-card--technique {
+  border-color: rgba(168, 85, 247, 0.28);
+}
+
+.product-domain-card--admin {
+  border-color: rgba(148, 163, 184, 0.24);
 }
 
 /* ── Page Factures (par marché) ─────────────────────────────────── */
