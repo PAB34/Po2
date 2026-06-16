@@ -27,7 +27,7 @@ function formatEur(value: number | null | undefined): string {
 type Domain = "energie" | "patrimoine" | "marches" | "technique";
 
 const DOMAIN_LABEL: Record<Domain, string> = {
-  energie: "Énergie",
+  energie: "Fluides",
   patrimoine: "Patrimoine",
   marches: "Marchés",
   technique: "Technique",
@@ -153,7 +153,7 @@ export function HomePage() {
       </div>
 
       <div className="cockpit-kpi-grid">
-        <KpiCard label="Bâtiments" value={formatInt(perimeter.buildings)} to="/buildings/list" />
+        <KpiCard label="Bâtiments" value={formatInt(perimeter.buildings)} to="/patrimoine" />
         <KpiCard
           label="Points de livraison"
           value={formatInt(perimeter.prms)}
@@ -223,7 +223,7 @@ export function HomePage() {
           badge="vérifier les liaisons"
           badgeTone="info"
           action="Rapprocher"
-          to="/buildings/compteurs"
+          to="/patrimoine/rattachements"
         />
         <QueueCard
           domain="marches"
@@ -233,7 +233,7 @@ export function HomePage() {
           badge="sites actifs"
           badgeTone="neutral"
           action="Voir"
-          to="/cpe"
+          to="/marches"
         />
       </div>
     </section>

@@ -25,6 +25,7 @@ import { EnergieDataOpsPage, EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { ProductDomainPage } from "./pages/ProductDomainPage";
 import { RegisterPage } from "./pages/RegisterPage";
 
 function RequireAuth() {
@@ -58,23 +59,24 @@ const DOMAINS: NavDomain[] = [
   {
     key: "patrimoine",
     label: "Patrimoine",
-    primaryTo: "/buildings/list",
+    primaryTo: "/patrimoine",
     pillar: "patrimoine",
-    prefixes: ["/buildings/list", "/buildings/compteurs", "/buildings/create-edit", "/buildings"],
+    prefixes: ["/patrimoine", "/buildings/list", "/buildings/compteurs", "/buildings/create-edit", "/buildings"],
     links: [
+      { to: "/patrimoine", label: "Vue d'ensemble" },
       { to: "/buildings/list", label: "Sites et bâtiments" },
-      { to: "/buildings", label: "Carte du patrimoine" },
       { to: "/buildings/compteurs", label: "Rapprochement compteurs" },
+      { to: "/buildings/create-edit", label: "Import patrimoine" },
     ],
   },
   {
     key: "energie",
-    label: "Énergie",
+    label: "Fluides & consommations",
     primaryTo: "/energie",
     pillar: "energie",
     prefixes: ["/energie"],
     links: [
-      { to: "/energie", label: "Dashboard énergie" },
+      { to: "/energie", label: "Vue d'ensemble" },
       { to: "/energie/donnees", label: "Acquisition & données" },
       { to: "/energie/preconisations", label: "Préconisations" },
       { to: "/energie/bpu", label: "Prix et TURPE" },
@@ -82,27 +84,32 @@ const DOMAINS: NavDomain[] = [
     ],
   },
   {
-    key: "facturation",
-    label: "Facturation",
-    primaryTo: "/factures",
-    prefixes: ["/factures"],
-    links: [],
-  },
-  {
     key: "marches",
     label: "Marchés & contrats",
-    primaryTo: "/cpe",
+    primaryTo: "/marches",
     pillar: "maintenance",
-    prefixes: ["/cpe"],
-    links: [{ to: "/cpe", label: "CPE DALKIA" }],
+    prefixes: ["/marches", "/factures", "/cpe"],
+    links: [
+      { to: "/marches", label: "Vue d'ensemble" },
+      { to: "/factures", label: "Factures marché" },
+      { to: "/cpe", label: "CPE DALKIA" },
+      { to: "/cpe/dalkia-import", label: "Référentiel DALKIA" },
+    ],
   },
   {
     key: "technique",
     label: "Technique",
-    primaryTo: "/buildings/technique",
+    primaryTo: "/technique",
     pillar: "maintenance",
-    prefixes: ["/buildings/technique", "/buildings/cvc-fluides", "/buildings/cvc-rapport-technique"],
+    prefixes: [
+      "/technique",
+      "/buildings/technique",
+      "/buildings/cvc-fluides",
+      "/buildings/cvc-rapport-technique",
+      "/buildings/cvc-import",
+    ],
     links: [
+      { to: "/technique", label: "Vue d'ensemble" },
       { to: "/buildings/technique", label: "Inventaire & CVC" },
       { to: "/buildings/cvc-fluides", label: "Fluides frigorigènes & ESP" },
       { to: "/buildings/cvc-rapport-technique", label: "Rapport technique CVC" },
@@ -111,9 +118,10 @@ const DOMAINS: NavDomain[] = [
   {
     key: "admin",
     label: "Administration",
-    primaryTo: "/energie/facturation",
-    prefixes: ["/cpe/dalkia-import", "/buildings/cvc-import", "/energie/facturation", "/account"],
+    primaryTo: "/administration",
+    prefixes: ["/administration", "/cpe/dalkia-import", "/buildings/cvc-import", "/energie/facturation", "/account"],
     links: [
+      { to: "/administration", label: "Vue d'ensemble" },
       { to: "/cpe/dalkia-import", label: "Import référentiel DALKIA" },
       { to: "/buildings/cvc-import", label: "Import CVC terrain" },
       { to: "/buildings/cvc-import/batiments", label: "Matching bâtiment CVC" },
@@ -124,9 +132,9 @@ const DOMAINS: NavDomain[] = [
 ];
 
 const PILLARS: { key: Pillar; label: string; to: string }[] = [
-  { key: "energie", label: "Énergie", to: "/energie" },
-  { key: "maintenance", label: "Maintenance", to: "/cpe" },
-  { key: "patrimoine", label: "Patrimoine", to: "/buildings/list" },
+  { key: "energie", label: "Fluides", to: "/energie" },
+  { key: "maintenance", label: "Maintenance", to: "/marches" },
+  { key: "patrimoine", label: "Patrimoine", to: "/patrimoine" },
 ];
 
 function matchesPrefix(path: string, prefix: string): boolean {
@@ -224,6 +232,10 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/patrimoine" element={<ProductDomainPage domain="patrimoine" />} />
+            <Route path="/patrimoine/sites" element={<Navigate to="/buildings/list" replace />} />
+            <Route path="/patrimoine/rattachements" element={<Navigate to="/buildings/compteurs" replace />} />
+            <Route path="/patrimoine/imports" element={<Navigate to="/buildings/create-edit" replace />} />
             <Route path="/buildings" element={<BuildingsLandingPage />} />
             <Route path="/buildings/list" element={<BuildingsListPage />} />
             <Route path="/buildings/create-edit" element={<BuildingCreateEditPage />} />
@@ -248,9 +260,16 @@ export default function App() {
             <Route path="/energie/bpu" element={<EnergieBpuPage />} />
             <Route path="/energie/gaz" element={<EnergieGazPage />} />
             <Route path="/energie/:prmId" element={<EnergieDetailPage />} />
+            <Route path="/marches" element={<ProductDomainPage domain="marches" />} />
+            <Route path="/marches/cpe-dalkia" element={<Navigate to="/cpe" replace />} />
             <Route path="/cpe" element={<CpeDalkiaPage />} />
             <Route path="/cpe/sites/:siteId" element={<CpeSiteDetailPage />} />
             <Route path="/cpe/dalkia-import" element={<CpeDalkiaImportPage />} />
+            <Route path="/technique" element={<ProductDomainPage domain="technique" />} />
+            <Route path="/technique/cvc" element={<Navigate to="/buildings/technique" replace />} />
+            <Route path="/technique/fluides" element={<Navigate to="/buildings/cvc-fluides" replace />} />
+            <Route path="/technique/rapport" element={<Navigate to="/buildings/cvc-rapport-technique" replace />} />
+            <Route path="/administration" element={<ProductDomainPage domain="administration" />} />
             <Route path="/account" element={<AccountPage />} />
           </Route>
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />

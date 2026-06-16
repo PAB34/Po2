@@ -1,4 +1,38 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-16 (parcours Factures marché : consolidation finances transversale)
+> **Branche** : `codex/refonte-frontend-shell` (suite PR #13). Build frontend non exécuté localement (npm absent) -> validation CI.
+>
+> Refonte du parcours `Marchés & contrats > Factures marché`. Constat : le stepper
+> `importer -> contrôler -> comprendre -> décider` existait déjà dans `EnergieInvoicesPage`
+> (`StepTab` / `ControlStep` : Données & import, Contrôle contractuel, Rapport fournisseur, Liaison finance).
+> Livrable de la session = sortir la consolidation/export finances au niveau supérieur (arbitrage utilisateur) :
+> - `EnergieAccountingMatrix` : nouveau mode `variant="inline"` (en plus du modal existant) ;
+> - `FacturesPage` : onglet transversal `Consolidation finances` (au-dessus des marchés) avec cartes de suivi,
+>   tableau de transmission par marché et matrice comptable partagée inline.
+> Détail : `docs/Sessions/2026-06-16 - Parcours Factures marche et consolidation finances.md`.
+>
+> **Mise a jour complementaire** : 2026-06-16 (refonte frontend : shell produit + atelier de cartographie)
+> **Etat PR** : PR #13 verte dans GitHub Actions, branche `codex/refonte-frontend-shell`.
+>
+> Premiere brique de refonte frontend livree sans casser les routes existantes :
+> ajout des conteneurs produit `/patrimoine`, `/marches`, `/technique`, `/administration`,
+> conservation de `/buildings/*`, `/energie/*`, `/factures/*`, `/cpe/*`, et ajout de
+> `ProductDomainPage`.
+>
+> Atelier local ajoute dans `docs/atelier-cartographie-frontend.html` pour raccorder les fonctionnalites
+> existantes aux sections/sous-sections cibles et decrire les ecrans futurs. Documentation associee :
+> `docs/17-Refonte-frontend-capacites-metier.md`, `docs/18-Registre-raccordement-frontend.md`,
+> `docs/19-Atelier-cartographie-frontend.md` et note de session
+> `docs/Sessions/2026-06-16 - Refonte frontend shell et atelier cartographie.md`.
+>
+> Decision produit actee : le domaine visible `Energie` devient `Fluides & consommations`
+> (electricite, gaz, eau, donnees distributeurs, prix contractuels, preconisations).
+> Les factures fournisseurs sortent de ce domaine et deviennent `Marches & contrats > Factures marche`.
+> La section technique `Fluides et conformite` devient `F-Gaz / ESP` pour eviter l'ambiguite.
+>
+> Prochaine action recommandee : refondre le premier parcours raccorde
+> `Marches & contrats > Factures marche` avec la chaine `importer -> controler -> comprendre -> decider -> exporter`.
+>
 > **Mise a jour complementaire** : 2026-06-15 (preuves de validation API P0)
 > **Etat documentation/outillage local** : `docs/13-Matrice-routes-fonctionnalites-refonte-api.md` contient maintenant
 > les colonnes `Statut validation` et `Preuve`, generees par `saas/backend/app/scripts/build_api_catalog.py`.

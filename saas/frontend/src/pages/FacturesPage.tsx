@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { fetchCpeFinanceInvoices, fetchCpeMarketTracking, fetchEnergyInvoiceImports } from "../lib/api";
 import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
+import EnergieAccountingMatrix from "../components/EnergieAccountingMatrix";
 import { EnergieInvoicesPage, type SupplierKey } from "./EnergieInvoicesPage";
 
 type Market = "herault" | "dalkia" | "spie";
@@ -325,8 +326,10 @@ function DalkiaSection() {
   );
 }
 
+type TopView = Market | "consolidation";
+
 export default function FacturesPage() {
-  const [market, setMarket] = useState<Market>("herault");
+  const [view, setView] = useState<TopView>("herault");
 
   return (
     <section className="fct">
@@ -343,20 +346,32 @@ export default function FacturesPage() {
             key={m.key}
             type="button"
             role="tab"
-            aria-selected={market === m.key}
-            className={`fct-market-tab${market === m.key ? " fct-market-tab--active" : ""}`}
-            onClick={() => setMarket(m.key)}
+            aria-selected={view === m.key}
+            className={`fct-market-tab${view === m.key ? " fct-market-tab--active" : ""}`}
+            onClick={() => setView(m.key)}
           >
             {m.label}
           </button>
         ))}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "consolidation"}
+          className={`fct-market-tab${view === "consolidation" ? " fct-market-tab--active" : ""}`}
+          style={{ marginLeft: "auto" }}
+          onClick={() => setView("consolidation")}
+        >
+          Consolidation finances
+        </button>
       </div>
 
-      {market === "herault" && <HeraultSection />}
+      {view === "herault" && <HeraultSection />}
 
-      {market === "dalkia" && <DalkiaSection />}
+      {view === "dalkia" && <DalkiaSection />}
 
-      {market === "spie" && (
+      {view === "consolidation" && <FinanceConsolidationSection />}
+
+      {view === "spie" && (
         <div className="fct-market-body">
           <div className="fct-etat">
             <div className="fct-etat-head">
@@ -433,4 +448,87 @@ function HeraultEtatLoader({ onSelectSupplier }: { onSelectSupplier: (supplier: 
     enabled: !!token,
   });
   return <HeraultEtat invoices={invoicesQuery.data ?? []} onSelectSupplier={onSelectSupplier} />;
+}
+
+// Vue transversale (au-dessus des marchés) : codification comptable partagée et
+// suivi de la transmission au service finance, tous marchés confondus.
+function FinanceConsolidationSection() {
+  const { token } = useAuth();
+
+  const elecQuery = useQuery({
+    queryKey: ["factures-consolidation-elec"],
+    queryFn: () => fetchEnergyInvoiceImports(token!),
+    enabled: !!token,
+  });
+  const dalkiaQuery = useQuery({
+    queryKey: ["factures-consolidation-dalkia"],
+    queryFn: () => fetchCpeFinanceInvoices(token!),
+    enabled: !!token,
+  });
+
+  const elec = elecQuery.data ?? [];
+  const dalkia = dalkiaQuery.data ?? [];
+
+  const elecCount = elec.length;
+  const elecExported = elec.filter((i) => i.finance_exported_at).length;
+  const elecTtc = elec.reduce((sum, i) => sum + (i.total_ttc ?? 0), 0);
+
+  const rows: { market: string; count: number; exported: number | null; note?: string }[] = [
+    { market: "Hérault Énergie (élec)", count: elecCount, exported: elecExported },
+    { market: "DALKIA (CPE)", count: dalkia.length, exported: null, note: "suivi dans /cpe" },
+    { market: "SPIE (maintenance)", count: 0, exported: null, note: "à intégrer" },
+  ];
+
+  return (
+    <div className="fct-market-body">
+      <div className="fct-etat">
+        <div className="fct-etat-head">
+          <strong>Consolidation finances — tous marchés</strong>
+        </div>
+        <div className="fct-overview-grid">
+          <div className="fct-overview-card">
+            <span>Factures suivies</span>
+            <strong>{formatInt(elecCount + dalkia.length)}</strong>
+            <small>élec + DALKIA, SPIE à venir</small>
+          </div>
+          <div className="fct-overview-card">
+            <span>Transmises finance</span>
+            <strong>{formatInt(elecExported)}</strong>
+            <small>fiche de liaison horodatée (élec)</small>
+          </div>
+          <div className="fct-overview-card">
+            <span>Montant TTC suivi</span>
+            <strong>{formatEur(elecTtc)}</strong>
+            <small>électricité (DALKIA dans /cpe)</small>
+          </div>
+        </div>
+        <table className="fct-etat-table">
+          <thead>
+            <tr>
+              <th>Marché</th>
+              <th>Factures</th>
+              <th>Transmises finance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.market}>
+                <td>{row.market}</td>
+                <td>{formatInt(row.count)}</td>
+                <td className="fct-etat-muted">
+                  {row.exported === null ? (row.note ?? "—") : `${formatInt(row.exported)} / ${formatInt(row.count)}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="fct-etat-note">
+          La fiche de liaison (par facture) est exportée et horodatée depuis le détail de chaque facture. La
+          codification comptable partagée (PRM/site → analytique, poste → nature) est éditable ci-dessous.
+        </p>
+      </div>
+
+      <EnergieAccountingMatrix variant="inline" />
+    </div>
+  );
 }
