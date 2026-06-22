@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import date, datetime, timezone
+from calendar import monthrange
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
 
@@ -201,8 +202,8 @@ def acheminement_reference(invoices: list[GasInvoice]) -> dict[str, float]:
     return ref
 
 
-def load_network_tariff(db: Session, city_id: int | None, annee: int) -> dict[str, float]:
-    """Terme variable ATRD (€/MWh) par option pour l'année (référence absolue éditable)."""
+def load_network_tariff(db: Session, city_id: int | None, annee: int) -> dict[str, dict[str, float | None]]:
+    """Barème ATRD par option : {option: {variable: €/MWh, abonnement: €/an}}."""
     rows = list(db.execute(
         select(GasNetworkTariff).where(
             (GasNetworkTariff.city_id == city_id) | (GasNetworkTariff.city_id.is_(None))
@@ -210,11 +211,29 @@ def load_network_tariff(db: Session, city_id: int | None, annee: int) -> dict[st
     ).scalars())
     exact = [r for r in rows if r.annee == annee]
     pool = exact or rows
-    out: dict[str, float] = {}
+    out: dict[str, dict[str, float | None]] = {}
     for r in sorted(pool, key=lambda r: (0 if r.city_id == city_id else 1, -r.annee)):
-        if r.option and r.atrd_terme_variable_eur_mwh is not None and r.option not in out:
-            out[r.option] = r.atrd_terme_variable_eur_mwh
+        if r.option and r.option not in out:
+            out[r.option] = {
+                "variable": r.atrd_terme_variable_eur_mwh,
+                "abonnement": r.atrd_abonnement_annuel_eur,
+            }
     return out
+
+
+def _prorated_atrd_fixe(abonnement_annuel: float, start: date, end: date) -> float:
+    """Terme fixe ATRD attendu : abonnement/12 par mois, proraté par jours sur mois partiels."""
+    monthly = abonnement_annuel / 12.0
+    total = 0.0
+    cursor = start
+    while cursor <= end:
+        days_in_month = monthrange(cursor.year, cursor.month)[1]
+        month_end = date(cursor.year, cursor.month, days_in_month)
+        seg_end = min(end, month_end)
+        days = (seg_end - cursor).days + 1
+        total += monthly * days / days_in_month
+        cursor = seg_end + timedelta(days=1)
+    return total
 
 
 def compute_control(
@@ -297,7 +316,8 @@ def compute_control(
         and inv.atrd_terme_variable is not None
         and inv.total_conso_kwh
     ):
-        absolute = (network_ref or {}).get(inv.tarif_acheminement)
+        net = (network_ref or {}).get(inv.tarif_acheminement) or {}
+        absolute = net.get("variable")
         ref_rate = absolute if absolute is not None else (achem_ref or {}).get(inv.tarif_acheminement)
         if ref_rate:
             rate = inv.atrd_terme_variable / (inv.total_conso_kwh / 1000.0)
@@ -307,6 +327,26 @@ def compute_control(
                     "GAS_ACHEMINEMENT", "Acheminement",
                     f"Taux ATRD variable {rate:.2f} ≠ référence {ref_rate:.2f} €/MWh "
                     f"(tarif {inv.tarif_acheminement}, {origine}) — à vérifier", "review",
+                ))
+
+    # --- Contrôle du terme fixe ATRD (abonnement proraté vs barème CRE) ---
+    if (
+        network_ref
+        and inv.type_detail != "AVOIR"
+        and inv.tarif_acheminement
+        and inv.atrd_terme_fixe is not None
+        and inv.debut_conso
+        and inv.fin_conso
+        and inv.debut_conso <= inv.fin_conso
+    ):
+        abonnement = (network_ref.get(inv.tarif_acheminement) or {}).get("abonnement")
+        if abonnement:
+            expected = _prorated_atrd_fixe(abonnement, inv.debut_conso, inv.fin_conso)
+            if abs(expected - inv.atrd_terme_fixe) > 0.20:
+                issues.append(_issue(
+                    "GAS_ATRD_FIXE", "Acheminement",
+                    f"Terme fixe ATRD {inv.atrd_terme_fixe:.2f} ≠ attendu {expected:.2f} € "
+                    f"(abonnement {abonnement:.2f} €/an proraté) — à vérifier", "review",
                 ))
 
     if any(i["severity"] == "invalid" for i in issues):
