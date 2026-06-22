@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
 import {
+  fetchGasBpu,
   fetchGasInvoices,
   fetchGasPortfolio,
   importGasInvoices,
@@ -65,6 +66,11 @@ export default function TotalEnergiesGasSection() {
   const invoicesQuery = useQuery({
     queryKey: ["gas-invoices", controlFilter],
     queryFn: () => fetchGasInvoices(token!, { control_status: controlFilter || undefined }),
+    enabled: !!token,
+  });
+  const bpuQuery = useQuery({
+    queryKey: ["gas-bpu"],
+    queryFn: () => fetchGasBpu(token!),
     enabled: !!token,
   });
 
@@ -149,9 +155,21 @@ export default function TotalEnergiesGasSection() {
           </div>
         </div>
 
+        {(() => {
+          const ref = (bpuQuery.data ?? []).find((b) => b.annee === new Date().getFullYear()) ?? (bpuQuery.data ?? [])[0];
+          if (!ref) return null;
+          return (
+            <p className="fct-etat-note">
+              <strong>BPU gaz Lot 7 {ref.annee}</strong> (réf. contrôle prix) : fourniture ferme{" "}
+              <strong>{ref.fourniture_ht_mwh} €/MWh</strong> · CEE {ref.cee_ht_mwh} · CEE précarité {ref.cee_precarite_ht_mwh} · CPB {ref.cpb_ht_mwh} · GO {ref.go_ht_mwh} (€ HT/MWh).
+            </p>
+          );
+        })()}
+
         <p className="fct-etat-note">
-          Contrôle v1 = cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA). Le contrôle prix
-          (BPU gaz lot 7, acheminement ATRD/ATRT, TICGN) viendra avec les barèmes de référence.
+          Contrôle : cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA) <strong>+ prix fourniture vs BPU
+          Lot 7</strong> (les PCE à prix révisable PEG sont signalés « à contrôler »). À venir : acheminement ATRD/ATRT
+          (barème réglementé GRDF) et CEE définitifs.
         </p>
       </div>
 

@@ -4912,3 +4912,22 @@ export async function setGasInvoiceDecision(
   });
   return parseResponse<GasInvoice>(response);
 }
+
+export type GasBpuPrice = {
+  id: number;
+  annee: number;
+  profil: string;
+  fourniture_ht_mwh: number | null;
+  cee_ht_mwh: number | null;
+  cee_precarite_ht_mwh: number | null;
+  cpb_ht_mwh: number | null;
+  go_ht_mwh: number | null;
+  source: string | null;
+};
+
+export async function fetchGasBpu(token: string): Promise<GasBpuPrice[]> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/bpu`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GasBpuPrice[]>(response);
+}
