@@ -31,6 +31,7 @@ from app.models.gas import GasPce
 from app.models.gas_bpu import GasBpuPrice
 from app.models.gas_invoice import GasInvoice
 from app.models.gas_network_tariff import GasNetworkTariff
+from app.models.gas_revisable import GasSupplyRevisablePrice
 from app.models.gas_tax import GasTaxRate
 
 # Tolérances de contrôle.
@@ -254,12 +255,63 @@ def _pick_tax_rate(rows: list[GasTaxRate] | None, on_date: date | None) -> GasTa
     return match[-1] if match else None
 
 
+def load_revisable_prices(db: Session, city_id: int | None) -> dict[tuple[int, int], float]:
+    """Prix de fourniture révisable par (année, mois) de consommation."""
+    rows = list(db.execute(
+        select(GasSupplyRevisablePrice).where(
+            (GasSupplyRevisablePrice.city_id == city_id) | (GasSupplyRevisablePrice.city_id.is_(None))
+        )
+    ).scalars())
+    out: dict[tuple[int, int], float] = {}
+    for r in sorted(rows, key=lambda r: 0 if r.city_id == city_id else 1):
+        key = (r.annee, r.mois)
+        if r.fourniture_eur_mwh is not None and key not in out:
+            out[key] = r.fourniture_eur_mwh
+    return out
+
+
+def _is_full_calendar_month(start: date, end: date) -> bool:
+    return (
+        start.day == 1
+        and start.year == end.year
+        and start.month == end.month
+        and end.day == monthrange(end.year, end.month)[1]
+    )
+
+
+def coherence_refs(invoices: list[GasInvoice]) -> dict[str, float]:
+    """Références de cohérence sans donnée externe : ATRT/CAR (mois pleins) et taux CEE."""
+    atrt_ratios: list[float] = []
+    cee_ratios: list[float] = []
+    for inv in invoices:
+        if inv.type_detail == "AVOIR":
+            continue
+        if inv.total_conso_kwh and inv.montant_cee is not None and inv.montant_cee > 0:
+            cee_ratios.append(inv.montant_cee / (inv.total_conso_kwh / 1000.0))
+        if (
+            inv.atrt_terme_fixe is not None and inv.car_acheminement
+            and inv.debut_conso and inv.fin_conso
+            and _is_full_calendar_month(inv.debut_conso, inv.fin_conso)
+        ):
+            atrt_ratios.append(inv.atrt_terme_fixe / (inv.car_acheminement / 1000.0))
+    out: dict[str, float] = {}
+    if atrt_ratios:
+        atrt_ratios.sort()
+        out["atrt_per_car"] = atrt_ratios[len(atrt_ratios) // 2]
+    if cee_ratios:
+        cee_ratios.sort()
+        out["cee_rate"] = cee_ratios[len(cee_ratios) // 2]
+    return out
+
+
 def compute_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
     achem_ref: dict[str, float] | None = None,
     network_ref: dict[str, dict[str, float | None]] | None = None,
     tax_rows: list[GasTaxRate] | None = None,
+    revisable_ref: dict[tuple[int, int], float] | None = None,
+    coh_ref: dict[str, float] | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     issues: list[dict[str, str]] = []
 
@@ -314,11 +366,24 @@ def compute_control(
         if bpu.fourniture_ht_mwh is not None and inv.prix_conso_gaz is not None:
             pu_mwh = inv.prix_conso_gaz * 1000.0
             if abs(pu_mwh - bpu.fourniture_ht_mwh) > _TOL_PU_MWH:
-                issues.append(_issue(
-                    "GAS_PRIX_FOURNITURE", "Prix fourniture",
-                    f"Prix conso {pu_mwh:.2f} ≠ BPU fourniture ferme {bpu.fourniture_ht_mwh:.2f} €/MWh "
-                    f"(prix révisable PEG ou écart à vérifier)", "review",
-                ))
+                # Prix ≠ BPU ferme : soit prix révisable PEG (référencé par mois), soit écart.
+                ref_month = None
+                if revisable_ref and (inv.debut_conso or inv.date_comptable):
+                    d0 = inv.debut_conso or inv.date_comptable
+                    ref_month = revisable_ref.get((d0.year, d0.month))
+                if ref_month is not None and abs(pu_mwh - ref_month) <= _TOL_PU_MWH:
+                    pass  # conforme au prix révisable référencé
+                elif ref_month is not None:
+                    issues.append(_issue(
+                        "GAS_PRIX_FOURNITURE", "Prix fourniture",
+                        f"Prix conso {pu_mwh:.2f} ≠ prix révisable référencé {ref_month:.2f} €/MWh — à vérifier", "review",
+                    ))
+                else:
+                    issues.append(_issue(
+                        "GAS_PRIX_FOURNITURE", "Prix fourniture",
+                        f"Prix conso {pu_mwh:.2f} ≠ BPU fourniture ferme {bpu.fourniture_ht_mwh:.2f} €/MWh "
+                        f"(prix révisable PEG non référencé ou écart) — à vérifier", "review",
+                    ))
         if bpu.cpb_ht_mwh is not None and inv.montant_cpb and kwh:
             eff = inv.montant_cpb / (kwh / 1000.0)
             if abs(eff - bpu.cpb_ht_mwh) > _TOL_PU_MWH:
@@ -388,6 +453,11 @@ def compute_control(
                         f"({tax.cta_coeff_atrd_fixe * 100:.2f}% du terme fixe ATRD) — à vérifier", "review",
                     ))
 
+    # Note : ATRT (transport) et CEE varient légitimement par PCE/zone et par mois
+    # (prix de marché). Un contrôle de cohérence par médiane génère des faux positifs ;
+    # leur contrôle absolu nécessite le barème transport GRDF et les CEE définitifs
+    # fournisseur (flux externes non disponibles ici). Volontairement non contrôlés.
+
     if any(i["severity"] == "invalid" for i in issues):
         status = "invalid"
     elif issues:
@@ -410,8 +480,13 @@ def _apply_control(
     achem_ref: dict[str, float] | None = None,
     network_ref: dict[str, dict[str, float | None]] | None = None,
     tax_rows: list[GasTaxRate] | None = None,
+    revisable_ref: dict[tuple[int, int], float] | None = None,
+    coh_ref: dict[str, float] | None = None,
 ) -> None:
-    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows)
+    status, issues = compute_control(
+        inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows,
+        revisable_ref=revisable_ref, coh_ref=coh_ref,
+    )
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
 
@@ -493,11 +568,16 @@ def recompute_controls(db: Session, city_id: int | None) -> dict[str, int]:
     invoices = list(db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars())
     achem_ref = acheminement_reference(invoices)
     tax_rows = load_tax_rates(db, city_id)
+    revisable_ref = load_revisable_prices(db, city_id)
+    coh_ref = coherence_refs(invoices)
     for inv in invoices:
         year = _invoice_year(inv)
         bpu = bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
         network_ref = net_cache.setdefault(year, load_network_tariff(db, city_id, year)) if year else None
-        _apply_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows)
+        _apply_control(
+            inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows,
+            revisable_ref=revisable_ref, coh_ref=coh_ref,
+        )
         out[inv.control_status] = out.get(inv.control_status, 0) + 1
     db.commit()
     return out
@@ -652,6 +732,35 @@ def update_tax_rate(db: Session, row_id: int, fields: dict[str, Any]) -> GasTaxR
             setattr(row, key, float(fields[key]))
     if fields.get("source"):
         row.source = str(fields["source"])
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_revisable(db: Session, city_id: int | None) -> list[GasSupplyRevisablePrice]:
+    rows = list(db.execute(
+        select(GasSupplyRevisablePrice).where(
+            (GasSupplyRevisablePrice.city_id == city_id) | (GasSupplyRevisablePrice.city_id.is_(None))
+        )
+    ).scalars())
+    rows.sort(key=lambda r: (-r.annee, -r.mois))
+    return rows
+
+
+def upsert_revisable(db: Session, city_id: int | None, annee: int, mois: int, prix: float, source: str | None) -> GasSupplyRevisablePrice:
+    row = db.execute(
+        select(GasSupplyRevisablePrice).where(
+            GasSupplyRevisablePrice.city_id == city_id,
+            GasSupplyRevisablePrice.annee == annee,
+            GasSupplyRevisablePrice.mois == mois,
+        )
+    ).scalars().first()
+    if row is None:
+        row = GasSupplyRevisablePrice(city_id=city_id, annee=annee, mois=mois)
+        db.add(row)
+    row.fourniture_eur_mwh = float(prix)
+    if source:
+        row.source = source
     db.commit()
     db.refresh(row)
     return row

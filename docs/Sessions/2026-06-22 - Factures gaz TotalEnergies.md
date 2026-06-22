@@ -122,7 +122,24 @@ Contrôle acheminement ATRD désormais complet : terme variable + terme fixe.
 
 Couverture contrôle gaz : cohérence + fourniture (BPU) + acheminement ATRD (variable+fixe) + taxes.
 
-## Reste — ATRT (transport, dépend capacité PCE), CEE définitifs, fourniture révisable PEG
+## v3 (partie 7) — révisable PEG référencé ; ATRT/CEE = données externes (2026-06-22)
+
+Analyse des 3 derniers points :
+- **Fourniture révisable PEG** : les 9 factures sont toutes à 56,88 €/MWh (conso déc. 2025).
+  Table éditable `gas_supply_revisable_prices` (migration `0062`, par mois), endpoints
+  `GET / PUT /api/gas/invoices/revisable`. Les 9 factures deviennent **conformes** (58/58 valides).
+  Les mois suivants se renseignent au fil de l'eau (valeur = indice PEGAS, donnée marché).
+- **ATRT (transport)** : `ATRT fixe / CAR` ≈ 0,671 €/MWh-CAR mais varie par PCE/zone → un contrôle
+  de cohérence par médiane génère des **faux positifs** (testé). Non retenu : contrôle absolu
+  nécessite le barème transport GRDF (flux externe).
+- **CEE classique** : prix de marché variable par période (déc. 2025 ≈ 2,9 ; 2026 ≈ 8,1) →
+  cohérence = faux positifs. Non retenu : nécessite les CEE définitifs fournisseur (révisés mars).
+
+Conclusion : le contrôle gaz est complet sur tout ce qui est réglementé/contractuel
+(fourniture ferme + révisable, acheminement ATRD variable+fixe, accise, CTA, TVA, cohérence).
+ATRT et CEE restent volontairement non contrôlés faute de donnée de référence externe.
+
+## Bilan — contrôle gaz TotalEnergies bouclé
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.

@@ -15,6 +15,8 @@ from app.schemas.gas_invoice import (
     GasNetworkTariffUpdateIn,
     GasTaxRateOut,
     GasTaxRateUpdateIn,
+    GasRevisablePriceIn,
+    GasRevisablePriceOut,
 )
 from app.services import gas_invoice as svc
 
@@ -122,6 +124,25 @@ def update_tax_rate(
         return svc.update_tax_rate(db, row_id, payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/revisable", response_model=list[GasRevisablePriceOut])
+def list_revisable(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return svc.list_revisable(db, current_user.city_id)
+
+
+@router.put("/revisable", response_model=GasRevisablePriceOut)
+def upsert_revisable(
+    payload: GasRevisablePriceIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return svc.upsert_revisable(
+        db, current_user.city_id, payload.annee, payload.mois, payload.fourniture_eur_mwh, payload.source
+    )
 
 
 @router.get("/export")
