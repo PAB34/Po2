@@ -101,6 +101,7 @@ class GasInvoice(Base):
     # Contrôle & décision
     control_status: Mapped[str] = mapped_column(String(20), nullable=False, default="not_checked")
     control_issues_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    control_detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     decision_status: Mapped[str] = mapped_column(String(20), nullable=False, default="to_review")
     decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     finance_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

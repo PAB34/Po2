@@ -30,6 +30,8 @@ class GasTaxRate(Base):
 
     ticgn_eur_mwh: Mapped[float | None] = mapped_column(Float, nullable=True)
     cta_coeff_atrd_fixe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tva_normale: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tva_reduite: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     source: Mapped[str | None] = mapped_column(String(160), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(255), nullable=True)

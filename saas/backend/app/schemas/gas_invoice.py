@@ -31,6 +31,7 @@ class GasInvoiceOut(BaseModel):
     building_id: int | None = None
     control_status: str
     control_issues_json: str | None = None
+    control_detail_json: str | None = None
     decision_status: str
     decision_comment: str | None = None
 

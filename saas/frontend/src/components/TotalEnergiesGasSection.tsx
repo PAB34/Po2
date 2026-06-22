@@ -53,12 +53,57 @@ function issuesOf(inv: GasInvoice): GasInvoiceIssue[] {
   }
 }
 
+type ControlDetail = { key: string; label: string; billed: string; method: string; reference: string; source: string; verdict: string };
+
+function detailOf(inv: GasInvoice): ControlDetail[] {
+  if (!inv.control_detail_json) return [];
+  try {
+    return JSON.parse(inv.control_detail_json) as ControlDetail[];
+  } catch {
+    return [];
+  }
+}
+
+function verdictMark(v: string): { icon: string; color: string } {
+  if (v === "ok") return { icon: "✓", color: "var(--color-text-success)" };
+  if (v === "invalid") return { icon: "✕", color: "var(--color-text-danger)" };
+  if (v === "review") return { icon: "⚠", color: "#854f0b" };
+  return { icon: "ℹ", color: "var(--color-text-tertiary)" };
+}
+
+function FicheVerification({ detail }: { detail: ControlDetail[] }) {
+  if (detail.length === 0) {
+    return <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>Aucun détail de contrôle (relancer « Recontrôler »).</span>;
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 8 }}>
+        Comment cette facture est vérifiée — chaque composante, la méthode et la référence utilisée :
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {detail.map((d) => {
+          const m = verdictMark(d.verdict);
+          return (
+            <div key={d.key} style={{ display: "grid", gridTemplateColumns: "auto 1.1fr 1.5fr auto", gap: 10, alignItems: "center", fontSize: 12.5, padding: "5px 0", borderTop: "0.5px solid var(--color-border-tertiary)" }}>
+              <span style={{ color: m.color, fontWeight: 500, width: 16, textAlign: "center" }}>{m.icon}</span>
+              <span><strong>{d.label}</strong><br /><span style={{ color: "var(--color-text-secondary)" }}>{d.billed}</span></span>
+              <span style={{ color: "var(--color-text-secondary)" }}>{d.method}{d.reference !== "—" ? <> · réf. <strong style={{ color: "var(--color-text-primary)" }}>{d.reference}</strong></> : null}</span>
+              <span style={{ color: "var(--color-text-tertiary)", fontSize: 11, whiteSpace: "nowrap" }}>{d.source !== "—" ? d.source : ""}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function TotalEnergiesGasSection() {
   const { token } = useAuth();
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [controlFilter, setControlFilter] = useState<string>("");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const portfolioQuery = useQuery({
     queryKey: ["gas-portfolio"],
@@ -263,9 +308,18 @@ export default function TotalEnergiesGasSection() {
             <tbody>
               {invoices.map((inv) => {
                 const iss = issuesOf(inv);
-                return (
+                const open = expandedId === inv.id;
+                return [
                   <tr key={inv.id}>
                     <td>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(open ? null : inv.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginRight: 6, color: "var(--color-text-secondary)" }}
+                        aria-label="Voir la vérification"
+                      >
+                        <i className={`ti ti-chevron-${open ? "down" : "right"}`} aria-hidden="true"></i>
+                      </button>
                       {inv.num_facture}
                       {inv.type_detail === "AVOIR" && <span className="cockpit-badge cockpit-badge--neutral" style={{ marginLeft: 6 }}>avoir</span>}
                     </td>
@@ -291,8 +345,15 @@ export default function TotalEnergiesGasSection() {
                         ))}
                       </select>
                     </td>
-                  </tr>
-                );
+                  </tr>,
+                  open ? (
+                    <tr key={`${inv.id}-detail`}>
+                      <td colSpan={7} style={{ background: "var(--color-background-secondary)", padding: "10px 14px" }}>
+                        <FicheVerification detail={detailOf(inv)} />
+                      </td>
+                    </tr>
+                  ) : null,
+                ];
               })}
             </tbody>
           </table>
