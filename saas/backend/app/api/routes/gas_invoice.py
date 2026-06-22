@@ -13,6 +13,8 @@ from app.schemas.gas_invoice import (
     GasInvoiceOut,
     GasNetworkTariffOut,
     GasNetworkTariffUpdateIn,
+    GasTaxRateOut,
+    GasTaxRateUpdateIn,
 )
 from app.services import gas_invoice as svc
 
@@ -97,6 +99,27 @@ def update_network_tariff(
 ):
     try:
         return svc.update_network_tariff(db, row_id, payload.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/tax-rates", response_model=list[GasTaxRateOut])
+def list_tax_rates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return svc.load_tax_rates(db, current_user.city_id)
+
+
+@router.patch("/tax-rates/{row_id}", response_model=GasTaxRateOut)
+def update_tax_rate(
+    row_id: int,
+    payload: GasTaxRateUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return svc.update_tax_rate(db, row_id, payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

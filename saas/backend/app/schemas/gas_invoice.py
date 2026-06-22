@@ -78,3 +78,21 @@ class GasNetworkTariffUpdateIn(BaseModel):
     atrd_terme_variable_eur_mwh: float | None = None
     atrd_abonnement_annuel_eur: float | None = None
     source: str | None = None
+
+
+class GasTaxRateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    valid_from: date
+    valid_to: date | None = None
+    ticgn_eur_mwh: float | None = None
+    cta_coeff_atrd_fixe: float | None = None
+    source: str | None = None
+    source_url: str | None = None
+
+
+class GasTaxRateUpdateIn(BaseModel):
+    ticgn_eur_mwh: float | None = None
+    cta_coeff_atrd_fixe: float | None = None
+    source: str | None = None
