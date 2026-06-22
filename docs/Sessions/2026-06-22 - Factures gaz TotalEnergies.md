@@ -89,7 +89,22 @@ passthrough). Mise en place d'un référentiel éditable `gas_network_tariffs`
 Note : les termes fixes ATRD/ATRT dépendent de la capacité du PCE (variables d'un PCE à
 l'autre) → restent en cohérence ; seul le terme variable est référencé par option.
 
-## Reste à faire — compléter barème CRE & CEE définitifs
+## v3 (partie 4) — barème CRE ATRD 7 complet (2026-06-22)
+
+Grille ATRD 7 GRDF au 1er juillet 2025 (valable jusqu'au 30/06/2026) récupérée et seedée
+(migration `0060`), recoupée contre les factures (T2 = 12,08 €/MWh confirmé) :
+
+| Option | Abonnement €/an | Terme variable €/MWh |
+|---|---|---|
+| T1 | 54,72 | 44,94 |
+| T2 | 186,12 | 12,08 |
+| T3 | 1 301,40 | 8,69 |
+| T4 | 21 705,72 | 1,18 |
+
+Source : CRE délibération 2025-122. Contrôle terme variable ATRD désormais absolu sur T1-T4.
+Abonnement annuel stocké (186,12/12 = 15,51 €/mois = terme fixe ATRD facturé sur mois plein).
+
+## Reste à faire — termes fixes prorata & CEE définitifs
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.
