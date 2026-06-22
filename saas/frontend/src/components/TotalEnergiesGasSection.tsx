@@ -206,8 +206,8 @@ export default function TotalEnergiesGasSection() {
 
         <p className="fct-etat-note">
           Contrôle : cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA), <strong>prix fourniture vs BPU
-          Lot 7</strong> (PCE à prix révisable PEG signalés) et <strong>acheminement ATRD vs barème</strong> (référence absolue
-          si renseignée, sinon cohérence par tarif). À compléter : barème CRE T1/T3/T4 + termes fixes et CEE définitifs.
+          Lot 7</strong> (PCE à prix révisable PEG signalés) et <strong>acheminement ATRD vs barème CRE</strong> (terme variable
+          T1–T4, référence absolue ATRD 7). À compléter : termes fixes ATRD/ATRT (dépendants du PCE) et CEE définitifs.
         </p>
       </div>
 
