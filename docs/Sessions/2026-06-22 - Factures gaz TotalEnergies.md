@@ -112,7 +112,17 @@ février ; 186,12/12 = 15,51 sur mois plein). Implémenté `_prorated_atrd_fixe`
 absolu vs abonnement CRE (tolérance 0,20 €). Aucun faux positif sur le lot réel.
 Contrôle acheminement ATRD désormais complet : terme variable + terme fixe.
 
-## Reste — ATRT (transport, dépend du PCE) & CEE définitifs
+## v3 (partie 6) — contrôle taxes (accise/TICGN daté + CTA) (2026-06-22)
+
+- Accise gaz (ex-TICGN) modélisée **par date d'effet** (table `gas_tax_rates`, migration `0061`) :
+  15,43 €/MWh au 1er août 2025 → 16,39 €/MWh au 1er février 2026 (confirmé contre factures +
+  sources publiques). Contrôle = montant TICGN / kWh vs taux de la période de conso (tol 0,25).
+- CTA = 24,76 % du terme fixe ATRD (observé stable) → contrôle CTA = coeff × ATRD fixe (tol 0,20).
+- Endpoints `GET/PATCH /api/gas/invoices/tax-rates`. Aucun faux positif sur le lot réel.
+
+Couverture contrôle gaz : cohérence + fourniture (BPU) + acheminement ATRD (variable+fixe) + taxes.
+
+## Reste — ATRT (transport, dépend capacité PCE), CEE définitifs, fourniture révisable PEG
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.

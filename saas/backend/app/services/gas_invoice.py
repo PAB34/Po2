@@ -31,6 +31,7 @@ from app.models.gas import GasPce
 from app.models.gas_bpu import GasBpuPrice
 from app.models.gas_invoice import GasInvoice
 from app.models.gas_network_tariff import GasNetworkTariff
+from app.models.gas_tax import GasTaxRate
 
 # Tolérances de contrôle.
 _TOL_EUR = 0.5
@@ -236,11 +237,29 @@ def _prorated_atrd_fixe(abonnement_annuel: float, start: date, end: date) -> flo
     return total
 
 
+def load_tax_rates(db: Session, city_id: int | None) -> list[GasTaxRate]:
+    rows = list(db.execute(
+        select(GasTaxRate).where(
+            (GasTaxRate.city_id == city_id) | (GasTaxRate.city_id.is_(None))
+        )
+    ).scalars())
+    rows.sort(key=lambda r: (r.valid_from, 0 if r.city_id == city_id else 1))
+    return rows
+
+
+def _pick_tax_rate(rows: list[GasTaxRate] | None, on_date: date | None) -> GasTaxRate | None:
+    if not rows or on_date is None:
+        return None
+    match = [r for r in rows if r.valid_from <= on_date and (r.valid_to is None or on_date <= r.valid_to)]
+    return match[-1] if match else None
+
+
 def compute_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
     achem_ref: dict[str, float] | None = None,
-    network_ref: dict[str, float] | None = None,
+    network_ref: dict[str, dict[str, float | None]] | None = None,
+    tax_rows: list[GasTaxRate] | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     issues: list[dict[str, str]] = []
 
@@ -349,6 +368,26 @@ def compute_control(
                     f"(abonnement {abonnement:.2f} €/an proraté) — à vérifier", "review",
                 ))
 
+    # --- Contrôle des taxes réglementées (accise ex-TICGN + CTA) ---
+    if inv.type_detail != "AVOIR":
+        tax = _pick_tax_rate(tax_rows, inv.debut_conso or inv.date_comptable)
+        if tax is not None:
+            if tax.ticgn_eur_mwh is not None and inv.montant_ticgn is not None and inv.total_conso_kwh:
+                rate = inv.montant_ticgn / (inv.total_conso_kwh / 1000.0)
+                if abs(rate - tax.ticgn_eur_mwh) > 0.25:
+                    issues.append(_issue(
+                        "GAS_TICGN", "Taxes",
+                        f"Accise (TICGN) {rate:.2f} ≠ taux {tax.ticgn_eur_mwh:.2f} €/MWh — à vérifier", "review",
+                    ))
+            if tax.cta_coeff_atrd_fixe and inv.montant_cta is not None and inv.atrd_terme_fixe:
+                expected_cta = tax.cta_coeff_atrd_fixe * inv.atrd_terme_fixe
+                if abs(expected_cta - inv.montant_cta) > 0.20:
+                    issues.append(_issue(
+                        "GAS_CTA", "Taxes",
+                        f"CTA {inv.montant_cta:.2f} ≠ attendu {expected_cta:.2f} € "
+                        f"({tax.cta_coeff_atrd_fixe * 100:.2f}% du terme fixe ATRD) — à vérifier", "review",
+                    ))
+
     if any(i["severity"] == "invalid" for i in issues):
         status = "invalid"
     elif issues:
@@ -369,9 +408,10 @@ def _apply_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
     achem_ref: dict[str, float] | None = None,
-    network_ref: dict[str, float] | None = None,
+    network_ref: dict[str, dict[str, float | None]] | None = None,
+    tax_rows: list[GasTaxRate] | None = None,
 ) -> None:
-    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref)
+    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows)
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
 
@@ -449,14 +489,15 @@ def import_invoices(
 def recompute_controls(db: Session, city_id: int | None) -> dict[str, int]:
     out = {"valid": 0, "review": 0, "invalid": 0}
     bpu_cache: dict[int, GasBpuPrice | None] = {}
-    net_cache: dict[int, dict[str, float]] = {}
+    net_cache: dict[int, dict[str, dict[str, float | None]]] = {}
     invoices = list(db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars())
     achem_ref = acheminement_reference(invoices)
+    tax_rows = load_tax_rates(db, city_id)
     for inv in invoices:
         year = _invoice_year(inv)
         bpu = bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
         network_ref = net_cache.setdefault(year, load_network_tariff(db, city_id, year)) if year else None
-        _apply_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref)
+        _apply_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref, tax_rows=tax_rows)
         out[inv.control_status] = out.get(inv.control_status, 0) + 1
     db.commit()
     return out
@@ -593,6 +634,20 @@ def update_network_tariff(db: Session, row_id: int, fields: dict[str, Any]) -> G
     if row is None:
         raise ValueError("Ligne barème réseau introuvable.")
     for key in ("atrd_terme_variable_eur_mwh", "atrd_abonnement_annuel_eur"):
+        if key in fields and fields[key] is not None:
+            setattr(row, key, float(fields[key]))
+    if fields.get("source"):
+        row.source = str(fields["source"])
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def update_tax_rate(db: Session, row_id: int, fields: dict[str, Any]) -> GasTaxRate:
+    row = db.get(GasTaxRate, row_id)
+    if row is None:
+        raise ValueError("Ligne taxe gaz introuvable.")
+    for key in ("ticgn_eur_mwh", "cta_coeff_atrd_fixe"):
         if key in fields and fields[key] is not None:
             setattr(row, key, float(fields[key]))
     if fields.get("source"):
