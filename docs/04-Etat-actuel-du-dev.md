@@ -1,4 +1,15 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-22 (boite de rapprochement patrimoine — PO2-PAT-003 v1)
+> Nouveau : file de rapprochement compteurs externes -> referentiel Site/Batiment.
+> Backend : `patrimoine_match_items` (migration 0056), `services/patrimoine_match.py`,
+> endpoints `/api/patrimoine/matches/*`. Frontend : page `/patrimoine/rapprochements`
+> (menu Patrimoine > « Rapprochements (file) »). Sources v1 = PRM ENEDIS + PCE GRDF ;
+> cible = Batiment (repli Site). Le moteur collecte, propose un candidat par similarite
+> de libelle (score), et « Lier » ecrit le lien canonique (`building_meter_links` /
+> `gas_pces.building_id`). Valide de bout en bout sur le staging contre la copie prod :
+> 496 PRM, 97 candidats, lien + lien-en-masse (>=90) OK. Detail :
+> `[[Sessions/2026-06-22 - Boite de rapprochement patrimoine]]`.
+>
 > **Mise a jour complementaire** : 2026-06-16 (environnement de staging EN SERVICE)
 > Staging operationnel sur le meme VPS, isole (projet docker `po2-staging`, base = copie prod) :
 > <https://staging.135-125-152-112.sslip.io> (sslip.io, aucun DNS a gerer ; protege par mot de passe).
