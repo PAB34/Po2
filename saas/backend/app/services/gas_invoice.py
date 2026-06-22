@@ -347,17 +347,20 @@ def compute_control(
                 f"m³×coeff ({calc:.0f}) ≠ kWh facturés ({inv.total_conso_kwh})", "review",
             ))
 
+    _tax = _pick_tax_rate(tax_rows, inv.debut_conso or inv.date_comptable)
+    tva_n = (_tax.tva_normale if _tax and _tax.tva_normale is not None else _TVA_NORMAL)
+    tva_r = (_tax.tva_reduite if _tax and _tax.tva_reduite is not None else _TVA_REDUIT)
     if inv.assiette_tva_tn is not None and inv.tva_tn is not None:
-        if abs(inv.assiette_tva_tn * _TVA_NORMAL - inv.tva_tn) > _TOL_EUR:
+        if abs(inv.assiette_tva_tn * tva_n - inv.tva_tn) > _TOL_EUR:
             issues.append(_issue(
                 "GAS_TVA_TN", "TVA",
-                f"TVA normale {inv.tva_tn:.2f} ≠ 20% de {inv.assiette_tva_tn:.2f}", "review",
+                f"TVA normale {inv.tva_tn:.2f} ≠ {tva_n * 100:.1f}% de {inv.assiette_tva_tn:.2f}", "review",
             ))
     if inv.assiette_tva_tr is not None and inv.tva_tr is not None:
-        if abs(inv.assiette_tva_tr * _TVA_REDUIT - inv.tva_tr) > _TOL_EUR:
+        if abs(inv.assiette_tva_tr * tva_r - inv.tva_tr) > _TOL_EUR:
             issues.append(_issue(
                 "GAS_TVA_TR", "TVA",
-                f"TVA réduite {inv.tva_tr:.2f} ≠ 5,5% de {inv.assiette_tva_tr:.2f}", "review",
+                f"TVA réduite {inv.tva_tr:.2f} ≠ {tva_r * 100:.1f}% de {inv.assiette_tva_tr:.2f}", "review",
             ))
 
     # --- Contrôle prix vs BPU lot 7 (fourniture + CPB) ---
@@ -474,6 +477,134 @@ def _invoice_year(inv: GasInvoice) -> int | None:
     return ref.year if ref else None
 
 
+def build_control_detail(
+    inv: GasInvoice,
+    issues: list[dict[str, str]],
+    bpu: GasBpuPrice | None = None,
+    network_ref: dict[str, dict[str, float | None]] | None = None,
+    tax_rows: list[GasTaxRate] | None = None,
+    revisable_ref: dict[tuple[int, int], float] | None = None,
+) -> list[dict[str, Any]]:
+    """Trace lisible de chaque contrôle (fiche de vérification) : composante, montant
+    facturé, méthode, référence + source, verdict. Le verdict découle des `issues`."""
+    by_code = {i["code"]: i for i in issues}
+
+    def verdict(*codes: str) -> str:
+        for c in codes:
+            if c in by_code:
+                return by_code[c]["severity"]
+        return "ok"
+
+    def eur(v): return f"{v:.2f} €" if v is not None else "—"
+    kwh = inv.total_conso_kwh
+    detail: list[dict[str, Any]] = []
+
+    # 1. Cohérence des totaux
+    detail.append({
+        "key": "coherence", "label": "Cohérence des totaux",
+        "billed": eur(inv.total_ttc) + " TTC",
+        "method": "Recalcul interne : prix×kWh = montant, Σ composantes = HT, HT+TVA = TTC",
+        "reference": "—", "source": "interne",
+        "verdict": verdict("GAS_CONSO_PUXQ", "GAS_HT_SUM", "GAS_TTC"),
+    })
+    if inv.total_conso_m3 and inv.coeff_conversion:
+        detail.append({
+            "key": "conversion", "label": "Conversion m³ → kWh",
+            "billed": f"{inv.total_conso_kwh} kWh",
+            "method": f"m³ × coefficient ({inv.coeff_conversion})",
+            "reference": f"{(inv.total_conso_m3 * inv.coeff_conversion):.0f} kWh attendus", "source": "PCS facture",
+            "verdict": verdict("GAS_CONVERSION"),
+        })
+
+    # 2. Fourniture
+    if inv.prix_conso_gaz is not None:
+        pu_mwh = inv.prix_conso_gaz * 1000.0
+        ferme = bpu.fourniture_ht_mwh if bpu else None
+        d0 = inv.debut_conso or inv.date_comptable
+        rev = revisable_ref.get((d0.year, d0.month)) if (revisable_ref and d0) else None
+        if ferme is not None and abs(pu_mwh - ferme) <= _TOL_PU_MWH:
+            method, ref, src = "Prix ferme comparé au BPU lot 7", f"{ferme:.2f} €/MWh", "BPU Hérault Énergie lot 7"
+        elif rev is not None:
+            method, ref, src = "Prix révisable PEG comparé à la référence du mois", f"{rev:.2f} €/MWh", "Prix révisable référencé"
+        else:
+            method, ref, src = "Prix comparé au BPU lot 7", (f"{ferme:.2f} €/MWh" if ferme else "—"), "BPU lot 7"
+        detail.append({
+            "key": "fourniture", "label": "Fourniture gaz", "billed": f"{pu_mwh:.2f} €/MWh",
+            "method": method, "reference": ref, "source": src, "verdict": verdict("GAS_PRIX_FOURNITURE"),
+        })
+
+    # 3. CPB
+    if bpu and bpu.cpb_ht_mwh is not None and inv.montant_cpb and kwh:
+        detail.append({
+            "key": "cpb", "label": "CPB", "billed": f"{inv.montant_cpb / (kwh / 1000.0):.2f} €/MWh",
+            "method": "Comparé au BPU lot 7", "reference": f"{bpu.cpb_ht_mwh:.2f} €/MWh", "source": "BPU lot 7",
+            "verdict": verdict("GAS_PRIX_CPB"),
+        })
+
+    # 4-5. Acheminement ATRD
+    net = (network_ref or {}).get(inv.tarif_acheminement or "") or {}
+    if net.get("variable") is not None and inv.atrd_terme_variable is not None and kwh:
+        detail.append({
+            "key": "atrd_var", "label": "Acheminement ATRD — variable",
+            "billed": f"{inv.atrd_terme_variable / (kwh / 1000.0):.2f} €/MWh",
+            "method": f"Comparé au barème CRE ATRD ({inv.tarif_acheminement})",
+            "reference": f"{net['variable']:.2f} €/MWh", "source": "Barème CRE ATRD 7",
+            "verdict": verdict("GAS_ACHEMINEMENT"),
+        })
+    if net.get("abonnement") and inv.atrd_terme_fixe is not None and inv.debut_conso and inv.fin_conso:
+        exp = _prorated_atrd_fixe(net["abonnement"], inv.debut_conso, inv.fin_conso)
+        detail.append({
+            "key": "atrd_fixe", "label": "Acheminement ATRD — abonnement",
+            "billed": eur(inv.atrd_terme_fixe),
+            "method": f"Abonnement {net['abonnement']:.2f} €/an ÷ 12, proraté sur la période",
+            "reference": f"{exp:.2f} € attendus", "source": "Barème CRE ATRD 7",
+            "verdict": verdict("GAS_ATRD_FIXE"),
+        })
+
+    # 6-7. Taxes
+    tax = _pick_tax_rate(tax_rows, inv.debut_conso or inv.date_comptable)
+    if tax and tax.ticgn_eur_mwh is not None and inv.montant_ticgn is not None and kwh:
+        detail.append({
+            "key": "ticgn", "label": "Accise (ex-TICGN)", "billed": f"{inv.montant_ticgn / (kwh / 1000.0):.2f} €/MWh",
+            "method": f"Taux réglementé daté (au {tax.valid_from.strftime('%d/%m/%Y')})",
+            "reference": f"{tax.ticgn_eur_mwh:.2f} €/MWh", "source": "Accise gaz (CRE / DGEC)",
+            "verdict": verdict("GAS_TICGN"),
+        })
+    if tax and tax.cta_coeff_atrd_fixe and inv.montant_cta is not None and inv.atrd_terme_fixe:
+        detail.append({
+            "key": "cta", "label": "CTA", "billed": eur(inv.montant_cta),
+            "method": f"{tax.cta_coeff_atrd_fixe * 100:.2f}% du terme fixe ATRD",
+            "reference": f"{tax.cta_coeff_atrd_fixe * inv.atrd_terme_fixe:.2f} € attendus", "source": "Coefficient CTA réglementé",
+            "verdict": verdict("GAS_CTA"),
+        })
+
+    # 8. TVA
+    if inv.tva_tn is not None or inv.tva_tr is not None:
+        tn = (tax.tva_normale if tax and tax.tva_normale is not None else _TVA_NORMAL)
+        tr = (tax.tva_reduite if tax and tax.tva_reduite is not None else _TVA_REDUIT)
+        detail.append({
+            "key": "tva", "label": "TVA", "billed": eur((inv.tva_tn or 0.0) + (inv.tva_tr or 0.0)),
+            "method": f"{tn * 100:.0f}% (conso) / {tr * 100:.1f}% (abonnement) sur assiettes",
+            "reference": "taux réglementés", "source": "TVA (datée)",
+            "verdict": verdict("GAS_TVA_TN", "GAS_TVA_TR"),
+        })
+
+    # 9. Non contrôlés (donnée externe)
+    non_ctrl = []
+    if inv.atrt_terme_fixe:
+        non_ctrl.append(f"ATRT {inv.atrt_terme_fixe:.2f} €")
+    if inv.montant_cee:
+        non_ctrl.append(f"CEE {inv.montant_cee:.2f} €")
+    if non_ctrl:
+        detail.append({
+            "key": "non_controle", "label": "ATRT transport · CEE", "billed": " · ".join(non_ctrl),
+            "method": "Non contrôlé — nécessite barème transport GRDF / CEE définitifs (données externes)",
+            "reference": "—", "source": "—", "verdict": "info",
+        })
+
+    return detail
+
+
 def _apply_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
@@ -489,6 +620,10 @@ def _apply_control(
     )
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
+    detail = build_control_detail(
+        inv, issues, bpu=bpu, network_ref=network_ref, tax_rows=tax_rows, revisable_ref=revisable_ref,
+    )
+    inv.control_detail_json = json.dumps(detail, ensure_ascii=False) if detail else None
 
 
 # --------------------------------------------------------------------------- #

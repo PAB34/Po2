@@ -139,6 +139,21 @@ Conclusion : le contrôle gaz est complet sur tout ce qui est réglementé/contr
 (fourniture ferme + révisable, acheminement ATRD variable+fixe, accise, CTA, TVA, cohérence).
 ATRT et CEE restent volontairement non contrôlés faute de donnée de référence externe.
 
+## v4 — explicabilité : fiche de vérification + TVA éditable (2026-06-22)
+
+Demande utilisateur : éviter la « boîte noire / usine à gaz » → expliquer le process de contrôle,
+et sortir les dernières valeurs en dur. Audit : seules les **TVA** (20/5,5 %) étaient une donnée
+réglementée en dur (les tolérances restent des seuils internes). 
+
+- Migration `0063` : `gas_invoices.control_detail_json` + `gas_tax_rates.tva_normale/tva_reduite` (seedés).
+- Moteur : TVA lue depuis `gas_tax_rates` (datée) ; nouvelle fonction `build_control_detail` qui
+  produit une **trace lisible de chaque contrôle** (composante, facturé, méthode, référence + source,
+  verdict), stockée par facture ; verdict dérivé des issues (cohérence garantie).
+- Frontend : ligne facture **dépliable → « fiche de vérification »** (cf. maquette validée).
+
+Reste (incrément 2, à valider) : présentation pédagogique des référentiels gaz « à l'image du
+TURPE » (/energie/bpu) + vue de vérification au global. CPE DALKIA : même pattern plus tard.
+
 ## Bilan — contrôle gaz TotalEnergies bouclé
 
 Nécessite de charger les **barèmes de référence** :
