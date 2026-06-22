@@ -4841,6 +4841,7 @@ export type GasInvoice = {
   building_id: number | null;
   control_status: string;
   control_issues_json: string | null;
+  control_detail_json: string | null;
   decision_status: string;
   decision_comment: string | null;
 };
