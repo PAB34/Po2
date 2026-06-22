@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.models.user import User
-from app.schemas.gas_invoice import GasInvoiceDecisionIn, GasInvoiceOut
+from app.schemas.gas_invoice import (
+    GasBpuPriceOut,
+    GasBpuPriceUpdateIn,
+    GasInvoiceDecisionIn,
+    GasInvoiceOut,
+)
 from app.services import gas_invoice as svc
 
 router = APIRouter(prefix="/gas/invoices", tags=["gaz-factures"])
@@ -50,6 +55,27 @@ def recompute(
     current_user: User = Depends(get_current_user),
 ):
     return svc.recompute_controls(db, current_user.city_id)
+
+
+@router.get("/bpu", response_model=list[GasBpuPriceOut])
+def list_bpu(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return svc.list_bpu(db, current_user.city_id)
+
+
+@router.patch("/bpu/{row_id}", response_model=GasBpuPriceOut)
+def update_bpu(
+    row_id: int,
+    payload: GasBpuPriceUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return svc.update_bpu(db, row_id, payload.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.patch("/{invoice_id}/decision", response_model=GasInvoiceOut)

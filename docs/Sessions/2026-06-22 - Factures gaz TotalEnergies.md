@@ -43,7 +43,22 @@ Frontend :
 - Boîte de rapprochement : 10 PCE collectés, 8 avec candidat (ex. École des Beaux Arts -> bâtiment, score 100).
 - HTTP + auth OK (401 sans token).
 
-## Reste à faire — v2 (contrôle prix)
+## v2 livré — contrôle prix fourniture (2026-06-22)
+
+Source de vérité confirmée par l'utilisateur : `extraction_tarifs_BPU_herault.xlsx`
+(extraction canonique élec + gaz). Section Lot 7 / TOTALENERGIES / 2026 = fourniture 35,23 ·
+CEE 3,89 · CEE précarité 3,06 · CPB 0,41 · GO 16,25 (€ HT/MWh) — identique au seed.
+
+- Table éditable `gas_bpu_prices` (migration `0058`, seed BPU lot 7 2026 T1-T4), endpoints
+  `GET/PATCH /api/gas/invoices/bpu`.
+- Moteur étendu : contrôle prix fourniture vs BPU (+ CPB), basé sur l'**année de facturation**
+  (date comptable) avec repli sur le BPU le plus récent. Les PCE à prix révisable PEG sont
+  signalés « à contrôler » (pas une erreur).
+- Frontend : la référence BPU s'affiche dans la section TotalEnergies ; les écarts prix
+  remontent dans la colonne contrôle.
+- Validé staging contre le vrai fichier : **49 conformes / 9 à prix révisable** (56,88 ≠ 35,23).
+
+## Reste à faire — v3 (acheminement & taxes)
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.

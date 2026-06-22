@@ -27,11 +27,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.gas import GasPce
+from app.models.gas_bpu import GasBpuPrice
 from app.models.gas_invoice import GasInvoice
 
 # Tolérances de contrôle.
 _TOL_EUR = 0.5
 _TOL_KWH = 10.0
+_TOL_PU_MWH = 1.0  # tolérance prix unitaire en €/MWh
 _TVA_NORMAL = 0.20
 _TVA_REDUIT = 0.055
 
@@ -162,7 +164,24 @@ def _issue(code: str, family: str, message: str, severity: str) -> dict[str, str
     return {"code": code, "family": family, "message": message, "severity": severity}
 
 
-def compute_control(inv: GasInvoice) -> tuple[str, list[dict[str, str]]]:
+def load_gas_bpu(db: Session, city_id: int | None, annee: int) -> GasBpuPrice | None:
+    """Référence BPU gaz pour l'année (prix identiques sur T1-T4 en 2026).
+    Préfère la ligne de la ville, sinon la ligne générique (city_id NULL)."""
+    rows = list(db.execute(
+        select(GasBpuPrice).where(
+            GasBpuPrice.annee == annee,
+            (GasBpuPrice.city_id == city_id) | (GasBpuPrice.city_id.is_(None)),
+        )
+    ).scalars())
+    if not rows:
+        return None
+    exact = [r for r in rows if r.annee == annee]
+    pool = exact or rows  # repli : BPU le plus récent si l'année exacte est absente
+    pool.sort(key=lambda r: (0 if r.city_id == city_id else 1, -r.annee))
+    return pool[0]
+
+
+def compute_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> tuple[str, list[dict[str, str]]]:
     issues: list[dict[str, str]] = []
 
     pu, kwh, mt = inv.prix_conso_gaz, inv.total_conso_kwh, inv.montant_conso_gaz
@@ -210,6 +229,25 @@ def compute_control(inv: GasInvoice) -> tuple[str, list[dict[str, str]]]:
                 f"TVA réduite {inv.tva_tr:.2f} ≠ 5,5% de {inv.assiette_tva_tr:.2f}", "review",
             ))
 
+    # --- Contrôle prix vs BPU lot 7 (fourniture + CPB) ---
+    if bpu is not None:
+        kwh = inv.total_conso_kwh
+        if bpu.fourniture_ht_mwh is not None and inv.prix_conso_gaz is not None:
+            pu_mwh = inv.prix_conso_gaz * 1000.0
+            if abs(pu_mwh - bpu.fourniture_ht_mwh) > _TOL_PU_MWH:
+                issues.append(_issue(
+                    "GAS_PRIX_FOURNITURE", "Prix fourniture",
+                    f"Prix conso {pu_mwh:.2f} ≠ BPU fourniture ferme {bpu.fourniture_ht_mwh:.2f} €/MWh "
+                    f"(prix révisable PEG ou écart à vérifier)", "review",
+                ))
+        if bpu.cpb_ht_mwh is not None and inv.montant_cpb and kwh:
+            eff = inv.montant_cpb / (kwh / 1000.0)
+            if abs(eff - bpu.cpb_ht_mwh) > _TOL_PU_MWH:
+                issues.append(_issue(
+                    "GAS_PRIX_CPB", "Prix CPB",
+                    f"CPB {eff:.2f} ≠ BPU {bpu.cpb_ht_mwh:.2f} €/MWh", "review",
+                ))
+
     if any(i["severity"] == "invalid" for i in issues):
         status = "invalid"
     elif issues:
@@ -219,8 +257,15 @@ def compute_control(inv: GasInvoice) -> tuple[str, list[dict[str, str]]]:
     return status, issues
 
 
-def _apply_control(inv: GasInvoice) -> None:
-    status, issues = compute_control(inv)
+def _invoice_year(inv: GasInvoice) -> int | None:
+    # Année de facturation (date comptable) = année du BPU « Prix YYYY » appliqué,
+    # même si la période de conso déborde sur l'année précédente.
+    ref = inv.date_comptable or inv.debut_conso
+    return ref.year if ref else None
+
+
+def _apply_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> None:
+    status, issues = compute_control(inv, bpu=bpu)
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
 
@@ -261,6 +306,7 @@ def import_invoices(
     batch = datetime.now(timezone.utc).strftime("TE-%Y%m%d%H%M%S")
     summary = {"batch": batch, "rows": len(rows), "created": 0, "updated": 0, "skipped": 0,
                "valid": 0, "review": 0, "invalid": 0}
+    _bpu_cache: dict[int, GasBpuPrice | None] = {}
 
     for data in rows:
         existing = db.execute(
@@ -287,7 +333,9 @@ def import_invoices(
 
         db.flush()
         inv.building_id = _upsert_pce(db, city_id, inv) or inv.building_id
-        _apply_control(inv)
+        year = _invoice_year(inv)
+        bpu = _bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
+        _apply_control(inv, bpu=bpu)
         summary[inv.control_status] = summary.get(inv.control_status, 0) + 1
 
     db.commit()
@@ -296,8 +344,11 @@ def import_invoices(
 
 def recompute_controls(db: Session, city_id: int | None) -> dict[str, int]:
     out = {"valid": 0, "review": 0, "invalid": 0}
+    bpu_cache: dict[int, GasBpuPrice | None] = {}
     for inv in db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars():
-        _apply_control(inv)
+        year = _invoice_year(inv)
+        bpu = bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
+        _apply_control(inv, bpu=bpu)
         out[inv.control_status] = out.get(inv.control_status, 0) + 1
     db.commit()
     return out
@@ -348,6 +399,28 @@ def portfolio(db: Session, city_id: int | None) -> dict[str, Any]:
         "by_decision": by_decision,
         "by_site": sorted(by_site.values(), key=lambda c: c["ht"], reverse=True),
     }
+
+
+def list_bpu(db: Session, city_id: int | None) -> list[GasBpuPrice]:
+    rows = list(db.execute(
+        select(GasBpuPrice).where(
+            (GasBpuPrice.city_id == city_id) | (GasBpuPrice.city_id.is_(None))
+        )
+    ).scalars())
+    rows.sort(key=lambda r: (-r.annee, r.profil))
+    return rows
+
+
+def update_bpu(db: Session, row_id: int, fields: dict[str, Any]) -> GasBpuPrice:
+    row = db.get(GasBpuPrice, row_id)
+    if row is None:
+        raise ValueError("Ligne BPU gaz introuvable.")
+    for key in ("fourniture_ht_mwh", "cee_ht_mwh", "cee_precarite_ht_mwh", "cpb_ht_mwh", "go_ht_mwh"):
+        if key in fields and fields[key] is not None:
+            setattr(row, key, float(fields[key]))
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def set_decision(db: Session, city_id: int | None, invoice_id: int, decision_status: str, comment: str | None) -> GasInvoice:

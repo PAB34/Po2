@@ -38,3 +38,25 @@ class GasInvoiceOut(BaseModel):
 class GasInvoiceDecisionIn(BaseModel):
     decision_status: str
     comment: str | None = None
+
+
+class GasBpuPriceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    annee: int
+    profil: str
+    fourniture_ht_mwh: float | None = None
+    cee_ht_mwh: float | None = None
+    cee_precarite_ht_mwh: float | None = None
+    cpb_ht_mwh: float | None = None
+    go_ht_mwh: float | None = None
+    source: str | None = None
+
+
+class GasBpuPriceUpdateIn(BaseModel):
+    fourniture_ht_mwh: float | None = None
+    cee_ht_mwh: float | None = None
+    cee_precarite_ht_mwh: float | None = None
+    cpb_ht_mwh: float | None = None
+    go_ht_mwh: float | None = None
