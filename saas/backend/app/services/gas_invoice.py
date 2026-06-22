@@ -175,8 +175,10 @@ def load_gas_bpu(db: Session, city_id: int | None, annee: int) -> GasBpuPrice | 
     ).scalars())
     if not rows:
         return None
-    rows.sort(key=lambda r: 0 if r.city_id == city_id else 1)
-    return rows[0]
+    exact = [r for r in rows if r.annee == annee]
+    pool = exact or rows  # repli : BPU le plus récent si l'année exacte est absente
+    pool.sort(key=lambda r: (0 if r.city_id == city_id else 1, -r.annee))
+    return pool[0]
 
 
 def compute_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> tuple[str, list[dict[str, str]]]:
@@ -256,7 +258,9 @@ def compute_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> tuple[st
 
 
 def _invoice_year(inv: GasInvoice) -> int | None:
-    ref = inv.debut_conso or inv.date_comptable
+    # Année de facturation (date comptable) = année du BPU « Prix YYYY » appliqué,
+    # même si la période de conso déborde sur l'année précédente.
+    ref = inv.date_comptable or inv.debut_conso
     return ref.year if ref else None
 
 
