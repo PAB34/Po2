@@ -58,7 +58,13 @@ CEE 3,89 · CEE précarité 3,06 · CPB 0,41 · GO 16,25 (€ HT/MWh) — identi
   remontent dans la colonne contrôle.
 - Validé staging contre le vrai fichier : **49 conformes / 9 à prix révisable** (56,88 ≠ 35,23).
 
-## Reste à faire — v3 (acheminement & taxes)
+## v3 (partie 1) livré — export fiche liaison finance (2026-06-22)
+
+- `GET /api/gas/invoices/export` génère un XLSX (feuille Factures détaillée + Synthèse par site
+  avec TOTAL) et horodate la transmission (`finance_exported_at`). Bouton dans la section TotalEnergies.
+- Validé staging : XLSX 2 feuilles, 58 factures, total 22 717 € HT / 257 418 kWh.
+
+## Reste à faire — acheminement & taxes (données externes)
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.
