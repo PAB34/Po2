@@ -181,7 +181,30 @@ def load_gas_bpu(db: Session, city_id: int | None, annee: int) -> GasBpuPrice | 
     return pool[0]
 
 
-def compute_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> tuple[str, list[dict[str, str]]]:
+def acheminement_reference(invoices: list[GasInvoice]) -> dict[str, float]:
+    """Taux médian ATRD variable (€/MWh) par option tarifaire, sur les FACTURE.
+    Sert de référence de cohérence (l'acheminement est un passthrough réglementé
+    très stable ; un écart trahit une anomalie de facturation)."""
+    rates: dict[str, list[float]] = {}
+    for inv in invoices:
+        if inv.type_detail == "AVOIR" or not inv.tarif_acheminement:
+            continue
+        if inv.atrd_terme_variable is None or not inv.total_conso_kwh:
+            continue
+        rate = inv.atrd_terme_variable / (inv.total_conso_kwh / 1000.0)
+        rates.setdefault(inv.tarif_acheminement, []).append(rate)
+    ref: dict[str, float] = {}
+    for tarif, values in rates.items():
+        values.sort()
+        ref[tarif] = values[len(values) // 2]  # médiane
+    return ref
+
+
+def compute_control(
+    inv: GasInvoice,
+    bpu: GasBpuPrice | None = None,
+    achem_ref: dict[str, float] | None = None,
+) -> tuple[str, list[dict[str, str]]]:
     issues: list[dict[str, str]] = []
 
     pu, kwh, mt = inv.prix_conso_gaz, inv.total_conso_kwh, inv.montant_conso_gaz
@@ -248,6 +271,24 @@ def compute_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> tuple[st
                     f"CPB {eff:.2f} ≠ BPU {bpu.cpb_ht_mwh:.2f} €/MWh", "review",
                 ))
 
+    # --- Contrôle de cohérence de l'acheminement (ATRD variable, passthrough réglementé) ---
+    if (
+        achem_ref
+        and inv.type_detail != "AVOIR"
+        and inv.tarif_acheminement
+        and inv.atrd_terme_variable is not None
+        and inv.total_conso_kwh
+    ):
+        ref_rate = achem_ref.get(inv.tarif_acheminement)
+        if ref_rate:
+            rate = inv.atrd_terme_variable / (inv.total_conso_kwh / 1000.0)
+            if abs(rate - ref_rate) > _TOL_PU_MWH:
+                issues.append(_issue(
+                    "GAS_ACHEMINEMENT", "Acheminement",
+                    f"Taux ATRD variable {rate:.2f} ≠ référence {ref_rate:.2f} €/MWh "
+                    f"(tarif {inv.tarif_acheminement}) — à vérifier", "review",
+                ))
+
     if any(i["severity"] == "invalid" for i in issues):
         status = "invalid"
     elif issues:
@@ -264,8 +305,12 @@ def _invoice_year(inv: GasInvoice) -> int | None:
     return ref.year if ref else None
 
 
-def _apply_control(inv: GasInvoice, bpu: GasBpuPrice | None = None) -> None:
-    status, issues = compute_control(inv, bpu=bpu)
+def _apply_control(
+    inv: GasInvoice,
+    bpu: GasBpuPrice | None = None,
+    achem_ref: dict[str, float] | None = None,
+) -> None:
+    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref)
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
 
@@ -306,7 +351,6 @@ def import_invoices(
     batch = datetime.now(timezone.utc).strftime("TE-%Y%m%d%H%M%S")
     summary = {"batch": batch, "rows": len(rows), "created": 0, "updated": 0, "skipped": 0,
                "valid": 0, "review": 0, "invalid": 0}
-    _bpu_cache: dict[int, GasBpuPrice | None] = {}
 
     for data in rows:
         existing = db.execute(
@@ -333,22 +377,23 @@ def import_invoices(
 
         db.flush()
         inv.building_id = _upsert_pce(db, city_id, inv) or inv.building_id
-        year = _invoice_year(inv)
-        bpu = _bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
-        _apply_control(inv, bpu=bpu)
-        summary[inv.control_status] = summary.get(inv.control_status, 0) + 1
 
     db.commit()
+    # Contrôle final avec contexte complet (BPU + référence acheminement sur tout le lot).
+    counts = recompute_controls(db, city_id)
+    summary.update(counts)
     return summary
 
 
 def recompute_controls(db: Session, city_id: int | None) -> dict[str, int]:
     out = {"valid": 0, "review": 0, "invalid": 0}
     bpu_cache: dict[int, GasBpuPrice | None] = {}
-    for inv in db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars():
+    invoices = list(db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars())
+    achem_ref = acheminement_reference(invoices)
+    for inv in invoices:
         year = _invoice_year(inv)
         bpu = bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
-        _apply_control(inv, bpu=bpu)
+        _apply_control(inv, bpu=bpu, achem_ref=achem_ref)
         out[inv.control_status] = out.get(inv.control_status, 0) + 1
     db.commit()
     return out
