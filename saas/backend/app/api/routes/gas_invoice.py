@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -76,6 +76,19 @@ def update_bpu(
         return svc.update_bpu(db, row_id, payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/export")
+def export_xlsx(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    content = svc.export_xlsx(db, current_user.city_id)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="liaison_finance_gaz_totalenergies.xlsx"'},
+    )
 
 
 @router.patch("/{invoice_id}/decision", response_model=GasInvoiceOut)

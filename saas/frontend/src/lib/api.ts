@@ -4931,3 +4931,14 @@ export async function fetchGasBpu(token: string): Promise<GasBpuPrice[]> {
   });
   return parseResponse<GasBpuPrice[]>(response);
 }
+
+export async function exportGasInvoices(token: string): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/export`, {
+    headers: buildAuthHeaders(token),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur ${response.status}`);
+  }
+  return response.blob();
+}
