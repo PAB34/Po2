@@ -96,3 +96,20 @@ class GasTaxRateUpdateIn(BaseModel):
     ticgn_eur_mwh: float | None = None
     cta_coeff_atrd_fixe: float | None = None
     source: str | None = None
+
+
+class GasRevisablePriceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    annee: int
+    mois: int
+    fourniture_eur_mwh: float | None = None
+    source: str | None = None
+
+
+class GasRevisablePriceIn(BaseModel):
+    annee: int
+    mois: int
+    fourniture_eur_mwh: float
+    source: str | None = None
