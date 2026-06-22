@@ -423,6 +423,53 @@ def update_bpu(db: Session, row_id: int, fields: dict[str, Any]) -> GasBpuPrice:
     return row
 
 
+def export_xlsx(db: Session, city_id: int | None, mark_transmitted: bool = True) -> bytes:
+    """Fiche de liaison finance (XLSX) : synthèse par site + détail factures."""
+    from openpyxl import Workbook
+
+    invoices = list_invoices(db, city_id)
+    wb = Workbook()
+
+    ws = wb.active
+    ws.title = "Factures"
+    headers = [
+        "N° facture", "Type", "Date comptable", "Échéance", "PCE", "Site", "Bâtiment ID",
+        "Classe", "Tarif", "Début conso", "Fin conso", "kWh", "Prix conso (€/kWh)",
+        "Conso (€)", "Abonnement", "CEE", "CEE précarité", "CPB",
+        "ATRT fixe", "ATRD fixe", "ATRD variable", "Autres", "TICGN", "CTA",
+        "Total HT", "TVA", "Total TTC", "Contrôle", "Décision",
+    ]
+    ws.append(headers)
+    for inv in invoices:
+        ws.append([
+            inv.num_facture, inv.type_detail, inv.date_comptable, inv.date_echeance, inv.pce,
+            inv.lib_regroupement or inv.nom_site, inv.building_id, inv.classe_conso, inv.tarif_acheminement,
+            inv.debut_conso, inv.fin_conso, inv.total_conso_kwh, inv.prix_conso_gaz,
+            inv.montant_conso_gaz, inv.abonnement_fournisseur, inv.montant_cee, inv.montant_cee_precarite,
+            inv.montant_cpb, inv.atrt_terme_fixe, inv.atrd_terme_fixe, inv.atrd_terme_variable,
+            inv.montant_autres, inv.montant_ticgn, inv.montant_cta, inv.total_hors_tva,
+            (inv.tva_tn or 0.0) + (inv.tva_tr or 0.0), inv.total_ttc, inv.control_status, inv.decision_status,
+        ])
+
+    ws2 = wb.create_sheet("Synthèse par site")
+    ws2.append(["Site", "PCE", "Bâtiment rattaché", "Factures", "Total HT", "kWh"])
+    pf = portfolio(db, city_id)
+    for s in pf["by_site"]:
+        ws2.append([s["site"], s["pce"], "oui" if s["linked"] else "non", s["count"], round(s["ht"], 2), s["kwh"]])
+    ws2.append([])
+    ws2.append(["TOTAL", "", "", pf["count"], pf["total_ht"], pf["total_kwh"]])
+
+    if mark_transmitted:
+        now = datetime.now(timezone.utc)
+        for inv in invoices:
+            inv.finance_exported_at = now
+        db.commit()
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def set_decision(db: Session, city_id: int | None, invoice_id: int, decision_status: str, comment: str | None) -> GasInvoice:
     inv = db.execute(
         select(GasInvoice).where(GasInvoice.id == invoice_id, GasInvoice.city_id == city_id)

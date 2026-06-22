@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
 import {
+  exportGasInvoices,
   fetchGasBpu,
   fetchGasInvoices,
   fetchGasPortfolio,
@@ -101,6 +102,23 @@ export default function TotalEnergiesGasSection() {
     onSuccess: () => invalidate(),
   });
 
+  const exportMut = useMutation({
+    mutationFn: () => exportGasInvoices(token!),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "liaison_finance_gaz_totalenergies.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setFlash("Fiche de liaison finance exportée (transmission horodatée).");
+      invalidate();
+    },
+    onError: (e) => setFlash(`Erreur export : ${(e as Error).message}`),
+  });
+
   const pf = portfolioQuery.data;
   const invoices = invoicesQuery.data ?? [];
 
@@ -129,6 +147,9 @@ export default function TotalEnergiesGasSection() {
           </button>
           <button type="button" className="btn-secondary btn-compact" onClick={() => recomputeMut.mutate()} disabled={recomputeMut.isPending}>
             Recontrôler
+          </button>
+          <button type="button" className="btn-secondary btn-compact" onClick={() => exportMut.mutate()} disabled={exportMut.isPending}>
+            {exportMut.isPending ? "Export…" : "Exporter fiche liaison (XLSX)"}
           </button>
           <Link to="/patrimoine/rapprochements" className="cockpit-queue-action">
             Rattacher les PCE aux bâtiments <span aria-hidden="true">↗</span>
