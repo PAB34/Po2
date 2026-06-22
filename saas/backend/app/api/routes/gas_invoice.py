@@ -11,6 +11,8 @@ from app.schemas.gas_invoice import (
     GasBpuPriceUpdateIn,
     GasInvoiceDecisionIn,
     GasInvoiceOut,
+    GasNetworkTariffOut,
+    GasNetworkTariffUpdateIn,
 )
 from app.services import gas_invoice as svc
 
@@ -74,6 +76,27 @@ def update_bpu(
 ):
     try:
         return svc.update_bpu(db, row_id, payload.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/network-tariff", response_model=list[GasNetworkTariffOut])
+def list_network_tariffs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return svc.list_network_tariffs(db, current_user.city_id)
+
+
+@router.patch("/network-tariff/{row_id}", response_model=GasNetworkTariffOut)
+def update_network_tariff(
+    row_id: int,
+    payload: GasNetworkTariffUpdateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return svc.update_network_tariff(db, row_id, payload.model_dump(exclude_unset=True))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

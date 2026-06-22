@@ -14,6 +14,7 @@ from app.models.enedis_async import EnedisAsyncJob
 from app.models.gas import GasConsumption, GasPce
 from app.models.gas_bpu import GasBpuPrice
 from app.models.gas_invoice import GasInvoice
+from app.models.gas_network_tariff import GasNetworkTariff
 from app.models.invoice import (
     EnergyAccountingNatureRule,
     EnergyAccountingSiteMapping,

@@ -7,6 +7,7 @@ import {
   exportGasInvoices,
   fetchGasBpu,
   fetchGasInvoices,
+  fetchGasNetworkTariffs,
   fetchGasPortfolio,
   importGasInvoices,
   recomputeGasControls,
@@ -72,6 +73,11 @@ export default function TotalEnergiesGasSection() {
   const bpuQuery = useQuery({
     queryKey: ["gas-bpu"],
     queryFn: () => fetchGasBpu(token!),
+    enabled: !!token,
+  });
+  const networkQuery = useQuery({
+    queryKey: ["gas-network-tariff"],
+    queryFn: () => fetchGasNetworkTariffs(token!),
     enabled: !!token,
   });
 
@@ -187,10 +193,21 @@ export default function TotalEnergiesGasSection() {
           );
         })()}
 
+        {(() => {
+          const nets = (networkQuery.data ?? []).filter((n) => n.atrd_terme_variable_eur_mwh != null);
+          if (nets.length === 0) return null;
+          return (
+            <p className="fct-etat-note">
+              <strong>Barème réseau ATRD/ATRT (« TURPE gaz »)</strong> — terme variable ATRD :{" "}
+              {nets.map((n) => `${n.option} ${n.atrd_terme_variable_eur_mwh} €/MWh`).join(" · ")} ({nets[0].source}).
+            </p>
+          );
+        })()}
+
         <p className="fct-etat-note">
           Contrôle : cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA), <strong>prix fourniture vs BPU
-          Lot 7</strong> (PCE à prix révisable PEG signalés) et <strong>cohérence de l'acheminement ATRD</strong> (taux €/MWh
-          stable par tarif). À venir : barème GRDF absolu et CEE définitifs.
+          Lot 7</strong> (PCE à prix révisable PEG signalés) et <strong>acheminement ATRD vs barème</strong> (référence absolue
+          si renseignée, sinon cohérence par tarif). À compléter : barème CRE T1/T3/T4 + termes fixes et CEE définitifs.
         </p>
       </div>
 

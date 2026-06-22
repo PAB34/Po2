@@ -60,3 +60,21 @@ class GasBpuPriceUpdateIn(BaseModel):
     cee_precarite_ht_mwh: float | None = None
     cpb_ht_mwh: float | None = None
     go_ht_mwh: float | None = None
+
+
+class GasNetworkTariffOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    annee: int
+    option: str
+    atrd_terme_variable_eur_mwh: float | None = None
+    atrd_abonnement_annuel_eur: float | None = None
+    source: str | None = None
+    source_url: str | None = None
+
+
+class GasNetworkTariffUpdateIn(BaseModel):
+    atrd_terme_variable_eur_mwh: float | None = None
+    atrd_abonnement_annuel_eur: float | None = None
+    source: str | None = None

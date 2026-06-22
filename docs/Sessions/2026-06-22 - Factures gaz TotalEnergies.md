@@ -72,7 +72,24 @@ Sur le vrai fichier : taux T2 = **12,08 €/MWh** (dispersion 12,06–12,10, σ=
 = médiane par tarif, écart > 1 €/MWh signalé. Aucun faux positif sur le lot actuel ; prêt à
 détecter les anomalies futures. Implémenté dans `compute_control` (achem_ref calculé sur tout le lot).
 
-## Reste à faire — barème absolu & taxes (données externes)
+## v3 (partie 3) — référentiel ATRD/ATRT en miroir de TURPE (2026-06-22)
+
+Constat utilisateur : ATRD/ATRT = le « TURPE du gaz » (tarif réseau réglementé CRE,
+passthrough). Mise en place d'un référentiel éditable `gas_network_tariffs`
+(migration `0059`) sur le modèle du module TURPE / du BPU gaz : par année et option
+(T1-T4), terme variable ATRD (€/MWh) + abonnement annuel, daté et sourcé CRE.
+
+- Contrôle acheminement passé de « cohérence (médiane observée) » à **référence absolue**
+  quand le barème est renseigné (capte une dérive uniforme qu'une médiane ne verrait pas),
+  avec repli cohérence sinon.
+- Seed : terme variable ATRD T2 2026 = 12,08 €/MWh (dérivé des factures, **à confirmer
+  barème CRE ATRD**). T1/T3/T4 et termes fixes à compléter via `PATCH /api/gas/invoices/network-tariff`.
+- Endpoints `GET/PATCH /api/gas/invoices/network-tariff` ; barème affiché dans la section TotalEnergies.
+
+Note : les termes fixes ATRD/ATRT dépendent de la capacité du PCE (variables d'un PCE à
+l'autre) → restent en cohérence ; seul le terme variable est référencé par option.
+
+## Reste à faire — compléter barème CRE & CEE définitifs
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.

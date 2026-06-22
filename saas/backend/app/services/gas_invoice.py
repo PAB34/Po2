@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.models.gas import GasPce
 from app.models.gas_bpu import GasBpuPrice
 from app.models.gas_invoice import GasInvoice
+from app.models.gas_network_tariff import GasNetworkTariff
 
 # Tolérances de contrôle.
 _TOL_EUR = 0.5
@@ -200,10 +201,27 @@ def acheminement_reference(invoices: list[GasInvoice]) -> dict[str, float]:
     return ref
 
 
+def load_network_tariff(db: Session, city_id: int | None, annee: int) -> dict[str, float]:
+    """Terme variable ATRD (€/MWh) par option pour l'année (référence absolue éditable)."""
+    rows = list(db.execute(
+        select(GasNetworkTariff).where(
+            (GasNetworkTariff.city_id == city_id) | (GasNetworkTariff.city_id.is_(None))
+        )
+    ).scalars())
+    exact = [r for r in rows if r.annee == annee]
+    pool = exact or rows
+    out: dict[str, float] = {}
+    for r in sorted(pool, key=lambda r: (0 if r.city_id == city_id else 1, -r.annee)):
+        if r.option and r.atrd_terme_variable_eur_mwh is not None and r.option not in out:
+            out[r.option] = r.atrd_terme_variable_eur_mwh
+    return out
+
+
 def compute_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
     achem_ref: dict[str, float] | None = None,
+    network_ref: dict[str, float] | None = None,
 ) -> tuple[str, list[dict[str, str]]]:
     issues: list[dict[str, str]] = []
 
@@ -271,22 +289,24 @@ def compute_control(
                     f"CPB {eff:.2f} ≠ BPU {bpu.cpb_ht_mwh:.2f} €/MWh", "review",
                 ))
 
-    # --- Contrôle de cohérence de l'acheminement (ATRD variable, passthrough réglementé) ---
+    # --- Contrôle de l'acheminement (ATRD terme variable) ---
+    # Référence absolue (barème ATRD type TURPE) si disponible, sinon cohérence (médiane observée).
     if (
-        achem_ref
-        and inv.type_detail != "AVOIR"
+        inv.type_detail != "AVOIR"
         and inv.tarif_acheminement
         and inv.atrd_terme_variable is not None
         and inv.total_conso_kwh
     ):
-        ref_rate = achem_ref.get(inv.tarif_acheminement)
+        absolute = (network_ref or {}).get(inv.tarif_acheminement)
+        ref_rate = absolute if absolute is not None else (achem_ref or {}).get(inv.tarif_acheminement)
         if ref_rate:
             rate = inv.atrd_terme_variable / (inv.total_conso_kwh / 1000.0)
             if abs(rate - ref_rate) > _TOL_PU_MWH:
+                origine = "barème ATRD" if absolute is not None else "cohérence"
                 issues.append(_issue(
                     "GAS_ACHEMINEMENT", "Acheminement",
                     f"Taux ATRD variable {rate:.2f} ≠ référence {ref_rate:.2f} €/MWh "
-                    f"(tarif {inv.tarif_acheminement}) — à vérifier", "review",
+                    f"(tarif {inv.tarif_acheminement}, {origine}) — à vérifier", "review",
                 ))
 
     if any(i["severity"] == "invalid" for i in issues):
@@ -309,8 +329,9 @@ def _apply_control(
     inv: GasInvoice,
     bpu: GasBpuPrice | None = None,
     achem_ref: dict[str, float] | None = None,
+    network_ref: dict[str, float] | None = None,
 ) -> None:
-    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref)
+    status, issues = compute_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref)
     inv.control_status = status
     inv.control_issues_json = json.dumps(issues, ensure_ascii=False) if issues else None
 
@@ -388,12 +409,14 @@ def import_invoices(
 def recompute_controls(db: Session, city_id: int | None) -> dict[str, int]:
     out = {"valid": 0, "review": 0, "invalid": 0}
     bpu_cache: dict[int, GasBpuPrice | None] = {}
+    net_cache: dict[int, dict[str, float]] = {}
     invoices = list(db.execute(select(GasInvoice).where(GasInvoice.city_id == city_id)).scalars())
     achem_ref = acheminement_reference(invoices)
     for inv in invoices:
         year = _invoice_year(inv)
         bpu = bpu_cache.setdefault(year, load_gas_bpu(db, city_id, year)) if year else None
-        _apply_control(inv, bpu=bpu, achem_ref=achem_ref)
+        network_ref = net_cache.setdefault(year, load_network_tariff(db, city_id, year)) if year else None
+        _apply_control(inv, bpu=bpu, achem_ref=achem_ref, network_ref=network_ref)
         out[inv.control_status] = out.get(inv.control_status, 0) + 1
     db.commit()
     return out
@@ -513,6 +536,30 @@ def export_xlsx(db: Session, city_id: int | None, mark_transmitted: bool = True)
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def list_network_tariffs(db: Session, city_id: int | None) -> list[GasNetworkTariff]:
+    rows = list(db.execute(
+        select(GasNetworkTariff).where(
+            (GasNetworkTariff.city_id == city_id) | (GasNetworkTariff.city_id.is_(None))
+        )
+    ).scalars())
+    rows.sort(key=lambda r: (-r.annee, r.option))
+    return rows
+
+
+def update_network_tariff(db: Session, row_id: int, fields: dict[str, Any]) -> GasNetworkTariff:
+    row = db.get(GasNetworkTariff, row_id)
+    if row is None:
+        raise ValueError("Ligne barème réseau introuvable.")
+    for key in ("atrd_terme_variable_eur_mwh", "atrd_abonnement_annuel_eur"):
+        if key in fields and fields[key] is not None:
+            setattr(row, key, float(fields[key]))
+    if fields.get("source"):
+        row.source = str(fields["source"])
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def set_decision(db: Session, city_id: int | None, invoice_id: int, decision_status: str, comment: str | None) -> GasInvoice:
