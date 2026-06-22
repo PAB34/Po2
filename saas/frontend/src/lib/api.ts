@@ -4942,3 +4942,20 @@ export async function exportGasInvoices(token: string): Promise<Blob> {
   }
   return response.blob();
 }
+
+export type GasNetworkTariff = {
+  id: number;
+  annee: number;
+  option: string;
+  atrd_terme_variable_eur_mwh: number | null;
+  atrd_abonnement_annuel_eur: number | null;
+  source: string | null;
+  source_url: string | null;
+};
+
+export async function fetchGasNetworkTariffs(token: string): Promise<GasNetworkTariff[]> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/network-tariff`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GasNetworkTariff[]>(response);
+}
