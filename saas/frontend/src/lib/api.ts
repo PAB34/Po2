@@ -4720,3 +4720,95 @@ export async function fetchGrdfReconcileP1(token: string, year: number): Promise
   });
   return parseResponse<GrdfP1ReconcileItem[]>(response);
 }
+
+// ---------------------------------------------------------------------------
+// Rapprochement patrimoine (PO2-PAT-003) — boîte de réconciliation compteurs ↔ patrimoine
+// ---------------------------------------------------------------------------
+
+export type PatrimoineMatchItem = {
+  id: number;
+  source: string;
+  external_id: string;
+  label: string | null;
+  candidate_target_type: string | null;
+  candidate_target_id: number | null;
+  candidate_label: string | null;
+  candidate_score: number | null;
+  candidate_reason: string | null;
+  status: string;
+  resolved_target_type: string | null;
+  resolved_target_id: number | null;
+  notes: string | null;
+  updated_at: string | null;
+};
+
+export type PatrimoineMatchCounts = Record<string, number>;
+
+export type PatrimoineTarget = {
+  target_type: string;
+  target_id: number;
+  label: string;
+};
+
+export async function fetchPatrimoineMatches(
+  token: string,
+  params: { source?: string; status?: string } = {},
+): Promise<PatrimoineMatchItem[]> {
+  const qs = new URLSearchParams();
+  if (params.source) qs.set("source", params.source);
+  if (params.status) qs.set("status", params.status);
+  const suffix = qs.toString();
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches${suffix ? `?${suffix}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PatrimoineMatchItem[]>(response);
+}
+
+export async function fetchPatrimoineMatchCounts(token: string): Promise<PatrimoineMatchCounts> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches/counts`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PatrimoineMatchCounts>(response);
+}
+
+export async function searchPatrimoineTargets(token: string, query: string): Promise<PatrimoineTarget[]> {
+  const qs = new URLSearchParams({ q: query });
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches/targets?${qs.toString()}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<PatrimoineTarget[]>(response);
+}
+
+export async function collectPatrimoineMatches(token: string): Promise<Record<string, number>> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches/collect`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<Record<string, number>>(response);
+}
+
+export async function bulkLinkPatrimoineMatches(token: string, minScore = 90): Promise<{ linked: number }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches/bulk-link?min_score=${minScore}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ linked: number }>(response);
+}
+
+export async function updatePatrimoineMatch(
+  token: string,
+  itemId: number,
+  payload: {
+    status: string;
+    resolved_target_type?: string | null;
+    resolved_target_id?: number | null;
+    notes?: string | null;
+  },
+): Promise<PatrimoineMatchItem> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/matches/${itemId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<PatrimoineMatchItem>(response);
+}
