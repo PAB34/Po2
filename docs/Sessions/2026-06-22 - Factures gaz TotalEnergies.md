@@ -64,7 +64,15 @@ CEE 3,89 · CEE précarité 3,06 · CPB 0,41 · GO 16,25 (€ HT/MWh) — identi
   avec TOTAL) et horodate la transmission (`finance_exported_at`). Bouton dans la section TotalEnergies.
 - Validé staging : XLSX 2 feuilles, 58 factures, total 22 717 € HT / 257 418 kWh.
 
-## Reste à faire — acheminement & taxes (données externes)
+## v3 (partie 2) livré — contrôle cohérence acheminement (2026-06-22)
+
+Pas de barème ATRD/ATRT GRDF dans le repo (dossier GRDF = API ADICT only) → contrôle de
+cohérence sans donnée externe : le taux ATRD variable (€/MWh) doit être stable par tarif.
+Sur le vrai fichier : taux T2 = **12,08 €/MWh** (dispersion 12,06–12,10, σ=0,01) → référence
+= médiane par tarif, écart > 1 €/MWh signalé. Aucun faux positif sur le lot actuel ; prêt à
+détecter les anomalies futures. Implémenté dans `compute_control` (achem_ref calculé sur tout le lot).
+
+## Reste à faire — barème absolu & taxes (données externes)
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.

@@ -188,9 +188,9 @@ export default function TotalEnergiesGasSection() {
         })()}
 
         <p className="fct-etat-note">
-          Contrôle : cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA) <strong>+ prix fourniture vs BPU
-          Lot 7</strong> (les PCE à prix révisable PEG sont signalés « à contrôler »). À venir : acheminement ATRD/ATRT
-          (barème réglementé GRDF) et CEE définitifs.
+          Contrôle : cohérence (prix×kWh, somme = HT, HT+TVA = TTC, conversion m³→kWh, TVA), <strong>prix fourniture vs BPU
+          Lot 7</strong> (PCE à prix révisable PEG signalés) et <strong>cohérence de l'acheminement ATRD</strong> (taux €/MWh
+          stable par tarif). À venir : barème GRDF absolu et CEE définitifs.
         </p>
       </div>
 
