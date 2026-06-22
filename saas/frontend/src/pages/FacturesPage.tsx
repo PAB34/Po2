@@ -5,6 +5,7 @@ import { fetchCpeFinanceInvoices, fetchCpeMarketTracking, fetchEnergyInvoiceImpo
 import type { EnergyInvoiceImport } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 import EnergieAccountingMatrix from "../components/EnergieAccountingMatrix";
+import TotalEnergiesGasSection from "../components/TotalEnergiesGasSection";
 import { EnergieInvoicesPage, type SupplierKey } from "./EnergieInvoicesPage";
 
 type Market = "herault" | "dalkia" | "spie";
@@ -420,17 +421,7 @@ function HeraultSection() {
       {sub === "etat" ? (
         <HeraultEtatLoader onSelectSupplier={setSub} />
       ) : sub === "TOTALENERGIES" ? (
-        <div className="fct-etat">
-          <div className="fct-etat-head">
-            <strong>TotalEnergies - gaz batiments</strong>
-            <span className="cockpit-badge cockpit-badge--neutral">a preparer</span>
-          </div>
-          <p className="fct-etat-note">
-            Cette sous-section doit controler les factures gaz du marche Herault Energie avec les PCE, les releves GRDF
-            et le BPU gaz lot 7. Le moteur de prix gaz est documente, mais la page facture gaz ne doit pas etre ouverte
-            tant que le parser et le rapprochement PCE ne sont pas finalises.
-          </p>
-        </div>
+        <TotalEnergiesGasSection />
       ) : (
         <div className="fct-embed">
           <EnergieInvoicesPage supplierFilter={sub} />

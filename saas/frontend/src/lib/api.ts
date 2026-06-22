@@ -4812,3 +4812,103 @@ export async function updatePatrimoineMatch(
   });
   return parseResponse<PatrimoineMatchItem>(response);
 }
+
+// ---------------------------------------------------------------------------
+// Factures gaz TotalEnergies (marché Hérault Énergie) — contrôle v1
+// ---------------------------------------------------------------------------
+
+export type GasInvoice = {
+  id: number;
+  num_facture: string;
+  type_detail: string | null;
+  date_comptable: string | null;
+  date_echeance: string | null;
+  pce: string;
+  nom_site: string | null;
+  lib_regroupement: string | null;
+  adresse: string | null;
+  ville: string | null;
+  classe_conso: string | null;
+  tarif_acheminement: string | null;
+  debut_conso: string | null;
+  fin_conso: string | null;
+  prix_conso_gaz: number | null;
+  montant_conso_gaz: number | null;
+  total_hors_tva: number | null;
+  total_ttc: number | null;
+  total_conso_kwh: number | null;
+  total_conso_m3: number | null;
+  building_id: number | null;
+  control_status: string;
+  control_issues_json: string | null;
+  decision_status: string;
+  decision_comment: string | null;
+};
+
+export type GasInvoiceIssue = { code: string; family: string; message: string; severity: string };
+
+export type GasPortfolioSite = { site: string; pce: string; count: number; ht: number; kwh: number; linked: boolean };
+
+export type GasPortfolio = {
+  count: number;
+  total_ht: number;
+  total_ttc: number;
+  total_kwh: number;
+  by_control: Record<string, number>;
+  by_decision: Record<string, number>;
+  by_site: GasPortfolioSite[];
+};
+
+export async function fetchGasInvoices(
+  token: string,
+  params: { control_status?: string; decision_status?: string } = {},
+): Promise<GasInvoice[]> {
+  const qs = new URLSearchParams();
+  if (params.control_status) qs.set("control_status", params.control_status);
+  if (params.decision_status) qs.set("decision_status", params.decision_status);
+  const suffix = qs.toString();
+  const response = await fetch(`${apiBaseUrl}/gas/invoices${suffix ? `?${suffix}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GasInvoice[]>(response);
+}
+
+export async function fetchGasPortfolio(token: string): Promise<GasPortfolio> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/portfolio`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<GasPortfolio>(response);
+}
+
+export async function importGasInvoices(token: string, file: File, forceUpdate = false): Promise<Record<string, unknown>> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/import?force_update=${forceUpdate}`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: form,
+  });
+  return parseResponse<Record<string, unknown>>(response);
+}
+
+export async function recomputeGasControls(token: string): Promise<Record<string, number>> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/recompute`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<Record<string, number>>(response);
+}
+
+export async function setGasInvoiceDecision(
+  token: string,
+  invoiceId: number,
+  decisionStatus: string,
+  comment?: string | null,
+): Promise<GasInvoice> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/${invoiceId}/decision`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ decision_status: decisionStatus, comment: comment ?? null }),
+  });
+  return parseResponse<GasInvoice>(response);
+}
