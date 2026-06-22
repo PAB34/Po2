@@ -104,7 +104,15 @@ Grille ATRD 7 GRDF au 1er juillet 2025 (valable jusqu'au 30/06/2026) récupéré
 Source : CRE délibération 2025-122. Contrôle terme variable ATRD désormais absolu sur T1-T4.
 Abonnement annuel stocké (186,12/12 = 15,51 €/mois = terme fixe ATRD facturé sur mois plein).
 
-## Reste à faire — termes fixes prorata & CEE définitifs
+## v3 (partie 5) — contrôle terme fixe ATRD proraté (2026-06-22)
+
+Règle de prorata GRDF identifiée sur les factures : terme fixe ATRD = abonnement/12 par
+mois plein, proraté par jours sur les mois partiels (ex. 15,51 × 18/28 = 9,97 pour 18 j de
+février ; 186,12/12 = 15,51 sur mois plein). Implémenté `_prorated_atrd_fixe` + contrôle
+absolu vs abonnement CRE (tolérance 0,20 €). Aucun faux positif sur le lot réel.
+Contrôle acheminement ATRD désormais complet : terme variable + terme fixe.
+
+## Reste — ATRT (transport, dépend du PCE) & CEE définitifs
 
 Nécessite de charger les **barèmes de référence** :
 1. **BPU gaz lot 7 TotalEnergies** (prix conso par classe + abonnement) -> contrôle `PRIX CONSO GAZ`.
