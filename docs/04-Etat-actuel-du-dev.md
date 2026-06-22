@@ -1,4 +1,14 @@
 # État actuel du développement
+> **Mise a jour complementaire** : 2026-06-22 (factures gaz TotalEnergies — contrôle v1)
+> Nouveau module gaz dedie : import + controle de coherence des factures gaz TotalEnergies
+> (marche Herault Energie). Backend `gas_invoices` (migration 0057), `services/gas_invoice.py`
+> (parser xlsx + controles prix×kWh / Σ=HT / HT+TVA=TTC / conversion m³→kWh / TVA), endpoints
+> `/api/gas/invoices/*`. Frontend : onglet Factures marche > Herault Energie > TotalEnergies
+> (import, portefeuille, table par site/PCE, controle, decision). L'import alimente `gas_pces`
+> -> boite de rapprochement (rattachement PCE→batiment). Valide sur staging contre le vrai
+> fichier : 58 factures, 22 717 € HT / 257 418 kWh, 10 PCE crees. v2 = controle prix (BPU gaz
+> lot 7, ATRD/ATRT, TICGN). Detail : `[[Sessions/2026-06-22 - Factures gaz TotalEnergies]]`.
+>
 > **Mise a jour complementaire** : 2026-06-22 (boite de rapprochement patrimoine — PO2-PAT-003 v1)
 > Nouveau : file de rapprochement compteurs externes -> referentiel Site/Batiment.
 > Backend : `patrimoine_match_items` (migration 0056), `services/patrimoine_match.py`,
