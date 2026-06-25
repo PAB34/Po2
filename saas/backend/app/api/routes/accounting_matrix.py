@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -20,6 +20,7 @@ from app.schemas.accounting_matrix import (
     InvoiceAccountingSnapshotOut,
 )
 from app.services import accounting_matrix as svc
+from app.services import accounting_matrix_xlsx as xlsx_svc
 
 router = APIRouter(prefix="/accounting-matrices", tags=["accounting-matrices"])
 
@@ -117,6 +118,62 @@ def archive_version(
 ):
     try:
         return svc.archive_version(db, current_user.city_id, version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Import / export XLSX (doc 35 §5)
+# ---------------------------------------------------------------------------
+@router.get("/versions/{version_id}/export.xlsx")
+def export_version_xlsx(
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        content, filename = xlsx_svc.export_version_xlsx(db, current_user.city_id, version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/contracts/{contract_id}/import-preview")
+async def import_preview(
+    contract_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Charge un XLSX et renvoie les différences vs la version de référence,
+    sans rien écrire. Le commit crée ensuite une version brouillon."""
+    raw = await file.read()
+    try:
+        return xlsx_svc.preview_import(db, current_user.city_id, contract_id, raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/contracts/{contract_id}/import-commit", response_model=AccountingMatrixVersionOut, status_code=201)
+async def import_commit(
+    contract_id: int,
+    version_label: str = Query(..., min_length=1),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crée une nouvelle version brouillon depuis le classeur. N'altère jamais
+    une version active."""
+    raw = await file.read()
+    try:
+        return xlsx_svc.commit_import(
+            db, current_user.city_id, contract_id, raw,
+            version_label=version_label, user_id=current_user.id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
