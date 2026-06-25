@@ -368,3 +368,20 @@ Le backend des matrices est désormais **complet et mergé dans `main`** (CI ver
 - **#28** : moteur d'imputation `apply_matrix` + cycle de vie des snapshots immuables (`apply`/`validate-snapshot`/`manual-override`/`export-finance`), dédoublonnage et contrôle de ventilation, avec tests.
 
 Côté raccordement frontend (objet de ce plan 37) : `/refonte-v1/factures` peut maintenant viser `/api/accounting-matrices/*` à la place de la synthèse transitoire `useAccountingMatricesV1`. Prérequis : faire atterrir le labo React V1 (aujourd'hui sur la branche `wip/codex-2026-06-25`) dans `main`, puis brancher l'écran sur les endpoints réels.
+
+
+## Avancement frontend : premier raccordement réel matrices - 2026-06-25
+
+Branche `feat/frontend-react-v1` (PR #30, en validation staging avant merge).
+
+1. **Reprise du labo React V1** depuis `wip/codex-2026-06-25` (design-system, `AppShellV1`, pages cockpit/factures/fluides/sites sous `/refonte-v1*`), build CI vert.
+2. **Premier écran connecté au vrai backend** (pas de mock) : `MatrixAdminPageV1` (`/refonte-v1/matrices`) consomme `/api/accounting-matrices/*`.
+   - `src/lib/api.ts` : client `fetchAccountingMatrixContracts` / `fetchAccountingMatrixContract` / `fetchAccountingMatrixVersionRules` / `seedAccountingMatrices` + types.
+   - `src/features/matrices/` : hooks React Query + page (liste contrats → drawer versions → règles, bouton seed idempotent).
+   - route + entrée de navigation labo.
+
+Validation : build CI (TypeScript + Vite) vert ; déployé sur staging ; testé de bout en bout côté backend sur la copie prod (7 matrices DALKIA, city_id 303). `main` non touché tant que la revue visuelle n'est pas faite.
+
+Méthode retenue (validée avec l'utilisateur) : on **valide chaque tranche frontend sur staging avant de merger dans `main`** (le staging sert exactement à ça).
+
+Suite : revue visuelle utilisateur → merge PR #30 ; puis brancher `/refonte-v1/factures` sur l'API matrices (remplacer `useAccountingMatricesV1`), et faire atterrir les autres pages du labo (cockpit/fluides/sites) tranche par tranche.

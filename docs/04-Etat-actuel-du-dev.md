@@ -9,6 +9,14 @@
 > budget initial et atterrissage global non modelises ; inventaire CVC sans PPT chiffre consolide ; referentiel
 > generique de contrats et matrice de couverture absents ; SPIE a cadrer depuis ses pieces reelles.
 >
+> **Mise a jour complementaire** : 2026-06-25 (frontend — premier écran connecté à l'API matrices)
+> Branche `feat/frontend-react-v1` (PR #30, en validation staging avant merge, `main` non touché). Reprise du labo
+> React V1 de Codex (`/refonte-v1*`) puis ajout du premier écran branché sur le vrai backend : `/refonte-v1/matrices`
+> (`MatrixAdminPageV1`) consomme `/api/accounting-matrices/*` via un client `lib/api.ts` + hooks React Query (liste
+> contrats → versions → règles, bouton seed). Build CI vert, déployé sur staging, testé bout-en-bout côté backend
+> (7 matrices DALKIA, Sète city_id 303). Convention adoptée : valider chaque tranche frontend sur staging avant
+> merge. Détail : [[37-Plan-migration-React-refonte-V1]] et [[Sessions/2026-06-25 - Socle React V1]].
+>
 > **Mise a jour complementaire** : 2026-06-25 (backend matrices comptables versionnées — COMPLET, mergé `main`)
 > Le backend des matrices comptables versionnées est livré et mergé dans `main` en trois PR (CI verte) :
 > #26 schéma + service + router + seed + ADR [[Decisions/010-matrices-comptables-versionnees]] ; #27 import/export

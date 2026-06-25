@@ -190,3 +190,24 @@ Validation : `python -m py_compile` OK. Import runtime FastAPI et migration Alem
 ## État backend matrices : COMPLET
 
 Les 3 PR (#26/#27/#28) sont mergées dans `main`, CI verte. Restent en intégration : brancher les extracteurs réels de lignes facture par source sur `apply` ; droits par rôle (doc 35 §6) ; faire atterrir le labo React V1 (`wip/codex-2026-06-25`) dans `main` puis brancher `/refonte-v1/factures` sur `/api/accounting-matrices/*`.
+
+## Réconciliation vault (PR #29, mergée)
+
+Tout le vault Codex (docs 17→38, contrats d'écran, sessions, prototype, branding) + statut matrices à jour ont été mergés dans `main` (docs uniquement, code Codex laissé sur `wip/codex-2026-06-25`).
+
+## Extension : frontend — premier écran connecté à l'API matrices (PR #30, draft)
+
+Branche `feat/frontend-react-v1`. Méthode : valider sur staging avant merge `main`.
+
+- Reprise du labo React V1 de Codex (`/refonte-v1*`), build CI vert.
+- `src/lib/api.ts` : client `/api/accounting-matrices` (contracts, détail, règles, seed) + types.
+- `src/features/matrices/` : hooks React Query + `MatrixAdminPageV1` (liste contrats → drawer versions → règles, bouton seed).
+- route `/refonte-v1/matrices` + nav labo (`navigationV1` + mapping `AppShellV1`).
+- Build CI vert (TS + Vite) ; déployé sur staging ; backend testé bout-en-bout (7 matrices DALKIA, city_id 303).
+
+### Handoff frontend
+
+1. Revue visuelle utilisateur sur staging `/refonte-v1/matrices` (compte rattaché à Sète 303 pour voir les données).
+2. Si OK → marquer PR #30 ready → merge `main`.
+3. Ensuite : brancher `/refonte-v1/factures` sur l'API matrices (remplacer `useAccountingMatricesV1`), puis porter cockpit/fluides/sites tranche par tranche.
+4. Données/artefacts (`outputs/`, `saas/energie/…`) restent à gitignorer avant tout commit.
