@@ -4960,3 +4960,79 @@ export async function fetchGasNetworkTariffs(token: string): Promise<GasNetworkT
   });
   return parseResponse<GasNetworkTariff[]>(response);
 }
+
+// ---------------------------------------------------------------------------
+// Matrices comptables versionnées (/api/accounting-matrices/*)
+// ---------------------------------------------------------------------------
+export type AccountingMatrixVersionV1 = {
+  id: number;
+  matrix_contract_id: number;
+  version_label: string;
+  status: string;
+  source: string;
+  rules_count: number;
+  effective_from: string | null;
+  effective_to: string | null;
+  validated_at: string | null;
+};
+
+export type AccountingMatrixContractV1 = {
+  id: number;
+  domain: string;
+  supplier: string;
+  contract_code: string | null;
+  contract_label: string | null;
+  lot_label: string | null;
+  status: string;
+  active_version_id: number | null;
+  active_version_label: string | null;
+  versions_count: number;
+};
+
+export type AccountingMatrixContractDetailV1 = AccountingMatrixContractV1 & {
+  versions: AccountingMatrixVersionV1[];
+};
+
+export type AccountingMatrixRuleV1 = {
+  id: number;
+  matrix_version_id: number;
+  stable_rule_key: string;
+  scope: string;
+  site_code: string | null;
+  meter_id: string | null;
+  billed_item_pattern: string | null;
+  accounting_service: string | null;
+  accounting_function: string | null;
+  accounting_antenna: string | null;
+  operation_number: string | null;
+  accounting_nature: string | null;
+  accounting_label: string | null;
+  allocation_percent: number;
+  is_active: boolean;
+};
+
+export type AccountingMatrixSeedResultV1 = {
+  energy: { contracts_created: number; contracts_skipped: number; rules: number };
+  cpe: { contracts_created: number; contracts_skipped: number; rules: number };
+  versions_created: number;
+};
+
+export async function fetchAccountingMatrixContracts(token: string): Promise<AccountingMatrixContractV1[]> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/contracts`, { headers: buildHeaders(token) });
+  return parseResponse<AccountingMatrixContractV1[]>(response);
+}
+
+export async function fetchAccountingMatrixContract(token: string, contractId: number): Promise<AccountingMatrixContractDetailV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/contracts/${contractId}`, { headers: buildHeaders(token) });
+  return parseResponse<AccountingMatrixContractDetailV1>(response);
+}
+
+export async function fetchAccountingMatrixVersionRules(token: string, versionId: number): Promise<AccountingMatrixRuleV1[]> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/versions/${versionId}/rules`, { headers: buildHeaders(token) });
+  return parseResponse<AccountingMatrixRuleV1[]>(response);
+}
+
+export async function seedAccountingMatrices(token: string): Promise<AccountingMatrixSeedResultV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/seed`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<AccountingMatrixSeedResultV1>(response);
+}

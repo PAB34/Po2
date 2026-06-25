@@ -9,7 +9,7 @@ export function AppShellV1({ children, profile = "direction", userLabel, onProfi
   const location = useLocation();
   const labTo = (key: string, to: string) => {
     if (!routePrefix) return to;
-    const mapped: Record<string, string> = { cockpit: routePrefix, invoices: `${routePrefix}/factures`, fluids: `${routePrefix}/fluides`, sites: `${routePrefix}/sites` };
+    const mapped: Record<string, string> = { cockpit: routePrefix, invoices: `${routePrefix}/factures`, matrices: `${routePrefix}/matrices`, fluids: `${routePrefix}/fluides`, sites: `${routePrefix}/sites` };
     return mapped[key] ?? to;
   };
   return (
