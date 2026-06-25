@@ -17,9 +17,12 @@ from app.schemas.accounting_matrix import (
     AccountingMatrixSeedOut,
     AccountingMatrixVersionCreateIn,
     AccountingMatrixVersionOut,
+    ApplyInvoiceIn,
     InvoiceAccountingSnapshotOut,
+    ManualOverrideIn,
 )
 from app.services import accounting_matrix as svc
+from app.services import accounting_matrix_apply as apply_svc
 from app.services import accounting_matrix_xlsx as xlsx_svc
 
 router = APIRouter(prefix="/accounting-matrices", tags=["accounting-matrices"])
@@ -220,7 +223,7 @@ def update_rule(
 
 
 # ---------------------------------------------------------------------------
-# Snapshot facture (lecture seule)
+# Snapshot facture : lecture + application / cycle de vie
 # ---------------------------------------------------------------------------
 @router.get(
     "/invoices/{source}/{invoice_id}/snapshot",
@@ -236,3 +239,76 @@ def get_invoice_snapshot(
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Aucun snapshot comptable pour cette facture.")
     return snapshot
+
+
+@router.post("/invoices/{source}/{invoice_id}/apply", response_model=InvoiceAccountingSnapshotOut)
+def apply_matrix_to_invoice(
+    source: str,
+    invoice_id: str,
+    payload: ApplyInvoiceIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Produit une proposition d'imputation depuis la version active du contrat
+    matrice. N'écrase pas un snapshot déjà figé."""
+    lines = [
+        apply_svc.InvoiceLine(
+            billed_item=l.billed_item, site_code=l.site_code, meter_id=l.meter_id,
+            amount=l.amount, line_ref=l.line_ref,
+        )
+        for l in payload.invoice_lines
+    ]
+    try:
+        return apply_svc.apply_to_invoice(
+            db, current_user.city_id, source=source, invoice_id=invoice_id,
+            contract_id=payload.matrix_contract_id, lines=lines,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/invoices/{source}/{invoice_id}/validate-snapshot", response_model=InvoiceAccountingSnapshotOut)
+def validate_invoice_snapshot(
+    source: str,
+    invoice_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return apply_svc.validate_snapshot(
+            db, current_user.city_id, source=source, invoice_id=invoice_id, user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/invoices/{source}/{invoice_id}/manual-override", response_model=InvoiceAccountingSnapshotOut)
+def manual_override_snapshot(
+    source: str,
+    invoice_id: str,
+    payload: ManualOverrideIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return apply_svc.manual_override(
+            db, current_user.city_id, source=source, invoice_id=invoice_id,
+            snapshot_json=payload.snapshot_json, motif=payload.motif, user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/invoices/{source}/{invoice_id}/export-finance", response_model=InvoiceAccountingSnapshotOut)
+def export_invoice_finance(
+    source: str,
+    invoice_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return apply_svc.export_finance(
+            db, current_user.city_id, source=source, invoice_id=invoice_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
