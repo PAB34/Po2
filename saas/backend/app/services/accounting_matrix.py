@@ -1,0 +1,486 @@
+"""Service des matrices comptables versionnées (doc 38).
+
+Cette couche concentre les invariants métier du référentiel versionné :
+
+- une seule version ``active`` par contrat matrice ;
+- une version active n'est jamais modifiée en place : on crée une nouvelle
+  version (éventuellement clonée) puis on l'active explicitement ;
+- une version déjà appliquée à une facture (snapshot) ne peut pas être
+  supprimée ;
+- les règles ne sont modifiables que tant que leur version n'est pas active.
+"""
+from __future__ import annotations
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.accounting_matrix import (
+    AccountingMatrixContract,
+    AccountingMatrixRule,
+    AccountingMatrixVersion,
+    InvoiceAccountingSnapshot,
+)
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping
+from app.models.invoice import EnergyAccountingNatureRule, EnergyAccountingSiteMapping
+
+_RULE_COPY_FIELDS = (
+    "stable_rule_key",
+    "scope",
+    "site_code",
+    "building_id",
+    "meter_id",
+    "billed_item_pattern",
+    "supplier_item_code",
+    "accounting_service",
+    "accounting_function",
+    "accounting_antenna",
+    "operation_number",
+    "accounting_nature",
+    "accounting_label",
+    "allocation_percent",
+    "priority",
+    "is_active",
+    "comment",
+)
+
+
+# ---------------------------------------------------------------------------
+# Contrats matrice
+# ---------------------------------------------------------------------------
+def list_contracts(
+    db: Session,
+    city_id: int | None,
+    *,
+    domain: str | None = None,
+    supplier: str | None = None,
+) -> list[dict]:
+    stmt = (
+        select(AccountingMatrixContract)
+        .where(AccountingMatrixContract.city_id == city_id)
+        .options(selectinload(AccountingMatrixContract.versions))
+        .order_by(AccountingMatrixContract.supplier, AccountingMatrixContract.contract_code)
+    )
+    if domain:
+        stmt = stmt.where(AccountingMatrixContract.domain == domain)
+    if supplier:
+        stmt = stmt.where(AccountingMatrixContract.supplier == supplier)
+    contracts = db.execute(stmt).scalars().all()
+    return [_contract_summary(c) for c in contracts]
+
+
+def get_contract(db: Session, city_id: int | None, contract_id: int) -> dict:
+    contract = _require_contract(db, city_id, contract_id)
+    summary = _contract_summary(contract)
+    summary["versions"] = [_version_out(v) for v in contract.versions]
+    return summary
+
+
+def create_contract(db: Session, city_id: int | None, payload) -> dict:
+    contract = AccountingMatrixContract(
+        city_id=city_id,
+        domain=payload.domain,
+        supplier=payload.supplier,
+        contract_code=payload.contract_code,
+        contract_label=payload.contract_label,
+        lot_label=payload.lot_label,
+        starts_on=payload.starts_on,
+        ends_on=payload.ends_on,
+        contact_name=payload.contact_name,
+        contact_email=payload.contact_email,
+        status=payload.status,
+    )
+    db.add(contract)
+    db.commit()
+    db.refresh(contract)
+    return _contract_summary(contract)
+
+
+def update_contract(db: Session, city_id: int | None, contract_id: int, payload) -> dict:
+    contract = _require_contract(db, city_id, contract_id)
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(contract, field, value)
+    db.commit()
+    db.refresh(contract)
+    return _contract_summary(contract)
+
+
+# ---------------------------------------------------------------------------
+# Versions
+# ---------------------------------------------------------------------------
+def create_version(
+    db: Session, city_id: int | None, contract_id: int, payload, *, user_id: int | None
+) -> dict:
+    contract = _require_contract(db, city_id, contract_id)
+
+    if payload.status == "active":
+        raise ValueError("Une version est créée en brouillon/candidate puis activée explicitement.")
+
+    version = AccountingMatrixVersion(
+        matrix_contract_id=contract.id,
+        version_label=payload.version_label,
+        status=payload.status or "draft",
+        effective_from=payload.effective_from,
+        effective_to=payload.effective_to,
+        source=payload.source or "manuel",
+        created_by_user_id=user_id,
+    )
+    db.add(version)
+    db.flush()
+
+    if payload.clone_from_version_id is not None:
+        source_version = _require_version(db, city_id, payload.clone_from_version_id)
+        if source_version.matrix_contract_id != contract.id:
+            raise ValueError("La version source n'appartient pas à ce contrat matrice.")
+        for rule in source_version.rules:
+            db.add(_clone_rule(rule, version.id))
+
+    db.commit()
+    db.refresh(version)
+    return _version_out(version)
+
+
+def activate_version(db: Session, city_id: int | None, version_id: int, *, user_id: int | None) -> dict:
+    version = _require_version(db, city_id, version_id)
+    if version.status == "archived":
+        raise ValueError("Une version archivée ne peut pas être activée.")
+
+    # Désactiver l'ancienne version active sans la supprimer (archivage).
+    current_active = db.execute(
+        select(AccountingMatrixVersion).where(
+            AccountingMatrixVersion.matrix_contract_id == version.matrix_contract_id,
+            AccountingMatrixVersion.status == "active",
+            AccountingMatrixVersion.id != version.id,
+        )
+    ).scalars().all()
+    for previous in current_active:
+        previous.status = "archived"
+
+    version.status = "active"
+    version.validated_by_user_id = user_id
+    version.validated_at = func.now()
+    db.commit()
+    db.refresh(version)
+    return _version_out(version)
+
+
+def archive_version(db: Session, city_id: int | None, version_id: int) -> dict:
+    version = _require_version(db, city_id, version_id)
+    if version.status == "active":
+        raise ValueError("Activez d'abord une autre version : une version active ne s'archive pas directement.")
+    version.status = "archived"
+    db.commit()
+    db.refresh(version)
+    return _version_out(version)
+
+
+def list_version_rules(db: Session, city_id: int | None, version_id: int) -> list[AccountingMatrixRule]:
+    version = _require_version(db, city_id, version_id)
+    return list(version.rules)
+
+
+# ---------------------------------------------------------------------------
+# Règles
+# ---------------------------------------------------------------------------
+def create_rule(db: Session, city_id: int | None, version_id: int, payload) -> AccountingMatrixRule:
+    version = _require_version(db, city_id, version_id)
+    if version.status in ("active", "archived"):
+        raise ValueError(
+            "Les règles ne sont éditables que sur une version brouillon/candidate. "
+            "Créez une nouvelle version pour faire évoluer une matrice active."
+        )
+    rule = AccountingMatrixRule(matrix_version_id=version.id, **payload.model_dump())
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+def update_rule(db: Session, city_id: int | None, rule_id: int, payload) -> AccountingMatrixRule:
+    rule = db.get(AccountingMatrixRule, rule_id)
+    if rule is None:
+        raise ValueError("Règle introuvable.")
+    version = _require_version(db, city_id, rule.matrix_version_id)
+    if version.status in ("active", "archived"):
+        raise ValueError(
+            "Une règle d'une version active ou archivée ne peut pas être modifiée en place. "
+            "Créez une nouvelle version clonée pour la faire évoluer."
+        )
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(rule, field, value)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+# ---------------------------------------------------------------------------
+# Snapshot facture (lecture seule pour la tranche minimale)
+# ---------------------------------------------------------------------------
+def get_invoice_snapshot(
+    db: Session, city_id: int | None, source: str, invoice_id: str
+) -> InvoiceAccountingSnapshot | None:
+    return db.execute(
+        select(InvoiceAccountingSnapshot).where(
+            InvoiceAccountingSnapshot.city_id == city_id,
+            InvoiceAccountingSnapshot.invoice_source == source,
+            InvoiceAccountingSnapshot.invoice_id == invoice_id,
+        )
+    ).scalars().first()
+
+
+# ---------------------------------------------------------------------------
+# Seed depuis les codifications existantes (doc 38, étape 3)
+# ---------------------------------------------------------------------------
+SEED_VERSION_LABEL = "V0 - migration existant"
+
+
+def seed_from_existing(db: Session, city_id: int | None, *, user_id: int | None) -> dict:
+    """Crée des matrices versionnées en `draft` depuis les tables à plat.
+
+    Choix de regroupement (validé avec l'utilisateur le 2026-06-25) :
+
+    - Énergie : une matrice par fournisseur (`domain=fluides`). Les règles de
+      nature suivent leur `supplier` ; les mappings PRM->axes (non rattachés à
+      un fournisseur dans l'existant) sont dupliqués dans chaque matrice énergie.
+    - CPE DALKIA : une matrice par `contract_code` (`domain=cpe`). Les mappings
+      site->axes (sans `contract_code`) sont dupliqués dans chaque matrice CPE.
+
+    Idempotent : une matrice déjà présente (même clé contrat) est ignorée.
+    Aucune version n'est activée : la validation reste un acte explicite.
+    """
+    energy = _seed_energy(db, city_id, user_id=user_id)
+    cpe = _seed_cpe(db, city_id, user_id=user_id)
+    db.commit()
+    return {
+        "energy": energy,
+        "cpe": cpe,
+        "versions_created": energy["contracts_created"] + cpe["contracts_created"],
+    }
+
+
+def _seed_energy(db: Session, city_id: int | None, *, user_id: int | None) -> dict:
+    nature_rules = db.execute(
+        select(EnergyAccountingNatureRule).where(EnergyAccountingNatureRule.city_id == city_id)
+    ).scalars().all()
+    site_mappings = db.execute(
+        select(EnergyAccountingSiteMapping).where(EnergyAccountingSiteMapping.city_id == city_id)
+    ).scalars().all()
+
+    suppliers = sorted({(r.supplier or "INCONNU").strip() for r in nature_rules})
+    created = skipped = rules_count = 0
+
+    for supplier in suppliers:
+        if _contract_exists(db, city_id, domain="fluides", supplier=supplier, contract_code=None, lot_label=None):
+            skipped += 1
+            continue
+        version = _new_seed_contract_version(
+            db, city_id, domain="fluides", supplier=supplier,
+            contract_label=f"Fourniture {supplier} (migration codification énergie)", user_id=user_id,
+        )
+        # Règles de nature pour ce fournisseur.
+        for r in (x for x in nature_rules if (x.supplier or "INCONNU").strip() == supplier):
+            db.add(AccountingMatrixRule(
+                matrix_version_id=version.id,
+                stable_rule_key=_key("energy", "nature", r.market, r.billed_item, r.frequency),
+                scope="billed_item",
+                billed_item_pattern=r.billed_item,
+                accounting_nature=r.accounting_nature,
+                accounting_label=r.accounting_label,
+                is_active=r.active,
+                comment=r.notes,
+            ))
+            rules_count += 1
+        # Mappings PRM -> axes (dupliqués dans chaque matrice énergie).
+        for m in site_mappings:
+            db.add(AccountingMatrixRule(
+                matrix_version_id=version.id,
+                stable_rule_key=_key("energy", "site", m.prm_id),
+                scope="meter",
+                meter_id=m.prm_id,
+                accounting_service=m.service_label or m.service_code,
+                accounting_function=m.function_label or m.function_code,
+                accounting_antenna=m.antenna_label or m.antenna_code,
+                operation_number=m.operation_code,
+                is_active=m.active,
+                comment=_join(m.site_name, m.regroupement, m.family, m.notes),
+            ))
+            rules_count += 1
+        created += 1
+
+    return {"contracts_created": created, "contracts_skipped": skipped, "rules": rules_count}
+
+
+def _seed_cpe(db: Session, city_id: int | None, *, user_id: int | None) -> dict:
+    nature_rules = db.execute(
+        select(CpeAccountingNatureRule).where(CpeAccountingNatureRule.city_id == city_id)
+    ).scalars().all()
+    site_mappings = db.execute(
+        select(CpeAccountingSiteMapping).where(CpeAccountingSiteMapping.city_id == city_id)
+    ).scalars().all()
+
+    contract_codes = sorted({(r.contract_code or "").strip() for r in nature_rules})
+    created = skipped = rules_count = 0
+
+    for code in contract_codes:
+        code_value = code or None
+        if _contract_exists(db, city_id, domain="cpe", supplier="DALKIA", contract_code=code_value, lot_label=None):
+            skipped += 1
+            continue
+        label = f"DALKIA {code}" if code else "DALKIA - non rattaché"
+        version = _new_seed_contract_version(
+            db, city_id, domain="cpe", supplier="DALKIA",
+            contract_code=code_value, contract_label=label, user_id=user_id,
+        )
+        for r in (x for x in nature_rules if (x.contract_code or "").strip() == code):
+            db.add(AccountingMatrixRule(
+                matrix_version_id=version.id,
+                stable_rule_key=_key("cpe", "nature", r.market, r.service_sold, r.billed_item, r.frequency),
+                scope="billed_item",
+                billed_item_pattern=r.billed_item,
+                supplier_item_code=r.service_sold,
+                accounting_nature=r.accounting_nature,
+                accounting_label=r.accounting_label,
+                is_active=r.active,
+                comment=r.notes,
+            ))
+            rules_count += 1
+        for m in site_mappings:
+            db.add(AccountingMatrixRule(
+                matrix_version_id=version.id,
+                stable_rule_key=_key("cpe", "site", m.code_site),
+                scope="site",
+                site_code=m.code_site,
+                accounting_service=m.service_label or m.service_code,
+                accounting_function=m.function_label or m.function_code,
+                accounting_antenna=m.antenna_label or m.antenna_code,
+                operation_number=m.operation_code,
+                is_active=m.active,
+                comment=_join(m.site_name, m.family, m.manager, m.notes),
+            ))
+            rules_count += 1
+        created += 1
+
+    return {"contracts_created": created, "contracts_skipped": skipped, "rules": rules_count}
+
+
+def _contract_exists(
+    db: Session, city_id: int | None, *, domain: str, supplier: str,
+    contract_code: str | None, lot_label: str | None,
+) -> bool:
+    return db.execute(
+        select(AccountingMatrixContract.id).where(
+            AccountingMatrixContract.city_id == city_id,
+            AccountingMatrixContract.domain == domain,
+            AccountingMatrixContract.supplier == supplier,
+            AccountingMatrixContract.contract_code.is_(None) if contract_code is None
+            else AccountingMatrixContract.contract_code == contract_code,
+            AccountingMatrixContract.lot_label.is_(None) if lot_label is None
+            else AccountingMatrixContract.lot_label == lot_label,
+        )
+    ).first() is not None
+
+
+def _new_seed_contract_version(
+    db: Session, city_id: int | None, *, domain: str, supplier: str,
+    contract_label: str, user_id: int | None, contract_code: str | None = None,
+) -> AccountingMatrixVersion:
+    contract = AccountingMatrixContract(
+        city_id=city_id, domain=domain, supplier=supplier,
+        contract_code=contract_code, contract_label=contract_label, status="active",
+    )
+    db.add(contract)
+    db.flush()
+    source = "migration_cpe" if domain == "cpe" else "migration_energie"
+    version = AccountingMatrixVersion(
+        matrix_contract_id=contract.id,
+        version_label=SEED_VERSION_LABEL,
+        status="draft",
+        source=source,
+        created_by_user_id=user_id,
+    )
+    db.add(version)
+    db.flush()
+    return version
+
+
+def _key(*parts: str | None) -> str:
+    return ":".join((p or "-").strip() for p in parts)
+
+
+def _join(*parts: str | None) -> str | None:
+    values = [p.strip() for p in parts if p and p.strip()]
+    return " · ".join(values) if values else None
+
+
+# ---------------------------------------------------------------------------
+# Helpers internes
+# ---------------------------------------------------------------------------
+def _require_contract(db: Session, city_id: int | None, contract_id: int) -> AccountingMatrixContract:
+    contract = db.get(AccountingMatrixContract, contract_id)
+    if contract is None or contract.city_id != city_id:
+        raise ValueError("Contrat matrice introuvable.")
+    return contract
+
+
+def _require_version(db: Session, city_id: int | None, version_id: int) -> AccountingMatrixVersion:
+    version = db.get(AccountingMatrixVersion, version_id)
+    if version is None:
+        raise ValueError("Version de matrice introuvable.")
+    # Vérifie l'isolation multi-tenant via le contrat parent.
+    if version.contract is None or version.contract.city_id != city_id:
+        raise ValueError("Version de matrice introuvable.")
+    return version
+
+
+def _clone_rule(rule: AccountingMatrixRule, version_id: int) -> AccountingMatrixRule:
+    data = {field: getattr(rule, field) for field in _RULE_COPY_FIELDS}
+    return AccountingMatrixRule(matrix_version_id=version_id, **data)
+
+
+def _active_version(contract: AccountingMatrixContract) -> AccountingMatrixVersion | None:
+    for version in contract.versions:
+        if version.status == "active":
+            return version
+    return None
+
+
+def _contract_summary(contract: AccountingMatrixContract) -> dict:
+    active = _active_version(contract)
+    return {
+        "id": contract.id,
+        "domain": contract.domain,
+        "supplier": contract.supplier,
+        "contract_code": contract.contract_code,
+        "contract_label": contract.contract_label,
+        "lot_label": contract.lot_label,
+        "starts_on": contract.starts_on,
+        "ends_on": contract.ends_on,
+        "contact_name": contract.contact_name,
+        "contact_email": contract.contact_email,
+        "status": contract.status,
+        "active_version_id": active.id if active else None,
+        "active_version_label": active.version_label if active else None,
+        "versions_count": len(contract.versions),
+        "created_at": contract.created_at,
+        "updated_at": contract.updated_at,
+    }
+
+
+def _version_out(version: AccountingMatrixVersion) -> dict:
+    return {
+        "id": version.id,
+        "matrix_contract_id": version.matrix_contract_id,
+        "version_label": version.version_label,
+        "status": version.status,
+        "effective_from": version.effective_from,
+        "effective_to": version.effective_to,
+        "source": version.source,
+        "source_filename": version.source_filename,
+        "source_sha256": version.source_sha256,
+        "created_by_user_id": version.created_by_user_id,
+        "validated_by_user_id": version.validated_by_user_id,
+        "validated_at": version.validated_at,
+        "rules_count": len(version.rules),
+        "created_at": version.created_at,
+        "updated_at": version.updated_at,
+    }
