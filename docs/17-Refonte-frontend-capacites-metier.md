@@ -334,3 +334,11 @@ Chantier suivant = creer la nouvelle architecture frontend cible,
 avec navigation produit, cockpit et squelette des domaines,
 sans supprimer les anciennes routes tant que les nouveaux parcours ne sont pas prets.
 ```
+
+## 12. Reorientation direction et dette structurelle - 2026-06-22
+
+La modernisation frontend est desormais un chantier transversal P0 au service de quatre preuves : factures, budget/atterrissage, CVC/PPT et couverture maintenance. L'audit du code confirme qu'un lifting CSS ne suffit pas : `CpeDalkiaPage.tsx` approche 180 Ko, `lib/api.ts` depasse 150 Ko et `styles.css` depasse 110 Ko. La cible est un design system leger et des features par domaine ; commencer par le parcours Factures, puis Budget, Maintenance et CVC. Voir [[20-Cap-direction-2026-factures-budget-CVC-maintenance]].
+
+## 13. Cartographie canonique et design system
+
+La suite ne doit plus partir des pages ou endpoints seuls. La chaine cible est `capacite -> donnee -> regle -> situation -> decision -> preuve -> parcours -> ecran -> composant -> KPI`. Le statut reel est : shell/navigation commences, design system non encore construit au sens strict. Methode detaillee : [[21-Cartographie-fonctionnelle-vers-experience-utilisateur]].

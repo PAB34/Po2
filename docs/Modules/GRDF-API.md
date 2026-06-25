@@ -701,8 +701,9 @@ Quotas **par Tiers, toutes API confondues**, adaptés au parc. Sète ≈ 66 PCE 
 | API / donnée | Fréquence préconisée | Implémentation |
 |---|---|---|
 | Consulter mes droits d'accès | **1/jour** (1 appel pour TOUS les PCE) | `sync_droits` (ndjson, 1 appel) — endpoint manuel ; auto à câbler |
-| Consommations **publiées** (6M/1M/MM) | **1/mois/PCE** | job quotidien + **garde par PCE** `grdf_publiees_min_interval_days=25` → ~1/mois |
-| Consommations **informatives** + **JJ** | 1/jour/PCE (gros volume) | `run_informatives_sync` + job optionnel `grdf_informatives_sync_enabled` (off) |
+| Consommations **publiées** 6M/1M/MM | **1/mois/PCE** | job quotidien + **garde par PCE** `grdf_publiees_min_interval_days=25` → ~1/mois |
+| Consommations **publiées JJ** | 1/jour/PCE (quotidiennes) | **routage par fréquence** : les PCE `JJ` échappent à la garde → collectés chaque run |
+| Consommations **informatives** (1M/MM) | 1/jour/PCE (gros volume) | `run_informatives_sync` + job optionnel `grdf_informatives_sync_enabled` (off) ; exclut 6M/JJ |
 | Données contractuelles / techniques | 1/mois/PCE | `enrich_pces` (endpoint manuel / mensuel) |
 | Déclarer / révoquer / preuves | selon besoin / 1·mois | endpoints `grdf_gda` |
 
@@ -718,8 +719,10 @@ Quotas **par Tiers, toutes API confondues**, adaptés au parc. Sète ≈ 66 PCE 
 > **Conséquences implémentées** : profondeur **publiées 5 ans** (`grdf_history_days=1825`),
 > **informatives 3 ans** (`grdf_informatives_history_days=1095`). La synchro publiées utilise une
 > **fenêtre de rattrapage large** (`grdf_publiees_lookback_days=62`) pour absorber le délai
-> J+1 DPM et les corrections. Le `frequence_releve` de chaque PCE (6M/1M/MM/JJ) est récupéré via
-> `enrich_pces` (données techniques) → permettra de router les PCE JJ/MM vers la synchro informative.
+> J+1 DPM et les corrections. **Routage par `frequence_releve`** (récupéré via `enrich_pces`,
+> données techniques) : PCE `JJ` → publiées collectées chaque run (pas de garde mensuelle) ;
+> `6M/1M/MM` → publiées ~1/mois ; `1M/MM` → seuls éligibles aux informatives (6M/JJ exclus).
+> Constantes : `_DAILY_PUBLIEES_FREQ={JJ}`, `_NO_INFORMATIVES_FREQ={6M,JJ}` (`grdf_conso.py`).
 
 ### 14.4 Récap des changements de paramètres (vs version initiale)
 

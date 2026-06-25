@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#1D3150">
+  <title>PatrimoineAuCarré · Prototype V1</title>
+  <link rel="icon" type="image/svg+xml" href="assets/po2-icone-app.svg">
+  <script>
+    (() => {
+      const mode = localStorage.getItem('po2-theme') || 'auto';
+      const dark = mode === 'dark' || (mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.themeMode = mode;
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-logo-wrap"><img src="assets/po2-sans-cadre.svg" alt="PO²"></span>
+        <div><strong>Patrimoine</strong><b>AuCarré</b></div>
+      </div>
+      <div class="workspace-pill"><span>V</span><div><small>Collectivité</small><strong>Ville de Sète</strong></div><button aria-label="Changer de collectivité">⌄</button></div>
+      <nav id="mainNav" aria-label="Navigation principale"></nav>
+      <div class="sidebar-foot">
+        <button class="help-card" data-action="open-about"><span class="help-icon">?</span><span><strong>Prototype V1</strong><small>Comprendre cette maquette</small></span></button>
+        <div class="user-mini"><div class="avatar">PB</div><div><strong>Pascal Borja</strong><small>Administrateur général</small></div><button aria-label="Menu utilisateur">•••</button></div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <button class="menu-button" id="menuButton" aria-label="Ouvrir le menu">☰</button>
+        <button class="global-search" data-action="open-search"><span class="search-symbol">⌕</span><span>Rechercher un site, une facture, un compteur…</span><kbd>Ctrl K</kbd></button>
+        <div class="top-actions">
+          <label class="profile-control"><span>Voir comme</span><select id="profileSelect" aria-label="Profil simulé"></select></label>
+          <button class="icon-button theme-button" id="themeButton" aria-label="Thème : automatique" title="Thème : automatique" data-action="theme"><span id="themeIcon">◐</span></button>
+          <button class="icon-button" aria-label="Notifications" data-action="notifications"><span>♢</span><i>4</i></button>
+          <button class="primary-action" data-view="invoices"><span>＋</span> Importer</button>
+        </div>
+      </header>
+      <main id="content" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true"><div id="drawerContent"></div></aside>
+  <dialog id="searchDialog" class="search-dialog">
+    <form method="dialog" class="search-head"><span>⌕</span><input id="commandSearch" placeholder="Rechercher dans tout le patrimoine…" autocomplete="off"><button aria-label="Fermer">Échap</button></form>
+    <div id="searchResults" class="search-results"></div>
+  </dialog>
+  <dialog id="aboutDialog" class="about-dialog">
+    <div class="about-hero"><span class="eyebrow light">Prototype sans backend</span><h2>Une première traduction visuelle de la V1</h2><p>Les chiffres sont simulés. L'objectif est d'évaluer la hiérarchie de l'information, les parcours et le confort d'usage avant de raccorder les moteurs existants.</p></div>
+    <div class="about-grid"><div><b>3</b><span>parcours prioritaires</span></div><div><b>5</b><span>profils simulés</span></div><div><b>0</b><span>écriture en base</span></div></div>
+    <form method="dialog"><button class="button dark">J'ai compris</button></form>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>

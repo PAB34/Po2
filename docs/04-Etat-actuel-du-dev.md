@@ -1,4 +1,31 @@
 # État actuel du développement
+> **Reorientation produit** : 2026-06-22 (cap direction)
+> Les briques developpees convergent maintenant vers cinq preuves P0 : factures contre contrats signes ;
+> budget/realise/atterrissage selon la matrice comptable ; etat CVC et PPT chiffre ; couverture DALKIA/SPIE
+> avec detection des sites non entretenus ; consommations ENEDIS/GRDF, DJU et atterrissage annuel. La refonte frontend devient transverse : design system, parcours de
+> decision et decomposition des pages/API/CSS monolithiques. Cadrage : [[20-Cap-direction-2026-factures-budget-CVC-maintenance]].
+>
+> **Diagnostic** : moteurs ENGIE, TotalEnergies et DALKIA avances mais dossier contractuel multi-marches incomplet ;
+> budget initial et atterrissage global non modelises ; inventaire CVC sans PPT chiffre consolide ; referentiel
+> generique de contrats et matrice de couverture absents ; SPIE a cadrer depuis ses pieces reelles.
+>
+> **Mise a jour complementaire** : 2026-06-25 (backend matrices comptables versionnées — tranche minimale)
+> Pose de la structure backend durable cadrée dans [[38-Modele-backend-matrices-comptables-versionnees]].
+> Nouvelles tables (migration `0064_add_accounting_matrices`) : `accounting_matrix_contracts`,
+> `accounting_matrix_versions`, `accounting_matrix_rules`, `invoice_accounting_snapshots`. Nouveau router
+> `/api/accounting-matrices/*` (lecture, création contrat/version, activation/archivage, règles, snapshot facture
+> en lecture). Invariant clé respecté : une version active n'est jamais modifiée en place ; on clone -> on édite ->
+> on active (l'ancienne active est archivée). Différé phase suivante : import/export XLSX, application/écriture des
+> snapshots, seed depuis `energy_accounting_*`/`cpe_accounting_*`, bascule du frontend `/refonte-v1/factures`.
+> Validation : `py_compile` OK ; import runtime FastAPI et migration non joués localement (deps absentes du poste) ->
+> validation CI requise. Détail : `[[Sessions/2026-06-25 - Socle React V1]]`.
+>
+> **Mise a jour complementaire** : 2026-06-22 (seconde passe d'audit fonctionnel)
+> Comparaison du code reel (routes, services, modeles, pages et migrations) aux cadrages 20-22. Les cinq axes
+> restent valides. Fondations a expliciter : patrimoine maitre, qualite/provenance, documents/versions/preuves,
+> workflow/securite/audit. Angles morts principaux : execution effective de maintenance, engagements/mandats,
+> taches/notifications et mesure des gains travaux. Detail : [[23-Seconde-passe-audit-fonctionnel-et-angles-morts]].
+>
 > **Mise a jour complementaire** : 2026-06-22 (factures gaz TotalEnergies — contrôle v1)
 > Nouveau module gaz dedie : import + controle de coherence des factures gaz TotalEnergies
 > (marche Herault Energie). Backend `gas_invoices` (migration 0057), `services/gas_invoice.py`
@@ -572,3 +599,201 @@ Handoff suivant :
 2. Verifier dans `/cpe` > `Performance et consommations` les totaux par fluide et les codes non rattaches.
 3. Rattacher les 3 codes piscines / codes DALKIA non alignes au referentiel CPE ou a la future boite de rapprochement patrimoine.
 4. Maintenir le perimetre contrat depuis `cpe_contract_references` et ajouter/retirer les contrats via l'ecran Referentiel finance si le marche evolue.
+
+## Mise a jour atelier V1 - arbitrages avant refonte - 2026-06-24
+
+Le modele V1 de l atelier BPMN porte maintenant un registre de decisions utilisateur :
+
+- 26 questions reliees aux cadres concernes ;
+- 13 arbitrages structurants marques `◆` en rouge, apres reclassement de la matrice comptable A26 ;
+- 13 choix de conception marques `◇` en ambre ;
+- passage en `✓` vert apres validation ;
+- filtre dedie dans la barre d outils ;
+- question, proposition et reponse modifiables dans la fiche du cadre ;
+- preservation des reponses utilisateur pendant les fusions non destructives et dans l export JSON ;
+- compteur et liste dans la vue Couverture UX.
+
+Le registre de lecture et la sequence d ateliers sont documentes dans `docs/28-Questions-arbitrage-avant-refonte-V1.md`. Aucun code fonctionnel SaaS ni deploiement production n est concerne par cette mise a jour.
+
+Validation locale : syntaxe JavaScript valide ; 16 diagrammes, 230 cadres, 26 arbitrages uniques (12 structurants, 14 conception) ; test de preservation d une reponse validee reussi.
+## Mise a jour prototype frontend V1 sans backend - 2026-06-24
+
+Un premier jet autonome de la refonte est disponible dans `docs/prototype-refonte-v1/`.
+
+Perimetre :
+
+- cockpit adapte aux profils Direction, Fluides, Technique/CVC, Finances et Patrimoine ;
+- vue Factures et decisions multi-fournisseurs ;
+- drill-down facture avec trace de controle et actions simulees ;
+- fiche Site 360 avec onglets Fluides, Contrats, Technique, Budget/PPT et Documents ;
+- recherche globale, filtres, navigation responsive et donnees simulees.
+
+Aucune API, authentification ou base de donnees n est raccordee. Le prototype sert uniquement a valider le langage visuel, la densite, la navigation et la hierarchie des preuves.
+
+Estimation de preparation : 80 % pour prototyper l experience ; 55-60 % pour construire immediatement le frontend definitif raccorde au reel.
+
+Validation : syntaxe JavaScript OK ; rendu controle dans le navigateur ; changement de profil, recherche, factures, panneau de detail, Site 360 et onglets testes sans erreur console.
+## Mise a jour registre vers 100 pourcent de preparation frontend - 2026-06-24
+
+Le fichier `docs/30-Questions-pour-atteindre-100-pourcent-refonte-frontend.md` transforme l ecart de preparation en registre mesurable :
+
+- socle acquis : 57 points ;
+- 29 questions ou preuves restantes : 43 points ;
+- total cible : 100 points pour lancer et raccorder proprement la premiere tranche ;
+- distinction entre decisions metier, fichiers/preuves et travaux Codex ;
+- blocs profils/droits, factures-CIRIL-comptabilite, contrats-maintenance-technique, UX et recette/migration.
+
+Le score 100 ne signifie pas que toutes les fonctionnalites futures sont developpees. Il signifie que le perimetre, les contrats d ecran, les donnees, les cas de recette et la strategie de migration de la premiere tranche sont fermes.
+## Mise a jour charte graphique PO2 - 2026-06-24
+
+La charte texte et la planche de logo fournies sont conservees dans `docs/branding/`. L analyse `docs/31-Analyse-charte-graphique-et-alignement-prototype.md` confirme que la structure UX du prototype est compatible avec la marque, mais que les tokens visuels doivent etre corriges : bleu nuit `#1D3150`, vert accent limite `#74B44A`, gris techniques et titres Montserrat.
+
+La planche PNG regroupe plusieurs variantes et n est pas un actif de production. Le DOCX ne contient aucun media integre. Il reste a obtenir les variantes SVG/PNG transparentes separees avant integration definitive du logo.
+
+La chronologie fonctionnelle MVP/V1.5/V2 de la charte est historique et ne remplace pas la V1 produit actuelle ; la charte reste la reference visuelle uniquement.
+
+## Mise à jour consolidation des arbitrages et audit DALKIA - 2026-06-24
+
+Le questionnaire du document 30 est traité. Le score d’arbitrage et de preuves disponibles atteint **95/100** :
+
+- gouvernance et profils : 10/10 ;
+- factures et comptabilité : 13/13 ;
+- contrats et technique : 4/7 ;
+- expérience utilisateur : 6/6 ;
+- recette et migration : 5/7.
+
+Décisions principales : Responsable de service maintenance transverse, portail DALKIA en phase 2, CIRIL hors intégration V1, transmission manuelle aux finances, budget porté par le numéro d’opération, circuit P3 avec accord automatique sous 1 000 € si conforme, priorité ordinateur, portefeuille Sites 360° avant la fiche détaillée et première tranche Facturation/Cockpit/Sites/Fluides.
+
+Audit du classeur comptable DALKIA : 75 sites, 7 contrats et 43 couples contrat/poste. La structure couvre service, fonction, antenne, opération et nature, mais aucune des 43 validations comptables n’est renseignée ; 9 règles restent à ventiler ou arbitrer et 4 marchés sont encore à confirmer. Les conclusions et clés cibles figurent dans le document 32.
+
+Le prototype a été mis à jour : `Transmises CIRIL` devient `Transmises aux finances` avec lecture mensuelle ; Sites 360° s’ouvre sur une vue portefeuille puis permet le drill-down. L’atelier V1 reprend les décisions CIRIL, profils, budget, P3 et Sites. Vérification navigateur réussie, sans erreur console.
+
+Points ouverts : revalidation séparée DALKIA P1/P2/P3, corpus SPIE, jeux de recette réels et contrat d’écran détaillé Fluides.
+
+
+## Mise à jour clarification des actions utilisateur restantes - 2026-06-24
+
+Le document `docs/33-Dernieres-questions-utilisateur-avant-contrats-ecran.md` réduit explicitement le travail encore demandé à Pascal : six choix d'usage concernant Fluides, puis la fourniture du corpus SPIE lorsque ce module sera ouvert et la relecture des audits DALKIA.
+
+Codex prend en charge sans nouvelle question générale les contrats d'écran, la cartographie API, l'extension du prototype, les états d'interface, la recette initiale depuis les fichiers présents et la migration progressive du frontend. Le corpus SPIE, l'eau et le portail tiers DALKIA ne bloquent pas le démarrage de Facturation/Cockpit/Sites/Fluides.
+
+
+## Mise à jour contrat et prototype Fluides V1 - 2026-06-24
+
+Les six réponses du document 33 sont consolidées. Le contrat d'écran `docs/34-Contrat-ecran-Fluides-V1.md` fixe : portefeuille → site → compteur, électricité/gaz/eau visible, comparaisons N-1/N-2/N-3, hiver/été, journalier et courbe de charge 30 minutes, scénario central avec fourchette et corrections métier versionnées.
+
+Correction méthodologique : DJU chauffage pour les usages de chauffage, DJU froid pour la climatisation électrique, aucune correction DJU par défaut pour l'eau ou l'électricité non thermosensible.
+
+Audit du raccordement : ENEDIS expose déjà portefeuille PRM, consommations journalières, courbes de charge, DJU, profils, puissance et qualité ; GRDF expose PCE, collecte et séries mensuelles. Restent portefeuille multi-fluides unifié, agrégations site, détection de dérives CDC, moteurs d'atterrissage et scénarios, valorisation contractuelle et eau.
+
+Le prototype `docs/prototype-refonte-v1/` possède maintenant une page Fluides détaillée : filtres Tous/Électricité/Gaz/Eau, KPI, trajectoire, atterrissage filtré, saisons, dérives, qualité et sites prioritaires. L'eau affiche explicitement `À construire`. Navigation vers Site 360° testée ; aucune erreur console.
+
+
+## Mise à jour surveillance des abonnements et thème sombre - 2026-06-24
+
+Le contrat d’écran Fluides inclut désormais la surveillance du calibrage des abonnements. La règle métier distingue explicitement les distributeurs et sources de mesure (ENEDIS, GRDF, futur distributeur d’eau) des fournisseurs et contrats (EDF, ENGIE, TotalEnergies). L’électricité s’appuie sur les courbes de charge ENEDIS au pas de 30 minutes et la puissance souscrite ; le gaz utilise le profil GRDF, la CAR et les paramètres contractuels ; l’eau dépend de la télérelève, des index, du débit de pointe et de la structure tarifaire réellement disponibles.
+
+Le prototype Fluides affiche une file `Abonnements à recalibrer` avec périmètre, source de mesure, fournisseur, nombre de compteurs, diagnostic, potentiel et niveau de confiance. Les valeurs sont simulées et servent à valider l’expérience utilisateur avant raccordement aux moteurs.
+
+Le prototype gère maintenant trois thèmes : `Automatique`, `Sombre` et `Clair`. Le mode automatique suit `prefers-color-scheme`, le choix manuel est accessible dans la barre supérieure et conservé localement. Le thème sombre automatique a été observé avec la préférence Windows sombre ; le sélecteur manuel a également été contrôlé.
+
+
+## Mise à jour drill-down de calibrage des abonnements - 2026-06-24
+
+La file Fluides ne s’arrête plus à une synthèse agrégée. Chaque exemple d’abonnement ouvre une fiche latérale avec diagnostic, paramètre contractuel actuel, mesure de référence, recommandation, impact, confiance, courbe ou profil source, détail des étapes du calcul et actions d’instruction.
+
+Quatre cas sont simulés pour valider le parcours : puissance électrique surdimensionnée, puissance électrique à sécuriser, CAR gaz à revoir et compteur d’eau sans données assez fines. Le cas Eau interdit explicitement toute recommandation chiffrée tant que la télérelève ou une granularité suffisante n’est pas disponible.
+
+
+## Mise à jour Factures & décisions et matrices comptables - 2026-06-24
+
+Le contrat d’écran `docs/35-Contrat-ecran-Factures-Decisions-V1.md` fixe la matrice comptable au niveau du contrat/lot dans une version datée. Les factures héritent de cette matrice et conservent un instantané immuable après validation ; la comptabilité traite les exceptions et corrections motivées.
+
+Le prototype affiche désormais la chaîne import → dédoublonnage → parsing → association contractuelle → imputation → décision/export. Quatre matrices simulées ENGIE, EDF, TotalEnergies et DALKIA présentent couverture, règles et exceptions. Chaque matrice s’ouvre dans un éditeur en masse. L’export/import XLSX est modélisé avec identifiants stables et aperçu des différences ; aucun réimport ne peut écraser directement une version active.
+
+
+## Mise à jour Cockpit Direction et Sites 360° - 2026-06-25
+
+Le contrat d’écran `docs/36-Contrat-ecran-Cockpit-Sites-V1.md` fixe le rôle du cockpit : transformer les signaux en décisions, avec source, preuve, responsable et action suivante. Le cockpit ne doit pas être une collection de KPI isolés.
+
+Le prototype `docs/prototype-refonte-v1/` affiche maintenant une Chaîne de décision V1 reliant Factures, Fluides, Technique, Budget et Sites 360° aux preuves et aux écrans métier correspondants. La fiche Site 360° ajoute une file de décisions reliées au site : facture, abonnement, maintenance et budget, chacune avec sa preuve attendue.
+
+Cette passe ferme le cadrage UX des quatre surfaces de première tranche : Cockpit, Factures & décisions, Fluides et Sites 360°. Les données restent simulées ; la prochaine étape est la validation utilisateur puis la migration progressive en React avec contrats de données typés.
+
+
+## Mise à jour plan de migration React V1 - 2026-06-25
+
+Le document `docs/37-Plan-migration-React-refonte-V1.md` fixe l’ordre de passage du prototype HTML vers le frontend React réel. La stratégie retenue est une migration progressive en parallèle de l’existant : socle visuel, composants communs, mocks typés, puis raccordement tranche par tranche.
+
+Première tranche retenue : shell moderne, cockpit, Factures & décisions, Fluides et Sites 360°. Les routes historiques restent accessibles tant que les nouveaux écrans ne sont pas validés sur cas réels. Le plan prévoit explicitement les composants `AppShellV1`, `KpiCard`, `Drawer`, `StatusBadge`, `DataTable`, `FilterBar`, ainsi que les features `cockpit`, `invoices`, `fluids` et `sites`.
+
+Prochaine action : démarrer l’incrément 1 dans `saas/frontend/src` en créant les tokens, composants communs et shell V1 sans casser `App.tsx`, `api.ts` ni les pages historiques.
+
+
+## Mise à jour socle React V1 - 2026-06-25
+
+L’incrément 1 de la migration React est démarré. Un socle non intrusif a été ajouté dans `saas/frontend/src` : tokens PO², composants communs, navigation V1, `AppShellV1` et première page `CockpitPageV1` mockée. Le fichier `main.tsx` importe les tokens V1 avant le CSS historique.
+
+Aucune route existante n’a été remplacée : `App.tsx`, les pages historiques et les appels API restent le chemin actif. Une route laboratoire protégée `/refonte-v1` affiche `AppShellV1` + `CockpitPageV1` pour tester le socle sans bascule production. Cette prudence permet de construire la refonte à côté de l’existant avant raccordement.
+
+Validation : `npm install` effectué dans `saas/frontend`, puis `npm run build` réussi après relance escaladée pour autoriser le spawn esbuild. Vite signale un chunk principal supérieur à 500 kB ; `npm audit` signale 4 vulnérabilités hautes non corrigées automatiquement.
+
+
+## Mise à jour Factures React V1 mockées - 2026-06-25
+
+La route laboratoire `/refonte-v1/factures` affiche désormais une première version React mockée de Factures & décisions : KPI, matrices comptables par contrat, table de factures, filtre de recherche et drawer de preuve facture.
+
+Le shell `AppShellV1` accepte un préfixe de route pour maintenir la navigation laboratoire sous `/refonte-v1`. Les routes historiques `/factures` et les pages métier existantes ne sont pas remplacées.
+
+Validation : `npm run build` réussi. Vite conserve un avertissement de chunk principal supérieur à 500 kB, à traiter plus tard par découpage dynamique.
+
+
+## Mise à jour Fluides et Sites React V1 mockés - 2026-06-25
+
+Le laboratoire de refonte React couvre maintenant les quatre surfaces de première tranche :
+
+- `/refonte-v1` : cockpit mocké ;
+- `/refonte-v1/factures` : Factures & décisions mocké ;
+- `/refonte-v1/fluides` : Fluides mocké ;
+- `/refonte-v1/sites` : Sites 360° mocké.
+
+Fluides présente KPI, dérives, atterrissage et abonnements à recalibrer, avec distinction distributeur/fournisseur. Sites 360° présente portefeuille, recherche, sélection d’un site et décisions reliées au site.
+
+Validation : `npm run build` réussi après ces ajouts. Le laboratoire reste non raccordé au backend et ne remplace pas les routes historiques. Avertissement Vite restant : chunk principal > 500 kB.
+
+
+## Mise à jour DTO Facture React V1 - 2026-06-25
+
+La préparation du raccordement réel de `/refonte-v1/factures` a commencé. Un DTO commun `InvoiceDecisionV1` et des adaptateurs frontend ont été ajoutés pour normaliser les sources existantes : imports factures énergie ENGIE/EDF, factures gaz TotalEnergies et factures CPE DALKIA.
+
+La page Factures V1 mockée consomme maintenant ce DTO commun. Cela permet de remplacer progressivement les mocks par des données React Query sans réécrire l’interface.
+
+Validation : `npm run build` réussi. Avertissement restant : chunk principal Vite > 500 kB.
+
+
+## Mise à jour hook Factures React V1 - 2026-06-25
+
+La page laboratoire `/refonte-v1/factures` utilise maintenant un hook `useInvoiceDecisionsV1`. Il tente de charger les factures énergie, gaz et CPE via les API existantes, applique les adaptateurs vers `InvoiceDecisionV1`, puis retombe sur les mocks si les sources sont indisponibles.
+
+Cette étape amorce le raccordement réel sans rendre la page dépendante d’un backend complet et sans remplacer la route historique `/factures`. Les matrices comptables restent simulées.
+
+Validation : `npm run build` réussi. Avertissement restant : chunk principal Vite > 500 kB.
+
+
+## Mise à jour synthèse Matrices React V1 - 2026-06-25
+
+La page laboratoire `/refonte-v1/factures` affiche désormais une synthèse des matrices comptables issue des codifications existantes lorsque les API répondent : énergie (site mappings + nature rules) et CPE DALKIA (site mappings + nature rules). À défaut, elle conserve les matrices mockées.
+
+Cette couche frontend prépare le raccordement UX mais ne constitue pas encore le modèle backend cible de matrice contractuelle versionnée.
+
+Validation : `npm run build` réussi. Avertissement restant : chunk principal Vite > 500 kB.
+
+## Mise à jour cadrage backend Matrices V1 - 2026-06-25
+
+Le document docs/38-Modele-backend-matrices-comptables-versionnees.md a été créé pour transformer la demande utilisateur sur les matrices comptables en modèle backend actionnable.
+
+Il fixe le principe suivant : les codifications actuelles énergie et CPE sont conservées, mais la V1 cible doit ajouter une enveloppe contractuelle versionnée avec contrats, versions, règles, import/export XLSX, preview de différences et snapshots facture immuables. Une facture validée doit rester reliée à la version de matrice appliquée au moment de sa décision, même si une nouvelle version est créée ensuite.
+
+Le document couvre aussi l'historique des factures déjà traitées, la réimportation d'un export annuel complet, les contacts entreprise pour préparer une réclamation, et la migration progressive depuis energy_accounting_* et cpe_accounting_*.
+
+Prochaine étape technique logique : créer modèles SQLAlchemy, migration Alembic, schémas Pydantic et endpoints de base /api/accounting-matrices avant l'import XLSX complet.

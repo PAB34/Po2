@@ -17,3 +17,10 @@
 *.pdf
 *.docx
 define_name.py
+# Frontend build/dependency artifacts
+saas/frontend/node_modules/
+saas/frontend/dist/
+saas/frontend/*.tsbuildinfo
+saas/frontend/vite.config.js
+saas/frontend/vite.config.d.ts
+

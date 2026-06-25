@@ -1,5 +1,11 @@
 # Roadmap fonctionnalités
 
+> **Reorientation 2026-06-22** : cette grille historique reste l'inventaire des fonctionnalites, mais l'ordre
+> d'execution est desormais pilote par cinq programmes P0 : controle contractuel des factures ; budget/realise/
+> atterrissage financier ; suivi ENEDIS/GRDF, DJU et atterrissage de consommation ; etat CVC/PPT ;
+> couverture des marches DALKIA/SPIE. La modernisation frontend est transverse.
+> Voir [[20-Cap-direction-2026-factures-budget-CVC-maintenance]] et [[Backlog]].
+
 > Source : fichier `Fonctionnalités.xlsx` fourni par l'utilisateur.
 > Croisement avec l'existant à date : **2026-05-19**.
 >

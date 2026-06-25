@@ -28,6 +28,25 @@
 - [[17-Refonte-frontend-capacites-metier]] - Cadrage de la refonte totale du frontend : capacites backend -> parcours metier -> ecrans cibles -> ordre de chantier
 - [[18-Registre-raccordement-frontend]] - Plan de cablage de la nouvelle interface : ecrans cibles -> fonctionnalites deja developpees -> code actuel -> action de refonte
 - [[19-Atelier-cartographie-frontend]] - Interface HTML locale pour cartographier les fonctionnalites existantes vers les sections/sous-sections, puis decrire la cible front
+- [[20-Cap-direction-2026-factures-budget-CVC-maintenance]] - Cap prioritaire : factures, budget/atterrissage, CVC/PPT, couverture maintenance et front moderne
+- [[21-Cartographie-fonctionnelle-vers-experience-utilisateur]] - Methode capacite -> decision -> preuve -> ecran, DJU transversal et etat reel du design system
+- [[22-Developpement-deux-pistes-et-profils-utilisateurs]] - Strategie fonctions + UX synchronisees, profils utilisateurs, droits et tranches verticales
+- [[23-Seconde-passe-audit-fonctionnel-et-angles-morts]] - Controle differentiel du code reel, fondations transverses, capacites a raccorder et angles morts
+- [[24-Cockpit-canonique-reconstruction-produit-frontend]] - Source de verite quotidienne : registre des capacites, workflows, contrats d'ecran, design system et migration
+- [[25-Atelier-BPMN-produit-UX]] - Atelier visuel BPMN simplifie : couloirs, cadres deplacables, relations, commentaires, AS-IS/TO-BE et couverture UX
+- [[26-Audit-couverture-atelier-BPMN-2026-06-22]] - Verification differentielle code/registre/atelier : etat actuel 55/55 et cible V1 66/66
+- [[27-Modele-V1-plateforme-operationnelle]] - Projection complete de la V1 : cockpits par profil, Site 360 degres, design system, fondations et criteres de recette
+- [[28-Questions-arbitrage-avant-refonte-V1]] - Registre des 26 decisions utilisateur reliees aux cadres V1 : 13 structurantes et 13 de conception
+- [[29-Prototype-frontend-V1-sans-backend]] - Premier jet interactif du cockpit par profil, des factures et du Site 360, sans backend
+- [[30-Questions-pour-atteindre-100-pourcent-refonte-frontend]] - Questionnaire de 29 decisions et preuves pour passer de 57 a 100 de preparation au raccordement
+- [[31-Analyse-charte-graphique-et-alignement-prototype]] - Tokens PO2, logos officiels et alignement du prototype brandé
+- [[32-Consolidation-reponses-et-audit-matrice-DALKIA]] - Décisions V1 consolidées, score 95/100, audit des clés comptables DALKIA et garde-fou Fluides
+- [[33-Dernieres-questions-utilisateur-avant-contrats-ecran]] - Six choix Fluides répondus et consolidés
+- [[34-Contrat-ecran-Fluides-V1]] - Portefeuille, site, compteur, DJU hiver/été, courbes de charge, atterrissage, calibrage des abonnements et raccordement API
+- [[35-Contrat-ecran-Factures-Decisions-V1]] - Import, parsing, matrice comptable versionnée par contrat, décision et aller-retour XLSX
+- [[36-Contrat-ecran-Cockpit-Sites-V1]] - Cockpit Direction, chaîne de décision V1 et décisions reliées dans Site 360°
+- [[37-Plan-migration-React-refonte-V1]] - Ordre de chantier React V1, routes, composants, mocks et raccordement progressif
+- [[38-Modele-backend-matrices-comptables-versionnees]] - Modèle cible backend pour matrices comptables par contrat, versions, import/export XLSX, snapshots facture et historique.
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
@@ -57,6 +76,7 @@
 - [[Decisions/007-bpu-schema-on-read-vs-parser]]
 - [[Decisions/008-referentiel-patrimoine-et-rapprochements]]
 - [[Decisions/009-environnement-staging]]
+- [[Decisions/010-matrices-comptables-versionnees]]
 - Template : [[Decisions/_template]]
 
 ### 📅 Journal des sessions

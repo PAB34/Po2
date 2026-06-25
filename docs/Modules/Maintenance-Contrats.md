@@ -106,3 +106,7 @@ Ces lots doivent rester configurables : ne pas figer trop tôt une nomenclature 
 - `Building` existant ;
 - module gestion technique pour rattachement futur aux équipements ;
 - stockage de documents déjà utilisé par les factures énergie.
+
+## Reorientation direction 2026-06-22
+
+Le livrable prioritaire n'est plus seulement un CRUD de contrats. Il doit repondre a la question « quels sites ou equipements ne sont pas entretenus ? » avec une matrice de couverture distinguant `couvert et prouve`, `a confirmer`, `non couvert`, `hors perimetre`, `chevauchement` et `expire`. DALKIA et SPIE doivent viser le patrimoine maitre, avec une lecture par lots attendus et une preuve contractuelle. Voir [[20-Cap-direction-2026-factures-budget-CVC-maintenance]].
