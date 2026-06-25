@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./providers/AuthProvider";
 
 import App from "./App";
+import "./design-system/tokens.css";
 import "./styles.css";
 
 const queryClient = new QueryClient();
