@@ -172,6 +172,24 @@ class AccountingMatrixSeedOut(BaseModel):
     versions_created: int
 
 
+class ApplyInvoiceLineIn(BaseModel):
+    billed_item: str | None = None
+    site_code: str | None = None
+    meter_id: str | None = None
+    amount: float | None = None
+    line_ref: str | None = None
+
+
+class ApplyInvoiceIn(BaseModel):
+    matrix_contract_id: int
+    invoice_lines: list[ApplyInvoiceLineIn] = []
+
+
+class ManualOverrideIn(BaseModel):
+    snapshot_json: str
+    motif: str = Field(..., min_length=1)
+
+
 class InvoiceAccountingSnapshotOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
