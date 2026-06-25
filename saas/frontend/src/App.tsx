@@ -28,6 +28,10 @@ import { LoginPage } from "./pages/LoginPage";
 import PatrimoineMatchPage from "./pages/PatrimoineMatchPage";
 import { ProductDomainPage } from "./pages/ProductDomainPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { RefonteV1Page } from "./pages/RefonteV1Page";
+import { RefonteV1InvoicesPage } from "./pages/RefonteV1InvoicesPage";
+import { RefonteV1FluidsPage } from "./pages/RefonteV1FluidsPage";
+import { RefonteV1SitesPage } from "./pages/RefonteV1SitesPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -234,6 +238,10 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/refonte-v1" element={<RefonteV1Page />} />
+            <Route path="/refonte-v1/factures" element={<RefonteV1InvoicesPage />} />
+            <Route path="/refonte-v1/fluides" element={<RefonteV1FluidsPage />} />
+            <Route path="/refonte-v1/sites" element={<RefonteV1SitesPage />} />
             <Route path="/patrimoine" element={<ProductDomainPage domain="patrimoine" />} />
             <Route path="/patrimoine/sites" element={<Navigate to="/buildings/list" replace />} />
             <Route path="/patrimoine/rattachements" element={<Navigate to="/buildings/compteurs" replace />} />
