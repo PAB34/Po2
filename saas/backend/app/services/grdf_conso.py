@@ -183,14 +183,32 @@ def _upsert_rows(db: Session, pce_id: int, rows: list[dict]) -> int:
     return n
 
 
+# Routage par fréquence de relève (specs GRDF) :
+#  - JJ : publiées quotidiennes → pas de garde mensuelle (collecte à chaque run).
+#  - 6M et JJ : pas de données informatives → exclus de la synchro informative.
+_DAILY_PUBLIEES_FREQ = {"JJ"}
+_NO_INFORMATIVES_FREQ = {"6M", "JJ"}
+
+
+def _freq(pce: GasPce) -> str:
+    return (pce.frequence_releve or "").upper()
+
+
 def _collectable_pces(db: Session, *, informatives: bool = False) -> list[GasPce]:
-    """PCE dont le droit est actif et le périmètre demandé accordé."""
+    """PCE dont le droit est actif et le périmètre demandé accordé.
+
+    Pour les informatives, on exclut en plus les fréquences qui n'en produisent
+    pas (6M, JJ) — évite des appels inutiles.
+    """
     perim = GasPce.perim_informatives if informatives else GasPce.perim_publiees
-    return (
+    pces = (
         db.query(GasPce)
         .filter(GasPce.etat_droit_acces == "Active", perim.is_(True))
         .all()
     )
+    if informatives:
+        pces = [p for p in pces if _freq(p) not in _NO_INFORMATIVES_FREQ]
+    return pces
 
 
 def _has_recent_publiees(db: Session, pce_id: int, min_days: int, type_conso: str) -> bool:
@@ -240,8 +258,13 @@ def _run(
             _STATE["pce_total"] = len(pces)
         _log(f"{mode} : {len(pces)} PCE ({date_debut} → {date_fin})")
         for pce in pces:
-            # Garde anti-redondance (préconisation 1/mois/PCE pour les publiées)
-            if guard_min_days and _has_recent_publiees(db, pce.id, guard_min_days, type_conso):
+            # Garde anti-redondance (préconisation 1/mois/PCE pour les publiées).
+            # Les PCE JJ (publiées quotidiennes) ne sont jamais gardés → collecte chaque run.
+            if (
+                guard_min_days
+                and _freq(pce) not in _DAILY_PUBLIEES_FREQ
+                and _has_recent_publiees(db, pce.id, guard_min_days, type_conso)
+            ):
                 skipped += 1
                 with _LOCK:
                     _STATE["pce_done"] += 1

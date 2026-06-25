@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+import time
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
@@ -31,8 +33,22 @@ class FootballDataClient:
     token: str
     base_url: str = settings.football_data_base_url
     timeout: int = 30
+    # Tier gratuit football-data.org = 10 req/min. On espace les appels pour
+    # rester sous la limite (0 = pas de throttle, ex. tests).
+    min_interval_seconds: float = 0.0
+    _last_call: float = field(default=0.0, init=False, repr=False)
+
+    def _throttle(self) -> None:
+        if self.min_interval_seconds <= 0:
+            return
+        elapsed = time.monotonic() - self._last_call
+        wait = self.min_interval_seconds - elapsed
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call = time.monotonic()
 
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self._throttle()
         response = requests.get(
             f"{self.base_url.rstrip('/')}/{path.lstrip('/')}",
             params=params,
@@ -42,6 +58,85 @@ class FootballDataClient:
         response.raise_for_status()
         payload = response.json()
         return payload if isinstance(payload, dict) else {}
+
+
+def _retry_after_seconds(response: requests.Response | None) -> int:
+    """Combien de secondes attendre apres un 429 football-data.org."""
+    if response is None:
+        return 10
+    header = response.headers.get("Retry-After")
+    if header and header.isdigit():
+        return int(header)
+    try:
+        match = re.search(r"Wait (\d+) second", response.text)
+    except Exception:  # pragma: no cover - defensif
+        match = None
+    return int(match.group(1)) + 1 if match else 10
+
+
+def _safe_get(
+    api: FootballDataClient,
+    path: str,
+    *,
+    params: dict[str, Any] | None = None,
+    errors: list[dict[str, Any]],
+    max_retries: int = 3,
+) -> dict[str, Any]:
+    """Appelle football-data.org sans jamais propager une erreur HTTP.
+
+    Sur 429 (quota tier gratuit = 10 req/min), attend le delai indique puis
+    retente (``max_retries`` fois). Toute autre erreur (403 tier, 404, timeout,
+    JSON invalide) est enregistree dans ``errors`` et renvoie ``{}`` pour que le
+    feed reste exploitable au lieu de remonter un 500 opaque.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return api.get(path, params=params)
+        except requests.HTTPError as exc:
+            response = exc.response
+            status_code = response.status_code if response is not None else None
+            if status_code == 429 and attempt < max_retries:
+                time.sleep(_retry_after_seconds(response))
+                continue
+            body = ""
+            if response is not None:
+                try:
+                    body = response.text[:300]
+                except Exception:  # pragma: no cover - defensif
+                    body = ""
+            errors.append(
+                {
+                    "endpoint": path,
+                    "params": params,
+                    "status_code": status_code,
+                    "error": str(exc),
+                    "body": body,
+                }
+            )
+            return {}
+        except requests.RequestException as exc:
+            errors.append(
+                {
+                    "endpoint": path,
+                    "params": params,
+                    "status_code": None,
+                    "error": str(exc),
+                    "body": "",
+                }
+            )
+            return {}
+        except ValueError as exc:  # JSON invalide
+            errors.append(
+                {
+                    "endpoint": path,
+                    "params": params,
+                    "status_code": None,
+                    "error": f"reponse non-JSON: {exc}",
+                    "body": "",
+                }
+            )
+            return {}
+    return {}
 
 
 def build_pronostics_model_feed(
@@ -56,12 +151,18 @@ def build_pronostics_model_feed(
         return _empty_feed(configured=False)
 
     api = client or FootballDataClient(token=settings.football_data_token)
-    date_from = date_from or (date.today() - timedelta(days=365))
+    date_to = date.today()
+    # 730 jours : capte le dernier grand tournoi international (ex. EURO 2024),
+    # seule source de forme reelle exposee par le tier gratuit pour les nations.
+    date_from = date_from or (date_to - timedelta(days=730))
 
     feed = _empty_feed(configured=True)
-    teams_payload = api.get(
+    errors: list[dict[str, Any]] = feed["errors"]
+    teams_payload = _safe_get(
+        api,
         f"competitions/{settings.football_data_competition}/teams",
         params={"season": settings.football_data_season},
+        errors=errors,
     )
     competition_teams = teams_payload.get("teams") or []
     feed["coverage"]["competition_teams"] = _status_block(
@@ -75,18 +176,22 @@ def build_pronostics_model_feed(
         team_id = team["football_data_team_id"]
         team_detail: dict[str, Any] = {}
         if team_id is not None:
-            team_detail = api.get(f"teams/{team_id}")
+            team_detail = _safe_get(api, f"teams/{team_id}", errors=errors)
             _merge_team_detail(team, team_detail)
             _append_players(feed, team, team_detail)
-            team_matches = api.get(
+            team_matches = _safe_get(
+                api,
                 f"teams/{team_id}/matches",
                 params={
                     "status": "FINISHED",
-                    "limit": recent_team_matches_limit,
                     "dateFrom": date_from.isoformat(),
+                    "dateTo": date_to.isoformat(),
                 },
+                errors=errors,
             )
-            team["recent_form"] = _summarize_team_matches(team, team_matches)
+            team["recent_form"] = _summarize_team_matches(
+                team, team_matches, limit=recent_team_matches_limit
+            )
 
         feed["teams"].append(team)
 
@@ -96,11 +201,15 @@ def build_pronostics_model_feed(
             api,
             recent_player_matches_limit=recent_player_matches_limit,
             date_from=date_from,
+            date_to=date_to,
+            errors=errors,
         )
 
-    scorers_payload = api.get(
+    scorers_payload = _safe_get(
+        api,
         f"competitions/{settings.football_data_competition}/scorers",
         params={"season": settings.football_data_season, "limit": 100},
+        errors=errors,
     )
     feed["competition_scorers"] = _build_scorers(scorers_payload)
     feed["coverage"]["competition_scorers"] = _status_block(
@@ -132,6 +241,7 @@ def _empty_feed(*, configured: bool) -> dict[str, Any]:
         "teams": [],
         "players": [],
         "competition_scorers": [],
+        "errors": [],
         "unavailable_fields": FOOTBALL_DATA_UNAVAILABLE_FIELDS,
     }
 
@@ -235,19 +345,31 @@ def _append_players(feed: dict[str, Any], team: dict[str, Any], team_detail: dic
         )
 
 
-def _summarize_team_matches(team: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
-    matches = payload.get("matches") or []
-    result_set = payload.get("resultSet") or {}
+def _summarize_team_matches(
+    team: dict[str, Any], payload: dict[str, Any], *, limit: int = 10
+) -> dict[str, Any]:
+    all_matches = payload.get("matches") or []
+    # On ne garde que les N matchs termines les plus recents (tri par date desc).
+    finished = [
+        match
+        for match in all_matches
+        if (match.get("score") or {}).get("fullTime", {}).get("home") is not None
+        and (match.get("score") or {}).get("fullTime", {}).get("away") is not None
+    ]
+    finished.sort(key=lambda match: match.get("utcDate") or "", reverse=True)
+    matches = finished[: max(1, limit)]
+
     goals_for = 0
     goals_against = 0
     clean_sheets = 0
+    wins = 0
+    draws = 0
+    losses = 0
     played = 0
     normalized_team = team["local_team_key"]
     for match in matches:
         score = (match.get("score") or {}).get("fullTime") or {}
         home_score, away_score = score.get("home"), score.get("away")
-        if home_score is None or away_score is None:
-            continue
         home = _normalize_team(_api_team_name(match.get("homeTeam") or {}))
         away = _normalize_team(_api_team_name(match.get("awayTeam") or {}))
         if normalized_team == home:
@@ -260,14 +382,18 @@ def _summarize_team_matches(team: dict[str, Any], payload: dict[str, Any]) -> di
         goals_for += gf
         goals_against += ga
         clean_sheets += int(ga == 0)
+        wins += int(gf > ga)
+        draws += int(gf == ga)
+        losses += int(gf < ga)
 
     return {
-        "status": "retrieved" if matches else "missing",
+        "status": "retrieved" if played else "missing",
+        "matches_available": len(all_matches),
         "matches_count": len(matches),
         "played_count": played,
-        "wins": result_set.get("wins"),
-        "draws": result_set.get("draws"),
-        "losses": result_set.get("losses"),
+        "wins": wins,
+        "draws": draws,
+        "losses": losses,
         "goals_for": goals_for,
         "goals_against": goals_against,
         "clean_sheets": clean_sheets,
@@ -282,19 +408,24 @@ def _enrich_players_with_recent_matches(
     *,
     recent_player_matches_limit: int,
     date_from: date,
+    date_to: date,
+    errors: list[dict[str, Any]],
 ) -> None:
     enriched = 0
     for player in feed["players"]:
         person_id = player.get("person_id")
         if person_id is None:
             continue
-        payload = api.get(
+        payload = _safe_get(
+            api,
             f"persons/{person_id}/matches",
             params={
                 "limit": recent_player_matches_limit,
                 "dateFrom": date_from.isoformat(),
+                "dateTo": date_to.isoformat(),
                 "status": "FINISHED",
             },
+            errors=errors,
         )
         aggregations = payload.get("aggregations") or {}
         player["recent_stats"] = {

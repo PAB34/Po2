@@ -107,4 +107,5 @@ class PronosticsModelFeedRead(BaseModel):
     teams: list[dict[str, Any]]
     players: list[dict[str, Any]]
     competition_scorers: list[dict[str, Any]]
+    errors: list[dict[str, Any]]
     unavailable_fields: dict[str, str]
