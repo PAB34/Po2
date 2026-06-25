@@ -1,4 +1,10 @@
 from app.models.user import User
+from app.models.accounting_matrix import (
+    AccountingMatrixContract,
+    AccountingMatrixRule,
+    AccountingMatrixVersion,
+    InvoiceAccountingSnapshot,
+)
 from app.models.building import Building
 from app.models.building_meter import BuildingMeterLink
 from app.models.billing import BillingBpuLine, BillingConfig, BillingHphcSlot, BillingPriceEntry
