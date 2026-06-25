@@ -88,9 +88,14 @@ temporel des bâtiments. Tâche rattachée à `PO2-GRDF-001` et au cadre gaz pos
 - Validé : compileall, quota lève après N appels, garde recent 25j/5j, app boot 8 routes.
 - Détail : `docs/Modules/GRDF-API.md` §14.
 
+### Routage par fréquence de relève — ✅ FAIT
+- PCE `JJ` (publiées quotidiennes) échappent à la garde mensuelle → collectés chaque run ;
+  `6M/1M/MM` gardés ~1/mois ; informatives réservées à `1M/MM` (6M/JJ exclus).
+- Constantes `_DAILY_PUBLIEES_FREQ={JJ}`, `_NO_INFORMATIVES_FREQ={6M,JJ}` (`grdf_conso.py`).
+- Validé SQLite : informatives = {1M,MM} ; sync publiées skip 6M/1M/MM récents mais fetch JJ.
+
 ### Reste (post-visio / 1er appel live)
 - Valider forme réelle réponses conso/droits (credentials PROD) ; question DÉTENTEUR.
-- Router les PCE JJ/MM (via `frequence_releve`) vers la synchro informative.
 - Optionnel : lier `gas_pces.building_id` au patrimoine ; auto-câbler la sync droits 1/jour.
 
 ### Côté visio / 1er appel réel
