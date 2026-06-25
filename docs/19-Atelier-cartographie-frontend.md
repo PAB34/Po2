@@ -137,3 +137,7 @@ Marches & contrats > Factures marche
 ```
 
 Objectif : construire le parcours cible `importer -> controler -> comprendre -> decider -> exporter`, en reutilisant les fonctionnalites deja developpees autour des factures ENGIE/EDF, du controle BPU/TURPE/ENEDIS et de l'export finance.
+
+## Complement de methode - 2026-06-22
+
+L'atelier existant constitue une premiere cartographie, mais il doit etre enrichi avant de devenir la source de verite : utilisateur, situation, decision, donnees, regles, qualite, preuve, statut de validation et KPI UX. Voir [[21-Cartographie-fonctionnelle-vers-experience-utilisateur]]. Le shell est livre ; le design system reste a construire.

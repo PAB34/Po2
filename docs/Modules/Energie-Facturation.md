@@ -175,6 +175,11 @@ lot EDF eclairage public.
 
 - [[Modules/Energie-BPU]] — Source des prix attendus
 - [[Modules/Energie-Preconisations]] — Calcul prix unitaires
+- [[38-Modele-backend-matrices-comptables-versionnees]] — Imputation comptable versionnée par contrat (en aval du contrôle facture)
+
+## Imputation comptable versionnée (backend posé 2026-06-25)
+
+L'imputation comptable des factures (quel service/fonction/nature/opération/antenne pour chaque ligne) ne vit plus seulement dans les tables à plat `energy_accounting_*` / `cpe_accounting_*`. Un référentiel **versionné par contrat** a été ajouté (migration `0064`) : `accounting_matrix_contracts` → `accounting_matrix_versions` → `accounting_matrix_rules`, plus `invoice_accounting_snapshots` qui fige l'imputation appliquée à une facture au moment de la décision. Router `/api/accounting-matrices/*`. Invariant : une version active n'est jamais écrasée (clone → édition → activation). Cadrage : [[38-Modele-backend-matrices-comptables-versionnees]] ; décision : [[Decisions/010-matrices-comptables-versionnees]]. Les tables à plat existantes restent la source du seed initial.
 
 ## Note de consolidation - 2026-05-26
 

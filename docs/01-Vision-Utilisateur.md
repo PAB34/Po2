@@ -38,3 +38,9 @@ L'utilisateur final est un **chargé de patrimoine / responsable bâtiments / DG
 - L'utilisateur final n'est **pas un ingénieur** : l'UI doit être lisible (badges colorés, tooltips, légendes systématiques)
 - Environnement entreprise restreint côté admin (pas d'install logiciel libre, pas d'accès admin local)
 - Développement principalement piloté par **PAB34** (l'utilisateur du repo) avec assistance IA — d'où l'importance de ce vault de coordination
+
+## Profils cibles - reorientation 2026-06-22
+
+Le profil principal actuel reste le **pilote maintenance & energie**, utilisateur transversal et administrateur de fait. Le produit doit cependant etre prepare pour des profils cumulatifs : analyste energie, responsable maintenance/patrimoine technique, controleur finances, direction, gestionnaire/referent de site et administrateur fonctionnel. Un profil prestataire externe reste futur.
+
+Les profils pilotent l'accueil, le vocabulaire et la densite ; les permissions pilotent les actions ; le perimetre limite les villes, services, marches ou sites. Voir [[22-Developpement-deux-pistes-et-profils-utilisateurs]].

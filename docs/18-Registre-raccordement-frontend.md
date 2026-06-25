@@ -99,12 +99,14 @@ Point d'accord a valider : l'import patrimoine doit etre accessible, mais il ne 
 | Fluides > Vue d'ensemble | portefeuille PRM/PCE/eau, couverture, conso, anomalies | `EnergiePage`, `fetchEnergieOverview`, `fetchDataAudit` | Refondre |
 | Fluides > Electricite | detail PRM, conso, courbes, puissance max, DJU | `EnergieDetailPage`, fonctions `fetchPrm*`, `fetchDju*` | Brancher |
 | Fluides > Gaz | PCE, GRDF, conso mensuelle, rapprochement P1 | `EnergieGazPage`, fonctions `fetchGrdf*` | Brancher/P1 |
+| Fluides > Performance & DJU | comparaison temporelle, normalisation climatique, derive | `EnergieDetailPage`, `dju_sync.py`, fonctions `fetchDju*` | Refondre/P0 |
+| Fluides > Atterrissage consommations | reel ENEDIS/GRDF, DJU restants, scenarios kWh et euros | services energie/gaz/DJU + prix BPU/TURPE/facturation | Completer/P0 |
 | Fluides > Eau | consommations eau, pertes possibles, futur SUEZ | a cadrer | A cadrer |
 | Fluides > Donnees distributeurs | sync ENEDIS, async FTP/AES, GRDF sync, qualite des donnees | `EnergieDataOpsPage`, `fetchSyncStatus`, `fetchEnedisAsyncJobs`, `fetchGrdfConsoStatus` | Garder expert |
 | Fluides > Preconisations | puissance, pertes, couts reels, recommandations | `EnergieRecommendationsPage`, `fetchPowerRecommendations` | Brancher |
 | Fluides > Prix contractuels | BPU, TURPE, timeline, edition | `EnergieBpuPage`, `EnergieBillingPage`, fonctions `fetchBpu*`, `fetchTurpeVersions`, billing config | Refondre |
 
-Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF/eau) et `prix contractuels`. Les factures sont un parcours marche transversal, pas un sous-bloc Fluides.
+Decision UX : separer clairement `donnees mesurees` (ENEDIS/GRDF/eau), `contexte climatique DJU`, `previsions physiques` et `prix contractuels`, puis les relier dans un atterrissage explicable. Les factures restent un parcours marche transversal.
 
 ### 4.4 Marches & contrats > Factures marche
 
@@ -224,3 +226,11 @@ Recommandation :
 On valide ce registre comme plan de cablage,
 puis on implemente le paquet 1 : shell + cockpit + pages conteneurs + aliases.
 ```
+
+## 8. Methode de cartographie UX complete - 2026-06-22
+
+Le raccordement `ecran -> endpoint` est necessaire mais insuffisant. Chaque capacite doit desormais etre reliee a une situation utilisateur, une decision, une preuve, un niveau de qualite, un ecran cible, un composant et un indicateur de succes. La methode canonique et l'etat reel du design system sont dans [[21-Cartographie-fonctionnelle-vers-experience-utilisateur]].
+
+## 9. Passage au cockpit canonique - 2026-06-22
+
+Ce registre reste une source historique utile, mais le pilotage quotidien de la couverture frontend passe a [[24-Cockpit-canonique-reconstruction-produit-frontend]], qui ajoute profils, etat capacite, etat experience, workflows et decisions de reconstruction. Les contrats d'ecran utilisent [[Templates/Contrat-ecran-UX]].
