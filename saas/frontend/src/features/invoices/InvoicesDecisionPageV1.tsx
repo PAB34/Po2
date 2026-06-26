@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, DataTable, Drawer, FilterBar, KpiCard, StatusBadge } from "../../design-system";
+import { Button, Drawer, StatusBadge } from "../../design-system";
 import { useAccountingMatricesV1 } from "./accountingMatrixV1";
 import { useInvoiceDecisionsV1 } from "./useInvoiceDecisionsV1";
 import { useInvoiceAccountingSnapshotV1, useInvoiceAccountingActionsV1 } from "./useInvoiceAccountingSnapshotsV1";
@@ -7,6 +7,9 @@ import { useMatrixContractsV1 } from "../matrices/useMatricesV1";
 import type { AccountingMatrixContractV1 } from "../../lib/api";
 import type { AccountingMatrixStatus, InvoiceDecision, InvoiceDecisionStatus } from "./invoices.types";
 
+// ---------------------------------------------------------------------------
+// Helpers de présentation
+// ---------------------------------------------------------------------------
 function matrixSupplierKeyword(value: string) {
   const upper = value.toUpperCase();
   if (upper.includes("TOTAL")) return "TOTAL";
@@ -29,6 +32,16 @@ function actionError(error: unknown) {
   return error instanceof Error ? error.message : null;
 }
 
+function supplierInitials(supplier: string) {
+  const upper = supplier.toUpperCase();
+  if (upper.includes("TOTAL")) return "TE";
+  if (upper.includes("DALKIA")) return "DK";
+  if (upper.includes("ENGIE")) return "EN";
+  if (upper.includes("EDF")) return "ED";
+  if (upper.includes("SPIE")) return "SP";
+  return supplier.slice(0, 2).toUpperCase();
+}
+
 function invoiceTone(status: InvoiceDecisionStatus) {
   if (status === "conforme") return "ok" as const;
   if (status === "anomalie") return "bad" as const;
@@ -37,13 +50,7 @@ function invoiceTone(status: InvoiceDecisionStatus) {
 }
 
 function invoiceLabel(status: InvoiceDecisionStatus) {
-  return {
-    conforme: "Conforme",
-    anomalie: "Anomalie",
-    decision: "À décider",
-    transmise: "Transmise",
-    archivee: "Archivée",
-  }[status];
+  return { conforme: "Conforme", anomalie: "Anomalie", decision: "À décider", transmise: "Transmise", archivee: "Archivée" }[status];
 }
 
 function matrixTone(status: AccountingMatrixStatus) {
@@ -55,13 +62,7 @@ function matrixTone(status: AccountingMatrixStatus) {
 }
 
 function matrixLabel(status: AccountingMatrixStatus) {
-  return {
-    validee: "Validée",
-    proposee: "Proposée",
-    a_completer: "À compléter",
-    a_arbitrer: "À arbitrer",
-    non_applicable: "Non applicable",
-  }[status];
+  return { validee: "Validée", proposee: "Proposée", a_completer: "À compléter", a_arbitrer: "À arbitrer", non_applicable: "Non applicable" }[status];
 }
 
 function snapshotLabel(status?: string) {
@@ -72,31 +73,6 @@ function snapshotLabel(status?: string) {
   return "Aucun snapshot";
 }
 
-type SnapshotException = { code?: string; message?: string; severity?: string; line_ref?: string };
-
-function parseExceptions(json: string | null): SnapshotException[] {
-  if (!json) return [];
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? (parsed as SnapshotException[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function exceptionTone(severity?: string) {
-  if (severity === "error" || severity === "blocking") return "bad" as const;
-  if (severity === "warning") return "warn" as const;
-  return "info" as const;
-}
-
-function snapshotTone(status?: string) {
-  if (status === "validated" || status === "exported") return "ok" as const;
-  if (status === "proposed") return "info" as const;
-  if (status === "manual_override") return "warn" as const;
-  return "neutral" as const;
-}
-
 function formatKpiAmount(value: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 }
@@ -105,66 +81,85 @@ function sumInvoiceAmounts(rows: InvoiceDecision[]) {
   return rows.reduce((total, invoice) => total + (invoice.amountTtc ?? 0), 0);
 }
 
-function kpiAmountDetail(rows: InvoiceDecision[], suffix: string) {
-  return formatKpiAmount(sumInvoiceAmounts(rows)) + " · " + suffix;
+// ---------------------------------------------------------------------------
+// Snapshot comptable : parsing imputation par ligne + exceptions
+// ---------------------------------------------------------------------------
+type SnapshotImputation = { service?: string | null; function?: string | null; antenna?: string | null; operation?: string | null; nature?: string | null; label?: string | null; allocation_percent?: number; amount_allocated?: number | null };
+type SnapshotLine = { line_index: number; line_ref?: string | null; billed_item?: string | null; amount?: number | null; matched: boolean; allocation_total?: number; imputations: SnapshotImputation[] };
+type SnapshotPayload = { lines: SnapshotLine[]; exceptions: Array<{ billed_item?: string | null; reason?: string }>; matched_lines: number; total_lines: number };
+
+function parseSnapshotJson(json: string | null | undefined): SnapshotPayload | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!parsed || !Array.isArray(parsed.lines)) return null;
+    return parsed as SnapshotPayload;
+  } catch {
+    return null;
+  }
+}
+
+function parseExceptions(json: string | null | undefined): Array<{ billed_item?: string | null; reason?: string }> {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function eur(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
+}
+
+function dominantAxes(payload: SnapshotPayload): string[] {
+  const natures = new Set<string>();
+  for (const line of payload.lines) {
+    for (const imp of line.imputations) {
+      const key = imp.nature || imp.label || imp.service;
+      if (key) natures.add(key);
+    }
+  }
+  return Array.from(natures).slice(0, 4);
+}
+
+// ---------------------------------------------------------------------------
+// Verdict + décision recommandée (dérivés des vraies données)
+// ---------------------------------------------------------------------------
+function verdict(invoice: InvoiceDecision, payload: SnapshotPayload | null, exceptionsCount: number) {
+  if (invoice.status === "anomalie") return { tone: "bad" as const, text: invoice.issue || "Écart de contrôle à traiter" };
+  if (exceptionsCount > 0) return { tone: "warn" as const, text: `${exceptionsCount} exception(s) d'imputation à résoudre` };
+  if (payload && payload.total_lines > 0 && payload.matched_lines < payload.total_lines)
+    return { tone: "warn" as const, text: `${payload.matched_lines}/${payload.total_lines} lignes imputées` };
+  if (invoice.status === "transmise") return { tone: "ok" as const, text: "Facture transmise aux finances" };
+  if (invoice.status === "conforme") return { tone: "ok" as const, text: invoice.issue || "Contrôles conformes" };
+  return { tone: "warn" as const, text: invoice.issue || "Décision attendue" };
+}
+
+function recommendation(invoice: InvoiceDecision, snapshotStatus: string | undefined, exceptionsCount: number) {
+  if (invoice.status === "transmise") return "Aucune action : facture déjà transmise aux finances.";
+  if (invoice.status === "anomalie") return "Préparer une réclamation fournisseur avant validation.";
+  if (exceptionsCount > 0) return "Résoudre les exceptions d'imputation avant de valider.";
+  if (snapshotStatus === "validated") return "Snapshot validé : prêt pour l'export finances.";
+  if (snapshotStatus === "proposed") return "Vérifier l'imputation proposée puis valider.";
+  return "Appliquer la matrice comptable pour proposer l'imputation.";
 }
 
 const invoiceWorkflowSteps = [
-  { label: "Importer", detail: "Export fournisseur, lot annuel ou fichier unitaire" },
-  { label: "Dédoublonner", detail: "Nouvelles, historiques, révisions et erreurs" },
-  { label: "Contrôler", detail: "BPU, TURPE, taxes, périodes, montants" },
-  { label: "Imputer", detail: "Matrice contractuelle et snapshot comptable" },
-  { label: "Décider", detail: "Valider, mettre en attente ou réclamer" },
-  { label: "Exporter", detail: "Transmission finances et historique figé" },
+  { label: "Importer", detail: "Export fournisseur ou lot annuel" },
+  { label: "Dédoublonner", detail: "Nouvelles vs déjà traitées" },
+  { label: "Contrôler", detail: "BPU, TURPE, taxes, périodes" },
+  { label: "Imputer", detail: "Matrice comptable versionnée" },
+  { label: "Décider", detail: "Valider, réclamer ou exporter" },
+  { label: "Exporter", detail: "Transmission finances figée" },
 ] as const;
-
-function sourceProfile(invoice: InvoiceDecision) {
-  if (invoice.source === "gas-totalenergies") {
-    return {
-      title: "Dossier gaz TotalEnergies",
-      eyebrow: "BPU gaz, taxes et référentiels datés",
-      items: [
-        ["Contrôle attendu", "ATRD, CTA, accise, TVA et lignes non contrôlées explicites"],
-        ["Décision métier", "Valider, réclamer ou historiser avec preuve ligne par ligne"],
-        ["Imputation", "Matrice comptable du marché gaz à appliquer avant finances"],
-      ],
-    };
-  }
-  if (invoice.source === "cpe-dalkia") {
-    return {
-      title: "Dossier CPE / DALKIA",
-      eyebrow: "Maintenance, P1/P2/P3 et justificatifs",
-      items: [
-        ["Contrôle attendu", "Contrat, période, prestation facturée, pièces et écarts"],
-        ["Décision métier", "Arbitrer la conformité avant validation comptable"],
-        ["Imputation", "Matrice CPE par contrat, site, service et nature comptable"],
-      ],
-    };
-  }
-  if (invoice.source === "energy-import") {
-    return {
-      title: "Dossier fournisseur fluides",
-      eyebrow: "ENGIE / EDF et futurs fournisseurs",
-      items: [
-        ["Contrôle attendu", "BPU, TURPE, taxes, abonnement, consommation et doublons"],
-        ["Décision métier", "Contrôler les écarts puis préparer la transmission finances"],
-        ["Imputation", "Matrice du contrat de fourniture et axes comptables associés"],
-      ],
-    };
-  }
-  return {
-    title: "Dossier de démonstration",
-    eyebrow: "Prototype UX sans écriture",
-    items: [
-      ["Contrôle attendu", "Valider le parcours avant raccordement complet"],
-      ["Décision métier", "Vérifier que les libellés et actions parlent métier"],
-      ["Imputation", "Simulation de matrice comptable"],
-    ],
-  };
-}
 
 export function InvoicesDecisionPageV1() {
   const [query, setQuery] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [matrixFilter, setMatrixFilter] = useState("all");
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDecision | null>(null);
   const { invoices, isFetching, isUsingFallback } = useInvoiceDecisionsV1();
   const { matrices, isUsingFallback: isUsingMatrixFallback } = useAccountingMatricesV1();
@@ -172,6 +167,7 @@ export function InvoicesDecisionPageV1() {
   const actions = useInvoiceAccountingActionsV1(selectedInvoice);
   const { data: matrixContracts = [] } = useMatrixContractsV1();
   const [matrixContractId, setMatrixContractId] = useState<number | null>(null);
+
   useEffect(() => {
     setMatrixContractId(null);
     actions.apply.reset();
@@ -179,296 +175,316 @@ export function InvoicesDecisionPageV1() {
     actions.exportFinance.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInvoice?.stableId]);
+
   const autoMatchedContractId = useMemo(() => {
     const code = selectedInvoice?.contractCode?.trim().toUpperCase();
     if (!code) return null;
     return matrixContracts.find((c) => c.contract_code?.trim().toUpperCase() === code)?.id ?? null;
   }, [selectedInvoice, matrixContracts]);
-  const suggestedContractId = useMemo(
-    () => suggestMatrixContract(selectedInvoice, matrixContracts),
-    [selectedInvoice, matrixContracts],
-  );
+  const suggestedContractId = useMemo(() => suggestMatrixContract(selectedInvoice, matrixContracts), [selectedInvoice, matrixContracts]);
   const effectiveContractId = matrixContractId ?? autoMatchedContractId ?? suggestedContractId;
   const effectiveContract = matrixContracts.find((c) => c.id === effectiveContractId) ?? null;
   const isAutoMatched = matrixContractId === null && autoMatchedContractId !== null;
 
+  const suppliers = useMemo(() => Array.from(new Set(invoices.map((i) => i.supplier))).sort(), [invoices]);
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q
-      ? invoices.filter((invoice) => Object.values(invoice).join(" ").toLowerCase().includes(q))
-      : invoices;
-  }, [query, invoices]);
+    return invoices.filter((invoice) => {
+      if (supplierFilter !== "all" && invoice.supplier !== supplierFilter) return false;
+      if (matrixFilter !== "all" && invoice.matrixStatus !== matrixFilter) return false;
+      if (q && !Object.values(invoice).join(" ").toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [query, supplierFilter, matrixFilter, invoices]);
 
-  const invoiceKpis = useMemo(() => {
-    const toControl = invoices.filter(
-      (invoice) =>
-        invoice.status === "decision" ||
-        invoice.status === "anomalie" ||
-        invoice.matrixStatus === "a_completer" ||
-        invoice.matrixStatus === "a_arbitrer",
-    );
-    const conformes = invoices.filter((invoice) => invoice.status === "conforme");
-    const anomalies = invoices.filter(
-      (invoice) =>
-        invoice.status === "anomalie" ||
-        invoice.matrixStatus === "a_completer" ||
-        invoice.matrixStatus === "a_arbitrer",
-    );
-    const ready = invoices.filter((invoice) => invoice.status === "conforme" && invoice.matrixStatus === "validee");
-    const newRows = invoices.filter((invoice) => !invoice.alreadyProcessed).length;
-    const conformRate = invoices.length > 0 ? Math.round((conformes.length / invoices.length) * 100) : 0;
-
+  const kpis = useMemo(() => {
+    const nouvelles = invoices.filter((i) => !i.alreadyProcessed);
+    const imputees = invoices.filter((i) => i.matrixStatus === "validee");
+    const exceptions = invoices.filter((i) => i.status === "anomalie" || i.matrixStatus === "a_completer" || i.matrixStatus === "a_arbitrer");
+    const transmises = invoices.filter((i) => i.status === "transmise");
     return {
-      toControl: {
-        count: toControl.length,
-        detail: kpiAmountDetail(toControl, newRows + " nouvelle(s) non traitée(s)"),
-      },
-      conformes: {
-        count: conformes.length,
-        detail: kpiAmountDetail(conformes, conformRate + " % du lot"),
-      },
-      anomalies: {
-        count: anomalies.length,
-        detail: kpiAmountDetail(anomalies, "réclamation ou correction proposée"),
-      },
-      ready: {
-        count: ready.length,
-        detail: kpiAmountDetail(ready, "vers le service finances"),
-      },
+      nouvelles: { count: nouvelles.length, detail: `${formatKpiAmount(sumInvoiceAmounts(nouvelles))} à instruire` },
+      imputees: { count: imputees.length, detail: `sur ${invoices.length} factures` },
+      exceptions: { count: exceptions.length, detail: `${formatKpiAmount(sumInvoiceAmounts(exceptions))} à arbitrer` },
+      transmises: { count: transmises.length, detail: `${formatKpiAmount(sumInvoiceAmounts(transmises))} ce lot` },
     };
   }, [invoices]);
 
-  const snapshotStatus = snapshot.data?.status;
-  const snapshotDetail = snapshot.isFetching
-    ? "Recherche du snapshot comptable…"
-    : snapshot.data?.matrix_version_id
-      ? "Version matrice #" + snapshot.data.matrix_version_id
-      : selectedInvoice?.source === "mock"
-        ? "Donnée de démonstration"
-        : "Pas encore imputée via la matrice";
-
+  const snapshotPayload = parseSnapshotJson(snapshot.data?.snapshot_json);
+  const snapshotExceptions = parseExceptions(snapshot.data?.exceptions_json);
+  const blockingExceptions = snapshotExceptions.length > 0;
+  const currentVerdict = selectedInvoice ? verdict(selectedInvoice, snapshotPayload, snapshotExceptions.length) : null;
 
   const sourceTone = isUsingFallback ? "warn" : isFetching ? "info" : "ok";
   const sourceLabel = isUsingFallback ? "Démonstration" : isFetching ? "Synchronisation" : "Données API";
-  const matrixSourceLabel = isUsingMatrixFallback ? "Matrices transitoires" : "Matrices API";
-  const sourceDetail = isUsingFallback
-    ? "Aucune session ou API indisponible : la page montre un jeu de démonstration explicite."
-    : "La file agrège les imports ENGIE/EDF, les factures gaz TotalEnergies et les factures CPE/DALKIA disponibles.";
+
   return (
     <div className="po2-page-v1">
-      <header className="po2-page-v1__head po2-invoices-v1__head">
+      <header className="po2-prototype-page-head">
         <div>
           <span className="po2-eyebrow">Factures & décisions</span>
           <h1>Importer, contrôler, imputer, décider.</h1>
           <p>Une chaîne unique relie la facture à son contrat, sa matrice comptable et la transmission aux finances.</p>
         </div>
-        <div className="po2-invoices-v1__head-actions">
+        <div className="po2-prototype-actions">
           <Button variant="ghost">Rapports d’import</Button>
           <Button>Importer des factures</Button>
         </div>
       </header>
 
-      <section className="po2-invoice-source-strip">
-        <StatusBadge tone={sourceTone}>{sourceLabel}</StatusBadge>
-        <div>
-          <strong>{sourceDetail}</strong>
-          <small>{matrixSourceLabel} · {invoices.length} facture(s) dans la file · {filteredRows.length} affichée(s)</small>
+      <section className="po2-proto-panel po2-proto-flow-panel">
+        <div className="po2-proto-flow-batch">
+          <div>
+            <span className="po2-eyebrow">File de traitement</span>
+            <h2>{invoices.length} facture(s) · {filteredRows.length} affichée(s)</h2>
+            <p>Agrège les imports ENGIE/EDF, le gaz TotalEnergies et les factures CPE/DALKIA disponibles.</p>
+          </div>
+          <StatusBadge tone={sourceTone}>{sourceLabel}</StatusBadge>
         </div>
-      </section>
-
-      <div className="po2-kpi-grid">
-        <KpiCard label="À contrôler" value={String(invoiceKpis.toControl.count)} detail={invoiceKpis.toControl.detail} icon="▤" />
-        <KpiCard label="Conformes" value={String(invoiceKpis.conformes.count)} detail={invoiceKpis.conformes.detail} tone="good" icon="✓" />
-        <KpiCard label="Avec anomalie" value={String(invoiceKpis.anomalies.count)} detail={invoiceKpis.anomalies.detail} tone="danger" icon="!" />
-        <KpiCard label="Prêtes à transmettre" value={String(invoiceKpis.ready.count)} detail={invoiceKpis.ready.detail} tone="info" icon="→" />
-      </div>
-
-      <Card title="Chaîne de traitement" eyebrow="facture -> contrôle -> décision -> finances">
-        <div className="po2-invoice-workflow po2-invoice-workflow--compact">
+        <div className="po2-proto-invoice-steps">
           {invoiceWorkflowSteps.map((step, index) => (
-            <article key={step.label} className="po2-invoice-workflow__step">
+            <article key={step.label} className={index < 4 ? "done" : "current"}>
               <span>{index + 1}</span>
-              <strong>{step.label}</strong>
+              <b>{step.label}</b>
               <small>{step.detail}</small>
             </article>
           ))}
         </div>
-      </Card>
+      </section>
 
-      <Card
-        title="Matrices comptables par contrat"
-        eyebrow={isUsingMatrixFallback ? "Référentiel contractuel · synthèse mockée" : "Référentiel contractuel · synthèse API"}
-        action={<Button variant="ghost">Exporter XLSX</Button>}
-      >
-        <div className="po2-matrix-grid">
+      <div className="po2-proto-kpi-grid">
+        <article><span>Nouvelles</span><strong>{kpis.nouvelles.count}</strong><small>{kpis.nouvelles.detail}</small></article>
+        <article><span>Imputation complète</span><strong>{kpis.imputees.count}</strong><small>{kpis.imputees.detail}</small></article>
+        <article><span>Exceptions comptables</span><strong>{kpis.exceptions.count}</strong><small>{kpis.exceptions.detail}</small></article>
+        <article><span>Transmises aux finances</span><strong>{kpis.transmises.count}</strong><small>{kpis.transmises.detail}</small></article>
+      </div>
+
+      <section className="po2-proto-panel po2-proto-matrix-overview">
+        <div className="po2-proto-panel-head">
+          <div>
+            <span className="po2-eyebrow">{isUsingMatrixFallback ? "Référentiel contractuel · synthèse transitoire" : "Référentiel contractuel · synthèse API"}</span>
+            <h2>Matrices comptables par contrat</h2>
+            <p>La facture hérite de la version active ; seules les exceptions sont corrigées par la comptabilité.</p>
+          </div>
+          <div className="po2-prototype-actions">
+            <Button variant="ghost">↓ Exporter XLSX</Button>
+          </div>
+        </div>
+        <div className="po2-proto-matrix-contracts">
           {matrices.map((matrix) => (
-            <article key={matrix.id} className="po2-matrix-card">
-              <div>
-                <strong>{matrix.supplier}</strong>
-                <small>{matrix.contract}</small>
+            <article key={matrix.id}>
+              <div className="po2-proto-matrix-card-top">
+                <span className="po2-proto-supplier-logo">{supplierInitials(matrix.supplier)}</span>
+                <div>
+                  <strong>{matrix.supplier}</strong>
+                  <small>{matrix.contract}</small>
+                </div>
+                <StatusBadge tone={matrix.status === "Active" ? "ok" : matrix.status === "À valider" ? "warn" : "bad"}>{matrix.status}</StatusBadge>
               </div>
-              <StatusBadge tone={matrix.status === "Active" ? "ok" : matrix.status === "À valider" ? "warn" : "bad"}>{matrix.status}</StatusBadge>
-              <p>{matrix.version}</p>
-              <dl>
-                <div><dt>Couverture</dt><dd>{matrix.coverage}</dd></div>
-                <div><dt>Règles</dt><dd>{matrix.rules}</dd></div>
-                <div><dt>Exceptions</dt><dd>{matrix.exceptions}</dd></div>
-              </dl>
+              <div className="po2-proto-matrix-stats">
+                <span><b>{matrix.coverage}</b> couverture</span>
+                <span><b>{matrix.exceptions}</b></span>
+              </div>
+              <a href="/refonte-v1/matrices">Éditer la matrice →</a>
             </article>
           ))}
         </div>
-      </Card>
+      </section>
 
-      <Card
-        title="File factures"
-        eyebrow={isUsingFallback ? "Contrôle et décision · données de démonstration" : isFetching ? "Contrôle et décision · synchronisation" : "Contrôle et décision · données API"}
-        action={<StatusBadge tone={sourceTone}>{sourceLabel}</StatusBadge>}
-      >
-        <FilterBar searchPlaceholder="Numéro, fournisseur, site ou marché" searchValue={query} onSearchChange={setQuery} />
-        <DataTable
-          rows={filteredRows}
-          getRowKey={(invoice) => invoice.stableId}
-          onRowClick={setSelectedInvoice}
-          columns={[
-            { key: "supplier", header: "Fournisseur / facture", render: (invoice) => <span><strong>{invoice.supplier}</strong><small className="po2-muted-line">{invoice.invoiceNumber}</small></span> },
-            { key: "site", header: "Site", render: (invoice) => invoice.siteDetail ? <span><strong>{invoice.siteLabel}</strong><small className="po2-muted-line">{invoice.siteDetail}</small></span> : invoice.siteLabel },
-            { key: "market", header: "Marché", render: (invoice) => invoice.marketLabel ?? invoice.contractLabel },
-            { key: "amount", header: "Montant TTC", render: (invoice) => <strong>{invoice.amountTtcLabel}</strong> },
-            { key: "matrix", header: "Matrice", render: (invoice) => <StatusBadge tone={matrixTone(invoice.matrixStatus)}>{matrixLabel(invoice.matrixStatus)}</StatusBadge> },
-            { key: "decision", header: "Décision", render: (invoice) => <StatusBadge tone={invoiceTone(invoice.status)}>{invoiceLabel(invoice.status)}</StatusBadge> },
-          ]}
-        />
-      </Card>
+      <div className="po2-proto-toolbar-row">
+        <label>
+          <span>⌕</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Numéro, fournisseur, site ou marché" />
+        </label>
+        <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label="Filtrer fournisseur">
+          <option value="all">Tous les fournisseurs</option>
+          {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={matrixFilter} onChange={(e) => setMatrixFilter(e.target.value)} aria-label="Filtrer imputation">
+          <option value="all">Toutes les imputations</option>
+          <option value="validee">Validée</option>
+          <option value="proposee">Proposée</option>
+          <option value="a_completer">À compléter</option>
+          <option value="a_arbitrer">À arbitrer</option>
+        </select>
+      </div>
+
+      <section className="po2-proto-panel po2-proto-table-panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Fournisseur / facture</th>
+              <th>Site</th>
+              <th>Marché</th>
+              <th>Montant TTC</th>
+              <th>Émission</th>
+              <th>Matrice</th>
+              <th>Décision</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map((invoice) => (
+              <tr key={invoice.stableId} className={invoice.stableId === selectedInvoice?.stableId ? "active" : ""} onClick={() => setSelectedInvoice(invoice)}>
+                <td>
+                  <div className="po2-proto-supplier">
+                    <span className="po2-proto-supplier-logo">{supplierInitials(invoice.supplier)}</span>
+                    <span><b>{invoice.supplier}</b><small>{invoice.invoiceNumber}</small></span>
+                  </div>
+                </td>
+                <td>{invoice.siteDetail ? <span><b>{invoice.siteLabel}</b><small className="po2-muted-line">{invoice.siteDetail}</small></span> : invoice.siteLabel}</td>
+                <td>{invoice.marketLabel ?? invoice.contractLabel}</td>
+                <td><strong>{invoice.amountTtcLabel}</strong></td>
+                <td>{invoice.issuedAt ?? "—"}</td>
+                <td><StatusBadge tone={matrixTone(invoice.matrixStatus)}>{matrixLabel(invoice.matrixStatus)}</StatusBadge></td>
+                <td><StatusBadge tone={invoiceTone(invoice.status)}>{invoiceLabel(invoice.status)}</StatusBadge></td>
+                <td className="po2-proto-open-cell">Ouvrir →</td>
+              </tr>
+            ))}
+            {filteredRows.length === 0 ? (
+              <tr><td colSpan={8} className="po2-muted-line">Aucune facture ne correspond aux filtres.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </section>
 
       <Drawer
         open={Boolean(selectedInvoice)}
         title={selectedInvoice ? selectedInvoice.supplier + " · " + selectedInvoice.invoiceNumber : "Facture"}
         eyebrow="Dossier facture"
-        description={selectedInvoice ? selectedInvoice.siteLabel + " · " + selectedInvoice.contractLabel : undefined}
+        description={selectedInvoice ? selectedInvoice.siteLabel + " · " + (selectedInvoice.marketLabel ?? selectedInvoice.contractLabel) : undefined}
         onClose={() => setSelectedInvoice(null)}
-        footer={<Button variant="ghost" disabled title="Génération du courrier de réclamation à venir">Préparer une réclamation (à venir)</Button>}
       >
         {selectedInvoice ? (
-          <div className="po2-invoice-proof">
-            <div className="po2-kpi-grid">
-              <KpiCard label="Montant TTC" value={selectedInvoice.amountTtcLabel} detail={selectedInvoice.issuedAt ?? "Date inconnue"} />
-              <KpiCard label="Échéance" value={selectedInvoice.dueAt ?? "À définir"} detail="À traiter avant transmission" />
-              <KpiCard label="Statut" value={invoiceLabel(selectedInvoice.status)} detail={selectedInvoice.issue} />
-              <KpiCard label="Matrice comptable" value={snapshotLabel(snapshotStatus)} detail={snapshotDetail} />
+          <div className="po2-proto-dossier">
+            <div className="po2-proto-dossier-kpis">
+              <div><span>Montant TTC</span><b>{selectedInvoice.amountTtcLabel}</b></div>
+              <div><span>Échéance</span><b>{selectedInvoice.dueAt ?? "À définir"}</b></div>
+              <div><span>Statut</span><b>{invoiceLabel(selectedInvoice.status)}</b></div>
             </div>
 
-            <Card title={sourceProfile(selectedInvoice).title} eyebrow={sourceProfile(selectedInvoice).eyebrow}>
-              <div className="po2-invoice-source-profile">
-                <article>
-                  <span>Facture</span>
-                  <strong>{selectedInvoice.invoiceNumber}</strong>
-                  <small>{selectedInvoice.supplier} · {selectedInvoice.contractLabel}</small>
-                </article>
-                <article>
-                  <span>Site / périmètre</span>
-                  <strong>{selectedInvoice.siteLabel}</strong>
-                  <small>{selectedInvoice.alreadyProcessed ? "Déjà connu dans l'historique" : "Nouveau ou à instruire"}</small>
-                </article>
-                {sourceProfile(selectedInvoice).items.map(([label, detail]) => (
-                  <article key={label}>
-                    <span>{label}</span>
-                    <strong>{detail}</strong>
-                  </article>
-                ))}
+            {currentVerdict ? (
+              <div className="po2-proto-verdict" style={currentVerdict.tone === "bad" ? { background: "#f4d4d4" } : currentVerdict.tone === "warn" ? { background: "#f6e7c8" } : undefined}>
+                <span style={currentVerdict.tone === "bad" ? { background: "#d3584f" } : currentVerdict.tone === "warn" ? { background: "#d9a13a" } : undefined}>{currentVerdict.tone === "bad" ? "!" : currentVerdict.tone === "warn" ? "•" : "✓"}</span>
+                <p><b>Verdict :</b> {currentVerdict.text}</p>
               </div>
-            </Card>
+            ) : null}
 
-            <Card title="Trace de contrôle" eyebrow="Preuves">
-              <div className="po2-decision-list">
-                {snapshot.data ? (
-                  <>
-                    <article className="po2-decision-item">
-                      <StatusBadge tone={snapshotTone(snapshot.data.status)}>{snapshotLabel(snapshot.data.status)}</StatusBadge>
-                      <strong>Snapshot comptable</strong>
-                      <small>{snapshot.data.exceptions_json ? "Exceptions à analyser avant validation" : "Imputation enregistrée sans exception bloquante"}</small>
-                    </article>
-                    {parseExceptions(snapshot.data.exceptions_json).slice(0, 3).map((ex, i) => (
-                      <article key={ex.code ?? i} className="po2-decision-item">
-                        <StatusBadge tone={exceptionTone(ex.severity)}>{ex.severity?.toUpperCase() ?? "EX"}</StatusBadge>
-                        <strong>{ex.code ?? "Exception"}</strong>
-                        <small>{ex.message ?? "Détail non disponible"}{ex.line_ref ? " · ligne " + ex.line_ref : ""}</small>
+            <h3>Trace de contrôle</h3>
+            <div className="po2-proto-control-list">
+              {selectedInvoice.proofs.length > 0 ? selectedInvoice.proofs.map((proof) => (
+                <article key={proof.label + "-" + proof.method}>
+                  <StatusBadge tone={proof.status === "bad" ? "bad" : proof.status === "warn" ? "warn" : proof.status === "ok" ? "ok" : "info"}>{proof.status.toUpperCase()}</StatusBadge>
+                  <div><strong>{proof.label}</strong><small>{proof.method}{proof.reference ? " · réf. " + proof.reference : ""}</small></div>
+                </article>
+              )) : (
+                <article>
+                  <StatusBadge tone="info">INFO</StatusBadge>
+                  <div><strong>Trace à construire</strong><small>Le contrôle fournira les preuves ligne par ligne.</small></div>
+                </article>
+              )}
+            </div>
+
+            <h3>Imputation proposée</h3>
+            {selectedInvoice.source === "mock" ? (
+              <p className="po2-muted-line">Facture de démonstration : imputation simulée.</p>
+            ) : snapshotPayload ? (
+              <>
+                <div className="po2-proto-accounting-grid">
+                  <article><span>Lignes imputées</span><strong>{snapshotPayload.matched_lines}/{snapshotPayload.total_lines}</strong></article>
+                  <article><span>Exceptions</span><strong>{snapshotExceptions.length || "Aucune"}</strong></article>
+                  {dominantAxes(snapshotPayload).map((axis, i) => (
+                    <article key={axis + i}><span>Nature {i + 1}</span><strong>{axis}</strong></article>
+                  ))}
+                </div>
+                {snapshotExceptions.length > 0 ? (
+                  <div className="po2-proto-control-list" style={{ marginTop: ".55rem" }}>
+                    {snapshotExceptions.slice(0, 4).map((ex, i) => (
+                      <article key={i}>
+                        <StatusBadge tone="bad">EXCEPT.</StatusBadge>
+                        <div><strong>{ex.billed_item ?? "Ligne"}</strong><small>{ex.reason ?? "Exception"}</small></div>
                       </article>
                     ))}
-                  </>
+                  </div>
                 ) : null}
-                {selectedInvoice.proofs.length > 0 ? selectedInvoice.proofs.map((proof) => (
-                  <article key={proof.label + "-" + proof.method} className="po2-decision-item">
-                    <StatusBadge tone={proof.status === "bad" ? "bad" : proof.status === "warn" ? "warn" : proof.status === "ok" ? "ok" : "info"}>{proof.status.toUpperCase()}</StatusBadge>
-                    <strong>{proof.label}</strong>
-                    <small>{proof.method}{proof.reference ? " · réf. " + proof.reference : ""}</small>
-                  </article>
-                )) : (
-                  <article className="po2-decision-item">
-                    <StatusBadge tone="info">INFO</StatusBadge>
-                    <strong>Trace à construire</strong>
-                    <small>Le raccordement devra fournir les preuves ligne par ligne.</small>
-                  </article>
+                <details style={{ marginTop: ".6rem" }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: ".82rem" }}>Détail ligne par ligne ({snapshotPayload.lines.length})</summary>
+                  <div className="po2-proto-control-list" style={{ marginTop: ".5rem" }}>
+                    {snapshotPayload.lines.map((line) => (
+                      <article key={line.line_index} style={{ gridTemplateColumns: "1fr" }}>
+                        <div>
+                          <strong>{line.billed_item ?? "Ligne " + (line.line_index + 1)} · {eur(line.amount)}</strong>
+                          {line.imputations.length > 0 ? line.imputations.map((imp, i) => (
+                            <small key={i}>
+                              {[imp.nature, imp.service, imp.function, imp.antenna, imp.operation].filter(Boolean).join(" · ") || imp.label || "Axes non précisés"}
+                              {imp.allocation_percent != null ? ` — ${imp.allocation_percent}% (${eur(imp.amount_allocated)})` : ""}
+                            </small>
+                          )) : <small className="po2-muted-line">Non imputée</small>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              </>
+            ) : (
+              <p className="po2-muted-line">Pas encore imputée. Appliquez la matrice ci-dessous.</p>
+            )}
+
+            <div className="po2-proto-decision-box">
+              <span>Décision recommandée</span>
+              <strong>{recommendation(selectedInvoice, snapshot.data?.status, snapshotExceptions.length)}</strong>
+            </div>
+
+            {selectedInvoice.source !== "mock" ? (
+              <div className="po2-invoice-actions" style={{ marginTop: ".85rem" }}>
+                {isAutoMatched ? (
+                  <p className="po2-muted-line">Matrice liée automatiquement au contrat {effectiveContract?.contract_code ?? selectedInvoice.contractCode} · {effectiveContract?.supplier ?? "DALKIA"}</p>
+                ) : (
+                  <label className="po2-invoice-actions__field">
+                    <span>{selectedInvoice.contractCode ? `Contrat ${selectedInvoice.contractCode} non reconnu — choisir une matrice` : "Matrice contrat"}</span>
+                    <select value={effectiveContractId ?? ""} onChange={(event) => setMatrixContractId(event.target.value ? Number(event.target.value) : null)}>
+                      <option value="">— choisir une matrice —</option>
+                      {matrixContracts.map((contract) => (
+                        <option key={contract.id} value={contract.id}>{contract.supplier} · {contract.contract_code ?? contract.contract_label ?? "#" + contract.id}</option>
+                      ))}
+                    </select>
+                  </label>
                 )}
               </div>
-            </Card>
+            ) : null}
 
-            <Card title="Imputation comptable" eyebrow="Appliquer la matrice → valider → transmettre">
-              {selectedInvoice.source === "mock" ? (
-                <p className="po2-muted-line">Facture de démonstration : actions comptables désactivées.</p>
-              ) : (
-                <div className="po2-invoice-actions">
-                  {isAutoMatched ? (
-                    <div className="po2-invoice-actions__field">
-                      <span>Matrice contrat</span>
-                      <p className="po2-muted-line">
-                        Liée automatiquement au contrat {effectiveContract?.contract_code ?? selectedInvoice.contractCode} · {effectiveContract?.supplier ?? "DALKIA"}
-                      </p>
-                    </div>
-                  ) : (
-                    <label className="po2-invoice-actions__field">
-                      <span>{selectedInvoice.contractCode ? `Contrat ${selectedInvoice.contractCode} non reconnu — choisir une matrice` : "Matrice contrat"}</span>
-                      <select
-                        value={effectiveContractId ?? ""}
-                        onChange={(event) => setMatrixContractId(event.target.value ? Number(event.target.value) : null)}
-                      >
-                        <option value="">— choisir une matrice —</option>
-                        {matrixContracts.map((contract) => (
-                          <option key={contract.id} value={contract.id}>
-                            {contract.supplier} · {contract.contract_code ?? contract.contract_label ?? "#" + contract.id}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <div className="po2-invoice-actions__buttons">
-                    <Button
-                      onClick={() => effectiveContractId && actions.apply.mutate({ matrix_contract_id: effectiveContractId })}
-                      disabled={!effectiveContractId || actions.apply.isPending}
-                    >
-                      {actions.apply.isPending ? "Application…" : "Appliquer la matrice"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => actions.validate.mutate()}
-                      disabled={snapshot.data?.status !== "proposed" || Boolean(snapshot.data?.exceptions_json) || actions.validate.isPending}
-                    >
-                      {actions.validate.isPending ? "Validation…" : "Valider l’imputation"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      onClick={() => actions.exportFinance.mutate()}
-                      disabled={!(snapshot.data?.status === "validated" || snapshot.data?.status === "manual_override") || actions.exportFinance.isPending}
-                    >
-                      {actions.exportFinance.isPending ? "Transmission…" : "Exporter aux finances"}
-                    </Button>
-                  </div>
-                  {actionError(actions.apply.error) ? <p className="po2-action-error">Application : {actionError(actions.apply.error)}</p> : null}
-                  {actionError(actions.validate.error) ? <p className="po2-action-error">Validation : {actionError(actions.validate.error)}</p> : null}
-                  {actionError(actions.exportFinance.error) ? <p className="po2-action-error">Export : {actionError(actions.exportFinance.error)}</p> : null}
-                  {actions.exportFinance.isSuccess ? <p className="po2-muted-line">Transmise aux finances ✓</p> : null}
-                </div>
-              )}
-            </Card>
+            <div className="po2-proto-action-stack">
+              {selectedInvoice.source !== "mock" ? (
+                <>
+                  <Button onClick={() => effectiveContractId && actions.apply.mutate({ matrix_contract_id: effectiveContractId })} disabled={!effectiveContractId || actions.apply.isPending}>
+                    {actions.apply.isPending ? "Application…" : snapshotPayload ? "Réappliquer la matrice" : "Appliquer la matrice"}
+                  </Button>
+                  <Button variant="secondary" onClick={() => actions.validate.mutate()} disabled={snapshot.data?.status !== "proposed" || blockingExceptions || actions.validate.isPending}>
+                    {actions.validate.isPending ? "Validation…" : "Valider l’imputation"}
+                  </Button>
+                  <Button variant="secondary" onClick={() => actions.exportFinance.mutate()} disabled={!(snapshot.data?.status === "validated" || snapshot.data?.status === "manual_override") || actions.exportFinance.isPending}>
+                    {actions.exportFinance.isPending ? "Transmission…" : "Exporter aux finances"}
+                  </Button>
+                </>
+              ) : null}
+              <Button variant="danger" disabled title="Génération du courrier de réclamation à venir">Préparer une réclamation (à venir)</Button>
+              <Button variant="ghost" disabled title="Correction manuelle d'imputation à venir">Corriger l’imputation (à venir)</Button>
+              <Button variant="ghost" disabled title="Demande de correction de la matrice à venir">Demander correction matrice (à venir)</Button>
+            </div>
+
+            {actionError(actions.apply.error) ? <p className="po2-action-error">Application : {actionError(actions.apply.error)}</p> : null}
+            {actionError(actions.validate.error) ? <p className="po2-action-error">Validation : {actionError(actions.validate.error)}</p> : null}
+            {actionError(actions.exportFinance.error) ? <p className="po2-action-error">Export : {actionError(actions.exportFinance.error)}</p> : null}
+            {actions.exportFinance.isSuccess ? <p className="po2-muted-line">Transmise aux finances ✓</p> : null}
+
+            <h3>Historique</h3>
+            <div className="po2-proto-control-list">
+              {selectedInvoice.issuedAt ? <article><StatusBadge tone="info">IMPORT</StatusBadge><div><strong>Facture importée</strong><small>Émise le {selectedInvoice.issuedAt}</small></div></article> : null}
+              {snapshot.data?.status ? <article><StatusBadge tone="info">MATRICE</StatusBadge><div><strong>Snapshot {snapshotLabel(snapshot.data.status).toLowerCase()}</strong><small>{snapshot.data.matrix_version_id ? "Version matrice #" + snapshot.data.matrix_version_id : "—"}</small></div></article> : null}
+              {snapshot.data?.validated_at ? <article><StatusBadge tone="ok">VALIDÉ</StatusBadge><div><strong>Imputation validée</strong><small>{snapshot.data.validated_at}</small></div></article> : null}
+              {snapshot.data?.exported_at ? <article><StatusBadge tone="ok">FINANCE</StatusBadge><div><strong>Transmis aux finances</strong><small>{snapshot.data.exported_at}</small></div></article> : null}
+            </div>
           </div>
         ) : null}
       </Drawer>
