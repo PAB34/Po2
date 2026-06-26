@@ -42,6 +42,18 @@ function issueTone(severity: string) {
   return "warn" as const;
 }
 
+/** Codes énergie « non contrôlables » : référence/donnée manquante côté plateforme,
+ *  pas une anomalie de facturation. Comptés en « Bloqués », pas en « Écarts ». */
+const NON_CONTROLABLE_CODES = new Set([
+  "BPU_CONFIG_MISSING", "BPU_LINES_MISSING",
+  "ENEDIS_CONSUMPTION_MISSING", "CONSUMPTION_REFERENCE_MISSING",
+  "POWER_REFERENCE_MISSING", "SUBSCRIBED_POWER_MISSING",
+  "TAX_TOTALS_MISSING", "PERIOD_MISSING", "MISSING_MARKET_REFERENCE",
+]);
+function isNonControlable(code: string) {
+  return NON_CONTROLABLE_CODES.has(code);
+}
+
 // ---------------------------------------------------------------------------
 // Statuts unifiés (CPE et énergie ont des codes différents)
 // ---------------------------------------------------------------------------
@@ -113,6 +125,9 @@ export function InvoicesDecisionPageV1() {
       const status = ENERGY_TO_UNIFIED[e.decision_status] ?? "todo";
       const sites = e.site_count ? ` · ${e.site_count} site(s)` : "";
       const docType = e.filter_facets?.document_types?.[0];
+      const energyIssues = e.control_issues ?? [];
+      const nonControlable = energyIssues.filter((i) => isNonControlable(i.code)).length;
+      const realErrors = energyIssues.filter((i) => (i.severity === "error" || i.severity === "blocking") && !isNonControlable(i.code)).length;
       out.push({
         key: `energy:${e.id}`, source: "energy", rowId: e.id,
         invoiceNumber: e.invoice_number ?? `import-${e.id}`, supplier: supplierFromEnergy(e),
@@ -120,10 +135,10 @@ export function InvoicesDecisionPageV1() {
         client: e.contract_holder ?? "—",
         marche: "Hérault Énergie",
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
-        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: e.control_errors_count, blocked: 0,
+        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, blocked: nonControlable,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date),
-        issues: e.control_issues ?? [],
+        issues: energyIssues,
       });
     }
     return out;
@@ -251,7 +266,7 @@ export function InvoicesDecisionPageV1() {
                   <td style={{ textAlign: "right" }}><strong>{fmtEur(row.total)}</strong></td>
                   <td style={{ textAlign: "right", color: "#166534" }}>{row.source === "cpe" ? row.ok : "—"}</td>
                   <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : undefined, fontWeight: row.error ? 700 : 400 }}>{row.error}</td>
-                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : undefined, fontWeight: row.blocked ? 700 : 400 }}>{row.source === "cpe" ? row.blocked : "—"}</td>
+                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : undefined, fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || (row.source === "cpe" ? 0 : "—")}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select value={row.status} disabled={actions.setStatus.isPending || actions.setEnergyStatus.isPending}
                       onChange={(e) => changeStatus(row, e.target.value as UnifiedStatus)}
@@ -291,19 +306,40 @@ export function InvoicesDecisionPageV1() {
               </>
             ) : (
               <>
-                <h3>Écarts de contrôle{selected.issues.length ? ` (${selected.issues.length})` : ""}</h3>
-                {selected.issues.length === 0 ? (
-                  <p className="po2-muted-line">Aucun écart de contrôle. Le détail BPU/TURPE/taxes est dans le module Énergie.</p>
-                ) : (
-                  <div className="po2-proto-control-list">
-                    {aggregateIssues(selected.issues).map((iss) => (
-                      <article key={iss.message}>
-                        <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "error" ? "ERREUR" : "ALERTE"}</StatusBadge>
-                        <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
-                      </article>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const reals = selected.issues.filter((i) => !isNonControlable(i.code));
+                  const nc = selected.issues.filter((i) => isNonControlable(i.code));
+                  return (
+                    <>
+                      <h3>Écarts de contrôle{reals.length ? ` (${reals.length})` : ""}</h3>
+                      {reals.length === 0 ? (
+                        <p className="po2-muted-line">Aucun écart réel de facturation.</p>
+                      ) : (
+                        <div className="po2-proto-control-list">
+                          {aggregateIssues(reals).map((iss) => (
+                            <article key={iss.message}>
+                              <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "error" ? "ÉCART" : "ALERTE"}</StatusBadge>
+                              <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                      {nc.length > 0 ? (
+                        <>
+                          <h3>Non contrôlable / en attente de donnée ({nc.length})</h3>
+                          <div className="po2-proto-control-list">
+                            {aggregateIssues(nc).map((iss) => (
+                              <article key={iss.message}>
+                                <StatusBadge tone="neutral">{iss.count > 1 ? `×${iss.count}` : "N/C"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>Référence ou donnée manquante côté plateforme — pas une anomalie de facture.</small></div>
+                              </article>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </>
             )}
 
@@ -339,32 +375,42 @@ export function InvoicesDecisionPageV1() {
 
 function ControlDecomposition({ controls, loading }: { controls: CpeFinanceControl[]; loading: boolean }) {
   const okCount = controls.filter((c) => c.status === "ok").length;
-  const issues = useMemo(
-    () => aggregateIssues(
-      controls
-        .filter((c) => c.status !== "ok")
-        .map((c) => ({ severity: c.severity || (c.status === "blocked" ? "blocking" : "error"), message: c.message || controlTypeLabel(c.control_type), code: c.control_type })),
-    ),
+  const errors = useMemo(
+    () => aggregateIssues(controls.filter((c) => c.status === "error").map((c) => ({ severity: "error", message: c.message || controlTypeLabel(c.control_type), code: c.control_type }))),
+    [controls],
+  );
+  const blocked = useMemo(
+    () => aggregateIssues(controls.filter((c) => c.status === "blocked").map((c) => ({ severity: "warning", message: c.message || controlTypeLabel(c.control_type), code: c.control_type }))),
     [controls],
   );
   if (loading) return <p className="po2-muted-line">Chargement des contrôles…</p>;
   if (controls.length === 0) return <p className="po2-muted-line">Aucun contrôle enregistré pour cette facture.</p>;
   return (
-    <div className="po2-proto-control-list">
-      {issues.length === 0 ? (
-        <article><StatusBadge tone="ok">OK</StatusBadge><div><strong>Aucun écart</strong><small>{controls.length} contrôle(s) conforme(s)</small></div></article>
-      ) : (
+    <>
+      <div className="po2-proto-control-list">
+        {errors.length === 0 ? (
+          <article><StatusBadge tone="ok">OK</StatusBadge><div><strong>Aucun écart réel</strong><small>{okCount} contrôle(s) conforme(s)</small></div></article>
+        ) : errors.map((iss) => (
+          <article key={iss.message}>
+            <StatusBadge tone="bad">{iss.count > 1 ? `×${iss.count}` : "ÉCART"}</StatusBadge>
+            <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+          </article>
+        ))}
+      </div>
+      {blocked.length > 0 ? (
         <>
-          {issues.map((iss) => (
-            <article key={iss.message}>
-              <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "blocking" ? "BLOQUÉ" : "ÉCART"}</StatusBadge>
-              <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
-            </article>
-          ))}
-          {okCount > 0 ? <article><StatusBadge tone="ok">OK</StatusBadge><div><strong>{okCount} contrôle(s) conforme(s)</strong><small>sans écart</small></div></article> : null}
+          <h3>Non contrôlable / en attente</h3>
+          <div className="po2-proto-control-list">
+            {blocked.map((iss) => (
+              <article key={iss.message}>
+                <StatusBadge tone="neutral">{iss.count > 1 ? `×${iss.count}` : "N/C"}</StatusBadge>
+                <div><strong>{iss.message}</strong><small>Référence ou donnée manquante — à compléter, pas une anomalie de facture.</small></div>
+              </article>
+            ))}
+          </div>
         </>
-      )}
-    </div>
+      ) : null}
+    </>
   );
 }
 
