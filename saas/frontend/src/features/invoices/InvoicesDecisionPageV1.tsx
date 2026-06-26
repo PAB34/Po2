@@ -11,11 +11,10 @@ type UnifiedRow = {
   rowId: number;
   invoiceNumber: string;
   supplier: string;
-  contract: string;
   type: string;
-  recipient: string;
-  market: string;
-  billedItems: string;
+  client: string;
+  marche: string;
+  perimetre: string;
   total: number;
   ok: number;
   error: number;
@@ -88,8 +87,8 @@ export function InvoicesDecisionPageV1() {
       out.push({
         key: `cpe:${r.invoice_id}`, source: "cpe", rowId: r.invoice_id,
         invoiceNumber: r.invoice_number, supplier: "DALKIA",
-        contract: r.contract_label ?? r.contract_code ?? "—", type: r.invoice_type ?? "—",
-        recipient: r.recipient_ref ?? "—", market: r.market ?? "—", billedItems: r.billed_items ?? "—",
+        type: r.invoice_type ?? "—", client: r.recipient_ref ?? "—",
+        marche: r.contract_code ?? r.contract_label ?? "—", perimetre: r.market ?? "—",
         total: r.total_ht, ok: r.ok, error: r.error, blocked: r.blocked,
         status: CPE_TO_UNIFIED[r.invoice_status] ?? "todo",
         processed: r.invoice_status === "valide" || Boolean(r.finance_exported_at),
@@ -98,12 +97,15 @@ export function InvoicesDecisionPageV1() {
     }
     for (const e of energy.data ?? []) {
       const status = ENERGY_TO_UNIFIED[e.decision_status] ?? "todo";
+      const sites = e.site_count ? ` · ${e.site_count} site(s)` : "";
+      const docType = e.filter_facets?.document_types?.[0];
       out.push({
         key: `energy:${e.id}`, source: "energy", rowId: e.id,
         invoiceNumber: e.invoice_number ?? `import-${e.id}`, supplier: supplierFromEnergy(e),
-        contract: e.regroupement ?? e.energy_type ?? "—", type: e.energy_type ?? "—",
-        recipient: e.contract_holder ?? "—", market: e.regroupement ?? "Électricité",
-        billedItems: e.filter_facets?.site_names?.slice(0, 2).join(", ") || "—",
+        type: docType ? (docType.toLowerCase().includes("avoir") ? "Avoir" : "Facture") : "Facture",
+        client: e.contract_holder ?? "—",
+        marche: e.market_reference ?? "—",
+        perimetre: (e.regroupement ?? "Portefeuille") + sites,
         total: e.total_ttc ?? 0, ok: 0, error: e.control_errors_count, blocked: 0,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date),
@@ -137,7 +139,7 @@ export function InvoicesDecisionPageV1() {
     return rows.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (supplierFilter !== "all" && r.supplier !== supplierFilter) return false;
-      if (q && ![r.invoiceNumber, r.contract, r.market, r.billedItems, r.recipient, r.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)) return false;
+      if (q && ![r.invoiceNumber, r.marche, r.perimetre, r.client, r.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
   }, [rows, query, statusFilter, supplierFilter]);
@@ -218,19 +220,19 @@ export function InvoicesDecisionPageV1() {
           <table>
             <thead>
               <tr>
-                <th>Facture</th><th>Contrat</th><th>Type</th><th>Destinataire</th><th>Marché</th><th>Postes facturés</th>
+                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marché</th><th>Périmètre</th>
                 <th style={{ textAlign: "right" }}>Montant</th><th style={{ textAlign: "right" }}>OK</th><th style={{ textAlign: "right" }}>Écarts</th><th style={{ textAlign: "right" }}>Bloqués</th><th>Décision</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.map((row) => (
                 <tr key={row.key} className={row.key === selectedKey ? "active" : ""} onClick={() => setSelectedKey(row.key)}>
-                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><span><b>{row.invoiceNumber}</b><small>{row.supplier}</small></span></div></td>
-                  <td>{row.contract}</td>
+                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><b>{row.invoiceNumber}</b></div></td>
+                  <td>{row.supplier}</td>
                   <td>{row.type}</td>
-                  <td>{row.recipient}</td>
-                  <td>{row.market}</td>
-                  <td>{row.billedItems}</td>
+                  <td>{row.client}</td>
+                  <td>{row.marche}</td>
+                  <td>{row.perimetre}</td>
                   <td style={{ textAlign: "right" }}><strong>{fmtEur(row.total)}</strong></td>
                   <td style={{ textAlign: "right", color: "#166534" }}>{row.source === "cpe" ? row.ok : "—"}</td>
                   <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : undefined, fontWeight: row.error ? 700 : 400 }}>{row.error}</td>
@@ -254,7 +256,7 @@ export function InvoicesDecisionPageV1() {
         open={Boolean(selected)}
         title={selected ? "Facture " + selected.invoiceNumber : "Facture"}
         eyebrow={selected ? "Dossier facture · " + selected.supplier : "Dossier facture"}
-        description={selected ? selected.contract + " · " + selected.market : undefined}
+        description={selected ? selected.supplier + " · " + selected.marche + " · " + selected.perimetre : undefined}
         onClose={() => setSelectedKey(null)}
       >
         {selected ? (
