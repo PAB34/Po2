@@ -47,7 +47,17 @@
 - [[36-Contrat-ecran-Cockpit-Sites-V1]] - Cockpit Direction, chaîne de décision V1 et décisions reliées dans Site 360°
 - [[37-Plan-migration-React-refonte-V1]] - Ordre de chantier React V1, routes, composants, mocks et raccordement progressif
 - [[38-Modele-backend-matrices-comptables-versionnees]] - Modèle cible backend pour matrices comptables par contrat, versions, import/export XLSX, snapshots facture et historique.
-- [[49-Spec-execution-refonte-Factures-Decisions-V1]] - Spec execution de la premiere tranche verticale React raccordee : Factures & decisions, API existantes, statuts, phases de code et definition de termine.
+- [[39-Questions-avant-raccord-factures-matrices-V1]] - Questions ouvertes avant le raccord complet Factures + matrices (intermédiaire)
+- [[40-Analyse-factures-reelles-pour-matrice-comptable]] - Analyse des exports factures réels (ENGIE/EDF/gaz/DALKIA) pour alimenter la matrice et les contrôles
+- [[41-Cartographie-existant-avant-refonte-et-raccord-UX]] - Cartographie du code/API existant avant refonte et plan de raccord UX
+- [[42-Questions-ciblees-apres-cartographie-existant]] - Questions ciblées après cartographie (intermédiaire)
+- [[43-Decisions-apres-reponses-assistant-matrices-V1]] - Décisions sur l'assistant matrices V1 (intermédiaire)
+- [[44-Questions-suite-refonte-matrices-factures]] - Questions suite refonte matrices/factures (intermédiaire)
+- [[45-Decisions-suite-refonte-matrices-factures]] - Décisions suite refonte matrices/factures (intermédiaire)
+- [[46-Diagnostic-environnement-local-API-base]] - Diagnostic de l'environnement local (API + base) pour le dev/staging
+- [[47-Plan-staging-refonte-V1-sans-docker-local]] - Plan de validation staging de la refonte V1 sans Docker local
+- [[48-Preview-Factures-decisions-V1]] - Preview statique de l'écran Factures & décisions V1
+- [[49-Spec-execution-refonte-Factures-Decisions-V1]] - Spec execution de la premiere tranche verticale React raccordee : Factures & decisions, API existantes, statuts, phases de code et definition de termine. **Spec active de la tranche en cours.**
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)
