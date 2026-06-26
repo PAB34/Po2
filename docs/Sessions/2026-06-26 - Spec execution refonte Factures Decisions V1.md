@@ -65,3 +65,19 @@ Prochaine action : raccorder le calcul des KPI aux vraies lignes agregees au lie
 - But UX : que l'utilisateur comprenne immediatement quel controle metier est attendu selon le type de facture, avant de lire la trace ligne par ligne.
 - Styles ajoutes dans `tokens.css` via `.po2-invoice-source-profile`.
 - Validation : `npx tsc -b` OK.
+
+## Consolidation + validation (reprise, 2026-06-26)
+
+Le travail de la journée (laissé non commité) a été sécurisé en 4 commits cohérents sur `feat/frontend-react-v1` puis poussé :
+
+- `chore(gitignore)` : exclusion `outputs/`, `saas/energie/`, `saas/LOGO/` (données locales) ;
+- `feat(accounting)` : extracteurs réels de lignes (`accounting_matrix_invoice_lines.py`) branchés sur `apply` + tests ;
+- `feat(frontend)` : tranche Factures & décisions (KPI réels, drawer contextualisé) + UI matrices import/export + rôles ;
+- `docs` : spec 49 + cartographie/décisions 39-48 + session.
+
+Validation :
+
+- **CI verte** (PR #30) : nouveaux tests backend extracteurs + build frontend.
+- **Démo staging sur données réelles** : facture CPE/DALKIA #3433 (contrat C00025811F, 3 lignes P1, ~18.8 k€ HT) → `extract_invoice_lines` → `apply` = **3/3 lignes imputées, 0 exception**, snapshot `proposed` épinglé sur la version active. La chaîne extracteur → matrice → snapshot fonctionne bout-en-bout sur la copie prod.
+
+Prochaine étape (Phase 5 du doc 49) : brancher les **vraies actions du drawer** facture côté React (`apply` → `validate-snapshot` → `export-finance`, préparer réclamation) sur `/refonte-v1/factures`, en réutilisant `useInvoiceAccountingSnapshotsV1`.
