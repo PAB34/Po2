@@ -47,6 +47,7 @@
 - [[36-Contrat-ecran-Cockpit-Sites-V1]] - Cockpit Direction, chaîne de décision V1 et décisions reliées dans Site 360°
 - [[37-Plan-migration-React-refonte-V1]] - Ordre de chantier React V1, routes, composants, mocks et raccordement progressif
 - [[38-Modele-backend-matrices-comptables-versionnees]] - Modèle cible backend pour matrices comptables par contrat, versions, import/export XLSX, snapshots facture et historique.
+- [[49-Spec-execution-refonte-Factures-Decisions-V1]] - Spec execution de la premiere tranche verticale React raccordee : Factures & decisions, API existantes, statuts, phases de code et definition de termine.
 - [[07-Environnement-poste-entreprise]] — Contrainte zero installation locale et workflow de validation
 
 ### 🧩 Modules métier (1 fichier par grand bloc)

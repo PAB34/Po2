@@ -815,3 +815,117 @@ Il fixe le principe suivant : les codifications actuelles énergie et CPE sont c
 Le document couvre aussi l'historique des factures déjà traitées, la réimportation d'un export annuel complet, les contacts entreprise pour préparer une réclamation, et la migration progressive depuis energy_accounting_* et cpe_accounting_*.
 
 Prochaine étape technique logique : créer modèles SQLAlchemy, migration Alembic, schémas Pydantic et endpoints de base /api/accounting-matrices avant l'import XLSX complet.
+
+## Mise à jour correction moteur imputation matrices - 2026-06-25
+
+Suite à l'audit de la reprise Claude Code, le moteur d'application des matrices a été corrigé : les règles de contexte (site, compteur, service, fonction, antenne, opération) ne sont plus additionnées comme des ventilations financières. Elles enrichissent désormais les règles de nature comptable qui portent réellement l'imputation et le pourcentage.
+
+Pourquoi c'est important : une règle compteur à 100 % et une règle poste facturé à 100 % doivent produire une imputation complète à 100 %, pas une anomalie artificielle à 200 %. Un test ciblé a été ajouté dans tests/test_accounting_matrix_apply.py pour verrouiller ce cas.
+
+Validation locale : python -m compileall app -q OK ; py_compile du service et du test OK. Les tests pytest complets n'ont pas été exécutés localement car les dépendances backend (pytest/SQLAlchemy) ne sont pas installées dans le Python courant.
+
+## Mise à jour droits écritures matrices - 2026-06-25
+
+Deuxième point critique de l'audit traité : les mutations du router /api/accounting-matrices sont désormais réservées aux rôles élevés. Les rôles autorisés sont ADMIN, SUPERADMIN, FINANCE, COMPTA et COMPTABILITE.
+
+Lecture conservée pour les utilisateurs authentifiés de la ville ; écritures protégées : seed, création/modification contrat, création/activation/archivage version, import XLSX, règles, application/validation/correction/export finance des snapshots.
+
+Attention opérationnelle : si le compte de Pascal est encore en rôle USER, les actions d'administration matrices seront refusées en 403 tant que le rôle n'est pas ajusté en base.
+
+## Mise à jour UX rôles écran Matrices V1 - 2026-06-25
+
+L'écran laboratoire /refonte-v1/matrices tient maintenant compte du rôle utilisateur : le bouton Seed depuis l'existant est désactivé si le rôle n'est pas autorisé côté backend, un message lecture seule est affiché, et les erreurs de seed sont rendues lisibles.
+
+Validation : npm run build OK avec le Node local. Avertissement inchangé : chunk Vite principal > 500 kB.
+
+## Mise à jour extraction lignes factures pour matrices - 2026-06-25
+
+L'endpoint d'application des matrices comptables peut désormais fonctionner sans lignes saisies manuellement : si `invoice_lines` est vide, le backend extrait automatiquement les lignes depuis les sources existantes.
+
+Sources branchées : imports fluides normalisés ENGIE/EDF (`energy-import` ou `fluides-import`), factures gaz TotalEnergies (`gas-totalenergies`) et factures CPE DALKIA (`cpe-dalkia`). Les tirets et underscores sont acceptés pour rester compatible frontend/backend.
+
+Limite volontaire : l'extraction transforme les modèles existants en lignes génériques d'imputation ; elle ne remplace pas les contrôles métier propres à chaque source. Le prochain raccord attendu est côté `/refonte-v1/factures` : bouton "appliquer la matrice" → snapshot réel → validation/export finance.
+
+Validation locale : py_compile OK sur le nouveau service, le router et les tests ; compileall backend OK. Pytest complet reste à lancer dans un environnement backend avec dépendances installées.
+
+## Mise à jour raccord lecture snapshots Factures V1 - 2026-06-25
+
+Le frontend dispose maintenant des fonctions API pour le cycle snapshot comptable : lecture, application, validation et export finance. Un hook React Query dédié a été ajouté pour préparer le raccord complet de `/refonte-v1/factures`.
+
+La page Factures V1 lit désormais le snapshot comptable existant lorsqu'une facture réelle est ouverte dans le drawer. L'information affichée reste volontairement non destructive : statut du snapshot, version de matrice si disponible, et signalement d'exceptions.
+
+Aucune imputation automatique n'est déclenchée depuis l'interface tant que le choix du contrat/matrice n'est pas explicitement traité côté UX.
+
+Validation : `npm run build` OK. Avertissement restant : chunk Vite principal > 500 kB.
+
+## Mise a jour cartographie existant et atelier matrices UX - 2026-06-25
+
+La passe de verification demandee par Pascal confirme que la refonte doit absorber l'existant plutot que le reconstruire. Le document `docs/41-Cartographie-existant-avant-refonte-et-raccord-UX.md` cartographie les capacites deja developpees par domaine : patrimoine, fluides ENEDIS/GRDF, factures ENGIE/EDF, gaz TotalEnergies, CPE DALKIA, matrices versionnees, BPU/TURPE, CVC/PPT et maintenance.
+
+Consequence produit majeure : les matrices comptables ne doivent pas seulement etre appliquees depuis une facture. Elles deviennent un parcours de configuration par tiers facturant : import d'un export facture de reference, detection des lignes recurrentes, codification comptable, export/import XLSX, controle de couverture, activation d'une version, puis application automatique aux factures futures.
+
+L'ecran laboratoire `/refonte-v1/matrices` a ete reoriente dans ce sens : il conserve les donnees API reelles contrats/versions/regles, mais ajoute une lecture UX par tiers facturant, le parcours cible de configuration et des guides de detection DALKIA, ENGIE, EDF et TotalEnergies. DALKIA reste le cas pilote recommande.
+
+Questions ciblees restantes : `docs/42-Questions-ciblees-apres-cartographie-existant.md`.
+
+## Mise a jour decisions assistant matrices - 2026-06-25
+
+Les reponses au document 42 sont consolidees dans `docs/43-Decisions-apres-reponses-assistant-matrices-V1.md`.
+
+Decisions principales :
+
+- l'entree `Configurer la matrice comptable` doit etre dediee, avec assistant en 6 etapes ;
+- le chantier ne doit pas se limiter a DALKIA : objectif rapide = produire des exports XLSX pour tous les tiers facturants afin que la comptabilite puisse les completer ;
+- les anciennes factures DALKIA restent visibles avec badge `Ancien marche - hors controle courant` ;
+- les contacts fournisseurs restent libres en V1 ;
+- la navigation Fluides cible est validee avec Portefeuille, Electricite, Gaz, Eau, Abonnements a recalibrer, Referentiels et prix ;
+- les roles matrices sont ouverts a Admin, Direction, Responsable maintenance, Patrimoine et equivalents finance/admin existants, mais fermes aux profils Fluides et Technicien CVC.
+
+Implementation associee : le frontend expose maintenant l'export XLSX d'une version de matrice depuis `/refonte-v1/matrices` via le bouton `Exporter XLSX` dans le drawer. Le backend et le frontend ont ete alignes sur la regle de roles ci-dessus.
+
+## Mise a jour retour comptabilite XLSX matrices - 2026-06-25
+
+Le cycle export/import XLSX des matrices est maintenant expose dans l'atelier `/refonte-v1/matrices`.
+
+Flux disponible cote frontend :
+
+1. ouvrir un contrat matrice ;
+2. selectionner une version ;
+3. exporter le XLSX pour transmission comptabilite ;
+4. importer le fichier complete ;
+5. lancer une preview sans ecriture ;
+6. lire le resume : ajouts, modifications, erreurs, regles absentes ;
+7. creer une nouvelle version brouillon si le fichier est commitable.
+
+Le backend possedait deja les endpoints `export.xlsx`, `import-preview` et `import-commit`. Le frontend dispose maintenant des appels API et hooks React Query associes : `downloadAccountingMatrixVersionXlsx`, `previewAccountingMatrixImport`, `commitAccountingMatrixImport`, `usePreviewMatrixImportV1`, `useCommitMatrixImportV1`.
+
+Validation locale : `npx tsc -b` OK, `python -m py_compile saas/backend/app/api/routes/accounting_matrix.py` OK, `git diff --check` OK sur les fichiers modifies.
+
+## Point environnement local API/base - 2026-06-25
+
+Dans le cadre de la refonte React V1, le diagnostic local a montre que le frontend Vite fonctionne sur `5173`, mais que le backend FastAPI n'est pas joignable sur `8000` et qu'aucun PostgreSQL/PostGIS local n'ecoute sur `5432`.
+
+Une route de preview sans backend existe pour continuer l'UX : `/refonte-v1/matrices-preview`.
+
+Pour revenir aux vraies donnees sans utiliser la production comme bac a sable, un compose local minimal a ete ajoute : `saas/infra/docker-compose.dev.yml`. Il lance seulement PostgreSQL/PostGIS + FastAPI, le frontend restant lance via Vite.
+
+Documentation associee : `docs/46-Diagnostic-environnement-local-API-base.md`.
+
+## Decision environnement de test refonte - 2026-06-25
+
+Compte tenu du poste entreprise et de l'impossibilite probable d'installer Docker Desktop, la strategie retenue est : previews UX locales sur Vite, puis validation donnees reelles sur staging distant.
+
+Staging actif verifie : `https://staging.135-125-152-112.sslip.io/api/health` -> OK (`PatrimoineOp API (staging)`). Le sous-domaine `staging.patrimoineaucarre.com` ne resolvait pas, mais l'URL `sslip.io` suffit pour tester.
+
+Documentation associee : `docs/47-Plan-staging-refonte-V1-sans-docker-local.md`.
+
+## 2026-06-26 - Cadrage execution refonte `Factures & decisions`
+
+- Nouveau document cree : `docs/49-Spec-execution-refonte-Factures-Decisions-V1.md`.
+- Decision : commencer la refonte definitive par la tranche verticale `Factures & decisions`.
+- Le document 49 fait le pont entre la maquette, les besoins utilisateur, les API existantes et les phases de code.
+- Phase 1 demarree : les KPI React de `InvoicesDecisionPageV1.tsx` sont alignes sur la logique comptabilite ; `tsc -b` OK. Reste : alignement layout React avec maquette et clarification API/fallback.
+- Note de session associee : `docs/Sessions/2026-06-26 - Spec execution refonte Factures Decisions V1.md`.
+- Phase 1 bis : `InvoicesDecisionPageV1.tsx` alignee davantage sur la maquette (entete actions, bandeau API/fallback, workflow de traitement) ; styles ajoutes dans `tokens.css`; `tsc -b` OK.
+- Phase 1 ter : les KPI de `InvoicesDecisionPageV1.tsx` sont maintenant calcules depuis la file agregee des factures ; CPE/DALKIA contribue au montant via `total_ht` provisoire ; controle Unicode OK ; `tsc -b` OK.
+- Phase 1 quater : le drawer facture contient une fiche source contextualisee (`energy-import`, `gas-totalenergies`, `cpe-dalkia`, `mock`) pour preparer les traces detaillees par metier ; `tsc -b` OK.

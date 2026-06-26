@@ -211,3 +211,79 @@ Branche `feat/frontend-react-v1`. Méthode : valider sur staging avant merge `ma
 2. Si OK → marquer PR #30 ready → merge `main`.
 3. Ensuite : brancher `/refonte-v1/factures` sur l'API matrices (remplacer `useAccountingMatricesV1`), puis porter cockpit/fluides/sites tranche par tranche.
 4. Données/artefacts (`outputs/`, `saas/energie/…`) restent à gitignorer avant tout commit.
+
+## Extension : correction moteur imputation matrices
+
+- Audit de la reprise Claude Code : le moteur initial risquait de compter comme ventilations concurrentes les règles de contexte (site/compteur) et les règles de nature.
+- Correction de saas/backend/app/services/accounting_matrix_apply.py : les règles sans accounting_nature enrichissent la ligne (service/fonction/antenne/opération), les règles avec accounting_nature portent l'imputation et la ventilation.
+- Ajout d'un test ciblé dans saas/backend/tests/test_accounting_matrix_apply.py : compteur PRM + poste Abonnement doit produire une imputation à 100 % avec axes hérités.
+- Validation disponible localement : compileall et py_compile OK. Pytest complet à lancer en CI ou dans un environnement backend dépendances installées.
+
+## Handoff immédiat
+
+1. Lancer les tests pytest accounting_matrix_apply/xlsx dans un environnement backend complet.
+2. Corriger ensuite les droits des endpoints /api/accounting-matrices/*.
+3. Protéger ou retirer du labo le bouton Seed depuis l'existant tant que les rôles ne sont pas posés.
+
+## Extension : droits écritures matrices
+
+- Ajout d'un garde-fou dans saas/backend/app/api/routes/accounting_matrix.py.
+- Rôles autorisés pour les mutations : ADMIN, SUPERADMIN, FINANCE, COMPTA, COMPTABILITE.
+- Les lectures restent accessibles aux utilisateurs authentifiés de la ville.
+- Validation locale : py_compile et compileall OK.
+
+## Handoff sécurité
+
+1. Vérifier le rôle réel du compte Pascal avant essai du bouton Seed depuis l'existant.
+2. Ajouter côté frontend une gestion explicite du 403 sur /refonte-v1/matrices.
+3. À terme, remplacer ce garde-fou simple par une politique de permissions plus fine par action.
+
+## Extension : UX rôles écran Matrices V1
+
+- MatrixAdminPageV1 lit le rôle utilisateur via AuthProvider.
+- Le bouton Seed depuis l'existant est désactivé en lecture seule.
+- Les erreurs de seed sont affichées dans la page.
+- Le message d'absence de matrices distingue profil autorisé et profil lecture seule.
+- Validation : npm run build OK. Avertissement bundle Vite > 500 kB inchangé.
+
+## Extension : extraction lignes factures pour application matrices
+
+- Nouveau service `saas/backend/app/services/accounting_matrix_invoice_lines.py`.
+- Sources supportées : `energy-import` / `fluides-import`, `gas-totalenergies`, `cpe-dalkia` (tirets ou underscores acceptés).
+- Le router `/api/accounting-matrices/invoices/{source}/{invoice_id}/apply` extrait les lignes réelles quand `invoice_lines` est vide, tout en conservant le mode manuel pour tests/cas spéciaux.
+- Test ajouté : normalisation des noms de sources.
+- Validation locale : py_compile et compileall OK.
+
+## Handoff après extraction lignes factures
+
+1. Lancer pytest dans un environnement backend complet.
+2. Raccorder `/refonte-v1/factures` au vrai cycle : appliquer matrice → afficher snapshot/exceptions → valider → exporter finance.
+3. Ajouter une UX historique : facture déjà traitée, facture réimportée identique, facture réimportée modifiée.
+4. Prévoir ensuite la synchronisation `finance_exported_at` sur les modèles source après export finance.
+
+## Extension : lecture snapshots Factures V1
+
+- `src/lib/api.ts` : fonctions `fetchInvoiceAccountingSnapshot`, `applyAccountingMatrixToInvoice`, `validateInvoiceAccountingSnapshot`, `exportInvoiceAccountingSnapshotToFinance`.
+- `src/features/invoices/useInvoiceAccountingSnapshotsV1.ts` : hook lecture snapshot + mutations préparées.
+- `InvoicesDecisionPageV1` remis en forme et enrichi : le drawer facture affiche le statut du snapshot comptable réel si disponible.
+- Aucun apply automatique : le choix de matrice doit rester explicite pour éviter une imputation sur mauvais contrat.
+- Validation : `npm run build` OK.
+
+## Extension : preview matrices sans backend
+
+- Probleme rencontre : `Internal Server Error` venait du proxy Vite `/api` vers `127.0.0.1:8000`, alors que le backend n'etait pas lance.
+- Verification : `/refonte-v1/matrices` renvoie bien le shell React sur `5173`, mais la route est protegee par login ; sans backend, impossible de s'authentifier.
+- Ajout : route publique locale `/refonte-v1/matrices-preview` avec donnees statiques de demonstration pour valider l'UX matrices sans API.
+- Validation : `tsc -b` OK ; ouverture navigateur OK sur `http://127.0.0.1:5173/refonte-v1/matrices-preview`.
+
+Handoff : ne pas confondre `8765` (serveur docs/prototypes statiques) avec `5173` (front React Vite). Pour tester l'UX matrices sans backend, utiliser `5173/refonte-v1/matrices-preview`.
+
+## Extension : preview Factures & decisions V1
+
+- Route ajoutee : `/refonte-v1/factures-preview`.
+- Objectif : valider l'UX du poste de decision facture sans backend local.
+- Workflow affiche : import, parsing, controle, matrice comptable, decision, export.
+- Cas metier couverts dans la preview : DALKIA, ENGIE, EDF, TotalEnergies.
+- Validation : TypeScript `tsc -b` OK ; route Vite OK en HTTP 200.
+
+Handoff : prochaine etape = revue utilisateur, puis raccord progressif de `/refonte-v1/factures` aux donnees reelles et verification sur staging sslip.io.

@@ -1,0 +1,55 @@
+# Environnement local de developpement API + base.
+# Objectif : garder le frontend Vite lance sur l'hote (:5173) et fournir :
+# - PostgreSQL/PostGIS sur 127.0.0.1:5432
+# - FastAPI sur 127.0.0.1:8000
+#
+# Usage depuis le dossier `saas` :
+#   docker compose -f infra/docker-compose.dev.yml --env-file .env up -d --build
+#   docker compose -f infra/docker-compose.dev.yml --env-file .env logs -f backend
+#
+# Puis lancer le frontend separement :
+#   cd frontend
+#   npm run dev
+#
+# Pre-requis : Docker Desktop installe et demarre.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-patrimoineop}
+      POSTGRES_USER: ${POSTGRES_USER:-patrimoineop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patrimoineop}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patrimoineop} -d ${POSTGRES_DB:-patrimoineop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-patrimoineop}:${POSTGRES_PASSWORD:-patrimoineop}@db:5432/${POSTGRES_DB:-patrimoineop}
+      BACKEND_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      WEB_CONCURRENCY: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../:/workspace:ro
+      - ../../saas/energie/output:/workspace/saas/energie/output
+      - invoice_local_data:/app/storage/invoices
+
+volumes:
+  postgres_local_data:
+  invoice_local_data:
