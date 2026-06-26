@@ -45,6 +45,16 @@ def apply_matrix(rules: list[AccountingMatrixRule], lines: list[InvoiceLine]) ->
 
     Retourne un dict d'imputation prêt à être figé dans snapshot_json, avec la
     liste des exceptions (lignes non imputées, ventilation ≠ 100 %).
+
+    Les règles ne jouent pas toutes le même rôle :
+
+    - les règles de contexte (site, compteur, axes service/fonction/antenne)
+      enrichissent la ligne ;
+    - les règles de nature / ventilation (accounting_nature renseignée)
+      portent l'imputation financière.
+
+    Une règle compteur à 100 % et une règle nature à 100 % ne doivent donc pas
+    produire 200 % de ventilation : elles se complètent.
     """
     active_rules = [r for r in rules if r.is_active]
     result_lines: list[dict] = []
@@ -52,19 +62,22 @@ def apply_matrix(rules: list[AccountingMatrixRule], lines: list[InvoiceLine]) ->
 
     for idx, line in enumerate(lines):
         candidates = [r for r in active_rules if _rule_matches(r, line)]
-        if not candidates:
+        context_rules = _select_context_rules(candidates)
+        allocation_rules = _select_allocation_rules(candidates)
+
+        if not allocation_rules:
             result_lines.append({
                 "line_index": idx, "line_ref": line.line_ref, "billed_item": line.billed_item,
                 "amount": line.amount, "matched": False, "imputations": [],
             })
-            exceptions.append({"line_index": idx, "billed_item": line.billed_item, "reason": "aucune règle applicable"})
+            reason = "aucune règle applicable" if not candidates else "aucune règle de nature comptable applicable"
+            exceptions.append({"line_index": idx, "billed_item": line.billed_item, "reason": reason})
             continue
 
-        top_priority = max(r.priority for r in candidates)
-        selected = [r for r in candidates if r.priority == top_priority]
-        imputations = [_imputation(r, line) for r in selected]
+        context = _merged_context(context_rules)
+        imputations = [_imputation(r, line, context) for r in allocation_rules]
 
-        alloc_sum = round(sum(r.allocation_percent for r in selected), 2)
+        alloc_sum = round(sum(r.allocation_percent for r in allocation_rules), 2)
         if abs(alloc_sum - 100.0) > _TOLERANCE:
             exceptions.append({
                 "line_index": idx, "billed_item": line.billed_item,
@@ -98,16 +111,62 @@ def _rule_matches(rule: AccountingMatrixRule, line: InvoiceLine) -> bool:
     return True
 
 
-def _imputation(rule: AccountingMatrixRule, line: InvoiceLine) -> dict:
+def _is_allocation_rule(rule: AccountingMatrixRule) -> bool:
+    """Une règle d'imputation doit porter une nature comptable.
+
+    Les règles issues des mappings site/compteur peuvent ne contenir que les
+    axes analytiques. Elles ne ventilent pas le montant à elles seules.
+    """
+    return bool(rule.accounting_nature)
+
+
+def _select_allocation_rules(candidates: list[AccountingMatrixRule]) -> list[AccountingMatrixRule]:
+    allocation_rules = [r for r in candidates if _is_allocation_rule(r)]
+    if not allocation_rules:
+        return []
+    top_priority = max(r.priority for r in allocation_rules)
+    return [r for r in allocation_rules if r.priority == top_priority]
+
+
+def _select_context_rules(candidates: list[AccountingMatrixRule]) -> list[AccountingMatrixRule]:
+    context_rules = [r for r in candidates if not _is_allocation_rule(r)]
+    if not context_rules:
+        return []
+    top_priority = max(r.priority for r in context_rules)
+    return [r for r in context_rules if r.priority == top_priority]
+
+
+def _merged_context(rules: list[AccountingMatrixRule]) -> dict:
+    """Fusionne les axes analytiques des règles de contexte.
+
+    Les règles sont lues dans un ordre stable ; la première valeur non vide
+    gagne. Une règle d'imputation peut encore surcharger ces axes champ par
+    champ si elle porte une valeur plus spécifique.
+    """
+    context = {"service": None, "function": None, "antenna": None, "operation": None}
+    for rule in sorted(rules, key=lambda r: (r.priority, r.id or 0), reverse=True):
+        if context["service"] is None and rule.accounting_service:
+            context["service"] = rule.accounting_service
+        if context["function"] is None and rule.accounting_function:
+            context["function"] = rule.accounting_function
+        if context["antenna"] is None and rule.accounting_antenna:
+            context["antenna"] = rule.accounting_antenna
+        if context["operation"] is None and rule.operation_number:
+            context["operation"] = rule.operation_number
+    return context
+
+
+def _imputation(rule: AccountingMatrixRule, line: InvoiceLine, context: dict | None = None) -> dict:
+    context = context or {}
     pct = rule.allocation_percent
     amount_allocated = round(line.amount * pct / 100.0, 2) if line.amount is not None else None
     return {
         "rule_id": rule.id,
         "stable_rule_key": rule.stable_rule_key,
-        "service": rule.accounting_service,
-        "function": rule.accounting_function,
-        "antenna": rule.accounting_antenna,
-        "operation": rule.operation_number,
+        "service": rule.accounting_service or context.get("service"),
+        "function": rule.accounting_function or context.get("function"),
+        "antenna": rule.accounting_antenna or context.get("antenna"),
+        "operation": rule.operation_number or context.get("operation"),
         "nature": rule.accounting_nature,
         "label": rule.accounting_label,
         "allocation_percent": pct,

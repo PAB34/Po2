@@ -1,114 +1,52 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Porte d'entrée pour Claude Code. **Travailler en mode économe en tokens** : lire le minimum,
+ne pas scanner le dépôt, ne pas suivre les liens Markdown automatiquement.
 
-## Project Overview
+## Lire au démarrage (uniquement ces fichiers)
 
-**Patrimoineaucarre** alias **Po2* — a SaaS platform for municipal building/property portfolio management. It consolidates data from DGFiP (MAJIC/DGFP fiscal registers), IGN, and OSM to build a geospatial building inventory. Users are scoped to a city (multi-tenant by `city_id`).
+1. `docs/00-Index.md` — carte de la documentation
+2. `docs/04-Etat-actuel-du-dev.md` — surtout la section « Reprise prochaine session »
+3. `docs/05-Conventions-IA.md` — **règles agent complètes (source de vérité)**
 
-## Stack
+Contrainte poste entreprise (zéro install locale) : `docs/07-Environnement-poste-entreprise.md`.
 
-| Layer | Tech |
-|---|---|
-| Backend | FastAPI, SQLAlchemy 2.0, Alembic, Pydantic, PostgreSQL 16 + PostGIS |
-| Frontend | React 18, Vite, TypeScript, React Router v6, React Query v5 |
-| Auth | JWT (python-jose), bcrypt — token stored in `localStorage`, sent as `Authorization: Bearer` |
-| Infra | Docker Compose, Caddy (reverse proxy), Nginx (frontend static), GitHub Actions → VPS SSH deploy |
+## Ne PAS lire par défaut
 
-## Common Commands
+- `docs/Archives/`, le journal `docs/Archives/Journal-etat-dev-2026.md`, `docs/Sessions/`,
+  et tout fichier historique : seulement sur demande explicite ou besoin justifié.
+- Ne pas suivre automatiquement les liens Markdown ; respecter `read_policy` dans l'en-tête d'un fichier.
+- Lire un fichier de `docs/Modules/` **seulement si la tâche concerne ce module** ; ouvrir la spec active citée dans l'index.
 
-### Backend
+## Au début d'une session
 
-```bash
-# Install dependencies
-cd saas/backend
-pip install -r requirements.txt
+Déduire l'objectif probable depuis la section « Reprise » de `docs/04-Etat-actuel-du-dev.md`, puis
+**me le faire confirmer avant de coder**, en annonçant :
 
-# Run dev server (from saas/backend/)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+- objectif déduit + **niveau de confiance : élevé / moyen / faible** ;
+- fichiers/modules probablement concernés ;
+- tests ciblés probables.
 
-# Run migrations
-alembic upgrade head
+## Pendant le travail
 
-# Create a new migration
-alembic revision --autogenerate -m "description"
+- Proposer un **plan court** avant toute modification importante.
+- Modifier le **minimum de fichiers** nécessaire.
+- Lancer **uniquement les tests ciblés** (pas la suite complète).
+- Résumer le **diff final en moins de 10 lignes**.
 
-# Run tests
-pytest
-```
-
-### Frontend
+## Commandes essentielles
 
 ```bash
-cd saas/frontend
-npm install
-npm run dev        # dev server on :5173
-npm run build      # tsc + vite build
+# Backend (saas/backend/)
+uvicorn app.main:app --reload --port 8000   # dev
+alembic upgrade head                         # migrations
+alembic revision --autogenerate -m "msg"     # nouvelle migration
+pytest                                        # tests (env avec deps)
+
+# Frontend (saas/frontend/)
+npm run dev          # dev :5173
+npm run build        # tsc + vite build  (npx tsc -b pour le typecheck seul)
 ```
 
-### Full stack (Docker Compose production)
-
-```bash
-# From saas/ with a .env file (copy from .env.example)
-docker compose -f infra/docker-compose.prod.yml --env-file .env up -d --build
-```
-
-## Architecture
-
-### Backend (`saas/backend/app/`)
-
-```
-api/
-  router.py          # mounts all route groups under /api
-  deps.py            # FastAPI Depends: get_db, get_current_user
-  routes/            # auth, buildings, cities, health
-core/
-  config.py          # Pydantic Settings (reads .env)
-  db.py              # SQLAlchemy engine + SessionLocal
-  security.py        # JWT encode/decode, password hashing
-models/              # SQLAlchemy ORM models (User, City, Building, Local)
-schemas/             # Pydantic request/response schemas
-services/            # Business logic (auth, buildings, cities, building_naming)
-scripts/             # One-off data import scripts (import_cities.py)
-```
-
-Routes are thin; business logic lives in `services/`. All DB access goes through `Depends(get_db)` session injection.
-
-### Frontend (`saas/frontend/src/`)
-
-```
-lib/api.ts           # All fetch calls — single source of API truth
-providers/AuthProvider.tsx  # AuthContext: token + user, persisted in localStorage
-pages/               # Feature pages (one per route)
-components/          # Shared / map components
-App.tsx              # Route definitions + sidebar shell
-```
-
-React Query manages all server state. `lib/api.ts` exposes typed async functions; pages call them via `useQuery`/`useMutation`.
-
-### Data models
-
-- **Building** — core entity; tracks DGFiP source data, geocoordinates, IGN/OSM identifiers, MAJIC fiscal properties
-- **Local** — a premises/unit linked to a Building (e.g., floors, separate units)
-- **City** — scoping entity; every User and Building belongs to one city
-- **User** — has `city_id`; all data queries are filtered by the logged-in user's city
-
-### Building naming workflow
-
-`services/building_naming.py` handles the reconciliation logic between DGFP/MAJIC Excel imports and IGN/OSM geodata. The frontend `BuildingCreateEditPage` drives a multi-step import/create flow.
-
-## Environment
-
-Copy `saas/.env.example` to `saas/.env`. Key variables:
-
-```
-DATABASE_URL=postgresql+psycopg://patrimoineop:patrimoineop@db:5432/patrimoineop
-SECRET_KEY=<random string>
-VITE_API_URL=/api           # frontend uses this to reach the backend via Caddy
-```
-
-## Deployment
-
-GitHub Actions (`.github/workflows/deploy.yml`) triggers on push to `main` when `saas/` or `infra/` files change. It SSHs into the VPS, `git pull`s, and runs `docker compose up --build -d`.
-
-CI (`.github/workflows/ci.yml`) runs on every push/PR: Python `compileall` check for backend, `npm run build` for frontend.
+Stack, arborescence, conventions de code et déploiement : `docs/02-Architecture.md`.
+Règles inter-IA détaillées (handoff, ADR, git partagé avec Codex) : `docs/05-Conventions-IA.md`.

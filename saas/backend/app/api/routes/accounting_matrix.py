@@ -23,9 +23,30 @@ from app.schemas.accounting_matrix import (
 )
 from app.services import accounting_matrix as svc
 from app.services import accounting_matrix_apply as apply_svc
+from app.services import accounting_matrix_invoice_lines as invoice_line_svc
 from app.services import accounting_matrix_xlsx as xlsx_svc
 
 router = APIRouter(prefix="/accounting-matrices", tags=["accounting-matrices"])
+
+MATRIX_WRITE_DENIED_ROLES = {"FLUIDES", "FLUIDE", "RESPONSABLE_FLUIDES", "TECHNICIEN_CVC", "TECHNICIEN CVC"}
+MATRIX_WRITE_ALLOWED_ROLES = {
+    "ADMIN", "SUPERADMIN", "DIRECTION", "RESPONSABLE_MAINTENANCE",
+    "RESPONSABLE MAINTENANCE", "PATRIMOINE", "FINANCE", "COMPTA", "COMPTABILITE",
+}
+
+
+def _normalize_role(role: str | None) -> str:
+    return (role or "").strip().upper().replace("-", "_")
+
+
+def _require_matrix_write_access(user: User) -> None:
+    role = _normalize_role(user.role)
+    if role in MATRIX_WRITE_DENIED_ROLES or role not in MATRIX_WRITE_ALLOWED_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Action reservee aux roles autorises hors Fluides et Technicien CVC.",
+        )
+
 
 
 # ---------------------------------------------------------------------------
@@ -46,8 +67,9 @@ def seed_from_existing(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Crée les matrices versionnées (en brouillon) depuis les codifications
-    énergie/CPE existantes. Idempotent : saute les matrices déjà présentes."""
+    """CrÃ©e les matrices versionnÃ©es (en brouillon) depuis les codifications
+    Ã©nergie/CPE existantes. Idempotent : saute les matrices dÃ©jÃ  prÃ©sentes."""
+    _require_matrix_write_access(current_user)
     return svc.seed_from_existing(db, current_user.city_id, user_id=current_user.id)
 
 
@@ -57,6 +79,7 @@ def create_contract(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     return svc.create_contract(db, current_user.city_id, payload)
 
 
@@ -79,6 +102,7 @@ def update_contract(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.update_contract(db, current_user.city_id, contract_id, payload)
     except ValueError as exc:
@@ -95,6 +119,7 @@ def create_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.create_version(db, current_user.city_id, contract_id, payload, user_id=current_user.id)
     except ValueError as exc:
@@ -107,6 +132,7 @@ def activate_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.activate_version(db, current_user.city_id, version_id, user_id=current_user.id)
     except ValueError as exc:
@@ -119,6 +145,7 @@ def archive_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.archive_version(db, current_user.city_id, version_id)
     except ValueError as exc:
@@ -126,7 +153,7 @@ def archive_version(
 
 
 # ---------------------------------------------------------------------------
-# Import / export XLSX (doc 35 §5)
+# Import / export XLSX (doc 35 Â§5)
 # ---------------------------------------------------------------------------
 @router.get("/versions/{version_id}/export.xlsx")
 def export_version_xlsx(
@@ -152,8 +179,9 @@ async def import_preview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Charge un XLSX et renvoie les différences vs la version de référence,
-    sans rien écrire. Le commit crée ensuite une version brouillon."""
+    """Charge un XLSX et renvoie les diffÃ©rences vs la version de rÃ©fÃ©rence,
+    sans rien Ã©crire. Le commit crÃ©e ensuite une version brouillon."""
+    _require_matrix_write_access(current_user)
     raw = await file.read()
     try:
         return xlsx_svc.preview_import(db, current_user.city_id, contract_id, raw)
@@ -169,8 +197,9 @@ async def import_commit(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Crée une nouvelle version brouillon depuis le classeur. N'altère jamais
+    """CrÃ©e une nouvelle version brouillon depuis le classeur. N'altÃ¨re jamais
     une version active."""
+    _require_matrix_write_access(current_user)
     raw = await file.read()
     try:
         return xlsx_svc.commit_import(
@@ -182,7 +211,7 @@ async def import_commit(
 
 
 # ---------------------------------------------------------------------------
-# Règles
+# RÃ¨gles
 # ---------------------------------------------------------------------------
 @router.get("/versions/{version_id}/rules", response_model=list[AccountingMatrixRuleOut])
 def list_version_rules(
@@ -203,6 +232,7 @@ def create_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.create_rule(db, current_user.city_id, version_id, payload)
     except ValueError as exc:
@@ -216,6 +246,7 @@ def update_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return svc.update_rule(db, current_user.city_id, rule_id, payload)
     except ValueError as exc:
@@ -250,15 +281,18 @@ def apply_matrix_to_invoice(
     current_user: User = Depends(get_current_user),
 ):
     """Produit une proposition d'imputation depuis la version active du contrat
-    matrice. N'écrase pas un snapshot déjà figé."""
-    lines = [
-        apply_svc.InvoiceLine(
-            billed_item=l.billed_item, site_code=l.site_code, meter_id=l.meter_id,
-            amount=l.amount, line_ref=l.line_ref,
-        )
-        for l in payload.invoice_lines
-    ]
+    matrice. N'Ã©crase pas un snapshot dÃ©jÃ  figÃ©."""
+    _require_matrix_write_access(current_user)
     try:
+        lines = [
+            apply_svc.InvoiceLine(
+                billed_item=l.billed_item, site_code=l.site_code, meter_id=l.meter_id,
+                amount=l.amount, line_ref=l.line_ref,
+            )
+            for l in payload.invoice_lines
+        ] or invoice_line_svc.extract_invoice_lines(
+            db, current_user.city_id, source=source, invoice_id=invoice_id,
+        )
         return apply_svc.apply_to_invoice(
             db, current_user.city_id, source=source, invoice_id=invoice_id,
             contract_id=payload.matrix_contract_id, lines=lines,
@@ -274,6 +308,7 @@ def validate_invoice_snapshot(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return apply_svc.validate_snapshot(
             db, current_user.city_id, source=source, invoice_id=invoice_id, user_id=current_user.id,
@@ -290,6 +325,7 @@ def manual_override_snapshot(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return apply_svc.manual_override(
             db, current_user.city_id, source=source, invoice_id=invoice_id,
@@ -306,6 +342,7 @@ def export_invoice_finance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_matrix_write_access(current_user)
     try:
         return apply_svc.export_finance(
             db, current_user.city_id, source=source, invoice_id=invoice_id,

@@ -1,0 +1,5 @@
+import { Card, KpiCard, StatusBadge } from "../../design-system";
+import { cockpitKpisMock, cockpitPrioritiesMock } from "./cockpit.mock";
+export function CockpitPageV1() {
+  return <div className="po2-page-v1"><header className="po2-page-v1__head"><span className="po2-eyebrow">Cockpit personnalisé</span><h1>Bonjour, voici ce qui mérite votre attention.</h1><p>Une lecture consolidée du budget, des fluides et du patrimoine technique.</p></header><div className="po2-kpi-grid">{cockpitKpisMock.map((kpi) => <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} detail={kpi.detail} trend={kpi.trend} />)}</div><Card title="À décider maintenant" eyebrow="Décisions" className="po2-decision-card"><div className="po2-decision-list">{cockpitPrioritiesMock.map((priority) => <article key={priority.label} className="po2-decision-item"><StatusBadge tone={priority.tone === "bad" ? "bad" : priority.tone === "warn" ? "warn" : "info"}>{priority.domain}</StatusBadge><div><strong>{priority.label}</strong><small>Preuve : {priority.proof}</small></div><b>{priority.value}</b></article>)}</div></Card></div>;
+}

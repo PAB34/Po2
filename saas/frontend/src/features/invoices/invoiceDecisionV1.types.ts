@@ -1,0 +1,24 @@
+export type InvoiceDecisionV1Source = "energy-import" | "gas-totalenergies" | "cpe-dalkia" | "mock";
+export type InvoiceDecisionV1Status = "conforme" | "anomalie" | "decision" | "transmise" | "archivee";
+export type AccountingMatrixV1Status = "validee" | "proposee" | "a_completer" | "a_arbitrer" | "non_applicable";
+export type InvoiceProofV1 = { label: string; method: string; reference?: string | null; status: "ok" | "warn" | "bad" | "info"; source?: string | null; };
+export type InvoiceDecisionV1 = {
+  stableId: string;
+  source: InvoiceDecisionV1Source;
+  sourceId: number | string;
+  supplier: string;
+  invoiceNumber: string;
+  siteLabel: string;
+  contractLabel: string;
+  amountTtc: number | null;
+  amountTtcLabel: string;
+  issuedAt: string | null;
+  dueAt: string | null;
+  status: InvoiceDecisionV1Status;
+  matrixStatus: AccountingMatrixV1Status;
+  issue: string;
+  proofs: InvoiceProofV1[];
+  alreadyProcessed: boolean;
+  snapshotVersionLabel?: string | null;
+};
+export type AccountingMatrixSummaryV1 = { id: string; supplier: string; contract: string; version: string; status: string; coverage: string; rules: string; exceptions: string; };

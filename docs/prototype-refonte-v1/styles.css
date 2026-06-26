@@ -130,3 +130,4 @@ html[data-theme="dark"],html[data-theme="dark"] body{background:var(--canvas)}[d
 [data-theme="dark"] .decision-lanes{background:var(--line)}[data-theme="dark"] .decision-lane,[data-theme="dark"] .site-decision-feed button{background:#152231}[data-theme="dark"] .decision-lane:hover{background:#1a2838}[data-theme="dark"] .decision-lane em{color:#b4c0cc}[data-theme="dark"] .site-decision-feed{border-color:var(--line);background:#101a27}
 @media(max-width:1180px){.decision-lanes{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.decision-lanes{grid-template-columns:1fr}.site-decision-feed button{grid-template-columns:1fr}.site-decision-feed small{text-align:left}}
+.kpi-grid>.kpi-single{display:flex;min-width:0}.kpi-grid>.kpi-single>.kpi{width:100%;height:100%;min-height:150px}

@@ -368,3 +368,121 @@ Le backend des matrices est désormais **complet et mergé dans `main`** (CI ver
 - **#28** : moteur d'imputation `apply_matrix` + cycle de vie des snapshots immuables (`apply`/`validate-snapshot`/`manual-override`/`export-finance`), dédoublonnage et contrôle de ventilation, avec tests.
 
 Côté raccordement frontend (objet de ce plan 37) : `/refonte-v1/factures` peut maintenant viser `/api/accounting-matrices/*` à la place de la synthèse transitoire `useAccountingMatricesV1`. Prérequis : faire atterrir le labo React V1 (aujourd'hui sur la branche `wip/codex-2026-06-25`) dans `main`, puis brancher l'écran sur les endpoints réels.
+
+
+## Avancement frontend : premier raccordement réel matrices - 2026-06-25
+
+Branche `feat/frontend-react-v1` (PR #30, en validation staging avant merge).
+
+1. **Reprise du labo React V1** depuis `wip/codex-2026-06-25` (design-system, `AppShellV1`, pages cockpit/factures/fluides/sites sous `/refonte-v1*`), build CI vert.
+2. **Premier écran connecté au vrai backend** (pas de mock) : `MatrixAdminPageV1` (`/refonte-v1/matrices`) consomme `/api/accounting-matrices/*`.
+   - `src/lib/api.ts` : client `fetchAccountingMatrixContracts` / `fetchAccountingMatrixContract` / `fetchAccountingMatrixVersionRules` / `seedAccountingMatrices` + types.
+   - `src/features/matrices/` : hooks React Query + page (liste contrats → drawer versions → règles, bouton seed idempotent).
+   - route + entrée de navigation labo.
+
+Validation : build CI (TypeScript + Vite) vert ; déployé sur staging ; testé de bout en bout côté backend sur la copie prod (7 matrices DALKIA, city_id 303). `main` non touché tant que la revue visuelle n'est pas faite.
+
+Méthode retenue (validée avec l'utilisateur) : on **valide chaque tranche frontend sur staging avant de merger dans `main`** (le staging sert exactement à ça).
+
+Suite : revue visuelle utilisateur → merge PR #30 ; puis brancher `/refonte-v1/factures` sur l'API matrices (remplacer `useAccountingMatricesV1`), et faire atterrir les autres pages du labo (cockpit/fluides/sites) tranche par tranche.
+
+## Avancement correction moteur imputation Matrices - 2026-06-25
+
+Le premier point critique de l'audit post-Claude Code est traité : le moteur d'imputation distingue maintenant les règles de contexte des règles de nature/ventilation.
+
+Conséquence UX attendue pour /refonte-v1/factures : les exceptions comptables affichées devront correspondre à de vrais manques de nature ou de ventilation, pas à un double comptage entre rattachement compteur/site et nature comptable.
+
+Prochaine étape : sécuriser les mutations /api/accounting-matrices par rôle ou, à défaut pour la tranche labo, masquer/protéger les actions d'écriture sensibles comme le seed et l'activation de version.
+
+## Avancement droits écritures Matrices - 2026-06-25
+
+Les actions sensibles de /api/accounting-matrices sont maintenant protégées par rôle côté backend. Cela réduit le risque du bouton Seed depuis l'existant dans le laboratoire React : il ne peut plus écrire si l'utilisateur n'a pas un rôle comptabilité/finance/admin.
+
+À faire côté frontend : afficher un message clair en cas de 403 et idéalement masquer les boutons d'écriture si le profil utilisateur n'a pas le rôle requis.
+
+## Avancement UX rôles écran Matrices - 2026-06-25
+
+/refonte-v1/matrices affiche désormais un état lecture seule quand le rôle utilisateur n'est pas autorisé à écrire les matrices. Le seed est désactivé côté UI et protégé côté API.
+
+Reste à faire : brancher les actions d'édition/import/activation avec les mêmes garde-fous UX, puis construire les extracteurs de lignes facture réelles avant raccordement complet à /refonte-v1/factures.
+
+## Avancement extraction lignes factures pour Matrices - 2026-06-25
+
+Le backend dispose maintenant d'un adaptateur source → `InvoiceLine` pour appliquer une matrice à une facture réelle sans payload manuel.
+
+Sources couvertes :
+
+- fluides électricité ENGIE/EDF depuis `EnergyInvoiceImport.normalized_invoice` ;
+- gaz TotalEnergies depuis la décomposition HT de `GasInvoice` ;
+- CPE DALKIA depuis les lignes `CpeFinanceLine`.
+
+L'endpoint `POST /api/accounting-matrices/invoices/{source}/{invoice_id}/apply` garde le fallback manuel : s'il reçoit `invoice_lines`, il les utilise ; sinon il extrait les lignes réelles.
+
+Suite frontend : raccorder `/refonte-v1/factures` aux contrats matrices + snapshots réels, avec trois actions visibles : appliquer/proposer, valider, exporter finance. L'interface doit afficher clairement les exceptions d'imputation et le statut historique d'une facture déjà traitée.
+
+## Avancement lecture snapshots dans Factures V1 - 2026-06-25
+
+Le raccord frontend a commencé côté Factures :
+
+- `src/lib/api.ts` expose les endpoints snapshot : lecture, apply, validate, export finance ;
+- `useInvoiceAccountingSnapshotsV1` encapsule React Query/mutations ;
+- `InvoicesDecisionPageV1` affiche dans le drawer le snapshot comptable existant d'une facture réelle, sans action automatique.
+
+Choix assumé : ne pas déclencher `apply` depuis la liste tant que le contrat matrice n'est pas choisi/confirmé. Prochaine UX à concevoir : sélection de matrice active compatible, bouton "proposer l'imputation", lecture des exceptions, puis validation/export.
+
+## Avancement UX atelier matrices par tiers facturant - 2026-06-25
+
+Suite a la cartographie de l'existant, `/refonte-v1/matrices` n'est plus presente seulement comme une table technique contrats / versions / regles. L'ecran devient l'amorce d'un atelier metier de configuration par tiers facturant.
+
+Ajouts frontend :
+
+- en-tete oriente objectif V1 : detecter les lignes recurrentes de factures, codifier, valider, puis appliquer automatiquement aux futures factures ;
+- parcours cible en 5 etapes : import reference, detection recurrente, codification, controle couverture, activation version ;
+- regroupement des matrices par tiers facturant ;
+- guides de detection et risques UX pour DALKIA, ENGIE, EDF et TotalEnergies ;
+- maintien du tableau API contrats/versions/regles et du drawer de detail existant.
+
+Cette tranche reste non destructive : elle ne remplace pas encore le backend par un assistant complet d'import facture de reference. Elle pose l'UX et prepare l'etape suivante : DALKIA comme cas pilote, avec detection des postes recurrentes depuis les exports reels et controle de couverture avant activation.
+
+## Avancement export XLSX matrices et decisions utilisateur - 2026-06-25
+
+Les reponses utilisateur du document 42 changent la priorite : l'assistant matrices doit couvrir rapidement tous les tiers facturants, pas seulement DALKIA, afin de fournir au service comptabilite un fichier XLSX a completer.
+
+Raccord ajoute : `src/lib/api.ts` expose `downloadAccountingMatrixVersionXlsx`, `useMatricesV1.ts` expose `useExportMatrixVersionV1`, et `MatrixAdminPageV1` affiche un bouton `Exporter XLSX` sur la version selectionnee. Cela s'appuie sur l'endpoint backend deja present `/api/accounting-matrices/versions/{version_id}/export.xlsx`.
+
+Les droits d'ecriture matrices sont ajustes selon la decision : Admin, Direction, Responsable maintenance, Patrimoine et anciens roles finance/compta/admin peuvent agir ; Fluides et Technicien CVC restent lecture seule.
+
+Suite logique : brancher import-preview/import-commit XLSX cote frontend, puis construire la detection des lignes recurrentes par source facture.
+
+## Avancement retour compta XLSX - 2026-06-25
+
+La tranche suivante du plan React V1 est implementee dans `/refonte-v1/matrices` : l'aller-retour comptable XLSX.
+
+L'utilisateur peut exporter la version selectionnee, importer le fichier complete par la comptabilite, afficher une preview sans ecriture, puis creer une version brouillon si le fichier ne contient pas d'erreur bloquante. La preview affiche les compteurs d'ajouts, modifications, erreurs et regles absentes du fichier, plus les premieres lignes de diff.
+
+Cette etape ne remplace pas encore la detection automatique des lignes recurrentes depuis les exports facture. Elle rend toutefois le flux immediatement exploitable pour envoyer les matrices existantes au service comptabilite et recuperer une version corrigee.
+
+Suite logique : construire la detection recurrente par source facture pour pre-remplir les matrices multi-tiers avant export compta.
+
+## Avancement preview matrices sans backend - 2026-06-25
+
+Constat local : le serveur Vite tourne sur `http://127.0.0.1:5173`, mais le backend FastAPI n'est pas joignable sur `127.0.0.1:8000` et aucun Postgres local n'ecoute sur `5432`. La route raccordee `/refonte-v1/matrices` redirige donc vers le login et ne peut pas etre testee sans API.
+
+Ajout d'une route de preview non authentifiee : `/refonte-v1/matrices-preview`. Elle ne fait aucune ecriture et n'appelle pas le backend. Son role est uniquement de valider l'UX de l'atelier matrices : tiers facturants, parcours cible, retour comptabilite XLSX et differents statuts de preview.
+
+Suite : utiliser `/refonte-v1/matrices-preview` pour discuter UX tant que l'infra locale n'est pas disponible ; utiliser `/refonte-v1/matrices` pour les donnees reelles des que FastAPI + Postgres sont relances.
+
+## Decision staging refonte sans Docker local - 2026-06-25
+
+Le poste utilisateur etant un ordinateur entreprise, on ne force pas une installation Docker locale. La refonte garde deux rails :
+
+- local Vite pour previews UX rapides (`/refonte-v1/*-preview`) ;
+- staging distant pour validation sur API et donnees reelles.
+
+Staging actif : `https://staging.135-125-152-112.sslip.io`. La prochaine tranche peut donc etre concue localement puis deployee via le workflow GitHub `Deploy staging` pour validation metier.
+
+## Preview Factures & decisions V1 - 2026-06-25
+
+Ajout de la route locale sans backend `/refonte-v1/factures-preview`. Elle pose la cible UX du poste de controle facture : file priorisee, workflow import -> controle -> matrice -> decision -> export, trace de controle, imputation comptable proposee, actions metier et historique de reimport.
+
+Cas representes : DALKIA, ENGIE, EDF, TotalEnergies. Cette preview doit servir de reference pour le raccordement progressif de `/refonte-v1/factures` aux endpoints reels et a la validation staging.
