@@ -22,7 +22,25 @@ type UnifiedRow = {
   status: UnifiedStatus;
   processed: boolean;
   month: number | null;
+  issues: { severity: string; code: string; message: string; scope: string | null }[];
 };
+
+/** Regroupe des anomalies par message et compte les occurrences. */
+function aggregateIssues(issues: { severity: string; message: string; code: string }[]) {
+  const map = new Map<string, { message: string; severity: string; count: number }>();
+  for (const it of issues) {
+    const key = (it.message || it.code || "Anomalie").trim();
+    const cur = map.get(key);
+    if (cur) cur.count += 1;
+    else map.set(key, { message: key, severity: it.severity || "warning", count: 1 });
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+function issueTone(severity: string) {
+  if (severity === "error" || severity === "blocking") return "bad" as const;
+  return "warn" as const;
+}
 
 // ---------------------------------------------------------------------------
 // Statuts unifiés (CPE et énergie ont des codes différents)
@@ -46,11 +64,6 @@ const CONTROL_TYPE_LABELS: Record<string, string> = {
 function controlTypeLabel(type: string) { return CONTROL_TYPE_LABELS[type] ?? type.replace(/_/g, " "); }
 function statusLabel(s: UnifiedStatus) { return UNIFIED_OPTIONS.find((o) => o.value === s)?.label ?? s; }
 function statusTone(s: UnifiedStatus) { return s === "valid" ? ("ok" as const) : s === "todo" ? ("warn" as const) : ("bad" as const); }
-function controlTone(status: string, severity: string) {
-  if (status === "ok") return "ok" as const;
-  if (status === "blocked" || severity === "blocking" || status === "error") return "bad" as const;
-  return "warn" as const;
-}
 function fmtEur(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(value);
@@ -93,6 +106,7 @@ export function InvoicesDecisionPageV1() {
         status: CPE_TO_UNIFIED[r.invoice_status] ?? "todo",
         processed: r.invoice_status === "valide" || Boolean(r.finance_exported_at),
         month: cpeMonthById.get(r.invoice_id) ?? null,
+        issues: [],
       });
     }
     for (const e of energy.data ?? []) {
@@ -104,11 +118,12 @@ export function InvoicesDecisionPageV1() {
         invoiceNumber: e.invoice_number ?? `import-${e.id}`, supplier: supplierFromEnergy(e),
         type: docType ? (docType.toLowerCase().includes("avoir") ? "Avoir" : "Facture") : "Facture",
         client: e.contract_holder ?? "—",
-        marche: e.market_reference ?? "—",
+        marche: "Hérault Énergie",
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
         total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: e.control_errors_count, blocked: 0,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date),
+        issues: e.control_issues ?? [],
       });
     }
     return out;
@@ -276,8 +291,19 @@ export function InvoicesDecisionPageV1() {
               </>
             ) : (
               <>
-                <h3>Contrôle fournisseur</h3>
-                <p className="po2-muted-line">{selected.error > 0 ? `${selected.error} écart(s) de contrôle détecté(s).` : "Aucun écart de contrôle bloquant."} Le détail BPU/TURPE/taxes est disponible dans le module Énergie.</p>
+                <h3>Écarts de contrôle{selected.issues.length ? ` (${selected.issues.length})` : ""}</h3>
+                {selected.issues.length === 0 ? (
+                  <p className="po2-muted-line">Aucun écart de contrôle. Le détail BPU/TURPE/taxes est dans le module Énergie.</p>
+                ) : (
+                  <div className="po2-proto-control-list">
+                    {aggregateIssues(selected.issues).map((iss) => (
+                      <article key={iss.message}>
+                        <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "error" ? "ERREUR" : "ALERTE"}</StatusBadge>
+                        <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -312,24 +338,32 @@ export function InvoicesDecisionPageV1() {
 }
 
 function ControlDecomposition({ controls, loading }: { controls: CpeFinanceControl[]; loading: boolean }) {
-  const groups = useMemo(() => {
-    const map = new Map<string, CpeFinanceControl[]>();
-    for (const c of controls) { const arr = map.get(c.control_type) ?? []; arr.push(c); map.set(c.control_type, arr); }
-    return Array.from(map.entries());
-  }, [controls]);
+  const okCount = controls.filter((c) => c.status === "ok").length;
+  const issues = useMemo(
+    () => aggregateIssues(
+      controls
+        .filter((c) => c.status !== "ok")
+        .map((c) => ({ severity: c.severity || (c.status === "blocked" ? "blocking" : "error"), message: c.message || controlTypeLabel(c.control_type), code: c.control_type })),
+    ),
+    [controls],
+  );
   if (loading) return <p className="po2-muted-line">Chargement des contrôles…</p>;
   if (controls.length === 0) return <p className="po2-muted-line">Aucun contrôle enregistré pour cette facture.</p>;
   return (
     <div className="po2-proto-control-list">
-      {groups.map(([type, items]) => {
-        const worst = items.find((i) => i.status === "blocked") ?? items.find((i) => i.status === "error") ?? items[0];
-        return (
-          <article key={type}>
-            <StatusBadge tone={controlTone(worst.status, worst.severity)}>{worst.status === "ok" ? "OK" : worst.status.toUpperCase()}</StatusBadge>
-            <div><strong>{controlTypeLabel(type)}</strong><small>{items.map((i) => i.message).filter(Boolean).slice(0, 2).join(" · ") || "Contrôle effectué"}</small></div>
-          </article>
-        );
-      })}
+      {issues.length === 0 ? (
+        <article><StatusBadge tone="ok">OK</StatusBadge><div><strong>Aucun écart</strong><small>{controls.length} contrôle(s) conforme(s)</small></div></article>
+      ) : (
+        <>
+          {issues.map((iss) => (
+            <article key={iss.message}>
+              <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "blocking" ? "BLOQUÉ" : "ÉCART"}</StatusBadge>
+              <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+            </article>
+          ))}
+          {okCount > 0 ? <article><StatusBadge tone="ok">OK</StatusBadge><div><strong>{okCount} contrôle(s) conforme(s)</strong><small>sans écart</small></div></article> : null}
+        </>
+      )}
     </div>
   );
 }
