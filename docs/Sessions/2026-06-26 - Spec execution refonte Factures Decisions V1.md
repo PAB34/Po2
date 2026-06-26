@@ -81,3 +81,16 @@ Validation :
 - **Démo staging sur données réelles** : facture CPE/DALKIA #3433 (contrat C00025811F, 3 lignes P1, ~18.8 k€ HT) → `extract_invoice_lines` → `apply` = **3/3 lignes imputées, 0 exception**, snapshot `proposed` épinglé sur la version active. La chaîne extracteur → matrice → snapshot fonctionne bout-en-bout sur la copie prod.
 
 Prochaine étape (Phase 5 du doc 49) : brancher les **vraies actions du drawer** facture côté React (`apply` → `validate-snapshot` → `export-finance`, préparer réclamation) sur `/refonte-v1/factures`, en réutilisant `useInvoiceAccountingSnapshotsV1`.
+
+## Phase 5 (début) - actions réelles du drawer facture - 2026-06-26
+
+`InvoicesDecisionPageV1` : le drawer facture porte maintenant une carte « Imputation comptable » avec actions réelles câblées sur l'API matrices :
+
+- sélecteur de matrice contrat (match auto par fournisseur/contrat, modifiable) ;
+- **Appliquer la matrice** → `apply` (lignes extraites côté backend) ;
+- **Valider l'imputation** → `validate-snapshot` (actif si snapshot `proposed`) ;
+- **Exporter aux finances** → `export-finance` (actif si `validated`/`manual_override`).
+
+État piloté par `useInvoiceAccountingSnapshotV1` ; erreurs backend affichées ; mock = actions désactivées ; réclamation = placeholder désactivé (pas de backend). Réutilise `useInvoiceAccountingActionsV1` + `useMatrixContractsV1` (Codex). Build CI vert ; déployé staging.
+
+Reste Phase 5 : générateur de réclamation, harmonisation des statuts décision (énergie/gaz/CPE ↔ snapshot), rapport de lot d'import. Puis revue visuelle staging (compte Sète/303) → merge PR #30.
