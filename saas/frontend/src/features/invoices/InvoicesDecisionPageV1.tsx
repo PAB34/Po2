@@ -1,9 +1,33 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Card, DataTable, Drawer, FilterBar, KpiCard, StatusBadge } from "../../design-system";
 import { useAccountingMatricesV1 } from "./accountingMatrixV1";
 import { useInvoiceDecisionsV1 } from "./useInvoiceDecisionsV1";
-import { useInvoiceAccountingSnapshotV1 } from "./useInvoiceAccountingSnapshotsV1";
+import { useInvoiceAccountingSnapshotV1, useInvoiceAccountingActionsV1 } from "./useInvoiceAccountingSnapshotsV1";
+import { useMatrixContractsV1 } from "../matrices/useMatricesV1";
+import type { AccountingMatrixContractV1 } from "../../lib/api";
 import type { AccountingMatrixStatus, InvoiceDecision, InvoiceDecisionStatus } from "./invoices.types";
+
+function matrixSupplierKeyword(value: string) {
+  const upper = value.toUpperCase();
+  if (upper.includes("TOTAL")) return "TOTAL";
+  if (upper.includes("DALKIA")) return "DALKIA";
+  if (upper.includes("ENGIE")) return "ENGIE";
+  if (upper.includes("EDF")) return "EDF";
+  return upper;
+}
+
+function suggestMatrixContract(invoice: InvoiceDecision | null, contracts: AccountingMatrixContractV1[]) {
+  if (!invoice) return null;
+  const supplierKey = matrixSupplierKeyword(invoice.supplier);
+  const sameSupplier = contracts.filter((c) => matrixSupplierKeyword(c.supplier) === supplierKey);
+  const ref = `${invoice.contractLabel ?? ""} ${invoice.invoiceNumber ?? ""}`.toUpperCase();
+  const exact = sameSupplier.find((c) => c.contract_code && ref.includes(c.contract_code.toUpperCase()));
+  return (exact ?? sameSupplier[0] ?? null)?.id ?? null;
+}
+
+function actionError(error: unknown) {
+  return error instanceof Error ? error.message : null;
+}
 
 function invoiceTone(status: InvoiceDecisionStatus) {
   if (status === "conforme") return "ok" as const;
@@ -127,6 +151,21 @@ export function InvoicesDecisionPageV1() {
   const { invoices, isFetching, isUsingFallback } = useInvoiceDecisionsV1();
   const { matrices, isUsingFallback: isUsingMatrixFallback } = useAccountingMatricesV1();
   const snapshot = useInvoiceAccountingSnapshotV1(selectedInvoice);
+  const actions = useInvoiceAccountingActionsV1(selectedInvoice);
+  const { data: matrixContracts = [] } = useMatrixContractsV1();
+  const [matrixContractId, setMatrixContractId] = useState<number | null>(null);
+  useEffect(() => {
+    setMatrixContractId(null);
+    actions.apply.reset();
+    actions.validate.reset();
+    actions.exportFinance.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedInvoice?.stableId]);
+  const suggestedContractId = useMemo(
+    () => suggestMatrixContract(selectedInvoice, matrixContracts),
+    [selectedInvoice, matrixContracts],
+  );
+  const effectiveContractId = matrixContractId ?? suggestedContractId;
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -282,7 +321,7 @@ export function InvoicesDecisionPageV1() {
         eyebrow="Dossier facture"
         description={selectedInvoice ? selectedInvoice.siteLabel + " · " + selectedInvoice.contractLabel : undefined}
         onClose={() => setSelectedInvoice(null)}
-        footer={<><Button variant="ghost">Préparer une réclamation</Button><Button variant="secondary">Valider le contrôle</Button></>}
+        footer={<Button variant="ghost" disabled title="Génération du courrier de réclamation à venir">Préparer une réclamation (à venir)</Button>}
       >
         {selectedInvoice ? (
           <div className="po2-invoice-proof">
@@ -337,6 +376,55 @@ export function InvoicesDecisionPageV1() {
                   </article>
                 )}
               </div>
+            </Card>
+
+            <Card title="Imputation comptable" eyebrow="Appliquer la matrice → valider → transmettre">
+              {selectedInvoice.source === "mock" ? (
+                <p className="po2-muted-line">Facture de démonstration : actions comptables désactivées.</p>
+              ) : (
+                <div className="po2-invoice-actions">
+                  <label className="po2-invoice-actions__field">
+                    <span>Matrice contrat</span>
+                    <select
+                      value={effectiveContractId ?? ""}
+                      onChange={(event) => setMatrixContractId(event.target.value ? Number(event.target.value) : null)}
+                    >
+                      <option value="">— choisir une matrice —</option>
+                      {matrixContracts.map((contract) => (
+                        <option key={contract.id} value={contract.id}>
+                          {contract.supplier} · {contract.contract_code ?? contract.contract_label ?? "#" + contract.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="po2-invoice-actions__buttons">
+                    <Button
+                      onClick={() => effectiveContractId && actions.apply.mutate({ matrix_contract_id: effectiveContractId })}
+                      disabled={!effectiveContractId || actions.apply.isPending}
+                    >
+                      {actions.apply.isPending ? "Application…" : "Appliquer la matrice"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => actions.validate.mutate()}
+                      disabled={snapshot.data?.status !== "proposed" || actions.validate.isPending}
+                    >
+                      {actions.validate.isPending ? "Validation…" : "Valider l’imputation"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => actions.exportFinance.mutate()}
+                      disabled={!(snapshot.data?.status === "validated" || snapshot.data?.status === "manual_override") || actions.exportFinance.isPending}
+                    >
+                      {actions.exportFinance.isPending ? "Transmission…" : "Exporter aux finances"}
+                    </Button>
+                  </div>
+                  {actionError(actions.apply.error) ? <p className="po2-action-error">Application : {actionError(actions.apply.error)}</p> : null}
+                  {actionError(actions.validate.error) ? <p className="po2-action-error">Validation : {actionError(actions.validate.error)}</p> : null}
+                  {actionError(actions.exportFinance.error) ? <p className="po2-action-error">Export : {actionError(actions.exportFinance.error)}</p> : null}
+                  {actions.exportFinance.isSuccess ? <p className="po2-muted-line">Transmise aux finances ✓</p> : null}
+                </div>
+              )}
             </Card>
           </div>
         ) : null}
