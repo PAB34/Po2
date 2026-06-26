@@ -27,12 +27,12 @@ type UnifiedRow = {
 
 /** Regroupe des anomalies par message et compte les occurrences. */
 function aggregateIssues(issues: { severity: string; message: string; code: string }[]) {
-  const map = new Map<string, { message: string; severity: string; count: number }>();
+  const map = new Map<string, { message: string; severity: string; code: string; count: number }>();
   for (const it of issues) {
     const key = (it.message || it.code || "Anomalie").trim();
     const cur = map.get(key);
     if (cur) cur.count += 1;
-    else map.set(key, { message: key, severity: it.severity || "warning", count: 1 });
+    else map.set(key, { message: key, severity: it.severity || "warning", code: it.code, count: 1 });
   }
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
@@ -74,6 +74,47 @@ const CONTROL_TYPE_LABELS: Record<string, string> = {
   documentaire: "Documentaire", comptable: "Comptable", echeance: "Échéance",
 };
 function controlTypeLabel(type: string) { return CONTROL_TYPE_LABELS[type] ?? type.replace(/_/g, " "); }
+
+/** Court message d'explication par type d'écart (CPE control_type + codes énergie). */
+const ECART_EXPLAIN: Record<string, string> = {
+  // CPE / DALKIA
+  invoice_total_ht: "Le total de la facture ne correspond pas à la somme de ses lignes.",
+  invoice_period: "La période facturée est incohérente (fin avant début).",
+  invoice_timeline: "Les dates d'édition / échéance sont incohérentes avec la période.",
+  p1_gaz_pu_os3: "Le prix unitaire P1 gaz diffère du prix OS N°3 attendu.",
+  p1_gaz_acompte_dpgf: "L'acompte P1 gaz ne correspond pas au DPGF de référence.",
+  p2p3_base_dpgf: "Le montant P2/P3 s'écarte de l'enveloppe contractuelle DPGF.",
+  revision_p2: "L'indice de révision P2 ne correspond pas aux indices validés.",
+  revision_p3: "L'indice de révision P3 ne correspond pas aux indices validés.",
+  p2_4_objectives: "L'intéressement P2.4 ne respecte pas les objectifs contractuels.",
+  invoice_type: "Type de facture absent : impossible de qualifier acompte / avoir / régularisation.",
+  accounting_nature: "Aucune règle de matrice ne couvre cette ligne : imputation comptable impossible.",
+  accounting_site: "Le site détecté n'est pas rattaché à la matrice de codification.",
+  // Énergie (codes)
+  SUPPLIER_UNKNOWN: "Le fournisseur de la facture n'est pas reconnu par le moteur de contrôle.",
+  MISSING_INVOICE_NUMBER: "Numéro de facture absent.",
+  MISSING_INVOICE_DATE: "Date de facture absente.",
+  MISSING_TOTAL_TTC: "Montant TTC global absent.",
+  MISSING_REGROUPEMENT: "Le regroupement (compte / CCC) est absent.",
+  MISSING_MARKET_REFERENCE: "Référence de marché absente.",
+  MARKET_REFERENCE_MISMATCH: "La référence de marché ne correspond pas au marché en cours.",
+  DUPLICATE_INVOICE_NUMBER: "Ce numéro de facture a déjà été importé (doublon).",
+  NO_SITE_FOUND: "Aucun point de livraison (PRM / PCE) détecté dans la facture.",
+  MISSING_PRM: "Le point de livraison (PRM) est absent sur un site.",
+  UNKNOWN_PRM: "Le PRM facturé est inconnu du référentiel énergie.",
+  PERIOD_INVALID: "La période facturée est incohérente (fin avant début).",
+  PERIOD_MISSING: "Période facturée incomplète : contrôle de fréquence impossible.",
+  BPU_CONFIG_MISSING: "Aucun bordereau (BPU) configuré pour ce fournisseur : prix non contrôlables.",
+  BPU_LINES_MISSING: "Bordereau présent mais sans ligne exploitable.",
+  ENEDIS_CONSUMPTION_MISSING: "Données ENEDIS absentes sur la période : consommation non comparable.",
+  CONSUMPTION_REFERENCE_MISSING: "Consommation ou période incomplète : contrôle impossible.",
+  POWER_REFERENCE_MISSING: "Référence de puissance absente : contrôle impossible.",
+  SUBSCRIBED_POWER_MISSING: "Puissance souscrite absente de la facture.",
+  TAX_TOTALS_MISSING: "Totaux HT / TVA / TTC incomplets : contrôle des taxes impossible.",
+};
+function explainEcart(code: string | undefined) {
+  return (code && ECART_EXPLAIN[code]) || "Écart à examiner avec le fournisseur.";
+}
 function statusLabel(s: UnifiedStatus) { return UNIFIED_OPTIONS.find((o) => o.value === s)?.label ?? s; }
 function statusTone(s: UnifiedStatus) { return s === "valid" ? ("ok" as const) : s === "todo" ? ("warn" as const) : ("bad" as const); }
 function fmtEur(value: number | null | undefined) {
@@ -141,7 +182,15 @@ export function InvoicesDecisionPageV1() {
         issues: energyIssues,
       });
     }
-    return out;
+    // Dédoublonnage : un même n° de facture (réimport du même fichier) ne doit
+    // apparaître qu'une fois par fournisseur. On garde la 1re occurrence.
+    const seen = new Set<string>();
+    return out.filter((r) => {
+      const k = `${r.source}:${r.invoiceNumber}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   }, [report.data, energy.data, cpeMonthById]);
 
   const selected = rows.find((r) => r.key === selectedKey) ?? null;
@@ -319,7 +368,7 @@ export function InvoicesDecisionPageV1() {
                           {aggregateIssues(reals).map((iss) => (
                             <article key={iss.message}>
                               <StatusBadge tone={issueTone(iss.severity)}>{iss.count > 1 ? `×${iss.count}` : iss.severity === "error" ? "ÉCART" : "ALERTE"}</StatusBadge>
-                              <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+                              <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
                             </article>
                           ))}
                         </div>
@@ -331,7 +380,7 @@ export function InvoicesDecisionPageV1() {
                             {aggregateIssues(nc).map((iss) => (
                               <article key={iss.message}>
                                 <StatusBadge tone="neutral">{iss.count > 1 ? `×${iss.count}` : "N/C"}</StatusBadge>
-                                <div><strong>{iss.message}</strong><small>Référence ou donnée manquante côté plateforme — pas une anomalie de facture.</small></div>
+                                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
                               </article>
                             ))}
                           </div>
@@ -393,7 +442,7 @@ function ControlDecomposition({ controls, loading }: { controls: CpeFinanceContr
         ) : errors.map((iss) => (
           <article key={iss.message}>
             <StatusBadge tone="bad">{iss.count > 1 ? `×${iss.count}` : "ÉCART"}</StatusBadge>
-            <div><strong>{iss.message}</strong><small>{iss.count > 1 ? `Apparaît ${iss.count} fois sur cette facture` : "1 occurrence"}</small></div>
+            <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
           </article>
         ))}
       </div>
@@ -404,7 +453,7 @@ function ControlDecomposition({ controls, loading }: { controls: CpeFinanceContr
             {blocked.map((iss) => (
               <article key={iss.message}>
                 <StatusBadge tone="neutral">{iss.count > 1 ? `×${iss.count}` : "N/C"}</StatusBadge>
-                <div><strong>{iss.message}</strong><small>Référence ou donnée manquante — à compléter, pas une anomalie de facture.</small></div>
+                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
               </article>
             ))}
           </div>
