@@ -30,9 +30,11 @@ import { ProductDomainPage } from "./pages/ProductDomainPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RefonteV1Page } from "./pages/RefonteV1Page";
 import { RefonteV1InvoicesPage } from "./pages/RefonteV1InvoicesPage";
+import { RefonteV1InvoicesPreviewPage } from "./pages/RefonteV1InvoicesPreviewPage";
 import { RefonteV1FluidsPage } from "./pages/RefonteV1FluidsPage";
 import { RefonteV1SitesPage } from "./pages/RefonteV1SitesPage";
 import { RefonteV1MatricesPage } from "./pages/RefonteV1MatricesPage";
+import { RefonteV1MatricesPreviewPage } from "./pages/RefonteV1MatricesPreviewPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -237,6 +239,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/refonte-v1/matrices-preview" element={<RefonteV1MatricesPreviewPage />} />
+          <Route path="/refonte-v1/factures-preview" element={<RefonteV1InvoicesPreviewPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/refonte-v1" element={<RefonteV1Page />} />

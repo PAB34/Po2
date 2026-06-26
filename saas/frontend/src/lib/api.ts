@@ -1512,7 +1512,7 @@ export async function fetchDataAudit(token: string): Promise<EnergyDataAudit> {
   return parseResponse<EnergyDataAudit>(response);
 }
 
-// ── Billing ─────────────────────────────────────────────────────────────────
+// â”€â”€ Billing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type BillingGroupItem = {
   supplier: string;
@@ -2072,7 +2072,7 @@ export async function uploadEnergyInvoiceImport(token: string, file: File): Prom
   return parseResponse<EnergyInvoiceUploadResponse>(response);
 }
 
-// Réponse de /billing/invoices/imports/xlsx — résumé d'import multi-factures depuis l'export ENGIE
+// RÃ©ponse de /billing/invoices/imports/xlsx â€” rÃ©sumÃ© d'import multi-factures depuis l'export ENGIE
 export type EnergyInvoiceXlsxImportSummary = {
   source: "engie_xlsx_export";
   filename: string;
@@ -2195,7 +2195,7 @@ export async function updateEnergyInvoiceDecision(
   return parseResponse<EnergyInvoiceImportDetail>(response);
 }
 
-// ── ENEDIS Async (Phase B + C) ────────────────────────────────────────────
+// â”€â”€ ENEDIS Async (Phase B + C) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type EnedisAsyncJobType = "CDC" | "ENERGIE";
 
@@ -2487,7 +2487,7 @@ export async function fetchBuildingEquipmentSummary(
 }
 
 // ===========================================================================
-// BPU — Bordereaux de Prix Unitaires (suivi temporel des prix d'énergie)
+// BPU â€” Bordereaux de Prix Unitaires (suivi temporel des prix d'Ã©nergie)
 // ===========================================================================
 
 export type BpuFormulaComponent = {
@@ -2501,7 +2501,7 @@ export type BpuFormulaPeriod = { code: string; label: string };
 
 export type BpuFormula = {
   expression: string;
-  unit_target: string; // "€HTT/MWh"
+  unit_target: string; // "â‚¬HTT/MWh"
   components: BpuFormulaComponent[];
   segments: BpuFormulaSegment[];
   periods: BpuFormulaPeriod[];
@@ -2753,7 +2753,7 @@ export async function triggerBpuXlsxImport(
   return parseResponse<BpuXlsxImportResponse>(response);
 }
 
-// === BPU édition tableau ====================================================
+// === BPU Ã©dition tableau ====================================================
 
 export type BpuEditableRow = {
   component_id: number;
@@ -2776,7 +2776,7 @@ export type BpuEditableRow = {
   period_label: string | null;
   component_type: string;
   component_label: string | null;
-  price_value: string;            // Decimal sérialisé en string par Pydantic
+  price_value: string;            // Decimal sÃ©rialisÃ© en string par Pydantic
   price_unit: string;
   price_value_eur_per_mwh: string | null;
   is_negative: boolean;
@@ -2855,7 +2855,7 @@ export async function updateBpuDocument(
   return parseResponse<BpuDocumentSummary>(response);
 }
 
-// ─── CVC Inventaire terrain ────────────────────────────────────────────────
+// â”€â”€â”€ CVC Inventaire terrain â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type CvcPreviewResponse = {
   columns: string[];
@@ -3446,7 +3446,7 @@ export async function fetchCvcTechnicalCoverageReport(token: string): Promise<Cv
   return parseResponse<CvcTechnicalCoverageReport>(response);
 }
 
-// ── CPE DALKIA ───────────────────────────────────────────────────────────────
+// â”€â”€ CPE DALKIA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type CpeSite = {
   id: number;
@@ -3459,7 +3459,7 @@ export type CpeSite = {
   q_ecs_mwh_pci_per_m3: number | null;
   dju_reference: number;
   cible_elec_mwh: number | null;
-  tarif: "T1" | "T2" | "T3" | null;  // OS N°3
+  tarif: "T1" | "T2" | "T3" | null;  // OS NÂ°3
   pce: string | null;                  // PCE GRDF
   actif: boolean;
   notes: string | null;
@@ -3483,8 +3483,8 @@ export type CpeGazReleve = {
 export type CpePrixGaz = {
   id: number;
   annee: number;
-  tarif: "T1" | "T2" | "T3" | null;  // OS N°3
-  pu_eur_mwh_pci: number;             // en €/MWhPCI (converti depuis PCS)
+  tarif: "T1" | "T2" | "T3" | null;  // OS NÂ°3
+  pu_eur_mwh_pci: number;             // en â‚¬/MWhPCI (converti depuis PCS)
   source: string;
   notes: string | null;
   updated_at: string;
@@ -3517,8 +3517,8 @@ export type CpeSiteBilanItem = {
   site: CpeSite;
   resultat: CpeResultatAnnuel | null;
   nb_mois_releves: number;
-  nb_exercice: number;          // NB utilisé pour le calcul de l'exercice
-  nb_source: "dalkia" | "site"; // origine du NB : cible importée de l'année | scalaire de secours
+  nb_exercice: number;          // NB utilisÃ© pour le calcul de l'exercice
+  nb_source: "dalkia" | "site"; // origine du NB : cible importÃ©e de l'annÃ©e | scalaire de secours
   qt_cumul: number | null;
   nc_cumul: number | null;
   n_prime_b: number | null;
@@ -3533,7 +3533,7 @@ export type CpeBilanAnnuel = {
   dju_reels: number | null;
   dju_reference: number;
   pu_mwh: number | null;            // prix T2 (affichage KPI)
-  prix_tarifs: Record<string, number>; // {T1: ..., T2: ..., T3: ...} en €/MWhPCI
+  prix_tarifs: Record<string, number>; // {T1: ..., T2: ..., T3: ...} en â‚¬/MWhPCI
   nb_sites_actifs: number;
   nb_sites_complets: number;
   total_interessement_ht: number;
@@ -4511,7 +4511,7 @@ export async function downloadCpeMarketTracking(token: string, yearFrom: number,
   return response.blob();
 }
 
-// ── Devis petits travaux P3 (type P6 DALKIA) ─────────────────────────────────
+// â”€â”€ Devis petits travaux P3 (type P6 DALKIA) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export type CpeP3Devis = {
   id: number;
@@ -4603,7 +4603,7 @@ export async function downloadCpeFinanceInvoiceLiaison(token: string, invoiceId:
 }
 
 // ---------------------------------------------------------------------------
-// GRDF ADICT — gaz (PCE, consommations, rapprochement P1 DALKIA)
+// GRDF ADICT â€” gaz (PCE, consommations, rapprochement P1 DALKIA)
 // ---------------------------------------------------------------------------
 
 export type GrdfPce = {
@@ -4722,7 +4722,7 @@ export async function fetchGrdfReconcileP1(token: string, year: number): Promise
 }
 
 // ---------------------------------------------------------------------------
-// Rapprochement patrimoine (PO2-PAT-003) — boîte de réconciliation compteurs ↔ patrimoine
+// Rapprochement patrimoine (PO2-PAT-003) â€” boÃ®te de rÃ©conciliation compteurs â†” patrimoine
 // ---------------------------------------------------------------------------
 
 export type PatrimoineMatchItem = {
@@ -4814,7 +4814,7 @@ export async function updatePatrimoineMatch(
 }
 
 // ---------------------------------------------------------------------------
-// Factures gaz TotalEnergies (marché Hérault Énergie) — contrôle v1
+// Factures gaz TotalEnergies (marchÃ© HÃ©rault Ã‰nergie) â€” contrÃ´le v1
 // ---------------------------------------------------------------------------
 
 export type GasInvoice = {
@@ -4962,7 +4962,7 @@ export async function fetchGasNetworkTariffs(token: string): Promise<GasNetworkT
 }
 
 // ---------------------------------------------------------------------------
-// Matrices comptables versionnées (/api/accounting-matrices/*)
+// Matrices comptables versionnÃ©es (/api/accounting-matrices/*)
 // ---------------------------------------------------------------------------
 export type AccountingMatrixVersionV1 = {
   id: number;
@@ -5035,4 +5035,137 @@ export async function fetchAccountingMatrixVersionRules(token: string, versionId
 export async function seedAccountingMatrices(token: string): Promise<AccountingMatrixSeedResultV1> {
   const response = await fetch(`${apiBaseUrl}/accounting-matrices/seed`, { method: "POST", headers: buildHeaders(token) });
   return parseResponse<AccountingMatrixSeedResultV1>(response);
+}
+
+export async function downloadAccountingMatrixVersionXlsx(token: string, versionId: number, label?: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/versions/${versionId}/export.xlsx`, { headers: buildHeaders(token) });
+  if (!response.ok) {
+    await parseResponse(response);
+    return;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `matrice-comptable-${label ?? versionId}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+export type AccountingMatrixImportPreviewRowV1 = {
+  line: number;
+  stable_rule_key: string | null;
+  status: "ajout" | "modifie" | "inchange" | "erreurs" | string;
+  message: string | null;
+};
+
+export type AccountingMatrixImportPreviewV1 = {
+  contract_id: number;
+  reference_version_id: number | null;
+  reference_version_label: string | null;
+  structural_errors: string[];
+  summary: Record<string, number>;
+  rows: AccountingMatrixImportPreviewRowV1[];
+  absentes_du_fichier: string[];
+  can_commit: boolean;
+  warnings: string[];
+};
+
+export async function previewAccountingMatrixImport(token: string, contractId: number, file: File): Promise<AccountingMatrixImportPreviewV1> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/contracts/${contractId}/import-preview`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: form,
+  });
+  return parseResponse<AccountingMatrixImportPreviewV1>(response);
+}
+
+export async function commitAccountingMatrixImport(token: string, contractId: number, versionLabel: string, file: File): Promise<AccountingMatrixVersionV1> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/contracts/${contractId}/import-commit?version_label=${encodeURIComponent(versionLabel)}`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: form,
+  });
+  return parseResponse<AccountingMatrixVersionV1>(response);
+}
+export type InvoiceAccountingSnapshotV1 = {
+  id: number;
+  invoice_source: string;
+  invoice_id: string;
+  matrix_contract_id: number | null;
+  matrix_version_id: number | null;
+  status: "proposed" | "validated" | "manual_override" | "exported" | string;
+  snapshot_json: string | null;
+  exceptions_json: string | null;
+  validated_by_user_id: number | null;
+  validated_at: string | null;
+  exported_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ApplyAccountingMatrixPayloadV1 = {
+  matrix_contract_id: number;
+  invoice_lines?: Array<{
+    billed_item?: string | null;
+    site_code?: string | null;
+    meter_id?: string | null;
+    amount?: number | null;
+    line_ref?: string | null;
+  }>;
+};
+
+export async function fetchInvoiceAccountingSnapshot(
+  token: string,
+  source: string,
+  invoiceId: string | number,
+): Promise<InvoiceAccountingSnapshotV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/invoices/${source}/${invoiceId}/snapshot`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<InvoiceAccountingSnapshotV1>(response);
+}
+
+export async function applyAccountingMatrixToInvoice(
+  token: string,
+  source: string,
+  invoiceId: string | number,
+  payload: ApplyAccountingMatrixPayloadV1,
+): Promise<InvoiceAccountingSnapshotV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/invoices/${source}/${invoiceId}/apply`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ invoice_lines: [], ...payload }),
+  });
+  return parseResponse<InvoiceAccountingSnapshotV1>(response);
+}
+
+export async function validateInvoiceAccountingSnapshot(
+  token: string,
+  source: string,
+  invoiceId: string | number,
+): Promise<InvoiceAccountingSnapshotV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/invoices/${source}/${invoiceId}/validate-snapshot`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<InvoiceAccountingSnapshotV1>(response);
+}
+
+export async function exportInvoiceAccountingSnapshotToFinance(
+  token: string,
+  source: string,
+  invoiceId: string | number,
+): Promise<InvoiceAccountingSnapshotV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/invoices/${source}/${invoiceId}/export-finance`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<InvoiceAccountingSnapshotV1>(response);
 }
