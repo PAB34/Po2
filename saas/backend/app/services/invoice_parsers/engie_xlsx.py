@@ -754,6 +754,11 @@ def parse_engie_xlsx(path: Path) -> list[dict[str, Any]]:
         if sums:
             entry["invoice"]["total_ttc"] = float(sum(sums, Decimal("0")))
 
+        ht_sums = [_coerce_decimal(s.get("total_ht")) for s in entry["sites"]]
+        ht_sums = [s for s in ht_sums if s is not None]
+        if ht_sums:
+            entry["invoice"]["total_ht"] = float(sum(ht_sums, Decimal("0")))
+
         consumption_sums = [_coerce_decimal(s.get("total_consumption_kwh")) for s in entry["sites"]]
         consumption_sums = [s for s in consumption_sums if s is not None]
         if consumption_sums:

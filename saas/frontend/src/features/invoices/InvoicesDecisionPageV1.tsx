@@ -106,7 +106,7 @@ export function InvoicesDecisionPageV1() {
         client: e.contract_holder ?? "—",
         marche: e.market_reference ?? "—",
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
-        total: e.total_ttc ?? 0, ok: 0, error: e.control_errors_count, blocked: 0,
+        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: e.control_errors_count, blocked: 0,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date),
       });

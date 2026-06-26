@@ -1797,6 +1797,7 @@ export type EnergyInvoiceImport = {
   regroupement: string | null;
   market_reference: string | null;
   contract_holder: string | null;
+  total_ht: number | null;
   total_ttc: number | null;
   total_consumption_kwh: number | null;
   site_count: number | null;
