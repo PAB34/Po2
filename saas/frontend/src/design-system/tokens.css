@@ -446,6 +446,13 @@
 .po2-proto-decision-box strong { display: block; margin-top: .3rem; font-size: .9rem; line-height: 1.35; }
 .po2-proto-action-stack { display: grid; gap: .5rem; margin-top: .85rem; }
 .po2-proto-action-stack .po2-button { justify-content: flex-start; }
+.po2-month-chart { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .5rem; align-items: end; height: 11rem; padding-top: .5rem; }
+.po2-month-chart__col { display: flex; flex-direction: column; align-items: center; gap: .35rem; height: 100%; justify-content: flex-end; }
+.po2-month-chart__bar { display: flex; flex-direction: column-reverse; justify-content: flex-start; width: 100%; max-width: 2.4rem; height: 8rem; border-radius: .4rem; overflow: hidden; background: var(--po2-color-mint-soft); }
+.po2-month-chart__seg--done { background: #74b44a; }
+.po2-month-chart__seg--todo { background: #d9a13a; }
+.po2-month-chart__count { font-size: .72rem; font-weight: 800; color: var(--po2-color-ink); }
+.po2-month-chart__label { font-size: .68rem; color: var(--po2-color-muted); text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 1220px) {
   .po2-prototype-shell { grid-template-columns: 1fr; }
   .po2-prototype-sidebar { position: static; height: auto; }
