@@ -1532,11 +1532,13 @@ def _control_accounting_nature(line: CpeFinanceLine) -> CpeFinanceControl:
             severity="info",
             message=f"Nature comptable rattachee : {line.accounting_nature}.",
         )
+    # Non contrôlable (famille C) : matrice de codification incomplète, ce n'est pas
+    # une anomalie de facturation. Classé "blocked" (à compléter), pas "error".
     return _make_basic_control(
         line,
         control_type="accounting_nature",
-        status="error",
-        severity="error",
+        status="blocked",
+        severity="warning",
         message=(
             "Nature comptable absente : la ligne ne peut pas etre envoyee au service finances "
             "sans regle de codification."
@@ -1597,11 +1599,12 @@ def _control_invoice_type(invoice: CpeFinanceInvoice, anchor: CpeFinanceLine) ->
             message=f"Type de facture reconnu : {INVOICE_TYPE_LABELS[code]} ({code}).",
         )
     if not code:
+        # Non contrôlable (famille C) : donnée manquante, impossible de qualifier → "blocked".
         return _make_basic_control(
             anchor,
             control_type="invoice_type",
-            status="error",
-            severity="error",
+            status="blocked",
+            severity="warning",
             message="Type de facture absent : impossible de qualifier acompte, avoir, regularisation ou definitive.",
         )
     return _make_basic_control(
