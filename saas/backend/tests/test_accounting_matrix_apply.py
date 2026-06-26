@@ -69,6 +69,41 @@ def test_engine_matches_and_flags_unmatched(contract, db_session):
 
 
 # ---- cycle de vie ---------------------------------------------------------
+def test_engine_combines_meter_context_and_billed_item_nature(contract, db_session):
+    version = contract.versions[0]
+    db_session.add(
+        AccountingMatrixRule(
+            matrix_version_id=version.id,
+            stable_rule_key="ctx-prm-1",
+            scope="meter",
+            meter_id="PRM-1",
+            accounting_service="SERVICE-FLUIDES",
+            accounting_function="FONCTION-BAT",
+            accounting_antenna="ANTENNE-NORD",
+            operation_number="OP-2026",
+            allocation_percent=100.0,
+            priority=0,
+        )
+    )
+    db_session.commit()
+
+    result = apply_svc.apply_matrix(
+        list(version.rules),
+        [InvoiceLine(billed_item="Abonnement mensuel", meter_id="PRM-1", amount=120.0)],
+    )
+
+    assert result["exceptions"] == []
+    assert result["matched_lines"] == 1
+    assert result["lines"][0]["allocation_total"] == 100.0
+    imputation = result["lines"][0]["imputations"][0]
+    assert imputation["nature"] == "6061"
+    assert imputation["service"] == "SERVICE-FLUIDES"
+    assert imputation["function"] == "FONCTION-BAT"
+    assert imputation["antenna"] == "ANTENNE-NORD"
+    assert imputation["operation"] == "OP-2026"
+    assert imputation["amount_allocated"] == 120.0
+
+
 def test_apply_creates_proposed_snapshot(contract, db_session):
     snap = apply_svc.apply_to_invoice(
         db_session, 1, source="energy_import", invoice_id="F-1",
