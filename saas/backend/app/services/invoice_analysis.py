@@ -274,6 +274,10 @@ def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
             item["severity"] = "warning"
 
 
+# Fournisseurs énergie reconnus par le moteur de contrôle (sinon SUPPLIER_UNKNOWN).
+_KNOWN_ENERGY_SUPPLIERS = {"ENGIE", "EDF"}
+
+
 def _check_document_identity(
     db: Session,
     invoice_import: EnergyInvoiceImport,
@@ -281,8 +285,11 @@ def _check_document_identity(
     parsed: dict[str, Any],
     issue,
 ) -> None:
-    if parsed.get("supplier") != "ENGIE":
-        issue("error", "SUPPLIER_UNKNOWN", "Fournisseur non reconnu comme ENGIE.")
+    # Contrôles d'identité communs à tous les fournisseurs énergie.
+    supplier = parsed.get("supplier")
+    is_engie = supplier == "ENGIE"
+    if supplier not in _KNOWN_ENERGY_SUPPLIERS:
+        issue("error", "SUPPLIER_UNKNOWN", f"Fournisseur non reconnu : {supplier or 'inconnu'}.")
     if not invoice.get("invoice_number"):
         issue("error", "MISSING_INVOICE_NUMBER", "Numero de facture absent.")
     if not invoice.get("invoice_date"):
@@ -291,11 +298,14 @@ def _check_document_identity(
         issue("error", "MISSING_TOTAL_TTC", "Montant TTC global absent.")
     if not invoice.get("regroupement"):
         issue("error", "MISSING_REGROUPEMENT", "Regroupement absent.")
-    market_reference = invoice.get("market_reference")
-    if not market_reference:
-        issue("error", "MISSING_MARKET_REFERENCE", "Reference marche absente.")
-    elif market_reference != "2024-FCS-03":
-        issue("error", "MARKET_REFERENCE_MISMATCH", f"Reference marche inattendue : {market_reference}.")
+    # Référence de marché : propre au marché ENGIE (2024-FCS-03). Le format EDF
+    # ne porte pas ce champ → ne pas le contrôler hors ENGIE (évite un faux écart).
+    if is_engie:
+        market_reference = invoice.get("market_reference")
+        if not market_reference:
+            issue("error", "MISSING_MARKET_REFERENCE", "Reference marche absente.")
+        elif market_reference != "2024-FCS-03":
+            issue("error", "MARKET_REFERENCE_MISMATCH", f"Reference marche inattendue : {market_reference}.")
 
     invoice_number = invoice.get("invoice_number")
     if invoice_number:
