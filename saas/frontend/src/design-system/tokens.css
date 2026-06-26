@@ -86,6 +86,8 @@
 .po2-shell-v1__nav-link { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .65rem .75rem; border-radius: .72rem; color: #b9ced1; font-weight: 650; }
 .po2-shell-v1__nav-link:hover, .po2-shell-v1__nav-link--active { color: white; background: rgba(255,255,255,.1); }
 .po2-shell-v1__nav-link b { min-width: 1.35rem; padding: .1rem .35rem; border-radius: 999px; color: #1d3150; background: var(--po2-color-mint); font-size: .65rem; text-align: center; }
+.po2-shell-v1__nav-link--soon { color: #6b8086; cursor: default; }
+.po2-shell-v1__nav-link--soon b.po2-shell-v1__nav-soon { min-width: auto; color: #b9ced1; background: rgba(255,255,255,.08); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
 .po2-shell-v1__topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: .75rem; min-height: 4.4rem; padding: 0 1.8rem; border-bottom: 1px solid var(--po2-color-line); background: var(--po2-color-paper); }
 .po2-shell-v1__search { flex: 1; max-width: 28rem; padding: .65rem .8rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); color: var(--po2-color-muted); background: var(--po2-color-paper); text-align: left; }
 .po2-shell-v1__profile { display: flex; align-items: center; gap: .45rem; padding: .35rem .45rem .35rem .65rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); background: var(--po2-color-paper); }
