@@ -3752,6 +3752,8 @@ export type CpeFinanceInvoice = {
   markets: string | null;
   billed_items: string | null;
   recipient_reference_1: string | null;
+  prestation_sites: string | null;
+  prestation_detail: string | null;
   evidence_id: number | null;
   evidence_status: string | null;
   evidence_revision_date: string | null;

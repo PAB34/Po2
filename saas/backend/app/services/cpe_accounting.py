@@ -2539,6 +2539,8 @@ def list_finance_invoices_enriched(
     markets_by_invoice: dict[int, set[str]] = defaultdict(set)
     billed_items_by_invoice: dict[int, set[str]] = defaultdict(set)
     dest_ref1_by_invoice: dict[int, set[str]] = defaultdict(set)
+    prestation_sites_by_invoice: dict[int, set[str]] = defaultdict(set)
+    prestation_detail_by_invoice: dict[int, set[str]] = defaultdict(set)
     evidence_by_invoice: dict[int, CpeInvoiceEvidence] = {}
     evidence_query = (
         select(CpeInvoiceEvidence)
@@ -2553,6 +2555,10 @@ def list_finance_invoices_enriched(
             markets_by_invoice[line.invoice_id].add(line.market.strip().upper())
         if line.billed_item:
             billed_items_by_invoice[line.invoice_id].add(line.billed_item.strip().upper())
+        if line.site_code_detected:
+            prestation_sites_by_invoice[line.invoice_id].add(line.site_code_detected.strip())
+        if line.detail:
+            prestation_detail_by_invoice[line.invoice_id].add(line.detail.strip())
         for key in ("ref_destinataire_1", "ref_destinataire1", "reference_destinataire_1"):
             value = _line_raw_str(line, key)
             if value:
@@ -2580,6 +2586,8 @@ def list_finance_invoices_enriched(
             "markets": ", ".join(sorted(markets_by_invoice.get(invoice.id, set()))) or None,
             "billed_items": ", ".join(sorted(billed_items_by_invoice.get(invoice.id, set()))) or None,
             "recipient_reference_1": ", ".join(sorted(dest_ref1_by_invoice.get(invoice.id, set()))) or None,
+            "prestation_sites": ", ".join(sorted(prestation_sites_by_invoice.get(invoice.id, set()))) or None,
+            "prestation_detail": " · ".join(sorted(prestation_detail_by_invoice.get(invoice.id, set()))[:3]) or None,
             "evidence_id": evidence.id if evidence else None,
             "evidence_status": evidence.validation_status if evidence else None,
             "evidence_revision_date": evidence.revision_date if evidence else None,

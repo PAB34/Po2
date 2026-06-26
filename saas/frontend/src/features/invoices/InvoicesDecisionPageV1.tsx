@@ -72,6 +72,24 @@ function snapshotLabel(status?: string) {
   return "Aucun snapshot";
 }
 
+type SnapshotException = { code?: string; message?: string; severity?: string; line_ref?: string };
+
+function parseExceptions(json: string | null): SnapshotException[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as SnapshotException[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function exceptionTone(severity?: string) {
+  if (severity === "error" || severity === "blocking") return "bad" as const;
+  if (severity === "warning") return "warn" as const;
+  return "info" as const;
+}
+
 function snapshotTone(status?: string) {
   if (status === "validated" || status === "exported") return "ok" as const;
   if (status === "proposed") return "info" as const;
@@ -161,11 +179,18 @@ export function InvoicesDecisionPageV1() {
     actions.exportFinance.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInvoice?.stableId]);
+  const autoMatchedContractId = useMemo(() => {
+    const code = selectedInvoice?.contractCode?.trim().toUpperCase();
+    if (!code) return null;
+    return matrixContracts.find((c) => c.contract_code?.trim().toUpperCase() === code)?.id ?? null;
+  }, [selectedInvoice, matrixContracts]);
   const suggestedContractId = useMemo(
     () => suggestMatrixContract(selectedInvoice, matrixContracts),
     [selectedInvoice, matrixContracts],
   );
-  const effectiveContractId = matrixContractId ?? suggestedContractId;
+  const effectiveContractId = matrixContractId ?? autoMatchedContractId ?? suggestedContractId;
+  const effectiveContract = matrixContracts.find((c) => c.id === effectiveContractId) ?? null;
+  const isAutoMatched = matrixContractId === null && autoMatchedContractId !== null;
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -306,8 +331,8 @@ export function InvoicesDecisionPageV1() {
           onRowClick={setSelectedInvoice}
           columns={[
             { key: "supplier", header: "Fournisseur / facture", render: (invoice) => <span><strong>{invoice.supplier}</strong><small className="po2-muted-line">{invoice.invoiceNumber}</small></span> },
-            { key: "site", header: "Site", render: (invoice) => invoice.siteLabel },
-            { key: "market", header: "Marché", render: (invoice) => invoice.contractLabel },
+            { key: "site", header: "Site", render: (invoice) => invoice.siteDetail ? <span><strong>{invoice.siteLabel}</strong><small className="po2-muted-line">{invoice.siteDetail}</small></span> : invoice.siteLabel },
+            { key: "market", header: "Marché", render: (invoice) => invoice.marketLabel ?? invoice.contractLabel },
             { key: "amount", header: "Montant TTC", render: (invoice) => <strong>{invoice.amountTtcLabel}</strong> },
             { key: "matrix", header: "Matrice", render: (invoice) => <StatusBadge tone={matrixTone(invoice.matrixStatus)}>{matrixLabel(invoice.matrixStatus)}</StatusBadge> },
             { key: "decision", header: "Décision", render: (invoice) => <StatusBadge tone={invoiceTone(invoice.status)}>{invoiceLabel(invoice.status)}</StatusBadge> },
@@ -356,11 +381,20 @@ export function InvoicesDecisionPageV1() {
             <Card title="Trace de contrôle" eyebrow="Preuves">
               <div className="po2-decision-list">
                 {snapshot.data ? (
-                  <article className="po2-decision-item">
-                    <StatusBadge tone={snapshotTone(snapshot.data.status)}>{snapshotLabel(snapshot.data.status)}</StatusBadge>
-                    <strong>Snapshot comptable</strong>
-                    <small>{snapshot.data.exceptions_json ? "Exceptions à analyser avant validation" : "Imputation enregistrée sans exception bloquante"}</small>
-                  </article>
+                  <>
+                    <article className="po2-decision-item">
+                      <StatusBadge tone={snapshotTone(snapshot.data.status)}>{snapshotLabel(snapshot.data.status)}</StatusBadge>
+                      <strong>Snapshot comptable</strong>
+                      <small>{snapshot.data.exceptions_json ? "Exceptions à analyser avant validation" : "Imputation enregistrée sans exception bloquante"}</small>
+                    </article>
+                    {parseExceptions(snapshot.data.exceptions_json).slice(0, 3).map((ex, i) => (
+                      <article key={ex.code ?? i} className="po2-decision-item">
+                        <StatusBadge tone={exceptionTone(ex.severity)}>{ex.severity?.toUpperCase() ?? "EX"}</StatusBadge>
+                        <strong>{ex.code ?? "Exception"}</strong>
+                        <small>{ex.message ?? "Détail non disponible"}{ex.line_ref ? " · ligne " + ex.line_ref : ""}</small>
+                      </article>
+                    ))}
+                  </>
                 ) : null}
                 {selectedInvoice.proofs.length > 0 ? selectedInvoice.proofs.map((proof) => (
                   <article key={proof.label + "-" + proof.method} className="po2-decision-item">
@@ -383,20 +417,29 @@ export function InvoicesDecisionPageV1() {
                 <p className="po2-muted-line">Facture de démonstration : actions comptables désactivées.</p>
               ) : (
                 <div className="po2-invoice-actions">
-                  <label className="po2-invoice-actions__field">
-                    <span>Matrice contrat</span>
-                    <select
-                      value={effectiveContractId ?? ""}
-                      onChange={(event) => setMatrixContractId(event.target.value ? Number(event.target.value) : null)}
-                    >
-                      <option value="">— choisir une matrice —</option>
-                      {matrixContracts.map((contract) => (
-                        <option key={contract.id} value={contract.id}>
-                          {contract.supplier} · {contract.contract_code ?? contract.contract_label ?? "#" + contract.id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {isAutoMatched ? (
+                    <div className="po2-invoice-actions__field">
+                      <span>Matrice contrat</span>
+                      <p className="po2-muted-line">
+                        Liée automatiquement au contrat {effectiveContract?.contract_code ?? selectedInvoice.contractCode} · {effectiveContract?.supplier ?? "DALKIA"}
+                      </p>
+                    </div>
+                  ) : (
+                    <label className="po2-invoice-actions__field">
+                      <span>{selectedInvoice.contractCode ? `Contrat ${selectedInvoice.contractCode} non reconnu — choisir une matrice` : "Matrice contrat"}</span>
+                      <select
+                        value={effectiveContractId ?? ""}
+                        onChange={(event) => setMatrixContractId(event.target.value ? Number(event.target.value) : null)}
+                      >
+                        <option value="">— choisir une matrice —</option>
+                        {matrixContracts.map((contract) => (
+                          <option key={contract.id} value={contract.id}>
+                            {contract.supplier} · {contract.contract_code ?? contract.contract_label ?? "#" + contract.id}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   <div className="po2-invoice-actions__buttons">
                     <Button
                       onClick={() => effectiveContractId && actions.apply.mutate({ matrix_contract_id: effectiveContractId })}
@@ -407,7 +450,7 @@ export function InvoicesDecisionPageV1() {
                     <Button
                       variant="secondary"
                       onClick={() => actions.validate.mutate()}
-                      disabled={snapshot.data?.status !== "proposed" || actions.validate.isPending}
+                      disabled={snapshot.data?.status !== "proposed" || Boolean(snapshot.data?.exceptions_json) || actions.validate.isPending}
                     >
                       {actions.validate.isPending ? "Validation…" : "Valider l’imputation"}
                     </Button>
