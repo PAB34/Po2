@@ -377,7 +377,7 @@ Pas encore analysé faute de fichiers dans cette demande :
 
 Lire cette analyse et surtout les points DALKIA.
 
-Les questions 12 à 17 du document `docs/39-Questions-avant-raccord-factures-matrices-V1.md` restent pertinentes, mais il faut y répondre avec ces chiffres en tête :
+Les questions 12 à 17 du document `docs/Archives/39-Questions-avant-raccord-factures-matrices-V1.md` *(archivé)* restent pertinentes, mais il faut y répondre avec ces chiffres en tête :
 
 - `P3.4 / WORKS` = 294,2 k€ HT ;
 - `C00190116O / P2 à ventiler` = 118,6 k€ HT ;

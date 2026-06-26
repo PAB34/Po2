@@ -24,8 +24,8 @@ Documents :
 - `docs/35-Contrat-ecran-Factures-Decisions-V1.md`
 - `docs/38-Modele-backend-matrices-comptables-versionnees.md`
 - `docs/40-Analyse-factures-reelles-pour-matrice-comptable.md`
-- `docs/41-Cartographie-existant-avant-refonte-et-raccord-UX.md`
-- `docs/48-Preview-Factures-decisions-V1.md`
+- `docs/Archives/41-Cartographie-existant-avant-refonte-et-raccord-UX.md` *(archivé)*
+- `docs/Archives/48-Preview-Factures-decisions-V1.md` *(archivé)*
 - `docs/prototype-refonte-v1/index.html`, `app.js`, `styles.css`
 
 Code frontend :
