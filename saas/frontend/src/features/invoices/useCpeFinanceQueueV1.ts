@@ -5,7 +5,9 @@ import {
   fetchCpeFinanceControls,
   fetchCpeFinanceInvoiceLines,
   fetchCpeFinanceInvoices,
+  fetchEnergyInvoiceImports,
   updateCpeFinanceInvoice,
+  updateEnergyInvoiceDecision,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -24,7 +26,13 @@ export function useCpeFinanceQueueV1() {
     retry: false,
     queryFn: () => fetchCpeFinanceInvoices(token!),
   });
-  return { report, invoices };
+  const energy = useQuery({
+    queryKey: ["energy-invoice-imports"],
+    enabled: Boolean(token),
+    retry: false,
+    queryFn: () => fetchEnergyInvoiceImports(token!),
+  });
+  return { report, invoices, energy };
 }
 
 /** Détail d'une facture : contrôles par type + lignes (décomposition comptable). */
@@ -52,11 +60,19 @@ export function useCpeInvoiceActionsV1() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
     queryClient.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
   };
   const setStatus = useMutation({
     mutationFn: ({ invoiceId, status }: { invoiceId: number; status: string }) => {
       if (!token) throw new Error("Session absente.");
       return updateCpeFinanceInvoice(token, invoiceId, { status });
+    },
+    onSuccess: invalidate,
+  });
+  const setEnergyStatus = useMutation({
+    mutationFn: ({ importId, decisionStatus }: { importId: number; decisionStatus: "to_review" | "approved" | "rejected" | "dispute_sent" }) => {
+      if (!token) throw new Error("Session absente.");
+      return updateEnergyInvoiceDecision(token, importId, { decision_status: decisionStatus });
     },
     onSuccess: invalidate,
   });
@@ -74,5 +90,5 @@ export function useCpeInvoiceActionsV1() {
       URL.revokeObjectURL(url);
     },
   });
-  return { setStatus, exportLiaison };
+  return { setStatus, setEnergyStatus, exportLiaison };
 }
