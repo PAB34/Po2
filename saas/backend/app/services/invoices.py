@@ -542,6 +542,32 @@ def delete_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> 
     return True
 
 
+def purge_duplicate_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
+    """Supprime les imports énergie en double (même numéro de facture).
+
+    Conserve l'import le plus récent (id le plus élevé) par numéro de facture
+    et supprime les autres. Retour : {"removed": N, "kept": K}.
+    """
+    rows = (
+        db.query(EnergyInvoiceImport.id, EnergyInvoiceImport.invoice_number)
+        .filter(EnergyInvoiceImport.city_id == city_id)
+        .order_by(EnergyInvoiceImport.id.desc())
+        .all()
+    )
+    seen: set[str] = set()
+    to_delete: list[int] = []
+    for import_id, invoice_number in rows:
+        if not invoice_number:
+            continue
+        if invoice_number in seen:
+            to_delete.append(import_id)
+        else:
+            seen.add(invoice_number)
+    for import_id in to_delete:
+        delete_invoice_import(db, city_id, import_id)
+    return {"removed": len(to_delete), "kept": len(seen)}
+
+
 def delete_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
     """Supprime tous les EnergyInvoiceImport d'une city + fichiers physiques.
 

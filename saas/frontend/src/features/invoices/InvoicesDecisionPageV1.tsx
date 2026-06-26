@@ -239,10 +239,23 @@ export function InvoicesDecisionPageV1() {
           <p>DALKIA (CPE), ENGIE et EDF dans une file unique. La comptable valide chaque numéro de facture.</p>
         </div>
         <div className="po2-prototype-actions">
+          <Button
+            variant="ghost"
+            onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
+            disabled={actions.purgeDuplicates.isPending}
+          >
+            {actions.purgeDuplicates.isPending ? "Purge…" : "Purger les doublons"}
+          </Button>
           <Button variant="ghost">Rapport de contrôle</Button>
           <Button>Importer des factures</Button>
         </div>
       </header>
+      {actions.purgeDuplicates.isSuccess ? (
+        <p className="po2-muted-line">Purge effectuée : {actions.purgeDuplicates.data?.removed ?? 0} doublon(s) supprimé(s).</p>
+      ) : null}
+      {actions.purgeDuplicates.isError ? (
+        <p className="po2-action-error">Purge : {(actions.purgeDuplicates.error as Error).message}</p>
+      ) : null}
 
       <div className="po2-proto-kpi-grid">
         <article><span>À traiter</span><strong>{kpis.aTraiter}</strong><small>en attente de décision</small></article>

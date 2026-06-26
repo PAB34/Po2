@@ -3337,6 +3337,40 @@ def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:
     db.commit()
 
 
+def purge_duplicate_finance_invoices(db: Session, city_id: int | None = None) -> dict[str, int]:
+    """Supprime les factures DALKIA en double (même numéro de facture).
+
+    Conserve la facture la plus récente (id le plus élevé) par numéro et supprime
+    les autres ainsi que leurs lignes et contrôles. Retour : {"removed": N, "kept": K}.
+    """
+    query = select(CpeFinanceInvoice.id, CpeFinanceInvoice.invoice_number)
+    if city_id is not None:
+        query = query.where(CpeFinanceInvoice.city_id == city_id)
+    rows = list(db.execute(query.order_by(CpeFinanceInvoice.id.desc())).all())
+    seen: set[str] = set()
+    to_delete: list[int] = []
+    for invoice_id, invoice_number in rows:
+        if not invoice_number:
+            continue
+        if invoice_number in seen:
+            to_delete.append(invoice_id)
+        else:
+            seen.add(invoice_number)
+    if not to_delete:
+        return {"removed": 0, "kept": len(seen)}
+    db.execute(delete(CpeInvoiceEvidenceLink).where(CpeInvoiceEvidenceLink.invoice_id.in_(to_delete)))
+    db.execute(
+        CpeInvoiceEvidence.__table__.update()
+        .where(CpeInvoiceEvidence.invoice_id.in_(to_delete))
+        .values(invoice_id=None)
+    )
+    db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.invoice_id.in_(to_delete)))
+    db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.invoice_id.in_(to_delete)))
+    removed = db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.id.in_(to_delete))).rowcount or 0
+    db.commit()
+    return {"removed": removed, "kept": len(seen)}
+
+
 def delete_finance_history(db: Session, city_id: int | None = None) -> dict[str, int]:
     """Supprime l'historique des factures DALKIA sans toucher au referentiel."""
     batch_query = select(CpeFinanceImportBatch.id)

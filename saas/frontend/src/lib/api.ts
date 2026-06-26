@@ -4293,6 +4293,16 @@ export async function fetchCpeFinanceBatches(token: string): Promise<CpeFinanceI
   return parseResponse<CpeFinanceImportBatch[]>(response);
 }
 
+export async function purgeCpeFinanceDuplicates(token: string): Promise<{ removed: number; kept: number }> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/purge-duplicates`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ removed: number; kept: number }>(response);
+}
+
+export async function purgeEnergyInvoiceDuplicates(token: string): Promise<{ removed: number; kept: number }> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/purge-duplicates`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ removed: number; kept: number }>(response);
+}
+
 export async function fetchCpeFinanceInvoices(token: string, batchId?: number): Promise<CpeFinanceInvoice[]> {
   const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
   const response = await fetch(url, { headers: buildHeaders(token) });

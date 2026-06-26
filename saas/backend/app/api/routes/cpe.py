@@ -444,6 +444,15 @@ def delete_finance_history(
     return accounting_svc.delete_finance_history(db, current_user.city_id)
 
 
+@router.post("/finances/purge-duplicates")
+def purge_duplicate_finance_invoices(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Supprime les factures DALKIA en double (meme numero), garde la plus recente."""
+    return accounting_svc.purge_duplicate_finance_invoices(db, current_user.city_id)
+
+
 @router.get("/finances/invoices/{invoice_id}/lines", response_model=list[CpeFinanceLineOut])
 def list_finance_invoice_lines(
     invoice_id: int,

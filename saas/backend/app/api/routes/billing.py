@@ -60,6 +60,7 @@ from app.services.invoices import (
     create_invoice_import,
     delete_all_invoice_imports,
     delete_invoice_import,
+    purge_duplicate_invoice_imports,
     get_invoice_batch,
     get_invoice_import,
     get_monthly_invoice_consumption,
@@ -628,6 +629,16 @@ def delete_energy_invoice_import(
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/invoices/imports/purge-duplicates")
+def purge_duplicate_energy_invoice_imports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Supprime les factures énergie en double (même numéro), garde la plus récente."""
+    city_id = _require_city(current_user)
+    return purge_duplicate_invoice_imports(db, city_id)
 
 
 @router.delete("/invoices/imports")
