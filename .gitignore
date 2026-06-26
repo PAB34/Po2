@@ -24,3 +24,8 @@ saas/frontend/*.tsbuildinfo
 saas/frontend/vite.config.js
 saas/frontend/vite.config.d.ts
 
+# Local data, analysis outputs and source documents (never committed)
+outputs/
+saas/energie/
+saas/LOGO/
+
