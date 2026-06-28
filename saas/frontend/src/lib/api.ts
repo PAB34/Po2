@@ -4303,6 +4303,11 @@ export async function purgeEnergyInvoiceDuplicates(token: string): Promise<{ rem
   return parseResponse<{ removed: number; kept: number }>(response);
 }
 
+export async function reanalyzeAllEnergyInvoices(token: string): Promise<{ reanalyzed: number }> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/reanalyze-all`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ reanalyzed: number }>(response);
+}
+
 export async function fetchCpeFinanceInvoices(token: string, batchId?: number): Promise<CpeFinanceInvoice[]> {
   const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
   const response = await fetch(url, { headers: buildHeaders(token) });

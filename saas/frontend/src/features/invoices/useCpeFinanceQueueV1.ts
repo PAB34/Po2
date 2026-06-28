@@ -8,6 +8,8 @@ import {
   fetchEnergyInvoiceImports,
   purgeCpeFinanceDuplicates,
   purgeEnergyInvoiceDuplicates,
+  reanalyzeAllEnergyInvoices,
+  recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
 } from "../../lib/api";
@@ -103,5 +105,16 @@ export function useCpeInvoiceActionsV1() {
     },
     onSuccess: invalidate,
   });
-  return { setStatus, setEnergyStatus, exportLiaison, purgeDuplicates };
+  const recomputeControls = useMutation({
+    mutationFn: async () => {
+      if (!token) throw new Error("Session absente.");
+      const [, energy] = await Promise.all([
+        recalculateAllCpeFinanceControls(token),
+        reanalyzeAllEnergyInvoices(token),
+      ]);
+      return { reanalyzed: energy.reanalyzed };
+    },
+    onSuccess: invalidate,
+  });
+  return { setStatus, setEnergyStatus, exportLiaison, purgeDuplicates, recomputeControls };
 }

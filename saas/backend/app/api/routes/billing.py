@@ -61,6 +61,7 @@ from app.services.invoices import (
     delete_all_invoice_imports,
     delete_invoice_import,
     purge_duplicate_invoice_imports,
+    reanalyze_all_invoice_imports,
     get_invoice_batch,
     get_invoice_import,
     get_monthly_invoice_consumption,
@@ -639,6 +640,16 @@ def purge_duplicate_energy_invoice_imports(
     """Supprime les factures énergie en double (même numéro), garde la plus récente."""
     city_id = _require_city(current_user)
     return purge_duplicate_invoice_imports(db, city_id)
+
+
+@router.post("/invoices/imports/reanalyze-all")
+def reanalyze_all_energy_invoice_imports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Recalcule les contrôles de toutes les factures énergie (après correctif moteur)."""
+    city_id = _require_city(current_user)
+    return reanalyze_all_invoice_imports(db, city_id)
 
 
 @router.delete("/invoices/imports")

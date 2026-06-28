@@ -246,7 +246,13 @@ export function InvoicesDecisionPageV1() {
           >
             {actions.purgeDuplicates.isPending ? "Purge…" : "Purger les doublons"}
           </Button>
-          <Button variant="ghost">Rapport de contrôle</Button>
+          <Button
+            variant="ghost"
+            onClick={() => { if (window.confirm("Recalculer tous les contrôles (DALKIA + énergie) ? Peut prendre une minute.")) actions.recomputeControls.mutate(); }}
+            disabled={actions.recomputeControls.isPending}
+          >
+            {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
+          </Button>
           <Button>Importer des factures</Button>
         </div>
       </header>
@@ -255,6 +261,12 @@ export function InvoicesDecisionPageV1() {
       ) : null}
       {actions.purgeDuplicates.isError ? (
         <p className="po2-action-error">Purge : {(actions.purgeDuplicates.error as Error).message}</p>
+      ) : null}
+      {actions.recomputeControls.isSuccess ? (
+        <p className="po2-muted-line">Contrôles recalculés ✓ (énergie : {actions.recomputeControls.data?.reanalyzed ?? 0} facture(s) ré-analysée(s)).</p>
+      ) : null}
+      {actions.recomputeControls.isError ? (
+        <p className="po2-action-error">Recalcul : {(actions.recomputeControls.error as Error).message}</p>
       ) : null}
 
       <div className="po2-proto-kpi-grid">
@@ -313,7 +325,11 @@ export function InvoicesDecisionPageV1() {
             <thead>
               <tr>
                 <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marché</th><th>Périmètre</th>
-                <th style={{ textAlign: "right" }}>Montant</th><th style={{ textAlign: "right" }}>OK</th><th style={{ textAlign: "right" }}>Écarts</th><th style={{ textAlign: "right" }}>Bloqués</th><th>Décision</th>
+                <th style={{ textAlign: "right" }}>Montant</th>
+                <th style={{ textAlign: "right" }} title="Contrôles conformes (moteur DALKIA uniquement)">OK</th>
+                <th style={{ textAlign: "right" }} title="Anomalies réelles de facturation">Écarts</th>
+                <th style={{ textAlign: "right" }} title="Non contrôlable : référence ou donnée manquante">Bloqués</th>
+                <th>Décision</th>
               </tr>
             </thead>
             <tbody>
@@ -326,9 +342,15 @@ export function InvoicesDecisionPageV1() {
                   <td>{row.marche}</td>
                   <td>{row.perimetre}</td>
                   <td style={{ textAlign: "right" }}><strong>{fmtEur(row.total)}</strong></td>
-                  <td style={{ textAlign: "right", color: "#166534" }}>{row.source === "cpe" ? row.ok : "—"}</td>
-                  <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : undefined, fontWeight: row.error ? 700 : 400 }}>{row.error}</td>
-                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : undefined, fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || (row.source === "cpe" ? 0 : "—")}</td>
+                  <td style={{ textAlign: "right" }}>
+                    {row.source === "cpe"
+                      ? <span style={{ color: row.ok ? "#166534" : "var(--po2-color-muted)" }}>{row.ok}</span>
+                      : (row.error === 0 && row.blocked === 0
+                          ? <span style={{ color: "#166534", fontWeight: 700 }} title="Aucun écart ni point bloquant">✓</span>
+                          : <span style={{ color: "var(--po2-color-muted)" }}>—</span>)}
+                  </td>
+                  <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : "var(--po2-color-muted)", fontWeight: row.error ? 700 : 400 }}>{row.error || "—"}</td>
+                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || "—"}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select value={row.status} disabled={actions.setStatus.isPending || actions.setEnergyStatus.isPending}
                       onChange={(e) => changeStatus(row, e.target.value as UnifiedStatus)}

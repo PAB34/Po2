@@ -507,6 +507,31 @@ def analyze_existing_invoice_import(
     return invoice_import
 
 
+def reanalyze_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
+    """Relance l'analyse/contrôle de toutes les factures énergie d'une city.
+
+    Nécessaire après une évolution du moteur de contrôle (ex. correctif faux écarts
+    EDF) : les contrôles sont figés à l'import, ce recalcul les régénère.
+    """
+    imports = (
+        db.query(EnergyInvoiceImport)
+        .filter(EnergyInvoiceImport.city_id == city_id)
+        .all()
+    )
+    count = 0
+    for invoice_import in imports:
+        try:
+            if invoice_import.source == "engie_xlsx_export" and invoice_import.analysis_result:
+                apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
+            else:
+                analyze_invoice_import(db, invoice_import)
+            count += 1
+        except Exception:  # noqa: BLE001 — une facture défaillante ne bloque pas le lot
+            continue
+    db.commit()
+    return {"reanalyzed": count}
+
+
 def update_invoice_decision(
     db: Session,
     city_id: int,
