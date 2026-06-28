@@ -123,7 +123,6 @@ const ECART_EXPLAIN: Record<string, string> = {
   MISSING_PRM: "Le point de livraison (PRM) est absent sur un site.",
   UNKNOWN_PRM: "Le PRM facturé est inconnu du référentiel énergie (normal hors périmètre ENEDIS chargé).",
   SUPPLIER_CONTRACT_MISMATCH: "Le PRM est rattaché à un autre fournisseur dans le référentiel ENEDIS.",
-  MISSING_INVOICE_DATE: "Date de facture absente.",
   BPU_REFERENCE_MISSING: "Aucune ligne de bordereau (BPU) ne correspond au tarif/poste facturé.",
   BPU_PRICE_MISSING: "Ligne BPU trouvée mais prix de référence non renseigné.",
   BPU_FIXED_CHARGE_MISMATCH: "Frais fixe facturé différent du BPU (contrôle indicatif).",
