@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a2e22">
+  <title>Ligue 1 · Pronos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<!-- ÉCRAN CONNEXION -->
+<div id="login" class="wrap loginwrap">
+  <div class="hero" style="text-align:center">
+    <div class="logo big">L1</div>
+    <h1>Ligue 1 · Pronos</h1>
+    <p class="metaline" style="justify-content:center">Accès privé — connexion requise.</p>
+  </div>
+  <div class="panel">
+    <div class="field"><label for="email">Adresse email</label>
+      <input id="email" type="email" autocomplete="email" placeholder="ton@email.com"></div>
+    <div class="field" style="margin-top:12px"><label for="password">Mot de passe</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="Mot de passe"></div>
+    <button class="btn lime block" id="loginBtn" style="margin-top:16px" onclick="doLogin()">Entrer</button>
+    <div id="loginMsg" class="loginmsg"></div>
+  </div>
+</div>
+
+<!-- ÉCRAN APP -->
+<div id="app" class="wrap hidden">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">L1</div>
+      <div><b>Ligue 1 · Pronos</b><small>Probabilités &amp; actu des équipes</small></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn sm" id="refreshBtn" onclick="loadJournee(true)">↻ Actualiser</button>
+      <button class="btn sm" onclick="logout()">Quitter</button>
+    </div>
+  </div>
+
+  <div class="hero">
+    <span class="kicker">⚽ Prochaine journée</span>
+    <h1 id="heroTitle">Pronostics du jour</h1>
+    <div class="metaline" id="heroMeta"></div>
+  </div>
+
+  <div id="healthAlert" class="alert hidden"></div>
+  <div id="list"><div class="loading"><div class="spin"></div>Chargement…</div></div>
+
+  <div class="note">
+    ℹ️ Probabilités issues du <b>consensus du marché</b> (cotes Pinnacle/Bet365, dévigottées).
+    Meilleure estimation gratuite, mais <b>aucun avantage</b> sur les bookmakers : outil de lecture.
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

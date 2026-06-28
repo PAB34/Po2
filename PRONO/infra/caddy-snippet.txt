@@ -1,0 +1,24 @@
+# =====================================================================
+# Bloc à AJOUTER au Caddyfile existant (saas/infra/caddy/Caddyfile).
+# Caddy émettra automatiquement le certificat HTTPS pour ce sous-domaine
+# dès que le DNS « ligue1 » pointera vers le VPS.
+#
+# Prérequis :
+#   1. Enregistrement DNS A : ligue1.patrimoineaucarre.com -> IP du VPS
+#   2. Les conteneurs prono-frontend / prono-backend tournent sur le
+#      réseau partagé po2-edge (cf. PRONO/infra/docker-compose.yml).
+# =====================================================================
+
+ligue1.patrimoineaucarre.com {
+    handle /api/* {
+        reverse_proxy prono-backend:8000 {
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    handle {
+        reverse_proxy prono-frontend:80
+    }
+}

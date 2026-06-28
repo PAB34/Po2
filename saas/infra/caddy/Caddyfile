@@ -76,3 +76,23 @@
         }
     }
 }
+
+# =====================================================================
+# PRONO — app privée Ligue 1 (sous-domaine dédié).
+# Conteneurs prono-frontend / prono-backend sur le réseau partagé po2-edge
+# (cf. PRONO/infra/docker-compose.yml). HTTPS auto dès que le DNS pointe ici.
+# L'auth est gérée par l'app elle-même (login JWT) : pas de forward_auth ici.
+# =====================================================================
+ligue1.patrimoineaucarre.com {
+    handle /api/* {
+        reverse_proxy prono-backend:8000 {
+            transport http {
+                response_header_timeout 120s
+            }
+        }
+    }
+
+    handle {
+        reverse_proxy prono-frontend:80
+    }
+}
