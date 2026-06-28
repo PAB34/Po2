@@ -1,0 +1,37 @@
+# PRONO — Ligue 1 (app privée). Déploiement sur le VPS existant.
+# Les services rejoignent le réseau partagé `po2-edge` pour que le Caddy déjà en
+# place (projet saas) puisse les router vers ligue1.patrimoineaucarre.com.
+# Aucun port n'est exposé directement : tout passe par le Caddy existant.
+
+services:
+  prono-backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      PRONO_DATA_DIR: /data
+    volumes:
+      - prono_data:/data
+    networks:
+      - default
+      - edge
+
+  prono-frontend:
+    build:
+      context: ../frontend
+    restart: unless-stopped
+    depends_on:
+      - prono-backend
+    networks:
+      - default
+      - edge
+
+volumes:
+  prono_data:
+
+networks:
+  edge:
+    external: true
+    name: po2-edge
