@@ -42,13 +42,33 @@ function issueTone(severity: string) {
   return "warn" as const;
 }
 
-/** Codes énergie « non contrôlables » : référence/donnée manquante côté plateforme,
- *  pas une anomalie de facturation. Comptés en « Bloqués », pas en « Écarts ». */
+/** Codes énergie « non contrôlables » : référence/donnée manquante côté plateforme
+ *  ou rapprochement à une donnée externe (ENEDIS, PRM, BPU), pas une anomalie de
+ *  facturation. Comptés en « Bloqués », pas en « Écarts ».
+ *  Les vrais écarts restent HORS de ce set : BPU_PRICE_MISMATCH,
+ *  BPU_TARIFF_POSTE_INCONSISTENCY, TOTAL_TTC_MISMATCH, LINE_AMOUNT_MISMATCH,
+ *  VAT_*, HT_TOTAL_MISMATCH, PERIOD_INVALID, DUPLICATE_INVOICE_NUMBER,
+ *  SUPPLIER_UNKNOWN, NO_SITE_FOUND, MISSING_INVOICE_NUMBER, MISSING_TOTAL_TTC. */
 const NON_CONTROLABLE_CODES = new Set([
+  // Identité / périmètre : donnée absente ou PRM hors référentiel (typique EDF)
+  "MISSING_INVOICE_DATE", "MISSING_REGROUPEMENT",
+  "MISSING_MARKET_REFERENCE", "MARKET_REFERENCE_MISMATCH",
+  "MISSING_PRM", "UNKNOWN_PRM", "SUPPLIER_CONTRACT_MISMATCH",
+  // BPU : prix de référence absent (l'écart de prix réel reste contrôlé séparément)
   "BPU_CONFIG_MISSING", "BPU_LINES_MISSING",
+  "BPU_REFERENCE_MISSING", "BPU_PRICE_MISSING", "BPU_FIXED_CHARGE_MISMATCH",
+  // Taxes : totaux incomplets (les écarts TVA/HT chiffrés restent en écart)
+  "TAX_TOTALS_MISSING",
+  // Périodes : continuité / historique (PERIOD_INVALID = fin avant début reste un écart)
+  "PERIOD_MISSING", "PERIOD_GAP", "PERIOD_OVERLAP", "LINE_PERIOD_OUTSIDE_SITE_PERIOD",
+  // Consommation : rapprochement ENEDIS / courbe de charge (donnée externe)
   "ENEDIS_CONSUMPTION_MISSING", "CONSUMPTION_REFERENCE_MISSING",
-  "POWER_REFERENCE_MISSING", "SUBSCRIBED_POWER_MISSING",
-  "TAX_TOTALS_MISSING", "PERIOD_MISSING", "MISSING_MARKET_REFERENCE",
+  "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH",
+  "LOAD_CURVE_CONSUMPTION_PARTIAL", "ENEDIS_CONSUMPTION_PARTIAL",
+  // Puissance : rapprochement ENEDIS / courbe de charge (donnée externe)
+  "POWER_REFERENCE_MISSING", "SUBSCRIBED_POWER_MISSING", "SUBSCRIBED_POWER_CONTRACT_MISMATCH",
+  "POWER_OVERRUN", "POWER_OVERRUN_BILLED", "POWER_LOAD_CURVE_MISMATCH", "POWER_LOAD_CURVE_OVERRUN",
+  "LOAD_CURVE_POWER_PARTIAL", "POWER_ENEDIS_MISMATCH", "POWER_ENEDIS_OVERRUN", "ENEDIS_POWER_MISSING",
 ]);
 function isNonControlable(code: string) {
   return NON_CONTROLABLE_CODES.has(code);
@@ -101,7 +121,14 @@ const ECART_EXPLAIN: Record<string, string> = {
   DUPLICATE_INVOICE_NUMBER: "Ce numéro de facture a déjà été importé (doublon).",
   NO_SITE_FOUND: "Aucun point de livraison (PRM / PCE) détecté dans la facture.",
   MISSING_PRM: "Le point de livraison (PRM) est absent sur un site.",
-  UNKNOWN_PRM: "Le PRM facturé est inconnu du référentiel énergie.",
+  UNKNOWN_PRM: "Le PRM facturé est inconnu du référentiel énergie (normal hors périmètre ENEDIS chargé).",
+  SUPPLIER_CONTRACT_MISMATCH: "Le PRM est rattaché à un autre fournisseur dans le référentiel ENEDIS.",
+  MISSING_INVOICE_DATE: "Date de facture absente.",
+  BPU_REFERENCE_MISSING: "Aucune ligne de bordereau (BPU) ne correspond au tarif/poste facturé.",
+  BPU_PRICE_MISSING: "Ligne BPU trouvée mais prix de référence non renseigné.",
+  BPU_FIXED_CHARGE_MISMATCH: "Frais fixe facturé différent du BPU (contrôle indicatif).",
+  PERIOD_GAP: "Trou de facturation avec la période précédente (information d'historique).",
+  PERIOD_OVERLAP: "Chevauchement avec une période déjà facturée (information d'historique).",
   PERIOD_INVALID: "La période facturée est incohérente (fin avant début).",
   PERIOD_MISSING: "Période facturée incomplète : contrôle de fréquence impossible.",
   BPU_CONFIG_MISSING: "Aucun bordereau (BPU) configuré pour ce fournisseur : prix non contrôlables.",
@@ -113,7 +140,9 @@ const ECART_EXPLAIN: Record<string, string> = {
   TAX_TOTALS_MISSING: "Totaux HT / TVA / TTC incomplets : contrôle des taxes impossible.",
 };
 function explainEcart(code: string | undefined) {
-  return (code && ECART_EXPLAIN[code]) || "Écart à examiner avec le fournisseur.";
+  if (code && ECART_EXPLAIN[code]) return ECART_EXPLAIN[code];
+  if (code && isNonControlable(code)) return "Donnée de référence absente ou rapprochement externe indisponible : non contrôlable.";
+  return "Écart à examiner avec le fournisseur.";
 }
 function statusLabel(s: UnifiedStatus) { return UNIFIED_OPTIONS.find((o) => o.value === s)?.label ?? s; }
 function statusTone(s: UnifiedStatus) { return s === "valid" ? ("ok" as const) : s === "todo" ? ("warn" as const) : ("bad" as const); }

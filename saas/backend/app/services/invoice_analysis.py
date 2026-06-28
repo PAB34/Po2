@@ -24,7 +24,6 @@ from app.services.invoice_bpu import (
 )
 from app.services.invoice_parsers.engie_pdf import parse_engie_pdf
 from app.services.invoice_normalization import replace_normalized_invoice
-from app.services.turpe import evaluate_invoice_turpe
 
 
 PRICE_TOLERANCE_EUR_MWH = Decimal("0.05")
@@ -201,7 +200,9 @@ def _build_control_report(
     _check_arithmetic(invoice, sites, issue)
     _check_bpu(db, invoice_import.city_id, parsed, issue, bpu_summary)
     _check_bpu_fixed_charges(db, parsed, issue, fixed_charges_summary)
-    _check_turpe(parsed, issue, turpe_summary)
+    # Contrôle TURPE/acheminement retiré : retournait des écarts non exploitables
+    # (références non alignées, faux positifs sur EDF). turpe_summary reste vide
+    # pour préserver la structure du rapport consommée par le frontend.
     _check_tax_and_vat(invoice, sites, issue, taxes_summary)
     _check_period_continuity(db, invoice_import, sites, issue, period_summary)
     _check_consumption_against_enedis(sites, issue, consumption_summary)
@@ -842,18 +843,6 @@ def _check_bpu_fixed_charges(
                     ),
                     scope,
                 )
-
-
-def _check_turpe(parsed: dict[str, Any], issue, turpe_summary: dict[str, Any]) -> None:
-    report = evaluate_invoice_turpe(parsed)
-    turpe_summary.update(report["summary"])
-    for item in report["issues"]:
-        issue(
-            item.get("severity", "warning"),
-            item.get("code", "TURPE_CONTROL"),
-            item.get("message", "Controle TURPE incomplet."),
-            item.get("scope") or "document",
-        )
 
 
 def _check_tax_and_vat(
