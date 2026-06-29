@@ -15,7 +15,7 @@ from app.models.invoice import EnergyInvoiceImport
 from app.services.billing import _extract_tariff_code, ensure_default_bpu_lines
 from app.services.billing_bpu_sync import build_current_lines_for_supplier
 from app.services import load_curve_store, supplier_registry
-from app.services.energie import _contracts, _daily_consumption_index, _max_power_index, _safe_float
+from app.services.energie import _contracts, _daily_consumption_index
 from app.services.invoice_bpu import (
     load_bpu_fixed_charges,
     load_historical_bpu_prices,
@@ -180,14 +180,10 @@ def _build_control_report(
     taxes_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0}
     period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "missing_references": 0}
     consumption_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0, "partial_references": 0}
-    power_summary = {
-        "checked_sites": 0,
-        "overruns": 0,
-        "mismatches": 0,
-        "missing_references": 0,
-        "load_curve_checks": 0,
-        "max_power_checks": 0,
-    }
+    # Contrôle puissance retiré : suivi puissance atteinte / souscrite / dépassement
+    # n'est pas une anomalie de facturation et bloquait inutilement les factures.
+    # power_summary reste vide pour préserver la structure du rapport (frontend).
+    power_summary: dict[str, Any] = {}
 
     def issue(severity: str, code: str, message: str, scope: str = "document") -> None:
         issues.append({"severity": severity, "code": code, "message": message, "scope": scope})
@@ -206,7 +202,6 @@ def _build_control_report(
     _check_tax_and_vat(invoice, sites, issue, taxes_summary)
     _check_period_continuity(db, invoice_import, sites, issue, period_summary)
     _check_consumption_against_enedis(sites, issue, consumption_summary)
-    _check_power_controls(sites, issue, power_summary)
 
     _apply_invoice_severity_policy(issues)
 
@@ -1085,131 +1080,6 @@ def _check_consumption_against_enedis(
         # d'ecart "ENEDIS_CONSUMPTION_MISSING" qui bloquait inutilement la facture.
 
 
-def _check_power_controls(
-    sites: list[dict[str, Any]],
-    issue,
-    power_summary: dict[str, int],
-) -> None:
-    contracts = _contracts()
-    max_power = _max_power_index()
-
-    for site in sites:
-        scope = _site_scope(site)
-        prm_id = site.get("prm_id")
-        start = _date_value(site.get("period_start"))
-        end = _date_value(site.get("period_end"))
-        invoice_subscribed = _decimal(site.get("subscribed_power_kva"))
-        invoice_reached = _decimal(site.get("max_reached_power_kva"))
-        contract_subscribed = _decimal(_safe_float((contracts.get(prm_id) or {}).get("0_subscribed_power_value")) if prm_id else None)
-
-        if prm_id is None or start is None or end is None:
-            power_summary["missing_references"] += 1
-            issue("warning", "POWER_REFERENCE_MISSING", f"PRM ou periode absent pour controler la puissance sur {scope}.", scope)
-            continue
-
-        checked = False
-        if invoice_subscribed is None:
-            power_summary["missing_references"] += 1
-            issue("warning", "SUBSCRIBED_POWER_MISSING", f"Puissance souscrite absente de la facture sur {scope}.", scope)
-        elif contract_subscribed is not None:
-            checked = True
-            if abs(invoice_subscribed - contract_subscribed) > POWER_TOLERANCE_KVA:
-                power_summary["mismatches"] += 1
-                issue(
-                    "warning",
-                    "SUBSCRIBED_POWER_CONTRACT_MISMATCH",
-                    f"Puissance souscrite facture {invoice_subscribed:.1f} kVA differente du contrat ENEDIS {contract_subscribed:.1f} kVA sur {scope}.",
-                    scope,
-                )
-
-        if invoice_reached is not None and invoice_subscribed is not None:
-            checked = True
-            if invoice_reached > invoice_subscribed + POWER_TOLERANCE_KVA:
-                power_summary["overruns"] += 1
-                issue(
-                    "warning",
-                    "POWER_OVERRUN",
-                    f"Puissance atteinte {invoice_reached:.1f} kVA superieure a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
-                    scope,
-                )
-
-        billed_overrun = _billed_power_overrun_amount(site)
-        if billed_overrun > Decimal("0"):
-            power_summary["overruns"] += 1
-            issue("warning", "POWER_OVERRUN_BILLED", f"Depassement de puissance facture sur {scope}: {billed_overrun:.2f} EUR HT.", scope)
-
-        load_curve_metrics = _load_curve_metrics(
-            load_curve_store.points_for_prm(prm_id, start, end), start, end
-        )
-        if load_curve_metrics is not None and load_curve_metrics["coverage_ratio"] >= MIN_ENEDIS_COVERAGE_RATIO:
-            power_summary["load_curve_checks"] += 1
-            enedis_peak = load_curve_metrics["peak_kva"]
-            if invoice_reached is not None:
-                checked = True
-                delta = abs(invoice_reached - enedis_peak)
-                if delta > POWER_LOAD_CURVE_TOLERANCE_KVA:
-                    power_summary["mismatches"] += 1
-                    issue(
-                        "warning",
-                        "POWER_LOAD_CURVE_MISMATCH",
-                        f"Puissance atteinte facture {invoice_reached:.1f} kVA differente du pic courbe de charge {enedis_peak:.1f} kVA sur {scope}.",
-                        scope,
-                    )
-            elif invoice_subscribed is not None and enedis_peak > invoice_subscribed + POWER_TOLERANCE_KVA:
-                power_summary["overruns"] += 1
-                issue(
-                    "warning",
-                    "POWER_LOAD_CURVE_OVERRUN",
-                    f"Pic courbe de charge {enedis_peak:.1f} kVA superieur a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
-                    scope,
-                )
-        else:
-            if load_curve_metrics is not None:
-                power_summary["missing_references"] += 1
-                issue(
-                    "warning",
-                    "LOAD_CURVE_POWER_PARTIAL",
-                    (
-                        f"Courbe de charge partielle sur {scope}: "
-                        f"{load_curve_metrics['covered_slots']}/{load_curve_metrics['expected_slots']} pas 30 min."
-                    ),
-                    scope,
-                )
-            selected_power_points = [
-                point
-                for point in max_power.get(prm_id, [])
-                if start.isoformat() <= point.get("date", "") <= end.isoformat()
-            ]
-            if selected_power_points:
-                power_summary["max_power_checks"] += 1
-                enedis_peak = max(Decimal(str(point["value_va"])) for point in selected_power_points) / Decimal("1000")
-                if invoice_reached is not None:
-                    checked = True
-                    delta = abs(invoice_reached - enedis_peak)
-                    if delta > POWER_ENEDIS_TOLERANCE_KVA:
-                        power_summary["mismatches"] += 1
-                        issue(
-                            "warning",
-                            "POWER_ENEDIS_MISMATCH",
-                            f"Puissance atteinte facture {invoice_reached:.1f} kVA differente du max ENEDIS {enedis_peak:.1f} kVA sur {scope}.",
-                            scope,
-                        )
-                elif invoice_subscribed is not None and enedis_peak > invoice_subscribed + POWER_TOLERANCE_KVA:
-                    power_summary["overruns"] += 1
-                    issue(
-                        "warning",
-                        "POWER_ENEDIS_OVERRUN",
-                        f"Max ENEDIS {enedis_peak:.1f} kVA superieur a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
-                        scope,
-                    )
-            # Absence totale de donnees ENEDIS (courbe de charge ou puissance max)
-            # sur la periode : donnee externe non chargee, pas une anomalie de
-            # facturation. On n'emet plus d'ecart "ENEDIS_POWER_MISSING".
-
-        if checked:
-            power_summary["checked_sites"] += 1
-
-
 def _tariff_code_for_site(site: dict[str, Any]) -> str:
     label = site.get("tariff_option_label") or site.get("segment") or ""
     upper = label.upper()
@@ -1478,18 +1348,6 @@ def _daily_consumption_metrics(points: list[dict[str, Any]], start: date, end: d
         "expected_days": expected_days,
         "coverage_ratio": Decimal(covered_days) / Decimal(expected_days),
     }
-
-
-def _billed_power_overrun_amount(site: dict[str, Any]) -> Decimal:
-    total = Decimal("0")
-    for line in site.get("invoice_lines", []):
-        normalized = _strip_accents(str(line.get("label") or line.get("raw_line") or "")).lower()
-        if "depassement" not in normalized or "puissance" not in normalized:
-            continue
-        amount = _decimal(line.get("amount_ht"))
-        if amount is not None:
-            total += amount
-    return total
 
 
 def _load_curve_metrics(points: list[dict[str, Any]], start: date, end: date) -> dict[str, Any] | None:
