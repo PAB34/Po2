@@ -6,12 +6,15 @@ import {
   fetchCpeFinanceInvoiceLines,
   fetchCpeFinanceInvoices,
   fetchEnergyInvoiceImports,
+  fetchSupplierContacts,
   purgeCpeFinanceDuplicates,
   purgeEnergyInvoiceDuplicates,
   reanalyzeAllEnergyInvoices,
   recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
+  upsertSupplierContact,
+  type SupplierContactInput,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -37,6 +40,26 @@ export function useCpeFinanceQueueV1() {
     queryFn: () => fetchEnergyInvoiceImports(token!),
   });
   return { report, invoices, energy };
+}
+
+/** Contacts fournisseurs (réclamations) : liste + upsert par fournisseur. */
+export function useSupplierContactsV1() {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const contacts = useQuery({
+    queryKey: ["supplier-contacts"],
+    enabled: Boolean(token),
+    retry: false,
+    queryFn: () => fetchSupplierContacts(token!),
+  });
+  const save = useMutation({
+    mutationFn: ({ supplier, payload }: { supplier: string; payload: SupplierContactInput }) => {
+      if (!token) throw new Error("Session absente.");
+      return upsertSupplierContact(token, supplier, payload);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["supplier-contacts"] }),
+  });
+  return { contacts, save };
 }
 
 /** Détail d'une facture : contrôles par type + lignes (décomposition comptable). */

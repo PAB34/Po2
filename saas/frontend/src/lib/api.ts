@@ -4411,6 +4411,39 @@ export async function recalculateAllCpeFinanceControls(token: string): Promise<C
   return parseResponse<CpeFinanceControlReport>(response);
 }
 
+export type SupplierContact = {
+  id: number;
+  supplier: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type SupplierContactInput = {
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  notes?: string | null;
+};
+
+export async function fetchSupplierContacts(token: string): Promise<SupplierContact[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/supplier-contacts`, { headers: buildHeaders(token) });
+  return parseResponse<SupplierContact[]>(response);
+}
+
+export async function upsertSupplierContact(token: string, supplier: string, payload: SupplierContactInput): Promise<SupplierContact> {
+  const response = await fetch(`${apiBaseUrl}/billing/supplier-contacts/${encodeURIComponent(supplier)}`, {
+    method: "PUT",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<SupplierContact>(response);
+}
+
 export async function downloadCpeFinanceControlReport(token: string): Promise<Blob> {
   const response = await fetch(`${apiBaseUrl}/cpe/finances/controls/report.xlsx`, {
     headers: { Authorization: `Bearer ${token}` },

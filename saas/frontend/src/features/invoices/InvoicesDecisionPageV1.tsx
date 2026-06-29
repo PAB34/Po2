@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import { Button, Drawer, StatusBadge } from "../../design-system";
-import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1 } from "./useCpeFinanceQueueV1";
-import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport } from "../../lib/api";
+import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useSupplierContactsV1 } from "./useCpeFinanceQueueV1";
+import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput } from "../../lib/api";
 
 type CpeQueueInvoice = CpeFinanceControlReport["invoices"][number];
 type UnifiedStatus = "todo" | "valid" | "refused" | "disputed";
@@ -179,6 +179,36 @@ function explainExplained(code: string | undefined) {
   if (code && EXPLAINED_LABELS[code]) return EXPLAINED_LABELS[code];
   return "Régularisation expliquée par avoir, annulation ou refacturation.";
 }
+/** Construit un brouillon d'e-mail de réclamation à partir des points à signaler. */
+function buildClaimDraft(
+  row: UnifiedRow,
+  contact: SupplierContact | undefined,
+  points: string[],
+): { to: string; subject: string; body: string } {
+  const periode = fmtPeriod(row.periodStart, row.periodEnd);
+  const greeting = contact?.contact_name ? `Bonjour ${contact.contact_name},` : "Bonjour,";
+  const lines = points.length
+    ? points.map((p) => `- ${p}`).join("\n")
+    : "- (préciser le motif de la réclamation)";
+  const body = [
+    greeting,
+    "",
+    `Nous revenons vers vous au sujet de la facture ${row.invoiceNumber} (${row.supplier}` +
+      `${periode ? `, période ${periode}` : ""}, montant ${fmtEur(row.total)}).`,
+    "",
+    "Points à clarifier :",
+    lines,
+    "",
+    "Pourriez-vous nous apporter les éléments correspondants ou procéder à la régularisation ?",
+    "",
+    "Cordialement,",
+  ].join("\n");
+  return {
+    to: contact?.email ?? "",
+    subject: `Réclamation facture ${row.invoiceNumber} — ${row.supplier}`,
+    body,
+  };
+}
 function statusLabel(s: UnifiedStatus) { return UNIFIED_OPTIONS.find((o) => o.value === s)?.label ?? s; }
 function statusTone(s: UnifiedStatus) { return s === "valid" ? ("ok" as const) : s === "todo" ? ("warn" as const) : ("bad" as const); }
 function fmtEur(value: number | null | undefined) {
@@ -271,7 +301,10 @@ export function InvoicesDecisionPageV1() {
   const [monthFilter, setMonthFilter] = useState<number | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [contactsOpen, setContactsOpen] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
+  const { contacts } = useSupplierContactsV1();
   const actions = useCpeInvoiceActionsV1();
 
   // Date d'émission + période des factures CPE (le rapport de contrôle ne les porte pas)
@@ -336,7 +369,27 @@ export function InvoicesDecisionPageV1() {
   const selected = rows.find((r) => r.key === selectedKey) ?? null;
   const detail = useCpeInvoiceDetailV1(selected?.source === "cpe" ? selected.rowId : null);
 
+  // Points à signaler dans une réclamation : écarts + anomalies non expliquées.
+  const claimPoints = useMemo(() => {
+    if (!selected) return [] as string[];
+    const issues = selected.source === "cpe"
+      ? (detail.controls.data ?? [])
+          .filter((c) => c.status === "error")
+          .map((c) => ({ severity: "error", message: c.message || controlTypeLabel(c.control_type), code: c.control_type }))
+      : selected.issues.filter((i) => isAnomalyIssue(i) || (!isNonControlable(i.code) && !isExplainedIssue(i)));
+    return aggregateIssues(issues).map((i) => (i.count > 1 ? `${i.message} (${i.count}×)` : i.message));
+  }, [selected, detail.controls.data]);
+
   const suppliers = useMemo(() => Array.from(new Set(rows.map((r) => r.supplier))).sort(), [rows]);
+  const editableSuppliers = useMemo(
+    () => Array.from(new Set([...rows.map((r) => r.supplier), "DALKIA", "ENGIE", "EDF"])).sort(),
+    [rows],
+  );
+  const contactBySupplier = useMemo(() => {
+    const m = new Map<string, SupplierContact>();
+    for (const c of contacts.data ?? []) m.set(c.supplier, c);
+    return m;
+  }, [contacts.data]);
 
   // Années d'émission disponibles (la plus récente par défaut) — évite de mélanger
   // les années dans le graphe et le filtre par mois.
@@ -426,6 +479,7 @@ export function InvoicesDecisionPageV1() {
             <p>DALKIA (CPE), ENGIE et EDF dans une file unique — la comptable valide chaque numéro de facture.</p>
           </div>
           <div className="po2-prototype-actions">
+            <Button variant="ghost" onClick={() => setContactsOpen(true)}>Contacts fournisseurs</Button>
             <Button
               variant="ghost"
               onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
@@ -735,7 +789,7 @@ export function InvoicesDecisionPageV1() {
                   {actions.exportLiaison.isPending ? "Export…" : "Exporter la fiche finance (XLSX)"}
                 </Button>
               ) : null}
-              <Button variant="danger" disabled title="Génération du courrier de réclamation à venir">Préparer une réclamation (à venir)</Button>
+              <Button variant="danger" onClick={() => setClaimOpen(true)}>Préparer une réclamation</Button>
             </div>
             {actions.setStatus.isError ? <p className="po2-action-error">Décision : {(actions.setStatus.error as Error).message}</p> : null}
             {actions.setEnergyStatus.isError ? <p className="po2-action-error">Décision : {(actions.setEnergyStatus.error as Error).message}</p> : null}
@@ -743,7 +797,140 @@ export function InvoicesDecisionPageV1() {
           </div>
         ) : null}
       </Drawer>
+
+      <Drawer
+        open={contactsOpen}
+        title="Contacts fournisseurs"
+        eyebrow="Réclamations"
+        description="Un contact par fournisseur, réutilisé pour pré-remplir les réclamations."
+        onClose={() => setContactsOpen(false)}
+      >
+        <SupplierContactsEditor suppliers={editableSuppliers} />
+      </Drawer>
+
+      {selected ? (
+        <ReclamationDrawer
+          key={`${selected.key}:${contactBySupplier.get(selected.supplier)?.updated_at ?? "none"}`}
+          open={claimOpen}
+          onClose={() => setClaimOpen(false)}
+          row={selected}
+          contact={contactBySupplier.get(selected.supplier)}
+          points={claimPoints}
+          onOpenContacts={() => { setClaimOpen(false); setContactsOpen(true); }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function SupplierContactsEditor({ suppliers }: { suppliers: string[] }) {
+  const { contacts, save } = useSupplierContactsV1();
+  const bySupplier = useMemo(() => {
+    const m = new Map<string, SupplierContact>();
+    for (const c of contacts.data ?? []) m.set(c.supplier, c);
+    return m;
+  }, [contacts.data]);
+  if (contacts.isLoading) return <p className="po2-muted-line">Chargement des contacts…</p>;
+  return (
+    <div className="po2-contacts-editor">
+      {suppliers.map((s) => {
+        const c = bySupplier.get(s);
+        return (
+          <ContactRow
+            key={`${s}:${c?.updated_at ?? "new"}`}
+            supplier={s}
+            contact={c}
+            saving={save.isPending}
+            onSave={(supplier, payload) => save.mutate({ supplier, payload })}
+          />
+        );
+      })}
+      {save.isError ? <p className="po2-action-error">Enregistrement : {(save.error as Error).message}</p> : null}
+    </div>
+  );
+}
+
+function ContactRow({
+  supplier, contact, onSave, saving,
+}: {
+  supplier: string;
+  contact: SupplierContact | undefined;
+  onSave: (supplier: string, payload: SupplierContactInput) => void;
+  saving: boolean;
+}) {
+  const [form, setForm] = useState<SupplierContactInput>({
+    contact_name: contact?.contact_name ?? "",
+    email: contact?.email ?? "",
+    phone: contact?.phone ?? "",
+    role: contact?.role ?? "",
+    notes: contact?.notes ?? "",
+  });
+  const set = (f: keyof SupplierContactInput) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((prev) => ({ ...prev, [f]: e.target.value }));
+  return (
+    <article className="po2-contact-card">
+      <div className="po2-contact-card__head">
+        <span className="po2-proto-supplier-logo">{supplier.slice(0, 2).toUpperCase()}</span>
+        <strong>{supplier}</strong>
+      </div>
+      <div className="po2-contact-card__grid">
+        <label><span>Nom du contact</span><input value={form.contact_name ?? ""} onChange={set("contact_name")} placeholder="Prénom Nom" /></label>
+        <label><span>E-mail</span><input type="email" value={form.email ?? ""} onChange={set("email")} placeholder="contact@fournisseur.fr" /></label>
+        <label><span>Téléphone</span><input value={form.phone ?? ""} onChange={set("phone")} placeholder="01 23 45 67 89" /></label>
+        <label><span>Rôle / service</span><input value={form.role ?? ""} onChange={set("role")} placeholder="Service clients, gestionnaire…" /></label>
+      </div>
+      <label className="po2-contact-card__notes"><span>Notes</span><textarea rows={2} value={form.notes ?? ""} onChange={set("notes")} /></label>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Button onClick={() => onSave(supplier, form)} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+      </div>
+    </article>
+  );
+}
+
+function ReclamationDrawer({
+  open, onClose, row, contact, points, onOpenContacts,
+}: {
+  open: boolean;
+  onClose: () => void;
+  row: UnifiedRow;
+  contact: SupplierContact | undefined;
+  points: string[];
+  onOpenContacts: () => void;
+}) {
+  const base = useMemo(() => buildClaimDraft(row, contact, points), [row, contact, points]);
+  const [to, setTo] = useState(base.to);
+  const [subject, setSubject] = useState(base.subject);
+  const [body, setBody] = useState(base.body);
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (label: string, text: string) => {
+    navigator.clipboard?.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(null), 1800); });
+  };
+  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return (
+    <Drawer
+      open={open}
+      title={`Réclamation · ${row.invoiceNumber}`}
+      eyebrow={`Brouillon · ${row.supplier}`}
+      description="Message pré-rempli à copier ou ouvrir dans votre messagerie. Aucun envoi automatique."
+      onClose={onClose}
+    >
+      <div className="po2-claim">
+        {!contact?.email ? (
+          <p className="po2-muted-line">
+            Aucun e-mail enregistré pour {row.supplier}.{" "}
+            <button type="button" className="po2-linklike" onClick={onOpenContacts}>Renseigner le contact</button>.
+          </p>
+        ) : null}
+        <label className="po2-claim__field"><span>Destinataire</span><input value={to} onChange={(e) => setTo(e.target.value)} placeholder="email du contact" /></label>
+        <label className="po2-claim__field"><span>Objet</span><input value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+        <label className="po2-claim__field"><span>Message</span><textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} /></label>
+        <div className="po2-claim__actions">
+          <Button onClick={() => copy("Message", body)}>{copied === "Message" ? "Copié ✓" : "Copier le message"}</Button>
+          <Button variant="ghost" onClick={() => copy("E-mail", to)} disabled={!to}>{copied === "E-mail" ? "Copié ✓" : "Copier l’e-mail"}</Button>
+          <a className="po2-button po2-button--ghost" href={mailto}>Ouvrir dans la messagerie</a>
+        </div>
+      </div>
+    </Drawer>
   );
 }
 

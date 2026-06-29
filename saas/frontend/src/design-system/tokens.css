@@ -498,6 +498,26 @@
 .po2-year-switch__btn { border: 0; background: transparent; cursor: pointer; padding: .3rem .7rem; border-radius: .5rem; font-weight: 800; font-size: .8rem; color: var(--po2-color-muted); }
 .po2-year-switch__btn.is-active { background: var(--po2-color-paper); color: var(--po2-color-ink); box-shadow: var(--po2-shadow-card); }
 .po2-fact-chipfilter { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .7rem; border: 1px solid var(--po2-color-mint); border-radius: 999px; background: var(--po2-color-mint-soft); color: var(--po2-color-ink); font-size: .75rem; font-weight: 700; cursor: pointer; }
+
+/* Contacts fournisseurs (panneau latéral) */
+.po2-contacts-editor { display: grid; gap: .9rem; }
+.po2-contact-card { padding: .9rem; border: 1px solid var(--po2-color-line); border-radius: 1rem; background: var(--po2-color-canvas); }
+.po2-contact-card__head { display: flex; align-items: center; gap: .6rem; margin-bottom: .7rem; }
+.po2-contact-card__head strong { font: 800 1rem var(--po2-font-title); }
+.po2-contact-card__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.po2-contact-card label, .po2-claim__field { display: flex; flex-direction: column; gap: .25rem; }
+.po2-contact-card label span, .po2-claim__field span { color: var(--po2-color-muted); font-size: .68rem; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+.po2-contact-card input, .po2-contact-card textarea, .po2-claim__field input, .po2-claim__field textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--po2-color-line); border-radius: .6rem;
+  background: var(--po2-color-paper); color: var(--po2-color-ink); font: inherit; font-size: .82rem;
+}
+.po2-contact-card textarea, .po2-claim__field textarea { resize: vertical; }
+.po2-contact-card__notes { margin: .6rem 0; }
+
+/* Brouillon de réclamation */
+.po2-claim { display: grid; gap: .8rem; }
+.po2-claim__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.po2-linklike { border: 0; background: transparent; padding: 0; color: var(--po2-color-ink); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .po2-month-chart__bar { display: flex; flex-direction: column-reverse; justify-content: flex-start; width: 100%; max-width: 2.4rem; height: 8rem; border-radius: .4rem; overflow: hidden; background: var(--po2-color-mint-soft); }
 .po2-month-chart__seg--done { background: #74b44a; }
 .po2-month-chart__seg--todo { background: #d9a13a; }
