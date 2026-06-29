@@ -24,6 +24,9 @@ type UnifiedRow = {
   status: UnifiedStatus;
   processed: boolean;
   month: number | null;
+  year: number | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   issues: { severity: string; code: string; message: string; scope: string | null }[];
 };
 
@@ -81,6 +84,14 @@ const ANOMALY_CODES = new Set([
   "POWER_OVERRUN_BILLED",
 ]);
 const EXPLAINED_CODES = new Set(["PERIOD_OVERLAP_EXPLAINED"]);
+/** Codes masqués sur la page Factures : le contrôle reste calculé côté backend
+ *  (réutilisable plus tard dans la section Fluides) mais n'est pas affiché ni
+ *  compté ici. Dépassement de puissance = pénalité réelle, pas un contrôle de
+ *  facturation à trancher par la comptable. */
+const HIDDEN_ENERGY_CODES = new Set(["POWER_OVERRUN_BILLED"]);
+function isHiddenIssue(issue: { code: string }) {
+  return HIDDEN_ENERGY_CODES.has(issue.code);
+}
 function isAnomalyIssue(issue: { severity: string; code: string }) {
   return issue.severity === "anomaly" || ANOMALY_CODES.has(issue.code);
 }
@@ -179,6 +190,19 @@ function parseMonth(date: string | null | undefined): number | null {
   const m = date.includes("/") ? Number(date.split("/")[1]) - 1 : Number(date.slice(5, 7)) - 1;
   return m >= 0 && m < 12 ? m : null;
 }
+function parseYear(date: string | null | undefined): number | null {
+  if (!date) return null;
+  const y = date.includes("/") ? Number(date.split("/")[2]) : Number(date.slice(0, 4));
+  return Number.isFinite(y) && y > 1990 ? y : null;
+}
+/** Période de consommation lisible : « oct → déc 2025 » (ou « janv. 2026 » si même mois). */
+function fmtPeriod(start: string | null, end: string | null): string | null {
+  const ms = parseMonth(start), me = parseMonth(end), ys = parseYear(start), ye = parseYear(end);
+  if (ms === null || me === null || ye === null) return null;
+  const startLabel = ys !== null && ys !== ye ? `${MONTHS[ms]} ${ys}` : MONTHS[ms];
+  if (ms === me && ys === ye) return `${MONTHS[ms]} ${ye}`;
+  return `${startLabel} → ${MONTHS[me]} ${ye}`;
+}
 function supplierFromEnergy(inv: EnergyInvoiceImport) {
   return inv.supplier_guess || (inv.source?.toUpperCase().includes("EDF") ? "EDF" : inv.source?.toUpperCase().includes("ENGIE") ? "ENGIE" : "Énergie");
 }
@@ -222,20 +246,24 @@ export function InvoicesDecisionPageV1() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [controlFilter, setControlFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState<number | null>(null);
+  const [monthFilter, setMonthFilter] = useState<number | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const actions = useCpeInvoiceActionsV1();
 
-  // Mois d'émission des factures CPE (le rapport de contrôle ne porte pas la date)
-  const cpeMonthById = useMemo(() => {
-    const map = new Map<number, number | null>();
-    for (const inv of invoices.data ?? []) map.set(inv.id, parseMonth(inv.invoice_date));
+  // Date d'émission + période des factures CPE (le rapport de contrôle ne les porte pas)
+  const cpeInfoById = useMemo(() => {
+    const map = new Map<number, { month: number | null; year: number | null; periodStart: string | null; periodEnd: string | null }>();
+    for (const inv of invoices.data ?? [])
+      map.set(inv.id, { month: parseMonth(inv.invoice_date), year: parseYear(inv.invoice_date), periodStart: inv.period_start, periodEnd: inv.period_end });
     return map;
   }, [invoices.data]);
 
   const rows: UnifiedRow[] = useMemo(() => {
     const out: UnifiedRow[] = [];
     for (const r of report.data?.invoices ?? []) {
+      const info = cpeInfoById.get(r.invoice_id);
       out.push({
         key: `cpe:${r.invoice_id}`, source: "cpe", rowId: r.invoice_id,
         invoiceNumber: r.invoice_number, supplier: "DALKIA",
@@ -244,7 +272,8 @@ export function InvoicesDecisionPageV1() {
         total: r.total_ht, ok: r.ok, error: r.error, anomaly: 0, explained: 0, blocked: r.blocked,
         status: CPE_TO_UNIFIED[r.invoice_status] ?? "todo",
         processed: r.invoice_status === "valide" || Boolean(r.finance_exported_at),
-        month: cpeMonthById.get(r.invoice_id) ?? null,
+        month: info?.month ?? null, year: info?.year ?? null,
+        periodStart: info?.periodStart ?? null, periodEnd: info?.periodEnd ?? null,
         issues: [],
       });
     }
@@ -252,7 +281,7 @@ export function InvoicesDecisionPageV1() {
       const status = ENERGY_TO_UNIFIED[e.decision_status] ?? "todo";
       const sites = e.site_count ? ` · ${e.site_count} site(s)` : "";
       const docType = e.filter_facets?.document_types?.[0];
-      const energyIssues = e.control_issues ?? [];
+      const energyIssues = (e.control_issues ?? []).filter((i) => !isHiddenIssue(i));
       const explained = energyIssues.filter((i) => isExplainedIssue(i)).length;
       const anomalies = energyIssues.filter((i) => isAnomalyIssue(i)).length;
       const nonControlable = energyIssues.filter((i) => isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
@@ -266,7 +295,8 @@ export function InvoicesDecisionPageV1() {
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
         total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, anomaly: anomalies, explained, blocked: nonControlable,
         status, processed: status === "valid",
-        month: parseMonth(e.invoice_date),
+        month: parseMonth(e.invoice_date), year: parseYear(e.invoice_date),
+        periodStart: e.period_start, periodEnd: e.period_end,
         issues: energyIssues,
       });
     }
@@ -279,22 +309,31 @@ export function InvoicesDecisionPageV1() {
       seen.add(k);
       return true;
     });
-  }, [report.data, energy.data, cpeMonthById]);
+  }, [report.data, energy.data, cpeInfoById]);
 
   const selected = rows.find((r) => r.key === selectedKey) ?? null;
   const detail = useCpeInvoiceDetailV1(selected?.source === "cpe" ? selected.rowId : null);
 
   const suppliers = useMemo(() => Array.from(new Set(rows.map((r) => r.supplier))).sort(), [rows]);
 
+  // Années d'émission disponibles (la plus récente par défaut) — évite de mélanger
+  // les années dans le graphe et le filtre par mois.
+  const availableYears = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.year).filter((y): y is number => y !== null))).sort((a, b) => b - a),
+    [rows],
+  );
+  const effectiveYear = yearFilter ?? availableYears[0] ?? null;
+
   const monthly = useMemo(() => {
     const data = MONTHS.map(() => ({ traitees: 0, aTraiter: 0 }));
     for (const r of rows) {
+      if (effectiveYear !== null && r.year !== effectiveYear) continue;
       if (r.month === null) continue;
       if (r.processed) data[r.month].traitees += 1; else data[r.month].aTraiter += 1;
     }
     const max = Math.max(1, ...data.map((d) => d.traitees + d.aTraiter));
     return { data, max };
-  }, [rows]);
+  }, [rows, effectiveYear]);
 
   const kpis = useMemo(() => {
     const traitees = rows.filter((r) => r.processed).length;
@@ -328,10 +367,11 @@ export function InvoicesDecisionPageV1() {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (controlFilter !== "all" && !matchesControl(r, controlFilter)) return false;
       if (supplierFilter !== "all" && r.supplier !== supplierFilter) return false;
+      if (monthFilter !== null && !(r.year === effectiveYear && r.month === monthFilter)) return false;
       if (q && ![r.invoiceNumber, r.marche, r.perimetre, r.client, r.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, query, statusFilter, controlFilter, supplierFilter]);
+  }, [rows, query, statusFilter, controlFilter, supplierFilter, monthFilter, effectiveYear]);
 
   const changeStatus = (row: UnifiedRow, value: UnifiedStatus) => {
     if (row.source === "cpe") actions.setStatus.mutate({ invoiceId: row.rowId, status: UNIFIED_TO_CPE[value] });
@@ -423,21 +463,43 @@ export function InvoicesDecisionPageV1() {
           <div>
             <span className="po2-eyebrow">Charge annuelle</span>
             <h2>Factures par mois d’émission</h2>
-            <p>Vert : déjà traitées (validées ou transmises). Orange : à traiter.</p>
+            <p>Vert : déjà traitées (validées ou transmises). Orange : à traiter. Cliquez un mois pour filtrer le tableau.</p>
           </div>
+          {availableYears.length > 0 ? (
+            <div className="po2-year-switch" role="group" aria-label="Année d’émission">
+              {availableYears.map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  className={"po2-year-switch__btn" + (y === effectiveYear ? " is-active" : "")}
+                  onClick={() => { setYearFilter(y); setMonthFilter(null); }}
+                >
+                  {y}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="po2-month-chart">
           {monthly.data.map((d, i) => {
             const total = d.traitees + d.aTraiter;
+            const active = monthFilter === i;
             return (
-              <div key={MONTHS[i]} className="po2-month-chart__col" title={`${MONTHS[i]} : ${d.traitees} traitée(s), ${d.aTraiter} à traiter`}>
+              <button
+                key={MONTHS[i]}
+                type="button"
+                className={"po2-month-chart__col" + (active ? " is-active" : "")}
+                title={`${MONTHS[i]} ${effectiveYear ?? ""} : ${d.traitees} traitée(s), ${d.aTraiter} à traiter${total ? " — cliquer pour filtrer" : ""}`}
+                onClick={() => setMonthFilter(active ? null : i)}
+                aria-pressed={active}
+              >
                 <div className="po2-month-chart__bar">
                   <div className="po2-month-chart__seg po2-month-chart__seg--todo" style={{ height: `${(d.aTraiter / monthly.max) * 100}%` }} />
                   <div className="po2-month-chart__seg po2-month-chart__seg--done" style={{ height: `${(d.traitees / monthly.max) * 100}%` }} />
                 </div>
                 <span className="po2-month-chart__count">{total || ""}</span>
                 <span className="po2-month-chart__label">{MONTHS[i]}</span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -459,6 +521,11 @@ export function InvoicesDecisionPageV1() {
           <option value="all">Toutes les décisions</option>
           {UNIFIED_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        {monthFilter !== null ? (
+          <button type="button" className="po2-fact-chipfilter" onClick={() => setMonthFilter(null)} title="Retirer le filtre mois">
+            {MONTHS[monthFilter]} {effectiveYear ?? ""} ✕
+          </button>
+        ) : null}
         <span style={{ marginLeft: "auto", color: "var(--po2-color-muted)", fontSize: ".8rem" }}>{filteredRows.length} / {rows.length} facture(s)</span>
       </div>
 
@@ -482,7 +549,7 @@ export function InvoicesDecisionPageV1() {
             <tbody>
               {filteredRows.map((row) => (
                 <tr key={row.key} className={row.key === selectedKey ? "active" : ""} onClick={() => setSelectedKey(row.key)}>
-                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><b>{row.invoiceNumber}</b></div></td>
+                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><div><b>{row.invoiceNumber}</b>{fmtPeriod(row.periodStart, row.periodEnd) ? <small title="Période de consommation facturée">conso {fmtPeriod(row.periodStart, row.periodEnd)}</small> : null}</div></div></td>
                   <td>{row.supplier}</td>
                   <td>{row.type}</td>
                   <td>{row.client}</td>
@@ -526,6 +593,11 @@ export function InvoicesDecisionPageV1() {
           <div className="po2-proto-dossier">
             <div className="po2-proto-dossier-kpis">
               <div><span>Montant</span><b>{fmtEur(selected.total)}</b></div>
+              <div>
+                <span>Période conso</span>
+                <b>{fmtPeriod(selected.periodStart, selected.periodEnd) ?? "—"}</b>
+                {selected.month !== null ? <small style={{ display: "block", marginTop: ".2rem", color: "var(--po2-color-muted)", fontSize: ".68rem" }}>émise {MONTHS[selected.month]} {selected.year ?? ""}</small> : null}
+              </div>
               <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart · ${selected.anomaly} à expliquer · ${selected.explained} expliqué · ${selected.blocked} bloqué`}</b></div>
               <div><span>Décision</span><b>{statusLabel(selected.status)}</b></div>
             </div>
