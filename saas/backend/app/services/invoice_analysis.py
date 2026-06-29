@@ -200,7 +200,7 @@ def _build_control_report(
     # (références non alignées, faux positifs sur EDF). turpe_summary reste vide
     # pour préserver la structure du rapport consommée par le frontend.
     _check_tax_and_vat(invoice, sites, issue, taxes_summary)
-    _check_period_continuity(db, invoice_import, sites, issue, period_summary)
+    _check_period_continuity(db, invoice_import, sites, issue, period_summary, parsed.get("supplier"))
     _check_consumption_against_enedis(sites, issue, consumption_summary)
     _check_billed_power_anomalies(sites, issue, power_summary)
 
@@ -261,7 +261,9 @@ ANOMALY_CONTROL_CODES = {
 }
 
 EXPLAINED_CONTROL_CODES = {
+    "DUPLICATE_EXPORT_OR_REISSUE",
     "PERIOD_OVERLAP_EXPLAINED",
+    "SUPPLIER_SWITCH_GAP_EXPLAINED",
 }
 
 
@@ -934,9 +936,11 @@ def _check_period_continuity(
     sites: list[dict[str, Any]],
     issue,
     period_summary: dict[str, int],
+    parsed_supplier: str | None = None,
 ) -> None:
     current_periods: list[dict[str, Any]] = []
     current_label = invoice_import.invoice_number or invoice_import.original_filename
+    current_supplier = parsed_supplier or invoice_import.supplier_guess
     for site in sites:
         scope = _site_scope(site)
         prm_id = site.get("prm_id")
@@ -952,7 +956,7 @@ def _check_period_continuity(
             continue
         period_summary["checked_sites"] += 1
         if not _site_is_credit_note(site):
-            current_periods.append(_period_record(prm_id, start, end, scope, current_label, site))
+            current_periods.append(_period_record(prm_id, start, end, scope, current_label, site, invoice_import, current_supplier))
 
     if not current_periods:
         return
@@ -974,7 +978,7 @@ def _check_period_continuity(
             start = _date_value(previous_site.get("period_start"))
             end = _date_value(previous_site.get("period_end"))
             if prm_id and start and end and end >= start:
-                previous_records.append(_period_record(prm_id, start, end, _site_scope(previous_site), label, previous_site))
+                previous_records.append(_period_record(prm_id, start, end, _site_scope(previous_site), label, previous_site, previous))
 
     raw_by_prm: dict[str, list[dict[str, Any]]] = {}
     for record in previous_records:
@@ -1009,24 +1013,50 @@ def _check_period_continuity(
             previous = previous_before[-1]
             expected_start = previous["end"] + timedelta(days=1)
             if start > expected_start:
-                period_summary["gaps"] += 1
-                issue(
-                    "anomaly",
-                    "PERIOD_GAP",
-                    f"Trou de facturation detecte sur {scope}: precedente fin {previous['end'].isoformat()} ({previous['label']}), nouvelle debut {start.isoformat()}.",
-                    scope,
-                )
+                if _is_supplier_switch_gap(previous, current, expected_start):
+                    period_summary["explained_overlaps"] += 1
+                    issue(
+                        "explained",
+                        "SUPPLIER_SWITCH_GAP_EXPLAINED",
+                        (
+                            f"Trou apparent explique sur {scope}: changement fournisseur "
+                            f"{previous.get('supplier') or 'precedent'} -> {current.get('supplier') or 'nouveau'}, "
+                            f"ancienne fin {previous['end'].isoformat()} ({previous['label']}), nouvelle debut {start.isoformat()}."
+                        ),
+                        scope,
+                    )
+                else:
+                    period_summary["gaps"] += 1
+                    issue(
+                        "anomaly",
+                        "PERIOD_GAP",
+                        f"Trou de facturation detecte sur {scope}: precedente fin {previous['end'].isoformat()} ({previous['label']}), nouvelle debut {start.isoformat()}.",
+                        scope,
+                    )
 
         for previous in net_overlaps:
-            period_summary["overlaps"] += 1
             if previous["start"] == start and previous["end"] == end:
-                issue(
-                    "anomaly",
-                    "DOUBLE_BILLING_PERIOD",
-                    f"Meme site et meme periode deja factures sur {scope} dans {previous['label']}.",
-                    scope,
-                )
+                if _is_exact_duplicate_or_reissue(previous, current):
+                    period_summary["explained_overlaps"] += 1
+                    issue(
+                        "explained",
+                        "DUPLICATE_EXPORT_OR_REISSUE",
+                        (
+                            f"Doublon exact explique sur {scope}: meme site, periode, montant et consommation "
+                            f"deja presents dans {previous['label']}. Probable reedition/export fournisseur a verifier sans impact de periode."
+                        ),
+                        scope,
+                    )
+                else:
+                    period_summary["overlaps"] += 1
+                    issue(
+                        "anomaly",
+                        "DOUBLE_BILLING_PERIOD",
+                        f"Meme site et meme periode deja factures sur {scope} dans {previous['label']}.",
+                        scope,
+                    )
             else:
+                period_summary["overlaps"] += 1
                 issue(
                     "anomaly",
                     "PERIOD_OVERLAP",
@@ -1043,6 +1073,8 @@ def _period_record(
     scope: str,
     label: str | None,
     site: dict[str, Any],
+    invoice_import: EnergyInvoiceImport | None = None,
+    supplier: str | None = None,
 ) -> dict[str, Any]:
     return {
         "prm_id": str(prm_id),
@@ -1051,11 +1083,36 @@ def _period_record(
         "scope": scope,
         "label": label or "document precedent",
         "amount_cents": _amount_cents(site.get("total_ttc") if site.get("total_ttc") is not None else site.get("total_ht")),
+        "consumption_kwh": _decimal(site.get("total_consumption_kwh")),
+        "supplier": supplier or (invoice_import.supplier_guess if invoice_import is not None else None),
+        "source": invoice_import.source if invoice_import is not None else None,
+        "sha256": invoice_import.sha256 if invoice_import is not None else None,
     }
 
 
 def _periods_overlap(left: dict[str, Any], right: dict[str, Any]) -> bool:
     return left["start"] <= right["end"] and left["end"] >= right["start"]
+
+
+def _is_exact_duplicate_or_reissue(previous: dict[str, Any], current: dict[str, Any]) -> bool:
+    if previous.get("amount_cents") is None or current.get("amount_cents") is None:
+        return False
+    if previous.get("amount_cents") != current.get("amount_cents"):
+        return False
+    previous_kwh = previous.get("consumption_kwh")
+    current_kwh = current.get("consumption_kwh")
+    if previous_kwh is not None and current_kwh is not None:
+        return abs(previous_kwh - current_kwh) <= CONSUMPTION_TOLERANCE_KWH
+    return True
+
+
+def _is_supplier_switch_gap(previous: dict[str, Any], current: dict[str, Any], expected_start: date) -> bool:
+    previous_supplier = str(previous.get("supplier") or "").upper()
+    current_supplier = str(current.get("supplier") or "").upper()
+    if not previous_supplier or not current_supplier or previous_supplier == current_supplier:
+        return False
+    gap_days = (current["start"] - expected_start).days
+    return 0 < gap_days <= 45
 
 
 def _site_is_credit_note(site: dict[str, Any]) -> bool:
