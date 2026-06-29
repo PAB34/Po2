@@ -84,23 +84,46 @@
 **Q1 — `PERIOD_GAP` (trou) & `PERIOD_OVERLAP` (chevauchement).**
 Pertinents mais **non bloquants, non écart**. Proposition : nouvelle catégorie **« Info »** affichée par un **triangle orange ⚠️ en bout de ligne** (tooltip au survol), + une section « Informations » dans le tiroir. N'entre ni dans *Écarts* ni dans *Bloqués*.
 → *Ce design te convient‑il ? Le triangle en bout de ligne suffit‑il, ou tu veux aussi un filtre dédié « factures avec trou de période » ?*
+Alors ce sont deux vrais sujets qui devront permettre si avéré d'envoyer un mail au contact de ce fournisseur pour explication. J'aimerais quand même que ce soit un sujet qu'on puisse suivre dans le temps avec une représentation graphique. Je pense que le mieux serait qu'à l'image de l'encart affichant le graphique "Charge annuelle", il y ai un graphique en dessous permettant de représenter le nombre de factures ce chevauchant et avec un trou. Peut être alors deux graphiques l'un en dessous de l'autre. Mais quand dans le tiroir de la facture on doit avoir un bouton pour demander des explications sur les écarts et sur ces PERIOD GAP/OVERLAP
 
 **Q2 — `LINE_PERIOD_OUTSIDE_SITE_PERIOD`** (« ligne facturée hors période FIC »).
 → *Info comme Q1, ou suppression pure ?*
+Je ne sais pas ce qu'est la période FIC, c'est quoi ? Et que représente cette anomalie ?
+
+> **Réponse Claude (FIC) :** dans l'export, **chaque ligne = un site (FIC) pour une période**.
+> Un « FIC » est le **numéro de facture individuelle de ce point de livraison** (ENGIE : champ
+> « N° Facture ou Avoir » ; EDF : `id_contrat`). La « période FIC » = la période de facturation
+> de ce site (date début → date fin de conso). L'anomalie `LINE_PERIOD_OUTSIDE_SITE_PERIOD`
+> signale qu'**une ligne de détail** de ce site porte des dates **hors** de cette période (ex. une
+> régularisation de décembre apparaissant dans la facture de janvier). C'est souvent **légitime**
+> (rattrapage / régularisation) → faux positif fréquent.
+> **Décision proposée : Supprimé** (bruit), sauf si tu veux le voir en « Info ». → **Q7**
 
 **Q3 — `CONSUMPTION_REFERENCE_MISSING` — explication.**
 Ce n'est **pas** un écart de prix. Il se déclenche quand, pour un site, la facture **n'a pas fourni** au moins l'un de : PRM, date de début, date de fin, **ou quantité de consommation** (kWh). Autrement dit : *le parseur n'a pas réussi à extraire une conso pour ce site*. Deux lectures possibles :
   - soit la facture ne porte effectivement pas de conso sur ce site (normal pour certaines lignes) → **à ignorer** ;
   - soit le **parseur** rate l'extraction (vrai sujet **technique**, à corriger côté parsing, pas à afficher comme écart).
 → *Veux‑tu (a) le supprimer de l'affichage, et (b) que je liste à part les sites où la conso n'est pas extraite, pour vérifier si c'est un trou de parsing ?*
+Il faut vérifier par toi meme en manuel le parsing et le garder comme bloquant si avéré et devra être intégré au rapport  à fournir au contact du fournisseur pour demande de rectification ete xplication.
+
+> **Vérification Claude (2026‑06‑29) : faux positif systématique côté EDF, corrigé.**
+> Le parser EDF (`edf_csv.py`) crée ses lignes via `_line(...)` qui ne porte **qu'un montant € (`amount_ht`),
+> jamais de quantité kWh**. Or `_invoice_site_consumption_kwh` ne lisait la conso que depuis la `quantity`
+> des lignes ou les relevés → il **ignorait** `total_consumption_kwh` du site (rempli par EDF via
+> `conso_elec_facturee_kwh`). Résultat : `CONSUMPTION_REFERENCE_MISSING` se déclenchait sur **toutes**
+> les factures EDF alors que la conso est bien là. **Corrigé** (commit `<ce commit>`) : repli sur la conso
+> site quand aucune quantité de ligne/relevé. Le contrôle ne reste donc bloquant que si la conso est
+> **réellement** absente (vrai sujet → à intégrer au rapport fournisseur). ✅
 
 **Q4 — Rapprochement conso ENEDIS** (`CONSUMPTION_ENEDIS_MISMATCH`, partiels).
 C'est une comparaison conso facturée vs relevés ENEDIS (donnée externe, estimative).
 → *On garde en simple « Info », ou on supprime tout le rapprochement conso comme on l'a fait pour la puissance ?*
+A supprimer mais cette anomalie rentrera dans une nouvelle section "Anomalie"
 
 **Q5 — Dépassement de puissance réellement FACTURÉ.**
 En supprimant la famille puissance, on a aussi retiré `POWER_OVERRUN_BILLED` qui détectait une **ligne de dépassement facturée en €**. C'était le seul contrôle puissance touchant un vrai montant.
 → *On le laisse supprimé, ou tu veux le réintroduire comme écart réel (A) « dépassement de puissance facturé : X € » ?*
+A supprimer mais cette anomalie rentrera dans une nouvelle section "Anomalie"
 
 ---
 
@@ -117,12 +140,61 @@ Le moteur CPE distingue déjà nativement `ok` / `error` / `blocked`. À revoir 
 | `revision_p2` / `revision_p3` / `p2_4_objectives` | ok / error / blocked | — |
 | `accounting_nature` / `accounting_site` | ok / blocked | imputation comptable manquante = bloquant légitime ? |
 
-**Question DALKIA (Q6)** : *passe‑t‑on en revue ces contrôles maintenant, ou après avoir figé les fluides ?*
+**Question DALKIA (Q6)** : *passe‑t‑on en revue ces contrôles maintenant, ou après avoir figé les fluides ?* On passe en revue les fluides déjà et après on contrôle tout
 
 ---
 
 ## 5. SPIE & SUEZ (à venir)
 
 Sources à ajouter (cf. backlog). À l'ajout, **repartir de ce tableau** : pour chaque contrôle,
-décider A / C / I / Supprimé **par tiers**, car le périmètre diffère (ex. SPIE = maintenance CVC,
+décider A / C / I / Supprimé / Anomalie **par tiers**, car le périmètre diffère (ex. SPIE = maintenance CVC,
 SUEZ = eau). Section à compléter quand les parseurs seront branchés.
+
+---
+
+## 6. Synthèse des réponses (2026‑06‑29) → nouveau modèle à 4 catégories
+
+Tes réponses font émerger une **4ᵉ catégorie** en plus de Écart / Bloqué / OK :
+
+> **« Anomalie »** — un fait avéré qui n'est pas une erreur de prix exploitable directement, mais
+> qui justifie de **demander une explication au fournisseur** et de **se suivre dans le temps**.
+> Affichage : badge/section dédiés, **suivi graphique**, et **bouton « Demander des explications »**
+> dans le tiroir (mail pré‑rempli au contact du fournisseur). Ni « Écart » ni « Bloqué ».
+
+**Décisions enregistrées :**
+
+| Sujet | Décision |
+|---|---|
+| `PERIOD_GAP` (trou) / `PERIOD_OVERLAP` (chevauchement) | → **Anomalie**. Vrais sujets, non bloquants. Suivi par **graphique sous « Charge annuelle »** (2 graphes empilés : nb factures avec trou / avec chevauchement). Bouton « Demander des explications » dans le tiroir. |
+| `CONSUMPTION_ENEDIS_MISMATCH` + `CONSUMPTION_LOAD_CURVE_MISMATCH` | → **Anomalie** (retirés des « Bloqués »). |
+| `ENEDIS_CONSUMPTION_PARTIAL` / `LOAD_CURVE_CONSUMPTION_PARTIAL` | **Supprimés** (bruit). |
+| `POWER_OVERRUN_BILLED` (dépassement puissance **facturé €**) | Réintroduit **en Anomalie** (le reste de la famille puissance reste supprimé). |
+| `CONSUMPTION_REFERENCE_MISSING` | Faux positif EDF **corrigé** (repli conso site). Reste **Bloquant** uniquement si conso réellement absente → à intégrer au **rapport fournisseur**. |
+| `LINE_PERIOD_OUTSIDE_SITE_PERIOD` | Proposé **Supprimé** (cf. Q7). |
+| DALKIA | On finit les fluides d'abord, puis revue complète (Q6 ✅). |
+
+**Le tiroir d'une facture aura donc :** Écarts (A) · Non contrôlable/Bloqués (C) · **Anomalies** (nouveau) · + bouton **« Demander des explications »** (mail pré‑rempli) couvrant écarts ET anomalies.
+
+### Questions de suite (avant de coder la section Anomalie)
+
+**Q7 —** `LINE_PERIOD_OUTSIDE_SITE_PERIOD` : on **supprime** (reco) ou on le met en Anomalie ?
+
+**Q8 — Mécanisme « Demander des explications ».** Tu avais aussi demandé « Préparer une réclamation »
+(pré‑rempli, **sans envoi**). Est‑ce le **même** bouton (un seul courrier qui couvre écarts + anomalies),
+ou deux actions distinctes ? Et l'envoi : **`mailto:` pré‑rempli** (s'ouvre dans ta messagerie, tu
+valides/envoies) — recommandé pour commencer — ou **envoi automatique depuis la plateforme** (nécessite
+SMTP + annuaire des contacts fournisseurs) ?
+
+**Q9 — Contacts fournisseurs.** Pour pré‑remplir le mail, il faut un **annuaire** (contact ENGIE / EDF /
+DALKIA…). Tu as ces emails quelque part (fichier, doc) ou je prévois une page de paramétrage pour les saisir ?
+
+**Q10 — Graphiques de suivi.** Confirmes‑tu : **2 graphiques empilés** sous « Charge annuelle »
+(1 = nb factures avec **trou** de période / mois, 2 = nb avec **chevauchement** / mois) ? Périmètre =
+le portefeuille filtré courant ? Et plus tard un 3ᵉ pour les autres anomalies (conso/puissance) ?
+
+### Ordre d'implémentation proposé
+1. **(fait)** Corriger faux positif conso EDF + retraits déjà actés.
+2. Introduire la **catégorie « Anomalie »** (backend : marquer ces codes ; frontend : bucket + section tiroir + colonne/badge), **sans** mail ni graphes → débloque les factures.
+3. **Graphiques de suivi** trou/chevauchement.
+4. **Bouton « Demander des explications »** (mailto pré‑rempli) + annuaire contacts.
+5. Revue **DALKIA**, puis **SPIE/SUEZ**.

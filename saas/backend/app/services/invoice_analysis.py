@@ -1327,7 +1327,14 @@ def _invoice_site_consumption_kwh(site: dict[str, Any]) -> Decimal | None:
         if energy is not None:
             has_reads = True
             total_from_reads += energy
-    return total_from_reads if has_reads else None
+    if has_reads:
+        return total_from_reads
+
+    # Repli sur la conso totale du site : certains formats (EDF .csv) ne portent
+    # pas de quantite par ligne ni de releves, mais exposent la conso facturee au
+    # niveau site (conso_elec_facturee_kwh). Sans ce repli, CONSUMPTION_REFERENCE_MISSING
+    # se declenchait a tort sur toutes les factures EDF.
+    return _decimal(site.get("total_consumption_kwh"))
 
 
 def _daily_consumption_metrics(points: list[dict[str, Any]], start: date, end: date) -> dict[str, Any] | None:
