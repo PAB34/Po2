@@ -195,13 +195,15 @@ function parseYear(date: string | null | undefined): number | null {
   const y = date.includes("/") ? Number(date.split("/")[2]) : Number(date.slice(0, 4));
   return Number.isFinite(y) && y > 1990 ? y : null;
 }
-/** Période de consommation lisible : « oct → déc 2025 » (ou « janv. 2026 » si même mois). */
+/** Période facturée en mois numériques : « 03/2026 » (ou « 10/2025 → 12/2025 »). */
+function fmtMonthYear(month: number, year: number): string {
+  return `${String(month + 1).padStart(2, "0")}/${year}`;
+}
 function fmtPeriod(start: string | null, end: string | null): string | null {
   const ms = parseMonth(start), me = parseMonth(end), ys = parseYear(start), ye = parseYear(end);
   if (ms === null || me === null || ye === null) return null;
-  const startLabel = ys !== null && ys !== ye ? `${MONTHS[ms]} ${ys}` : MONTHS[ms];
-  if (ms === me && ys === ye) return `${MONTHS[ms]} ${ye}`;
-  return `${startLabel} → ${MONTHS[me]} ${ye}`;
+  if (ms === me && ys === ye) return fmtMonthYear(ms, ye);
+  return `${fmtMonthYear(ms, ys ?? ye)} → ${fmtMonthYear(me, ye)}`;
 }
 function supplierFromEnergy(inv: EnergyInvoiceImport) {
   return inv.supplier_guess || (inv.source?.toUpperCase().includes("EDF") ? "EDF" : inv.source?.toUpperCase().includes("ENGIE") ? "ENGIE" : "Énergie");
@@ -241,6 +243,25 @@ function matchesControl(r: UnifiedRow, f: string) {
   }
 }
 
+// Colonnes triables : chaque clé correspond à un champ direct de UnifiedRow.
+type SortKey = "invoiceNumber" | "supplier" | "type" | "client" | "marche" | "perimetre"
+  | "total" | "ok" | "error" | "anomaly" | "explained" | "blocked" | "status";
+const COLUMNS: { key: SortKey; label: string; align?: "right"; title?: string }[] = [
+  { key: "invoiceNumber", label: "Facture" },
+  { key: "supplier", label: "Fournisseur" },
+  { key: "type", label: "Type" },
+  { key: "client", label: "Client" },
+  { key: "marche", label: "Marché" },
+  { key: "perimetre", label: "Périmètre" },
+  { key: "total", label: "Montant", align: "right" },
+  { key: "ok", label: "OK", align: "right", title: "Contrôles conformes (moteur DALKIA uniquement)" },
+  { key: "error", label: "Écarts", align: "right", title: "Écarts réels de facturation" },
+  { key: "anomaly", label: "À expliquer", align: "right", title: "Anomalies non résolues à expliquer au fournisseur" },
+  { key: "explained", label: "Expliquées", align: "right", title: "Anomalies neutralisées (avoir, doublon exact, transition fournisseur, ligne fixe)" },
+  { key: "blocked", label: "Bloquées", align: "right", title: "Non contrôlable : référence ou donnée manquante" },
+  { key: "status", label: "Décision" },
+];
+
 export function InvoicesDecisionPageV1() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -248,6 +269,7 @@ export function InvoicesDecisionPageV1() {
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState<number | null>(null);
   const [monthFilter, setMonthFilter] = useState<number | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const actions = useCpeInvoiceActionsV1();
@@ -372,6 +394,20 @@ export function InvoicesDecisionPageV1() {
       return true;
     });
   }, [rows, query, statusFilter, controlFilter, supplierFilter, monthFilter, effectiveYear]);
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return filteredRows;
+    const arr = [...filteredRows];
+    arr.sort((a, b) => {
+      const va = a[sort.key], vb = b[sort.key];
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * sort.dir;
+      return String(va ?? "").localeCompare(String(vb ?? ""), "fr", { numeric: true }) * sort.dir;
+    });
+    return arr;
+  }, [filteredRows, sort]);
+
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => (s && s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
 
   const changeStatus = (row: UnifiedRow, value: UnifiedStatus) => {
     if (row.source === "cpe") actions.setStatus.mutate({ invoiceId: row.rowId, status: UNIFIED_TO_CPE[value] });
@@ -536,20 +572,25 @@ export function InvoicesDecisionPageV1() {
           <table>
             <thead>
               <tr>
-                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marché</th><th>Périmètre</th>
-                <th style={{ textAlign: "right" }}>Montant</th>
-                <th style={{ textAlign: "right" }} title="Contrôles conformes (moteur DALKIA uniquement)">OK</th>
-                <th style={{ textAlign: "right" }} title="Écarts réels de facturation">Écarts</th>
-                <th style={{ textAlign: "right" }} title="Anomalies non résolues à expliquer au fournisseur">À expliquer</th>
-                <th style={{ textAlign: "right" }} title="Anomalies neutralisées (avoir, doublon exact, transition fournisseur, ligne fixe)">Expliquées</th>
-                <th style={{ textAlign: "right" }} title="Non contrôlable : référence ou donnée manquante">Bloquées</th>
-                <th>Décision</th>
+                {COLUMNS.map((col) => (
+                  <th
+                    key={col.key}
+                    className="po2-th-sortable"
+                    style={{ textAlign: col.align }}
+                    title={col.title ? `${col.title} · cliquer pour trier` : "Cliquer pour trier"}
+                    onClick={() => toggleSort(col.key)}
+                    aria-sort={sort?.key === col.key ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+                  >
+                    {col.label}
+                    <span className="po2-th-sort-ind">{sort?.key === col.key ? (sort.dir === 1 ? " ▲" : " ▼") : ""}</span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row) => (
+              {sortedRows.map((row) => (
                 <tr key={row.key} className={row.key === selectedKey ? "active" : ""} onClick={() => setSelectedKey(row.key)}>
-                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><div><b>{row.invoiceNumber}</b>{fmtPeriod(row.periodStart, row.periodEnd) ? <small title="Période de consommation facturée">conso {fmtPeriod(row.periodStart, row.periodEnd)}</small> : null}</div></div></td>
+                  <td><div className="po2-proto-supplier"><span className="po2-proto-supplier-logo">{row.supplier.slice(0, 2).toUpperCase()}</span><div><b>{row.invoiceNumber}</b>{fmtPeriod(row.periodStart, row.periodEnd) ? <small title="Période facturée">{fmtPeriod(row.periodStart, row.periodEnd)}</small> : null}</div></div></td>
                   <td>{row.supplier}</td>
                   <td>{row.type}</td>
                   <td>{row.client}</td>
@@ -594,9 +635,9 @@ export function InvoicesDecisionPageV1() {
             <div className="po2-proto-dossier-kpis">
               <div><span>Montant</span><b>{fmtEur(selected.total)}</b></div>
               <div>
-                <span>Période conso</span>
+                <span>Période facturée</span>
                 <b>{fmtPeriod(selected.periodStart, selected.periodEnd) ?? "—"}</b>
-                {selected.month !== null ? <small style={{ display: "block", marginTop: ".2rem", color: "var(--po2-color-muted)", fontSize: ".68rem" }}>émise {MONTHS[selected.month]} {selected.year ?? ""}</small> : null}
+                {selected.month !== null && selected.year !== null ? <small style={{ display: "block", marginTop: ".2rem", color: "var(--po2-color-muted)", fontSize: ".68rem" }}>émise {fmtMonthYear(selected.month, selected.year)}</small> : null}
               </div>
               <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart · ${selected.anomaly} à expliquer · ${selected.explained} expliqué · ${selected.blocked} bloqué`}</b></div>
               <div><span>Décision</span><b>{statusLabel(selected.status)}</b></div>

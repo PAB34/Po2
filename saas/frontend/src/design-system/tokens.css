@@ -451,6 +451,9 @@
   box-shadow: inset 0 -1px 0 var(--po2-color-line);
 }
 .po2-proto-table-panel tr { cursor: pointer; }
+.po2-th-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.po2-th-sortable:hover { color: var(--po2-color-ink); }
+.po2-th-sort-ind { font-size: .7rem; }
 .po2-proto-table-panel tbody tr:hover, .po2-proto-table-panel tbody tr.active { background: color-mix(in srgb, var(--po2-color-mint-soft) 64%, transparent); }
 .po2-proto-open-cell { color: var(--po2-color-ink); font-weight: 800; white-space: nowrap; }
 .po2-proto-dossier { position: sticky; top: 5.7rem; padding: 1.15rem; }
