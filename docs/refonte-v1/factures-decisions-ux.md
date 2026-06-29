@@ -20,13 +20,13 @@
 
 ## 1. Décisions déjà prises (historique)
 
-| Date | Sujet | Décision | Commit |
-|---|---|---|---|
-| 2026‑06‑28 | Faux écarts EDF (PRM/BPU) | Reclassés « non contrôlable » (set `NON_CONTROLABLE_CODES` élargi) | `7c90158` |
-| 2026‑06‑28 | Contrôle **TURPE / acheminement** | **Supprimé** (faux positifs, réf. non alignées) | `7c90158` |
-| 2026‑06‑29 | Recalcul EDF (.csv) | `_recompute_invoice_import` : recontrôle sur le parse stocké si fichier ≠ PDF | `8eb8e1b` |
-| 2026‑06‑29 | `UNKNOWN_PRM`, `ENEDIS_CONSUMPTION_MISSING`, `ENEDIS_POWER_MISSING` | **Supprimés** (donnée externe absente ≠ écart) | `cea3c89` |
-| 2026‑06‑29 | Contrôle **PUISSANCE** complet (`_check_power_controls`) | **Supprimé** : « Puissance atteinte… » n'a pas sa place dans le contrôle de facture | _(ce commit)_ |
+| Date       | Sujet                                                               | Décision                                                                            | Commit        |
+| ---------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------- |
+| 2026‑06‑28 | Faux écarts EDF (PRM/BPU)                                           | Reclassés « non contrôlable » (set `NON_CONTROLABLE_CODES` élargi)                  | `7c90158`     |
+| 2026‑06‑28 | Contrôle **TURPE / acheminement**                                   | **Supprimé** (faux positifs, réf. non alignées)                                     | `7c90158`     |
+| 2026‑06‑29 | Recalcul EDF (.csv)                                                 | `_recompute_invoice_import` : recontrôle sur le parse stocké si fichier ≠ PDF       | `8eb8e1b`     |
+| 2026‑06‑29 | `UNKNOWN_PRM`, `ENEDIS_CONSUMPTION_MISSING`, `ENEDIS_POWER_MISSING` | **Supprimés** (donnée externe absente ≠ écart)                                      | `cea3c89`     |
+| 2026‑06‑29 | Contrôle **PUISSANCE** complet (`_check_power_controls`)            | **Supprimé** : « Puissance atteinte… » n'a pas sa place dans le contrôle de facture | _(ce commit)_ |
 
 **Principe directeur validé** : une **donnée externe absente** (référentiel ENEDIS non chargé, courbe de charge, etc.) **n'est jamais un écart de facturation** et ne doit pas bloquer la facture.
 
@@ -178,19 +178,25 @@ Tes réponses font émerger une **4ᵉ catégorie** en plus de Écart / Bloqué 
 ### Questions de suite (avant de coder la section Anomalie)
 
 **Q7 —** `LINE_PERIOD_OUTSIDE_SITE_PERIOD` : on **supprime** (reco) ou on le met en Anomalie ?
+Alors je comprends mieux il ne faut pas le supprimer ni en anomalie. Si je comprends bien ca peut être "rattrapage / régularisation", c'est à dire si il y a un chevauchement ou un trou de facturation cela peut être rattrapé dans cette facture ? Si c'est bien le cas alors ce serait intéressant que si le détail existe sur ce "rattrapage / régularisation" d'avoir les informations précises de la période concernés car cela peut résoudre un problème de chevauchement ou un trou de facturation. Donc la question queje me pose c'est est-ce qu'un chevauchement ou un trou de facturation doit être mis en "Anomalie", j'ai besoin de ton avis et de propositions.
 
 **Q8 — Mécanisme « Demander des explications ».** Tu avais aussi demandé « Préparer une réclamation »
 (pré‑rempli, **sans envoi**). Est‑ce le **même** bouton (un seul courrier qui couvre écarts + anomalies),
 ou deux actions distinctes ? Et l'envoi : **`mailto:` pré‑rempli** (s'ouvre dans ta messagerie, tu
 valides/envoies) — recommandé pour commencer — ou **envoi automatique depuis la plateforme** (nécessite
 SMTP + annuaire des contacts fournisseurs) ?
+Oui on avait dit pour commencer "**`mailto:` pré‑rempli** (s'ouvre dans ta messagerie, tu
+valides/envoies) — recommandé pour commencer" mais c'est un sujet, car il faut penser que des factures auront été traiter et que dans cette nouvelle section il faut pouvoir traiter que les factures qui sont en statut "Contestée". D'ailleurs question est-ce que le statut refusée" à lieur d'être car avant de la refuser ne faut-il pas la contester ? J'ai besoin de ton avis et de propositions
 
 **Q9 — Contacts fournisseurs.** Pour pré‑remplir le mail, il faut un **annuaire** (contact ENGIE / EDF /
-DALKIA…). Tu as ces emails quelque part (fichier, doc) ou je prévois une page de paramétrage pour les saisir ?
+DALKIA…). Tu as ces emails quelque part (fichier, doc) ou je prévois une page de paramétrage pour les saisir ? Oui prévoir une page paramètre du marché pour saisir les noms, prénoms, adresse mail, entreprise, rôle des contacts
 
 **Q10 — Graphiques de suivi.** Confirmes‑tu : **2 graphiques empilés** sous « Charge annuelle »
 (1 = nb factures avec **trou** de période / mois, 2 = nb avec **chevauchement** / mois) ? Périmètre =
 le portefeuille filtré courant ? Et plus tard un 3ᵉ pour les autres anomalies (conso/puissance) ?
+La question n'est pas réglé tant que tu ne m'auras pas répondu à la question **Q7. Tu devras certainement faire une recherche en manuel pour confirmer ou non. Rappel 
+ENGIE : "C:\Users\pa.borja\Documents\Po2\saas\energie\ENGIE\FACTURES\MesFactures_20260609132103.xlsx"
+EDF "C:\Users\pa.borja\Documents\Po2\saas\energie\EDF\20260612_141002814868_EDF160626.csv"
 
 ### Ordre d'implémentation proposé
 1. **(fait)** Corriger faux positif conso EDF + retraits déjà actés.
@@ -198,3 +204,43 @@ le portefeuille filtré courant ? Et plus tard un 3ᵉ pour les autres anomalies
 3. **Graphiques de suivi** trou/chevauchement.
 4. **Bouton « Demander des explications »** (mailto pré‑rempli) + annuaire contacts.
 5. Revue **DALKIA**, puis **SPIE/SUEZ**.
+
+---
+
+## 7. Analyse des données réelles (2026‑06‑29) + propositions Claude
+
+J'ai inspecté les vrais fichiers (`saas/energie/EDF/…csv` 489 lignes, `…ENGIE/…xlsx`).
+
+### 7.1 Constat trou/chevauchement (EDF, 363 PRM)
+- **0 trou**, **55 « chevauchements » bruts**.
+- Après neutralisation des **avoirs** (33 lignes négatives, toutes avec `numero_facture_annulee`) et des factures annulées : **1 seul vrai chevauchement de périodes différentes** + 21 **doublons de période exacte** (réémissions).
+- Exemple type (PRM CONSERVATOIRE) : facture +345,62 € → **avoir −345,62 €** → re‑facture 345,46 € → doublon 345,46 €, **tous sur la même période 10→31/12**. Ce n'est pas un chevauchement de cycles, c'est le **mécanisme facture / avoir / refacturation** d'EDF.
+- ENGIE expose la même logique (colonne « N° Facture **ou Avoir** »).
+
+➡️ **Conclusion : le contrôle PERIOD_OVERLAP brut est ~98 % de bruit.** Il faut d'abord **neutraliser avoirs + factures annulées + doublons exacts**, *puis* détecter les trous/chevauchements résiduels.
+
+### 7.2 Réponse Q7 (régularisation / `LINE_PERIOD_OUTSIDE_SITE_PERIOD`)
+- Ton intuition « rattrapage / régularisation » est **juste**, mais elle ne passe **pas** par `LINE_PERIOD_OUTSIDE_SITE_PERIOD` (qui ne se déclenche jamais sur EDF — pas de période par ligne). Le rattrapage se matérialise par **avoir + refacture** (EDF : `numero_facture_annulee`).
+- **Proposition Claude :**
+  1. `LINE_PERIOD_OUTSIDE_SITE_PERIOD` → **Supprimé** (faux signal).
+  2. **Oui, mettre trou/chevauchement en « Anomalie »**, MAIS sur données **nettées** (hors avoirs/annulées/doublons). Un trou ou chevauchement *résiduel* est alors un vrai sujet fournisseur.
+  3. Dans le tiroir, afficher la **chaîne de correction** (« facture X annule/remplace Y, même période ») → c'est l'info précise de période que tu voulais, et ça **explique** le pseudo‑chevauchement.
+
+### 7.3 Réponse Q8 (workflow de statuts — mon avis)
+Ton intuition est bonne : **on conteste avant de refuser**. Proposition de cycle :
+- `À contrôler` → **`Validée`** (rien à signaler) **ou** `Contestée` (on demande explication).
+- `Contestée` → **`Validée`** (explication reçue, OK) **ou** **`Refusée`** (rejet définitif, avoir attendu).
+- Donc **`Refusée` n'est plus un choix direct** : c'est un **état terminal accessible uniquement depuis `Contestée`**.
+- Le bouton **« Demander des explications »** = action unique qui (a) génère le **mailto pré‑rempli** (écarts + anomalies), (b) passe la facture en **`Contestée`**. C'est **le même** que « Préparer une réclamation » (un seul courrier).
+- La **section de suivi** liste les factures **`Contestée`** (relances, réponses).
+→ *Valides‑tu ce cycle à 3 états (À contrôler / Validée / Contestée→Refusée) ?*
+
+### 7.4 Réponse Q9 (contacts) ✅
+Page **« Paramètres du marché »** pour saisir les contacts : nom, prénom, email, entreprise, rôle.
+
+### 7.5 Réponse Q10 (graphiques)
+OK pour 2 graphiques empilés sous « Charge annuelle » (trou / chevauchement par mois, périmètre filtré) — **mais alimentés par les compteurs NETTÉS** (sinon 55 faux vs 1 vrai). 3ᵉ graphe conso/puissance plus tard.
+
+### 7.6 Nouvelles questions
+**Q11 —** Valides‑tu le principe « **netter avoirs/annulées/doublons avant de détecter trou/chevauchement** » ? (sinon les graphes et la section Anomalie seront illisibles)
+**Q12 —** Les **doublons de période exacte** (réémissions sans avoir) : on les traite comme doublons (masqués par « Purger les doublons ») ou comme une anomalie « réémission » à tracer ?
