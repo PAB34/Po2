@@ -320,6 +320,36 @@
 }
 .po2-prototype-page-head h1 { margin: 0; font: 850 2.35rem/1.02 var(--po2-font-title); letter-spacing: -.045em; }
 .po2-prototype-page-head p { max-width: 48rem; margin: .55rem 0 0; color: var(--po2-color-muted); font-size: 1rem; line-height: 1.55; }
+
+/* En-tête opérationnel de la page Factures (zone compacte, pas de hero) */
+.po2-fact-head { padding: 1.15rem 1.25rem; margin-bottom: 1rem; }
+.po2-fact-head__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.2rem; }
+.po2-fact-head__top h1 { margin: 0; font: 850 1.65rem/1.05 var(--po2-font-title); letter-spacing: -.03em; }
+.po2-fact-head__top p { margin: .35rem 0 0; color: var(--po2-color-muted); font-size: .86rem; }
+.po2-fact-head__kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .6rem; margin-top: 1.1rem; }
+.po2-fact-kpi {
+  display: block;
+  text-align: left;
+  padding: .65rem .75rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: .9rem;
+  background: var(--po2-color-canvas);
+  cursor: pointer;
+  transition: border-color .12s, background .12s, box-shadow .12s;
+}
+.po2-fact-kpi:hover { border-color: var(--po2-color-mint); }
+.po2-fact-kpi.is-active { border-color: var(--po2-color-mint); background: var(--po2-color-mint-soft); box-shadow: var(--po2-shadow-card); }
+.po2-fact-kpi span { color: var(--po2-color-muted); font-size: .68rem; font-weight: 850; text-transform: uppercase; letter-spacing: .06em; }
+.po2-fact-kpi strong { display: block; margin-top: .25rem; font: 850 1.55rem/1 var(--po2-font-title); }
+.po2-fact-kpi small { display: block; margin-top: .25rem; color: var(--po2-color-muted); font-size: .68rem; line-height: 1.25; }
+.po2-fact-head__synthese { margin-top: 1rem; }
+.po2-fact-head__bar { display: flex; height: .7rem; border-radius: 999px; overflow: hidden; background: var(--po2-color-mint-soft); }
+.po2-fact-head__seg { height: 100%; min-width: 2px; }
+.po2-fact-head__legend { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin-top: .55rem; color: var(--po2-color-muted); font-size: .74rem; }
+.po2-fact-head__legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.po2-fact-head__legend i { width: .65rem; height: .65rem; border-radius: 3px; }
+.po2-fact-head__legend b { color: var(--po2-color-ink); }
+.po2-fact-head__total { margin-left: auto; font-weight: 700; }
 .po2-proto-panel {
   border: 1px solid var(--po2-color-line);
   border-radius: 1.35rem;
@@ -406,10 +436,20 @@
 .po2-proto-toolbar-row label { display: flex; align-items: center; gap: .5rem; min-width: min(29rem, 100%); }
 .po2-proto-toolbar-row label input { width: 100%; }
 .po2-proto-workspace-grid { display: grid; grid-template-columns: minmax(0, 1.42fr) minmax(24rem, .58fr); gap: 1rem; align-items: start; }
-.po2-proto-table-panel { overflow: hidden; }
+.po2-proto-table-panel { overflow: visible; }
 .po2-proto-table-panel table { width: 100%; border-collapse: collapse; }
 .po2-proto-table-panel th, .po2-proto-table-panel td { padding: .85rem .8rem; border-bottom: 1px solid var(--po2-color-line); text-align: left; font-size: .78rem; vertical-align: middle; }
-.po2-proto-table-panel th { color: var(--po2-color-muted); font-size: .67rem; text-transform: uppercase; letter-spacing: .08em; }
+.po2-proto-table-panel th {
+  position: sticky;
+  top: 4.4rem; /* sous la topbar sticky (.po2-shell-v1__topbar) */
+  z-index: 3;
+  color: var(--po2-color-muted);
+  font-size: .67rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  background: var(--po2-color-paper);
+  box-shadow: inset 0 -1px 0 var(--po2-color-line);
+}
 .po2-proto-table-panel tr { cursor: pointer; }
 .po2-proto-table-panel tbody tr:hover, .po2-proto-table-panel tbody tr.active { background: color-mix(in srgb, var(--po2-color-mint-soft) 64%, transparent); }
 .po2-proto-open-cell { color: var(--po2-color-ink); font-weight: 800; white-space: nowrap; }
@@ -458,6 +498,8 @@
   .po2-prototype-sidebar { position: static; height: auto; }
   .po2-prototype-nav { grid-template-columns: repeat(3, minmax(0,1fr)); }
   .po2-proto-invoice-steps, .po2-proto-kpi-grid, .po2-proto-matrix-contracts { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .po2-fact-head__kpis { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .po2-fact-head__top { flex-direction: column; align-items: stretch; }
   .po2-proto-workspace-grid { grid-template-columns: 1fr; }
   .po2-proto-dossier { position: static; }
 }
@@ -465,7 +507,9 @@
   .po2-prototype-content { padding: 1rem; }
   .po2-prototype-page-head, .po2-prototype-topbar, .po2-proto-panel-head { flex-direction: column; align-items: stretch; }
   .po2-prototype-nav, .po2-proto-invoice-steps, .po2-proto-kpi-grid, .po2-proto-matrix-contracts, .po2-proto-dossier-kpis, .po2-proto-accounting-grid { grid-template-columns: 1fr; }
+  .po2-fact-head__kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .po2-proto-table-panel { overflow: auto; }
+  .po2-proto-table-panel th { position: static; }
 }
 
 .po2-invoices-v1__head {

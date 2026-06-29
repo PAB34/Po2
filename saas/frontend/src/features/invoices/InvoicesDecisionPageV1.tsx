@@ -157,6 +157,17 @@ function explainEcart(code: string | undefined) {
   if (code && isNonControlable(code)) return "Donnée de référence absente ou rapprochement externe indisponible : non contrôlable.";
   return "Écart à examiner avec le fournisseur.";
 }
+/** Libellé métier d'un phénomène expliqué (neutralisé), par code moteur. */
+const EXPLAINED_LABELS: Record<string, string> = {
+  DUPLICATE_EXPORT_OR_REISSUE: "Doublon exact détecté : réédition / export fournisseur, sans impact de période.",
+  SUPPLIER_SWITCH_GAP_EXPLAINED: "Transition fournisseur : trou apparent (EDF → ENGIE), sans manque de facturation.",
+  FIXED_CHARGE_PERIOD_NOT_APPLICABLE: "Ligne fixe sans consommation : contrôle de période non applicable.",
+  PERIOD_OVERLAP_EXPLAINED: "Chevauchement expliqué par avoir, annulation ou refacturation.",
+};
+function explainExplained(code: string | undefined) {
+  if (code && EXPLAINED_LABELS[code]) return EXPLAINED_LABELS[code];
+  return "Régularisation expliquée par avoir, annulation ou refacturation.";
+}
 function statusLabel(s: UnifiedStatus) { return UNIFIED_OPTIONS.find((o) => o.value === s)?.label ?? s; }
 function statusTone(s: UnifiedStatus) { return s === "valid" ? ("ok" as const) : s === "todo" ? ("warn" as const) : ("bad" as const); }
 function fmtEur(value: number | null | undefined) {
@@ -174,9 +185,42 @@ function supplierFromEnergy(inv: EnergyInvoiceImport) {
 
 const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
 
+// Répartition « état dominant » d'une facture (segments mutuellement exclusifs,
+// par priorité décroissante) pour la barre de synthèse du header.
+const BAR_SEGMENTS: { key: keyof Distribution; label: string; color: string }[] = [
+  { key: "blocked", label: "Bloquées", color: "#b91c1c" },
+  { key: "explain", label: "À expliquer", color: "#b45309" },
+  { key: "ecart", label: "Écarts", color: "#d9a13a" },
+  { key: "explained", label: "Expliquées", color: "#7fb3a8" },
+  { key: "ok", label: "Sans écart", color: "#74b44a" },
+];
+type Distribution = { ok: number; explained: number; ecart: number; explain: number; blocked: number };
+
+const CONTROL_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "Tous les contrôles" },
+  { value: "todo", label: "À traiter" },
+  { value: "done", label: "Traitées" },
+  { value: "ecart", label: "Écarts" },
+  { value: "explain", label: "À expliquer" },
+  { value: "blocked", label: "Bloquées" },
+  { value: "explained", label: "Expliquées" },
+];
+function matchesControl(r: UnifiedRow, f: string) {
+  switch (f) {
+    case "todo": return !r.processed;
+    case "done": return r.processed;
+    case "ecart": return r.error > 0;
+    case "explain": return r.anomaly > 0;
+    case "blocked": return r.blocked > 0;
+    case "explained": return r.explained > 0;
+    default: return true;
+  }
+}
+
 export function InvoicesDecisionPageV1() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [controlFilter, setControlFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
@@ -264,15 +308,30 @@ export function InvoicesDecisionPageV1() {
     };
   }, [rows]);
 
+  const totalAmount = useMemo(() => rows.reduce((s, r) => s + (r.total || 0), 0), [rows]);
+
+  const distribution = useMemo<Distribution>(() => {
+    const d: Distribution = { ok: 0, explained: 0, ecart: 0, explain: 0, blocked: 0 };
+    for (const r of rows) {
+      if (r.blocked > 0) d.blocked += 1;
+      else if (r.error > 0) d.ecart += 1;
+      else if (r.anomaly > 0) d.explain += 1;
+      else if (r.explained > 0) d.explained += 1;
+      else d.ok += 1;
+    }
+    return d;
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (controlFilter !== "all" && !matchesControl(r, controlFilter)) return false;
       if (supplierFilter !== "all" && r.supplier !== supplierFilter) return false;
       if (q && ![r.invoiceNumber, r.marche, r.perimetre, r.client, r.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, query, statusFilter, supplierFilter]);
+  }, [rows, query, statusFilter, controlFilter, supplierFilter]);
 
   const changeStatus = (row: UnifiedRow, value: UnifiedStatus) => {
     if (row.source === "cpe") actions.setStatus.mutate({ invoiceId: row.rowId, status: UNIFIED_TO_CPE[value] });
@@ -283,28 +342,67 @@ export function InvoicesDecisionPageV1() {
 
   return (
     <div className="po2-page-v1">
-      <header className="po2-prototype-page-head">
-        <div>
-          <span className="po2-eyebrow">Factures & décisions</span>
-          <h1>Contrôler, décider, transmettre aux finances.</h1>
-          <p>DALKIA (CPE), ENGIE et EDF dans une file unique. La comptable valide chaque numéro de facture.</p>
+      <header className="po2-proto-panel po2-fact-head">
+        <div className="po2-fact-head__top">
+          <div>
+            <span className="po2-eyebrow">Factures & décisions</span>
+            <h1>Contrôler, décider, transmettre aux finances</h1>
+            <p>DALKIA (CPE), ENGIE et EDF dans une file unique — la comptable valide chaque numéro de facture.</p>
+          </div>
+          <div className="po2-prototype-actions">
+            <Button
+              variant="ghost"
+              onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
+              disabled={actions.purgeDuplicates.isPending}
+            >
+              {actions.purgeDuplicates.isPending ? "Purge…" : "Purger les doublons"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => { if (window.confirm("Recalculer tous les contrôles (DALKIA + énergie) ? Peut prendre une minute.")) actions.recomputeControls.mutate(); }}
+              disabled={actions.recomputeControls.isPending}
+            >
+              {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
+            </Button>
+            <Button>Importer des factures</Button>
+          </div>
         </div>
-        <div className="po2-prototype-actions">
-          <Button
-            variant="ghost"
-            onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
-            disabled={actions.purgeDuplicates.isPending}
-          >
-            {actions.purgeDuplicates.isPending ? "Purge…" : "Purger les doublons"}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => { if (window.confirm("Recalculer tous les contrôles (DALKIA + énergie) ? Peut prendre une minute.")) actions.recomputeControls.mutate(); }}
-            disabled={actions.recomputeControls.isPending}
-          >
-            {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
-          </Button>
-          <Button>Importer des factures</Button>
+
+        <div className="po2-fact-head__kpis">
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "todo" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "todo" ? "all" : "todo")}>
+            <span>À traiter</span><strong>{kpis.aTraiter}</strong><small>décision à prendre</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "done" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "done" ? "all" : "done")}>
+            <span>Traitées</span><strong>{kpis.traitees}</strong><small>validées / transmises</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "ecart" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "ecart" ? "all" : "ecart")}>
+            <span>Écarts</span><strong>{kpis.ecarts}</strong><small>à examiner</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "explain" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "explain" ? "all" : "explain")}>
+            <span>À expliquer</span><strong>{kpis.anomalies}</strong><small>anomalies non résolues</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "blocked" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "blocked" ? "all" : "blocked")}>
+            <span>Bloquées</span><strong>{kpis.bloquees}</strong><small>donnée manquante</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "explained" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "explained" ? "all" : "explained")}>
+            <span>Expliquées</span><strong>{kpis.expliquees}</strong><small>neutralisées (avoir, doublon…)</small>
+          </button>
+        </div>
+
+        <div className="po2-fact-head__synthese">
+          <div className="po2-fact-head__bar" role="img" aria-label="Répartition des factures par état de contrôle">
+            {BAR_SEGMENTS.map((seg) => {
+              const n = distribution[seg.key];
+              if (!n) return null;
+              return <span key={seg.key} className="po2-fact-head__seg" style={{ width: `${(n / Math.max(1, rows.length)) * 100}%`, background: seg.color }} title={`${seg.label} : ${n}`} />;
+            })}
+          </div>
+          <div className="po2-fact-head__legend">
+            {BAR_SEGMENTS.map((seg) => (
+              <span key={seg.key}><i style={{ background: seg.color }} />{seg.label} <b>{distribution[seg.key]}</b></span>
+            ))}
+            <span className="po2-fact-head__total">{rows.length} factures · {fmtEur(totalAmount)} HT</span>
+          </div>
         </div>
       </header>
       {actions.purgeDuplicates.isSuccess ? (
@@ -319,15 +417,6 @@ export function InvoicesDecisionPageV1() {
       {actions.recomputeControls.isError ? (
         <p className="po2-action-error">Recalcul : {(actions.recomputeControls.error as Error).message}</p>
       ) : null}
-
-      <div className="po2-proto-kpi-grid">
-        <article><span>A traiter</span><strong>{kpis.aTraiter}</strong><small>en attente de decision</small></article>
-        <article><span>Deja traitees</span><strong>{kpis.traitees}</strong><small>validees ou transmises</small></article>
-        <article><span>Avec ecarts</span><strong>{kpis.ecarts}</strong><small>a examiner</small></article>
-        <article><span>Anomalies</span><strong>{kpis.anomalies}</strong><small>a expliquer</small></article>
-        <article><span>Expliquees</span><strong>{kpis.expliquees}</strong><small>avoir / refacturation</small></article>
-        <article><span>Bloquees</span><strong>{kpis.bloquees}</strong><small>donnee manquante</small></article>
-      </div>
 
       <section className="po2-proto-panel" style={{ padding: "1.15rem", marginBottom: "1rem" }}>
         <div className="po2-proto-panel-head">
@@ -363,6 +452,9 @@ export function InvoicesDecisionPageV1() {
           <option value="all">Tous les fournisseurs</option>
           {suppliers.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select value={controlFilter} onChange={(e) => setControlFilter(e.target.value)} aria-label="Filtrer résultat de contrôle">
+          {CONTROL_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filtrer décision">
           <option value="all">Toutes les décisions</option>
           {UNIFIED_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -377,14 +469,14 @@ export function InvoicesDecisionPageV1() {
           <table>
             <thead>
               <tr>
-                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marche</th><th>Perimetre</th>
+                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marché</th><th>Périmètre</th>
                 <th style={{ textAlign: "right" }}>Montant</th>
-                <th style={{ textAlign: "right" }} title="Controles conformes (moteur DALKIA uniquement)">OK</th>
-                <th style={{ textAlign: "right" }} title="Ecarts reels de facturation">Ecarts</th>
-                <th style={{ textAlign: "right" }} title="Anomalies a expliquer au fournisseur">Anomalies</th>
-                <th style={{ textAlign: "right" }} title="Anomalies expliquees par avoir ou refacturation">Expliquees</th>
-                <th style={{ textAlign: "right" }} title="Non controlable : reference ou donnee manquante">Bloques</th>
-                <th>Decision</th>
+                <th style={{ textAlign: "right" }} title="Contrôles conformes (moteur DALKIA uniquement)">OK</th>
+                <th style={{ textAlign: "right" }} title="Écarts réels de facturation">Écarts</th>
+                <th style={{ textAlign: "right" }} title="Anomalies non résolues à expliquer au fournisseur">À expliquer</th>
+                <th style={{ textAlign: "right" }} title="Anomalies neutralisées (avoir, doublon exact, transition fournisseur, ligne fixe)">Expliquées</th>
+                <th style={{ textAlign: "right" }} title="Non contrôlable : référence ou donnée manquante">Bloquées</th>
+                <th>Décision</th>
               </tr>
             </thead>
             <tbody>
@@ -434,7 +526,7 @@ export function InvoicesDecisionPageV1() {
           <div className="po2-proto-dossier">
             <div className="po2-proto-dossier-kpis">
               <div><span>Montant</span><b>{fmtEur(selected.total)}</b></div>
-              <div><span>Controles</span><b>{selected.source === "cpe" ? `${selected.ok} OK - ${selected.error} ecart - ${selected.blocked} bloque` : `${selected.error} ecart - ${selected.anomaly} anomalie - ${selected.explained} expliquee - ${selected.blocked} bloque`}</b></div>
+              <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart · ${selected.anomaly} à expliquer · ${selected.explained} expliqué · ${selected.blocked} bloqué`}</b></div>
               <div><span>Décision</span><b>{statusLabel(selected.status)}</b></div>
             </div>
 
@@ -469,12 +561,12 @@ export function InvoicesDecisionPageV1() {
                       )}
                       {anomalies.length > 0 ? (
                         <>
-                          <h3>Anomalies a expliquer ({anomalies.length})</h3>
+                          <h3>Anomalies à expliquer ({anomalies.length})</h3>
                           <div className="po2-proto-control-list">
                             {aggregateIssues(anomalies).map((iss) => (
                               <article key={iss.message}>
-                                <StatusBadge tone="warn">{iss.count > 1 ? `x${iss.count}` : "ANOMALIE"}</StatusBadge>
-                                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` - ${iss.count} occurrences` : ""}</small></div>
+                                <StatusBadge tone="warn">{iss.count > 1 ? `×${iss.count}` : "ANOMALIE"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
                               </article>
                             ))}
                           </div>
@@ -482,12 +574,12 @@ export function InvoicesDecisionPageV1() {
                       ) : null}
                       {explained.length > 0 ? (
                         <>
-                          <h3>Anomalies expliquees ({explained.length})</h3>
+                          <h3>Éléments expliqués · non bloquants ({explained.length})</h3>
                           <div className="po2-proto-control-list">
                             {aggregateIssues(explained).map((iss) => (
                               <article key={iss.message}>
-                                <StatusBadge tone="ok">{iss.count > 1 ? `x${iss.count}` : "EXPLIQUE"}</StatusBadge>
-                                <div><strong>{iss.message}</strong><small>Explique par facture annulee, avoir ou refacturation.{iss.count > 1 ? ` - ${iss.count} occurrences` : ""}</small></div>
+                                <StatusBadge tone="ok">{iss.count > 1 ? `×${iss.count}` : "EXPLIQUÉ"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>{explainExplained(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
                               </article>
                             ))}
                           </div>
