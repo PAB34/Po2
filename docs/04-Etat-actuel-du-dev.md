@@ -25,9 +25,10 @@ do_not_auto_read:
   - Header opérationnel compact (titre + actions + chips KPI cliquables + barre de répartition par état + montant HT) à la place du hero ; **nomenclature KPI figée** : À traiter · Traitées · Écarts · À expliquer · Bloquées · Expliquées.
   - Filtre « résultat de contrôle » ; en-tête de colonnes **sticky** ; tiroir : section « Éléments expliqués · non bloquants » avec libellés métier par code.
   - **Auto-validation énergie** (`_auto_validate_if_clean` dans `apply_parsed_to_invoice_import`) : facture au contrôle entièrement `valid` ET encore `to_review` → `approved`, sans jamais écraser une décision humaine. Vérifié staging : 178 auto-validées, 1 décision humaine préservée.
-- **Objectif probable prochaine session** : étendre l'**auto-validation au CPE/DALKIA** (modèle de contrôle différent de l'énergie — vérifier comment `invoice_status` est calculé/recalculé avant de coder), puis brancher « Préparer une réclamation » (pré-rempli, pas d'envoi) et préparer le merge de la PR #32.
-- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/InvoicesDecisionPageV1.tsx` ; backend `app/services/invoice_analysis.py` (énergie fait) + flux CPE finances (`cpe_dalkia` / `cpe/finances/controls/recalculate`) pour le CPE.
-- **Tests ciblés probables** : `npx tsc -b` (frontend) ; `pytest tests/test_invoice_analysis_bpu_mapping.py` (12 passed) + test décision CPE si ajouté.
+  - **Auto-validation CPE/DALKIA** (`_should_auto_validate_cpe` dans `build_finance_control_report(recalculate=True)`) : critère strict symétrique (aucun contrôle `error` ni `blocked`), `a_controler` → `valide` + note, jamais une décision humaine. Vérifié staging : 70/72 auto-validées (2 exclues : 1 écart, 1 bloqué).
+- **Objectif probable prochaine session** : brancher « Préparer une réclamation » (pré-rempli, pas d'envoi) ; uniformiser Montant HT ; totaux/tri tableau ; préparer le merge de la PR #32.
+- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/InvoicesDecisionPageV1.tsx` ; backend `app/services/invoice_analysis.py` + `app/services/cpe_accounting.py`.
+- **Tests ciblés probables** : `npx tsc -b` (frontend) ; `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py` (15 passed).
 - **À ne pas faire sans validation** : envoyer un mail fournisseur directement (V1 = copié/pré-rempli) ; merger sur `main` sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`, docs non liées).
 - **Niveau de confiance** : élevé.
 
