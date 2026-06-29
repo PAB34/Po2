@@ -2269,6 +2269,16 @@ def list_finance_controls(db: Session, invoice_id: int, city_id: int | None = No
     return list(db.scalars(query).all())
 
 
+def _should_auto_validate_cpe(invoice_status: str, error_count: int, blocked_count: int) -> bool:
+    """Auto-validation CPE : une facture entièrement propre passe en `valide`.
+
+    Critère strict, symétrique de l'énergie (`control_status == valid`) : aucun
+    contrôle en `error` ni en `blocked`. On ne valide que depuis `a_controler`,
+    jamais une décision humaine déjà prise (`valide` / `refuse` / `conteste`).
+    """
+    return invoice_status == "a_controler" and error_count == 0 and blocked_count == 0
+
+
 def build_finance_control_report(
     db: Session,
     city_id: int | None = None,
@@ -2290,6 +2300,7 @@ def build_finance_control_report(
     controls_ok = 0
     controls_error = 0
     controls_blocked = 0
+    auto_validated = 0
 
     invoice_ids = [invoice.id for invoice in invoices]
     lines_by_invoice: dict[int, list[CpeFinanceLine]] = defaultdict(list)
@@ -2321,6 +2332,11 @@ def build_finance_control_report(
         controls_ok += status_counts["ok"]
         controls_error += status_counts["error"]
         controls_blocked += status_counts["blocked"]
+        if recalculate and _should_auto_validate_cpe(invoice.status, status_counts["error"], status_counts["blocked"]):
+            invoice.status = "valide"
+            note = "Validée automatiquement : contrôle sans écart ni point bloquant."
+            invoice.notes = f"{invoice.notes} | {note}" if invoice.notes else note
+            auto_validated += 1
         for control in controls:
             if control.status in type_counts[control.control_type]:
                 type_counts[control.control_type][control.status] += 1
@@ -2345,6 +2361,9 @@ def build_finance_control_report(
                 "control_types": sorted({control.control_type for control in controls if control.status != "ok"}),
             }
         )
+
+    if auto_validated:
+        db.commit()
 
     summaries.sort(key=lambda item: (-item["error"], -item["blocked"], item["invoice_number"]))
     return {
