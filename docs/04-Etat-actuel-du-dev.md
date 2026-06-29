@@ -19,20 +19,16 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-06-29 — branche `feat/phase-5-drawer-actions` (PR #32, non mergée)
+> Mis à jour : 2026-06-29 — branche `feat/phase-5-drawer-actions` (PR #32, non mergée). Détail de la session → journal `Archives/Journal-etat-dev-2026.md` (2026-06-29).
 
-- **Fait cette session** : refonte UX `/refonte-v1/factures` + auto-validation backend (commits `9f8c0d1` front, `42ca294` back, déployés et recalculés sur staging) :
-  - Header opérationnel compact (titre + actions + chips KPI cliquables + barre de répartition par état + montant HT) à la place du hero ; **nomenclature KPI figée** : À traiter · Traitées · Écarts · À expliquer · Bloquées · Expliquées.
-  - Filtre « résultat de contrôle » ; en-tête de colonnes **sticky** ; tiroir : section « Éléments expliqués · non bloquants » avec libellés métier par code.
-  - **Auto-validation énergie** (`_auto_validate_if_clean` dans `apply_parsed_to_invoice_import`) : facture au contrôle entièrement `valid` ET encore `to_review` → `approved`, sans jamais écraser une décision humaine. Vérifié staging : 178 auto-validées, 1 décision humaine préservée.
-  - **Auto-validation CPE/DALKIA** (`_should_auto_validate_cpe` dans `build_finance_control_report(recalculate=True)`) : critère strict symétrique (aucun contrôle `error` ni `blocked`), `a_controler` → `valide` + note, jamais une décision humaine. Vérifié staging : 70/72 auto-validées (2 exclues : 1 écart, 1 bloqué).
-  - **Graphe/dates** : clic-mois → filtre tableau, sélecteur d'année sur le graphe, affichage période de consommation (factures émises pour période antérieure), dépassement de puissance masqué (calcul backend conservé pour future section Fluides). Glossaire comptable : `docs/refonte-v1/factures-glossaire-controles.md`.
-  - **Tri colonnes + période numérique** ; **contacts fournisseurs** (table `supplier_contacts`, migration **0065**, API `/billing/supplier-contacts`) + bouton « Préparer une réclamation » opérationnel (brouillon e-mail pré-rempli, copier/mailto, aucun envoi).
-- **Objectif probable prochaine session** : brancher « Préparer une réclamation » (pré-rempli, pas d'envoi) ; uniformiser Montant HT ; totaux/tri tableau ; préparer le merge de la PR #32.
-- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/InvoicesDecisionPageV1.tsx` ; backend `app/services/invoice_analysis.py` + `app/services/cpe_accounting.py`.
-- **Tests ciblés probables** : `npx tsc -b` (frontend) ; `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py` (15 passed).
-- **À ne pas faire sans validation** : envoyer un mail fournisseur directement (V1 = copié/pré-rempli) ; merger sur `main` sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`, docs non liées).
-- **Niveau de confiance** : élevé.
+- **État** : (a) tranche `Factures & décisions V1` livrée sur staging (UX, **auto-validation** énergie + CPE — ADR 012, **contacts fournisseurs** + réclamation pré-remplie), **PR #32 non mergée** ; (b) **cadrage budget/suivi financier fait** (voir objectif).
+- **Objectif probable prochaine session** : démarrer la tranche **Suivi financier / Budget par marché** — cadrage et décisions déjà posés dans `refonte-v1/suivi-financier-budget-atterrissage-cadrage.md` (budget dans un **module « Marchés » dédié**, maille **opération**, table `accounting_budget_lines` ; page budget→réalisé→atterrissage). En parallèle, gate ouverte : **valider/merger la PR #32** (factures).
+- **Pourquoi prioritaire** : besoin métier exprimé (piloter le budget annuel par marché) ; s'appuie sur la matrice comptable déjà livrée. ⚠️ Pré-requis : réalisé par opération = extracteurs de lignes facture (PO2-FIN-001) + `operation_number` renseigné.
+- **Fichiers/modules concernés** : à créer — `accounting_budget_lines` (modèle + migration), API CRUD, module front « Marchés ». Existant à relire : `app/models/accounting_matrix.py`, `invoice_accounting_snapshots`, `app/services/cpe_atterrissage.py` (≠ atterrissage financier). Factures : `InvoicesDecisionPageV1.tsx` si reprise PR #32.
+- **Tests ciblés probables** : `npx tsc -b` (front) ; pytest du nouveau service budget ; (factures : `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py tests/test_supplier_contacts.py`).
+- **Décisions à confirmer avant de coder** : §7 du cadrage — temporalité budget (annuel vs mensuel/trimestriel), marché pilote v1, niveau d'atterrissage v1 (pro-rata vs moteur doc 34 §F04), source de la liste des opérations.
+- **À ne pas faire sans validation** : confondre atterrissage **financier** et atterrissage **intéressement** (`cpe_atterrissage.py`) ; merger PR #32 sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`).
+- **Niveau de confiance** : élevé (objectif et décisions cadrés ; reste des points §7 mineurs).
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -51,7 +47,7 @@ do_not_auto_read:
 | CPE DALKIA | `/cpe` | Avancé : cockpit finance, contrôle factures, référentiel DALKIA, conso multi-fluides |
 | BPU | `/energie/bpu` | Timeline · TURPE · Documents/Import · Édition tableau |
 | Matrices comptables versionnées | API `/api/accounting-matrices/*` | Backend complet mergé `main` (schéma + XLSX + apply/snapshots) |
-| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` tranche active (PR #30, validée staging) |
+| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` tranche active avancée (auto-validation, contacts/réclamation) — PR #32, validée staging, non mergée |
 
 ## 📦 Migrations alembic
 
@@ -96,5 +92,5 @@ patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → j
 
 - Pilotage : [[Backlog]] · [[03-Roadmap-fonctionnalites]]
 - Tranche active : [[49-Spec-execution-refonte-Factures-Decisions-V1]]
-- Décisions durables : [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]]
+- Décisions durables : [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]] · [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]]
 - Historique : `Archives/Journal-etat-dev-2026.md` · `Sessions/` *(ne pas lire par défaut)*

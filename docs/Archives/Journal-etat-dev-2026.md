@@ -25,6 +25,27 @@ source_of_truth: false
 > budget initial et atterrissage global non modelises ; inventaire CVC sans PPT chiffre consolide ; referentiel
 > generique de contrats et matrice de couverture absents ; SPIE a cadrer depuis ses pieces reelles.
 >
+> **Mise a jour complementaire** : 2026-06-29 (Factures & décisions V1 — UX, auto-validation, réclamations)
+> Branche `feat/phase-5-drawer-actions` (PR #32, non mergée), validée en continu sur staging.
+> **Moteur de contrôle** : faux positifs neutralisés en `explained` (non bloquants) — `DUPLICATE_EXPORT_OR_REISSUE`,
+> `SUPPLIER_SWITCH_GAP_EXPLAINED`, `FIXED_CHARGE_PERIOD_NOT_APPLICABLE` ; `control_status == valid` ⇔ aucun
+> error/warning/anomaly. **Auto-validation** énergie (`_auto_validate_if_clean`) et CPE (`_should_auto_validate_cpe`,
+> dans `build_finance_control_report(recalculate=True)`) : contrôle vert + décision initiale → `approved`/`valide`,
+> sans écraser une décision humaine. Vérifié staging : énergie 178 auto-validées (1 décision humaine préservée),
+> CPE 70/72. Décision durable : [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]].
+> **UX page** (`InvoicesDecisionPageV1.tsx` + `tokens.css`) : header opérationnel compact (KPI cliquables + barre de
+> répartition + montant HT) à la place du hero ; nomenclature figée (À traiter · Traitées · Écarts · À expliquer ·
+> Bloquées · Expliquées) ; filtre résultat de contrôle ; en-tête de colonnes sticky ; tri sur toutes les colonnes ;
+> graphe « Charge annuelle » avec clic-mois → filtre, sélecteur d'année (axe = date d'émission) ; période de
+> consommation affichée en mois numériques (`03/2026`) ; dépassement de puissance (`POWER_OVERRUN_BILLED`) masqué
+> côté page (calcul backend conservé pour la future section Fluides). Glossaire comptable :
+> `docs/refonte-v1/factures-glossaire-controles.md`.
+> **Contacts fournisseurs + réclamation** : table `supplier_contacts` (1 contact par ville×fournisseur, migration
+> **0065**), API `GET/PUT /billing/supplier-contacts` ; bouton « Contacts fournisseurs » (édition) et bouton
+> « Préparer une réclamation » opérationnel (brouillon e-mail pré-rempli depuis les écarts/anomalies, copier/mailto,
+> **aucun envoi**). Tests backend ciblés verts (18). Commits : `9f8c0d1`, `42ca294`, `976da87`, `dbfffba`,
+> `15c23e6`, `65a820a`.
+>
 > **Mise a jour complementaire** : 2026-06-25 (frontend — premier écran connecté à l'API matrices)
 > Branche `feat/frontend-react-v1` (PR #30, en validation staging avant merge, `main` non touché). Reprise du labo
 > React V1 de Codex (`/refonte-v1*`) puis ajout du premier écran branché sur le vrai backend : `/refonte-v1/matrices`

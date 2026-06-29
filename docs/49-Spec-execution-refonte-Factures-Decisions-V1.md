@@ -17,6 +17,18 @@ Pourquoi ce choix :
 
 L'objectif n'est pas de refaire un prototype decoratif. L'objectif est de transformer la maquette validee en ecran React raccordable, avec donnees reelles quand elles existent et fallback propre quand un endpoint manque.
 
+## 0. Etat d'implementation (maj 2026-06-29, PR #32, non mergee)
+
+Raccordement reel en place sur `/refonte-v1/factures` (`InvoicesDecisionPageV1.tsx`), table unifiee CPE + energie. Acquis :
+
+- **Semantique de controle** a 5 etats (OK / Ecart / A expliquer / Bloquee / Expliquee) + **auto-validation** (controle vert -> decision validee, sans ecraser une decision humaine). Regle durable : [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]]. Explication metier detaillee (a destination comptable) : `docs/refonte-v1/factures-glossaire-controles.md`.
+- **UX** : header KPI cliquables + barre de repartition, filtres (resultat de controle, decision, fournisseur), en-tete sticky, **tri sur toutes les colonnes**, graphe « Charge annuelle » (clic-mois -> filtre, selecteur d'annee ; axe = date d'**emission**), periode de consommation affichee (mois numeriques).
+- **Dates** : `invoice_date` = date d'emission (ENGIE « Date d'edition », EDF « date facture ») ; periode de conso + echeance aussi disponibles. ~47/266 factures emises en 2026 pour une periode 2025/2024 (facturation tardive = affichee, non bloquante).
+- **Depassement de puissance** (`POWER_OVERRUN_BILLED`) masque sur cette page ; calcul backend conserve pour la future section Fluides.
+- **Contacts fournisseurs + reclamation** : table `supplier_contacts` (migration 0065), API `/billing/supplier-contacts` ; bouton « Preparer une reclamation » = brouillon e-mail pre-rempli (copier/mailto), **aucun envoi** (V1).
+
+Decisions ouvertes : 1 vs N contacts par fournisseur ; gabarit de reclamation ; uniformisation Montant HT ; controle conso facturee vs ENEDIS (differe). Reste : validation staging puis merge.
+
 ## 2. Sources relues avant cadrage
 
 Documents :
