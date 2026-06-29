@@ -1,13 +1,245 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>PO² · Factures & décisions · Preview</title>
-  <meta http-equiv="refresh" content="0; url=/prototype-refonte-v1/index.html?view=invoices&v=20260626-2">
-  <script>location.replace('/prototype-refonte-v1/index.html?view=invoices&v=20260626-2');</script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Factures - aperçu anomalies expliquées</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #607083;
+      --line: #d8dee8;
+      --soft: #eef2f6;
+      --blue: #2563eb;
+      --blue-soft: #dbeafe;
+      --red: #dc2626;
+      --red-soft: #fee2e2;
+      --amber: #d97706;
+      --amber-soft: #fef3c7;
+      --green: #15803d;
+      --green-soft: #dcfce7;
+      --gray: #64748b;
+      --gray-soft: #e2e8f0;
+      --violet: #7c3aed;
+      --violet-soft: #ede9fe;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 28px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; letter-spacing: 0; }
+    h2 { font-size: 17px; margin-bottom: 4px; }
+    h3 { font-size: 14px; margin-bottom: 8px; }
+    .muted { color: var(--muted); }
+    .eyebrow { display: block; color: var(--blue); font-weight: 800; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 7px; }
+    .grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; align-items: start; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; box-shadow: 0 12px 30px rgba(31, 41, 51, .06); }
+    .stack { display: grid; gap: 18px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-height: 94px; }
+    .kpi span { display: block; color: var(--muted); font-size: 12px; }
+    .kpi strong { display: block; font-size: 28px; margin: 4px 0; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 700; border: 1px solid transparent; }
+    .pill::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: currentColor; }
+    .pill.red { color: var(--red); background: var(--red-soft); border-color: #fecaca; }
+    .pill.green { color: var(--green); background: var(--green-soft); border-color: #bbf7d0; }
+    .pill.amber { color: var(--amber); background: var(--amber-soft); border-color: #fde68a; }
+    .pill.gray { color: var(--gray); background: var(--gray-soft); border-color: #cbd5e1; }
+    .pill.blue { color: var(--blue); background: var(--blue-soft); border-color: #bfdbfe; }
+    .bar-chart { display: grid; grid-template-columns: 90px repeat(6, minmax(64px, 1fr)); gap: 10px; align-items: end; margin-top: 16px; }
+    .axis-title { color: var(--muted); font-size: 12px; align-self: center; }
+    .month { display: grid; gap: 7px; min-width: 0; }
+    .bars { height: 132px; display: flex; gap: 4px; align-items: end; justify-content: center; border-bottom: 1px solid var(--line); }
+    .bar { width: 18px; border-radius: 4px 4px 0 0; min-height: 3px; position: relative; }
+    .bar span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--muted); }
+    .bar.raw { background: var(--red); }
+    .bar.explained { background: var(--green); }
+    .bar.open { background: var(--amber); }
+    .month-label { text-align: center; color: var(--muted); font-size: 12px; }
+    .timeline { display: grid; gap: 18px; margin-top: 16px; }
+    .lane { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; }
+    .lane-label strong { display: block; }
+    .lane-label span { color: var(--muted); font-size: 12px; }
+    .track { height: 60px; position: relative; background: linear-gradient(to right, transparent 0, transparent 11%, #edf1f6 11%, #edf1f6 11.5%, transparent 11.5%, transparent 27%, #edf1f6 27%, #edf1f6 27.5%, transparent 27.5%, transparent 43%, #edf1f6 43%, #edf1f6 43.5%, transparent 43.5%, transparent 59%, #edf1f6 59%, #edf1f6 59.5%, transparent 59.5%, transparent 75%, #edf1f6 75%, #edf1f6 75.5%, transparent 75.5%); border: 1px solid var(--line); border-radius: 8px; }
+    .segment { position: absolute; top: 14px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; padding: 0 8px; color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .segment.invoice { background: var(--blue); }
+    .segment.credit { background: var(--red); top: 18px; height: 20px; }
+    .segment.cancelled { background: var(--gray); text-decoration: line-through; opacity: .86; }
+    .segment.rebill { background: var(--green); }
+    .segment.warning { background: var(--amber); }
+    .connector { position: absolute; top: 29px; height: 2px; background: var(--gray); opacity: .6; }
+    .decision-list { display: grid; gap: 10px; margin-top: 12px; }
+    .decision { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; background: #fbfcfe; }
+    .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 82px; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800; }
+    .badge.explained { color: var(--green); background: var(--green-soft); }
+    .badge.open { color: var(--amber); background: var(--amber-soft); }
+    .badge.blocked { color: var(--gray); background: var(--gray-soft); }
+    .badge.bad { color: var(--red); background: var(--red-soft); }
+    .drawer { display: grid; gap: 14px; }
+    .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .summary-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fbfcfe; }
+    .summary-box span { color: var(--muted); font-size: 12px; display: block; }
+    .summary-box strong { font-size: 16px; }
+    .callout { border: 1px solid #bfdbfe; background: var(--blue-soft); border-radius: 8px; padding: 12px; color: #1e3a8a; }
+    .mail-preview { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfe; padding: 12px; display: grid; gap: 8px; }
+    .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 8px 11px; color: var(--ink); font-weight: 800; }
+    button.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    button.danger { background: var(--red-soft); color: var(--red); border-color: #fecaca; }
+    .questions { margin-top: 18px; display: grid; gap: 10px; }
+    .question { border-left: 4px solid var(--blue); background: #fbfcfe; padding: 10px 12px; border-radius: 0 8px 8px 0; }
+    @media (max-width: 980px) {
+      main { padding: 18px; }
+      header, .grid { grid-template-columns: 1fr; display: grid; }
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .bar-chart { grid-template-columns: 1fr; }
+      .axis-title { display: none; }
+      .lane { grid-template-columns: 1fr; }
+      .summary-row { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
-  <p>Ouverture de la preview Factures & décisions… <a href="/prototype-refonte-v1/index.html?view=invoices&v=20260626-2">Cliquez ici si la redirection ne se lance pas</a>.</p>
+<main>
+  <header>
+    <div>
+      <span class="eyebrow">Maquette de validation - hors application</span>
+      <h1>Anomalies de période expliquées par avoirs et refacturations</h1>
+      <p class="muted">Objectif : distinguer visuellement ce qui est détecté brut, ce qui est expliqué par la mécanique facture / avoir / refacture, et ce qui reste à demander au fournisseur.</p>
+    </div>
+    <div class="legend" aria-label="Légende">
+      <span class="pill red">Détecté brut</span>
+      <span class="pill green">Expliqué</span>
+      <span class="pill amber">À expliquer</span>
+      <span class="pill gray">Annulé</span>
+      <span class="pill blue">Facturé</span>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Indicateurs">
+    <article class="kpi"><span>Chevauchements bruts</span><strong>55</strong><small class="muted">Avant analyse avoir / annulation</small></article>
+    <article class="kpi"><span>Anomalies expliqu?es</span><strong>54</strong><small class="muted">KPI s?par? : avoirs, annulations, refactures</small></article>
+    <article class="kpi"><span>Restent ? expliquer</span><strong>1</strong><small class="muted">Action fournisseur possible</small></article>
+    <article class="kpi"><span>Doubles facturations</span><strong>22</strong><small class="muted">M?me site + p?riode, documents distincts</small></article>
+  </section>
+
+  <div class="grid">
+    <div class="stack">
+      <section class="panel">
+        <span class="eyebrow">Vue portefeuille</span>
+        <h2>Chevauchements : brut, expliqué, résiduel</h2>
+        <p class="muted">Le rouge montre le signal initial. Le vert montre ce que la plateforme sait expliquer. L’orange correspond au reste à traiter humainement.</p>
+        <div class="bar-chart" role="img" aria-label="Graphique mensuel des anomalies de période">
+          <div class="axis-title">Nombre de factures</div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 34%"><span>4</span></div><div class="bar explained" style="height: 34%"><span>4</span></div><div class="bar open" style="height: 3%"><span>0</span></div></div><div class="month-label">Jan</div></div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 52%"><span>7</span></div><div class="bar explained" style="height: 45%"><span>6</span></div><div class="bar open" style="height: 9%"><span>1</span></div></div><div class="month-label">Fév</div></div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 72%"><span>11</span></div><div class="bar explained" style="height: 72%"><span>11</span></div><div class="bar open" style="height: 3%"><span>0</span></div></div><div class="month-label">Mar</div></div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 60%"><span>9</span></div><div class="bar explained" style="height: 60%"><span>9</span></div><div class="bar open" style="height: 3%"><span>0</span></div></div><div class="month-label">Avr</div></div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 88%"><span>14</span></div><div class="bar explained" style="height: 88%"><span>14</span></div><div class="bar open" style="height: 3%"><span>0</span></div></div><div class="month-label">Mai</div></div>
+          <div class="month"><div class="bars"><div class="bar raw" style="height: 65%"><span>10</span></div><div class="bar explained" style="height: 65%"><span>10</span></div><div class="bar open" style="height: 3%"><span>0</span></div></div><div class="month-label">Juin</div></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <span class="eyebrow">Frise lisible par site</span>
+        <h2>Pourquoi le chevauchement n’est pas forcément une anomalie</h2>
+        <p class="muted">Chaque ligne représente un PRM. Une barre rouge négative compense une facture précédente. Une refacturation peut donc expliquer un pseudo-chevauchement.</p>
+        <div class="timeline">
+          <div class="lane">
+            <div class="lane-label"><strong>PRM Conservatoire</strong><span>Cas expliqué : facture annulée puis refacturée</span></div>
+            <div class="track">
+              <div class="segment invoice" style="left: 7%; width: 24%">Facture 345,62 €</div>
+              <div class="connector" style="left: 31%; width: 6%"></div>
+              <div class="segment credit" style="left: 37%; width: 24%">Avoir -345,62 €</div>
+              <div class="connector" style="left: 61%; width: 5%"></div>
+              <div class="segment rebill" style="left: 66%; width: 24%">Refacture 345,46 €</div>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lane-label"><strong>PRM Gymnase</strong><span>Cas à expliquer : même période, deux documents actifs</span></div>
+            <div class="track">
+              <div class="segment invoice" style="left: 12%; width: 30%">Facture A 812,10 €</div>
+              <div class="segment warning" style="left: 32%; width: 30%">Facture B 812,10 €</div>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lane-label"><strong>PRM Ecole</strong><span>Cas normal : continuité mensuelle</span></div>
+            <div class="track">
+              <div class="segment invoice" style="left: 7%; width: 22%">Janvier</div>
+              <div class="segment invoice" style="left: 31%; width: 22%">Février</div>
+              <div class="segment invoice" style="left: 55%; width: 22%">Mars</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <span class="eyebrow">Décision proposée par le moteur</span>
+        <h2>Trois familles au lieu d’un seul “chevauchement”</h2>
+        <div class="decision-list">
+          <div class="decision"><span class="badge explained">Expliquée</span><div><strong>Facture annulée par avoir puis remplacée</strong><p class="muted">Visible pour comprendre l’historique, mais non comptée dans les factures à contester.</p></div></div>
+          <div class="decision"><span class="badge open">À expliquer</span><div><strong>Même site et même période dans deux factures groupées distinctes</strong><p class="muted">Risque de double facturation. Le bouton “Demander des explications” devient pertinent.</p></div></div>
+          <div class="decision"><span class="badge blocked">Non contrôlable</span><div><strong>Donnée manquante côté plateforme</strong><p class="muted">La facture n’est pas rejetée : il manque une référence ou un parsing doit être corrigé.</p></div></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="panel drawer" aria-label="Aper?u tiroir facture">
+      <span class="eyebrow">Tiroir facture - liste d?taill?e</span>
+      <h2>EDF 10248643096</h2>
+      <p class="muted">Portefeuille ?lectricit? - p?riode 10/12 au 31/12</p>
+      <div class="summary-row">
+        <div class="summary-box"><span>Montant</span><strong>345,46 ?</strong></div>
+        <div class="summary-box"><span>Statut</span><strong>? contr?ler</strong></div>
+        <div class="summary-box"><span>P?riode</span><strong>Expliqu?e</strong></div>
+      </div>
+      <div class="callout">
+        Chevauchement d?tect? brut, mais expliqu? par la cha?ne : facture initiale, avoir d?annulation, puis refacturation sur la m?me p?riode. Aucun courrier fournisseur n?cessaire pour ce point.
+      </div>
+      <section>
+        <h3>Cha?ne de correction d?taill?e</h3>
+        <div class="decision-list">
+          <div class="decision"><span class="badge bad">Facture</span><div><strong>10248643012 - 345,62 ?</strong><p class="muted">P?riode 10/12 - 31/12</p></div></div>
+          <div class="decision"><span class="badge bad">Avoir</span><div><strong>AV10248643012 - -345,62 ?</strong><p class="muted">Annule la facture pr?c?dente</p></div></div>
+          <div class="decision"><span class="badge explained">Refacture</span><div><strong>10248643096 - 345,46 ?</strong><p class="muted">Document actif retenu pour le contr?le</p></div></div>
+        </div>
+      </section>
+      <section class="mail-preview">
+        <h3>Cas qui reste ? expliquer</h3>
+        <p class="muted">Exemple : m?me PRM, m?me p?riode, deux factures group?es actives, et aucun avoir/annulation d?tectable pour compenser.</p>
+        <div class="decision-list">
+          <div class="decision"><span class="badge bad">Facture A</span><div><strong>EDF 10248643122 - 812,10 ?</strong><p class="muted">PRM Gymnase ? p?riode 01/02 - 28/02 ? document actif</p></div></div>
+          <div class="decision"><span class="badge open">Facture B</span><div><strong>EDF 10248643880 - 812,10 ?</strong><p class="muted">M?me PRM, m?me p?riode, montant identique ? aucun avoir trouv?</p></div></div>
+        </div>
+        <div class="callout" style="background: var(--amber-soft); border-color: #fde68a; color: #78350f;">
+          Lecture propos?e : risque de double facturation. La facture reste visible en ?Anomalie ? expliquer? et peut alimenter le mail fournisseur.
+        </div>
+        <div class="button-row">
+          <button class="primary">Demander des explications</button>
+          <button>Marquer comme expliqu?</button>
+          <button class="danger">Contester</button>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <section class="panel questions">
+    <span class="eyebrow">D?cisions valid?es avant code</span>
+    <div class="question"><strong>Q13.</strong> La vue portefeuille est valid?e comme encart principal pour comprendre brut / expliqu? / reste ? expliquer.</div>
+    <div class="question"><strong>Q14.</strong> Dans le tiroir, privil?gier la liste d?taill?e. La frise reste utile en vue portefeuille ou en appoint visuel.</div>
+    <div class="question"><strong>Q15.</strong> Conserver un KPI s?par? ?Anomalies expliqu?es?. Elles ne doivent pas se m?langer aux anomalies ? expliquer.</div>
+  </section>
+</main>
 </body>
 </html>

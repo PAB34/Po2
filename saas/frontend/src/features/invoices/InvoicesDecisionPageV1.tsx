@@ -18,6 +18,8 @@ type UnifiedRow = {
   total: number;
   ok: number;
   error: number;
+  anomaly: number;
+  explained: number;
   blocked: number;
   status: UnifiedStatus;
   processed: boolean;
@@ -60,18 +62,30 @@ const NON_CONTROLABLE_CODES = new Set([
   // Taxes : totaux incomplets (les écarts TVA/HT chiffrés restent en écart)
   "TAX_TOTALS_MISSING",
   // Périodes : continuité / historique (PERIOD_INVALID = fin avant début reste un écart)
-  "PERIOD_MISSING", "PERIOD_GAP", "PERIOD_OVERLAP", "LINE_PERIOD_OUTSIDE_SITE_PERIOD",
+  "PERIOD_MISSING", 
   // Consommation : rapprochement ENEDIS / courbe de charge (donnée externe)
   "ENEDIS_CONSUMPTION_MISSING", "CONSUMPTION_REFERENCE_MISSING",
-  "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH",
-  "LOAD_CURVE_CONSUMPTION_PARTIAL", "ENEDIS_CONSUMPTION_PARTIAL",
+    "LOAD_CURVE_CONSUMPTION_PARTIAL", "ENEDIS_CONSUMPTION_PARTIAL",
   // Puissance : rapprochement ENEDIS / courbe de charge (donnée externe)
   "POWER_REFERENCE_MISSING", "SUBSCRIBED_POWER_MISSING", "SUBSCRIBED_POWER_CONTRACT_MISMATCH",
-  "POWER_OVERRUN", "POWER_OVERRUN_BILLED", "POWER_LOAD_CURVE_MISMATCH", "POWER_LOAD_CURVE_OVERRUN",
+  "POWER_OVERRUN", "POWER_LOAD_CURVE_MISMATCH", "POWER_LOAD_CURVE_OVERRUN",
   "LOAD_CURVE_POWER_PARTIAL", "POWER_ENEDIS_MISMATCH", "POWER_ENEDIS_OVERRUN", "ENEDIS_POWER_MISSING",
 ]);
 function isNonControlable(code: string) {
   return NON_CONTROLABLE_CODES.has(code);
+}
+
+const ANOMALY_CODES = new Set([
+  "PERIOD_GAP", "PERIOD_OVERLAP", "DOUBLE_BILLING_PERIOD",
+  "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH",
+  "POWER_OVERRUN_BILLED",
+]);
+const EXPLAINED_CODES = new Set(["PERIOD_OVERLAP_EXPLAINED"]);
+function isAnomalyIssue(issue: { severity: string; code: string }) {
+  return issue.severity === "anomaly" || ANOMALY_CODES.has(issue.code);
+}
+function isExplainedIssue(issue: { severity: string; code: string }) {
+  return issue.severity === "explained" || EXPLAINED_CODES.has(issue.code);
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +197,7 @@ export function InvoicesDecisionPageV1() {
         invoiceNumber: r.invoice_number, supplier: "DALKIA",
         type: r.invoice_type ?? "—", client: r.recipient_ref ?? "—",
         marche: r.contract_code ?? r.contract_label ?? "—", perimetre: r.market ?? "—",
-        total: r.total_ht, ok: r.ok, error: r.error, blocked: r.blocked,
+        total: r.total_ht, ok: r.ok, error: r.error, anomaly: 0, explained: 0, blocked: r.blocked,
         status: CPE_TO_UNIFIED[r.invoice_status] ?? "todo",
         processed: r.invoice_status === "valide" || Boolean(r.finance_exported_at),
         month: cpeMonthById.get(r.invoice_id) ?? null,
@@ -195,8 +209,10 @@ export function InvoicesDecisionPageV1() {
       const sites = e.site_count ? ` · ${e.site_count} site(s)` : "";
       const docType = e.filter_facets?.document_types?.[0];
       const energyIssues = e.control_issues ?? [];
-      const nonControlable = energyIssues.filter((i) => isNonControlable(i.code)).length;
-      const realErrors = energyIssues.filter((i) => (i.severity === "error" || i.severity === "blocking") && !isNonControlable(i.code)).length;
+      const explained = energyIssues.filter((i) => isExplainedIssue(i)).length;
+      const anomalies = energyIssues.filter((i) => isAnomalyIssue(i)).length;
+      const nonControlable = energyIssues.filter((i) => isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
+      const realErrors = energyIssues.filter((i) => (i.severity === "error" || i.severity === "blocking") && !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
       out.push({
         key: `energy:${e.id}`, source: "energy", rowId: e.id,
         invoiceNumber: e.invoice_number ?? `import-${e.id}`, supplier: supplierFromEnergy(e),
@@ -204,7 +220,7 @@ export function InvoicesDecisionPageV1() {
         client: e.contract_holder ?? "—",
         marche: "Hérault Énergie",
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
-        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, blocked: nonControlable,
+        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, anomaly: anomalies, explained, blocked: nonControlable,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date),
         issues: energyIssues,
@@ -238,7 +254,14 @@ export function InvoicesDecisionPageV1() {
 
   const kpis = useMemo(() => {
     const traitees = rows.filter((r) => r.processed).length;
-    return { aTraiter: rows.length - traitees, traitees, ecarts: rows.filter((r) => r.error > 0).length, bloquees: rows.filter((r) => r.blocked > 0).length };
+    return {
+      aTraiter: rows.length - traitees,
+      traitees,
+      ecarts: rows.filter((r) => r.error > 0).length,
+      anomalies: rows.filter((r) => r.anomaly > 0).length,
+      expliquees: rows.filter((r) => r.explained > 0).length,
+      bloquees: rows.filter((r) => r.blocked > 0).length,
+    };
   }, [rows]);
 
   const filteredRows = useMemo(() => {
@@ -298,10 +321,12 @@ export function InvoicesDecisionPageV1() {
       ) : null}
 
       <div className="po2-proto-kpi-grid">
-        <article><span>À traiter</span><strong>{kpis.aTraiter}</strong><small>en attente de décision</small></article>
-        <article><span>Déjà traitées</span><strong>{kpis.traitees}</strong><small>validées ou transmises</small></article>
-        <article><span>Avec écarts</span><strong>{kpis.ecarts}</strong><small>à examiner</small></article>
-        <article><span>Bloquées</span><strong>{kpis.bloquees}</strong><small>donnée manquante</small></article>
+        <article><span>A traiter</span><strong>{kpis.aTraiter}</strong><small>en attente de decision</small></article>
+        <article><span>Deja traitees</span><strong>{kpis.traitees}</strong><small>validees ou transmises</small></article>
+        <article><span>Avec ecarts</span><strong>{kpis.ecarts}</strong><small>a examiner</small></article>
+        <article><span>Anomalies</span><strong>{kpis.anomalies}</strong><small>a expliquer</small></article>
+        <article><span>Expliquees</span><strong>{kpis.expliquees}</strong><small>avoir / refacturation</small></article>
+        <article><span>Bloquees</span><strong>{kpis.bloquees}</strong><small>donnee manquante</small></article>
       </div>
 
       <section className="po2-proto-panel" style={{ padding: "1.15rem", marginBottom: "1rem" }}>
@@ -352,12 +377,14 @@ export function InvoicesDecisionPageV1() {
           <table>
             <thead>
               <tr>
-                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marché</th><th>Périmètre</th>
+                <th>Facture</th><th>Fournisseur</th><th>Type</th><th>Client</th><th>Marche</th><th>Perimetre</th>
                 <th style={{ textAlign: "right" }}>Montant</th>
-                <th style={{ textAlign: "right" }} title="Contrôles conformes (moteur DALKIA uniquement)">OK</th>
-                <th style={{ textAlign: "right" }} title="Anomalies réelles de facturation">Écarts</th>
-                <th style={{ textAlign: "right" }} title="Non contrôlable : référence ou donnée manquante">Bloqués</th>
-                <th>Décision</th>
+                <th style={{ textAlign: "right" }} title="Controles conformes (moteur DALKIA uniquement)">OK</th>
+                <th style={{ textAlign: "right" }} title="Ecarts reels de facturation">Ecarts</th>
+                <th style={{ textAlign: "right" }} title="Anomalies a expliquer au fournisseur">Anomalies</th>
+                <th style={{ textAlign: "right" }} title="Anomalies expliquees par avoir ou refacturation">Expliquees</th>
+                <th style={{ textAlign: "right" }} title="Non controlable : reference ou donnee manquante">Bloques</th>
+                <th>Decision</th>
               </tr>
             </thead>
             <tbody>
@@ -373,12 +400,14 @@ export function InvoicesDecisionPageV1() {
                   <td style={{ textAlign: "right" }}>
                     {row.source === "cpe"
                       ? <span style={{ color: row.ok ? "#166534" : "var(--po2-color-muted)" }}>{row.ok}</span>
-                      : (row.error === 0 && row.blocked === 0
+                      : (row.error === 0 && row.anomaly === 0 && row.explained === 0 && row.blocked === 0
                           ? <span style={{ color: "#166534", fontWeight: 700 }} title="Aucun écart ni point bloquant">✓</span>
                           : <span style={{ color: "var(--po2-color-muted)" }}>—</span>)}
                   </td>
-                  <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : "var(--po2-color-muted)", fontWeight: row.error ? 700 : 400 }}>{row.error || "—"}</td>
-                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || "—"}</td>
+                  <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : "var(--po2-color-muted)", fontWeight: row.error ? 700 : 400 }}>{row.error || "-"}</td>
+                  <td style={{ textAlign: "right", color: row.anomaly ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.anomaly ? 700 : 400 }}>{row.anomaly || "-"}</td>
+                  <td style={{ textAlign: "right", color: row.explained ? "#166534" : "var(--po2-color-muted)", fontWeight: row.explained ? 700 : 400 }}>{row.explained || "-"}</td>
+                  <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || "-"}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select value={row.status} disabled={actions.setStatus.isPending || actions.setEnergyStatus.isPending}
                       onChange={(e) => changeStatus(row, e.target.value as UnifiedStatus)}
@@ -388,7 +417,7 @@ export function InvoicesDecisionPageV1() {
                   </td>
                 </tr>
               ))}
-              {filteredRows.length === 0 ? <tr><td colSpan={11} className="po2-muted-line">Aucune facture ne correspond aux filtres.</td></tr> : null}
+              {filteredRows.length === 0 ? <tr><td colSpan={13} className="po2-muted-line">Aucune facture ne correspond aux filtres.</td></tr> : null}
             </tbody>
           </table>
         )}
@@ -405,7 +434,7 @@ export function InvoicesDecisionPageV1() {
           <div className="po2-proto-dossier">
             <div className="po2-proto-dossier-kpis">
               <div><span>Montant</span><b>{fmtEur(selected.total)}</b></div>
-              <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart(s)`}</b></div>
+              <div><span>Controles</span><b>{selected.source === "cpe" ? `${selected.ok} OK - ${selected.error} ecart - ${selected.blocked} bloque` : `${selected.error} ecart - ${selected.anomaly} anomalie - ${selected.explained} expliquee - ${selected.blocked} bloque`}</b></div>
               <div><span>Décision</span><b>{statusLabel(selected.status)}</b></div>
             </div>
 
@@ -419,8 +448,10 @@ export function InvoicesDecisionPageV1() {
             ) : (
               <>
                 {(() => {
-                  const reals = selected.issues.filter((i) => !isNonControlable(i.code));
-                  const nc = selected.issues.filter((i) => isNonControlable(i.code));
+                  const explained = selected.issues.filter((i) => isExplainedIssue(i));
+                  const anomalies = selected.issues.filter((i) => isAnomalyIssue(i));
+                  const reals = selected.issues.filter((i) => !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i));
+                  const nc = selected.issues.filter((i) => isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i));
                   return (
                     <>
                       <h3>Écarts de contrôle{reals.length ? ` (${reals.length})` : ""}</h3>
@@ -436,6 +467,32 @@ export function InvoicesDecisionPageV1() {
                           ))}
                         </div>
                       )}
+                      {anomalies.length > 0 ? (
+                        <>
+                          <h3>Anomalies a expliquer ({anomalies.length})</h3>
+                          <div className="po2-proto-control-list">
+                            {aggregateIssues(anomalies).map((iss) => (
+                              <article key={iss.message}>
+                                <StatusBadge tone="warn">{iss.count > 1 ? `x${iss.count}` : "ANOMALIE"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` - ${iss.count} occurrences` : ""}</small></div>
+                              </article>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
+                      {explained.length > 0 ? (
+                        <>
+                          <h3>Anomalies expliquees ({explained.length})</h3>
+                          <div className="po2-proto-control-list">
+                            {aggregateIssues(explained).map((iss) => (
+                              <article key={iss.message}>
+                                <StatusBadge tone="ok">{iss.count > 1 ? `x${iss.count}` : "EXPLIQUE"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>Explique par facture annulee, avoir ou refacturation.{iss.count > 1 ? ` - ${iss.count} occurrences` : ""}</small></div>
+                              </article>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
                       {nc.length > 0 ? (
                         <>
                           <h3>Non contrôlable / en attente de donnée ({nc.length})</h3>

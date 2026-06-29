@@ -266,3 +266,58 @@ Si j'ai bien compris le FIC est un numéro individuel de facturation et ne doit 
 - Cycle de statuts : `À contrôler → {Validée | Contestée}`, `Contestée → {Validée | Refusée}`. `Refusée` non accessible directement.
 - Catégorie **Anomalie** = trou/chevauchement (nettés) + écart conso/ENEDIS + dépassement puissance facturé + **double facturation** (cas 2 ci‑dessus). Non bloquante, non écart.
 - `LINE_PERIOD_OUTSIDE_SITE_PERIOD`, `*_PARTIAL` conso → **supprimés**.
+
+---
+
+## 8. Aper?u visuel avant impl?mentation - anomalies de p?riode expliqu?es
+
+> M?thode valid?e : sur les sujets complexes, cr?er ou compl?ter ce fichier `.md` partag? avec les questions ? trancher avant de coder. Pierre-Andr? r?pond directement dans le fichier ou dans le fil, puis seulement ensuite on impl?mente.
+
+Aper?u statique cr?? : `docs/refonte-v1/factures-preview/index.html`.
+
+Objectif de la maquette : rendre compr?hensible visuellement qu'un trou ou chevauchement d?tect? brut peut ?tre **expliqu?** par la m?canique fournisseur `facture -> avoir / annulation -> refacturation`, et ne pas devenir une anomalie contestable.
+
+### Proposition UX ? valider
+
+- Graphique portefeuille en trois niveaux : **d?tect? brut**, **expliqu? par avoir/refacturation**, **reste ? expliquer**.
+- Frise par PRM/site dans le tiroir facture : facture initiale, avoir, facture annul?e, refacturation, double facturation potentielle.
+- Deux familles distinctes :
+  - **Anomalie expliqu?e** : visible pour comprendre l'historique, non contestable par d?faut.
+  - **Anomalie ? expliquer** : reste active, peut alimenter le mail `Demander des explications`.
+
+### Questions de validation
+
+**Q13 - Lisibilit? du graphique.**
+La distinction `d?tect? brut / expliqu? / reste ? expliquer` est-elle assez lisible pour comprendre que les 55 chevauchements bruts EDF ne sont pas tous des probl?mes fournisseur ?
+->Humm intéressant cette maquette. l'encart "Vue portefeuille" est très bien
+
+R?ponse Pierre-Andr? : voir d?cision retenue ci-dessous.
+
+**Q14 - Tiroir facture.**
+Dans le tiroir, pr?f?res-tu afficher la cha?ne de correction sous forme de frise, de liste d?taill?e, ou les deux ?
+
+-> la liste détaillée est très bien
+
+->Donner exemple pour "### Cas qui reste à expliquer
+
+Si une facture active recouvre une autre sans avoir/annulation détectable, elle passe dans “Anomalie à expliquer”."
+
+-> Une question que je me pose dans le cas de figure Facture puis Avoir puis Refacture, la refacture est donc bien une facture finale à payer ? elle doit donc ne pas avoir d'écart bloquant elle même ?
+
+R?ponse Pierre-Andr? : voir d?cision retenue ci-dessous.
+
+**Q15 - KPI.**
+Une anomalie expliqu?e doit-elle dispara?tre des KPI d'anomalies, ou rester compt?e dans un KPI s?par? `Expliqu?es` ?
+
+-> rester compt?e dans un KPI s?par? `Expliqu?es`
+
+R?ponse Pierre-Andr? : voir d?cision retenue ci-dessous.
+
+### D?cisions Q13-Q15 retenues
+
+- **Q13** : l'encart **Vue portefeuille** est valid? comme bonne base pour expliquer `d?tect? brut / expliqu? / reste ? expliquer`.
+- **Q14** : dans le tiroir facture, privil?gier la **liste d?taill?e** de la cha?ne de correction. Ajouter un exemple concret pour le cas `Anomalie ? expliquer` : m?me PRM + m?me p?riode dans deux factures group?es actives, sans avoir/annulation d?tectable.
+- **Q15** : les anomalies expliqu?es restent compt?es dans un KPI s?par? **Anomalies expliqu?es** ; elles ne se m?langent pas aux anomalies ? expliquer.
+
+Aper?u mis ? jour : `docs/refonte-v1/factures-preview/index.html`.
+
