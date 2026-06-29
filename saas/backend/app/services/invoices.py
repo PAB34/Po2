@@ -490,6 +490,20 @@ def get_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> Ene
     return db.query(EnergyInvoiceImport).filter_by(city_id=city_id, id=invoice_import_id).first()
 
 
+def _recompute_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> None:
+    """Régénère contrôles + normalisation d'un import.
+
+    Les imports issus d'un bordereau XLSX/CSV (ENGIE, EDF) n'ont pas de fichier
+    ré-analysable seul : on relance les contrôles sur le `parsed` déjà stocké.
+    Les PDF ENGIE sont re-parsés depuis le fichier (capte les évolutions parser).
+    """
+    suffix = Path(invoice_import.storage_path or "").suffix.lower()
+    if invoice_import.analysis_result and suffix != ".pdf":
+        apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
+    else:
+        analyze_invoice_import(db, invoice_import)
+
+
 def analyze_existing_invoice_import(
     db: Session,
     city_id: int,
@@ -498,10 +512,7 @@ def analyze_existing_invoice_import(
     invoice_import = get_invoice_import(db, city_id, invoice_import_id)
     if invoice_import is None:
         return None
-    if invoice_import.source == "engie_xlsx_export" and invoice_import.analysis_result:
-        apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
-    else:
-        analyze_invoice_import(db, invoice_import)
+    _recompute_invoice_import(db, invoice_import)
     db.commit()
     db.refresh(invoice_import)
     return invoice_import
@@ -521,10 +532,7 @@ def reanalyze_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
     count = 0
     for invoice_import in imports:
         try:
-            if invoice_import.source == "engie_xlsx_export" and invoice_import.analysis_result:
-                apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
-            else:
-                analyze_invoice_import(db, invoice_import)
+            _recompute_invoice_import(db, invoice_import)
             count += 1
         except Exception:  # noqa: BLE001 — une facture défaillante ne bloque pas le lot
             continue
