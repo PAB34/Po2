@@ -29,6 +29,8 @@ from app.schemas.billing import (
     EnergyLiaisonPreviewRow,
     TurpeVersionOut,
 )
+from app.schemas.supplier_contact import SupplierContactIn, SupplierContactOut
+from app.services import supplier_contacts as supplier_contacts_svc
 from app.schemas.invoice import (
     EnergyInvoiceBatchDetailOut,
     EnergyInvoiceBatchOut,
@@ -94,6 +96,26 @@ def list_supplier_groups(
 ):
     city_id = _require_city(current_user)
     return get_supplier_groups(db, city_id)
+
+
+@router.get("/supplier-contacts", response_model=list[SupplierContactOut])
+def list_supplier_contacts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return supplier_contacts_svc.list_contacts(db, city_id)
+
+
+@router.put("/supplier-contacts/{supplier}", response_model=SupplierContactOut)
+def upsert_supplier_contact(
+    supplier: str,
+    payload: SupplierContactIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return supplier_contacts_svc.upsert_contact(db, city_id, supplier, payload.model_dump(exclude_unset=True))
 
 
 @router.get("/configs", response_model=list[BillingConfigOut])
