@@ -262,6 +262,7 @@ ANOMALY_CONTROL_CODES = {
 
 EXPLAINED_CONTROL_CODES = {
     "DUPLICATE_EXPORT_OR_REISSUE",
+    "FIXED_CHARGE_PERIOD_NOT_APPLICABLE",
     "PERIOD_OVERLAP_EXPLAINED",
     "SUPPLIER_SWITCH_GAP_EXPLAINED",
 }
@@ -947,8 +948,16 @@ def _check_period_continuity(
         start = _date_value(site.get("period_start"))
         end = _date_value(site.get("period_end"))
         if not prm_id or start is None or end is None:
-            period_summary["missing_references"] += 1
-            issue("warning", "PERIOD_MISSING", f"Periode facturee incomplete sur {scope}.", scope)
+            if _site_has_only_fixed_non_consumption_lines(site):
+                issue(
+                    "explained",
+                    "FIXED_CHARGE_PERIOD_NOT_APPLICABLE",
+                    f"Ligne fixe sans consommation sur {scope}: controle de periode non applicable.",
+                    scope,
+                )
+            else:
+                period_summary["missing_references"] += 1
+                issue("warning", "PERIOD_MISSING", f"Periode facturee incomplete sur {scope}.", scope)
             continue
         if end < start:
             period_summary["missing_references"] += 1
@@ -1115,6 +1124,18 @@ def _is_supplier_switch_gap(previous: dict[str, Any], current: dict[str, Any], e
     return 0 < gap_days <= 45
 
 
+_FIXED_NON_CONSUMPTION_COMPONENTS = {"subscription", "network_fixed_total", "cta"}
+
+
+def _site_has_only_fixed_non_consumption_lines(site: dict[str, Any]) -> bool:
+    lines = site.get("invoice_lines") or []
+    if not lines:
+        return False
+    components = {str(line.get("normalized_component") or line.get("normalized_code") or "") for line in lines}
+    components.discard("")
+    return bool(components) and components <= _FIXED_NON_CONSUMPTION_COMPONENTS
+
+
 def _site_is_credit_note(site: dict[str, Any]) -> bool:
     amount = _decimal(site.get("total_ttc"))
     if amount is None:
@@ -1199,8 +1220,9 @@ def _check_consumption_against_enedis(
         end = _date_value(site.get("period_end"))
         invoice_kwh = _invoice_site_consumption_kwh(site)
         if not prm_id or start is None or end is None or invoice_kwh is None:
-            consumption_summary["missing_references"] += 1
-            issue("warning", "CONSUMPTION_REFERENCE_MISSING", f"Consommation facturee ou periode incomplete sur {scope}.", scope)
+            if not _site_has_only_fixed_non_consumption_lines(site):
+                consumption_summary["missing_references"] += 1
+                issue("warning", "CONSUMPTION_REFERENCE_MISSING", f"Consommation facturee ou periode incomplete sur {scope}.", scope)
             continue
 
         daily_metrics = _daily_consumption_metrics(daily_consumption.get(prm_id, []), start, end)

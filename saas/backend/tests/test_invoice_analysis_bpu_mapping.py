@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from app.services.invoice_analysis import (
     _bpu_component_field,
+    _check_consumption_against_enedis,
     _check_period_continuity,
     _classify_invoice_fixed_charge,
     _resolve_bpu_fallback_source,
@@ -188,3 +189,41 @@ def test_period_control_explains_short_supplier_switch_gap() -> None:
     assert issues[0]["severity"] == "explained"
     assert summary["gaps"] == 0
     assert summary["explained_overlaps"] == 1
+
+
+def test_fixed_charge_only_site_without_period_is_explained_once() -> None:
+    site = _period_site(
+        prm_id="24329232838393",
+        period_start=None,
+        period_end=None,
+        total_ttc=7.57,
+        total_consumption_kwh=None,
+        invoice_lines=[
+            {"normalized_component": "subscription", "amount_ht": 4.1},
+            {"normalized_component": "network_fixed_total", "amount_ht": 1.0},
+            {"normalized_component": "cta", "amount_ht": 0.2},
+        ],
+    )
+    current = _invoice_import(invoice_number="10248629137")
+    issues = []
+    period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "explained_overlaps": 0, "missing_references": 0}
+    consumption_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0, "partial_references": 0}
+
+    _check_period_continuity(
+        _FakeDb([]),
+        current,
+        [site],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        period_summary,
+        "EDF",
+    )
+    _check_consumption_against_enedis(
+        [site],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        consumption_summary,
+    )
+
+    assert [issue["code"] for issue in issues] == ["FIXED_CHARGE_PERIOD_NOT_APPLICABLE"]
+    assert issues[0]["severity"] == "explained"
+    assert period_summary["missing_references"] == 0
+    assert consumption_summary["missing_references"] == 0
