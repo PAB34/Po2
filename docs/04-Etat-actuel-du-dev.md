@@ -27,6 +27,7 @@ do_not_auto_read:
   - **Auto-validation énergie** (`_auto_validate_if_clean` dans `apply_parsed_to_invoice_import`) : facture au contrôle entièrement `valid` ET encore `to_review` → `approved`, sans jamais écraser une décision humaine. Vérifié staging : 178 auto-validées, 1 décision humaine préservée.
   - **Auto-validation CPE/DALKIA** (`_should_auto_validate_cpe` dans `build_finance_control_report(recalculate=True)`) : critère strict symétrique (aucun contrôle `error` ni `blocked`), `a_controler` → `valide` + note, jamais une décision humaine. Vérifié staging : 70/72 auto-validées (2 exclues : 1 écart, 1 bloqué).
   - **Graphe/dates** : clic-mois → filtre tableau, sélecteur d'année sur le graphe, affichage période de consommation (factures émises pour période antérieure), dépassement de puissance masqué (calcul backend conservé pour future section Fluides). Glossaire comptable : `docs/refonte-v1/factures-glossaire-controles.md`.
+  - **Tri colonnes + période numérique** ; **contacts fournisseurs** (table `supplier_contacts`, migration **0065**, API `/billing/supplier-contacts`) + bouton « Préparer une réclamation » opérationnel (brouillon e-mail pré-rempli, copier/mailto, aucun envoi).
 - **Objectif probable prochaine session** : brancher « Préparer une réclamation » (pré-rempli, pas d'envoi) ; uniformiser Montant HT ; totaux/tri tableau ; préparer le merge de la PR #32.
 - **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/InvoicesDecisionPageV1.tsx` ; backend `app/services/invoice_analysis.py` + `app/services/cpe_accounting.py`.
 - **Tests ciblés probables** : `npx tsc -b` (frontend) ; `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py` (15 passed).
@@ -54,7 +55,7 @@ do_not_auto_read:
 
 ## 📦 Migrations alembic
 
-HEAD code constaté : `0064_add_accounting_matrices` (matrices comptables versionnées).
+HEAD code constaté : `0065_add_supplier_contacts` (contacts fournisseurs pour réclamations).
 Jalons : `0017` hiérarchie sites · `0041` seed CPE scope · `0048` CVC F-Gaz · `0056` rapprochements
 patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → journal archivé.
 
