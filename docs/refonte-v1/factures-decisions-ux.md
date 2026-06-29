@@ -243,4 +243,26 @@ OK pour 2 graphiques empilés sous « Charge annuelle » (trou / chevauchement p
 
 ### 7.6 Nouvelles questions
 **Q11 —** Valides‑tu le principe « **netter avoirs/annulées/doublons avant de détecter trou/chevauchement** » ? (sinon les graphes et la section Anomalie seront illisibles)
+OUI
 **Q12 —** Les **doublons de période exacte** (réémissions sans avoir) : on les traite comme doublons (masqués par « Purger les doublons ») ou comme une anomalie « réémission » à tracer ?
+Si j'ai bien compris le FIC est un numéro individuel de facturation et ne doit plus jamais exister en double ? Si c'est le cas alors nous ici une solution pour traiter automatiquement (si 2 FIC identique) comme doublon et donc purger automatiquement et statut contester, on est d'accord ou je dis une ânerie ? Si classer comme contester alors anomalie ...
+
+> **Réponse Claude (Q12) — attention, deux notions différentes :**
+> Vérification sur le fichier réel EDF (489 lignes) :
+> - `num_facture` n'est **pas** unique par site : **81 numéros distincts** pour 489 lignes. Un `num_facture` EDF est une **facture groupée** couvrant **plusieurs PRM**. Donc « un FIC ne doit jamais exister en double » n'est **pas** vrai littéralement : un même site apparaît normalement dans plusieurs factures groupées au fil du temps.
+> - Le champ qu'on a appelé « FIC » côté EDF = `id_contrat` = l'**identifiant du site/contrat** (se répète, c'est normal).
+>
+> **Il faut distinguer 2 cas :**
+> 1. **Vrai doublon d'import** = la **même facture groupée** (même `num_facture` / même document) réimportée. → **purge automatique** (hygiène d'import, aucune contestation, pas d'anomalie). C'est ce que fait déjà « Purger les doublons ».
+> 2. **Même site + même période facturés dans DEUX factures groupées différentes** (montant identique, `num_facture` ≠) — **22 cas** dans le fichier. Ce **n'est pas** un doublon d'import : c'est potentiellement une **double facturation** (risque de payer 2×) **ou** une réémission qu'EDF aurait dû annuler par avoir. → **Anomalie « double facturation »** à **vérifier humainement**, pas à purger ni à contester automatiquement.
+>
+> **Reco :**
+> - **Ne pas auto‑contester** : la contestation reste une décision humaine (sinon on spamme le fournisseur sur des faux positifs). La plateforme **signale**, la comptable **décide** puis clique « Demander des explications ».
+> - Auto‑purge **uniquement** pour le cas 1 (document identique). Le cas 2 → **Anomalie** (la plus utile : elle attrape les vraies doubles facturations).
+> → *D'accord avec cette distinction ? (auto‑purge = document identique seulement ; même site/période sur 2 factures = anomalie à valider, pas auto‑contestée)*
+
+### 7.7 Décisions verrouillées pour la phase 2
+- Q11 ✅ **netter** avoirs/annulées/doublons‑document **avant** de détecter trou/chevauchement.
+- Cycle de statuts : `À contrôler → {Validée | Contestée}`, `Contestée → {Validée | Refusée}`. `Refusée` non accessible directement.
+- Catégorie **Anomalie** = trou/chevauchement (nettés) + écart conso/ENEDIS + dépassement puissance facturé + **double facturation** (cas 2 ci‑dessus). Non bloquante, non écart.
+- `LINE_PERIOD_OUTSIDE_SITE_PERIOD`, `*_PARTIAL` conso → **supprimés**.
