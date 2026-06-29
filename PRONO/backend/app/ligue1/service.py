@@ -14,7 +14,7 @@ from .data import load_upcoming, load_history
 from .probabilities import compute_probabilities
 from .dynamics import team_dynamic
 from .injuries_tm import injuries_by_team, get_status
-from .news import get_team_news
+from .news import get_team_news, get_league_news
 
 _CACHE = {"journee": None, "ts": 0}
 CACHE_TTL = 1800  # 30 min
@@ -101,6 +101,25 @@ def team_news(team):
         "link": it["link"], "tags": it["tags"],
     } for it in res.get("items", [])]
     return {"team": team, "error": res.get("error"), "items": items}
+
+
+_ACTU = {"data": None, "ts": 0}
+ACTU_TTL = 900  # 15 min
+
+
+def league_actu():
+    if _ACTU["data"] and (time.time() - _ACTU["ts"]) < ACTU_TTL:
+        return _ACTU["data"]
+    res = get_league_news(max_items=15)
+    items = [{
+        "title": it["title"], "source": it["source"],
+        "date": it["date"].strftime("%d/%m") if it.get("date") else "",
+        "link": it["link"], "tags": it["tags"],
+    } for it in res.get("items", [])]
+    out = {"error": res.get("error"), "items": items}
+    _ACTU["data"] = out
+    _ACTU["ts"] = time.time()
+    return out
 
 
 def health():

@@ -34,27 +34,37 @@
   <div class="topbar">
     <div class="brand">
       <div class="logo">L1</div>
-      <div><b>Ligue 1 · Pronos</b><small>Probabilités &amp; actu des équipes</small></div>
+      <div><b>Ligue 1 · Pronos</b><small>Probabilités &amp; actu</small></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn sm" id="refreshBtn" onclick="loadJournee(true)">↻ Actualiser</button>
+      <button class="btn sm" id="refreshBtn" onclick="refreshAll()">↻</button>
       <button class="btn sm" onclick="logout()">Quitter</button>
     </div>
   </div>
 
-  <div class="hero">
-    <span class="kicker">⚽ Prochaine journée</span>
-    <h1 id="heroTitle">Pronostics du jour</h1>
-    <div class="metaline" id="heroMeta"></div>
-  </div>
-
+  <div class="metaline" id="heroMeta" style="margin-bottom:10px"></div>
   <div id="healthAlert" class="alert hidden"></div>
-  <div id="list"><div class="loading"><div class="spin"></div>Chargement…</div></div>
 
-  <div class="note">
-    ℹ️ Probabilités issues du <b>consensus du marché</b> (cotes Pinnacle/Bet365, dévigottées).
-    Meilleure estimation gratuite, mais <b>aucun avantage</b> sur les bookmakers : outil de lecture.
+  <!-- Onglets -->
+  <div class="tabs">
+    <button class="tab active" data-tab="matchs" onclick="switchTab('matchs')">⚽ Matchs</button>
+    <button class="tab" data-tab="actu" onclick="switchTab('actu')">📰 Actualité</button>
   </div>
+
+  <!-- Vue Matchs (tableau) -->
+  <section id="view-matchs">
+    <div id="list"><div class="loading"><div class="spin"></div>Chargement…</div></div>
+    <div class="note">
+      ℹ️ Probabilités = <b>consensus du marché</b> (cotes Pinnacle/Bet365, dévigottées).
+      L'actu et les blessés sont du <b>contexte</b> : ils n'entrent <b>pas</b> dans le calcul
+      des probabilités (les bookmakers les intègrent déjà).
+    </div>
+  </section>
+
+  <!-- Vue Actualité -->
+  <section id="view-actu" class="hidden">
+    <div id="actuList"><div class="loading"><div class="spin"></div>Chargement de l'actu…</div></div>
+  </section>
 </div>
 
 <script src="/app.js"></script>
