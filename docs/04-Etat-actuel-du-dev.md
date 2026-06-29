@@ -19,14 +19,16 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-06-26 — branche `chore/optimisation-docs-ia`
+> Mis à jour : 2026-06-29 — branche `feat/phase-5-drawer-actions` (PR #32, non mergée)
 
-- **Objectif probable** : doc 49 §8 **Phase 5** — brancher les vraies actions du drawer facture (valider / mettre en attente / préparer réclamation / exporter finance / réimport), après la restructuration documentaire en cours.
-- **Pourquoi prioritaire** : la tranche verticale `Factures & décisions` est le parcours pilote ; Phases 1→4 posées, il reste à rendre les actions du drawer réellement opérationnelles (et non simulées).
-- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/*` (`InvoicesDecisionPageV1.tsx`, hooks `useInvoiceDecisionsV1`, `useInvoiceAccountingSnapshotsV1`), `saas/frontend/src/lib/api.ts` ; backend `app/api/routes/{billing,gas_invoice,cpe_dalkia,accounting_matrix}.py`.
-- **Tests ciblés probables** : `npx tsc -b` (frontend) ; backend `pytest tests/test_accounting_matrix_apply.py` + tests décision facture si ajoutés.
-- **Décisions à confirmer avant de coder** : rôles exacts autorisés pour `validate-snapshot` / `export-finance` (ADR 011) ; formulation `historique` vs `revision` ; `apply` envoie encore `invoice_lines: []` par défaut → confirmer extracteurs réels par source.
-- **À ne pas faire sans validation** : envoyer un mail fournisseur directement (V1 = copié/pré-rempli) ; écraser une version de matrice active ; merger sur `main` sans validation staging.
+- **Fait cette session** : refonte UX `/refonte-v1/factures` + auto-validation backend (commits `9f8c0d1` front, `42ca294` back, déployés et recalculés sur staging) :
+  - Header opérationnel compact (titre + actions + chips KPI cliquables + barre de répartition par état + montant HT) à la place du hero ; **nomenclature KPI figée** : À traiter · Traitées · Écarts · À expliquer · Bloquées · Expliquées.
+  - Filtre « résultat de contrôle » ; en-tête de colonnes **sticky** ; tiroir : section « Éléments expliqués · non bloquants » avec libellés métier par code.
+  - **Auto-validation énergie** (`_auto_validate_if_clean` dans `apply_parsed_to_invoice_import`) : facture au contrôle entièrement `valid` ET encore `to_review` → `approved`, sans jamais écraser une décision humaine. Vérifié staging : 178 auto-validées, 1 décision humaine préservée.
+- **Objectif probable prochaine session** : étendre l'**auto-validation au CPE/DALKIA** (modèle de contrôle différent de l'énergie — vérifier comment `invoice_status` est calculé/recalculé avant de coder), puis brancher « Préparer une réclamation » (pré-rempli, pas d'envoi) et préparer le merge de la PR #32.
+- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/InvoicesDecisionPageV1.tsx` ; backend `app/services/invoice_analysis.py` (énergie fait) + flux CPE finances (`cpe_dalkia` / `cpe/finances/controls/recalculate`) pour le CPE.
+- **Tests ciblés probables** : `npx tsc -b` (frontend) ; `pytest tests/test_invoice_analysis_bpu_mapping.py` (12 passed) + test décision CPE si ajouté.
+- **À ne pas faire sans validation** : envoyer un mail fournisseur directement (V1 = copié/pré-rempli) ; merger sur `main` sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`, docs non liées).
 - **Niveau de confiance** : élevé.
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
