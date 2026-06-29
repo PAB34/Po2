@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from app.services.invoice_analysis import (
+    _auto_validate_if_clean,
     _bpu_component_field,
     _check_consumption_against_enedis,
     _check_period_continuity,
@@ -17,6 +18,41 @@ def test_fallback_source_prefers_historical_then_configured() -> None:
     assert _resolve_bpu_fallback_source(0, 5, "canonical_xlsx") == "canonical_xlsx"
     assert _resolve_bpu_fallback_source(2, 4, "canonical_xlsx") == "mixed"
     assert _resolve_bpu_fallback_source(0, 0, "configured") is None
+
+
+def _decision_stub(control_status: str, decision_status: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        control_status=control_status,
+        decision_status=decision_status,
+        decision_comment=None,
+        decision_updated_at=None,
+    )
+
+
+def test_auto_validate_only_when_control_clean_and_not_decided() -> None:
+    # #7 : contrôle entièrement vert + décision encore to_review -> approved
+    clean = _decision_stub("valid", "to_review")
+    _auto_validate_if_clean(clean)
+    assert clean.decision_status == "approved"
+    assert clean.decision_comment is not None
+    assert clean.decision_updated_at is not None
+
+
+def test_auto_validate_never_overrides_human_decision() -> None:
+    # une décision humaine (approved/rejected/dispute_sent) n'est jamais écrasée
+    for human in ("approved", "rejected", "dispute_sent"):
+        inv = _decision_stub("valid", human)
+        _auto_validate_if_clean(inv)
+        assert inv.decision_status == human
+        assert inv.decision_comment is None
+
+
+def test_auto_validate_skips_non_valid_controls() -> None:
+    # review / invalid restent à traiter manuellement
+    for control in ("review", "invalid", "not_checked"):
+        inv = _decision_stub(control, "to_review")
+        _auto_validate_if_clean(inv)
+        assert inv.decision_status == "to_review"
 
 
 def test_bpu_component_field_maps_gas_components() -> None:

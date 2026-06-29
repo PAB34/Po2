@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -108,11 +108,33 @@ def apply_parsed_to_invoice_import(
     invoice_import.control_status = control_report["status"]
     invoice_import.control_errors_count = control_report["error_count"]
     invoice_import.control_warnings_count = control_report["warning_count"]
+    _auto_validate_if_clean(invoice_import)
     invoice_import.analysis_status = "partial" if parsed.get("parser_warnings") else "parsed"
     invoice_import.analysis_result_json = json.dumps(_json_ready(parsed), ensure_ascii=False)
     invoice_import.control_report_json = json.dumps(_json_ready(control_report), ensure_ascii=False)
     replace_normalized_invoice(db, invoice_import, parsed, control_report)
     return invoice_import
+
+
+def _auto_validate_if_clean(invoice_import: EnergyInvoiceImport) -> None:
+    """Valide automatiquement une facture au contrôle entièrement vert.
+
+    `control_status == "valid"` signifie déjà : aucune erreur, aucun warning et
+    aucune anomalie (les éléments « explained » ne comptent pas, cf.
+    `_build_control_report`). On ne touche la décision que si elle est encore
+    `to_review` : une décision humaine déjà prise (approved / rejected /
+    dispute_sent) n'est jamais écrasée. `decision_by_user_id` reste nul, ce qui
+    marque la validation comme automatique.
+    """
+    if (
+        invoice_import.control_status == "valid"
+        and invoice_import.decision_status == "to_review"
+    ):
+        invoice_import.decision_status = "approved"
+        invoice_import.decision_comment = (
+            "Validée automatiquement : contrôle sans écart, anomalie ni blocage."
+        )
+        invoice_import.decision_updated_at = datetime.now(timezone.utc)
 
 
 def _apply_parser_failure(
