@@ -334,7 +334,9 @@ def _check_perimeter(sites: list[dict[str, Any]], issue) -> None:
             issue("error", "MISSING_PRM", f"PRM absent sur {fic}.", fic)
             continue
         if prm_id not in contracts:
-            issue("error", "UNKNOWN_PRM", f"PRM inconnu dans les donnees energie : {prm_id}.", prm_id)
+            # PRM hors du referentiel ENEDIS charge (typique EDF ou nouveau site) :
+            # ce n'est pas une anomalie de facturation. On saute simplement les
+            # controles qui dependent du referentiel, sans emettre d'ecart.
             continue
         contractor = (contracts[prm_id].get("0_contractor") or "").upper()
         if contractor and "ENGIE" not in contractor:
@@ -1078,9 +1080,9 @@ def _check_consumption_against_enedis(
                 scope,
             )
 
-        if daily_metrics is None:
-            consumption_summary["missing_references"] += 1
-            issue("warning", "ENEDIS_CONSUMPTION_MISSING", f"Aucune consommation ENEDIS disponible sur la periode facturee pour {scope}.", scope)
+        # Absence totale de donnees ENEDIS sur la periode : ce n'est pas une
+        # anomalie de facturation (donnee externe non chargee). On n'emet plus
+        # d'ecart "ENEDIS_CONSUMPTION_MISSING" qui bloquait inutilement la facture.
 
 
 def _check_power_controls(
@@ -1200,14 +1202,9 @@ def _check_power_controls(
                         f"Max ENEDIS {enedis_peak:.1f} kVA superieur a la puissance souscrite {invoice_subscribed:.1f} kVA sur {scope}.",
                         scope,
                     )
-            else:
-                power_summary["missing_references"] += 1
-                issue(
-                    "warning",
-                    "ENEDIS_POWER_MISSING",
-                    f"Aucune courbe de charge ni puissance max ENEDIS disponible sur la periode facturee pour {scope}.",
-                    scope,
-                )
+            # Absence totale de donnees ENEDIS (courbe de charge ou puissance max)
+            # sur la periode : donnee externe non chargee, pas une anomalie de
+            # facturation. On n'emet plus d'ecart "ENEDIS_POWER_MISSING".
 
         if checked:
             power_summary["checked_sites"] += 1
