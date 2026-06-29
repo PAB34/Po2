@@ -207,7 +207,7 @@ def _build_control_report(
     _apply_invoice_severity_policy(issues)
 
     error_count = sum(1 for item in issues if item["severity"] == "error")
-    warning_count = sum(1 for item in issues if item["severity"] in {"warning", "anomaly", "explained"})
+    warning_count = sum(1 for item in issues if item["severity"] in {"warning", "anomaly"})
     status = "invalid" if error_count else "review" if warning_count else "valid"
 
     return {
