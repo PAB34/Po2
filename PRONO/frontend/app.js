@@ -78,6 +78,29 @@ function showApp() {
 }
 $("#password") && $("#password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 
+/* ---------- Mon compte ---------- */
+async function showAccount() {
+  $("#curPwd").value = ""; $("#newPwd").value = ""; $("#newPwd2").value = "";
+  $("#accountMsg").className = "loginmsg";
+  try { const me = await api("/api/auth/me"); $("#accEmail").value = me.email; } catch (e) {}
+  $("#accountModal").classList.remove("hidden");
+}
+function hideAccount() { $("#accountModal").classList.add("hidden"); }
+async function doChangePassword() {
+  const msg = $("#accountMsg");
+  const cur = $("#curPwd").value, n1 = $("#newPwd").value, n2 = $("#newPwd2").value;
+  if (n1.length < 8) { msg.textContent = "Le nouveau mot de passe doit faire au moins 8 caractères."; msg.className = "loginmsg err show"; return; }
+  if (n1 !== n2) { msg.textContent = "Les deux mots de passe ne correspondent pas."; msg.className = "loginmsg err show"; return; }
+  try {
+    await api("/api/auth/change-password", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: cur, new_password: n1 }),
+    });
+    msg.textContent = "Mot de passe modifié ✓"; msg.className = "loginmsg ok show";
+    $("#curPwd").value = ""; $("#newPwd").value = ""; $("#newPwd2").value = "";
+  } catch (e) { msg.textContent = e.message; msg.className = "loginmsg err show"; }
+}
+
 /* ---------- Onglets ---------- */
 let _actuLoaded = false;
 function switchTab(tab) {

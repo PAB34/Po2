@@ -49,6 +49,7 @@
     <div style="display:flex;gap:8px">
       <button class="btn sm hidden" id="installBtn" onclick="installApp()">📲 Installer</button>
       <button class="btn sm" id="refreshBtn" onclick="refreshAll()">↻</button>
+      <button class="btn sm" onclick="showAccount()">⚙️</button>
       <button class="btn sm" onclick="logout()">Quitter</button>
     </div>
   </div>
@@ -86,6 +87,24 @@
     <div class="modalHead"><h3>📲 Installer sur l'écran d'accueil</h3>
       <button class="btn sm" onclick="hideInstall()">Fermer</button></div>
     <div id="installContent"></div>
+  </div>
+</div>
+
+<!-- Mon compte (changer le mot de passe) -->
+<div id="accountModal" class="modal hidden" onclick="if(event.target.id==='accountModal')hideAccount()">
+  <div class="modalBox">
+    <div class="modalHead"><h3>⚙️ Mon compte</h3>
+      <button class="btn sm" onclick="hideAccount()">Fermer</button></div>
+    <div class="field"><label for="accEmail">Email</label>
+      <input id="accEmail" type="email" disabled></div>
+    <div class="field" style="margin-top:10px"><label for="curPwd">Mot de passe actuel</label>
+      <input id="curPwd" type="password" autocomplete="current-password"></div>
+    <div class="field" style="margin-top:10px"><label for="newPwd">Nouveau mot de passe</label>
+      <input id="newPwd" type="password" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+    <div class="field" style="margin-top:10px"><label for="newPwd2">Confirmer le nouveau mot de passe</label>
+      <input id="newPwd2" type="password" autocomplete="new-password"></div>
+    <button class="btn lime block" style="margin-top:14px" onclick="doChangePassword()">Modifier le mot de passe</button>
+    <div id="accountMsg" class="loginmsg"></div>
   </div>
 </div>
 

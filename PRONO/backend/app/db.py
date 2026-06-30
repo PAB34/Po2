@@ -51,3 +51,9 @@ def get_user_by_email(email: str):
 
 def get_user_by_id(user_id: int):
     return _connect().execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+
+
+def update_password_hash(user_id: int, new_hash: str):
+    conn = _connect()
+    conn.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, user_id))
+    conn.commit()
