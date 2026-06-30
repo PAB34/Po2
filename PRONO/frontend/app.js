@@ -52,6 +52,7 @@ function refreshAll() { _actuLoaded = false; loadJournee(true); if (!$("#view-ac
 /* ---------- Helpers rendu ---------- */
 function confClass(c){const l=(c||"").toLowerCase();return l.includes("fort")?"fort":l.includes("moyen")?"moyen":"faible";}
 function trendClass(l){return /↑|hausse/i.test(l)?"up":/↓|baisse|repli/i.test(l)?"down":"flat";}
+function stakesClass(level){const l=(level||"").toLowerCase();return l==="fort"?"stk-fort":l==="moyen"?"stk-moyen":"stk-faible";}
 function formPills(f){return [...(f||"")].map(c=>`<span class="pill ${c}">${c}</span>`).join("");}
 function newsItems(items){
   if(!items||!items.length) return `<div class="dyn">Aucune actu récente.</div>`;
@@ -71,11 +72,20 @@ function injuryList(b){
     return `<li><span class="${ko}">${esc(i.player)}</span> <span style="color:#64748b">(${esc(i.position)})</span> — ${esc(i.injury)}${ret}</li>`;
   }).join("")+`</ul>`;
 }
+function stakesBlock(st){
+  if(!st || st.rank==null) return "";
+  return `<div class="dlbl">Enjeu</div>
+    <div class="stkrow">
+      <span class="stkrank">${st.rank}<sup>e</sup>/${st.n_teams} · ${st.points} pts${st.games_remaining?` · ${st.games_remaining} matchs restants`:""}</span>
+      <span class="stkpill ${stakesClass(st.level)}">${esc(st.enjeu_label)}</span>
+    </div>`;
+}
 function teamCard(b){
   return `<div class="dcard"><h4>${esc(b.team)}</h4>
     <span class="tag ${trendClass(b.label)}">${esc(b.label)}</span>
     <div class="formpills" style="margin:6px 0">${formPills(b.forme)}</div>
     <div class="dyn">${esc(b.summary)}</div>
+    ${stakesBlock(b.stakes)}
     <div class="dlbl">Blessés</div>${injuryList(b)}
     <button class="btn sm newsbtn" onclick="loadTeamNews(this,'${esc(b.team)}')">📰 Actu ${esc(b.team)}</button>
     <div class="newslist"></div></div>`;
@@ -88,10 +98,13 @@ function matchRow(m,i){
   const when=isNaN(dt)?"":dt.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})+" "+dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
   const inj=(m.home_block.injuries_count||0)+(m.away_block.injuries_count||0);
   const injBadge=inj>0?`<span class="rowbadge inj">🩼 ${inj}</span>`:"";
+  const hotStakes=[m.home_block.stakes,m.away_block.stakes].some(s=>s&&s.level==="Fort");
+  const stakesBadge=hotStakes?`<span class="rowbadge hot">🔥 enjeu</span>`:"";
+  const noteRow=m.stakes_note?`<div class="stknote">⚖️ ${esc(m.stakes_note)}</div>`:"";
   return `<tr class="prow" onclick="toggleDetail(${i})">
       <td class="mcell">
         <div class="mteams"><span class="mh">${esc(m.home)}</span><span class="msep">–</span><span class="ma">${esc(m.away)}</span></div>
-        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge}</div>
+        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge} ${stakesBadge}</div>
       </td>
       ${probCell(m.p_home,"h",m.pick_outcome==="H")}
       ${probCell(m.p_draw,"d",m.pick_outcome==="D")}
@@ -99,6 +112,7 @@ function matchRow(m,i){
       <td class="acell"><button class="actubtn" onclick="event.stopPropagation();toggleDetail(${i})">Actu</button></td>
     </tr>
     <tr class="detailrow hidden" id="d${i}"><td colspan="5">
+      ${noteRow}
       <div class="dcols">${teamCard(m.home_block)}${teamCard(m.away_block)}</div>
     </td></tr>`;
 }

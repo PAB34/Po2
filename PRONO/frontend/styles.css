@@ -183,3 +183,15 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 /* actu : flux plein écran (onglet Actualité) */
 .newslist.big .newsitem{background:var(--card);box-shadow:0 6px 18px rgba(3,18,12,.12);border:0;margin-bottom:9px;padding:12px 14px}
 .newslist.big .newsitem a{font-size:14px}
+
+/* ===== Enjeu (classement / situation au tableau) ===== */
+.rowbadge.hot{background:#ffedd5;color:#9a3412;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.stknote{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;border-radius:11px;
+  padding:9px 12px;margin-bottom:11px;font-size:12.5px;font-weight:700;line-height:1.4}
+.stkrow{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
+.stkrank{font-size:11.5px;font-weight:800;color:#475569}
+.stkpill{display:inline-block;font-size:11.5px;font-weight:900;padding:5px 10px;border-radius:9px;
+  align-self:flex-start;line-height:1.3}
+.stkpill.stk-fort{background:#fee2e2;color:#b91c1c}
+.stkpill.stk-moyen{background:#fef3c7;color:#92400e}
+.stkpill.stk-faible{background:#e2e8f0;color:#475569}
