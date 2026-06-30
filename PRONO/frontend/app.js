@@ -6,6 +6,34 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => (
 const TOKEN_KEY = "prono_token";
 const token = () => localStorage.getItem(TOKEN_KEY) || "";
 
+/* Identité visuelle : badge coloré + initiales (pas de vrai logo reproduit,
+   juste une couleur d'identification — zéro question de droits/marques). */
+const TEAM_BADGE = {
+  "Paris SG":   { abbr: "PSG",  color: "#1a3a6b" },
+  "Marseille":  { abbr: "OM",   color: "#1d8fce" },
+  "Lyon":       { abbr: "OL",   color: "#1c2951" },
+  "Monaco":     { abbr: "ASM",  color: "#c8102e" },
+  "Lille":      { abbr: "LOSC", color: "#c8102e" },
+  "Nice":       { abbr: "OGCN", color: "#a4231e" },
+  "Lens":       { abbr: "RCL",  color: "#ffd200", dark: true },
+  "Rennes":     { abbr: "SRFC", color: "#e2001a" },
+  "Strasbourg": { abbr: "RCSA", color: "#0066b3" },
+  "Brest":      { abbr: "SB29", color: "#c8102e" },
+  "Nantes":     { abbr: "FCN",  color: "#fcd116", dark: true },
+  "Toulouse":   { abbr: "TFC",  color: "#6e2585" },
+  "Auxerre":    { abbr: "AJA",  color: "#1c2951" },
+  "Le Havre":   { abbr: "HAC",  color: "#0066b3" },
+  "Angers":     { abbr: "SCO",  color: "#1c2951" },
+  "Metz":       { abbr: "FCM",  color: "#8b1538" },
+  "Lorient":    { abbr: "FCL",  color: "#ff6600" },
+  "Paris FC":   { abbr: "PFC",  color: "#1a3a6b" },
+};
+function crestBadge(team){
+  const b = TEAM_BADGE[team];
+  if(!b) return `<span class="crest" style="background:#64748b;color:#fff">${esc((team||"?").slice(0,3).toUpperCase())}</span>`;
+  return `<span class="crest" style="background:${b.color};color:${b.dark?'#172800':'#fff'}">${esc(b.abbr)}</span>`;
+}
+
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), "Authorization": "Bearer " + token() } });
   if (r.status === 401) { logout(); throw new Error("Session expirée"); }
@@ -143,7 +171,7 @@ function stakesBlock(st){
     </div>`;
 }
 function teamCard(b){
-  return `<div class="dcard"><h4>${esc(b.team)}</h4>
+  return `<div class="dcard"><h4>${crestBadge(b.team)} ${esc(b.team)}</h4>
     <span class="tag ${trendClass(b.label)}">${esc(b.label)}</span>
     <div class="formpills" style="margin:6px 0">${formPills(b.forme)}</div>
     <div class="dyn">${esc(b.summary)}</div>
