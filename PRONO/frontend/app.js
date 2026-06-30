@@ -13,6 +13,45 @@ async function api(path, opts = {}) {
   return r.json();
 }
 
+/* ---------- PWA : installation ---------- */
+let _deferredInstallPrompt = null;
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+const _isStandalone = () => window.matchMedia("(display-mode: standalone)").matches
+  || window.navigator.standalone === true;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  if (!_isStandalone()) $("#installBtn").classList.remove("hidden");
+});
+window.addEventListener("appinstalled", () => { $("#installBtn").classList.add("hidden"); });
+async function installApp() {
+  if (_deferredInstallPrompt) {
+    _deferredInstallPrompt.prompt();
+    const choice = await _deferredInstallPrompt.userChoice;
+    _deferredInstallPrompt = null;
+    if (choice && choice.outcome === "accepted") { $("#installBtn").classList.add("hidden"); return; }
+  }
+  showInstallInstructions();
+}
+function showInstallInstructions() {
+  const ua = navigator.userAgent, iOS = /iphone|ipad|ipod/i.test(ua), android = /android/i.test(ua);
+  let html = `<div class="installStep"><b>Installer Ligue 1 · Pronos</b>L'app s'ouvre alors en plein écran, comme une appli normale.</div>`;
+  if (iOS) html += `<div class="installStep"><b>Sur iPhone (Safari)</b>Bouton Partager (carré avec flèche), puis « Sur l'écran d'accueil ».</div>`;
+  else if (android) html += `<div class="installStep"><b>Sur Android (Chrome)</b>Menu ⋮ en haut à droite, puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</div>`;
+  else html += `<div class="installStep"><b>Sur ordinateur</b>Utilise l'icône d'installation dans la barre d'adresse du navigateur (Chrome/Edge).</div>`;
+  $("#installContent").innerHTML = html;
+  $("#installModal").classList.remove("hidden");
+}
+function hideInstall() { $("#installModal").classList.add("hidden"); }
+// Si déjà installée (standalone), pas la peine de montrer le bouton du tout.
+if (_isStandalone()) document.addEventListener("DOMContentLoaded", () => $("#installBtn") && $("#installBtn").classList.add("hidden"));
+// iOS ne déclenche jamais beforeinstallprompt : on propose quand même le bouton manuellement.
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !_isStandalone()) {
+  document.addEventListener("DOMContentLoaded", () => $("#installBtn") && $("#installBtn").classList.remove("hidden"));
+}
+
 /* ---------- Auth ---------- */
 async function doLogin() {
   const msg = $("#loginMsg"), btn = $("#loginBtn");
@@ -138,6 +177,21 @@ async function loadTeamNews(btn,team){
   btn.disabled=false;
 }
 
+function renderSummaryLine(matches){
+  const sl=$("#summaryLine");
+  if(!matches||!matches.length){ sl.classList.add("hidden"); return; }
+  const nb=matches.length;
+  const derbies=matches.filter(m=>m.derby).length;
+  const volatils=matches.filter(m=>m.context&&m.context.level==="Volatil").length;
+  const nuances=matches.filter(m=>m.context&&m.context.level==="À nuancer").length;
+  const chips=[`${nb} match${nb>1?"s":""}`];
+  if(volatils) chips.push(`🌪 ${volatils} volatil${volatils>1?"s":""}`);
+  if(nuances) chips.push(`⚠️ ${nuances} à nuancer`);
+  if(derbies) chips.push(`⚔️ ${derbies} derby${derbies>1?"s":""}`);
+  sl.classList.remove("hidden");
+  sl.innerHTML=chips.map(c=>`<span>${esc(c)}</span>`).join(" · ");
+}
+
 async function loadJournee(force){
   const list=$("#list"); list.innerHTML=`<div class="loading"><div class="spin"></div>Chargement…</div>`;
   $("#refreshBtn").disabled=true;
@@ -153,6 +207,7 @@ async function loadJournee(force){
       bn.classList.remove("hidden");
       bn.innerHTML=`${icon} <b>${esc(d.break.label)}</b> — ${esc(d.break.note)}`;
     } else bn.classList.add("hidden");
+    renderSummaryLine(d.matches);
     list.innerHTML=d.matches.length
       ? `<table class="ptable"><thead><tr><th>Match</th><th>1</th><th>N</th><th>2</th><th></th></tr></thead>
          <tbody>${d.matches.map((m,i)=>matchRow(m,i)).join("")}</tbody></table>`

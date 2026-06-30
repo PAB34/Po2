@@ -1,0 +1,17 @@
+{
+  "name": "Ligue 1 · Pronos",
+  "short_name": "L1 Pronos",
+  "description": "Probabilités, enjeu, blessures et actualité de la Ligue 1.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#061a2b",
+  "theme_color": "#0a2e22",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
