@@ -81,6 +81,18 @@ LIGUE1_TRES_TOT_PLAYED_MAX_RATIO = 0.18   # ≈ 6 matchs sur 34
 # libellé ("décisif", "sprint final").
 LIGUE1_FIN_DE_SAISON_REMAINING_RATIO = 0.25  # ≈ les 8 derniers matchs sur 34
 
+# ------------------------------------------------------------------
+# Trêve internationale / hivernale — détectée depuis nos propres dates de
+# calendrier (cf. calendar_context.py), aucune source externe nécessaire.
+# ------------------------------------------------------------------
+# Écart (en jours) entre 2 journées au-delà duquel on considère que ce n'est
+# plus le rythme hebdomadaire normal (3-7 jours) mais une vraie coupure.
+BREAK_GAP_THRESHOLD_DAYS = 9
+# Mois où tombent les fenêtres internationales FIFA pendant une saison de
+# Ligue 1 (août à mai) : septembre, octobre, novembre, mars. Juin existe
+# aussi mais tombe hors saison. Stable d'une année sur l'autre.
+FIFA_WINDOW_MONTHS = {9, 10, 11, 3}
+
 # Regroupement en « journée » : nouveau bloc si l'écart entre 2 matchs dépasse N jours.
 JOURNEE_GAP_DAYS = 4
 

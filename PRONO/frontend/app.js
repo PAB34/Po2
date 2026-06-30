@@ -137,6 +137,12 @@ async function loadJournee(force){
     const ha=$("#healthAlert");
     if(d.health&&!d.health.ok){ha.classList.remove("hidden");ha.innerHTML=`<b>⚠ Alerte blessés</b> — données possiblement périmées : `+esc((d.health.issues||[]).join(" ; "));}
     else ha.classList.add("hidden");
+    const bn=$("#breakNote");
+    if(d.break&&d.break.detected){
+      const icon=d.break.kind==="hivernale"?"❄️":d.break.kind==="internationale"?"🌍":"⏸️";
+      bn.classList.remove("hidden");
+      bn.innerHTML=`${icon} <b>${esc(d.break.label)}</b> — ${esc(d.break.note)}`;
+    } else bn.classList.add("hidden");
     list.innerHTML=d.matches.length
       ? `<table class="ptable"><thead><tr><th>Match</th><th>1</th><th>N</th><th>2</th><th></th></tr></thead>
          <tbody>${d.matches.map((m,i)=>matchRow(m,i)).join("")}</tbody></table>`

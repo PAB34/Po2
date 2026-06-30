@@ -17,6 +17,7 @@ from .injuries_tm import injuries_by_team, get_status
 from .news import get_team_news, get_league_news
 from . import stakes as stakes_mod
 from .derby import derby_name
+from .calendar_context import detect_break
 
 _CACHE = {"journee": None, "ts": 0}
 CACHE_TTL = 1800  # 30 min
@@ -79,6 +80,8 @@ def build_journee(force=False):
     inj = injuries_by_team()
     season = stakes_mod.current_season(_hist())
     standings = stakes_mod.compute_standings(_hist(), season)
+    break_info = (detect_break(_hist(), season, matches["Kickoff"].min())
+                 if len(matches) else {"detected": False})
     out = []
     for _, r in scored.iterrows():
         home_block = _team_block(r["HomeTeam"], inj, standings)
@@ -105,6 +108,7 @@ def build_journee(force=False):
         "odds_source": scored["source"].dropna().unique().tolist() if len(scored) else [],
         "health": {"ok": health.get("ok", True), "issues": health.get("issues", []),
                    "count": health.get("count")},
+        "break": break_info,
         "matches": out,
     }
     _CACHE["journee"] = payload
