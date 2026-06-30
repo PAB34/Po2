@@ -100,11 +100,13 @@ function matchRow(m,i){
   const injBadge=inj>0?`<span class="rowbadge inj">🩼 ${inj}</span>`:"";
   const hotStakes=[m.home_block.stakes,m.away_block.stakes].some(s=>s&&s.level==="Fort");
   const stakesBadge=hotStakes?`<span class="rowbadge hot">🔥 enjeu</span>`:"";
+  const derbyBadge=m.derby?`<span class="rowbadge derby">⚔️ ${esc(m.derby)}</span>`:"";
   const noteRow=m.stakes_note?`<div class="stknote">⚖️ ${esc(m.stakes_note)}</div>`:"";
+  const derbyRow=m.derby?`<div class="derbynote">⚔️ <b>${esc(m.derby)}</b> — un derby se joue souvent différemment des stats brutes : plus de cartons, match plus serré, motivation indépendante du classement.</div>`:"";
   return `<tr class="prow" onclick="toggleDetail(${i})">
       <td class="mcell">
         <div class="mteams"><span class="mh">${esc(m.home)}</span><span class="msep">–</span><span class="ma">${esc(m.away)}</span></div>
-        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge} ${stakesBadge}</div>
+        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge} ${stakesBadge} ${derbyBadge}</div>
       </td>
       ${probCell(m.p_home,"h",m.pick_outcome==="H")}
       ${probCell(m.p_draw,"d",m.pick_outcome==="D")}
@@ -112,6 +114,7 @@ function matchRow(m,i){
       <td class="acell"><button class="actubtn" onclick="event.stopPropagation();toggleDetail(${i})">Actu</button></td>
     </tr>
     <tr class="detailrow hidden" id="d${i}"><td colspan="5">
+      ${derbyRow}
       ${noteRow}
       <div class="dcols">${teamCard(m.home_block)}${teamCard(m.away_block)}</div>
     </td></tr>`;

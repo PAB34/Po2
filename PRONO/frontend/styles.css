@@ -195,3 +195,8 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .stkpill.stk-fort{background:#fee2e2;color:#b91c1c}
 .stkpill.stk-moyen{background:#fef3c7;color:#92400e}
 .stkpill.stk-faible{background:#e2e8f0;color:#475569}
+
+/* ===== Derby / rivalité ===== */
+.rowbadge.derby{background:#ede9fe;color:#5b21b6;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.derbynote{background:#f5f3ff;border:1px solid #ddd6fe;color:#4c1d95;border-radius:11px;
+  padding:9px 12px;margin-bottom:11px;font-size:12.5px;font-weight:700;line-height:1.4}

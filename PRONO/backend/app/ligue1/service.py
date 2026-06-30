@@ -16,6 +16,7 @@ from .dynamics import team_dynamic
 from .injuries_tm import injuries_by_team, get_status
 from .news import get_team_news, get_league_news
 from . import stakes as stakes_mod
+from .derby import derby_name
 
 _CACHE = {"journee": None, "ts": 0}
 CACHE_TTL = 1800  # 30 min
@@ -92,6 +93,7 @@ def build_journee(force=False):
             "p_home": _pct(r["P_home"]), "p_draw": _pct(r["P_draw"]), "p_away": _pct(r["P_away"]),
             "pick": r["pick"], "pick_outcome": r["pick_outcome"],
             "pick_proba": _pct(r["pick_proba"]), "confidence": r["confidence"],
+            "derby": derby_name(r["HomeTeam"], r["AwayTeam"]),
             "home_block": home_block,
             "away_block": away_block,
             "stakes_note": stakes_note,
