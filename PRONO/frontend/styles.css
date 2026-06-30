@@ -204,3 +204,16 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 /* ===== Trêve internationale / hivernale (bandeau journée) ===== */
 .breaknote{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:14px;
   padding:11px 14px;margin-bottom:14px;font-size:13px;font-weight:700;line-height:1.45}
+
+/* ===== Niveau de lecture (consolidé : enjeu fort + derby + trêve) ===== */
+.rowbadge.ctx-nuancer{background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.rowbadge.ctx-volatil{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.ctxblock{border-radius:13px;padding:11px 13px;margin-bottom:11px;font-size:12.5px;line-height:1.45}
+.ctxblock.ctx-standard{background:#f1f5f9;border:1px solid #e2e8f0;color:#334155}
+.ctxblock.ctx-nuancer{background:#fffbeb;border:1px solid #fde68a;color:#78350f}
+.ctxblock.ctx-volatil{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d}
+.ctxhead{font-weight:900;margin-bottom:6px}
+.ctxlist{margin:0 0 8px;padding-left:18px}
+.ctxlist li{margin-bottom:3px;font-weight:700}
+.ctxlist.empty{font-weight:700;opacity:.75;list-style:none;padding-left:0}
+.ctxfoot{font-size:11px;font-weight:600;opacity:.85}

@@ -18,6 +18,7 @@ from .news import get_team_news, get_league_news
 from . import stakes as stakes_mod
 from .derby import derby_name
 from .calendar_context import detect_break
+from .context_level import match_context_level
 
 _CACHE = {"journee": None, "ts": 0}
 CACHE_TTL = 1800  # 30 min
@@ -91,12 +92,15 @@ def build_journee(force=False):
         stakes_note = stakes_mod.match_stakes_note(
             {**home_st, "team": r["HomeTeam"]}, {**away_st, "team": r["AwayTeam"]}
         )
+        derby = derby_name(r["HomeTeam"], r["AwayTeam"])
+        context = match_context_level(r["HomeTeam"], r["AwayTeam"], home_st, away_st, derby, break_info)
         out.append({
             "kickoff": str(r["Kickoff"]), "home": r["HomeTeam"], "away": r["AwayTeam"],
             "p_home": _pct(r["P_home"]), "p_draw": _pct(r["P_draw"]), "p_away": _pct(r["P_away"]),
             "pick": r["pick"], "pick_outcome": r["pick_outcome"],
             "pick_proba": _pct(r["pick_proba"]), "confidence": r["confidence"],
-            "derby": derby_name(r["HomeTeam"], r["AwayTeam"]),
+            "derby": derby,
+            "context": context,
             "home_block": home_block,
             "away_block": away_block,
             "stakes_note": stakes_note,

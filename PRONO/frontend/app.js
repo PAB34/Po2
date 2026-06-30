@@ -93,20 +93,31 @@ function teamCard(b){
 function probCell(val,cls,win){
   return `<td class="pc ${cls} ${win?"win":""}">${val==null?"—":val+"%"}</td>`;
 }
+function ctxClass(level){const l=(level||"").toLowerCase();return l.includes("volatil")?"ctx-volatil":l.includes("nuancer")?"ctx-nuancer":"ctx-standard";}
+function contextBlock(ctx){
+  if(!ctx) return "";
+  const cls=ctxClass(ctx.level);
+  const list=(ctx.factors&&ctx.factors.length)
+    ? `<ul class="ctxlist">${ctx.factors.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`
+    : `<div class="ctxlist empty">Aucun facteur particulier identifié.</div>`;
+  return `<div class="ctxblock ${cls}">
+    <div class="ctxhead">🔎 Niveau de lecture : <b>${esc(ctx.level)}</b> (${ctx.count} facteur${ctx.count>1?"s":""})</div>
+    ${list}
+    <div class="ctxfoot">Ce contexte n'influence pas la probabilité affichée (issue du marché) — il aide à nuancer la lecture, pas à recommander un pari.</div>
+  </div>`;
+}
 function matchRow(m,i){
   const dt=new Date(m.kickoff);
   const when=isNaN(dt)?"":dt.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})+" "+dt.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
   const inj=(m.home_block.injuries_count||0)+(m.away_block.injuries_count||0);
   const injBadge=inj>0?`<span class="rowbadge inj">🩼 ${inj}</span>`:"";
-  const hotStakes=[m.home_block.stakes,m.away_block.stakes].some(s=>s&&s.level==="Fort");
-  const stakesBadge=hotStakes?`<span class="rowbadge hot">🔥 enjeu</span>`:"";
-  const derbyBadge=m.derby?`<span class="rowbadge derby">⚔️ ${esc(m.derby)}</span>`:"";
-  const noteRow=m.stakes_note?`<div class="stknote">⚖️ ${esc(m.stakes_note)}</div>`:"";
-  const derbyRow=m.derby?`<div class="derbynote">⚔️ <b>${esc(m.derby)}</b> — un derby se joue souvent différemment des stats brutes : plus de cartons, match plus serré, motivation indépendante du classement.</div>`:"";
+  const ctx=m.context;
+  const ctxBadge=(ctx&&ctx.level!=="Standard")
+    ? `<span class="rowbadge ${ctxClass(ctx.level)}">${ctx.level==="Volatil"?"🌪":"⚠️"} ${esc(ctx.level)}</span>` : "";
   return `<tr class="prow" onclick="toggleDetail(${i})">
       <td class="mcell">
         <div class="mteams"><span class="mh">${esc(m.home)}</span><span class="msep">–</span><span class="ma">${esc(m.away)}</span></div>
-        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge} ${stakesBadge} ${derbyBadge}</div>
+        <div class="msub"><span class="cdot ${confClass(m.confidence)}"></span>${esc(when)} ${injBadge} ${ctxBadge}</div>
       </td>
       ${probCell(m.p_home,"h",m.pick_outcome==="H")}
       ${probCell(m.p_draw,"d",m.pick_outcome==="D")}
@@ -114,8 +125,7 @@ function matchRow(m,i){
       <td class="acell"><button class="actubtn" onclick="event.stopPropagation();toggleDetail(${i})">Actu</button></td>
     </tr>
     <tr class="detailrow hidden" id="d${i}"><td colspan="5">
-      ${derbyRow}
-      ${noteRow}
+      ${contextBlock(ctx)}
       <div class="dcols">${teamCard(m.home_block)}${teamCard(m.away_block)}</div>
     </td></tr>`;
 }
