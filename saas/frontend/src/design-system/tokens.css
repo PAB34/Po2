@@ -142,13 +142,15 @@
 .po2-matrix-supplier-card strong { font: 750 1.05rem var(--po2-font-title); }
 .po2-matrix-supplier-card span:not(.po2-eyebrow), .po2-matrix-supplier-card small { color: var(--po2-color-muted); font-size: .75rem; }
 .po2-matrix-supplier-card b { color: var(--po2-color-ink); }
+.po2-matrix-supplier-card--active { border-color: var(--po2-color-mint); background: var(--po2-color-mint-soft); box-shadow: 0 0 0 2px var(--po2-color-mint) inset; }
 .po2-decision-item { color: var(--po2-color-ink); background: var(--po2-color-paper); text-align: left; cursor: pointer; }
 .po2-decision-item--active { border-color: var(--po2-color-mint); background: var(--po2-color-mint-soft); }
 @media (max-width: 1200px) { .po2-matrix-setup-flow, .po2-matrix-supplier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .po2-matrix-setup-flow, .po2-matrix-supplier-grid { grid-template-columns: 1fr; } }
 .po2-matrix-import-form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-bottom: 1rem; }
 .po2-matrix-import-form label { display: grid; gap: .35rem; min-width: min(18rem, 100%); color: var(--po2-color-muted); font-size: .72rem; font-weight: 750; }
-.po2-matrix-import-form input[type="text"], .po2-matrix-import-form input[type="file"] { min-height: 2.35rem; padding: .55rem .65rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); color: var(--po2-color-ink); background: var(--po2-color-paper); }
+.po2-matrix-import-form input[type="text"], .po2-matrix-import-form input[type="file"], .po2-matrix-import-form input[type="number"] { min-height: 2.35rem; padding: .55rem .65rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); color: var(--po2-color-ink); background: var(--po2-color-paper); }
+.po2-inline-number-input { width: 8rem; min-height: 2.1rem; padding: .4rem .55rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); color: var(--po2-color-ink); background: var(--po2-color-paper); }
 .po2-matrix-import-preview { display: grid; gap: .85rem; }
 
 .po2-invoice-workflow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .75rem; }

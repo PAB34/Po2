@@ -140,6 +140,15 @@ export function MarketsBudgetPageV1() {
         </div>
       </Card>
 
+      {selectedContract && suivi.isError ? (
+        <Card eyebrow="erreur">
+          <p className="po2-muted-line">Suivi indisponible pour {contractLabel(selectedContract)} : {errorMessage(suivi.error)}</p>
+        </Card>
+      ) : null}
+      {selectedContract && suivi.isFetching && !suivi.data ? (
+        <p className="po2-muted-line">Chargement du suivi {contractLabel(selectedContract)}...</p>
+      ) : null}
+
       {selectedContract && suivi.data ? (
         <>
           <div className="po2-kpi-grid">
@@ -164,34 +173,10 @@ export function MarketsBudgetPageV1() {
             </Card>
           ) : null}
 
-          <Card title="Suivi par opération" eyebrow="budget vs réalisé vs atterrissage">
-            {suiviRows.length === 0 ? (
-              <p className="po2-muted-line">Aucune opération budgétée ni facture rattachée pour {year}.</p>
-            ) : (
-              <DataTable
-                rows={suiviRows}
-                getRowKey={(r) => r.operation_number}
-                columns={[
-                  { key: "operation", header: "Opération", render: (r) => <strong>{r.operation_number}</strong> },
-                  { key: "budget", header: "Budget", render: (r) => eur(r.amount_budget) },
-                  { key: "realized", header: "Réalisé", render: (r) => eur(r.amount_realized) },
-                  { key: "landing", header: "Atterrissage", render: (r) => eur(r.amount_landing) },
-                  {
-                    key: "variance",
-                    header: "Écart",
-                    render: (r) => <StatusBadge tone={varianceTone(r.variance_to_budget)}>{eur(r.variance_to_budget)}</StatusBadge>,
-                  },
-                ]}
-              />
-            )}
-            {suivi.data.unassigned_realized_amount > 0 ? (
-              <p className="po2-muted-line">
-                {eur(suivi.data.unassigned_realized_amount)} de réalisé sans opération rattachée (règle de matrice à compléter).
-              </p>
-            ) : null}
-          </Card>
-
-          <Card title="Saisie du budget" eyebrow={canWrite ? "ajouter/éditer une ligne par opération" : "lecture seule"}>
+          <Card
+            title={`Saisie du budget ${contractLabel(selectedContract)}`}
+            eyebrow={canWrite ? `étape 1 - une ligne par opération pour ${year}` : "lecture seule"}
+          >
             {!canWrite ? (
               <p className="po2-muted-line">Ton rôle actuel ne permet pas de modifier le budget. Les profils Fluides et Technicien CVC restent volontairement exclus.</p>
             ) : (
@@ -229,6 +214,7 @@ export function MarketsBudgetPageV1() {
                       canWrite ? (
                         <input
                           type="number"
+                          className="po2-inline-number-input"
                           defaultValue={l.amount_budget}
                           onBlur={(event) => {
                             const value = Number(event.currentTarget.value);
@@ -254,8 +240,35 @@ export function MarketsBudgetPageV1() {
                 ]}
               />
             ) : (
-              <p className="po2-muted-line">Aucune ligne de budget saisie pour {year}.</p>
+              <p className="po2-muted-line">Aucune ligne de budget saisie pour {year} : ajoute la première ligne ci-dessus.</p>
             )}
+          </Card>
+
+          <Card title="Suivi par opération" eyebrow="étape 2 - budget vs réalisé vs atterrissage">
+            {suiviRows.length === 0 ? (
+              <p className="po2-muted-line">Aucune opération budgétée ni facture rattachée pour {year} : commence par la saisie ci-dessus.</p>
+            ) : (
+              <DataTable
+                rows={suiviRows}
+                getRowKey={(r) => r.operation_number}
+                columns={[
+                  { key: "operation", header: "Opération", render: (r) => <strong>{r.operation_number}</strong> },
+                  { key: "budget", header: "Budget", render: (r) => eur(r.amount_budget) },
+                  { key: "realized", header: "Réalisé", render: (r) => eur(r.amount_realized) },
+                  { key: "landing", header: "Atterrissage", render: (r) => eur(r.amount_landing) },
+                  {
+                    key: "variance",
+                    header: "Écart",
+                    render: (r) => <StatusBadge tone={varianceTone(r.variance_to_budget)}>{eur(r.variance_to_budget)}</StatusBadge>,
+                  },
+                ]}
+              />
+            )}
+            {suivi.data.unassigned_realized_amount > 0 ? (
+              <p className="po2-muted-line">
+                {eur(suivi.data.unassigned_realized_amount)} de réalisé sans opération rattachée (règle de matrice à compléter).
+              </p>
+            ) : null}
           </Card>
         </>
       ) : null}
