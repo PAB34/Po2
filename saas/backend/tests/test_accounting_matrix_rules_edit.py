@@ -63,6 +63,19 @@ def test_create_and_delete_rule_on_active_version(db_session):
     assert remaining == ["k1"]
 
 
+def test_suggest_from_referential_derives_axes_from_designation():
+    from app.services.accounting_matrix import _suggest_antenna, _suggest_from_referential
+
+    # antenne = rapprochement au référentiel CIRIL (nom court officiel du bâtiment)
+    assert _suggest_antenna("ECOLE MATERNELLE AGNES VARDA") == "A VARDA"
+    assert _suggest_antenna("EX CONSERVATOIRE BEAUX ARTS") == "BEAUX ARTS"
+    # fonction déduite (écoles maternelles = 211) ; service pour les bâtiments typés
+    assert _suggest_from_referential("ECOLE MATERNELLE AGNES VARDA", "fonction") == "211"
+    assert _suggest_from_referential("PISCINE PHILIPPE BIASCAMANO", "service") == "PISC"
+    # désignation non typée -> pas de service inventé
+    assert _suggest_from_referential("LOCAL SYNDICAT", "service") is None
+
+
 def test_archived_version_stays_frozen(db_session):
     version = _make_version(db_session, "archived")
     rule = version.rules[0]

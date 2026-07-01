@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.accounting_matrix import (
@@ -30,6 +31,9 @@ from app.models.invoice import (
     EnergyAccountingNatureRule,
     EnergyAccountingSiteMapping,
     EnergyInvoice,
+    EnergyInvoiceImport,
+    EnergyInvoiceLine,
+    EnergyInvoicePeriod,
     EnergyInvoiceSite,
 )
 
@@ -55,39 +59,56 @@ def _short_antenna(designation: str | None) -> str | None:
 
 
 _INDEX_COMPTA_PATH = Path(__file__).resolve().parents[1] / "data" / "index_compta.json"
+_MATCH_STOPWORDS = _ANTENNA_STOPWORDS | {"EX", "ANCIEN", "ANCIENNE", "DIV", "PLACE", "RUE", "AVENUE"}
 
 
 @lru_cache(maxsize=1)
-def _antenna_referential() -> list[tuple[str, str]]:
-    """Référentiel antenne CIRIL (code, libellé). Vide si le fichier est absent."""
+def _index_compta() -> dict:
     try:
-        data = json.loads(_INDEX_COMPTA_PATH.read_text(encoding="utf-8"))
+        return json.loads(_INDEX_COMPTA_PATH.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
-    entries = data.get("referentiels", {}).get("antenne", {}).get("entries", [])
+        return {}
+
+
+def _referential(axis: str) -> list[tuple[str, str]]:
+    """Entrées (code, libellé) d'un axe du référentiel CIRIL. Vide si absent."""
+    entries = _index_compta().get("referentiels", {}).get(axis, {}).get("entries", [])
     return [(e.get("code") or "", e.get("label") or "") for e in entries if e.get("code")]
 
 
-def _suggest_antenna(designation: str | None) -> str | None:
-    """Antenne suggérée pour un site ENGIE/EDF : d'abord un rapprochement avec le
-    référentiel CIRIL (le code antenne = nom court officiel du bâtiment), sinon un
-    nom court dérivé de la désignation. Toujours corrigeable par la compta."""
+def _antenna_referential() -> list[tuple[str, str]]:  # rétrocompat
+    return _referential("antenne")
+
+
+def _match_tokens(text: str) -> set[str]:
+    ascii_text = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    cleaned = re.sub(r"[^A-Z0-9 ]", " ", ascii_text.upper())
+    # singularisation grossière (ECOLES -> ECOLE) pour rapprocher libellés pluriels
+    return {t.rstrip("S") for t in cleaned.split() if len(t) > 2 and t not in _MATCH_STOPWORDS}
+
+
+def _suggest_from_referential(designation: str | None, axis: str) -> str | None:
+    """Meilleur code du référentiel `axis` par recouvrement de mots avec la désignation."""
     if not designation:
         return None
-    hay = re.sub(r"[^A-Z0-9 ]", " ", designation.upper())
-    hay_tokens = {t for t in hay.split() if len(t) > 2}
+    hay = _match_tokens(designation)
+    if not hay:
+        return None
     best: tuple[int, str] | None = None
-    for code, label in _antenna_referential():
-        ref = re.sub(r"[^A-Z0-9 ]", " ", label.upper())
-        ref_tokens = {t for t in ref.split() if len(t) > 2}
-        if not ref_tokens:
+    for code, label in _referential(axis):
+        ref = _match_tokens(label)
+        if not ref:
             continue
-        overlap = len(hay_tokens & ref_tokens)
+        overlap = len(hay & ref)
         if overlap and (best is None or overlap > best[0]):
             best = (overlap, code)
-    if best is not None:
-        return best[1]
-    return _short_antenna(designation)
+    return best[1] if best else None
+
+
+def _suggest_antenna(designation: str | None) -> str | None:
+    """Antenne suggérée : rapprochement au référentiel CIRIL (code = nom court
+    officiel du bâtiment), sinon nom court dérivé. Toujours corrigeable."""
+    return _suggest_from_referential(designation, "antenne") or _short_antenna(designation)
 
 
 def _resolve_site_designations(
@@ -497,6 +518,102 @@ def _seed_cpe(db: Session, city_id: int | None, *, user_id: int | None) -> dict:
         created += 1
 
     return {"contracts_created": created, "contracts_skipped": skipped, "rules": rules_count}
+
+
+def prefill_energy_matrices(db: Session, city_id: int | None) -> dict:
+    """Pré-remplit la codification énergie (ENGIE/EDF) pour un premier jet corrigeable :
+
+    - règles poste→nature : tous les postes élec vus dans les factures → 60612, par
+      fournisseur présent (ENGIE, EDF) ;
+    - axes des sites (PRM) déduits de la désignation facture via le référentiel CIRIL :
+      antenne (nom court du bâtiment), service, fonction ; opération laissée **vide**
+      (électricité = fonctionnement, cf. arbitrage comptable).
+
+    N'active aucune version : `seed_from_existing` est appelé ensuite pour (re)construire
+    les matrices versionnées. Reconstruit intégralement les règles de nature énergie.
+    """
+    postes = sorted({
+        (code or "").upper()
+        for (code,) in db.execute(
+            select(EnergyInvoiceLine.normalized_code)
+            .join(EnergyInvoicePeriod, EnergyInvoiceLine.invoice_period_id == EnergyInvoicePeriod.id)
+            .join(EnergyInvoiceSite, EnergyInvoicePeriod.invoice_site_id == EnergyInvoiceSite.id)
+            .join(EnergyInvoice, EnergyInvoiceSite.invoice_id == EnergyInvoice.id)
+            .where(EnergyInvoice.city_id == city_id, EnergyInvoiceLine.normalized_code.isnot(None))
+            .distinct()
+        ).all()
+        if code and code.strip()
+    })
+    suppliers = [
+        s for s in (
+            (val or "").upper()
+            for (val,) in db.execute(
+                select(EnergyInvoiceImport.supplier_guess)
+                .where(EnergyInvoiceImport.city_id == city_id, EnergyInvoiceImport.supplier_guess.isnot(None))
+                .distinct()
+            ).all()
+        )
+        if s in ("ENGIE", "EDF")
+    ] or ["ENGIE"]
+
+    # 1. Règles poste -> nature (reconstruction complète).
+    db.execute(delete(EnergyAccountingNatureRule).where(EnergyAccountingNatureRule.city_id == city_id))
+    rules_created = 0
+    for supplier in suppliers:
+        for poste in postes:
+            db.add(EnergyAccountingNatureRule(
+                city_id=city_id, supplier=supplier, market=None, billed_item=poste,
+                accounting_nature="60612", accounting_label="Energie - Electricite",
+            ))
+            rules_created += 1
+
+    # 2. Axes des sites (PRM) déduits de la désignation facture.
+    designations = {
+        prm: name
+        for prm, name in db.execute(
+            select(EnergyInvoiceSite.prm_id, EnergyInvoiceSite.site_name)
+            .join(EnergyInvoice, EnergyInvoiceSite.invoice_id == EnergyInvoice.id)
+            .where(
+                EnergyInvoice.city_id == city_id,
+                EnergyInvoiceSite.prm_id.isnot(None),
+                EnergyInvoiceSite.site_name.isnot(None),
+            )
+        ).all()
+        if prm and name
+    }
+    service_labels = dict(_referential("service"))
+    function_labels = dict(_referential("fonction"))
+    antenna_labels = dict(_referential("antenne"))
+
+    filled = 0
+    mappings = db.execute(
+        select(EnergyAccountingSiteMapping).where(EnergyAccountingSiteMapping.city_id == city_id)
+    ).scalars().all()
+    for m in mappings:
+        designation = designations.get(m.prm_id)
+        if not designation:
+            continue
+        antenna = _suggest_antenna(designation)
+        service = _suggest_from_referential(designation, "service")
+        function = _suggest_from_referential(designation, "fonction")
+        m.antenna_code = antenna
+        m.antenna_label = antenna_labels.get(antenna or "")
+        m.service_code = service
+        m.service_label = service_labels.get(service or "")
+        m.function_code = function
+        m.function_label = function_labels.get(function or "")
+        m.operation_code = None
+        m.operation_label = None
+        filled += 1
+
+    db.commit()
+    return {
+        "suppliers": suppliers,
+        "postes": len(postes),
+        "nature_rules_created": rules_created,
+        "sites_prefilled": filled,
+        "sites_total": len(mappings),
+    }
 
 
 def _contract_exists(
