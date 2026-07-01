@@ -179,6 +179,7 @@ def parse_edf_csv(path: str | Path) -> list[dict[str, Any]]:
         ends = [s["period_end"] for s in sites if s["period_end"]]
         head = group[0]
         total_ttc = round(sum(s["total_ttc"] or 0.0 for s in sites), 2)
+        total_ht = round(sum(s["total_ht"] or 0.0 for s in sites), 2)
         total_consumption = sum(s["total_consumption_kwh"] or 0.0 for s in sites)
 
         parsed_list.append(
@@ -197,6 +198,7 @@ def parse_edf_csv(path: str | Path) -> list[dict[str, Any]]:
                     "period_start": min(starts) if starts else None,
                     "period_end": max(ends) if ends else None,
                     "total_ttc": total_ttc,
+                    "total_ht": total_ht,
                     "total_consumption_mwh": round(total_consumption / 1000, 3) if total_consumption else None,
                     "market_reference": None,
                 },

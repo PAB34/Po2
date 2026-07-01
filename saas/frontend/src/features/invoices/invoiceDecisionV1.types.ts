@@ -9,7 +9,10 @@ export type InvoiceDecisionV1 = {
   supplier: string;
   invoiceNumber: string;
   siteLabel: string;
+  siteDetail?: string | null;
   contractLabel: string;
+  marketLabel?: string | null;
+  contractCode?: string | null;
   amountTtc: number | null;
   amountTtcLabel: string;
   issuedAt: string | null;

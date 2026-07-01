@@ -29,6 +29,8 @@ from app.schemas.billing import (
     EnergyLiaisonPreviewRow,
     TurpeVersionOut,
 )
+from app.schemas.supplier_contact import SupplierContactIn, SupplierContactOut
+from app.services import supplier_contacts as supplier_contacts_svc
 from app.schemas.invoice import (
     EnergyInvoiceBatchDetailOut,
     EnergyInvoiceBatchOut,
@@ -60,6 +62,8 @@ from app.services.invoices import (
     create_invoice_import,
     delete_all_invoice_imports,
     delete_invoice_import,
+    purge_duplicate_invoice_imports,
+    reanalyze_all_invoice_imports,
     get_invoice_batch,
     get_invoice_import,
     get_monthly_invoice_consumption,
@@ -92,6 +96,26 @@ def list_supplier_groups(
 ):
     city_id = _require_city(current_user)
     return get_supplier_groups(db, city_id)
+
+
+@router.get("/supplier-contacts", response_model=list[SupplierContactOut])
+def list_supplier_contacts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return supplier_contacts_svc.list_contacts(db, city_id)
+
+
+@router.put("/supplier-contacts/{supplier}", response_model=SupplierContactOut)
+def upsert_supplier_contact(
+    supplier: str,
+    payload: SupplierContactIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    return supplier_contacts_svc.upsert_contact(db, city_id, supplier, payload.model_dump(exclude_unset=True))
 
 
 @router.get("/configs", response_model=list[BillingConfigOut])
@@ -628,6 +652,26 @@ def delete_energy_invoice_import(
     if not found:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import facture introuvable")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/invoices/imports/purge-duplicates")
+def purge_duplicate_energy_invoice_imports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Supprime les factures énergie en double (même numéro), garde la plus récente."""
+    city_id = _require_city(current_user)
+    return purge_duplicate_invoice_imports(db, city_id)
+
+
+@router.post("/invoices/imports/reanalyze-all")
+def reanalyze_all_energy_invoice_imports(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Recalcule les contrôles de toutes les factures énergie (après correctif moteur)."""
+    city_id = _require_city(current_user)
+    return reanalyze_all_invoice_imports(db, city_id)
 
 
 @router.delete("/invoices/imports")

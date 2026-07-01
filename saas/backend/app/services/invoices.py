@@ -490,6 +490,20 @@ def get_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> Ene
     return db.query(EnergyInvoiceImport).filter_by(city_id=city_id, id=invoice_import_id).first()
 
 
+def _recompute_invoice_import(db: Session, invoice_import: EnergyInvoiceImport) -> None:
+    """Régénère contrôles + normalisation d'un import.
+
+    Les imports issus d'un bordereau XLSX/CSV (ENGIE, EDF) n'ont pas de fichier
+    ré-analysable seul : on relance les contrôles sur le `parsed` déjà stocké.
+    Les PDF ENGIE sont re-parsés depuis le fichier (capte les évolutions parser).
+    """
+    suffix = Path(invoice_import.storage_path or "").suffix.lower()
+    if invoice_import.analysis_result and suffix != ".pdf":
+        apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
+    else:
+        analyze_invoice_import(db, invoice_import)
+
+
 def analyze_existing_invoice_import(
     db: Session,
     city_id: int,
@@ -498,13 +512,32 @@ def analyze_existing_invoice_import(
     invoice_import = get_invoice_import(db, city_id, invoice_import_id)
     if invoice_import is None:
         return None
-    if invoice_import.source == "engie_xlsx_export" and invoice_import.analysis_result:
-        apply_parsed_to_invoice_import(db, invoice_import, invoice_import.analysis_result)
-    else:
-        analyze_invoice_import(db, invoice_import)
+    _recompute_invoice_import(db, invoice_import)
     db.commit()
     db.refresh(invoice_import)
     return invoice_import
+
+
+def reanalyze_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
+    """Relance l'analyse/contrôle de toutes les factures énergie d'une city.
+
+    Nécessaire après une évolution du moteur de contrôle (ex. correctif faux écarts
+    EDF) : les contrôles sont figés à l'import, ce recalcul les régénère.
+    """
+    imports = (
+        db.query(EnergyInvoiceImport)
+        .filter(EnergyInvoiceImport.city_id == city_id)
+        .all()
+    )
+    count = 0
+    for invoice_import in imports:
+        try:
+            _recompute_invoice_import(db, invoice_import)
+            count += 1
+        except Exception:  # noqa: BLE001 — une facture défaillante ne bloque pas le lot
+            continue
+    db.commit()
+    return {"reanalyzed": count}
 
 
 def update_invoice_decision(
@@ -540,6 +573,32 @@ def delete_invoice_import(db: Session, city_id: int, invoice_import_id: int) -> 
     db.commit()
     _cleanup_storage_path_if_orphan(db, storage_path)
     return True
+
+
+def purge_duplicate_invoice_imports(db: Session, city_id: int) -> dict[str, int]:
+    """Supprime les imports énergie en double (même numéro de facture).
+
+    Conserve l'import le plus récent (id le plus élevé) par numéro de facture
+    et supprime les autres. Retour : {"removed": N, "kept": K}.
+    """
+    rows = (
+        db.query(EnergyInvoiceImport.id, EnergyInvoiceImport.invoice_number)
+        .filter(EnergyInvoiceImport.city_id == city_id)
+        .order_by(EnergyInvoiceImport.id.desc())
+        .all()
+    )
+    seen: set[str] = set()
+    to_delete: list[int] = []
+    for import_id, invoice_number in rows:
+        if not invoice_number:
+            continue
+        if invoice_number in seen:
+            to_delete.append(import_id)
+        else:
+            seen.add(invoice_number)
+    for import_id in to_delete:
+        delete_invoice_import(db, city_id, import_id)
+    return {"removed": len(to_delete), "kept": len(seen)}
 
 
 def delete_all_invoice_imports(db: Session, city_id: int) -> dict[str, int]:

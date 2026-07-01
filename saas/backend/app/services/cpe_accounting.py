@@ -1532,11 +1532,13 @@ def _control_accounting_nature(line: CpeFinanceLine) -> CpeFinanceControl:
             severity="info",
             message=f"Nature comptable rattachee : {line.accounting_nature}.",
         )
+    # Non contrôlable (famille C) : matrice de codification incomplète, ce n'est pas
+    # une anomalie de facturation. Classé "blocked" (à compléter), pas "error".
     return _make_basic_control(
         line,
         control_type="accounting_nature",
-        status="error",
-        severity="error",
+        status="blocked",
+        severity="warning",
         message=(
             "Nature comptable absente : la ligne ne peut pas etre envoyee au service finances "
             "sans regle de codification."
@@ -1597,11 +1599,12 @@ def _control_invoice_type(invoice: CpeFinanceInvoice, anchor: CpeFinanceLine) ->
             message=f"Type de facture reconnu : {INVOICE_TYPE_LABELS[code]} ({code}).",
         )
     if not code:
+        # Non contrôlable (famille C) : donnée manquante, impossible de qualifier → "blocked".
         return _make_basic_control(
             anchor,
             control_type="invoice_type",
-            status="error",
-            severity="error",
+            status="blocked",
+            severity="warning",
             message="Type de facture absent : impossible de qualifier acompte, avoir, regularisation ou definitive.",
         )
     return _make_basic_control(
@@ -2266,6 +2269,16 @@ def list_finance_controls(db: Session, invoice_id: int, city_id: int | None = No
     return list(db.scalars(query).all())
 
 
+def _should_auto_validate_cpe(invoice_status: str, error_count: int, blocked_count: int) -> bool:
+    """Auto-validation CPE : une facture entièrement propre passe en `valide`.
+
+    Critère strict, symétrique de l'énergie (`control_status == valid`) : aucun
+    contrôle en `error` ni en `blocked`. On ne valide que depuis `a_controler`,
+    jamais une décision humaine déjà prise (`valide` / `refuse` / `conteste`).
+    """
+    return invoice_status == "a_controler" and error_count == 0 and blocked_count == 0
+
+
 def build_finance_control_report(
     db: Session,
     city_id: int | None = None,
@@ -2287,6 +2300,7 @@ def build_finance_control_report(
     controls_ok = 0
     controls_error = 0
     controls_blocked = 0
+    auto_validated = 0
 
     invoice_ids = [invoice.id for invoice in invoices]
     lines_by_invoice: dict[int, list[CpeFinanceLine]] = defaultdict(list)
@@ -2318,6 +2332,11 @@ def build_finance_control_report(
         controls_ok += status_counts["ok"]
         controls_error += status_counts["error"]
         controls_blocked += status_counts["blocked"]
+        if recalculate and _should_auto_validate_cpe(invoice.status, status_counts["error"], status_counts["blocked"]):
+            invoice.status = "valide"
+            note = "Validée automatiquement : contrôle sans écart ni point bloquant."
+            invoice.notes = f"{invoice.notes} | {note}" if invoice.notes else note
+            auto_validated += 1
         for control in controls:
             if control.status in type_counts[control.control_type]:
                 type_counts[control.control_type][control.status] += 1
@@ -2342,6 +2361,9 @@ def build_finance_control_report(
                 "control_types": sorted({control.control_type for control in controls if control.status != "ok"}),
             }
         )
+
+    if auto_validated:
+        db.commit()
 
     summaries.sort(key=lambda item: (-item["error"], -item["blocked"], item["invoice_number"]))
     return {
@@ -2539,6 +2561,8 @@ def list_finance_invoices_enriched(
     markets_by_invoice: dict[int, set[str]] = defaultdict(set)
     billed_items_by_invoice: dict[int, set[str]] = defaultdict(set)
     dest_ref1_by_invoice: dict[int, set[str]] = defaultdict(set)
+    prestation_sites_by_invoice: dict[int, set[str]] = defaultdict(set)
+    prestation_detail_by_invoice: dict[int, set[str]] = defaultdict(set)
     evidence_by_invoice: dict[int, CpeInvoiceEvidence] = {}
     evidence_query = (
         select(CpeInvoiceEvidence)
@@ -2553,6 +2577,10 @@ def list_finance_invoices_enriched(
             markets_by_invoice[line.invoice_id].add(line.market.strip().upper())
         if line.billed_item:
             billed_items_by_invoice[line.invoice_id].add(line.billed_item.strip().upper())
+        if line.site_code_detected:
+            prestation_sites_by_invoice[line.invoice_id].add(line.site_code_detected.strip())
+        if line.detail:
+            prestation_detail_by_invoice[line.invoice_id].add(line.detail.strip())
         for key in ("ref_destinataire_1", "ref_destinataire1", "reference_destinataire_1"):
             value = _line_raw_str(line, key)
             if value:
@@ -2580,6 +2608,8 @@ def list_finance_invoices_enriched(
             "markets": ", ".join(sorted(markets_by_invoice.get(invoice.id, set()))) or None,
             "billed_items": ", ".join(sorted(billed_items_by_invoice.get(invoice.id, set()))) or None,
             "recipient_reference_1": ", ".join(sorted(dest_ref1_by_invoice.get(invoice.id, set()))) or None,
+            "prestation_sites": ", ".join(sorted(prestation_sites_by_invoice.get(invoice.id, set()))) or None,
+            "prestation_detail": " · ".join(sorted(prestation_detail_by_invoice.get(invoice.id, set()))[:3]) or None,
             "evidence_id": evidence.id if evidence else None,
             "evidence_status": evidence.validation_status if evidence else None,
             "evidence_revision_date": evidence.revision_date if evidence else None,
@@ -3324,6 +3354,40 @@ def delete_finance_batch(db: Session, batch: CpeFinanceImportBatch) -> None:
     db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.batch_id == batch.id))
     db.delete(batch)
     db.commit()
+
+
+def purge_duplicate_finance_invoices(db: Session, city_id: int | None = None) -> dict[str, int]:
+    """Supprime les factures DALKIA en double (même numéro de facture).
+
+    Conserve la facture la plus récente (id le plus élevé) par numéro et supprime
+    les autres ainsi que leurs lignes et contrôles. Retour : {"removed": N, "kept": K}.
+    """
+    query = select(CpeFinanceInvoice.id, CpeFinanceInvoice.invoice_number)
+    if city_id is not None:
+        query = query.where(CpeFinanceInvoice.city_id == city_id)
+    rows = list(db.execute(query.order_by(CpeFinanceInvoice.id.desc())).all())
+    seen: set[str] = set()
+    to_delete: list[int] = []
+    for invoice_id, invoice_number in rows:
+        if not invoice_number:
+            continue
+        if invoice_number in seen:
+            to_delete.append(invoice_id)
+        else:
+            seen.add(invoice_number)
+    if not to_delete:
+        return {"removed": 0, "kept": len(seen)}
+    db.execute(delete(CpeInvoiceEvidenceLink).where(CpeInvoiceEvidenceLink.invoice_id.in_(to_delete)))
+    db.execute(
+        CpeInvoiceEvidence.__table__.update()
+        .where(CpeInvoiceEvidence.invoice_id.in_(to_delete))
+        .values(invoice_id=None)
+    )
+    db.execute(delete(CpeFinanceControl).where(CpeFinanceControl.invoice_id.in_(to_delete)))
+    db.execute(delete(CpeFinanceLine).where(CpeFinanceLine.invoice_id.in_(to_delete)))
+    removed = db.execute(delete(CpeFinanceInvoice).where(CpeFinanceInvoice.id.in_(to_delete))).rowcount or 0
+    db.commit()
+    return {"removed": removed, "kept": len(seen)}
 
 
 def delete_finance_history(db: Session, city_id: int | None = None) -> dict[str, int]:

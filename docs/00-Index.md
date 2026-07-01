@@ -34,7 +34,8 @@ do_not_auto_read:
 ## 🟡 Mémoire tiède — lire si la tâche concerne le sujet
 
 **Tranche en cours**
-- [[49-Spec-execution-refonte-Factures-Decisions-V1]] — **spec active** Factures & décisions
+- [[49-Spec-execution-refonte-Factures-Decisions-V1]] — **spec active** Factures & décisions (état d'implém. §0). Glossaire métier : `refonte-v1/factures-glossaire-controles.md`
+- `refonte-v1/suivi-financier-budget-atterrissage-cadrage.md` — **cadrage prochaine tranche** : budget par marché + suivi financier / atterrissage
 - [[35-Contrat-ecran-Factures-Decisions-V1]] · [[34-Contrat-ecran-Fluides-V1]] · [[36-Contrat-ecran-Cockpit-Sites-V1]] — contrats d'écran
 - [[37-Plan-migration-React-refonte-V1]] · [[38-Modele-backend-matrices-comptables-versionnees]] · [[40-Analyse-factures-reelles-pour-matrice-comptable]] · [[13-Matrice-routes-fonctionnalites-refonte-api]]
 
@@ -46,7 +47,7 @@ do_not_auto_read:
 
 **Décisions durables (ADR)** — `Decisions/`
 - [[Decisions/000-format-ADR]] · [[Decisions/008-referentiel-patrimoine-et-rapprochements]] · [[Decisions/009-environnement-staging]]
-- [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]]
+- [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]] · [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]]
 - ADR 001→007 : voir le dossier `Decisions/`
 
 **Specs techniques** : [[Specs]] (catalogue `saas/specs/`)

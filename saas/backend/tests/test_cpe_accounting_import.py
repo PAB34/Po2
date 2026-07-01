@@ -153,7 +153,8 @@ def test_recompute_finance_invoice_controls_adds_global_and_accounting_checks(db
     assert by_type["invoice_type"][0].status == "ok"
     assert by_type["invoice_total_ht"][0].status == "ok"
     assert by_type["invoice_period"][0].status == "ok"
-    assert [control.status for control in by_type["accounting_nature"]] == ["ok", "error"]
+    # Nature absente = non contrôlable (matrice incomplète) → "blocked", pas "error" (famille C).
+    assert [control.status for control in by_type["accounting_nature"]] == ["ok", "blocked"]
     assert [control.status for control in by_type["accounting_site"]] == ["ok", "blocked"]
 
 

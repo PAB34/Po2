@@ -432,6 +432,8 @@ class CpeFinanceInvoiceOut(BaseModel):
     markets: str | None = None
     billed_items: str | None = None
     recipient_reference_1: str | None = None
+    prestation_sites: str | None = None
+    prestation_detail: str | None = None
     evidence_id: int | None = None
     evidence_status: str | None = None
     evidence_revision_date: date | None = None

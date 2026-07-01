@@ -41,6 +41,7 @@ from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
 from app.models.patrimoine_match import PatrimoineMatchItem
 from app.models.site import Site
+from app.models.supplier_contact import SupplierContact
 from app.models.pronostics import PronosticsMatch, PronosticsPlayer, PronosticsPrediction
 from app.models.cpe_dalkia import (
     CpeDalkiaRefApe,

@@ -135,6 +135,35 @@ class EnergyInvoiceImport(Base):
         return report if isinstance(report, dict) else None
 
     @property
+    def total_ht(self) -> float | None:
+        """Total HT facture, lu depuis le résultat d'analyse (agrégé par les parsers)."""
+        result = self.analysis_result
+        if not result:
+            return None
+        invoice = result.get("invoice")
+        if isinstance(invoice, dict):
+            value = invoice.get("total_ht")
+            if isinstance(value, (int, float)):
+                return float(value)
+        return None
+
+    @property
+    def market_reference(self) -> str | None:
+        """N° de marché (ex. 2024-FCS-03), lu depuis le résultat d'analyse stocké.
+
+        Évite une migration : la donnée est déjà dans analysis_result_json["invoice"].
+        """
+        result = self.analysis_result
+        if not result:
+            return None
+        invoice = result.get("invoice")
+        if isinstance(invoice, dict):
+            ref = invoice.get("market_reference")
+            if ref:
+                return str(ref)
+        return None
+
+    @property
     def contract_holder(self) -> str | None:
         if self.normalized_invoice is not None and self.normalized_invoice.contract_holder:
             return self.normalized_invoice.contract_holder

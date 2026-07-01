@@ -19,15 +19,16 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-06-26 — branche `chore/optimisation-docs-ia`
+> Mis à jour : 2026-06-29 — branche `feat/phase-5-drawer-actions` (PR #32, non mergée). Détail de la session → journal `Archives/Journal-etat-dev-2026.md` (2026-06-29).
 
-- **Objectif probable** : doc 49 §8 **Phase 5** — brancher les vraies actions du drawer facture (valider / mettre en attente / préparer réclamation / exporter finance / réimport), après la restructuration documentaire en cours.
-- **Pourquoi prioritaire** : la tranche verticale `Factures & décisions` est le parcours pilote ; Phases 1→4 posées, il reste à rendre les actions du drawer réellement opérationnelles (et non simulées).
-- **Fichiers/modules concernés** : `saas/frontend/src/features/invoices/*` (`InvoicesDecisionPageV1.tsx`, hooks `useInvoiceDecisionsV1`, `useInvoiceAccountingSnapshotsV1`), `saas/frontend/src/lib/api.ts` ; backend `app/api/routes/{billing,gas_invoice,cpe_dalkia,accounting_matrix}.py`.
-- **Tests ciblés probables** : `npx tsc -b` (frontend) ; backend `pytest tests/test_accounting_matrix_apply.py` + tests décision facture si ajoutés.
-- **Décisions à confirmer avant de coder** : rôles exacts autorisés pour `validate-snapshot` / `export-finance` (ADR 011) ; formulation `historique` vs `revision` ; `apply` envoie encore `invoice_lines: []` par défaut → confirmer extracteurs réels par source.
-- **À ne pas faire sans validation** : envoyer un mail fournisseur directement (V1 = copié/pré-rempli) ; écraser une version de matrice active ; merger sur `main` sans validation staging.
-- **Niveau de confiance** : élevé.
+- **État** : (a) tranche `Factures & décisions V1` livrée sur staging (UX, **auto-validation** énergie + CPE — ADR 012, **contacts fournisseurs** + réclamation pré-remplie), **PR #32 non mergée** ; (b) **cadrage budget/suivi financier fait** (voir objectif).
+- **Objectif probable prochaine session** : démarrer la tranche **Suivi financier / Budget par marché** — cadrage et décisions déjà posés dans `refonte-v1/suivi-financier-budget-atterrissage-cadrage.md` (budget dans un **module « Marchés » dédié**, maille **opération**, table `accounting_budget_lines` ; page budget→réalisé→atterrissage). En parallèle, gate ouverte : **valider/merger la PR #32** (factures).
+- **Pourquoi prioritaire** : besoin métier exprimé (piloter le budget annuel par marché) ; s'appuie sur la matrice comptable déjà livrée. ⚠️ Pré-requis : réalisé par opération = extracteurs de lignes facture (PO2-FIN-001) + `operation_number` renseigné.
+- **Fichiers/modules concernés** : à créer — `accounting_budget_lines` (modèle + migration), API CRUD, module front « Marchés ». Existant à relire : `app/models/accounting_matrix.py`, `invoice_accounting_snapshots`, `app/services/cpe_atterrissage.py` (≠ atterrissage financier). Factures : `InvoicesDecisionPageV1.tsx` si reprise PR #32.
+- **Tests ciblés probables** : `npx tsc -b` (front) ; pytest du nouveau service budget ; (factures : `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py tests/test_supplier_contacts.py`).
+- **Décisions à confirmer avant de coder** : §7 du cadrage — temporalité budget (annuel vs mensuel/trimestriel), marché pilote v1, niveau d'atterrissage v1 (pro-rata vs moteur doc 34 §F04), source de la liste des opérations.
+- **À ne pas faire sans validation** : confondre atterrissage **financier** et atterrissage **intéressement** (`cpe_atterrissage.py`) ; merger PR #32 sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`).
+- **Niveau de confiance** : élevé (objectif et décisions cadrés ; reste des points §7 mineurs).
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -46,11 +47,11 @@ do_not_auto_read:
 | CPE DALKIA | `/cpe` | Avancé : cockpit finance, contrôle factures, référentiel DALKIA, conso multi-fluides |
 | BPU | `/energie/bpu` | Timeline · TURPE · Documents/Import · Édition tableau |
 | Matrices comptables versionnées | API `/api/accounting-matrices/*` | Backend complet mergé `main` (schéma + XLSX + apply/snapshots) |
-| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` tranche active (PR #30, validée staging) |
+| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` tranche active avancée (auto-validation, contacts/réclamation) — PR #32, validée staging, non mergée |
 
 ## 📦 Migrations alembic
 
-HEAD code constaté : `0064_add_accounting_matrices` (matrices comptables versionnées).
+HEAD code constaté : `0065_add_supplier_contacts` (contacts fournisseurs pour réclamations).
 Jalons : `0017` hiérarchie sites · `0041` seed CPE scope · `0048` CVC F-Gaz · `0056` rapprochements
 patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → journal archivé.
 
@@ -91,5 +92,5 @@ patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → j
 
 - Pilotage : [[Backlog]] · [[03-Roadmap-fonctionnalites]]
 - Tranche active : [[49-Spec-execution-refonte-Factures-Decisions-V1]]
-- Décisions durables : [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]]
+- Décisions durables : [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]] · [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]]
 - Historique : `Archives/Journal-etat-dev-2026.md` · `Sessions/` *(ne pas lire par défaut)*

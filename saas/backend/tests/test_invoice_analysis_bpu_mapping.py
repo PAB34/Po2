@@ -1,5 +1,10 @@
+from types import SimpleNamespace
+
 from app.services.invoice_analysis import (
+    _auto_validate_if_clean,
     _bpu_component_field,
+    _check_consumption_against_enedis,
+    _check_period_continuity,
     _classify_invoice_fixed_charge,
     _resolve_bpu_fallback_source,
     _tariff_code_for_site,
@@ -13,6 +18,41 @@ def test_fallback_source_prefers_historical_then_configured() -> None:
     assert _resolve_bpu_fallback_source(0, 5, "canonical_xlsx") == "canonical_xlsx"
     assert _resolve_bpu_fallback_source(2, 4, "canonical_xlsx") == "mixed"
     assert _resolve_bpu_fallback_source(0, 0, "configured") is None
+
+
+def _decision_stub(control_status: str, decision_status: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        control_status=control_status,
+        decision_status=decision_status,
+        decision_comment=None,
+        decision_updated_at=None,
+    )
+
+
+def test_auto_validate_only_when_control_clean_and_not_decided() -> None:
+    # #7 : contrôle entièrement vert + décision encore to_review -> approved
+    clean = _decision_stub("valid", "to_review")
+    _auto_validate_if_clean(clean)
+    assert clean.decision_status == "approved"
+    assert clean.decision_comment is not None
+    assert clean.decision_updated_at is not None
+
+
+def test_auto_validate_never_overrides_human_decision() -> None:
+    # une décision humaine (approved/rejected/dispute_sent) n'est jamais écrasée
+    for human in ("approved", "rejected", "dispute_sent"):
+        inv = _decision_stub("valid", human)
+        _auto_validate_if_clean(inv)
+        assert inv.decision_status == human
+        assert inv.decision_comment is None
+
+
+def test_auto_validate_skips_non_valid_controls() -> None:
+    # review / invalid restent à traiter manuellement
+    for control in ("review", "invalid", "not_checked"):
+        inv = _decision_stub(control, "to_review")
+        _auto_validate_if_clean(inv)
+        assert inv.decision_status == "to_review"
 
 
 def test_bpu_component_field_maps_gas_components() -> None:
@@ -68,3 +108,158 @@ def test_xlsx_c2_segment_maps_to_c2_even_without_tariff_label() -> None:
     }
 
     assert _tariff_code_for_site(site) == "C2"
+
+
+class _FakeQuery:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def filter(self, *_args, **_kwargs):
+        return self
+
+    def all(self):
+        return self.rows
+
+
+class _FakeDb:
+    def __init__(self, previous_imports):
+        self.previous_imports = previous_imports
+
+    def query(self, *_args, **_kwargs):
+        return _FakeQuery(self.previous_imports)
+
+
+def _invoice_import(**overrides):
+    values = {
+        "id": 2,
+        "city_id": 1,
+        "invoice_number": "CURRENT",
+        "original_filename": "current.csv",
+        "supplier_guess": "EDF",
+        "source": "edf_csv_export",
+        "sha256": "current-sha",
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _period_site(**overrides):
+    values = {
+        "prm_id": "24381620657920",
+        "fic_number": "2010006564690",
+        "period_start": "2025-12-16",
+        "period_end": "2025-12-31",
+        "total_ttc": 645.51,
+        "total_consumption_kwh": 1342.0,
+    }
+    values.update(overrides)
+    return values
+
+
+def test_period_control_explains_exact_duplicate_reissue() -> None:
+    previous = _invoice_import(
+        id=1,
+        invoice_number="10248500902",
+        analysis_result={"sites": [_period_site()]},
+        analysis_result_json="{}",
+    )
+    current = _invoice_import(invoice_number="10250533593")
+    issues = []
+    summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "explained_overlaps": 0, "missing_references": 0}
+
+    _check_period_continuity(
+        _FakeDb([previous]),
+        current,
+        [_period_site()],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        summary,
+        "EDF",
+    )
+
+    assert [issue["code"] for issue in issues] == ["DUPLICATE_EXPORT_OR_REISSUE"]
+    assert issues[0]["severity"] == "explained"
+    assert summary["overlaps"] == 0
+    assert summary["explained_overlaps"] == 1
+
+
+def test_period_control_explains_short_supplier_switch_gap() -> None:
+    previous = _invoice_import(
+        id=1,
+        invoice_number="10248500902",
+        supplier_guess="EDF",
+        analysis_result={
+            "sites": [
+                _period_site(
+                    fic_number="2010006564690",
+                    period_start="2025-12-07",
+                    period_end="2025-12-31",
+                    total_ttc=332.78,
+                    total_consumption_kwh=820.0,
+                )
+            ]
+        },
+        analysis_result_json="{}",
+    )
+    current = _invoice_import(invoice_number="130000078078", supplier_guess="ENGIE", source="engie_xlsx_import")
+    issues = []
+    summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "explained_overlaps": 0, "missing_references": 0}
+
+    _check_period_continuity(
+        _FakeDb([previous]),
+        current,
+        [
+            _period_site(
+                fic_number="820006337746",
+                period_start="2026-01-08",
+                period_end="2026-02-07",
+                total_ttc=350.0,
+                total_consumption_kwh=900.0,
+            )
+        ],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        summary,
+        "ENGIE",
+    )
+
+    assert [issue["code"] for issue in issues] == ["SUPPLIER_SWITCH_GAP_EXPLAINED"]
+    assert issues[0]["severity"] == "explained"
+    assert summary["gaps"] == 0
+    assert summary["explained_overlaps"] == 1
+
+
+def test_fixed_charge_only_site_without_period_is_explained_once() -> None:
+    site = _period_site(
+        prm_id="24329232838393",
+        period_start=None,
+        period_end=None,
+        total_ttc=7.57,
+        total_consumption_kwh=None,
+        invoice_lines=[
+            {"normalized_component": "subscription", "amount_ht": 4.1},
+            {"normalized_component": "network_fixed_total", "amount_ht": 1.0},
+            {"normalized_component": "cta", "amount_ht": 0.2},
+        ],
+    )
+    current = _invoice_import(invoice_number="10248629137")
+    issues = []
+    period_summary = {"checked_sites": 0, "gaps": 0, "overlaps": 0, "explained_overlaps": 0, "missing_references": 0}
+    consumption_summary = {"checked_sites": 0, "mismatches": 0, "missing_references": 0, "partial_references": 0}
+
+    _check_period_continuity(
+        _FakeDb([]),
+        current,
+        [site],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        period_summary,
+        "EDF",
+    )
+    _check_consumption_against_enedis(
+        [site],
+        lambda severity, code, message, scope="document": issues.append({"severity": severity, "code": code, "message": message, "scope": scope}),
+        consumption_summary,
+    )
+
+    assert [issue["code"] for issue in issues] == ["FIXED_CHARGE_PERIOD_NOT_APPLICABLE"]
+    assert issues[0]["severity"] == "explained"
+    assert period_summary["missing_references"] == 0
+    assert consumption_summary["missing_references"] == 0

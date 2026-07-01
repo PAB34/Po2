@@ -1795,7 +1795,9 @@ export type EnergyInvoiceImport = {
   period_start: string | null;
   period_end: string | null;
   regroupement: string | null;
+  market_reference: string | null;
   contract_holder: string | null;
+  total_ht: number | null;
   total_ttc: number | null;
   total_consumption_kwh: number | null;
   site_count: number | null;
@@ -3752,6 +3754,8 @@ export type CpeFinanceInvoice = {
   markets: string | null;
   billed_items: string | null;
   recipient_reference_1: string | null;
+  prestation_sites: string | null;
+  prestation_detail: string | null;
   evidence_id: number | null;
   evidence_status: string | null;
   evidence_revision_date: string | null;
@@ -4289,6 +4293,21 @@ export async function fetchCpeFinanceBatches(token: string): Promise<CpeFinanceI
   return parseResponse<CpeFinanceImportBatch[]>(response);
 }
 
+export async function purgeCpeFinanceDuplicates(token: string): Promise<{ removed: number; kept: number }> {
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/purge-duplicates`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ removed: number; kept: number }>(response);
+}
+
+export async function purgeEnergyInvoiceDuplicates(token: string): Promise<{ removed: number; kept: number }> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/purge-duplicates`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ removed: number; kept: number }>(response);
+}
+
+export async function reanalyzeAllEnergyInvoices(token: string): Promise<{ reanalyzed: number }> {
+  const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/reanalyze-all`, { method: "POST", headers: buildHeaders(token) });
+  return parseResponse<{ reanalyzed: number }>(response);
+}
+
 export async function fetchCpeFinanceInvoices(token: string, batchId?: number): Promise<CpeFinanceInvoice[]> {
   const url = batchId ? `${apiBaseUrl}/cpe/finances/invoices?batch_id=${batchId}` : `${apiBaseUrl}/cpe/finances/invoices`;
   const response = await fetch(url, { headers: buildHeaders(token) });
@@ -4390,6 +4409,39 @@ export async function recalculateAllCpeFinanceControls(token: string): Promise<C
     headers: buildHeaders(token),
   });
   return parseResponse<CpeFinanceControlReport>(response);
+}
+
+export type SupplierContact = {
+  id: number;
+  supplier: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type SupplierContactInput = {
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  notes?: string | null;
+};
+
+export async function fetchSupplierContacts(token: string): Promise<SupplierContact[]> {
+  const response = await fetch(`${apiBaseUrl}/billing/supplier-contacts`, { headers: buildHeaders(token) });
+  return parseResponse<SupplierContact[]>(response);
+}
+
+export async function upsertSupplierContact(token: string, supplier: string, payload: SupplierContactInput): Promise<SupplierContact> {
+  const response = await fetch(`${apiBaseUrl}/billing/supplier-contacts/${encodeURIComponent(supplier)}`, {
+    method: "PUT",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<SupplierContact>(response);
 }
 
 export async function downloadCpeFinanceControlReport(token: string): Promise<Blob> {
