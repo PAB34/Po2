@@ -1,0 +1,1209 @@
+{
+  "source": "Export CIRIL (grilles SYLK _grille 9-14), fourni 2026-07-01",
+  "generated_at": "2026-07-01",
+  "usage": "Referentiel comptable canonique, transverse a tous les tiers facturants. Sert a valider/pre-remplir les axes (service/fonction/antenne/operation/nature) des matrices comptables (DALKIA, ENGIE, EDF, futurs).",
+  "referentiels": {
+    "service": {
+      "description": "Service gestionnaire (CIRIL)",
+      "source_file": "grilles-ciril-source/grille_13.xls",
+      "count": 27,
+      "entries": [
+        {
+          "code": "AMUR",
+          "label": "AMENAGEMENT ESPACE URBAIN",
+          "end_date": null
+        },
+        {
+          "code": "ANIM",
+          "label": "ANIMATION - MANUTENTION",
+          "end_date": null
+        },
+        {
+          "code": "ATBA",
+          "label": "DIV. PATRIMOINE IMMO BILIER ATELIER   BAT",
+          "end_date": null
+        },
+        {
+          "code": "AUTO",
+          "label": "PARC AUTO",
+          "end_date": null
+        },
+        {
+          "code": "BURA",
+          "label": "BUREAU DES ARTISTES",
+          "end_date": null
+        },
+        {
+          "code": "BURF",
+          "label": "BUREAU DES FESTIVALS",
+          "end_date": null
+        },
+        {
+          "code": "CIM",
+          "label": "CIMETIERES",
+          "end_date": null
+        },
+        {
+          "code": "CIRC",
+          "label": "CIRCULATION",
+          "end_date": null
+        },
+        {
+          "code": "COHS",
+          "label": "COHESION SOCIALE",
+          "end_date": null
+        },
+        {
+          "code": "CULT",
+          "label": "AFFAIRES CULTURELLES",
+          "end_date": null
+        },
+        {
+          "code": "DOPB",
+          "label": "COMMERCE ET ARTISANAT",
+          "end_date": null
+        },
+        {
+          "code": "DRH",
+          "label": "DIRECTION RESSOURCES HUMAINES",
+          "end_date": null
+        },
+        {
+          "code": "ENSG",
+          "label": "ENSEIGNEMENT",
+          "end_date": null
+        },
+        {
+          "code": "GBRA",
+          "label": "ESPACE GEORGES BRASSENS",
+          "end_date": "31/12/2025"
+        },
+        {
+          "code": "GYMN",
+          "label": "GYMNASES",
+          "end_date": null
+        },
+        {
+          "code": "JARD",
+          "label": "JARDINS PAYSAGES ETUDES & TRX ENTREPR",
+          "end_date": null
+        },
+        {
+          "code": "MABA",
+          "label": "MAINTENANCE BATIMENT",
+          "end_date": null
+        },
+        {
+          "code": "MUSE",
+          "label": "MUSEE",
+          "end_date": null
+        },
+        {
+          "code": "MVAQ",
+          "label": "MAISON DE LA VIE DE QUARTIER",
+          "end_date": null
+        },
+        {
+          "code": "NAUT",
+          "label": "CENTRES NAUTIQUES",
+          "end_date": null
+        },
+        {
+          "code": "PISC",
+          "label": "PISCINES",
+          "end_date": null
+        },
+        {
+          "code": "PLAG",
+          "label": "ENVIRONNEMENT- PLAGES",
+          "end_date": null
+        },
+        {
+          "code": "POLM",
+          "label": "POLICE MUNICIPALE",
+          "end_date": null
+        },
+        {
+          "code": "SPOR",
+          "label": "SPORTS ET ACTION SPORTIVE",
+          "end_date": null
+        },
+        {
+          "code": "SPUR",
+          "label": "SPORTS URBAINS EQUIPEMENT",
+          "end_date": null
+        },
+        {
+          "code": "STAD",
+          "label": "STADES",
+          "end_date": null
+        },
+        {
+          "code": "XSCO",
+          "label": "EXTRA SCOLAIRES ACTIVITES",
+          "end_date": null
+        }
+      ]
+    },
+    "fonction": {
+      "description": "Fonction M14/M57 (nomenclature fonctionnelle)",
+      "source_file": "grilles-ciril-source/grille_10.xls",
+      "count": 46,
+      "entries": [
+        {
+          "code": "",
+          "label": "PAS DE RUBRIQUE",
+          "end_date": null
+        },
+        {
+          "code": "01",
+          "label": "Opérations non ventilables",
+          "end_date": null
+        },
+        {
+          "code": "020",
+          "label": "Administration générale de la collectivité",
+          "end_date": null
+        },
+        {
+          "code": "024",
+          "label": "Aide aux associations (non classées ailleurs)",
+          "end_date": null
+        },
+        {
+          "code": "025",
+          "label": "Cimetières et pompes funèbres",
+          "end_date": null
+        },
+        {
+          "code": "028",
+          "label": "Autres moyens généraux",
+          "end_date": null
+        },
+        {
+          "code": "0342",
+          "label": "Section de la culture, de l'éducation et des sport",
+          "end_date": null
+        },
+        {
+          "code": "11",
+          "label": "Police, sécurité, justice",
+          "end_date": null
+        },
+        {
+          "code": "201",
+          "label": "Services communs",
+          "end_date": null
+        },
+        {
+          "code": "211",
+          "label": "Ecoles maternelles",
+          "end_date": null
+        },
+        {
+          "code": "212",
+          "label": "Ecoles primaires",
+          "end_date": null
+        },
+        {
+          "code": "213",
+          "label": "Classes regroupées",
+          "end_date": null
+        },
+        {
+          "code": "23",
+          "label": "Enseignement supérieur",
+          "end_date": null
+        },
+        {
+          "code": "281",
+          "label": "Hébergement et restauration scolaires",
+          "end_date": null
+        },
+        {
+          "code": "283",
+          "label": "Médecine scolaire",
+          "end_date": null
+        },
+        {
+          "code": "288",
+          "label": "Autres services annexes de l?enseignement",
+          "end_date": null
+        },
+        {
+          "code": "30",
+          "label": "Services communs",
+          "end_date": null
+        },
+        {
+          "code": "311",
+          "label": "Activités artistiques, actions et manifestations c",
+          "end_date": null
+        },
+        {
+          "code": "312",
+          "label": "Patrimoine",
+          "end_date": null
+        },
+        {
+          "code": "314",
+          "label": "Musées",
+          "end_date": null
+        },
+        {
+          "code": "315",
+          "label": "Services d'archives",
+          "end_date": null
+        },
+        {
+          "code": "316",
+          "label": "Théâtres et spectacles vivants",
+          "end_date": null
+        },
+        {
+          "code": "317",
+          "label": "Cinémas et autres salles de spectacles",
+          "end_date": null
+        },
+        {
+          "code": "321",
+          "label": "Salles de sport, gymnases",
+          "end_date": null
+        },
+        {
+          "code": "322",
+          "label": "Stades",
+          "end_date": null
+        },
+        {
+          "code": "323",
+          "label": "Piscines",
+          "end_date": null
+        },
+        {
+          "code": "324",
+          "label": "Centres de formation sportifs",
+          "end_date": null
+        },
+        {
+          "code": "325",
+          "label": "Autres équipements sportifs ou de loisirs",
+          "end_date": null
+        },
+        {
+          "code": "326",
+          "label": "Manifestations sportives",
+          "end_date": null
+        },
+        {
+          "code": "331",
+          "label": "Centres de loisirs",
+          "end_date": null
+        },
+        {
+          "code": "348",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "410",
+          "label": "Services communs",
+          "end_date": null
+        },
+        {
+          "code": "411",
+          "label": "PMI et planification familiale",
+          "end_date": null
+        },
+        {
+          "code": "412",
+          "label": "Prévention et éducation pour la santé",
+          "end_date": null
+        },
+        {
+          "code": "420",
+          "label": "Services communs",
+          "end_date": null
+        },
+        {
+          "code": "4213",
+          "label": "Aides sociales à l?enfance",
+          "end_date": null
+        },
+        {
+          "code": "4221",
+          "label": "Crèches et garderies",
+          "end_date": null
+        },
+        {
+          "code": "4238",
+          "label": "Autres actions en faveur des personnes âgées",
+          "end_date": null
+        },
+        {
+          "code": "511",
+          "label": "Espaces verts urbains",
+          "end_date": null
+        },
+        {
+          "code": "518",
+          "label": "Autres actions d?aménagement urbain",
+          "end_date": null
+        },
+        {
+          "code": "61",
+          "label": "Interventions économiques transversales",
+          "end_date": null
+        },
+        {
+          "code": "62",
+          "label": "Structure d'animation et de développement économiq",
+          "end_date": null
+        },
+        {
+          "code": "632",
+          "label": "Industrie, commerce et artisanat",
+          "end_date": null
+        },
+        {
+          "code": "633",
+          "label": "Développement touristique",
+          "end_date": null
+        },
+        {
+          "code": "76",
+          "label": "Préservation du patrimoine naturel et gestion des",
+          "end_date": null
+        },
+        {
+          "code": "847",
+          "label": "Equipements de voirie",
+          "end_date": null
+        }
+      ]
+    },
+    "nature": {
+      "description": "Nature comptable / compte (M14/M57)",
+      "source_file": "grilles-ciril-source/grille_11.xls",
+      "count": 65,
+      "entries": [
+        {
+          "code": "1311",
+          "label": "Etat et établissements nationaux",
+          "end_date": null
+        },
+        {
+          "code": "1312",
+          "label": "Régions",
+          "end_date": null
+        },
+        {
+          "code": "13151",
+          "label": "GFP de rattachement",
+          "end_date": null
+        },
+        {
+          "code": "1318",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "1321",
+          "label": "Etat et établissements nationaux",
+          "end_date": null
+        },
+        {
+          "code": "1322",
+          "label": "Régions",
+          "end_date": null
+        },
+        {
+          "code": "13251",
+          "label": "GFP de rattachement",
+          "end_date": null
+        },
+        {
+          "code": "1328",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "13362",
+          "label": "Dotation de soutien à l'investissement local",
+          "end_date": null
+        },
+        {
+          "code": "1381",
+          "label": "Etat et établissements nationaux",
+          "end_date": null
+        },
+        {
+          "code": "2031",
+          "label": "Frais d'études",
+          "end_date": null
+        },
+        {
+          "code": "2128",
+          "label": "Autres agencements et aménagements",
+          "end_date": null
+        },
+        {
+          "code": "21312",
+          "label": "Bâtiments scolaires",
+          "end_date": null
+        },
+        {
+          "code": "21318",
+          "label": "Autres bâtiments publics",
+          "end_date": null
+        },
+        {
+          "code": "21321",
+          "label": "Immeubles de rapport",
+          "end_date": null
+        },
+        {
+          "code": "21351",
+          "label": "Bâtiments publics",
+          "end_date": null
+        },
+        {
+          "code": "2138",
+          "label": "Autres constructions",
+          "end_date": null
+        },
+        {
+          "code": "2151",
+          "label": "Réseaux de voirie",
+          "end_date": null
+        },
+        {
+          "code": "21531",
+          "label": "Réseaux d'adduction d'eau",
+          "end_date": null
+        },
+        {
+          "code": "21534",
+          "label": "Réseaux d'électrification",
+          "end_date": null
+        },
+        {
+          "code": "21538",
+          "label": "Autres réseaux",
+          "end_date": null
+        },
+        {
+          "code": "21568",
+          "label": "Autre matériel et outillage d'incendie et de défen",
+          "end_date": null
+        },
+        {
+          "code": "2158",
+          "label": "Autres installations, matériel et outillage techni",
+          "end_date": null
+        },
+        {
+          "code": "21611",
+          "label": "Biens sous-jacents",
+          "end_date": null
+        },
+        {
+          "code": "21612",
+          "label": "Dépenses ultérieures immobilisées",
+          "end_date": null
+        },
+        {
+          "code": "21622",
+          "label": "Dépenses ultérieures immobilisées",
+          "end_date": null
+        },
+        {
+          "code": "21828",
+          "label": "Autres matériels de transport",
+          "end_date": null
+        },
+        {
+          "code": "21838",
+          "label": "Autre matériel informatique",
+          "end_date": null
+        },
+        {
+          "code": "2188",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "2313",
+          "label": "Constructions",
+          "end_date": null
+        },
+        {
+          "code": "2315",
+          "label": "Installations, matériel et outillage techniques",
+          "end_date": null
+        },
+        {
+          "code": "238",
+          "label": "Avances versées sur commandes d'immobilisations co",
+          "end_date": null
+        },
+        {
+          "code": "4541101",
+          "label": "TRAVAUX DE MISE EN SECURITE",
+          "end_date": null
+        },
+        {
+          "code": "4541201",
+          "label": "TRAVAUX DE MISE EN SECURITE",
+          "end_date": null
+        },
+        {
+          "code": "60611",
+          "label": "Eau et assainissement",
+          "end_date": null
+        },
+        {
+          "code": "60612",
+          "label": "Energie - Electricité",
+          "end_date": null
+        },
+        {
+          "code": "60613",
+          "label": "Chauffage urbain",
+          "end_date": null
+        },
+        {
+          "code": "60621",
+          "label": "Combustibles",
+          "end_date": null
+        },
+        {
+          "code": "60628",
+          "label": "Autres fournitures non stockées",
+          "end_date": null
+        },
+        {
+          "code": "60632",
+          "label": "Fournitures de petit équipement",
+          "end_date": null
+        },
+        {
+          "code": "60636",
+          "label": "Habillement et vêtements de travail",
+          "end_date": null
+        },
+        {
+          "code": "6064",
+          "label": "Fournitures administratives",
+          "end_date": null
+        },
+        {
+          "code": "6068",
+          "label": "Autres matières et fournitures",
+          "end_date": null
+        },
+        {
+          "code": "611",
+          "label": "Contrats de prestations de services",
+          "end_date": null
+        },
+        {
+          "code": "61358",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "614",
+          "label": "Charges locatives et de copropriété",
+          "end_date": null
+        },
+        {
+          "code": "61521",
+          "label": "Terrains",
+          "end_date": null
+        },
+        {
+          "code": "615221",
+          "label": "Bâtiments publics",
+          "end_date": null
+        },
+        {
+          "code": "615231",
+          "label": "Voiries",
+          "end_date": null
+        },
+        {
+          "code": "615232",
+          "label": "Réseaux",
+          "end_date": null
+        },
+        {
+          "code": "61551",
+          "label": "Matériel roulant",
+          "end_date": null
+        },
+        {
+          "code": "61558",
+          "label": "Autres biens mobiliers",
+          "end_date": null
+        },
+        {
+          "code": "6156",
+          "label": "Maintenance",
+          "end_date": null
+        },
+        {
+          "code": "617",
+          "label": "Etudes et recherches",
+          "end_date": null
+        },
+        {
+          "code": "6182",
+          "label": "Documentation générale et technique",
+          "end_date": null
+        },
+        {
+          "code": "62268",
+          "label": "Autres honoraires, conseils",
+          "end_date": null
+        },
+        {
+          "code": "6227",
+          "label": "Frais d'actes et de contentieux",
+          "end_date": null
+        },
+        {
+          "code": "6228",
+          "label": "Divers",
+          "end_date": null
+        },
+        {
+          "code": "6245",
+          "label": "Transports de personnes extérieures à la collectiv",
+          "end_date": null
+        },
+        {
+          "code": "6283",
+          "label": "Frais de nettoyage des locaux",
+          "end_date": null
+        },
+        {
+          "code": "6288",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "65888",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "74718",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "75888",
+          "label": "Autres",
+          "end_date": null
+        },
+        {
+          "code": "773",
+          "label": "Mandats annulés (sur exercices antérieurs) ou atte",
+          "end_date": null
+        }
+      ]
+    },
+    "operation": {
+      "description": "Operation d'equipement (investissement)",
+      "source_file": "grilles-ciril-source/grille_12.xls",
+      "count": 26,
+      "entries": [
+        {
+          "code": "",
+          "label": "PAS D'OPERATION",
+          "end_date": null
+        },
+        {
+          "code": "90000",
+          "label": "EQUIPEMENT ET MATERIEL ROULANT DES SERVICES",
+          "end_date": null
+        },
+        {
+          "code": "90003",
+          "label": "EQUIPEMENTS INFORMATIQUE ET COMMUNICATION",
+          "end_date": null
+        },
+        {
+          "code": "95002",
+          "label": "ZAC EST CSU",
+          "end_date": null
+        },
+        {
+          "code": "95011",
+          "label": "NOUVELLE SALLE BRASSENS PLACE J MOCH",
+          "end_date": null
+        },
+        {
+          "code": "97001",
+          "label": "REHABILITATION ECOLE DES BEAUX ARTS",
+          "end_date": null
+        },
+        {
+          "code": "97003",
+          "label": "CREATION SALLE MULTI ACTIVITES BARROU",
+          "end_date": null
+        },
+        {
+          "code": "97005",
+          "label": "ACQUISITION CENTRE COMMERCIAL",
+          "end_date": null
+        },
+        {
+          "code": "98001",
+          "label": "TRAVAUX BATIMENTS CULTURELS",
+          "end_date": null
+        },
+        {
+          "code": "98002",
+          "label": "TRAVAUX BATIMENTS SPORTIFS",
+          "end_date": null
+        },
+        {
+          "code": "98003",
+          "label": "TRAVAUX BATIMENTS EDUCATIFS",
+          "end_date": null
+        },
+        {
+          "code": "98004",
+          "label": "TRAVAUX BATIMENTS COMMUNAUX AUTRES",
+          "end_date": null
+        },
+        {
+          "code": "98005",
+          "label": "RENOVATION EXTENSION ECOLE ANATOLE FRANCE",
+          "end_date": null
+        },
+        {
+          "code": "98006",
+          "label": "REHABILITATION ECOLE JEAN MACE",
+          "end_date": null
+        },
+        {
+          "code": "98007",
+          "label": "REHABILITATION ET AMGT EXT ECOLE DES BEAUX ARTS",
+          "end_date": null
+        },
+        {
+          "code": "98008",
+          "label": "CREATION SALLE POLYVALENTE STADE LLENSE",
+          "end_date": null
+        },
+        {
+          "code": "98010",
+          "label": "DECANALE SAINT LOUIS RENOVATION ORGUES ET BATIMENT",
+          "end_date": null
+        },
+        {
+          "code": "98011",
+          "label": "PROJET BAIN DOUCHE",
+          "end_date": null
+        },
+        {
+          "code": "98012",
+          "label": "EXTENSION HALLE MARTY",
+          "end_date": null
+        },
+        {
+          "code": "98014",
+          "label": "AMENAGEMENT TECHNIQUE CENTRE SUPERVISEUR URBAIN",
+          "end_date": null
+        },
+        {
+          "code": "98016",
+          "label": "CHANTIER AVERSA",
+          "end_date": null
+        },
+        {
+          "code": "98019",
+          "label": "RECONSTRUCTION D UN POLE DE SERVICES PUBLICS",
+          "end_date": null
+        },
+        {
+          "code": "98020",
+          "label": "ACQUISITION FONCIERE ET AMENAGEMENT ESP CULT GAFF",
+          "end_date": null
+        },
+        {
+          "code": "98021",
+          "label": "GUINGUETTE LAZARET",
+          "end_date": null
+        },
+        {
+          "code": "98022",
+          "label": "CRECHE LACAN",
+          "end_date": null
+        },
+        {
+          "code": "98023",
+          "label": "CPE",
+          "end_date": null
+        }
+      ]
+    },
+    "antenne": {
+      "description": "Antenne = nom court du site/batiment (CIRIL)",
+      "source_file": "grilles-ciril-source/grille_14.xls",
+      "count": 64,
+      "entries": [
+        {
+          "code": "",
+          "label": "PAS D' ANTENNE",
+          "end_date": null
+        },
+        {
+          "code": "A FRANCE",
+          "label": "ECOLE ELEMENTAIRE ANATOLE FRANCE",
+          "end_date": null
+        },
+        {
+          "code": "A VARDA",
+          "label": "ECOLE MATENELLE AGNES VARDA",
+          "end_date": null
+        },
+        {
+          "code": "ACHATS",
+          "label": "ACHATS",
+          "end_date": null
+        },
+        {
+          "code": "AECP CPE",
+          "label": "AECP CPE DALKIA",
+          "end_date": null
+        },
+        {
+          "code": "ALSH",
+          "label": "ALSH",
+          "end_date": null
+        },
+        {
+          "code": "ARAGO",
+          "label": "ECOLE ELEMENTAIRE ARAGO",
+          "end_date": null
+        },
+        {
+          "code": "ARCHIVES",
+          "label": "ARCHIVES",
+          "end_date": null
+        },
+        {
+          "code": "BAIN DOUCH",
+          "label": "BAINS DOUCHES PLACE VICTOR HUGO",
+          "end_date": null
+        },
+        {
+          "code": "BARROU",
+          "label": "AUTRES EQUIPEMENTS SPORTIFS DU BARROU",
+          "end_date": null
+        },
+        {
+          "code": "BAT ADMIN",
+          "label": "BATIMENTS ADMINISTRATIFS",
+          "end_date": null
+        },
+        {
+          "code": "BEAUX ARTS",
+          "label": "BEAUX ARTS",
+          "end_date": null
+        },
+        {
+          "code": "BIASCAMANO",
+          "label": "PISCINE PHILIPPE BIASCAMANO",
+          "end_date": null
+        },
+        {
+          "code": "BOWLING",
+          "label": "COMPLEXE DU BOWLING",
+          "end_date": null
+        },
+        {
+          "code": "BRASSENS",
+          "label": "ESPACE GEORGES BRASSENS",
+          "end_date": null
+        },
+        {
+          "code": "CCAS",
+          "label": "SUBVENTIONS CCAS",
+          "end_date": null
+        },
+        {
+          "code": "CHAP Q HAU",
+          "label": "CHAPELLE DU QUARTIER HAUT",
+          "end_date": null
+        },
+        {
+          "code": "CHAPELLE",
+          "label": "EXPO CHAPELLE",
+          "end_date": null
+        },
+        {
+          "code": "CONDORCET",
+          "label": "ECOLE MATERNELLE CONDORCET",
+          "end_date": null
+        },
+        {
+          "code": "CTE MEDICO",
+          "label": "CENTRE MEDICO SCOLAIRE",
+          "end_date": null
+        },
+        {
+          "code": "CTM",
+          "label": "CENTRE TECHNIQUE MUNICIPAL",
+          "end_date": null
+        },
+        {
+          "code": "E COTTON",
+          "label": "ECOLE MATERNELLE EUGENIE COTTON",
+          "end_date": null
+        },
+        {
+          "code": "EQUIP PROX",
+          "label": "EQUIPEMENTS SPORTIFS DE PROXIMITES",
+          "end_date": null
+        },
+        {
+          "code": "F BUISSON",
+          "label": "ECOLE ELEMENTAIRE FERDINAND BUISSON",
+          "end_date": null
+        },
+        {
+          "code": "F PASCAL",
+          "label": "BASE FRANCOISE PASCAL BASE DE MER",
+          "end_date": null
+        },
+        {
+          "code": "G BAYROU",
+          "label": "STADE GEORGES BAYROU",
+          "end_date": null
+        },
+        {
+          "code": "G BRASSENS",
+          "label": "ECOLE ELEMENTAIRE GEORGES BRASSENS",
+          "end_date": null
+        },
+        {
+          "code": "GAST BABY",
+          "label": "ECOLE MATERNELLE GASTON BABY",
+          "end_date": null
+        },
+        {
+          "code": "GYM DI STE",
+          "label": "GYMNASE PAUL DI STEFANO",
+          "end_date": null
+        },
+        {
+          "code": "GYM FERRAR",
+          "label": "GYMNASE FERRARI",
+          "end_date": null
+        },
+        {
+          "code": "GYM NAKACH",
+          "label": "GYMNASE NAKACHE",
+          "end_date": null
+        },
+        {
+          "code": "H BOUCHER",
+          "label": "ECOLE MATERNELLE HELENE BOUCHER",
+          "end_date": null
+        },
+        {
+          "code": "HALLES",
+          "label": "HALLES DE SETE",
+          "end_date": null
+        },
+        {
+          "code": "HOTELVILLE",
+          "label": "HOTEL DE VILLE",
+          "end_date": null
+        },
+        {
+          "code": "IES",
+          "label": "IES",
+          "end_date": null
+        },
+        {
+          "code": "INT PETANQ",
+          "label": "INTERNATIONAL DE PETANQUE",
+          "end_date": null
+        },
+        {
+          "code": "JEAN MACE",
+          "label": "ECOLE ELEMENTAIRE JEAN MACE",
+          "end_date": null
+        },
+        {
+          "code": "JOUTES",
+          "label": "JOUTES",
+          "end_date": null
+        },
+        {
+          "code": "L BLANC",
+          "label": "ECOLE MATERNELLE LOUIS BLANC",
+          "end_date": null
+        },
+        {
+          "code": "L MARTY",
+          "label": "HALLE LOUIS MARTY",
+          "end_date": null
+        },
+        {
+          "code": "L MICHEL",
+          "label": "ECOLE MATERNELLE LOUISE MICHEL",
+          "end_date": null
+        },
+        {
+          "code": "L PASTEUR",
+          "label": "ECOLE MATERNELLE LOUIS PASTEUR",
+          "end_date": null
+        },
+        {
+          "code": "LAKANAL",
+          "label": "ECOLE ELEMENTAIRE LAKANAL",
+          "end_date": null
+        },
+        {
+          "code": "LIDO",
+          "label": "COMPLEXE DU LIDO GYMNASE + STADE",
+          "end_date": null
+        },
+        {
+          "code": "LOCAUX",
+          "label": "AUTRES LOCAUX",
+          "end_date": null
+        },
+        {
+          "code": "M CLAVEL",
+          "label": "COMPLEXE MAURICE CLAVEL GYMNASE + STADE",
+          "end_date": null
+        },
+        {
+          "code": "MAISONFRAN",
+          "label": "MAISON FRANCE SERVICES",
+          "end_date": null
+        },
+        {
+          "code": "MIAILLE MU",
+          "label": "BASE MIAILLE ET MUNOZ",
+          "end_date": null
+        },
+        {
+          "code": "MIAM",
+          "label": "MIAM",
+          "end_date": null
+        },
+        {
+          "code": "MICHELET",
+          "label": "ECOLE MATERNELLE MICHELET",
+          "end_date": null
+        },
+        {
+          "code": "MUSEE MER",
+          "label": "MUSEE MER",
+          "end_date": null
+        },
+        {
+          "code": "MUSEE P VA",
+          "label": "MUSEE PAUL VALERY",
+          "end_date": null
+        },
+        {
+          "code": "P LANGEVIN",
+          "label": "ECOLE PAUL LANGEVIN",
+          "end_date": null
+        },
+        {
+          "code": "P3",
+          "label": "P3 GARANTIE GROS ENTRETIEN",
+          "end_date": null
+        },
+        {
+          "code": "PAUL BERT",
+          "label": "ECOLE ELEMENTAIRE PAUL BERT",
+          "end_date": null
+        },
+        {
+          "code": "R LLENSE",
+          "label": "STADE RENE LLENSE",
+          "end_date": null
+        },
+        {
+          "code": "RENAISSANC",
+          "label": "ECOLE ELEMENTAIRE LA RENAISSANCE",
+          "end_date": null
+        },
+        {
+          "code": "S LACORE",
+          "label": "ECOLE MATERNELLE SUZANNE LACORE",
+          "end_date": null
+        },
+        {
+          "code": "ST LOUIS",
+          "label": "FETES DE LA SAINT LOUIS",
+          "end_date": null
+        },
+        {
+          "code": "STA MICHEL",
+          "label": "STADE LOUIS MICHEL",
+          "end_date": null
+        },
+        {
+          "code": "THEATREMER",
+          "label": "THEATRE DE LA MER",
+          "end_date": null
+        },
+        {
+          "code": "UJLAKI",
+          "label": "STADE UJLAKI",
+          "end_date": null
+        },
+        {
+          "code": "VIE",
+          "label": "GYMNASE VIE",
+          "end_date": null
+        },
+        {
+          "code": "ZAM",
+          "label": "ZONE D ACTIVITES MULTISPORTS PLAGE",
+          "end_date": null
+        }
+      ]
+    },
+    "direction_pole": {
+      "description": "Pole/direction CIRIL (identifie 2026-07-01). Pour les marches energie & batiments, la valeur retenue = BATIMENTS (code BATI = « BATIMENTS ET PATRIMOINE IMMOBILIER »).",
+      "source_file": "grilles-ciril-source/grille_9.xls",
+      "count": 4,
+      "entries": [
+        {
+          "code": "ACHATS",
+          "label": "ACHATS",
+          "end_date": null
+        },
+        {
+          "code": "BATI",
+          "label": "BATIMENTS ET PATRIMOINE IMMOBILIER",
+          "end_date": null
+        },
+        {
+          "code": "INFOR",
+          "label": "INFORMATIQUE",
+          "end_date": null
+        },
+        {
+          "code": "SPORT",
+          "label": "SPORTS ET ACTION SPORTIVE",
+          "end_date": null
+        }
+      ]
+    }
+  }
+}

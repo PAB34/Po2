@@ -253,6 +253,19 @@ def update_rule(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.delete("/rules/{rule_id}", status_code=204)
+def delete_rule(
+    rule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_matrix_write_access(current_user)
+    try:
+        svc.delete_rule(db, current_user.city_id, rule_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # ---------------------------------------------------------------------------
 # Snapshot facture : lecture + application / cycle de vie
 # ---------------------------------------------------------------------------
