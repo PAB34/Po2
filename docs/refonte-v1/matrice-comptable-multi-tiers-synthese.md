@@ -35,6 +35,40 @@
 
 ---
 
+## 0bis. Périmètre de la matrice = tous les bâtiments, par tiers facturant (décision 2026-07-01)
+
+**Décision structurante (utilisateur).** La matrice comptable doit couvrir **tous les bâtiments sous
+marché**, tiers facturant par tiers facturant : **DALKIA, ENGIE, EDF** en V1 (puis **SUEZ** en V2, **SPIE**
+maintenance seule en V3). Le parc immobilier réel est **plus large que le seul parc géré par DALKIA**.
+
+**Un même bâtiment peut être facturé par plusieurs tiers, sur des fluides différents.** Exemple confirmé
+par l'utilisateur : pour les sites gérés par DALKIA, le **gaz** est fourni et facturé **par DALKIA** (P1
+gaz, nature 60621), mais l'**électricité** de ces mêmes sites est payée **en direct à ENGIE** (nature
+60612). C'est cohérent avec le périmètre CPE déjà acté (L1 élec « Ville gère », gaz DALKIA). ⚠️ Nuance
+comptable à garder : DALKIA n'est pas qu'un fournisseur de fluide — c'est un CPE avec aussi P2/P3
+maintenance (nature 6156), voire P3.4 investissement (21351). Donc « fourniture de fluide » ≠ tout DALKIA.
+
+**Source de la liste des bâtiments (V1) = les factures elles-mêmes**, selon l'appellation propre à chaque
+tiers (pas de référentiel patrimoine maître pour l'instant). Constat données réelles (staging, 2026-07-01) :
+
+| Tiers | Table source | Clé d'identification du site | Volume |
+|---|---|---|---|
+| DALKIA | `cpe_finance_lines.site_code_detected` | code maison ex. `CCAS 01` | 75 sites |
+| ENGIE/EDF | `energy_invoice_sites` | **PRM** (14 chiffres) + nom libre ex. `CINEMA LE PLANET` | 496 PRM / 63 regroupements |
+
+**Conséquence directe** : il n'y a **aucune clé commune** entre les nomenclatures des tiers. La feuille
+« Sites vers codes » (site → axes analytiques) est **réutilisable dans son principe** pour ENGIE/EDF, mais
+**par tiers** et **avec sa propre clé** (PRM au lieu de `code_site`). Le rapprochement d'un même bâtiment
+physique entre tiers (DALKIA « CCAS 01 » = tel PRM ENGIE = bâtiment patrimoine canonique) est un sujet
+**distinct et ultérieur** (module rapprochements patrimoine), **hors périmètre V1** de la matrice.
+
+→ Impact sur le séquencement : construire **une codification site→axes par tiers**, alimentée depuis les
+sites/PRM qui apparaissent dans les factures de ce tiers. Reste ouvert (Q3) : d'où viennent les **axes**
+(service/fonction/antenne/opération) des 496 PRM ENGIE/EDF, puisque contrairement à DALKIA ils ne sont pas
+encore remplis. Options en Q3 §4.
+
+---
+
 ## 0. Moteur d'import de codification DALKIA existant (rappel 2026-07-01)
 
 Il existe déjà un **moteur backend** qui alimente la matrice DALKIA depuis un classeur Excel de
