@@ -220,4 +220,39 @@ figée.
   exception « aucune règle applicable »).
 - (c) Ou tu préfères qu'on traite d'abord ENGIE/EDF et qu'on laisse DALKIA tel quel pour l'instant ?
 
-**Ta réponse :**
+**Ta réponse (2026-07-01) : (a) fait** — les 2 snapshots parasites sont purgés sur staging (0 restant),
+la page Budget repart propre. (b)/(c) restent à planifier.
+
+---
+
+## 8. Décisions et actions du 2e échange (2026-07-01)
+
+- **Q1 (rôle) → réglé** : compte utilisateur passé `USER` → `ADMIN` sur staging **et** prod (le rôle
+  `USER` par défaut n'était dans aucune liste d'écriture ; c'est ce qui masquait le formulaire budget).
+- **Q7 (classeur canonique + moteur) → tranché et fait** :
+  - **Classeur canonique = `MATRICE_DALKIA-COMPATBILITE.xlsx`** (dernière version travaillée avec la
+    comptable de la ville), **pas** `analyse_codification_..._enrichie...xlsx`.
+  - **Moteur adapté** (`cpe_accounting.py::import_codification_workbook`) : la feuille « Poste facturé
+    vers Nature ctpab » lit désormais la colonne **« Code contrat »** (détection dynamique de la ligne
+    d'en-tête) → règles **par contrat** (marché dérivé du poste P1/P2/P3/R1/R2), et **capture les
+    colonnes de validation comptable** (Statut, Règle, Alerte/question, Action, Validation/Commentaire)
+    dans les notes de la règle. Repli inchangé en mode « par marché » si pas de colonne « Code contrat ».
+  - Vérifié sur le vrai fichier : **43 règles / 7 contrats / notes** — identique à la base actuelle mais
+    enrichi. PR `feat/matrice-import-code-contrat`.
+
+### Contrôle de ta compréhension comptable ENGIE/EDF (tu m'as demandé de vérifier)
+Ton intuition est **juste** :
+- **« Sites vers codes » = réutilisable** pour ENGIE/EDF : cette feuille rattache un **site → axes
+  analytiques** (service/fonction/antenne/opération), c'est-à-dire **où** part la dépense. Les sites
+  électricité sont les mêmes bâtiments de la ville. ⚠️ Nuance : la **clé** diffère — DALKIA utilise un
+  `code_site`, ENGIE/EDF un **PRM**. Donc on réutilise la **logique et souvent les mêmes bâtiments**,
+  mais il faut mapper via le PRM (les 496 sites énergie existent déjà, vides d'axes — cf. §4).
+- **« Poste facturé vers Nature ctpab » = à refaire** pour ENGIE/EDF : c'est là que ça change, oui. Les
+  postes DALKIA (P1/P2/P3 = chauffage/combustible/maintenance) n'existent pas en élec ; les postes élec
+  sont abonnement / consommation / acheminement (TURPE) / taxes → tous en **nature 60612** (§3). Donc
+  une feuille de codification **différente** par fournisseur, même structure de classeur.
+
+Conclusion : rien d'aberrant dans ce que tu dis. Reste à trancher Q3 (comment remplir les axes des 496
+sites énergie) et Q4/Q5 (édition en ligne) pour avancer côté ENGIE/EDF.
+
+**Ta réponse Q3/Q4/Q5 :**

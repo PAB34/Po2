@@ -33,6 +33,10 @@ Déduire l'objectif probable depuis la section « Reprise » de `docs/04-Etat-ac
 - Modifier le **minimum de fichiers** nécessaire.
 - Lancer **uniquement les tests ciblés** (pas la suite complète).
 - Résumer le **diff final en moins de 10 lignes**.
+- **Fil du dev (obligatoire)** : tout sujet non trivial = un fichier `docs/refonte-v1/<sujet>-decisions-ux.md`
+  écrit AVANT de coder (existant vérifié + décisions datées + questions ouvertes numérotées). Vérifier
+  l'existant (`services/`/`models/`/classeurs sources) et les données réelles avant d'annoncer du neuf.
+  Règle complète : `docs/05-Conventions-IA.md` §2 « fil du dev ».
 
 ## Commandes essentielles
 
