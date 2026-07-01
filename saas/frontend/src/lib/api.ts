@@ -5221,3 +5221,95 @@ export async function exportInvoiceAccountingSnapshotToFinance(
   });
   return parseResponse<InvoiceAccountingSnapshotV1>(response);
 }
+
+// ---------------------------------------------------------------------------
+// Budget par marché (/api/accounting-budget/*)
+// ---------------------------------------------------------------------------
+export type AccountingBudgetLineV1 = {
+  id: number;
+  matrix_contract_id: number;
+  year: number;
+  operation_number: string;
+  label: string | null;
+  amount_budget: number;
+  comment: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AccountingBudgetLineCreateV1 = {
+  matrix_contract_id: number;
+  year: number;
+  operation_number: string;
+  label?: string | null;
+  amount_budget: number;
+  comment?: string | null;
+};
+
+export type AccountingBudgetLineUpdateV1 = {
+  label?: string | null;
+  amount_budget?: number;
+  comment?: string | null;
+};
+
+export type BudgetSuiviRowV1 = {
+  operation_number: string;
+  amount_budget: number;
+  amount_realized: number;
+  amount_landing: number;
+  variance_to_budget: number;
+};
+
+export type BudgetSuiviV1 = {
+  matrix_contract_id: number;
+  year: number;
+  year_progress_percent: number;
+  rows: BudgetSuiviRowV1[];
+  unassigned_realized_amount: number;
+  total_budget: number;
+  total_realized: number;
+  total_landing: number;
+  snapshots_included: number;
+  snapshots_excluded_unknown_year: number;
+  snapshots_excluded_other_year: number;
+  snapshots_total: number;
+  data_completeness_note: string;
+};
+
+export async function fetchAccountingBudgetLines(token: string, matrixContractId: number, year: number): Promise<AccountingBudgetLineV1[]> {
+  const response = await fetch(`${apiBaseUrl}/accounting-budget/contracts/${matrixContractId}/lines?year=${year}`, { headers: buildHeaders(token) });
+  return parseResponse<AccountingBudgetLineV1[]>(response);
+}
+
+export async function createAccountingBudgetLine(token: string, payload: AccountingBudgetLineCreateV1): Promise<AccountingBudgetLineV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-budget/lines`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<AccountingBudgetLineV1>(response);
+}
+
+export async function updateAccountingBudgetLine(token: string, lineId: number, payload: AccountingBudgetLineUpdateV1): Promise<AccountingBudgetLineV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-budget/lines/${lineId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<AccountingBudgetLineV1>(response);
+}
+
+export async function deleteAccountingBudgetLine(token: string, lineId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/accounting-budget/lines/${lineId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  if (!response.ok) {
+    await parseResponse(response);
+  }
+}
+
+export async function fetchBudgetSuivi(token: string, matrixContractId: number, year: number): Promise<BudgetSuiviV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-budget/contracts/${matrixContractId}/suivi?year=${year}`, { headers: buildHeaders(token) });
+  return parseResponse<BudgetSuiviV1>(response);
+}
