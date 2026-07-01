@@ -244,6 +244,20 @@ def _rows_from_sheet(ws, header_row: int) -> list[dict[str, Any]]:
     return rows
 
 
+def _detect_header_row(ws, required_keys: set[str], *, scan_rows: int = 6) -> int | None:
+    """Retourne la ligne d'en-tête (1-based) dont les colonnes contiennent toutes
+    les clés attendues. Les classeurs de codification DALKIA n'ont pas toujours
+    l'en-tête à la même ligne (avec/sans ligne de titre « Matrice de validation »)."""
+    for header_row in range(1, scan_rows + 1):
+        try:
+            headers = {_norm_header(cell.value) for cell in ws[header_row]}
+        except IndexError:
+            break
+        if required_keys.issubset(headers):
+            return header_row
+    return None
+
+
 def list_accounting_nature_rules(db: Session, city_id: int | None = None) -> list[CpeAccountingNatureRule]:
     query = select(CpeAccountingNatureRule)
     if city_id is not None:
@@ -431,6 +445,27 @@ def _rule_notes_from_contract_row(row: dict[str, Any]) -> str | None:
     return " | ".join(parts) or None
 
 
+def _rule_notes_from_nature_row(row: dict[str, Any]) -> str | None:
+    """Notes issues de la feuille « Poste facturé vers Nature ctpab » : on conserve
+    le workflow de validation comptable saisi avec la comptable de la ville."""
+    parts = []
+    for key, label in [
+        ("marche_perimetre", "Périmètre"),
+        ("signification", "Signification"),
+        ("services_vendus_associes", "Services vendus"),
+        ("statut", "Statut"),
+        ("regle_justification", "Règle"),
+        ("alerte_question_restante", "Alerte/question"),
+        ("action_attendue", "Action attendue"),
+        ("validation_comptable", "Validation comptable"),
+        ("commentaire_comptable", "Commentaire comptable"),
+    ]:
+        value = _clean(row.get(key))
+        if value:
+            parts.append(f"{label}: {value}")
+    return " | ".join(parts) or None
+
+
 def _upsert_nature_rule(
     db: Session,
     *,
@@ -511,29 +546,47 @@ def import_codification_workbook(
                 updated_rules += 1
     elif "Poste facturé vers Nature ctpab" in wb.sheetnames:
         ws = wb["Poste facturé vers Nature ctpab"]
-        for row in _rows_from_sheet(ws, 3):
-            market = _upper(row.get("marche"))
-            billed_item = _upper(row.get("poste_facture"))
-            nature = _clean(row.get("nature_proposee"))
-            if not market or not billed_item or not nature:
-                continue
-            service_sold = _upper(row.get("service_vendu"))
-            frequency = _clean(row.get("frequence"))
-            if _upsert_nature_rule(
-                db,
-                city_id=city_id,
-                contract_code=None,
-                market=market,
-                service_sold=service_sold,
-                billed_item=billed_item,
-                frequency=frequency,
-                accounting_nature=nature,
-                accounting_label=_clean(row.get("libelle_nature")),
-                notes=None,
-            ):
-                created_rules += 1
-            else:
-                updated_rules += 1
+        # La ligne d'en-tête varie selon la version du classeur (avec/sans ligne de
+        # titre). On la détecte sur la présence de « poste facturé » + « nature proposée ».
+        header_row = _detect_header_row(ws, {"poste_facture", "nature_proposee"})
+        if header_row is None:
+            errors.append(
+                "Feuille « Poste facturé vers Nature ctpab » : en-tête (poste facturé / nature proposée) introuvable"
+            )
+        else:
+            has_contract_col = "code_contrat" in {_norm_header(cell.value) for cell in ws[header_row]}
+            for row in _rows_from_sheet(ws, header_row):
+                billed_item = _upper(row.get("poste_facture"))
+                nature = _clean(row.get("nature_proposee"))
+                if not billed_item or not nature:
+                    continue
+                # Version enrichie par code contrat : on conserve la granularité par
+                # contrat et on dérive le marché du poste (P1/P2/P3/R1/R2), comme le
+                # fait la feuille « Postes x contrat x nature ». Sinon, repli marché.
+                contract_code = _upper(row.get("code_contrat")) if has_contract_col else None
+                if contract_code:
+                    market = _market_from_billed_item(billed_item)
+                    notes = _rule_notes_from_nature_row(row)
+                else:
+                    market = _upper(row.get("marche")) or _upper(row.get("marche_perimetre"))
+                    notes = _rule_notes_from_nature_row(row)
+                if not market:
+                    continue
+                if _upsert_nature_rule(
+                    db,
+                    city_id=city_id,
+                    contract_code=contract_code,
+                    market=market,
+                    service_sold=_upper(row.get("service_vendu")),
+                    billed_item=billed_item,
+                    frequency=_clean(row.get("frequence")),
+                    accounting_nature=nature,
+                    accounting_label=_clean(row.get("libelle_nature")),
+                    notes=notes,
+                ):
+                    created_rules += 1
+                else:
+                    updated_rules += 1
     else:
         errors.append("Feuille absente : Postes x contrat x nature ou Poste facturé vers Nature ctpab")
 
