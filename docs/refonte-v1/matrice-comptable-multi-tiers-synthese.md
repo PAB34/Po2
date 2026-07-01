@@ -4,6 +4,28 @@
 > Même principe que `factures-decisions-ux.md` et `marches-budget-decisions-ux.md` : je récapitule
 > ce qui existe déjà, ce que j'ai vérifié en direct sur staging (pas de suppositions), et je pose les
 > questions à trancher avant de coder. On répond directement dans ce fichier ou en conversation.
+
+> ## ✅ Vérification 2e passe (2026-07-01)
+> Toutes les figures des §2-§5 ont été **re-vérifiées en direct sur staging ET prod** : elles sont
+> **inchangées et exactes** (aucune évolution des données ni du schéma de code entre les deux passes).
+> Détail : staging = 7 matrices DALKIA / 43 règles de nature toutes renseignées et actives / 496 sites
+> énergie sans axe (0 %) / 0 matrice ENGIE-EDF. Prod = encore en amont (seed matrices pas lancé : 0
+> matrice, même socle 43 CPE / 496 énergie vides). Le schéma backend `accounting_matrix*` n'a pas
+> évolué (dernier commit dessus : `424cab1`, extracteurs de lignes).
+>
+> **Deux découvertes nouvelles importantes (non vues en 1re passe) :**
+> 1. **La matrice n'a quasiment jamais été appliquée à de vraies factures.** Il y a **546 factures
+>    DALKIA / 5674 lignes** en base, mais **1 seul snapshot réel** (`cpe_dalkia`, statut `proposed`) —
+>    et il est **orphelin** : il pointe vers la facture `id=3433` qui n'existe plus (les factures vont
+>    aujourd'hui de 3617 à 5116 ; un réimport a recréé les factures avec de nouveaux ids). Concrètement,
+>    l'imputation comptable n'a encore jamais tourné à l'échelle sur les vraies factures.
+> 2. **Le message déroutant de la page Budget** (« 1 facture figée sur 1 n'a pas pu être rattachée à une
+>    année ») vient d'un **snapshot de démo résiduel** (`invoice_source=demo`, `DEMO-1`, `validated`),
+>    pas d'une vraie facture. C'est un reste de test à nettoyer.
+>
+> → Proposition d'action immédiate : purger les 2 snapshots parasites (demo + orphelin 3433) pour que
+> la page Budget reparte propre, puis rejouer l'application de matrice sur un lot réel de factures
+> DALKIA. Voir **Q6** ajoutée en fin de fichier.
 >
 > Code existant : `saas/backend/app/models/accounting_matrix.py`,
 > `saas/backend/app/services/accounting_matrix*.py`,
@@ -143,3 +165,21 @@ XLSX + son accès depuis la page Marchés.
    que le réalisé énergie apparaisse dans le suivi budget.
 
 **Tes réponses :**
+
+---
+
+## 7. Question ajoutée après la 2e passe de vérification
+
+**Q6 — Nettoyage des snapshots parasites + réapplication DALKIA.**
+Sur staging il ne reste que 2 snapshots d'imputation, tous deux à jeter (1 démo `DEMO-1`, 1 orphelin
+pointant sur la facture supprimée 3433). Les 546 vraies factures DALKIA n'ont **aucune** imputation
+figée.
+- (a) Je purge ces 2 snapshots parasites sur staging (page Budget repart propre) — action sans risque,
+  aucune vraie donnée touchée.
+- (b) Ensuite, je rejoue l'application de matrice (`apply` → `validate-snapshot`) sur un **lot réel** de
+  factures DALKIA du contrat actif `C00025811F` pour 2026, afin de voir enfin du réalisé remonter dans
+  la page Budget et de mesurer la vraie couverture des 43 règles (combien de lignes tombent en
+  exception « aucune règle applicable »).
+- (c) Ou tu préfères qu'on traite d'abord ENGIE/EDF et qu'on laisse DALKIA tel quel pour l'instant ?
+
+**Ta réponse :**
