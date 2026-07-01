@@ -46,12 +46,21 @@ L'IA qui ouvre une nouvelle conversation doit :
 > Objectif : ne plus jamais se perdre comme on l'a fait sur la matrice comptable (travail déjà réalisé
 > retrouvé tardivement faute de trace centralisée). Toute IA suit ce processus, sans exception.
 
-- **Tout sujet non trivial = un fichier `docs/refonte-v1/<sujet>-decisions-ux.md`** (ou `-synthese.md`),
-  écrit **avant** de coder. Il recense : ce qui existe déjà (vérifié, pas supposé), les décisions prises
-  (datées), et les **questions ouvertes numérotées** (Q1, Q2…) à trancher avec l'utilisateur.
-- **Vérifier l'existant AVANT d'annoncer du neuf** : chercher le moteur/service/fichier déjà en place
-  (`services/`, `models/`, classeurs sources dans `saas/energie/…`) et le citer dans le fichier de
-  décisions. On ne recode pas ce qui existe ; on le complète.
+> ⚠️ **Ce projet est une REFONTE UI/UX d'une plateforme existante.** Le backend (services, API, modèles,
+> parfois même un composant React) est **très souvent déjà construit et potentiellement fonctionnel** —
+> seule la nouvelle interface manque. Donc **avant toute action importante, présumer que ça existe déjà**
+> et le prouver par une recherche, plutôt que d'annoncer/coder du neuf. Cas vécu : la matrice ENGIE/EDF
+> (service `energie_accounting.py` + API `/accounting/*` + composant `EnergieAccountingMatrix.tsx` en
+> ligne) a été déclarée « à construire » alors qu'elle était **déjà livrée**.
+
+- **Tout sujet non trivial = un fichier de décisions dans `docs/`** (idéalement `docs/refonte-v1/<sujet>-decisions-ux.md`
+  ou `-synthese.md`), écrit **avant** de coder. Il recense : ce qui existe déjà (vérifié, pas supposé),
+  les décisions prises (datées), et les **questions ouvertes numérotées** (Q1, Q2…) à trancher avec l'utilisateur.
+- **Audit de l'existant AVANT toute grosse action** (obligatoire en refonte) : chercher **backend ET
+  frontend** — `grep`/`Glob` sur `services/`, `models/`, `api/routes/`, `components/`, `pages/`,
+  classeurs sources `saas/energie/…`, plus les docs `docs/Archives/` si conception antérieure. Rédiger un
+  **rapport `.md`** de ce qui est déjà là (et fonctionnel ou non), PUIS poser les questions d'intégration
+  dans la nouvelle interface. On ne recode pas ce qui existe ; on l'intègre/complète.
 - **Vérifier sur données réelles** (staging/prod en lecture seule via SSH) plutôt que supposer ; noter
   les chiffres constatés et leur date dans le fichier.
 - **Le fichier de décisions se met à jour au fil des réponses** (on répond dedans), et sert de source
