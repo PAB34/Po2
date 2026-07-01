@@ -32,6 +32,10 @@ class AccountingMatrixRuleOut(BaseModel):
     is_active: bool
     comment: str | None = None
     updated_at: datetime | None = None
+    # Enrichissement lecture seule (non stocké) : désignation de site issue des
+    # factures + antenne suggérée (référentiel CIRIL / nom court).
+    site_designation: str | None = None
+    suggested_antenna: str | None = None
 
 
 class AccountingMatrixRuleCreateIn(BaseModel):

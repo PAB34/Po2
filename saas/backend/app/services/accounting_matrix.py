@@ -11,6 +11,11 @@ Cette couche concentre les invariants métier du référentiel versionné :
 """
 from __future__ import annotations
 
+import json
+import re
+from functools import lru_cache
+from pathlib import Path
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -20,8 +25,110 @@ from app.models.accounting_matrix import (
     AccountingMatrixVersion,
     InvoiceAccountingSnapshot,
 )
-from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping
-from app.models.invoice import EnergyAccountingNatureRule, EnergyAccountingSiteMapping
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping, CpeFinanceLine
+from app.models.invoice import (
+    EnergyAccountingNatureRule,
+    EnergyAccountingSiteMapping,
+    EnergyInvoice,
+    EnergyInvoiceSite,
+)
+
+# Mots vides retirés lors de la dérivation d'un nom court d'antenne depuis la
+# désignation de site (ENGIE/EDF), pour rester lisible (cf. antenna_code DALKIA).
+_ANTENNA_STOPWORDS = {
+    "ESPACE", "LOCAL", "LOCAUX", "APPART", "APPARTEMENT", "MINUTERIE", "SITE",
+    "BATIMENT", "BAT", "DE", "DES", "DU", "LA", "LE", "LES", "ET", "A", "AU", "AUX",
+    "RDC", "ETAGE", "SOUS", "SOL",
+}
+
+
+def _short_antenna(designation: str | None) -> str | None:
+    """Nom court d'antenne dérivé d'une désignation de site (v1, modifiable ensuite)."""
+    if not designation:
+        return None
+    tokens = re.split(r"[^A-Za-z0-9]+", designation.upper())
+    kept = [t for t in tokens if t and t not in _ANTENNA_STOPWORDS]
+    if not kept:
+        kept = [t for t in tokens if t]
+    short = " ".join(kept)[:16].strip()
+    return short or None
+
+
+_INDEX_COMPTA_PATH = Path(__file__).resolve().parents[1] / "data" / "index_compta.json"
+
+
+@lru_cache(maxsize=1)
+def _antenna_referential() -> list[tuple[str, str]]:
+    """Référentiel antenne CIRIL (code, libellé). Vide si le fichier est absent."""
+    try:
+        data = json.loads(_INDEX_COMPTA_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    entries = data.get("referentiels", {}).get("antenne", {}).get("entries", [])
+    return [(e.get("code") or "", e.get("label") or "") for e in entries if e.get("code")]
+
+
+def _suggest_antenna(designation: str | None) -> str | None:
+    """Antenne suggérée pour un site ENGIE/EDF : d'abord un rapprochement avec le
+    référentiel CIRIL (le code antenne = nom court officiel du bâtiment), sinon un
+    nom court dérivé de la désignation. Toujours corrigeable par la compta."""
+    if not designation:
+        return None
+    hay = re.sub(r"[^A-Z0-9 ]", " ", designation.upper())
+    hay_tokens = {t for t in hay.split() if len(t) > 2}
+    best: tuple[int, str] | None = None
+    for code, label in _antenna_referential():
+        ref = re.sub(r"[^A-Z0-9 ]", " ", label.upper())
+        ref_tokens = {t for t in ref.split() if len(t) > 2}
+        if not ref_tokens:
+            continue
+        overlap = len(hay_tokens & ref_tokens)
+        if overlap and (best is None or overlap > best[0]):
+            best = (overlap, code)
+    if best is not None:
+        return best[1]
+    return _short_antenna(designation)
+
+
+def _resolve_site_designations(
+    db: Session, city_id: int | None, contract: AccountingMatrixContract, rules: list[AccountingMatrixRule]
+) -> dict[tuple[str, str], str]:
+    """Désignation de site extraite des factures, par (type, clé) :
+    DALKIA -> ('site', site_code) via cpe_finance_lines.detail ;
+    énergie -> ('meter', prm) via energy_invoice_sites.site_name."""
+    out: dict[tuple[str, str], str] = {}
+    site_codes = {r.site_code for r in rules if r.site_code}
+    meter_ids = {r.meter_id for r in rules if r.meter_id}
+
+    if contract.domain == "cpe" and site_codes:
+        for code, detail in db.execute(
+            select(CpeFinanceLine.site_code_detected, CpeFinanceLine.detail).where(
+                CpeFinanceLine.city_id == city_id,
+                CpeFinanceLine.site_code_detected.in_(site_codes),
+                CpeFinanceLine.detail.isnot(None),
+            )
+        ).all():
+            if code and detail and ("site", code) not in out:
+                out[("site", code)] = detail
+        for code, name in db.execute(
+            select(CpeAccountingSiteMapping.code_site, CpeAccountingSiteMapping.site_name).where(
+                CpeAccountingSiteMapping.city_id == city_id,
+                CpeAccountingSiteMapping.code_site.in_(site_codes),
+            )
+        ).all():
+            if code and name:
+                out.setdefault(("site", code), name)
+
+    if meter_ids:
+        for prm, name in db.execute(
+            select(EnergyInvoiceSite.prm_id, EnergyInvoiceSite.site_name)
+            .join(EnergyInvoice, EnergyInvoiceSite.invoice_id == EnergyInvoice.id)
+            .where(EnergyInvoice.city_id == city_id, EnergyInvoiceSite.prm_id.in_(meter_ids))
+        ).all():
+            if prm and name and ("meter", prm) not in out:
+                out[("meter", prm)] = name
+
+    return out
 
 _RULE_COPY_FIELDS = (
     "stable_rule_key",
@@ -176,7 +283,21 @@ def archive_version(db: Session, city_id: int | None, version_id: int) -> dict:
 
 def list_version_rules(db: Session, city_id: int | None, version_id: int) -> list[AccountingMatrixRule]:
     version = _require_version(db, city_id, version_id)
-    return list(version.rules)
+    rules = list(version.rules)
+    # Enrichissement (transient, non persisté) : désignation de site extraite des
+    # factures + antenne suggérée (référentiel CIRIL ou nom court) pour l'éditeur.
+    designations = _resolve_site_designations(db, city_id, version.contract, rules)
+    for rule in rules:
+        designation = None
+        if rule.site_code:
+            designation = designations.get(("site", rule.site_code))
+        if designation is None and rule.meter_id:
+            designation = designations.get(("meter", rule.meter_id))
+        rule.site_designation = designation
+        rule.suggested_antenna = (
+            _suggest_antenna(designation) if designation and not rule.accounting_antenna else None
+        )
+    return rules
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +431,7 @@ def _seed_energy(db: Session, city_id: int | None, *, user_id: int | None) -> di
                 meter_id=m.prm_id,
                 accounting_service=m.service_label or m.service_code,
                 accounting_function=m.function_label or m.function_code,
-                accounting_antenna=m.antenna_label or m.antenna_code,
+                accounting_antenna=m.antenna_code or m.antenna_label,
                 operation_number=m.operation_code,
                 is_active=m.active,
                 comment=_join(m.site_name, m.regroupement, m.family, m.notes),
@@ -363,7 +484,7 @@ def _seed_cpe(db: Session, city_id: int | None, *, user_id: int | None) -> dict:
                 site_code=m.code_site,
                 accounting_service=m.service_label or m.service_code,
                 accounting_function=m.function_label or m.function_code,
-                accounting_antenna=m.antenna_label or m.antenna_code,
+                accounting_antenna=m.antenna_code or m.antenna_label,
                 operation_number=m.operation_code,
                 is_active=m.active,
                 comment=_join(m.site_name, m.family, m.manager, m.notes),

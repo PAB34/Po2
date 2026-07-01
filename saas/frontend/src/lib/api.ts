@@ -5061,6 +5061,8 @@ export type AccountingMatrixRuleV1 = {
   accounting_label: string | null;
   allocation_percent: number;
   is_active: boolean;
+  site_designation?: string | null;
+  suggested_antenna?: string | null;
 };
 
 export type AccountingMatrixSeedResultV1 = {
