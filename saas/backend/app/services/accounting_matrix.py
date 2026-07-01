@@ -43,6 +43,8 @@ _ANTENNA_STOPWORDS = {
     "ESPACE", "LOCAL", "LOCAUX", "APPART", "APPARTEMENT", "MINUTERIE", "SITE",
     "BATIMENT", "BAT", "DE", "DES", "DU", "LA", "LE", "LES", "ET", "A", "AU", "AUX",
     "RDC", "ETAGE", "SOUS", "SOL",
+    # Toponymes/génériques trop courants qui provoquent de faux rapprochements.
+    "SETE", "COMMUNE", "VILLE", "GENERAL", "GENERALE", "POSTE",
 }
 
 
