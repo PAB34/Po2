@@ -57,25 +57,42 @@ Marché CPE (2 contrats : Lot 1 `C00190116O`, Lot 2 `C00190155J` — cf. périm�
   `cpe_p3_devis.build_p3_atterrissage()` → `engage_total`, `reste_provision`, `taux_engagement`.
   API `GET /cpe/finances/p3-devis/atterrissage`.
 
-### 3.3 Travaux de performance énergétique = P3.4 (élec) — ✅ **base existe**
+### 3.3 P3.4 — Travaux de performance énergétique (APE) — ✅ **documenté (CCAP/CCTP/OUV11)**
+> Correction : P3.4 n'est **pas** le suivi de perf élec — c'est un **poste de TRAVAUX**. Documentation
+> complète déjà produite dans la base `docs/energie/CPE-DALKIA/` (lecture des pièces marché) :
+> `01-Structure-du-marché.md` §P3/APE, `15-Formules-indices-et-travaux-P3.md`.
+- **P3.4 = travaux programmés (obligatoires + APE)**. **APE = Actions de Performance Énergétique** :
+  travaux d'efficacité énergétique, **montant global et forfaitaire** (non actualisable/révisable),
+  **deadline 31/12/2029**, **CEE déduits** du montant des investissements, **suivi séparé du programme
+  de travaux**. Révision P3.4 = formule OUV11.
+- **Atterrissage P3.4** = suivi **pluriannuel réalisé vs programme forfaitaire APE** (avancement des
+  travaux jusqu'à 2029), **pas** une projection conso-vs-cible annuelle. Proche de l'atterrissage P3
+  (engagé vs enveloppe), mais sur l'enveloppe **APE forfaitaire**. À construire (le moteur P3 devis
+  `build_p3_atterrissage` est le patron ; l'enveloppe = forfait APE, pas la provision annuelle).
+
+### 3.4 Suivi de performance ÉLECTRIQUE (cible vs conso) — ✅ **base existe**
 - **Cible ELEC** contractuelle (Annexe 5.2) par site/année : `resolve_cible_elec_for_year`.
 - **Suivi/atterrissage** : `build_elec_performance()` (IPMVP option B) = cible **au pro-rata de la
   période** vs conso réelle ; gate objectif global **P2.4** (`build_p24_objective`). API
   `GET /cpe/bilan/{annee}/elec-performance` et `/p24-objective`.
-- *Prévu ?* → oui, cible contractuelle existante ; à rebrancher dans le front refonte.
+- ⚠️ **Source de la conso réelle = ENEDIS (distributeur), PAS ENGIE (fournisseur).** Voir §4.
 
-## 4. ENGIE — fourniture électricité **bâtiments**
+## 4. ENGIE / ENEDIS — électricité **bâtiments**
 
-- **Périmètre** : marché ENGIE **désormais limité aux bâtiments** (avant il incluait l'éclairage public,
-  désormais chez EDF).
-- **Point clé** : c'est un **marché que nous avons avec ENGIE** (fourniture élec), **mais** DALKIA est
-  **intéressé/pénalisé sur les consommations d'électricité que ENGIE nous facture** (CPE élec). Donc :
-  - l'**atterrissage de la performance** de ces consommations se suit **côté DALKIA** (même moteur
-    `build_elec_performance` / cible élec Annexe 5.2, §3.3) ;
-  - mais le **front doit l'afficher en précisant « marché ENGIE »** (fourniture) distinct de l'
-    **intéressement DALKIA** (performance). Ne pas laisser croire que la performance est « ENGIE ».
-- **À construire** : rattacher les PRM ENGIE (bâtiments) aux sites CPE pour que la conso facturée ENGIE
-  alimente le suivi de cible élec DALKIA. La matrice comptable (antenne = bâtiment) aide au rapprochement.
+- **Distinguer fournisseur et distributeur** :
+  - **ENGIE = fournisseur** (le marché de fourniture, qui nous **facture** l'électricité des bâtiments ;
+    avant incluait l'éclairage public, désormais chez EDF).
+  - **ENEDIS = distributeur** (qui **mesure et livre** ; **source de vérité de la consommation réelle**).
+- **Correction (2026-07-01)** : le **suivi de performance / atterrissage** de DALKIA doit se baser sur
+  les **consommations ENEDIS** (données compteur), **pas** sur les consos des factures ENGIE. ENGIE sert
+  au **contrôle de facturation** (BPU/TURPE) et à l'imputation comptable ; **ENEDIS** sert au **calcul de
+  performance** (conso réelle vs cible élec Annexe 5.2).
+- **Intéressement** : DALKIA est intéressé/pénalisé sur ces consommations élec → suivi **côté DALKIA**
+  (`build_elec_performance`), mais le front doit **libeller le marché « ENGIE »** (fourniture) distinct
+  de **qui porte l'intéressement (DALKIA)**.
+- **À construire** : rattacher les **PRM ENEDIS** (bâtiments) aux sites CPE pour alimenter la cible élec
+  DALKIA depuis la conso **ENEDIS**. La plateforme dispose déjà d'un socle ENEDIS (module Énergie) et du
+  rapprochement patrimoine ; la matrice comptable (antenne = bâtiment) aide au rapprochement.
 
 ## 5. EDF — marché **éclairage public**
 
@@ -90,15 +107,45 @@ Marché CPE (2 contrats : Lot 1 `C00190116O`, Lot 2 `C00190155J` — cf. périm�
 - Réutilisable : la logique `build_elec_performance` (cible pro-rata vs conso) peut servir de patron,
   avec une **cible auto-définie** au lieu de la cible contractuelle DALKIA.
 
+## 5bis. Cible = **BUDGET CONTRACTUEL** branché à la matrice (idée utilisateur — VALIDÉE, réalisable)
+
+> Proposition de l'utilisateur (que j'aurais dû suggérer) : une fois ce premier travail fait, **rattacher
+> les cibles/atterrissages à la matrice comptable** pour que le « budget » de référence ne soit **pas le
+> budget prévisionnel de la Ville** (jugé trop compliqué par la compta) mais le **budget CONTRACTUEL**
+> (issu des pièces qui nous lient aux tiers). **Ce n'est pas une connerie — c'est la bonne cible d'archi.**
+
+**Pourquoi c'est réalisable (les briques existent déjà) :**
+- Le **réalisé par opération/nature** est déjà produit par la matrice (snapshots factures → module Budget).
+- Le **budget contractuel** est déjà connu, poste par poste, dans les **références contractuelles**
+  (`cpe_contract_references`, kinds `p1_gaz_acompte`, provision P3, forfait P2, cibles élec/gaz, forfait
+  APE P3.4). Ce sont des **montants/cibles contractuels**, pas une saisie prévisionnelle.
+- Il « suffit » donc de **relier chaque cible contractuelle à l'axe matrice** (opération/nature/marché) :
+  le module Budget (PR #33) prend alors comme **colonne budget** le **montant contractuel** au lieu d'une
+  saisie manuelle. `budget contractuel (référence) − réalisé (snapshots) = atterrissage vs contrat`.
+
+**Conséquences / cadrage :**
+- **DALKIA** : budget = P1 (acompte gaz révisé) + P2 (forfait) + P3 (provision) + P3.4 (forfait APE) +
+  cibles élec/gaz → tout est **contractuel**, donc pas de saisie Ville.
+- **ENGIE** : budget élec = la **cible élec DALKIA** (contractuelle) ; la conso mesurée = **ENEDIS**.
+- **EDF** : **exception** — pas de cible contractuelle → on **définit la cible** depuis l'historique
+  (§5), puis on la branche pareil à la matrice.
+- Le module Budget existant reste, mais **sa source de budget bascule** de « saisie manuelle » à
+  « référence contractuelle rattachée à la matrice ». C'est une **évolution**, pas un rejet, de la PR #33.
+
+→ **Séquencement** : (1) finir la matrice comptable (en cours) ; (2) brancher les cibles contractuelles
+existantes (CPE) sur l'axe matrice comme budget ; (3) construire la cible EDF (historique) ; (4) le front
+affiche « budget contractuel vs réalisé vs atterrissage » par marché/tiers.
+
 ## 6. Ce qui manque / à construire (synthèse)
 
 | Tiers / poste | Cible | Moteur atterrissage | État |
 |---|---|---|---|
 | DALKIA gaz (énergétique) | NB/N'B/NC contractuel | DJU (`cpe_atterrissage`) | ✅ existe, à rebrancher front |
 | DALKIA P2 maintenance | forfait annuel | trivial (forfait) | à exposer (cible + acomptes) |
-| DALKIA P3 travaux | provision | engagé vs provision (`build_p3_atterrissage`) | ✅ existe |
-| DALKIA P3.4 / élec perf | cible élec Annexe 5.2 | pro-rata (`build_elec_performance`) + gate P2.4 | ✅ existe |
-| ENGIE élec bâtiments | cible élec DALKIA | idem élec perf, **libellé marché ENGIE** | rattachement PRM→site CPE à faire |
+| DALKIA P3 travaux | provision annuelle | engagé vs provision (`build_p3_atterrissage`) | ✅ existe |
+| DALKIA P3.4 (travaux APE) | **forfait global APE** (deadline 2029) | réalisé vs programme forfaitaire | ❌ à construire (patron = P3) ; **documenté** CCAP/CCTP |
+| DALKIA perf ÉLEC | cible élec Annexe 5.2 | pro-rata (`build_elec_performance`) + gate P2.4 ; **conso = ENEDIS** | ✅ moteur existe ; source ENEDIS à brancher |
+| ENGIE élec bâtiments | cible élec DALKIA | idem perf élec, **conso ENEDIS**, **libellé marché ENGIE** | rattachement PRM ENEDIS→site CPE à faire |
 | EDF éclairage public | **à définir (historique)** | à construire (cible auto + pro-rata) | ❌ nouveau |
 
 ## 7. Recommandations pour le front refonte
