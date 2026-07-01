@@ -5,6 +5,44 @@
 > ce qui existe déjà, ce que j'ai vérifié en direct sur staging (pas de suppositions), et je pose les
 > questions à trancher avant de coder. On répond directement dans ce fichier ou en conversation.
 
+> ## 🛑 CORRECTION MAJEURE (2026-07-01, 3e passe) — la matrice ENGIE/EDF existe DÉJÀ
+> Mes §2-§5 disaient « ENGIE/EDF : quasiment tout à construire, aucune édition en ligne ». **C'est FAUX.**
+> J'avais raté tout un sous-système déjà livré (exactement le piège que la règle « fil du dev » doit
+> éviter — je suis moi-même tombé dedans). Vérifié dans le code :
+>
+> - **Backend `app/services/energie_accounting.py`** — service complet ENGIE/EDF :
+>   - `import_codification_workbook` : **import xlsx** (mêmes onglets que DALKIA, détection d'en-tête
+>     dynamique, clé = PRM) ;
+>   - `bootstrap_site_mappings_from_invoices` : **déduit la liste des sites depuis les factures** (crée
+>     une ligne PRM vide par PRM vu) — c'est très exactement le « liste des bâtiments déduite des
+>     factures » de la §0bis, **déjà codé** ;
+>   - `build_energy_liaison_workbook` : **export** fiche de liaison finances (xlsx).
+> - **API `app/api/routes/billing.py`** (`/accounting/*`) : `import-codification`, `site-mappings/bootstrap`,
+>   **CRUD `site-mappings`** (create/update/delete par PRM avec service/fonction/antenne/opération),
+>   **CRUD `nature-rules`**, export liaison. Donc **édition en ligne ET import/export xlsx déjà exposés**.
+> - **Frontend `src/components/EnergieAccountingMatrix.tsx`** — tableau éditable en direct (colonnes
+>   Service / Libellé / Fonction / Antenne / Opération / Gestionnaire par PRM + postes→nature), avec
+>   boutons bootstrap + import xlsx. **Déjà monté et en ligne** sur `/factures`
+>   (`FacturesPage.tsx`, variante inline) et en modale sur l'ancienne page factures.
+>
+> **Donc ce que tu demandes pour ENGIE/EDF (saisie compta en plateforme ET/OU import/export xlsx, liste
+> déduite des factures) est déjà construit.** Ce qui manque n'est PAS l'outil, c'est :
+> 1. **la donnée** : les 496 PRM sont créés (bootstrap) mais leurs axes sont **vides** (0/496) et il y a
+>    **0 règle poste→nature** énergie → il faut une **première saisie** (même arbitraire) pour tester ;
+> 2. **le pont vers la matrice versionnée + budget** : `seed_from_existing` ne crée des matrices énergie
+>    que s'il existe des `energy_accounting_nature_rules` (il y en a 0). Chaîne pour voir du réalisé
+>    budget côté énergie : remplir nature+axes → `seed` → `apply` sur factures → snapshots.
+>
+> **Conception documentée** (ta question « ça avait déjà été travaillé ») : oui — `docs/38-Modele-backend...`,
+> `docs/35-Contrat-ecran-Factures-Decisions-V1.md`, ADR `010`/`011`, et surtout l'audit
+> `docs/Archives/32-Consolidation-reponses-et-audit-matrice-DALKIA.md` (2026-06-24 : axes
+> service/fonction/antenne/site, **opération = seule dimension budgétaire faisant foi**, clés de
+> rapprochement, couverture du classeur).
+>
+> ⚠️ Les §2-§5 ci-dessous sont donc **partiellement périmés** pour ENGIE/EDF (ils restent exacts sur les
+> *chiffres* — 0 nature, 496 PRM vides — mais faux sur « rien n'existe / pas d'édition »). À relire à la
+> lumière de cette correction.
+
 > ## ✅ Vérification 2e passe (2026-07-01)
 > Toutes les figures des §2-§5 ont été **re-vérifiées en direct sur staging ET prod** : elles sont
 > **inchangées et exactes** (aucune évolution des données ni du schéma de code entre les deux passes).
