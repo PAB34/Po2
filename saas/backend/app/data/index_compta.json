@@ -1178,8 +1178,8 @@
         }
       ]
     },
-    "regroupement_a_confirmer": {
-      "description": "Referentiel a confirmer (ACHATS/BATIMENTS/INFORMATIQUE/SPORTS)",
+    "direction_pole": {
+      "description": "Pole/direction CIRIL (identifie 2026-07-01). Pour les marches energie & batiments, la valeur retenue = BATIMENTS (code BATI = « BATIMENTS ET PATRIMOINE IMMOBILIER »).",
       "source_file": "grilles-ciril-source/grille_9.xls",
       "count": 4,
       "entries": [

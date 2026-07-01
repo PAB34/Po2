@@ -101,6 +101,18 @@ def _resolve_site_designations(
     meter_ids = {r.meter_id for r in rules if r.meter_id}
 
     if contract.domain == "cpe" and site_codes:
+        # Priorité au nom curé « Sites vers codes » (nom_du_site) : propre et lisible
+        # (ex. « Maternelle AGNES VARDA »). Le « LIEU OU DÉTAIL DE LA PRESTATION » brut
+        # de la facture (avec préfixe code + « REFAC €/€ ») ne sert que de repli.
+        for code, name in db.execute(
+            select(CpeAccountingSiteMapping.code_site, CpeAccountingSiteMapping.site_name).where(
+                CpeAccountingSiteMapping.city_id == city_id,
+                CpeAccountingSiteMapping.code_site.in_(site_codes),
+                CpeAccountingSiteMapping.site_name.isnot(None),
+            )
+        ).all():
+            if code and name and ("site", code) not in out:
+                out[("site", code)] = name
         for code, detail in db.execute(
             select(CpeFinanceLine.site_code_detected, CpeFinanceLine.detail).where(
                 CpeFinanceLine.city_id == city_id,
@@ -108,16 +120,8 @@ def _resolve_site_designations(
                 CpeFinanceLine.detail.isnot(None),
             )
         ).all():
-            if code and detail and ("site", code) not in out:
-                out[("site", code)] = detail
-        for code, name in db.execute(
-            select(CpeAccountingSiteMapping.code_site, CpeAccountingSiteMapping.site_name).where(
-                CpeAccountingSiteMapping.city_id == city_id,
-                CpeAccountingSiteMapping.code_site.in_(site_codes),
-            )
-        ).all():
-            if code and name:
-                out.setdefault(("site", code), name)
+            if code and detail:
+                out.setdefault(("site", code), detail)
 
     if meter_ids:
         for prm, name in db.execute(
