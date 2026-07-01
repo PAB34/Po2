@@ -35,6 +35,44 @@
 
 ---
 
+## 0. Moteur d'import de codification DALKIA existant (rappel 2026-07-01)
+
+Il existe déjà un **moteur backend** qui alimente la matrice DALKIA depuis un classeur Excel de
+codification (c'est lui qui a produit les 43 règles + 75 sites en base) :
+
+- `cpe_accounting.py::import_codification_workbook(raw_bytes, ...)` lit un classeur avec les feuilles :
+  - **« Sites vers codes »** → `cpe_accounting_site_mappings` (site → service/fonction/antenne/opération) ;
+  - **« Postes x contrat x nature »** *(header ligne 1)* → règles **par code contrat** (`market` dérivé du
+    poste via `_market_from_billed_item` → P1/P2/P3) ; **OU**
+  - **« Poste facturé vers Nature ctpab »** *(header ligne 3)* → règles **par marché** (`contract_code`
+    laissé à NULL).
+- `_find_accounting_rule(...)` fait le **lien facture → nature comptable** (contrat + poste facturé).
+- `seed_from_existing` migre ensuite ces tables à plat vers la **matrice versionnée** (7 contrats DALKIA).
+
+Fichiers source dans `saas/energie/DALKIA/COMPTABILITE/` :
+`analyse_codification_dalkia_enrichie_par_code_contrat (1).xlsx`, `MATRICE_DALKIA-COMPATBILITE.xlsx`,
+`export_finances-20260527_1055.xlsx`.
+
+**⚠️ Constat de vérification (à trancher avant tout réimport) :** les données **actuellement** en base
+ont leur `market` en `P1/P2/P3` et un `contract_code` renseigné — signature de la branche
+**« Postes x contrat x nature »**. Or les **deux** classeurs présents dans le dossier n'ont **que** la
+feuille **« Poste facturé vers Nature ctpab »** (branche **par marché**, header ligne 3, qui *ignore* la
+colonne « Code contrat » pourtant présente dans le fichier). Autrement dit : **réimporter tel quel l'un
+de ces deux fichiers via le moteur actuel dégraderait la granularité par contrat** aujourd'hui en base.
+Le classeur qui a réellement produit la base (avec une feuille « Postes x contrat x nature ») n'est pas
+celui-ci. → **Q7** : quel est le classeur canonique à jour, et faut-il adapter le moteur pour lire la
+colonne « Code contrat » de la feuille « Poste facturé vers Nature ctpab » (header ligne 2) plutôt que
+de la router en mode « par marché » ?
+
+Richesse supplémentaire du fichier **non encore exploitée** par la matrice : colonnes `Statut`,
+`Règle / justification`, `Alerte / question restante`, `Action attendue`, `Validation comptable`,
+`Commentaire comptable` (= le workflow de validation compta poste par poste), plus une feuille
+**« Signification postes facturés »** (glossaire, 34 lignes) et **« Codes contrat - marchés »**
+(rattachement contrat → marché, dont ancien vs nouveau CPE ~oct 2025). C'est exactement la matière de
+l'aller-retour compta (§5, Q4/Q5).
+
+---
+
 ## 1. Ce qui est déjà posé (architecture + décisions actées)
 
 **Le socle technique est solide et ne demande pas à être refait** (ADR 010, doc 38) :
