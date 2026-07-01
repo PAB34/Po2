@@ -1,12 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   commitAccountingMatrixImport,
+  createAccountingMatrixRule,
+  deleteAccountingMatrixRule,
   downloadAccountingMatrixVersionXlsx,
   fetchAccountingMatrixContract,
   fetchAccountingMatrixContracts,
   fetchAccountingMatrixVersionRules,
   previewAccountingMatrixImport,
   seedAccountingMatrices,
+  updateAccountingMatrixRule,
+  type AccountingMatrixRuleCreateV1,
+  type AccountingMatrixRuleUpdateV1,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -36,6 +41,39 @@ export function useMatrixVersionRulesV1(versionId: number | null) {
     queryKey: ["accounting-matrix-version-rules", versionId],
     enabled: Boolean(token) && versionId != null,
     queryFn: () => fetchAccountingMatrixVersionRules(token!, versionId!),
+  });
+}
+
+function useInvalidateRules(versionId: number | null) {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ["accounting-matrix-version-rules", versionId] });
+}
+
+export function useCreateMatrixRuleV1(versionId: number | null) {
+  const { token } = useAuth();
+  const invalidate = useInvalidateRules(versionId);
+  return useMutation({
+    mutationFn: (payload: AccountingMatrixRuleCreateV1) => createAccountingMatrixRule(token!, versionId!, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateMatrixRuleV1(versionId: number | null) {
+  const { token } = useAuth();
+  const invalidate = useInvalidateRules(versionId);
+  return useMutation({
+    mutationFn: ({ ruleId, payload }: { ruleId: number; payload: AccountingMatrixRuleUpdateV1 }) =>
+      updateAccountingMatrixRule(token!, ruleId, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteMatrixRuleV1(versionId: number | null) {
+  const { token } = useAuth();
+  const invalidate = useInvalidateRules(versionId);
+  return useMutation({
+    mutationFn: (ruleId: number) => deleteAccountingMatrixRule(token!, ruleId),
+    onSuccess: invalidate,
   });
 }
 

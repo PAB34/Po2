@@ -184,10 +184,10 @@ def list_version_rules(db: Session, city_id: int | None, version_id: int) -> lis
 # ---------------------------------------------------------------------------
 def create_rule(db: Session, city_id: int | None, version_id: int, payload) -> AccountingMatrixRule:
     version = _require_version(db, city_id, version_id)
-    if version.status in ("active", "archived"):
+    if version.status == "archived":
         raise ValueError(
-            "Les règles ne sont éditables que sur une version brouillon/candidate. "
-            "Créez une nouvelle version pour faire évoluer une matrice active."
+            "Une version archivée est figée (historique des factures) : elle ne peut plus être éditée. "
+            "Activez ou créez une autre version pour faire évoluer la matrice."
         )
     rule = AccountingMatrixRule(matrix_version_id=version.id, **payload.model_dump())
     db.add(rule)
@@ -201,16 +201,27 @@ def update_rule(db: Session, city_id: int | None, rule_id: int, payload) -> Acco
     if rule is None:
         raise ValueError("Règle introuvable.")
     version = _require_version(db, city_id, rule.matrix_version_id)
-    if version.status in ("active", "archived"):
+    if version.status == "archived":
         raise ValueError(
-            "Une règle d'une version active ou archivée ne peut pas être modifiée en place. "
-            "Créez une nouvelle version clonée pour la faire évoluer."
+            "Une règle d'une version archivée (historique figé) ne peut pas être modifiée. "
+            "Éditez la version active ou créez une nouvelle version."
         )
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(rule, field, value)
     db.commit()
     db.refresh(rule)
     return rule
+
+
+def delete_rule(db: Session, city_id: int | None, rule_id: int) -> None:
+    rule = db.get(AccountingMatrixRule, rule_id)
+    if rule is None:
+        raise ValueError("Règle introuvable.")
+    version = _require_version(db, city_id, rule.matrix_version_id)
+    if version.status == "archived":
+        raise ValueError("Une version archivée (historique figé) ne peut pas être modifiée.")
+    db.delete(rule)
+    db.commit()
 
 
 # ---------------------------------------------------------------------------

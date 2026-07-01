@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
-import { Button, Card, DataTable, Drawer, FilterBar, KpiCard, StatusBadge } from "../../design-system";
-import type { AccountingMatrixContractV1, AccountingMatrixVersionV1 } from "../../lib/api";
+import { Button, Card, DataTable, FilterBar, KpiCard, StatusBadge } from "../../design-system";
+import type { AccountingMatrixContractV1 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
-import {
-  useCommitMatrixImportV1,
-  useExportMatrixVersionV1,
-  useMatrixContractDetailV1,
-  useMatrixContractsV1,
-  useMatrixVersionRulesV1,
-  usePreviewMatrixImportV1,
-  useSeedMatricesV1,
-} from "./useMatricesV1";
+import { MatrixEditorOverlayV1 } from "./MatrixEditorOverlayV1";
+import { useMatrixContractsV1, useSeedMatricesV1 } from "./useMatricesV1";
 
 const MATRIX_WRITE_DENIED_ROLES = new Set(["FLUIDES", "FLUIDE", "RESPONSABLE_FLUIDES", "TECHNICIEN_CVC", "TECHNICIEN CVC"]);
 const MATRIX_WRITE_ALLOWED_ROLES = new Set([
@@ -26,39 +19,19 @@ const MATRIX_WRITE_ALLOWED_ROLES = new Set([
 ]);
 
 const MATRIX_SETUP_STEPS = [
-  {
-    label: "1. Import reference",
-    detail: "Importer un export facture representatif du tiers facturant.",
-    status: "done",
-  },
-  {
-    label: "2. Detection recurrente",
-    detail: "Identifier les postes, compteurs, sites, contrats et services vendus qui reviennent.",
-    status: "done",
-  },
-  {
-    label: "3. Codification comptable",
-    detail: "Completer service, fonction, nature, operation, antenne et ventilation.",
-    status: "current",
-  },
-  {
-    label: "4. Controle couverture",
-    detail: "Refuser l'activation si une ligne recurrente reste non couverte ou incoherente.",
-    status: "next",
-  },
-  {
-    label: "5. Activation version",
-    detail: "Activer une version datee, jamais ecrasee, qui alimentera les futures factures.",
-    status: "next",
-  },
+  { label: "1. Import reference", detail: "Importer un export facture representatif du tiers facturant.", status: "done" },
+  { label: "2. Detection recurrente", detail: "Identifier postes, compteurs, sites, contrats et services vendus recurrents.", status: "done" },
+  { label: "3. Codification comptable", detail: "Completer service, fonction, nature, operation, antenne et ventilation.", status: "current" },
+  { label: "4. Controle couverture", detail: "Refuser l'activation si une ligne recurrente reste non couverte.", status: "next" },
+  { label: "5. Activation version", detail: "Activer une version datee, jamais ecrasee, qui alimentera les futures factures.", status: "next" },
 ];
 
 const SUPPLIER_GUIDES: Record<string, { pilot: string; detection: string; uxRisk: string; nextAction: string }> = {
   DALKIA: {
     pilot: "Cas complexe a couvrir",
     detection: "Code contrat + poste facture + service vendu + periode de marche.",
-    uxRisk: "P3.4, lignes a ventiler, ancien marche avant octobre 2025, prestations en attente fournisseur.",
-    nextAction: "Exporter la matrice, faire completer par la compta, puis reimporter en version brouillon.",
+    uxRisk: "P3.4, lignes a ventiler, ancien marche, prestations en attente fournisseur.",
+    nextAction: "Editer la matrice ou exporter/reimporter le classeur comptable.",
   },
   ENGIE: {
     pilot: "A traiter aussi pour l'envoi compta",
@@ -82,13 +55,6 @@ const SUPPLIER_GUIDES: Record<string, { pilot: string; detection: string; uxRisk
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Une erreur est survenue.";
-}
-
-function versionTone(status: string) {
-  if (status === "active") return "ok" as const;
-  if (status === "candidate") return "warn" as const;
-  if (status === "archived") return "neutral" as const;
-  return "info" as const;
 }
 
 function setupStatusTone(status: string) {
@@ -115,35 +81,21 @@ function supplierKey(contract: AccountingMatrixContractV1) {
   return raw;
 }
 
-function defaultImportLabel() {
-  return `Retour compta ${new Date().toISOString().slice(0, 10)}`;
-}
-
-function numberFromSummary(summary: Record<string, number> | undefined, key: string) {
-  return String(summary?.[key] ?? 0);
-}
-
 export function MatrixAdminPageV1() {
   const { user } = useAuth();
   const canWriteMatrices = canWriteAccountingMatrices(user?.role);
   const [query, setQuery] = useState("");
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [importVersionLabel, setImportVersionLabel] = useState("");
 
   const { data: contracts = [], isFetching, isError } = useMatrixContractsV1();
-  const detail = useMatrixContractDetailV1(selectedContractId);
-  const rules = useMatrixVersionRulesV1(selectedVersionId);
   const seed = useSeedMatricesV1();
-  const exportVersion = useExportMatrixVersionV1();
-  const importPreview = usePreviewMatrixImportV1();
-  const importCommit = useCommitMatrixImportV1();
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return contracts;
-    return contracts.filter((c) => `${c.supplier} ${c.contract_code ?? ""} ${c.contract_label ?? ""} ${c.domain}`.toLowerCase().includes(q));
+    return contracts.filter((c) =>
+      `${c.supplier} ${c.contract_code ?? ""} ${c.contract_label ?? ""} ${c.domain}`.toLowerCase().includes(q),
+    );
   }, [query, contracts]);
 
   const activeVersions = contracts.filter((c) => c.active_version_id != null).length;
@@ -165,42 +117,6 @@ export function MatrixAdminPageV1() {
       return { supplier, contracts: supplierContracts, versions, active, guide };
     });
   }, [contracts]);
-
-  function resetImportState() {
-    setImportFile(null);
-    setImportVersionLabel("");
-    importPreview.reset();
-    importCommit.reset();
-  }
-
-  function openContract(contract: AccountingMatrixContractV1) {
-    setSelectedContractId(contract.id);
-    setSelectedVersionId(contract.active_version_id);
-    resetImportState();
-  }
-
-  function closeDrawer() {
-    setSelectedContractId(null);
-    setSelectedVersionId(null);
-    resetImportState();
-  }
-
-  function handlePreviewImport() {
-    if (!selectedContractId || !importFile) return;
-    importPreview.mutate({ contractId: selectedContractId, file: importFile });
-  }
-
-  function handleCommitImport() {
-    if (!selectedContractId || !importFile || !importPreview.data?.can_commit) return;
-    importCommit.mutate({
-      contractId: selectedContractId,
-      file: importFile,
-      versionLabel: importVersionLabel.trim() || defaultImportLabel(),
-    });
-  }
-
-  const importSummary = importPreview.data?.summary;
-  const previewRows = importPreview.data?.rows.slice(0, 12) ?? [];
 
   return (
     <div className="po2-page-v1">
@@ -224,14 +140,16 @@ export function MatrixAdminPageV1() {
         <div className="po2-matrix-setup-flow">
           {MATRIX_SETUP_STEPS.map((step) => (
             <article key={step.label} className="po2-matrix-setup-step">
-              <StatusBadge tone={setupStatusTone(step.status)}>{step.status === "done" ? "socle" : step.status === "current" ? "a faire" : "ensuite"}</StatusBadge>
+              <StatusBadge tone={setupStatusTone(step.status)}>
+                {step.status === "done" ? "socle" : step.status === "current" ? "a faire" : "ensuite"}
+              </StatusBadge>
               <strong>{step.label}</strong>
               <small>{step.detail}</small>
             </article>
           ))}
         </div>
         <p className="po2-muted-line">
-          Lecture produit : l'ecran actuel sait lire contrats/versions/regles. Cette tranche ajoute l'aller-retour XLSX avec la comptabilite.
+          Ouvre un contrat pour editer la matrice en plein ecran (axes comptables) et importer/exporter le classeur.
         </p>
       </Card>
 
@@ -241,12 +159,7 @@ export function MatrixAdminPageV1() {
         ) : (
           <div className="po2-matrix-supplier-grid">
             {configuredSuppliers.map((item) => (
-              <button
-                type="button"
-                key={item.supplier}
-                className="po2-matrix-supplier-card"
-                onClick={() => openContract(item.contracts[0])}
-              >
+              <button type="button" key={item.supplier} className="po2-matrix-supplier-card" onClick={() => setSelectedContractId(item.contracts[0].id)}>
                 <span className="po2-eyebrow">{item.guide.pilot}</span>
                 <strong>{item.supplier}</strong>
                 <span>{item.contracts.length} contrat(s) - {item.versions} version(s) - {item.active} active(s)</span>
@@ -269,180 +182,39 @@ export function MatrixAdminPageV1() {
         }
       >
         {!canWriteMatrices ? (
-          <p className="po2-muted-line">Lecture seule : ton role actuel ne permet pas de modifier ou generer les matrices comptables. Les profils Fluides et Technicien CVC restent volontairement exclus de cette action.</p>
+          <p className="po2-muted-line">Lecture seule : ton role actuel ne permet pas de modifier ou generer les matrices comptables.</p>
         ) : null}
-        {seed.isError ? (
-          <p className="po2-muted-line">Seed impossible : {errorMessage(seed.error)}</p>
-        ) : null}
-        {isError ? (
-          <p className="po2-muted-line">API matrices indisponible : verifie le backend ou les migrations.</p>
-        ) : null}
+        {seed.isError ? <p className="po2-muted-line">Seed impossible : {errorMessage(seed.error)}</p> : null}
+        {isError ? <p className="po2-muted-line">API matrices indisponible : verifie le backend ou les migrations.</p> : null}
         {seed.isSuccess ? (
           <p className="po2-muted-line">
             Seed termine : {seed.data.versions_created} version(s) creee(s) - fluides {seed.data.energy.contracts_created}, CPE {seed.data.cpe.contracts_created}.
           </p>
         ) : null}
         {contracts.length === 0 && !isFetching ? (
-          <p className="po2-muted-line">{canWriteMatrices ? "Aucune matrice. Lance le seed pour generer les matrices a partir des codifications fluides/CPE." : "Aucune matrice visible. Demande a un profil habilite de generer les matrices depuis l'existant."}</p>
+          <p className="po2-muted-line">Aucune matrice. Lance le seed pour generer les matrices a partir des codifications fluides/CPE.</p>
         ) : (
           <>
             <FilterBar searchPlaceholder="Fournisseur, contrat ou domaine" searchValue={query} onSearchChange={setQuery} />
             <DataTable
               rows={rows}
               getRowKey={(c) => c.id}
-              onRowClick={openContract}
+              onRowClick={(c) => setSelectedContractId(c.id)}
               columns={[
-                { key: "domain", header: "Domaine", render: (c) => c.domain === "energy" ? "fluides" : c.domain },
+                { key: "domain", header: "Domaine", render: (c) => (c.domain === "energy" ? "fluides" : c.domain) },
                 { key: "supplier", header: "Fournisseur", render: (c) => <strong>{c.supplier}</strong> },
                 { key: "contract", header: "Contrat / lot", render: (c) => <span>{c.contract_code ?? "-"}<small className="po2-muted-line">{c.contract_label ?? ""}</small></span> },
                 { key: "versions", header: "Versions", render: (c) => String(c.versions_count) },
-                { key: "active", header: "Version active", render: (c) => c.active_version_label ? <StatusBadge tone="ok">{c.active_version_label}</StatusBadge> : <StatusBadge tone="info">aucune active</StatusBadge> },
+                { key: "active", header: "Version active", render: (c) => (c.active_version_label ? <StatusBadge tone="ok">{c.active_version_label}</StatusBadge> : <StatusBadge tone="info">aucune active</StatusBadge>) },
               ]}
             />
           </>
         )}
       </Card>
 
-      <Drawer
-        open={selectedContractId != null}
-        title={detail.data ? `${detail.data.supplier} - ${detail.data.contract_code ?? "contrat"}` : "Matrice"}
-        eyebrow="Detail matrice"
-        description={detail.data?.contract_label ?? undefined}
-        onClose={closeDrawer}
-      >
-        {detail.isFetching ? <p className="po2-muted-line">Chargement...</p> : null}
-        {detail.data ? (
-          <div className="po2-invoice-proof">
-            <Card title="Modele de detection attendu" eyebrow="a confirmer par l'assistant de configuration">
-              <p className="po2-muted-line">
-                {SUPPLIER_GUIDES[supplierKey(detail.data)]?.detection ?? "Detection a definir depuis un export facture de reference."}
-              </p>
-              <p className="po2-muted-line">
-                {SUPPLIER_GUIDES[supplierKey(detail.data)]?.nextAction ?? "Importer un export puis controler les lignes recurrentes."}
-              </p>
-            </Card>
-
-            <Card
-              title="Versions"
-              eyebrow="Exporter la version puis la faire completer par la compta"
-              action={selectedVersionId != null ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => exportVersion.mutate({ versionId: selectedVersionId, label: detail.data?.contract_code ?? detail.data?.supplier })}
-                  disabled={exportVersion.isPending}
-                >
-                  {exportVersion.isPending ? "Export..." : "Exporter XLSX"}
-                </Button>
-              ) : undefined}
-            >
-              {exportVersion.isError ? <p className="po2-muted-line">Export impossible : {errorMessage(exportVersion.error)}</p> : null}
-              <div className="po2-decision-list">
-                {detail.data.versions.map((v: AccountingMatrixVersionV1) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    className={selectedVersionId === v.id ? "po2-decision-item po2-decision-item--active" : "po2-decision-item"}
-                    onClick={() => setSelectedVersionId(v.id)}
-                  >
-                    <StatusBadge tone={versionTone(v.status)}>{v.status}</StatusBadge>
-                    <strong>{v.version_label}</strong>
-                    <small>{v.rules_count} regles - source {v.source}</small>
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <Card title="Retour comptabilite XLSX" eyebrow="Preview sans ecriture puis creation d'une version brouillon">
-              <div className="po2-matrix-import-form">
-                <label>
-                  <span>Fichier complete</span>
-                  <input
-                    type="file"
-                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    disabled={!canWriteMatrices}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0] ?? null;
-                      setImportFile(file);
-                      if (file && !importVersionLabel.trim()) setImportVersionLabel(defaultImportLabel());
-                      importPreview.reset();
-                      importCommit.reset();
-                    }}
-                  />
-                </label>
-                <label>
-                  <span>Nom de version brouillon</span>
-                  <input
-                    type="text"
-                    value={importVersionLabel}
-                    disabled={!canWriteMatrices}
-                    placeholder={defaultImportLabel()}
-                    onChange={(event) => setImportVersionLabel(event.currentTarget.value)}
-                  />
-                </label>
-                <Button variant="ghost" onClick={handlePreviewImport} disabled={!canWriteMatrices || !importFile || importPreview.isPending}>
-                  {importPreview.isPending ? "Analyse..." : "Analyser le retour"}
-                </Button>
-                <Button variant="secondary" onClick={handleCommitImport} disabled={!canWriteMatrices || !importFile || !importPreview.data?.can_commit || importCommit.isPending}>
-                  {importCommit.isPending ? "Creation..." : "Creer version brouillon"}
-                </Button>
-              </div>
-              {!canWriteMatrices ? <p className="po2-muted-line">Import reserve aux roles autorises hors Fluides et Technicien CVC.</p> : null}
-              {importPreview.isError ? <p className="po2-muted-line">Preview impossible : {errorMessage(importPreview.error)}</p> : null}
-              {importCommit.isError ? <p className="po2-muted-line">Creation impossible : {errorMessage(importCommit.error)}</p> : null}
-              {importCommit.isSuccess ? <p className="po2-muted-line">Version brouillon creee : {importCommit.data.version_label}. Elle doit encore etre controlee puis activee.</p> : null}
-              {importPreview.data ? (
-                <div className="po2-matrix-import-preview">
-                  <div className="po2-kpi-grid">
-                    <KpiCard label="Ajouts" value={numberFromSummary(importSummary, "ajout")} detail="nouvelles regles" />
-                    <KpiCard label="Modifiees" value={numberFromSummary(importSummary, "modifie")} detail="ecarts vs reference" tone="warning" />
-                    <KpiCard label="Erreurs" value={numberFromSummary(importSummary, "erreurs")} detail={importPreview.data.can_commit ? "aucune bloquante" : "commit bloque"} tone={importPreview.data.can_commit ? "neutral" : "danger"} />
-                    <KpiCard label="Absentes" value={numberFromSummary(importSummary, "absentes_du_fichier")} detail="presentes en reference" />
-                  </div>
-                  {importPreview.data.structural_errors.length ? (
-                    <p className="po2-muted-line">Erreurs structurelles : {importPreview.data.structural_errors.join(" | ")}</p>
-                  ) : null}
-                  {importPreview.data.warnings.length ? (
-                    <p className="po2-muted-line">Alertes : {importPreview.data.warnings.slice(0, 3).join(" | ")}</p>
-                  ) : null}
-                  {importPreview.data.absentes_du_fichier.length ? (
-                    <p className="po2-muted-line">Regles absentes du fichier : {importPreview.data.absentes_du_fichier.slice(0, 5).join(", ")}</p>
-                  ) : null}
-                  <DataTable
-                    rows={previewRows}
-                    getRowKey={(row) => `${row.line}-${row.stable_rule_key ?? "ligne"}`}
-                    columns={[
-                      { key: "line", header: "Ligne", render: (row) => row.line },
-                      { key: "key", header: "Cle stable", render: (row) => <small>{row.stable_rule_key ?? "-"}</small> },
-                      { key: "status", header: "Statut", render: (row) => <StatusBadge tone={row.status === "erreurs" ? "bad" : row.status === "modifie" ? "warn" : row.status === "ajout" ? "info" : "neutral"}>{row.status}</StatusBadge> },
-                      { key: "message", header: "Message", render: (row) => row.message ?? "-" },
-                    ]}
-                  />
-                </div>
-              ) : null}
-            </Card>
-
-            <Card title="Regles de la version" eyebrow={selectedVersionId ? `Version #${selectedVersionId}` : "Selectionner une version"}>
-              {selectedVersionId == null ? (
-                <p className="po2-muted-line">Choisis une version ci-dessus.</p>
-              ) : rules.isFetching ? (
-                <p className="po2-muted-line">Chargement des regles...</p>
-              ) : (
-                <DataTable
-                  rows={rules.data ?? []}
-                  getRowKey={(r) => r.id}
-                  columns={[
-                    { key: "key", header: "Cle stable", render: (r) => <small>{r.stable_rule_key}</small> },
-                    { key: "scope", header: "Scope", render: (r) => r.scope },
-                    { key: "item", header: "Poste / perimetre", render: (r) => r.billed_item_pattern ?? r.site_code ?? r.meter_id ?? "-" },
-                    { key: "nature", header: "Nature", render: (r) => <strong>{r.accounting_nature ?? "-"}</strong> },
-                    { key: "alloc", header: "%", render: (r) => `${r.allocation_percent}` },
-                  ]}
-                />
-              )}
-            </Card>
-          </div>
-        ) : null}
-      </Drawer>
+      {selectedContractId != null ? (
+        <MatrixEditorOverlayV1 contractId={selectedContractId} canWrite={canWriteMatrices} onClose={() => setSelectedContractId(null)} />
+      ) : null}
     </div>
   );
 }

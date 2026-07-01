@@ -5084,6 +5084,53 @@ export async function fetchAccountingMatrixVersionRules(token: string, versionId
   return parseResponse<AccountingMatrixRuleV1[]>(response);
 }
 
+export type AccountingMatrixRuleCreateV1 = {
+  stable_rule_key: string;
+  scope?: string;
+  site_code?: string | null;
+  meter_id?: string | null;
+  billed_item_pattern?: string | null;
+  accounting_service?: string | null;
+  accounting_function?: string | null;
+  accounting_antenna?: string | null;
+  operation_number?: string | null;
+  accounting_nature?: string | null;
+  accounting_label?: string | null;
+  allocation_percent?: number;
+  priority?: number;
+  is_active?: boolean;
+};
+
+export type AccountingMatrixRuleUpdateV1 = Partial<Omit<AccountingMatrixRuleCreateV1, "stable_rule_key">>;
+
+export async function createAccountingMatrixRule(token: string, versionId: number, payload: AccountingMatrixRuleCreateV1): Promise<AccountingMatrixRuleV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/versions/${versionId}/rules`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<AccountingMatrixRuleV1>(response);
+}
+
+export async function updateAccountingMatrixRule(token: string, ruleId: number, payload: AccountingMatrixRuleUpdateV1): Promise<AccountingMatrixRuleV1> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/rules/${ruleId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<AccountingMatrixRuleV1>(response);
+}
+
+export async function deleteAccountingMatrixRule(token: string, ruleId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/accounting-matrices/rules/${ruleId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  if (!response.ok) {
+    await parseResponse(response);
+  }
+}
+
 export async function seedAccountingMatrices(token: string): Promise<AccountingMatrixSeedResultV1> {
   const response = await fetch(`${apiBaseUrl}/accounting-matrices/seed`, { method: "POST", headers: buildHeaders(token) });
   return parseResponse<AccountingMatrixSeedResultV1>(response);
