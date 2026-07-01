@@ -1,4 +1,5 @@
 from app.models.user import User
+from app.models.accounting_budget import AccountingBudgetLine
 from app.models.accounting_matrix import (
     AccountingMatrixContract,
     AccountingMatrixRule,
