@@ -19,16 +19,17 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-06-29 — branche `feat/phase-5-drawer-actions` (PR #32, non mergée). Détail de la session → journal `Archives/Journal-etat-dev-2026.md` (2026-06-29).
+> Mis à jour : 2026-07-01 — PR #32 mergée sur `main`. Branche `feat/budget-marches` (PR #33, CI verte, déployée sur staging, **non mergée** — en attente de validation utilisateur). Détail de la session → journal `Archives/Journal-etat-dev-2026.md` (2026-07-01).
 
-- **État** : (a) tranche `Factures & décisions V1` livrée sur staging (UX, **auto-validation** énergie + CPE — ADR 012, **contacts fournisseurs** + réclamation pré-remplie), **PR #32 non mergée** ; (b) **cadrage budget/suivi financier fait** (voir objectif).
-- **Objectif probable prochaine session** : démarrer la tranche **Suivi financier / Budget par marché** — cadrage et décisions déjà posés dans `refonte-v1/suivi-financier-budget-atterrissage-cadrage.md` (budget dans un **module « Marchés » dédié**, maille **opération**, table `accounting_budget_lines` ; page budget→réalisé→atterrissage). En parallèle, gate ouverte : **valider/merger la PR #32** (factures).
-- **Pourquoi prioritaire** : besoin métier exprimé (piloter le budget annuel par marché) ; s'appuie sur la matrice comptable déjà livrée. ⚠️ Pré-requis : réalisé par opération = extracteurs de lignes facture (PO2-FIN-001) + `operation_number` renseigné.
-- **Fichiers/modules concernés** : à créer — `accounting_budget_lines` (modèle + migration), API CRUD, module front « Marchés ». Existant à relire : `app/models/accounting_matrix.py`, `invoice_accounting_snapshots`, `app/services/cpe_atterrissage.py` (≠ atterrissage financier). Factures : `InvoicesDecisionPageV1.tsx` si reprise PR #32.
-- **Tests ciblés probables** : `npx tsc -b` (front) ; pytest du nouveau service budget ; (factures : `pytest tests/test_invoice_analysis_bpu_mapping.py tests/test_cpe_auto_validation.py tests/test_supplier_contacts.py`).
-- **Décisions à confirmer avant de coder** : §7 du cadrage — temporalité budget (annuel vs mensuel/trimestriel), marché pilote v1, niveau d'atterrissage v1 (pro-rata vs moteur doc 34 §F04), source de la liste des opérations.
-- **À ne pas faire sans validation** : confondre atterrissage **financier** et atterrissage **intéressement** (`cpe_atterrissage.py`) ; merger PR #32 sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`).
-- **Niveau de confiance** : élevé (objectif et décisions cadrés ; reste des points §7 mineurs).
+- **État** : (a) tranche `Factures & décisions V1` **mergée sur `main`** (PR #32 — UX, auto-validation énergie + CPE ADR 012, contacts fournisseurs + réclamation pré-remplie) ; (b) **tranche Suivi financier / Budget par marché codée v1** (PR #33, pilote CPE/DALKIA), déployée sur staging, en attente de revue utilisateur avant merge.
+- **Décisions §7 du cadrage tranchées (2026-07-01)** : marché pilote v1 = **DALKIA (CPE)** ; granularité temporelle = **annuelle seule** ; atterrissage v1 = **pro-rata temporel simple** (moteur physique doc 34 §F04 reporté en v2).
+- **Ce qui a été livré (PR #33)** : table `accounting_budget_lines` (migration 0066, maille opération, rattachée au `matrix_contract_id`) ; service `accounting_budget.py` (CRUD + calcul du réalisé par opération depuis `invoice_accounting_snapshots` avec résolution d'année facture CPE/DALKIA + imports fluides, et comptage explicite des snapshots exclus faute d'année résolue — pas de chiffre trompeur tant que PO2-FIN-001 n'est pas complet) ; API `/api/accounting-budget/*` ; module front « Marchés » (`/refonte-v1/marches`).
+- **Objectif probable prochaine session** : (1) valider sur staging le module Marchés (`/refonte-v1/marches`) avec de vraies données DALKIA, puis merger la PR #33 si OK ; (2) si des lignes de budget réelles existent déjà côté finances, prévoir un import (pas fait en v1, saisie manuelle uniquement) ; (3) étendre le réalisé à d'autres sources de facture (gaz TotalEnergies) si le marché pilote suivant en a besoin.
+- **⚠️ Pré-requis toujours ouvert** : réalisé par opération = extracteurs de lignes facture (PO2-FIN-001) + `operation_number` réellement renseigné. Le service `accounting_budget.py` gère déjà l'incomplétude proprement (note de complétude affichée), mais le chiffre ne sera fiable qu'une fois les extracteurs branchés sur toutes les sources utiles.
+- **Fichiers/modules concernés** : `app/models/accounting_budget.py`, `app/services/accounting_budget.py`, `app/api/routes/accounting_budget.py`, `saas/frontend/src/features/marches/`. Existant à relire si besoin : `app/models/accounting_matrix.py`, `invoice_accounting_snapshots`, `app/services/cpe_atterrissage.py` (≠ atterrissage financier).
+- **Tests ciblés probables** : `pytest tests/test_accounting_budget.py` ; `npx tsc -b` / `npm run build` (front, CI uniquement — pas d'install npm locale sur ce poste).
+- **À ne pas faire sans validation** : confondre atterrissage **financier** et atterrissage **intéressement** (`cpe_atterrissage.py`) ; merger la PR #33 sans validation staging ; toucher les fichiers Codex hors tâche (`PRONO/*`, `knockout_mc.py`).
+- **Niveau de confiance** : élevé (v1 codée et déployée conformément au cadrage validé ; reste la revue utilisateur sur staging avant merge).
 
 ## 🟢 Ce qui tourne en prod (https://patrimoineaucarre.com)
 
@@ -47,11 +48,11 @@ do_not_auto_read:
 | CPE DALKIA | `/cpe` | Avancé : cockpit finance, contrôle factures, référentiel DALKIA, conso multi-fluides |
 | BPU | `/energie/bpu` | Timeline · TURPE · Documents/Import · Édition tableau |
 | Matrices comptables versionnées | API `/api/accounting-matrices/*` | Backend complet mergé `main` (schéma + XLSX + apply/snapshots) |
-| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` tranche active avancée (auto-validation, contacts/réclamation) — PR #32, validée staging, non mergée |
+| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` **mergé `main`** (PR #32, auto-validation, contacts/réclamation) ; `/marches` (budget par marché) — PR #33, déployée staging, non mergée |
 
 ## 📦 Migrations alembic
 
-HEAD code constaté : `0065_add_supplier_contacts` (contacts fournisseurs pour réclamations).
+HEAD code constaté : `0066_add_accounting_budget_lines` (budget par marché, maille opération, branche `feat/budget-marches` PR #33 — non encore sur `main`). Dernière migration sur `main` : `0065_add_supplier_contacts`.
 Jalons : `0017` hiérarchie sites · `0041` seed CPE scope · `0048` CVC F-Gaz · `0056` rapprochements
 patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → journal archivé.
 
@@ -59,7 +60,8 @@ patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → j
 
 | ID Backlog | Chantier | État / prochaine action |
 |---|---|---|
-| PO2-FIN-001 | Factures + matrice comptable + atterrissage | Backend matrices mergé ; reste extracteurs réels de lignes facture sur `apply`, droits par rôle, bascule front `/refonte-v1/factures` |
+| PO2-FIN-001 | Factures + matrice comptable + atterrissage | Backend matrices mergé ; reste extracteurs réels de lignes facture sur `apply`, droits par rôle. Bloque la fiabilité du réalisé du nouveau module Budget (PR #33) |
+| PO2-FIN-002 | Budget par marché + suivi financier | v1 codée (PR #33, pilote DALKIA) : `accounting_budget_lines`, réalisé pro-rata, module « Marchés ». Reste : validation staging, merge, extension autres marchés, atterrissage physique doc 34 §F04 (v2) |
 | PO2-UX-002 | Refonte frontend React V1 | Tranche `Factures & décisions` (doc 49) ; Phase 5 à brancher |
 | PO2-CPE-001 | Contrôle factures DALKIA CPE | Reimport CSV, rattacher codes piscines, parser DPGF Lot 1/2 |
 | PO2-FACT-001 | Audit facture ENGIE + socle EDF | Reimport XLSX force update, valider fiche liaison finance |
