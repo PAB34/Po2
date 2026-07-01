@@ -1,13 +1,15 @@
+import io
 from pathlib import Path
 from datetime import date
 
+import openpyxl
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeAccountingSiteMapping, CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine, CpeRevisionIndex
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping, CpeContractReference, CpeFinanceImportBatch, CpeFinanceInvoice, CpeFinanceLine, CpeRevisionIndex
 from app.services import cpe_accounting
 from app.services.cpe_accounting import extract_invoice_evidence_pdf, import_codification_workbook, import_finance_workbook, list_revision_observations, recompute_finance_invoice_controls
 
@@ -15,6 +17,66 @@ from app.services.cpe_accounting import extract_invoice_evidence_pdf, import_cod
 DATA_DIR = Path(__file__).resolve().parents[2] / "energie" / "DALKIA" / "COMPTABILITE"
 CODIFICATION = DATA_DIR / "analyse_codification_dalkia_enrichie_par_code_contrat (1).xlsx"
 FINANCE_EXPORT = DATA_DIR / "export_finances-20260527_1055.xlsx"
+
+_NATURE_HEADERS = [
+    "Code contrat", "Marché / périmètre", "Poste facturé", "Signification",
+    "Services vendus associés", "Nature proposée", "Libellé nature", "Statut",
+    "Règle / justification", "Alerte / question restante", "Action attendue",
+    "Validation comptable", "Commentaire comptable",
+]
+
+
+def _build_codification_bytes(*, title_row: bool) -> bytes:
+    """Reproduit la structure du classeur canonique « Poste facturé vers Nature
+    ctpab » (feuille enrichie par code contrat). ``title_row`` simule la variante
+    avec une ligne de titre avant l'en-tête, pour tester la détection dynamique."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Poste facturé vers Nature ctpab"
+    if title_row:
+        ws.append(["Matrice de validation"])
+    ws.append(_NATURE_HEADERS)
+    ws.append(["C00025811F", "Ville - ancien marché", "P1", "Fourniture énergie",
+               "CHAUFFAGE (198)", "60621", "Combustibles", "Cohérent",
+               "P1 chauffage/énergie", "Factures 2026", "Codification proposée", "", ""])
+    ws.append(["C00190116O", "Ville - nouveau CPE", "P3.4", "Travaux",
+               "TRAVAUX (2)", "21351", "Immobilisation", "À arbitrer",
+               "Investissement selon nature", "Opération 98023 ?", "Arbitrer avec compta", "", ""])
+    sites = wb.create_sheet("Sites vers codes")
+    sites.append(["Code site", "Nom du site", "Famille", "Gestionnaire", "Gestionnaire alternatif",
+                  "Service", "Libellé service", "Fonction", "Libellé fonction", "Antenne",
+                  "Libellé antenne", "Opération si travaux", "Libellé opération"])
+    sites.append(["VDS-ENS 01", "Ecole test", "SCOLAIRE", "Mairie", "",
+                  "S1", "Service test", "F1", "Fonction test", "A1", "Antenne test", "", ""])
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("title_row", [False, True])
+def test_codification_import_keeps_contract_code_and_compta_notes(db_session: Session, title_row: bool):
+    result = import_codification_workbook(
+        db_session,
+        _build_codification_bytes(title_row=title_row),
+        filename="MATRICE_DALKIA-COMPATBILITE.xlsx",
+        city_id=1,
+    )
+    assert result.errors == []
+    assert result.nature_rules_created == 2
+
+    rules = db_session.scalars(select(CpeAccountingNatureRule).order_by(CpeAccountingNatureRule.billed_item)).all()
+    # Granularité par contrat conservée (avant l'adaptation, contract_code tombait à NULL).
+    assert {r.contract_code for r in rules} == {"C00025811F", "C00190116O"}
+    p1 = next(r for r in rules if r.billed_item == "P1")
+    assert p1.contract_code == "C00025811F"
+    assert p1.market == "P1"  # dérivé du poste, pas du libellé « Ville - ancien marché »
+    assert p1.accounting_nature == "60621"
+    # Colonnes de validation comptable récupérées dans les notes.
+    assert "Statut: Cohérent" in (p1.notes or "")
+    assert "Services vendus: CHAUFFAGE (198)" in (p1.notes or "")
+    p34 = next(r for r in rules if r.billed_item == "P3.4")
+    assert "Statut: À arbitrer" in (p34.notes or "")
+    assert "Alerte/question: Opération 98023 ?" in (p34.notes or "")
 
 
 @pytest.fixture()
