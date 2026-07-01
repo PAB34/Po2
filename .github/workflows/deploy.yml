@@ -11,6 +11,7 @@ on:
       - "saas/frontend/**"
       - "saas/infra/**"
       - "saas/pronostics/**"
+      - "PRONO/**"
       - ".github/workflows/deploy.yml"
 
 # Empeche deux deploys concurrents de se marcher dessus sur le VPS

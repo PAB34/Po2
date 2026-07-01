@@ -91,6 +91,31 @@ def get_team_news(team: str, max_items: int = None, max_age_days: int = None):
     return {"team": team, "error": None, "items": kept[:max_items]}
 
 
+def get_league_news(max_items: int = 15, max_age_days: int = None):
+    """Dernières actus générales de Ligue 1 (1 requête, pour l'onglet Actualité)."""
+    max_age_days = max_age_days or NEWS_MAX_AGE_DAYS
+    q = urllib.parse.quote('"Ligue 1" football')
+    url = f"https://news.google.com/rss/search?q={q}&hl=fr&gl=FR&ceid=FR:fr"
+    try:
+        xml = _fetch(url)
+    except Exception as e:
+        return {"error": str(e)[:120], "items": []}
+    now = datetime.now(timezone.utc)
+    kept = []
+    seen = set()
+    for it in _parse_items(xml):
+        key = it["title"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if it["date"] is not None and (now - it["date"]).days > max_age_days:
+            continue
+        it["tags"] = _tag(it["title"])
+        kept.append(it)
+    kept.sort(key=lambda x: x["date"] or now, reverse=True)
+    return {"error": None, "items": kept[:max_items]}
+
+
 def get_journee_news(matches, max_items_per_team: int = None):
     teams = []
     for _, r in matches.iterrows():

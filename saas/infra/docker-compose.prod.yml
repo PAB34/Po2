@@ -38,6 +38,28 @@ services:
     depends_on:
       - backend
 
+  # --- PRONO : app privée Ligue 1 (sous-domaine ligue1.patrimoineaucarre.com) ---
+  prono-backend:
+    build:
+      context: ../../PRONO/backend
+    restart: unless-stopped
+    environment:
+      PRONO_SECRET_KEY: ${PRONO_SECRET_KEY}
+      PRONO_ADMIN_EMAIL: ${PRONO_ADMIN_EMAIL}
+      PRONO_ADMIN_PASSWORD: ${PRONO_ADMIN_PASSWORD}
+      PRONO_TOKEN_MINUTES: ${PRONO_TOKEN_MINUTES:-1440}
+      PRONO_CORS_ORIGINS: https://ligue1.patrimoineaucarre.com
+      PRONO_DATA_DIR: /data
+    volumes:
+      - prono_data:/data
+
+  prono-frontend:
+    build:
+      context: ../../PRONO/frontend
+    restart: unless-stopped
+    depends_on:
+      - prono-backend
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
@@ -46,6 +68,8 @@ services:
     depends_on:
       - frontend
       - pronostics
+      - prono-frontend
+      - prono-backend
       - backend
     ports:
       - "80:80"
@@ -65,6 +89,7 @@ volumes:
   caddy_data:
   caddy_config:
   invoice_data:
+  prono_data:
 
 networks:
   edge:
