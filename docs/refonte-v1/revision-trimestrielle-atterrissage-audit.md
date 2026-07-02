@@ -120,6 +120,13 @@ affichant explicitement « budget contractuel révisé (coef. Tn observé) » + 
   P30 révisé, formule OUV11 confirmée `06-Facturation-et-indices.md`). L'**APE** (forfait global non
   révisable, `01-Structure-du-marché.md`) est une **enveloppe pluriannuelle distincte**, hors de cette vue
   (chantier « réalisé vs programme APE » séparé). → aucun changement pour exclure P3.4 : comportement correct.
+- **Correctif 2026-07-02 (revue staging)** : le coefficient Σrévisé/Σbase n'a de sens que pour **P2/P3**
+  (base/révisé = forfaits annuels). Pour **P1 gaz**, `prix_de_base`/`prix_révisé` sont des **prix unitaires
+  du gaz (€/MWh)** sur des lignes de conso → un ratio agrégé donnait un coefficient aberrant (bug observé
+  ≈ 300). **P1 gaz est donc exclu** de la révision par coefficient (budget = base) : sa révision propre
+  (prix gaz OS3/PEG) est un mécanisme distinct à intégrer séparément. La **formule d'extrapolation** est
+  désormais affichée en petit sous la ligne du poste (`revision_detail`). L'extrapolation se **recale
+  automatiquement** à chaque nouvel import de factures (dernier trimestre connu, calcul à la volée).
 - **Suite (noté)** : construire un **tableau de suivi des indices/variables** (indices de révision, prix
   gaz PEG/OS3, TURPE…) avec graphiques, nouvelle entrée sur `/refonte-v1/marches`. Transversal aux marchés
   (DALKIA/ENGIE/EDF), à cadrer plus tard. Voir mémoire `project_suivi_indices_variables`.

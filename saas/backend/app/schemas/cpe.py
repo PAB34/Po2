@@ -714,6 +714,7 @@ class CpeContractBudgetPoste(BaseModel):
     label: str
     budget_base: float
     coefficient_revision: float
+    revision_detail: str | None = None
     budget_contractuel: float
     realise: float
     atterrissage: float

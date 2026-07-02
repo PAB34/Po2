@@ -5369,6 +5369,7 @@ export type ContractBudgetPosteV1 = {
   label: string;
   budget_base: number;
   coefficient_revision: number;
+  revision_detail: string | null;
   budget_contractuel: number;
   realise: number;
   atterrissage: number;

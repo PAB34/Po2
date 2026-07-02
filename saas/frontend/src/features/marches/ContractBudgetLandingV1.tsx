@@ -112,7 +112,20 @@ export function ContractBudgetLandingV1() {
                     header: "Coef. révision",
                     render: (p) => (p.coefficient_revision !== 1 ? p.coefficient_revision.toFixed(4) : "—"),
                   },
-                  { key: "budget", header: "Budget révisé", render: (p) => <strong>{eur(p.budget_contractuel)}</strong> },
+                  {
+                    key: "budget",
+                    header: "Budget révisé",
+                    render: (p) => (
+                      <div>
+                        <strong>{eur(p.budget_contractuel)}</strong>
+                        {p.coefficient_revision !== 1 && p.revision_detail ? (
+                          <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7, marginTop: 2 }}>
+                            {p.revision_detail}
+                          </div>
+                        ) : null}
+                      </div>
+                    ),
+                  },
                   { key: "realise", header: "Réalisé", render: (p) => eur(p.realise) },
                   { key: "landing", header: "Atterrissage", render: (p) => eur(p.atterrissage) },
                   { key: "reste", header: "Reste à facturer", render: (p) => eur(p.reste_a_facturer) },

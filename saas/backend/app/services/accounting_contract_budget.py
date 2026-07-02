@@ -47,10 +47,12 @@ POSTE_SCOPE: dict[str, str] = {
     "P3-4": "p3",
 }
 
-# Postes révisables → marché portant le coefficient de révision (formule d'indices par marché).
-# P1-ELEC absent volontairement : le P1 électrique (Lot 2 piscines) n'a pas de révision par indices.
+# Postes révisables par coefficient sur forfait → marché portant le coefficient (revised/base annuel).
+# Limité à P2/P3 : leurs prix_de_base/prix_révisé sont les forfaits annuels (P20/P30), le ratio a un sens.
+# P1 gaz EXCLU : sa "révision" est le prix unitaire du gaz (OS3/PEG) sur des lignes de consommation ;
+# un ratio Σrévisé/Σbase de prix unitaires n'a pas de sens (mécanisme propre à ajouter séparément).
+# P1-ELEC exclu : pas de révision par indices (Lot 2 piscines).
 REVISABLE_POSTE_MARKET: dict[str, str] = {
-    "P1": "P1",
     "P2": "P2",
     "P2-4": "P2",
     "P3": "P3",
@@ -80,12 +82,13 @@ def _revision_coef_by_market(
     year: int,
     today: date,
     contract_codes: list[str],
-) -> dict[str, float]:
-    """Coefficient de révision observé par marché (P1/P2/P3), Option C (dernier trimestre écoulé).
+) -> dict[str, dict[str, Any]]:
+    """Coefficient de révision observé par marché (P2/P3 seulement), Option C (dernier trimestre connu).
 
     Coefficient = Σ prix_révisé / Σ prix_base sur les lignes de factures du **dernier trimestre écoulé
-    avec données**, par marché. C'est l'extrapolation « dernier coefficient connu » ensuite appliquée au
-    budget base. Retourne {} si aucune facture révisée (le budget reste = base, coef 1,0).
+    avec données**, par marché (P2/P3, où base/révisé sont les forfaits annuels). C'est l'extrapolation
+    « dernier coefficient connu », ensuite appliquée au budget base. Retourne, par marché, le coefficient
+    et le détail du calcul (trimestre, sommes, nb de lignes) pour l'afficher. {} si aucune facture révisée.
     """
     scope = get_current_cpe_contract_codes(db, city_id, year=year)
     codes = ({c.strip().upper() for c in contract_codes if c} & scope) if contract_codes else scope
@@ -101,6 +104,7 @@ def _revision_coef_by_market(
         .join(CpeFinanceInvoice, CpeFinanceLine.invoice_id == CpeFinanceInvoice.id)
         .where(
             CpeFinanceInvoice.contract_code.in_(codes),
+            CpeFinanceLine.market.in_(("P2", "P3")),
             CpeFinanceLine.base_price.is_not(None),
             CpeFinanceLine.revised_price.is_not(None),
         )
@@ -108,7 +112,7 @@ def _revision_coef_by_market(
     if city_id is not None:
         stmt = stmt.where(CpeFinanceLine.city_id == city_id)
 
-    # {market: {quarter: [Σbase, Σrevised]}}
+    # {market: {quarter: [Σbase, Σrevised, count]}}
     agg: dict[str, dict[int, list[float]]] = {}
     for line in db.scalars(stmt).all():
         line_year, quarter = _line_quarter(line)
@@ -119,16 +123,23 @@ def _revision_coef_by_market(
         if base <= 0:
             continue
         market = (line.market or "").strip().upper()
-        bucket = agg.setdefault(market, {}).setdefault(quarter, [0.0, 0.0])
+        bucket = agg.setdefault(market, {}).setdefault(quarter, [0.0, 0.0, 0.0])
         bucket[0] += base
         bucket[1] += revised
+        bucket[2] += 1
 
-    coef_by_market: dict[str, float] = {}
+    coef_by_market: dict[str, dict[str, Any]] = {}
     for market, by_quarter in agg.items():
         latest = max(by_quarter)  # dernier trimestre écoulé avec données
-        total_base, total_revised = by_quarter[latest]
+        total_base, total_revised, count = by_quarter[latest]
         if total_base > 0:
-            coef_by_market[market] = round(total_revised / total_base, 6)
+            coef_by_market[market] = {
+                "coef": round(total_revised / total_base, 6),
+                "quarter": latest,
+                "base_sum": round(total_base, 2),
+                "revised_sum": round(total_revised, 2),
+                "line_count": int(count),
+            }
     return coef_by_market
 
 
@@ -195,9 +206,10 @@ def build_contract_budget_landing(
         "projection_note": projection_note,
         "source_note": (
             "Budget base = prévu DPGF DALKIA (P20/P30/P10 nus) ; budget contractuel = base × coefficient de "
-            "révision observé (dernier trimestre connu, Option C) ; réalisé = reçu factures CPE (déjà révisé). "
-            "Révision : P2 (ICHT-IME/FSD2), P3 & P3.4 (ICHT-IME/BT40), P1 gaz (prix OS3) ; P1-ELEC non révisé. "
-            "Ne pas confondre avec l'atterrissage d'intéressement (moteur DJU cpe_atterrissage)."
+            "révision observé (Σrévisé/Σbase du dernier trimestre facturé, extrapolé — Option C) ; réalisé = "
+            "reçu factures CPE (déjà révisé). Révision appliquée : P2 et P3/P3.4 (forfaits annuels). P1 gaz : "
+            "révision par prix unitaire du gaz (OS3/PEG), mécanisme propre non encore intégré ici → budget base. "
+            "P1-ELEC non révisé. Ne pas confondre avec l'intéressement (moteur DJU cpe_atterrissage)."
         ),
     }
 
@@ -208,12 +220,13 @@ def _poste_landing(
     prevu: float,
     recu: float,
     progress: float,
-    coef_by_market: dict[str, float],
+    coef_by_market: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     budget_base = round(prevu, 2)
     realise = round(recu, 2)
     market = REVISABLE_POSTE_MARKET.get(poste)
-    coef = coef_by_market.get(market, 1.0) if market else 1.0
+    info = coef_by_market.get(market) if market else None
+    coef = info["coef"] if info else 1.0
     budget = round(budget_base * coef, 2)  # budget contractuel révisé
     if budget > 0:
         atterrissage = budget
@@ -229,6 +242,7 @@ def _poste_landing(
         "label": label,
         "budget_base": budget_base,
         "coefficient_revision": round(coef, 6),
+        "revision_detail": _revision_detail(market, info),
         "budget_contractuel": budget,
         "realise": realise,
         "atterrissage": atterrissage,
@@ -238,6 +252,20 @@ def _poste_landing(
         "taux_facturation": round(realise / budget, 4) if budget else None,
         "landing_method": method,
     }
+
+
+def _revision_detail(market: str | None, info: dict[str, Any] | None) -> str | None:
+    """Formule lisible de l'extrapolation (affichée en petit sous la ligne du poste)."""
+    if market is None:
+        return None
+    if info is None:
+        return f"Marché {market} : aucune facture révisée trouvée → budget = base (coef 1,0000)."
+    return (
+        f"Coef. révision {market} = Σrévisé / Σbase (T{info['quarter']} = dernier trimestre facturé) "
+        f"= {info['revised_sum']:.0f} / {info['base_sum']:.0f} = {info['coef']:.4f}, "
+        f"extrapolé à l'année sur {info['line_count']} ligne(s). "
+        f"Budget révisé = budget base × {info['coef']:.4f}."
+    )
 
 
 def _project_on_operations(
