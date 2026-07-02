@@ -33,6 +33,7 @@ from app.schemas.cpe import (
     CpeInvoiceEvidenceOut,
     CpeFinancePreview,
     CpeAtterrissageOut,
+    CpeContractBudgetLandingOut,
     CpeElecPerfOut,
     CpeMarketTrackingOut,
     CpeP24Objective,
@@ -57,6 +58,7 @@ from app.services import cpe as svc
 from app.services import cpe_accounting as accounting_svc
 from app.services import cpe_atterrissage as atterrissage_svc
 from app.services import cpe_market_tracking as market_svc
+from app.services import accounting_contract_budget as contract_budget_svc
 from app.services import cpe_p3_devis as p3_devis_svc
 from app.services.cpe_finance_preview import preview_finance_export
 from app.services.cpe_import import import_releves_csv
@@ -626,6 +628,23 @@ def export_market_tracking(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/finances/contract-budget-landing", response_model=CpeContractBudgetLandingOut)
+def get_contract_budget_landing(
+    year: int = Query(..., ge=2025, le=2033),
+    lot: int | None = Query(None, ge=1, le=2),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CpeContractBudgetLandingOut:
+    """Atterrissage « budget contractuel − réalisé » par poste CPE (stratégie §5bis).
+
+    Le budget de référence est le montant contractuel (prévu DPGF DALKIA), pas une
+    saisie prévisionnelle Ville. ``lot`` 1/2 restreint à un lot ; absent = cumulé.
+    """
+    return CpeContractBudgetLandingOut.model_validate(
+        contract_budget_svc.build_contract_budget_landing(db, current_user.city_id, year=year, lot=lot)
     )
 
 

@@ -709,6 +709,47 @@ class CpeMarketTrackingOut(BaseModel):
     dju: CpeDju | None = None
 
 
+class CpeContractBudgetPoste(BaseModel):
+    poste: str
+    label: str
+    budget_contractuel: float
+    realise: float
+    atterrissage: float
+    reste_a_facturer: float
+    ecart_realise_vs_budget: float
+    ecart_atterrissage_vs_budget: float
+    taux_facturation: float | None
+    landing_method: str
+
+
+class CpeContractBudgetTotals(BaseModel):
+    budget_contractuel: float
+    realise: float
+    atterrissage: float
+    reste_a_facturer: float
+    ecart_atterrissage_vs_budget: float
+
+
+class CpeContractBudgetOperation(BaseModel):
+    operation_number: str
+    postes: list[str]
+    budget_contractuel: float
+    realise: float
+    atterrissage: float
+
+
+class CpeContractBudgetLandingOut(BaseModel):
+    year: int
+    lot: int | None = None
+    contract_codes: list[str]
+    year_progress_percent: float
+    postes: list[CpeContractBudgetPoste]
+    totals: CpeContractBudgetTotals
+    by_operation: list[CpeContractBudgetOperation] = []
+    projection_note: str
+    source_note: str
+
+
 class CpeP24Objective(BaseModel):
     annee: int
     has_data: bool
