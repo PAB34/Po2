@@ -5362,3 +5362,50 @@ export async function fetchBudgetSuivi(token: string, matrixContractId: number, 
   const response = await fetch(`${apiBaseUrl}/accounting-budget/contracts/${matrixContractId}/suivi?year=${year}`, { headers: buildHeaders(token) });
   return parseResponse<BudgetSuiviV1>(response);
 }
+
+// Atterrissage « budget contractuel − réalisé » par poste CPE (stratégie §5bis).
+export type ContractBudgetPosteV1 = {
+  poste: string;
+  label: string;
+  budget_contractuel: number;
+  realise: number;
+  atterrissage: number;
+  reste_a_facturer: number;
+  ecart_realise_vs_budget: number;
+  ecart_atterrissage_vs_budget: number;
+  taux_facturation: number | null;
+  landing_method: string;
+};
+
+export type ContractBudgetOperationV1 = {
+  operation_number: string;
+  postes: string[];
+  budget_contractuel: number;
+  realise: number;
+  atterrissage: number;
+};
+
+export type ContractBudgetLandingV1 = {
+  year: number;
+  lot: number | null;
+  contract_codes: string[];
+  year_progress_percent: number;
+  postes: ContractBudgetPosteV1[];
+  totals: {
+    budget_contractuel: number;
+    realise: number;
+    atterrissage: number;
+    reste_a_facturer: number;
+    ecart_atterrissage_vs_budget: number;
+  };
+  by_operation: ContractBudgetOperationV1[];
+  projection_note: string;
+  source_note: string;
+};
+
+export async function fetchContractBudgetLanding(token: string, year: number, lot?: number | null): Promise<ContractBudgetLandingV1> {
+  const params = new URLSearchParams({ year: String(year) });
+  if (lot != null) params.set("lot", String(lot));
+  const response = await fetch(`${apiBaseUrl}/cpe/finances/contract-budget-landing?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<ContractBudgetLandingV1>(response);
+}

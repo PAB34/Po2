@@ -19,7 +19,16 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-07-01 (soir) — **PR #32, #33, #34, #35 toutes mergées sur `main` et déployées en PROD** (3 deploys OK, migration 0066 appliquée en prod). Détail → journal `Archives/Journal-etat-dev-2026.md`.
+> Mis à jour : 2026-07-02 — **PR #36 ouverte (non mergée)** : atterrissage « budget contractuel − réalisé » par poste CPE (stratégie §5bis) + vue front. Contexte antérieur (PR #32→#35 mergées en prod) conservé plus bas.
+
+- **En cours (PR #36, branche `feat/cibles-contractuelles`)** : brancher les **cibles/budgets contractuels CPE (DALKIA)** comme source de budget (§5bis de `refonte-v1/atterrissage-strategie-front.md`). Audit « fil du dev » : `refonte-v1/cibles-contractuelles-budget-matrice-audit.md`.
+  - **Backend** : `services/accounting_contract_budget.py` (`build_contract_budget_landing`) + route `GET /api/cpe/finances/contract-budget-landing?year=&lot=`. Réutilise `cpe_market_tracking` (prévu DPGF = budget contractuel, reçu = réalisé factures CPE). **Calcul à la volée, aucune migration.** 6 tests sqlite verts.
+  - **Front** : onglet « Budget contractuel (poste) » dans `/refonte-v1/marches` (SegmentControl) — `ContractBudgetLandingV1` + hook. KPIs + table par poste (P1/P2/P3/P3.4) + projection optionnelle par `operation_number` (axe matrice, hybride).
+  - **Décisions validées** : hybride (poste + projection opération), réalisé = factures CPE par poste, calcul à la volée. Atterrissage v1 = montant contractuel fixe (pro-rata si budget inconnu) — **≠ intéressement DJU** (`cpe_atterrissage`).
+  - **Reste** : revue utilisateur + CI verte → merge (déploiement prod auto) ; puis ENGIE (conso ENEDIS→sites CPE), EDF (cible à définir depuis historique), P3.4 APE (patron = `build_p3_atterrissage`).
+- **Décision antérieure (2026-07-01) — setup matrices en prod** : `prefill_energy_matrices` + `seed_from_existing` déployés mais **pas exécutés en prod** (aucune matrice seedée). À rejouer sur feu vert (voir plus bas).
+
+> **Contexte antérieur (2026-07-01 soir) — PR #32, #33, #34, #35 mergées sur `main` et déployées en PROD** (migration 0066 en prod).
 
 - **État global** : tout le travail de la session est **en production** (`patrimoineaucarre.com`, santé 200) :
   - **Budget par marché v1** (PR #33) : `accounting_budget_lines` (migration 0066), API `/api/accounting-budget/*`, module front « Marchés » (`/refonte-v1/marches`). Décisions : pilote DALKIA, annuel, atterrissage pro-rata.
@@ -48,7 +57,8 @@ do_not_auto_read:
 | CPE DALKIA | `/cpe` | Avancé : cockpit finance, contrôle factures, référentiel DALKIA, conso multi-fluides |
 | BPU | `/energie/bpu` | Timeline · TURPE · Documents/Import · Édition tableau |
 | Matrices comptables versionnées | API `/api/accounting-matrices/*` | Backend complet mergé `main` (schéma + XLSX + apply/snapshots) |
-| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` **mergé `main`** (PR #32, auto-validation, contacts/réclamation) ; `/marches` (budget par marché) — PR #33, déployée staging, non mergée |
+| Refonte React V1 (labo) | `/refonte-v1/*` | `/matrices` branché API réelle ; `/factures` **mergé `main`** (PR #32) ; `/marches` = budget par marché (PR #33) + onglet **« Budget contractuel (poste) »** (PR #36, non mergée) |
+| Atterrissage budget contractuel CPE | API `/api/cpe/finances/contract-budget-landing` | PR #36 non mergée : budget contractuel (prévu DPGF) − réalisé (factures CPE) par poste ; calcul à la volée |
 
 ## 📦 Migrations alembic
 
