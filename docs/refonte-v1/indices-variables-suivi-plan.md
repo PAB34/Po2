@@ -39,3 +39,13 @@ Graphes : **recharts 2.15.3 déjà présent** ; suivre `components/BpuTimelineCh
 1. Regroupement d'affichage : un graphe par famille (DALKIA / gaz / élec) ou un graphe par variable ?
 2. Faut-il afficher, à côté des indices, la **courbe du coefficient observé** (revised/base) par marché
    pour matérialiser directement la tendance qui pilotera le budget révisé ? (recommandé).
+
+## Etat implementation (2026-07-02 / PR #38)
+- Branche : `codex/indices-variables`, PR #38 draft, CI verte, deployee et revue sur staging.
+- Backend livre : endpoint `GET /api/marches/indices-variables?year_from=&year_to=` ; calcul a la volee, aucune migration.
+- Front livre : 3e segment `Indices & variables` dans `/refonte-v1/marches`, graphes Recharts + table par famille.
+- Arbitrage retenu : un graphe par famille (DALKIA / gaz / electricite), avec courbes multiples par variable.
+- Coefficients observes DALKIA inclus et agreges a un point par marche/trimestre pour eviter les doublons visuels.
+- TURPE : exposition de `evolution_percent` et `cumulative_index` uniquement ; les versions datees restent une metadata/source, pas une serie numerique artificielle.
+- Validation : tests backend cibles `12 passed`; staging health 200 ; revue UI Chrome sans erreur console.
+
