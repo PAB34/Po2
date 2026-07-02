@@ -55,6 +55,8 @@ import {
   fetchCpeDju,
   fetchCpeFinanceBatches,
   fetchCpeRevisionIndices,
+  deleteCpeRevisionIndex,
+  purgeCpeRevisionIndices,
   fetchCpeRevisionObservations,
   fetchCpeRevisionEvidences,
   fetchCpeFinanceInvoices,
@@ -509,6 +511,22 @@ export default function CpeDalkiaPage() {
     },
   });
 
+  const deleteRevisionIndexM = useMutation({
+    mutationFn: (id: number) => deleteCpeRevisionIndex(token!, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
+    },
+  });
+
+  const purgeManualIndicesM = useMutation({
+    mutationFn: () => purgeCpeRevisionIndices(token!, "Saisie Po2"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
+    },
+  });
+
   const recalculateAllControlsM = useMutation({
     mutationFn: () => recalculateAllCpeFinanceControls(token!),
     onSuccess: (report) => {
@@ -683,6 +701,9 @@ export default function CpeDalkiaPage() {
           onUploadRevisionEvidencePdf={(file) => uploadRevisionEvidencePdfM.mutate(file)}
           onApplyEvidenceIndices={(evidenceId) => applyEvidenceIndicesM.mutate(evidenceId)}
           onSaveIndex={(payload) => upsertRevisionIndexM.mutate(payload)}
+          onDeleteIndex={(id) => deleteRevisionIndexM.mutate(id)}
+          onPurgeManualIndices={() => purgeManualIndicesM.mutate()}
+          indexDeletePending={deleteRevisionIndexM.isPending || purgeManualIndicesM.isPending}
           onRecalculateAllControls={() => recalculateAllControlsM.mutate()}
           onExportGlobalControlReport={() => exportGlobalControlReportM.mutate()}
           exportGlobalControlReportPending={exportGlobalControlReportM.isPending}
@@ -2048,6 +2069,9 @@ function CpeFinanceReference({
   onUploadRevisionEvidencePdf,
   onApplyEvidenceIndices,
   onSaveIndex,
+  onDeleteIndex,
+  onPurgeManualIndices,
+  indexDeletePending,
   onRecalculateAllControls,
   onExportGlobalControlReport,
   exportGlobalControlReportPending,
@@ -2102,6 +2126,9 @@ function CpeFinanceReference({
   onUploadRevisionEvidencePdf: (file: File) => void;
   onApplyEvidenceIndices: (evidenceId: number) => void;
   onSaveIndex: (payload: { index_code: string; year: number; quarter: number; value: number; source?: string | null; verification_status?: string; evidence_id?: number | null; notes?: string | null }) => void;
+  onDeleteIndex: (id: number) => void;
+  onPurgeManualIndices: () => void;
+  indexDeletePending: boolean;
   onRecalculateAllControls: () => void;
   onExportGlobalControlReport: () => void;
   exportGlobalControlReportPending: boolean;
@@ -2848,6 +2875,24 @@ function CpeFinanceReference({
             </div>
           </div>
         </div>
+        {indices.some((item) => item.source === "Saisie Po2") ? (
+          <div style={{ marginBottom: 10 }}>
+            <button
+              type="button"
+              className="secondary-button"
+              style={{ fontSize: 12, padding: "5px 10px", color: "#b91c1c", borderColor: "#fca5a5" }}
+              disabled={indexDeletePending}
+              onClick={() => {
+                const n = indices.filter((item) => item.source === "Saisie Po2").length;
+                if (window.confirm(`Supprimer les ${n} indice(s) saisi(s) manuellement (source « Saisie Po2 ») ?`)) {
+                  onPurgeManualIndices();
+                }
+              }}
+            >
+              Purger les saisies manuelles ({indices.filter((item) => item.source === "Saisie Po2").length})
+            </button>
+          </div>
+        ) : null}
         <div style={{ overflowX: "auto" }}>
           {sortedIndices.length === 0 ? (
             <span style={{ color: "#9ca3af", fontSize: 13 }}>Aucun indice saisi.</span>
@@ -2902,6 +2947,19 @@ function CpeFinanceReference({
                         }
                       >
                         Editer
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        style={{ fontSize: 12, padding: "3px 8px", marginLeft: 6, color: "#b91c1c", borderColor: "#fca5a5" }}
+                        disabled={indexDeletePending}
+                        onClick={() => {
+                          if (window.confirm(`Supprimer l'indice ${item.index_code} ${item.year} T${item.quarter} ?`)) {
+                            onDeleteIndex(item.id);
+                          }
+                        }}
+                      >
+                        Supprimer
                       </button>
                     </td>
                   </tr>

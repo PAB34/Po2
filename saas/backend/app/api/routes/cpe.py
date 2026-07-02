@@ -490,6 +490,29 @@ def upsert_revision_index(
     return CpeRevisionIndexOut.model_validate(index)
 
 
+@router.delete("/revision-indices/purge")
+def purge_revision_indices(
+    source: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    """Purge les indices d'une source (ex. « Saisie Po2 » : les indices saisis manuellement)."""
+    deleted = accounting_svc.delete_revision_indices_by_source(db, current_user.city_id, source)
+    return {"deleted": deleted}
+
+
+@router.delete("/revision-indices/{index_id}")
+def delete_revision_index(
+    index_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    ok = accounting_svc.delete_revision_index(db, current_user.city_id, index_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Indice introuvable")
+    return {"deleted": True}
+
+
 @router.get("/revision-observations", response_model=list[CpeRevisionObservationOut])
 def list_revision_observations(
     current_user: User = Depends(get_current_user),

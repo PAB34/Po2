@@ -851,6 +851,32 @@ def list_revision_indices(
     return list(db.scalars(query).all())
 
 
+def delete_revision_index(db: Session, city_id: int | None, index_id: int) -> bool:
+    """Supprime un indice de révision (scopé ville). Retourne False si introuvable."""
+    query = select(CpeRevisionIndex).where(CpeRevisionIndex.id == index_id)
+    if city_id is not None:
+        query = query.where(CpeRevisionIndex.city_id == city_id)
+    index = db.scalars(query).first()
+    if index is None:
+        return False
+    db.delete(index)
+    db.commit()
+    return True
+
+
+def delete_revision_indices_by_source(db: Session, city_id: int | None, source: str) -> int:
+    """Purge tous les indices d'une source donnée (ex. « Saisie Po2 »). Retourne le nb supprimé."""
+    query = select(CpeRevisionIndex).where(CpeRevisionIndex.source == source)
+    if city_id is not None:
+        query = query.where(CpeRevisionIndex.city_id == city_id)
+    rows = list(db.scalars(query).all())
+    for index in rows:
+        db.delete(index)
+    if rows:
+        db.commit()
+    return len(rows)
+
+
 def list_revision_observations(db: Session, city_id: int | None = None) -> list[dict[str, Any]]:
     """Liste les coefficients appliques par DALKIA, sans les assimiler a des indices officiels."""
     indices = {

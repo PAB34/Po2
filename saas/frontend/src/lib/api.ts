@@ -4385,6 +4385,23 @@ export async function upsertCpeRevisionIndex(
   return parseResponse<CpeRevisionIndex>(response);
 }
 
+export async function deleteCpeRevisionIndex(token: string, indexId: number): Promise<{ deleted: boolean }> {
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-indices/${indexId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  return parseResponse<{ deleted: boolean }>(response);
+}
+
+export async function purgeCpeRevisionIndices(token: string, source: string): Promise<{ deleted: number }> {
+  const params = new URLSearchParams({ source });
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-indices/purge?${params.toString()}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  return parseResponse<{ deleted: number }>(response);
+}
+
 export async function fetchCpeFinanceControls(token: string, invoiceId: number): Promise<CpeFinanceControl[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/controls`, { headers: buildHeaders(token) });
   return parseResponse<CpeFinanceControl[]>(response);
