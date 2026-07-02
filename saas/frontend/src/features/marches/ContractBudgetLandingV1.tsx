@@ -19,7 +19,8 @@ function ecartTone(poste: ContractBudgetPosteV1) {
 }
 
 const LANDING_METHOD_LABEL: Record<string, string> = {
-  contractuel_fixe: "montant contractuel",
+  contractuel_revise: "contractuel révisé",
+  contractuel_fixe: "contractuel (sans révision)",
   prorata: "pro-rata (budget inconnu)",
   nul: "—",
 };
@@ -39,8 +40,9 @@ export function ContractBudgetLandingV1() {
         <h1>Budget contractuel vs réalisé, par poste (CPE DALKIA)</h1>
         <p>
           Le budget de référence n'est pas une saisie prévisionnelle Ville mais le montant
-          <strong> contractuel</strong> (prévu DPGF DALKIA) : par poste (P1 / P2 / P3 / P3.4), on compare au
-          réalisé (factures CPE) et on projette l'atterrissage. À ne pas confondre avec l'intéressement (moteur DJU).
+          <strong> contractuel</strong> (prévu DPGF DALKIA) <strong>révisé</strong> par le coefficient de
+          révision trimestriel : par poste (P1 / P2 / P3 / P3.4), on compare au réalisé (factures CPE) et on
+          projette l'atterrissage. À ne pas confondre avec l'intéressement (moteur DJU).
         </p>
       </header>
 
@@ -78,14 +80,20 @@ export function ContractBudgetLandingV1() {
       {data ? (
         <>
           <div className="po2-kpi-grid">
-            <KpiCard label="Budget contractuel" value={eur(data.totals.budget_contractuel)} detail={`${year}`} />
+            <KpiCard label="Budget base (DPGF)" value={eur(data.totals.budget_base)} detail={`${year} - avant révision`} />
+            <KpiCard
+              label="Budget contractuel révisé"
+              value={eur(data.totals.budget_contractuel)}
+              tone={data.totals.budget_contractuel > data.totals.budget_base ? "info" : "neutral"}
+              detail={`+ ${eur(data.totals.budget_contractuel - data.totals.budget_base)} de révision`}
+            />
             <KpiCard label="Réalisé (factures CPE)" value={eur(data.totals.realise)} detail={`${data.year_progress_percent.toFixed(0)}% de l'année écoulée`} />
-            <KpiCard label="Atterrissage" value={eur(data.totals.atterrissage)} detail="projection fin d'année" />
+            <KpiCard label="Atterrissage" value={eur(data.totals.atterrissage)} detail="projection fin d'année (révisée)" />
             <KpiCard
               label="Reste à facturer"
               value={eur(data.totals.reste_a_facturer)}
               tone={data.totals.reste_a_facturer > 0 ? "good" : "danger"}
-              detail="budget contractuel - réalisé"
+              detail="budget révisé - réalisé"
             />
           </div>
 
@@ -98,7 +106,13 @@ export function ContractBudgetLandingV1() {
                 getRowKey={(p) => p.poste}
                 columns={[
                   { key: "poste", header: "Poste", render: (p) => <strong>{p.label}</strong> },
-                  { key: "budget", header: "Budget contractuel", render: (p) => eur(p.budget_contractuel) },
+                  { key: "base", header: "Budget base (DPGF)", render: (p) => eur(p.budget_base) },
+                  {
+                    key: "coef",
+                    header: "Coef. révision",
+                    render: (p) => (p.coefficient_revision !== 1 ? p.coefficient_revision.toFixed(4) : "—"),
+                  },
+                  { key: "budget", header: "Budget révisé", render: (p) => <strong>{eur(p.budget_contractuel)}</strong> },
                   { key: "realise", header: "Réalisé", render: (p) => eur(p.realise) },
                   { key: "landing", header: "Atterrissage", render: (p) => eur(p.atterrissage) },
                   { key: "reste", header: "Reste à facturer", render: (p) => eur(p.reste_a_facturer) },

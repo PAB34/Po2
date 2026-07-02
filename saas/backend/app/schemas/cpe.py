@@ -712,6 +712,8 @@ class CpeMarketTrackingOut(BaseModel):
 class CpeContractBudgetPoste(BaseModel):
     poste: str
     label: str
+    budget_base: float
+    coefficient_revision: float
     budget_contractuel: float
     realise: float
     atterrissage: float
@@ -723,6 +725,7 @@ class CpeContractBudgetPoste(BaseModel):
 
 
 class CpeContractBudgetTotals(BaseModel):
+    budget_base: float
     budget_contractuel: float
     realise: float
     atterrissage: float

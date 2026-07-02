@@ -186,3 +186,68 @@ def test_lot_filter(db_session):
     assert report["lot"] == 1
     assert report["contract_codes"] == ["C00190116O"]
     assert any(p["budget_contractuel"] for p in report["postes"])
+
+
+def _seed_revised_p2_line(db: Session, *, base: float, revised: float, quarter_end: date) -> None:
+    """Ajoute une ligne P2 facturée avec prix_de_base et prix_revise (coefficient de révision)."""
+    batch = CpeFinanceImportBatch(city_id=1, filename="rev.xlsx")
+    db.add(batch)
+    db.flush()
+    invoice = CpeFinanceInvoice(
+        batch_id=batch.id, city_id=1, invoice_number="INV-REV", contract_code="C00190116O",
+        period_start=date(quarter_end.year, quarter_end.month - 2, 1), period_end=quarter_end, total_ht=0.0,
+    )
+    db.add(invoice)
+    db.flush()
+    db.add(CpeFinanceLine(
+        batch_id=batch.id, invoice_id=invoice.id, city_id=1, row_number=1,
+        market="P2", billed_item="P2", amount_ht=revised / 4,
+        base_price=base, revised_price=revised,
+        period_start=date(quarter_end.year, quarter_end.month - 2, 1), period_end=quarter_end,
+    ))
+    db.commit()
+
+
+def test_revision_coefficient_inflates_budget(db_session):
+    """Le budget contractuel P2 = budget base × coefficient de révision observé (revised/base)."""
+    _seed_budget_and_invoices(db_session)  # budget base P2 = 800
+    # Coefficient observé T1 = 220/200 = 1,10 sur une ligne P2 révisée.
+    _seed_revised_p2_line(db_session, base=200.0, revised=220.0, quarter_end=date(2026, 3, 31))
+
+    report = build_contract_budget_landing(db_session, 1, year=2026, today=date(2026, 3, 31))
+    p2 = next(p for p in report["postes"] if p["poste"] == "P2")
+    assert p2["budget_base"] == 800.0
+    assert p2["coefficient_revision"] == 1.1
+    assert p2["budget_contractuel"] == 880.0  # 800 × 1,10 (gonflé par la révision)
+    assert p2["landing_method"] == "contractuel_revise"
+    # P1 (aucune ligne révisée) reste au budget base, coef 1,0.
+    p1 = next(p for p in report["postes"] if p["poste"] == "P1")
+    assert p1["coefficient_revision"] == 1.0
+    assert p1["budget_contractuel"] == p1["budget_base"]
+
+
+def test_p3_4_is_revised_like_p3(db_session):
+    """P3.4 (travaux programmés) suit le coefficient de révision du marché P3."""
+    _seed_budget_and_invoices(db_session)  # budget base P3.4 = 4000
+    # Ligne P3 révisée -> coefficient P3 = 1050/1000 = 1,05, appliqué à P3 ET P3-4.
+    batch = CpeFinanceImportBatch(city_id=1, filename="rev3.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    invoice = CpeFinanceInvoice(
+        batch_id=batch.id, city_id=1, invoice_number="INV-P3", contract_code="C00190116O",
+        period_start=date(2026, 1, 1), period_end=date(2026, 3, 31), total_ht=0.0,
+    )
+    db_session.add(invoice)
+    db_session.flush()
+    db_session.add(CpeFinanceLine(
+        batch_id=batch.id, invoice_id=invoice.id, city_id=1, row_number=1,
+        market="P3", billed_item="P3", amount_ht=262.5, base_price=1000.0, revised_price=1050.0,
+        period_start=date(2026, 1, 1), period_end=date(2026, 3, 31),
+    ))
+    db_session.commit()
+
+    report = build_contract_budget_landing(db_session, 1, year=2026, today=date(2026, 3, 31))
+    by_poste = {p["poste"]: p for p in report["postes"]}
+    assert by_poste["P3"]["coefficient_revision"] == 1.05
+    assert by_poste["P3-4"]["coefficient_revision"] == 1.05
+    assert by_poste["P3-4"]["budget_contractuel"] == 4200.0  # 4000 × 1,05

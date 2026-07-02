@@ -33,6 +33,8 @@ from app.models.accounting_matrix import (
     AccountingMatrixRule,
     AccountingMatrixVersion,
 )
+from app.models.cpe import CpeFinanceInvoice, CpeFinanceLine
+from app.services.cpe_accounting import get_current_cpe_contract_codes
 from app.services.cpe_market_tracking import build_market_tracking
 
 # Correspondance poste CPE → scope de règle matrice (pour la projection sur operation_number).
@@ -44,6 +46,90 @@ POSTE_SCOPE: dict[str, str] = {
     "P3": "p3",
     "P3-4": "p3",
 }
+
+# Postes révisables → marché portant le coefficient de révision (formule d'indices par marché).
+# P1-ELEC absent volontairement : le P1 électrique (Lot 2 piscines) n'a pas de révision par indices.
+REVISABLE_POSTE_MARKET: dict[str, str] = {
+    "P1": "P1",
+    "P2": "P2",
+    "P2-4": "P2",
+    "P3": "P3",
+    "P3-4": "P3",
+}
+
+
+def _current_quarter(year: int, today: date) -> int:
+    """Nombre de trimestres écoulés (1..4) pour l'année, 0 si année future."""
+    if today.year > year:
+        return 4
+    if today.year < year:
+        return 0
+    return (today.month - 1) // 3 + 1
+
+
+def _line_quarter(line: CpeFinanceLine) -> tuple[int | None, int | None]:
+    period_date = line.period_end or line.period_start
+    if period_date is None:
+        return None, None
+    return period_date.year, (period_date.month - 1) // 3 + 1
+
+
+def _revision_coef_by_market(
+    db: Session,
+    city_id: int | None,
+    year: int,
+    today: date,
+    contract_codes: list[str],
+) -> dict[str, float]:
+    """Coefficient de révision observé par marché (P1/P2/P3), Option C (dernier trimestre écoulé).
+
+    Coefficient = Σ prix_révisé / Σ prix_base sur les lignes de factures du **dernier trimestre écoulé
+    avec données**, par marché. C'est l'extrapolation « dernier coefficient connu » ensuite appliquée au
+    budget base. Retourne {} si aucune facture révisée (le budget reste = base, coef 1,0).
+    """
+    scope = get_current_cpe_contract_codes(db, city_id, year=year)
+    codes = ({c.strip().upper() for c in contract_codes if c} & scope) if contract_codes else scope
+    if not codes:
+        return {}
+    current_quarter = _current_quarter(year, today)
+    if current_quarter <= 0:
+        return {}
+
+    # Le code contrat est porté par la facture (les lignes ne le renseignent pas toujours).
+    stmt = (
+        select(CpeFinanceLine)
+        .join(CpeFinanceInvoice, CpeFinanceLine.invoice_id == CpeFinanceInvoice.id)
+        .where(
+            CpeFinanceInvoice.contract_code.in_(codes),
+            CpeFinanceLine.base_price.is_not(None),
+            CpeFinanceLine.revised_price.is_not(None),
+        )
+    )
+    if city_id is not None:
+        stmt = stmt.where(CpeFinanceLine.city_id == city_id)
+
+    # {market: {quarter: [Σbase, Σrevised]}}
+    agg: dict[str, dict[int, list[float]]] = {}
+    for line in db.scalars(stmt).all():
+        line_year, quarter = _line_quarter(line)
+        if line_year != year or quarter is None or quarter > current_quarter:
+            continue
+        base = line.base_price or 0.0
+        revised = line.revised_price or 0.0
+        if base <= 0:
+            continue
+        market = (line.market or "").strip().upper()
+        bucket = agg.setdefault(market, {}).setdefault(quarter, [0.0, 0.0])
+        bucket[0] += base
+        bucket[1] += revised
+
+    coef_by_market: dict[str, float] = {}
+    for market, by_quarter in agg.items():
+        latest = max(by_quarter)  # dernier trimestre écoulé avec données
+        total_base, total_revised = by_quarter[latest]
+        if total_base > 0:
+            coef_by_market[market] = round(total_revised / total_base, 6)
+    return coef_by_market
 
 
 def build_contract_budget_landing(
@@ -74,14 +160,17 @@ def build_contract_budget_landing(
             postes_src = entry["postes"]
             contract_codes = sorted(entry.get("contract_codes", []))
 
-    progress = _year_progress_percent(year, today or date.today())
+    resolved_today = today or date.today()
+    progress = _year_progress_percent(year, resolved_today)
+    coef_by_market = _revision_coef_by_market(db, city_id, year, resolved_today, contract_codes)
 
     postes: list[dict[str, Any]] = []
-    total_budget = total_realise = total_landing = 0.0
+    total_base = total_budget = total_realise = total_landing = 0.0
     for row in postes_src:
         cell = row["by_year"][0]
-        poste_out = _poste_landing(row["poste"], row["label"], cell["prevu"], cell["recu"], progress)
+        poste_out = _poste_landing(row["poste"], row["label"], cell["prevu"], cell["recu"], progress, coef_by_market)
         postes.append(poste_out)
+        total_base += poste_out["budget_base"]
         total_budget += poste_out["budget_contractuel"]
         total_realise += poste_out["realise"]
         total_landing += poste_out["atterrissage"]
@@ -95,6 +184,7 @@ def build_contract_budget_landing(
         "year_progress_percent": progress,
         "postes": postes,
         "totals": {
+            "budget_base": round(total_base, 2),
             "budget_contractuel": round(total_budget, 2),
             "realise": round(total_realise, 2),
             "atterrissage": round(total_landing, 2),
@@ -104,19 +194,30 @@ def build_contract_budget_landing(
         "by_operation": by_operation,
         "projection_note": projection_note,
         "source_note": (
-            "Budget = montant contractuel (prévu DPGF DALKIA) ; réalisé = reçu factures CPE par poste. "
-            "Atterrissage v1 : montant contractuel fixe (postes annuels), pro-rata si budget inconnu. "
+            "Budget base = prévu DPGF DALKIA (P20/P30/P10 nus) ; budget contractuel = base × coefficient de "
+            "révision observé (dernier trimestre connu, Option C) ; réalisé = reçu factures CPE (déjà révisé). "
+            "Révision : P2 (ICHT-IME/FSD2), P3 & P3.4 (ICHT-IME/BT40), P1 gaz (prix OS3) ; P1-ELEC non révisé. "
             "Ne pas confondre avec l'atterrissage d'intéressement (moteur DJU cpe_atterrissage)."
         ),
     }
 
 
-def _poste_landing(poste: str, label: str, prevu: float, recu: float, progress: float) -> dict[str, Any]:
-    budget = round(prevu, 2)
+def _poste_landing(
+    poste: str,
+    label: str,
+    prevu: float,
+    recu: float,
+    progress: float,
+    coef_by_market: dict[str, float],
+) -> dict[str, Any]:
+    budget_base = round(prevu, 2)
     realise = round(recu, 2)
+    market = REVISABLE_POSTE_MARKET.get(poste)
+    coef = coef_by_market.get(market, 1.0) if market else 1.0
+    budget = round(budget_base * coef, 2)  # budget contractuel révisé
     if budget > 0:
         atterrissage = budget
-        method = "contractuel_fixe"
+        method = "contractuel_revise" if coef != 1.0 else "contractuel_fixe"
     elif realise:
         atterrissage = _prorata_landing(realise, progress)
         method = "prorata"
@@ -126,6 +227,8 @@ def _poste_landing(poste: str, label: str, prevu: float, recu: float, progress: 
     return {
         "poste": poste,
         "label": label,
+        "budget_base": budget_base,
+        "coefficient_revision": round(coef, 6),
         "budget_contractuel": budget,
         "realise": realise,
         "atterrissage": atterrissage,
