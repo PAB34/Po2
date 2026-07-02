@@ -19,14 +19,13 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-07-02 — **PR #36 ouverte (non mergée)** : atterrissage « budget contractuel − réalisé » par poste CPE (stratégie §5bis) + vue front. Contexte antérieur (PR #32→#35 mergées en prod) conservé plus bas.
+> Mis à jour : 2026-07-02 (soir). **Détail complet → `Sessions/2026-07-02 - Revision trimestrielle et sourcing budget revise.md`** (handoff précis). Contexte antérieur (PR #32→#35 en prod) conservé plus bas.
 
-- **En cours (PR #36, branche `feat/cibles-contractuelles`)** : brancher les **cibles/budgets contractuels CPE (DALKIA)** comme source de budget (§5bis de `refonte-v1/atterrissage-strategie-front.md`). Audit « fil du dev » : `refonte-v1/cibles-contractuelles-budget-matrice-audit.md`.
-  - **Backend** : `services/accounting_contract_budget.py` (`build_contract_budget_landing`) + route `GET /api/cpe/finances/contract-budget-landing?year=&lot=`. Réutilise `cpe_market_tracking` (prévu DPGF = budget contractuel, reçu = réalisé factures CPE). **Calcul à la volée, aucune migration.** 6 tests sqlite verts.
-  - **Front** : onglet « Budget contractuel (poste) » dans `/refonte-v1/marches` (SegmentControl) — `ContractBudgetLandingV1` + hook. KPIs + table par poste (P1/P2/P3/P3.4) + projection optionnelle par `operation_number` (axe matrice, hybride).
-  - **Décisions validées** : hybride (poste + projection opération), réalisé = factures CPE par poste, calcul à la volée. Atterrissage v1 = montant contractuel fixe (pro-rata si budget inconnu) — **≠ intéressement DJU** (`cpe_atterrissage`).
-  - **Reste** : revue utilisateur + CI verte → merge (déploiement prod auto) ; puis ENGIE (conso ENEDIS→sites CPE), EDF (cible à définir depuis historique), P3.4 APE (patron = `build_p3_atterrissage`).
-- **Décision antérieure (2026-07-01) — setup matrices en prod** : `prefill_energy_matrices` + `seed_from_existing` déployés mais **pas exécutés en prod** (aucune matrice seedée). À rejouer sur feu vert (voir plus bas).
+- **PR #36 MERGÉE EN PROD** : atterrissage « budget contractuel − réalisé » par poste CPE (§5bis) — `services/accounting_contract_budget.py` + route `GET /api/cpe/finances/contract-budget-landing` + onglet front « Budget contractuel (poste) » sur `/refonte-v1/marches`. Calcul à la volée, aucune migration.
+- **PR #37 SUR STAGING, NON MERGÉE** (`feat/revision-atterrissage`) : budget contractuel **révisé** = base DPGF × coefficient de révision (Σrévisé/Σbase du dernier trimestre facturé, Option C ; **P2/P3 seulement** ; **P1 gaz exclu** = bug coef ~300 corrigé car prix unitaires ; formule d'extrapolation affichée sous la ligne). 9 tests verts, CI verte, staging santé 200. **À valider staging → merge (prod).**
+- **PROCHAINE ÉTAPE décidée (GO en attente)** : (1) **table de suivi des indices/variables** + graphes sur `/refonte-v1/marches` — plan prêt `refonte-v1/indices-variables-suivi-plan.md` ; sources déjà exposées (`/cpe/revision-indices` + `/revision-observations`, `/billing/gas/revisable` PEG, `/bpu/turpe-evolution`), **recharts déjà présent**. (2) Puis budget révisé en **reconstitution FIXE/VARIABLE** (maille **site/PRM**) — rapport `refonte-v1/budget-revise-fixe-variable-sourcing.md`.
+- **⚠️ Ne pas recoder** : les moteurs de prix ENGIE/EDF/gaz existent déjà (`gas_invoice` fixe/variable, `turpe` versionné, `bpu`, `gas_revisable` PEG, `power_real_costs`, imports `engie_xlsx_import`/`edf_csv_import`) → **brancher** l'atterrissage dessus, pas reconstruire. EDF : cible à définir depuis l'historique.
+- **Décision antérieure (2026-07-01) — setup matrices en prod** : `prefill_energy_matrices` + `seed_from_existing` déployés mais **pas exécutés en prod**. À rejouer sur feu vert (voir plus bas).
 
 > **Contexte antérieur (2026-07-01 soir) — PR #32, #33, #34, #35 mergées sur `main` et déployées en PROD** (migration 0066 en prod).
 
