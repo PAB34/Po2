@@ -83,22 +83,42 @@ def _cpe_index_series(db: Session, city_id: int | None, year_from: int, year_to:
 
 
 def _cpe_observed_factor_series(db: Session, city_id: int | None, year_from: int, year_to: int) -> list[dict[str, Any]]:
-    points_by_market: dict[str, list[dict[str, Any]]] = {"P2": [], "P3": []}
+    grouped: dict[str, dict[tuple[int, int], dict[str, Any]]] = {"P2": {}, "P3": {}}
     for observation in cpe_accounting.list_revision_observations(db, city_id):
         year = int(observation["year"])
         if year < year_from or year > year_to:
             continue
         market = str(observation["market"])
-        if market not in points_by_market:
+        if market not in grouped:
             continue
-        points_by_market[market].append(
-            {
-                "period": _period_quarter(year, int(observation["quarter"])),
-                "value": float(observation["observed_factor"]),
-                "label": observation.get("message"),
-                "source": ", ".join(observation.get("invoice_numbers") or []) or None,
-            }
+        quarter = int(observation["quarter"])
+        line_count = max(int(observation.get("line_count") or 1), 1)
+        bucket = grouped[market].setdefault(
+            (year, quarter),
+            {"weighted_sum": 0.0, "line_count": 0, "invoice_numbers": set()},
         )
+        bucket["weighted_sum"] += float(observation["observed_factor"]) * line_count
+        bucket["line_count"] += line_count
+        bucket["invoice_numbers"].update(observation.get("invoice_numbers") or [])
+
+    points_by_market: dict[str, list[dict[str, Any]]] = {"P2": [], "P3": []}
+    for market, periods in grouped.items():
+        for (year, quarter), bucket in periods.items():
+            line_count = int(bucket["line_count"])
+            invoices = sorted(bucket["invoice_numbers"])
+            shown_invoices = invoices[:5]
+            extra_count = max(len(invoices) - len(shown_invoices), 0)
+            source = ", ".join(shown_invoices)
+            if extra_count:
+                source = f"{source} (+{extra_count})" if source else f"{extra_count} factures"
+            points_by_market[market].append(
+                {
+                    "period": _period_quarter(year, quarter),
+                    "value": round(float(bucket["weighted_sum"]) / line_count, 6),
+                    "label": f"{line_count} ligne(s) facture",
+                    "source": source or None,
+                }
+            )
 
     return [
         {

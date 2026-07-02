@@ -103,6 +103,50 @@ def test_build_indices_variables_normalizes_existing_sources(db_session):
     assert _series(report, "TURPE_INDEX_CUMULE_HTA_BT")["points"]
 
 
+
+
+def test_build_indices_variables_aggregates_observed_factor_by_market_period(db_session):
+    db_session.add(CpeRevisionIndex(city_id=1, index_code="ICHT_IME", year=2026, quarter=1, value=131.2))
+    batch = CpeFinanceImportBatch(city_id=1, filename="fin.xlsx")
+    db_session.add(batch)
+    db_session.flush()
+    invoice = CpeFinanceInvoice(
+        batch_id=batch.id,
+        city_id=1,
+        invoice_number="INV-REV-AGG",
+        contract_code="C00190116O",
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        total_ht=0.0,
+    )
+    db_session.add(invoice)
+    db_session.flush()
+    for row_number, base_price, revised_price in [(1, 1000.0, 1100.0), (2, 1000.0, 1200.0)]:
+        db_session.add(
+            CpeFinanceLine(
+                batch_id=batch.id,
+                invoice_id=invoice.id,
+                city_id=1,
+                row_number=row_number,
+                contract_code="C00190116O",
+                invoice_number="INV-REV-AGG",
+                market="P2",
+                billed_item="P2",
+                amount_ht=100.0,
+                base_price=base_price,
+                revised_price=revised_price,
+                period_start=date(2026, 1, 1),
+                period_end=date(2026, 3, 31),
+            )
+        )
+    db_session.commit()
+
+    report = build_indices_variables(db_session, city_id=1, year_from=2026, year_to=2026)
+
+    observed_points = _series(report, "DALKIA_COEF_OBSERVE_P2")["points"]
+    assert observed_points == [
+        {"period": "2026-T1", "value": 1.15, "label": "2 ligne(s) facture", "source": "INV-REV-AGG"}
+    ]
 def test_build_indices_variables_swaps_inverted_years(db_session):
     report = build_indices_variables(db_session, city_id=1, year_from=2026, year_to=2025)
 
