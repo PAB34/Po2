@@ -48,6 +48,9 @@ uvicorn app.main:app --reload --port 8000   # dev
 alembic upgrade head                         # migrations
 alembic revision --autogenerate -m "msg"     # nouvelle migration
 pytest                                        # tests (env avec deps)
+# Poste entreprise Windows : si `pytest.exe` bloque en collecte, ne pas insister.
+# Utiliser le lanceur Python, sans plugins auto ni cacheprovider :
+#   $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'; $env:DATABASE_URL='sqlite:///./test.db'; python -m pytest <tests_cibles> -p no:cacheprovider
 
 # Frontend (saas/frontend/)
 npm run dev          # dev :5173
