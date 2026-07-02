@@ -5413,3 +5413,47 @@ export async function fetchContractBudgetLanding(token: string, year: number, lo
   const response = await fetch(`${apiBaseUrl}/cpe/finances/contract-budget-landing?${params.toString()}`, { headers: buildHeaders(token) });
   return parseResponse<ContractBudgetLandingV1>(response);
 }
+
+export type GasBudgetRevisePointV1 = {
+  pce: string;
+  nom_site: string | null;
+  building_id: number | null;
+  kwh_n1: number;
+  conso_attendue_kwh: number;
+  climate_ratio: number;
+  peg_ratio: number;
+  pu_variable_eur_kwh: number;
+  fixe_budget: number;
+  variable_budget: number;
+  budget_revise: number;
+  realise: number;
+  kwh_realise: number;
+  atterrissage: number;
+  ecart_atterrissage_vs_budget: number;
+  landing_method: string;
+  has_history: boolean;
+};
+
+export type GasBudgetReviseV1 = {
+  year: number;
+  generated_on: string;
+  pce_count: number;
+  peg_available: boolean;
+  dju_available: boolean;
+  totals: {
+    fixe_budget: number;
+    variable_budget: number;
+    budget_revise: number;
+    realise: number;
+    atterrissage: number;
+    ecart_atterrissage_vs_budget: number;
+  };
+  points: GasBudgetRevisePointV1[];
+  source_note: string;
+};
+
+export async function fetchGasBudgetRevise(token: string, year: number): Promise<GasBudgetReviseV1> {
+  const params = new URLSearchParams({ year: String(year) });
+  const response = await fetch(`${apiBaseUrl}/marches/gas-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<GasBudgetReviseV1>(response);
+}

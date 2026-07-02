@@ -3,6 +3,7 @@ import { Button, Card, DataTable, KpiCard, SegmentControl, StatusBadge } from ".
 import type { AccountingMatrixContractV1 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { ContractBudgetLandingV1 } from "./ContractBudgetLandingV1";
+import { GasBudgetReviseV1 } from "./GasBudgetReviseV1";
 import {
   useBudgetLinesV1,
   useBudgetSuiviV1,
@@ -12,7 +13,7 @@ import {
   useUpdateBudgetLineV1,
 } from "./useBudgetV1";
 
-type MarketsViewV1 = "saisi" | "contractuel";
+type MarketsViewV1 = "saisi" | "contractuel" | "gaz";
 
 const BUDGET_WRITE_DENIED_ROLES = new Set(["FLUIDES", "FLUIDE", "RESPONSABLE_FLUIDES", "TECHNICIEN_CVC", "TECHNICIEN CVC"]);
 const BUDGET_WRITE_ALLOWED_ROLES = new Set([
@@ -103,12 +104,15 @@ export function MarketsBudgetPageV1() {
           options={[
             { value: "saisi", label: "Budget saisi (opération)" },
             { value: "contractuel", label: "Budget contractuel (poste)" },
+            { value: "gaz", label: "Budget révisé gaz (fixe/variable)" },
           ]}
           onChange={setView}
         />
       </div>
       {view === "contractuel" ? (
         <ContractBudgetLandingV1 />
+      ) : view === "gaz" ? (
+        <GasBudgetReviseV1 />
       ) : (
     <div className="po2-page-v1">
       <header className="po2-page-v1__head">
