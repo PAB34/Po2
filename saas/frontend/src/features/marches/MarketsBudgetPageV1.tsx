@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Button, Card, DataTable, KpiCard, StatusBadge } from "../../design-system";
+import { Button, Card, DataTable, KpiCard, SegmentControl, StatusBadge } from "../../design-system";
 import type { AccountingMatrixContractV1 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
+import { ContractBudgetLandingV1 } from "./ContractBudgetLandingV1";
 import {
   useBudgetLinesV1,
   useBudgetSuiviV1,
@@ -10,6 +11,8 @@ import {
   useMarketContractsV1,
   useUpdateBudgetLineV1,
 } from "./useBudgetV1";
+
+type MarketsViewV1 = "saisi" | "contractuel";
 
 const BUDGET_WRITE_DENIED_ROLES = new Set(["FLUIDES", "FLUIDE", "RESPONSABLE_FLUIDES", "TECHNICIEN_CVC", "TECHNICIEN CVC"]);
 const BUDGET_WRITE_ALLOWED_ROLES = new Set([
@@ -50,6 +53,7 @@ export function MarketsBudgetPageV1() {
   const canWrite = canWriteBudget(user?.role);
   const currentYear = new Date().getFullYear();
 
+  const [view, setView] = useState<MarketsViewV1>("saisi");
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [year, setYear] = useState(currentYear);
   const [newOperation, setNewOperation] = useState("");
@@ -92,6 +96,20 @@ export function MarketsBudgetPageV1() {
   const suiviRows = suivi.data?.rows ?? [];
 
   return (
+    <>
+      <div className="po2-page-v1__viewswitch" style={{ marginBottom: "1rem" }}>
+        <SegmentControl
+          value={view}
+          options={[
+            { value: "saisi", label: "Budget saisi (opération)" },
+            { value: "contractuel", label: "Budget contractuel (poste)" },
+          ]}
+          onChange={setView}
+        />
+      </div>
+      {view === "contractuel" ? (
+        <ContractBudgetLandingV1 />
+      ) : (
     <div className="po2-page-v1">
       <header className="po2-page-v1__head">
         <span className="po2-eyebrow">Marchés - budget et suivi financier</span>
@@ -273,5 +291,7 @@ export function MarketsBudgetPageV1() {
         </>
       ) : null}
     </div>
+      )}
+    </>
   );
 }
