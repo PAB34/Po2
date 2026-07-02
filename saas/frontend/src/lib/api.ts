@@ -5367,6 +5367,9 @@ export async function fetchBudgetSuivi(token: string, matrixContractId: number, 
 export type ContractBudgetPosteV1 = {
   poste: string;
   label: string;
+  budget_base: number;
+  coefficient_revision: number;
+  revision_detail: string | null;
   budget_contractuel: number;
   realise: number;
   atterrissage: number;
@@ -5392,6 +5395,7 @@ export type ContractBudgetLandingV1 = {
   year_progress_percent: number;
   postes: ContractBudgetPosteV1[];
   totals: {
+    budget_base: number;
     budget_contractuel: number;
     realise: number;
     atterrissage: number;
