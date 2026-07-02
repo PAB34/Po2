@@ -45,12 +45,12 @@ def _invoice_year(inv: GasInvoice) -> int | None:
     return None
 
 
-def _elapsed_months(year: int, today: date) -> int:
-    if today.year > year:
-        return 12
-    if today.year < year:
-        return 0
-    return today.month
+def _invoice_month(inv: GasInvoice) -> int | None:
+    """Mois de consommation d'une facture (fin > début)."""
+    for d in (inv.fin_conso, inv.debut_conso):
+        if d is not None:
+            return d.month
+    return None
 
 
 # --------------------------------------------------------------------------- DJU
@@ -127,8 +127,10 @@ def _expected_consumption(
 
 
 def _landing(
-    realise: float,
+    realise_total: float,
+    realise_fixe: float,
     kwh_realise: float,
+    covered_months: set[int],
     fixe_ref: float,
     pu_variable: float,
     dju: dict[tuple[int, int], float],
@@ -137,31 +139,35 @@ def _landing(
     today: date,
     budget_revise: float,
 ) -> tuple[float, str]:
-    """Atterrissage = réalisé + reste projeté (conso via DJU, mêmes prix de référence)."""
-    if kwh_realise <= 0:
-        return round(budget_revise, 2), "budget_revise"
+    """Atterrissage = réalisé + reste projeté sur les mois NON facturés (conso via DJU, prix de réf).
 
-    elapsed = _elapsed_months(year, today)
-    if elapsed >= 12:
-        return round(realise, 2), "realise_complet"
-    months_left = 12 - elapsed
+    La base d'extrapolation est **les mois réellement couverts par les factures** (``covered_months``),
+    pas les mois calendaires écoulés : le décalage de facturation ne fausse plus le prorata.
+    """
+    if kwh_realise <= 0 or not covered_months:
+        return round(budget_revise, 2), "prevision"
+    if today.year > year:
+        return round(realise_total, 2), "realise_complet"  # année close
 
-    dju_ecoule = sum(dju.get((year, m), 0.0) for m in range(1, elapsed + 1))
-    dju_restant = sum(normal.get(m, 0.0) for m in range(elapsed + 1, 13))
+    remaining = [m for m in range(1, 13) if m not in covered_months]
+    n_covered = len(covered_months)
+    if not remaining:
+        return round(realise_total, 2), "realise_complet"
 
-    if dju_ecoule > 0 and dju_restant >= 0 and (dju_ecoule + dju_restant) > 0:
-        conso_projetee = kwh_realise * (dju_ecoule + dju_restant) / dju_ecoule
+    dju_covered = sum(dju.get((year, m)) or normal.get(m, 0.0) for m in covered_months)
+    dju_remaining = sum(normal.get(m, 0.0) for m in remaining)
+
+    if dju_covered > 0:
+        conso_reste = kwh_realise / dju_covered * dju_remaining
         method = "dju"
-    elif elapsed > 0:
-        conso_projetee = kwh_realise * 12.0 / elapsed  # fallback pro-rata temporel
-        method = "prorata"
     else:
-        return round(budget_revise, 2), "budget_revise"
+        conso_reste = kwh_realise * len(remaining) / n_covered  # fallback pro-rata (mois non chauffés)
+        method = "prorata"
 
-    conso_reste = max(conso_projetee - kwh_realise, 0.0)
     variable_reste = conso_reste * pu_variable
-    fixe_reste = (fixe_ref / 12.0) * months_left
-    return round(realise + variable_reste + fixe_reste, 2), method
+    fixe_par_mois = (realise_fixe / n_covered) if realise_fixe > 0 else (fixe_ref / 12.0)
+    fixe_reste = fixe_par_mois * len(remaining)
+    return round(realise_total + variable_reste + fixe_reste, 2), method
 
 
 def _build_point(
@@ -181,14 +187,23 @@ def _build_point(
 
     conso_attendue, climate_ratio = _expected_consumption(ref["kwh"], dju, normal, year)
     pu_variable = ref["pu_fourniture"] * peg_ratio + ref["pu_autres_var"]
-    variable_budget = conso_attendue * pu_variable
-    fixe_budget = ref["fixe"]
-    budget_revise = variable_budget + fixe_budget
+    variable_prevision = conso_attendue * pu_variable
+    fixe_prevision = ref["fixe"]
+    prevision_reference = variable_prevision + fixe_prevision
 
-    realise = round(sum(_num(inv.total_hors_tva) for inv in inv_y), 2)
+    # Réalisé Y décomposé fixe / variable, et mois réellement couverts par les factures.
+    realise_total = round(sum(_num(inv.total_hors_tva) for inv in inv_y), 2)
+    realise_fixe = sum(_num(getattr(inv, f)) for inv in inv_y for f in _FIXE_FIELDS)
+    realise_variable = sum(
+        _num(inv.montant_conso_gaz) + sum(_num(getattr(inv, f)) for f in _VAR_OTHER_FIELDS)
+        for inv in inv_y
+    )
     kwh_realise = sum(_num(inv.total_conso_kwh) for inv in inv_y)
+    covered_months = {m for inv in inv_y if (m := _invoice_month(inv)) is not None}
+
     atterrissage, method = _landing(
-        realise, kwh_realise, fixe_budget, pu_variable, dju, normal, year, today, budget_revise
+        realise_total, realise_fixe, kwh_realise, covered_months,
+        fixe_prevision, pu_variable, dju, normal, year, today, prevision_reference,
     )
 
     has_history = ref["kwh"] > 0
@@ -201,13 +216,16 @@ def _build_point(
         "climate_ratio": round(climate_ratio, 4),
         "peg_ratio": round(peg_ratio, 4),
         "pu_variable_eur_kwh": round(pu_variable, 6),
-        "fixe_budget": round(fixe_budget, 2),
-        "variable_budget": round(variable_budget, 2),
-        "budget_revise": round(budget_revise, 2),
-        "realise": realise,
+        "fixe_prevision": round(fixe_prevision, 2),
+        "variable_prevision": round(variable_prevision, 2),
+        "prevision_reference": round(prevision_reference, 2),
+        "realise": realise_total,
+        "realise_fixe": round(realise_fixe, 2),
+        "realise_variable": round(realise_variable, 2),
         "kwh_realise": round(kwh_realise, 0),
+        "months_covered": len(covered_months),
         "atterrissage": atterrissage,
-        "ecart_atterrissage_vs_budget": round(atterrissage - budget_revise, 2),
+        "ecart_atterrissage_vs_prevision": round(atterrissage - prevision_reference, 2),
         "landing_method": method,
         "has_history": has_history,
     }
@@ -248,16 +266,18 @@ def build_gas_budget_revise(
                 peg_ratio, dju, normal, year, resolved_today,
             )
         )
-    points.sort(key=lambda p: p["budget_revise"], reverse=True)
+    points.sort(key=lambda p: p["atterrissage"], reverse=True)
 
     totals = {
-        "fixe_budget": round(sum(p["fixe_budget"] for p in points), 2),
-        "variable_budget": round(sum(p["variable_budget"] for p in points), 2),
-        "budget_revise": round(sum(p["budget_revise"] for p in points), 2),
+        "fixe_prevision": round(sum(p["fixe_prevision"] for p in points), 2),
+        "variable_prevision": round(sum(p["variable_prevision"] for p in points), 2),
+        "prevision_reference": round(sum(p["prevision_reference"] for p in points), 2),
         "realise": round(sum(p["realise"] for p in points), 2),
+        "realise_fixe": round(sum(p["realise_fixe"] for p in points), 2),
+        "realise_variable": round(sum(p["realise_variable"] for p in points), 2),
         "atterrissage": round(sum(p["atterrissage"] for p in points), 2),
     }
-    totals["ecart_atterrissage_vs_budget"] = round(totals["atterrissage"] - totals["budget_revise"], 2)
+    totals["ecart_atterrissage_vs_prevision"] = round(totals["atterrissage"] - totals["prevision_reference"], 2)
 
     return {
         "year": year,
@@ -268,10 +288,11 @@ def build_gas_budget_revise(
         "totals": totals,
         "points": points,
         "source_note": (
-            "Budget révisé = parts fixes N-1 (abo, ATRD/ATRT fixe, CTA, tenues à plat) + conso attendue "
-            "× prix de référence. Conso attendue = kWh N-1 corrigés du climat (DJU normal / DJU N-1, profil "
-            "Sète). Fourniture révisée par le PEG (moyenne Y / N-1) ; accise, ATRD variable et indexation "
-            "tenues au dernier /kWh observé. Atterrissage = réalisé Y + reste projeté DJU aux mêmes prix. "
-            "Modèle pur-DJU (part ECS non thermosensible non isolée) — v1."
+            "Marché Ville sans budget contractuel : la « prévision de référence » n'est PAS un budget mais un "
+            "repère (conso N-1 recalée climat + prix actuels) = parts fixes N-1 + conso attendue × prix de "
+            "référence. Conso attendue = kWh N-1 corrigés du climat (DJU normal / DJU N-1, profil Sète) ; "
+            "fourniture révisée par le PEG (moyenne Y / N-1), autres termes /kWh tenus. Atterrissage (chiffre "
+            "utile) = réalisé Y (décomposé fixe/variable) + reste projeté sur les mois NON facturés (conso via "
+            "DJU aux mêmes prix). Modèle pur-DJU (part ECS non thermosensible non isolée) — v1."
         ),
     }

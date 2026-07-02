@@ -12,24 +12,29 @@ class GasBudgetRevisePointOut(BaseModel):
     climate_ratio: float
     peg_ratio: float
     pu_variable_eur_kwh: float
-    fixe_budget: float
-    variable_budget: float
-    budget_revise: float
+    fixe_prevision: float
+    variable_prevision: float
+    prevision_reference: float
     realise: float
+    realise_fixe: float
+    realise_variable: float
     kwh_realise: float
+    months_covered: int
     atterrissage: float
-    ecart_atterrissage_vs_budget: float
+    ecart_atterrissage_vs_prevision: float
     landing_method: str
     has_history: bool
 
 
 class GasBudgetReviseTotalsOut(BaseModel):
-    fixe_budget: float
-    variable_budget: float
-    budget_revise: float
+    fixe_prevision: float
+    variable_prevision: float
+    prevision_reference: float
     realise: float
+    realise_fixe: float
+    realise_variable: float
     atterrissage: float
-    ecart_atterrissage_vs_budget: float
+    ecart_atterrissage_vs_prevision: float
 
 
 class GasBudgetReviseOut(BaseModel):

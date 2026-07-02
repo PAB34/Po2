@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Card, SegmentControl } from "../../design-system";
-import { BudgetSaisiV1 } from "./BudgetSaisiV1";
 import { ContractBudgetLandingV1 } from "./ContractBudgetLandingV1";
 import { GasBudgetReviseV1 } from "./GasBudgetReviseV1";
 import { IndicesVariablesV1 } from "./IndicesVariablesV1";
 
 type MarketTier = "dalkia" | "gaz" | "engie" | "edf";
-type SubView = "atterrissage" | "saisi" | "indices";
+type SubView = "atterrissage" | "indices";
 
 type TierConfig = {
   value: MarketTier;
@@ -24,7 +23,6 @@ const TIERS: TierConfig[] = [
     families: ["dalkia"],
     subs: [
       { value: "atterrissage", label: "Atterrissage (budget / révisé / réalisé)" },
-      { value: "saisi", label: "Budget saisi (opération)" },
       { value: "indices", label: "Indices & variables" },
     ],
   },
@@ -128,8 +126,6 @@ export function MarketsBudgetPageV1() {
         <IndicesVariablesV1 embedded families={tierConfig.families} />
       ) : tier === "dalkia" && activeSub === "atterrissage" ? (
         <ContractBudgetLandingV1 />
-      ) : tier === "dalkia" && activeSub === "saisi" ? (
-        <BudgetSaisiV1 />
       ) : tier === "gaz" && activeSub === "atterrissage" ? (
         <GasBudgetReviseV1 />
       ) : (
