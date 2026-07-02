@@ -5413,3 +5413,32 @@ export async function fetchContractBudgetLanding(token: string, year: number, lo
   const response = await fetch(`${apiBaseUrl}/cpe/finances/contract-budget-landing?${params.toString()}`, { headers: buildHeaders(token) });
   return parseResponse<ContractBudgetLandingV1>(response);
 }
+
+export type MarketVariablePointV1 = {
+  period: string;
+  value: number;
+  label: string | null;
+  source: string | null;
+};
+
+export type MarketVariableSeriesV1 = {
+  code: string;
+  label: string;
+  unit: string;
+  market: string;
+  family: string;
+  periodicity: string;
+  points: MarketVariablePointV1[];
+};
+
+export type MarketIndicesVariablesV1 = {
+  year_from: number;
+  year_to: number;
+  series: MarketVariableSeriesV1[];
+};
+
+export async function fetchMarketIndicesVariables(token: string, yearFrom: number, yearTo: number): Promise<MarketIndicesVariablesV1> {
+  const params = new URLSearchParams({ year_from: String(yearFrom), year_to: String(yearTo) });
+  const response = await fetch(`${apiBaseUrl}/marches/indices-variables?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<MarketIndicesVariablesV1>(response);
+}
