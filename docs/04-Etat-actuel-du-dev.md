@@ -19,13 +19,14 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis à jour : 2026-07-02 (soir). **Détail complet → `Sessions/2026-07-02 - Revision trimestrielle et sourcing budget revise.md`** (handoff précis). Contexte antérieur (PR #32→#35 en prod) conservé plus bas.
+> Mis a jour : 2026-07-02 (handoff Codex). Detail complet -> `Sessions/2026-07-02 - Indices variables marches staging.md`.
 
-- **PR #36 MERGÉE EN PROD** : atterrissage « budget contractuel − réalisé » par poste CPE (§5bis) — `services/accounting_contract_budget.py` + route `GET /api/cpe/finances/contract-budget-landing` + onglet front « Budget contractuel (poste) » sur `/refonte-v1/marches`. Calcul à la volée, aucune migration.
-- **PR #37 SUR STAGING, NON MERGÉE** (`feat/revision-atterrissage`) : budget contractuel **révisé** = base DPGF × coefficient de révision (Σrévisé/Σbase du dernier trimestre facturé, Option C ; **P2/P3 seulement** ; **P1 gaz exclu** = bug coef ~300 corrigé car prix unitaires ; formule d'extrapolation affichée sous la ligne). 9 tests verts, CI verte, staging santé 200. **À valider staging → merge (prod).**
-- **PROCHAINE ÉTAPE décidée (GO en attente)** : (1) **table de suivi des indices/variables** + graphes sur `/refonte-v1/marches` — plan prêt `refonte-v1/indices-variables-suivi-plan.md` ; sources déjà exposées (`/cpe/revision-indices` + `/revision-observations`, `/billing/gas/revisable` PEG, `/bpu/turpe-evolution`), **recharts déjà présent**. (2) Puis budget révisé en **reconstitution FIXE/VARIABLE** (maille **site/PRM**) — rapport `refonte-v1/budget-revise-fixe-variable-sourcing.md`.
-- **⚠️ Ne pas recoder** : les moteurs de prix ENGIE/EDF/gaz existent déjà (`gas_invoice` fixe/variable, `turpe` versionné, `bpu`, `gas_revisable` PEG, `power_real_costs`, imports `engie_xlsx_import`/`edf_csv_import`) → **brancher** l'atterrissage dessus, pas reconstruire. EDF : cible à définir depuis l'historique.
-- **Décision antérieure (2026-07-01) — setup matrices en prod** : `prefill_energy_matrices` + `seed_from_existing` déployés mais **pas exécutés en prod**. À rejouer sur feu vert (voir plus bas).
+- **PR #37 MERGEE EN PROD** : budget contractuel revise par coefficient trimestriel DALKIA (P2/P3, P1 gaz exclu).
+- **PR #38 DRAFT SUR STAGING** (`codex/indices-variables`) : nouvelle vue lecture seule **Indices & variables** sur `/refonte-v1/marches` + endpoint `GET /api/marches/indices-variables?year_from=&year_to=`. CI verte (`backend`, `frontend`). Staging redeploye apres correction, health 200, revue UI Chrome OK.
+- **Correction importante deja faite dans #38** : coefficients observes DALKIA agreges a **un point par marche/trimestre** (moyenne ponderee par `line_count`) pour eviter les lignes quasi dupliquees en table.
+- **Prochaine decision** : l'utilisateur relit staging ; si OK, passer #38 ready puis merger `main` (prod auto) et surveiller prod. Ne pas merger prod sans accord explicite.
+- **Suite fonctionnelle apres #38** : budget revise fiable en reconstitution **FIXE/VARIABLE**, maille **site/PRM**, en branchant les moteurs existants (gaz TotalEnergies conseille en premier, puis ENGIE/TURPE+BPU+ENEDIS, puis EDF cible a definir).
+- **Poste entreprise** : `pytest.exe` peut bloquer en collecte. Utiliser `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, `DATABASE_URL=sqlite:///./test.db`, `python -m pytest <tests_cibles> -p no:cacheprovider`.
 
 > **Contexte antérieur (2026-07-01 soir) — PR #32, #33, #34, #35 mergées sur `main` et déployées en PROD** (migration 0066 en prod).
 
