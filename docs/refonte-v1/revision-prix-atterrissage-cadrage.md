@@ -32,7 +32,15 @@ Le budget/atterrissage d'un poste DALKIA se construit sur **deux couches indépe
 attendu vs observé »). L'atterrissage, lui, lit le révisé **a posteriori sur les factures** (coef observé) :
 tant qu'aucune facture révisée n'est arrivée, P2/P3 restent au **budget base (coef 1)**.
 
-## 3. Les trous à combler (couche B)
+## 2bis. Décisions utilisateur (2026-07-03)
+
+- **P2/P3 prospectif : ABANDONNÉ.** « On aura forcément les factures révisées » → le facteur **observé**
+  (factures) suffit ; inutile de calculer le révisé par la formule avant facturation. On garde l'existant.
+- **P1-ELEC Lot 2 piscines : REPORTÉ** (révision élec laissée de côté pour l'instant).
+- Conséquence : la couche B est **considérée traitée** pour le besoin actuel (P1 gaz via DPGF/OS3 ; P2/P3
+  via coef observé). Les §3/§4/§6 ci-dessous restent comme trace d'analyse, non planifiés.
+
+## 3. Les trous à combler (couche B) — non planifiés (cf. §2bis)
 
 1. **P2/P3 prospectif** : quand il n'y a pas encore de facture révisée pour l'année, piloter le budget avec
    le **facteur attendu (formule × indices)** au lieu de rester à coef 1. Les indices deviennent *moteurs*
