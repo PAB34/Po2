@@ -343,6 +343,28 @@ def test_edf_photoperiod_consumption(db_session, monkeypatch):
     assert abs(sum(w.values()) - 1.0) < 1e-9
 
 
+def test_pu_derived_from_enedis_when_invoice_has_no_kwh(db_session, monkeypatch):
+    # Cas EDF : la ligne fourniture a un montant mais PAS de quantité (kWh) → le prix unitaire
+    # doit être dérivé avec les kWh ENEDIS N-1 comme dénominateur.
+    _seed_invoice(
+        db_session, prm="EP1", year=2024, month=6, supplier="EDF",
+        lines=[("supply", "base", None, 1000.0)],  # montant 1000 €, aucune quantité
+    )
+    # ENEDIS 2024 = 20 000 kWh (répartis sur l'année).
+    conso = {f"2024-{m:02d}": 20000.0 / 12 for m in range(1, 13)}
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {"EP1": conso})
+    _patch_prices(monkeypatch)
+
+    res = build_edf_elec_budget_revise(db_session, 1, year=2025, today=date(2025, 6, 30))
+    p = res["points"][0]
+    assert p["conso_method"] == "photoperiod"
+    assert p["conso_attendue_kwh"] == 20000
+    # pu = 1000 € / 20 000 kWh (ENEDIS) = 0,05 €/kWh → variable = 20 000 × 0,05 = 1000 €.
+    assert p["pu_variable_eur_kwh"] == 0.05
+    assert p["variable_prevision"] == 1000.0
+
+
 def test_network_fixed_total_ignored_when_components_present(db_session, monkeypatch):
     # ENGIE : composantes + total → le total est ignoré (pas de double comptage).
     _seed_invoice(

@@ -308,9 +308,11 @@ def _reference_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
             postes_kwh[l["poste"]] = postes_kwh.get(l["poste"], 0.0) + _num(l["quantity"])
     return {
         "kwh": kwh,
-        "pu_fourniture": (fourniture / kwh) if kwh > 0 else 0.0,
-        "pu_reseau_var": (reseau_var / kwh) if kwh > 0 else 0.0,
-        "pu_autres_var": (autres_var / kwh) if kwh > 0 else 0.0,
+        # Montants bruts N-1 : le prix unitaire est calculé dans _build_point avec le meilleur
+        # dénominateur kWh disponible (kWh facture, sinon kWh ENEDIS N-1 — cas EDF sans kWh en ligne).
+        "fourniture": fourniture,
+        "reseau_var": reseau_var,
+        "autres_var": autres_var,
         "fixe_reseau": fixe_reseau,
         "fixe_autre": fixe_autre,
         "postes_kwh": postes_kwh,
@@ -397,7 +399,14 @@ def _build_point(
     conso = _expected_consumption(prm, year, dju_normal, ref["kwh"], conso_model, photoperiod)
     bpu_ratio, bpu_available = _bpu_fourniture_ratio(bpu_references, site_meta, ref["postes_kwh"], year)
 
-    pu_variable = ref["pu_fourniture"] * bpu_ratio + ref["pu_reseau_var"] * turpe_ratio + ref["pu_autres_var"]
+    # Dénominateur du prix unitaire N-1 : kWh facturés si présents (ENGIE), sinon kWh ENEDIS N-1
+    # (EDF : les lignes fourniture n'ont pas de quantité → on prend la conso ENEDIS de l'année N-1).
+    pu_denom = ref["kwh"] if ref["kwh"] > 0 else conso["enedis_kwh_n1"]
+    pu_fourniture = (ref["fourniture"] / pu_denom) if pu_denom > 0 else 0.0
+    pu_reseau_var = (ref["reseau_var"] / pu_denom) if pu_denom > 0 else 0.0
+    pu_autres_var = (ref["autres_var"] / pu_denom) if pu_denom > 0 else 0.0
+
+    pu_variable = pu_fourniture * bpu_ratio + pu_reseau_var * turpe_ratio + pu_autres_var
     fixe_prevision = ref["fixe_reseau"] * turpe_ratio + ref["fixe_autre"]
     variable_prevision = conso["conso_attendue_kwh"] * pu_variable
     prevision_reference = variable_prevision + fixe_prevision
