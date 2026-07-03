@@ -5480,6 +5480,75 @@ export async function fetchGasBudgetRevise(token: string, year: number): Promise
   return parseResponse<GasBudgetReviseV1>(response);
 }
 
+// --- ENGIE électricité : budget révisé fixe/variable par PRM + agrégat bâtiment ---
+
+export type EngieBudgetRevisePointV1 = {
+  prm: string;
+  site_name: string | null;
+  segment: string | null;
+  building_id: number | null;
+  building_name: string | null;
+  kwh_n1: number;
+  enedis_kwh_n1: number;
+  conso_attendue_kwh: number;
+  thermo_share: number;
+  conso_method: string;
+  enedis_available: boolean;
+  bpu_ratio: number;
+  bpu_available: boolean;
+  turpe_ratio: number;
+  pu_variable_eur_kwh: number;
+  fixe_prevision: number;
+  variable_prevision: number;
+  prevision_reference: number;
+  realise: number;
+  realise_fixe: number;
+  realise_variable: number;
+  kwh_realise: number;
+  months_covered: number;
+  atterrissage: number;
+  ecart_atterrissage_vs_prevision: number;
+  landing_method: string;
+  has_history: boolean;
+};
+
+export type EngieBudgetReviseBuildingV1 = {
+  building_id: number | null;
+  building_name: string | null;
+  prm_count: number;
+  prevision_reference: number;
+  realise: number;
+  atterrissage: number;
+};
+
+export type EngieBudgetReviseV1 = {
+  year: number;
+  generated_on: string;
+  prm_count: number;
+  turpe_available: boolean;
+  bpu_available: boolean;
+  enedis_available: boolean;
+  totals: {
+    fixe_prevision: number;
+    variable_prevision: number;
+    prevision_reference: number;
+    realise: number;
+    realise_fixe: number;
+    realise_variable: number;
+    atterrissage: number;
+    ecart_atterrissage_vs_prevision: number;
+  };
+  points: EngieBudgetRevisePointV1[];
+  buildings: EngieBudgetReviseBuildingV1[];
+  source_note: string;
+};
+
+export async function fetchEngieBudgetRevise(token: string, year: number): Promise<EngieBudgetReviseV1> {
+  const params = new URLSearchParams({ year: String(year) });
+  const response = await fetch(`${apiBaseUrl}/marches/engie-elec-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<EngieBudgetReviseV1>(response);
+}
+
 export type MarketVariablePointV1 = {
   period: string;
   value: number;
