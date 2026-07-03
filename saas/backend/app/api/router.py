@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from app.api.routes.accounting_budget import router as accounting_budget_router
 from app.api.routes.accounting_matrix import router as accounting_matrix_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.cpe import router as cpe_router
@@ -13,7 +12,9 @@ from app.api.routes.cvc import router as cvc_router
 from app.api.routes.enedis_async import router as enedis_async_router
 from app.api.routes.equipment import router as equipment_router
 from app.api.routes.engie import router as engie_router
+from app.api.routes.gas_budget import router as gas_budget_router
 from app.api.routes.gas_invoice import router as gas_invoice_router
+from app.api.routes.marches import router as marches_router
 from app.api.routes.grdf import router as grdf_router
 from app.api.routes.energie import router as energie_router
 from app.api.routes.enedis_sync import router as enedis_sync_router
@@ -37,11 +38,12 @@ api_router.include_router(enedis_async_router, prefix="/api")
 api_router.include_router(enedis_sync_router, prefix="/api")
 api_router.include_router(engie_router, prefix="/api")
 api_router.include_router(gas_invoice_router, prefix="/api")
+api_router.include_router(gas_budget_router, prefix="/api")
 api_router.include_router(grdf_router, prefix="/api")
 api_router.include_router(energie_router, prefix="/api")
 api_router.include_router(equipment_router, prefix="/api")
 api_router.include_router(cpe_router, prefix="/api")
 api_router.include_router(cpe_dalkia_router, prefix="/api")
 api_router.include_router(accounting_matrix_router, prefix="/api")
-api_router.include_router(accounting_budget_router, prefix="/api")
+api_router.include_router(marches_router, prefix="/api")
 api_router.include_router(health_router, prefix="/api")

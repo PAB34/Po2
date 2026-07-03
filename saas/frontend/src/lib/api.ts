@@ -4385,6 +4385,23 @@ export async function upsertCpeRevisionIndex(
   return parseResponse<CpeRevisionIndex>(response);
 }
 
+export async function deleteCpeRevisionIndex(token: string, indexId: number): Promise<{ deleted: boolean }> {
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-indices/${indexId}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  return parseResponse<{ deleted: boolean }>(response);
+}
+
+export async function purgeCpeRevisionIndices(token: string, source: string): Promise<{ deleted: number }> {
+  const params = new URLSearchParams({ source });
+  const response = await fetch(`${apiBaseUrl}/cpe/revision-indices/purge?${params.toString()}`, {
+    method: "DELETE",
+    headers: buildAuthHeaders(token),
+  });
+  return parseResponse<{ deleted: number }>(response);
+}
+
 export async function fetchCpeFinanceControls(token: string, invoiceId: number): Promise<CpeFinanceControl[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/finances/invoices/${invoiceId}/controls`, { headers: buildHeaders(token) });
   return parseResponse<CpeFinanceControl[]>(response);
@@ -5412,4 +5429,82 @@ export async function fetchContractBudgetLanding(token: string, year: number, lo
   if (lot != null) params.set("lot", String(lot));
   const response = await fetch(`${apiBaseUrl}/cpe/finances/contract-budget-landing?${params.toString()}`, { headers: buildHeaders(token) });
   return parseResponse<ContractBudgetLandingV1>(response);
+}
+
+export type GasBudgetRevisePointV1 = {
+  pce: string;
+  nom_site: string | null;
+  building_id: number | null;
+  kwh_n1: number;
+  conso_attendue_kwh: number;
+  climate_ratio: number;
+  peg_ratio: number;
+  pu_variable_eur_kwh: number;
+  fixe_prevision: number;
+  variable_prevision: number;
+  prevision_reference: number;
+  realise: number;
+  realise_fixe: number;
+  realise_variable: number;
+  kwh_realise: number;
+  months_covered: number;
+  atterrissage: number;
+  ecart_atterrissage_vs_prevision: number;
+  landing_method: string;
+  has_history: boolean;
+};
+
+export type GasBudgetReviseV1 = {
+  year: number;
+  generated_on: string;
+  pce_count: number;
+  peg_available: boolean;
+  dju_available: boolean;
+  totals: {
+    fixe_prevision: number;
+    variable_prevision: number;
+    prevision_reference: number;
+    realise: number;
+    realise_fixe: number;
+    realise_variable: number;
+    atterrissage: number;
+    ecart_atterrissage_vs_prevision: number;
+  };
+  points: GasBudgetRevisePointV1[];
+  source_note: string;
+};
+
+export async function fetchGasBudgetRevise(token: string, year: number): Promise<GasBudgetReviseV1> {
+  const params = new URLSearchParams({ year: String(year) });
+  const response = await fetch(`${apiBaseUrl}/marches/gas-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<GasBudgetReviseV1>(response);
+}
+
+export type MarketVariablePointV1 = {
+  period: string;
+  value: number;
+  label: string | null;
+  source: string | null;
+};
+
+export type MarketVariableSeriesV1 = {
+  code: string;
+  label: string;
+  unit: string;
+  market: string;
+  family: string;
+  periodicity: string;
+  points: MarketVariablePointV1[];
+};
+
+export type MarketIndicesVariablesV1 = {
+  year_from: number;
+  year_to: number;
+  series: MarketVariableSeriesV1[];
+};
+
+export async function fetchMarketIndicesVariables(token: string, yearFrom: number, yearTo: number): Promise<MarketIndicesVariablesV1> {
+  const params = new URLSearchParams({ year_from: String(yearFrom), year_to: String(yearTo) });
+  const response = await fetch(`${apiBaseUrl}/marches/indices-variables?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<MarketIndicesVariablesV1>(response);
 }
