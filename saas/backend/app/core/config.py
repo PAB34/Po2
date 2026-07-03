@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     dgfip_majic_file_path: str = ""
     energie_dir: str = "/workspace/saas/energie/output"
     invoice_storage_dir: str = "/app/storage/invoices"
+    # Sync DJU (Open-Meteo, profils Sète + DALKIA Montpellier) planifié automatiquement.
+    dju_sync_enabled: bool = True
+    dju_sync_interval_hours: int = 24
     secret_key: str = "change-this-secret-key-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440

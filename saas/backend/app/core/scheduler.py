@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -116,6 +117,25 @@ def _grdf_informatives_sync_job() -> None:
         LOG.exception("GRDF informatives sync job failed")
 
 
+def _dju_sync_job() -> None:
+    """Job périodique : récupère les DJU (Open-Meteo, profils Sète + DALKIA Montpellier).
+
+    Idempotent (reprend depuis la dernière date connue) et permissif : si le dossier
+    de données n'est pas inscriptible ou Open-Meteo indisponible, l'erreur est loggée.
+    """
+    if not settings.dju_sync_enabled:
+        return
+    try:
+        from app.services.dju_sync import is_dju_running, run_dju_sync  # noqa: PLC0415
+
+        if is_dju_running():
+            LOG.info("DJU sync déjà en cours, job périodique ignoré.")
+            return
+        run_dju_sync()
+    except Exception:
+        LOG.exception("DJU sync job failed")
+
+
 def _pronostics_score_sync_job() -> None:
     """Rafraîchit les scores réels du jeu sans bloquer les autres tâches."""
     if not settings.pronostics_score_sync_enabled or not settings.football_data_token:
@@ -179,6 +199,19 @@ def start_scheduler() -> None:
             max_instances=1,
             coalesce=True,
             replace_existing=True,
+        )
+    if settings.dju_sync_enabled:
+        dju_interval = max(int(settings.dju_sync_interval_hours), 1)
+        _SCHEDULER.add_job(
+            _dju_sync_job,
+            trigger="interval",
+            hours=dju_interval,
+            id="dju_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+            # Premier passage peu après le boot pour remplir sans attendre l'intervalle.
+            next_run_time=datetime.now() + timedelta(seconds=30),
         )
     if settings.pronostics_score_sync_enabled:
         score_interval = max(int(settings.pronostics_score_sync_interval_hours), 1)
