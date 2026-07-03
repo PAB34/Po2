@@ -35,6 +35,7 @@ from app.models.accounting_matrix import (
 )
 from app.models.cpe import CpeFinanceInvoice, CpeFinanceLine
 from app.services.cpe_accounting import get_current_cpe_contract_codes
+from app.services.cpe_dpgf_p1 import get_dpgf_p1_levels
 from app.services.cpe_market_tracking import build_market_tracking
 from app.services.cpe_p1_gaz_revise import compute_p1_gaz_budget
 
@@ -175,20 +176,15 @@ def build_contract_budget_landing(
     resolved_today = today or date.today()
     progress = _year_progress_percent(year, resolved_today)
     coef_by_market = _revision_coef_by_market(db, city_id, year, resolved_today, contract_codes)
-    p1_gaz = compute_p1_gaz_budget(db, city_id, year=year)
+    p1_override_budget, p1_override_detail = _p1_budget_override(db, city_id, year, lot)
 
     postes: list[dict[str, Any]] = []
     total_base = total_budget = total_realise = total_landing = 0.0
     for row in postes_src:
         cell = row["by_year"][0]
         override_budget = override_detail = None
-        if row["poste"] == "P1" and p1_gaz["total"] > 0:
-            override_budget = p1_gaz["total"]
-            override_detail = (
-                f"P1 gaz reconstitué : Σ (conso attendue × prix OS3) sur {len(p1_gaz['by_site'])} site(s) "
-                f"= {p1_gaz['total']:.0f} € (conso N-1 corrigée climat ×{p1_gaz['climate_ratio']:.3f}, "
-                f"prix OS3 par tarif). Remplace le budget base non révisé."
-            )
+        if row["poste"] == "P1":
+            override_budget, override_detail = p1_override_budget, p1_override_detail
         poste_out = _poste_landing(
             row["poste"], row["label"], cell["prevu"], cell["recu"], progress, coef_by_market,
             override_budget=override_budget, override_detail=override_detail,
@@ -221,11 +217,37 @@ def build_contract_budget_landing(
             "Budget base = prévu DPGF DALKIA (P20/P30/P10 nus) ; budget contractuel = base × coefficient de "
             "révision observé (Σrévisé/Σbase du dernier trimestre facturé, extrapolé — Option C) ; réalisé = "
             "reçu factures CPE (déjà révisé). Révision appliquée : P2 et P3/P3.4 (forfaits annuels). P1 gaz : "
-            "budget RECONSTITUÉ = Σ (conso attendue × prix OS3) par site (conso N-1 corrigée DJU DALKIA, prix "
-            "OS3 par tarif) — la part variable gaz est prise en compte. P1-ELEC non révisé. Ne pas confondre "
-            "avec l'intéressement (moteur DJU cpe_atterrissage)."
+            "budget révisé = DPGF « Rév T° & prix » officiel DALKIA en priorité, sinon reconstitution Σ (conso "
+            "attendue × prix OS3) par site en repli. P1-ELEC non révisé. Ne pas confondre avec l'intéressement "
+            "(moteur DJU cpe_atterrissage)."
         ),
     }
+
+
+def _p1_budget_override(
+    db: Session, city_id: int | None, year: int, lot: int | None
+) -> tuple[float | None, str | None]:
+    """Budget révisé P1 gaz : DPGF « Rév T° & prix » officiel prioritaire, sinon reconstitution OS3.
+
+    1. DPGF P1 ``rev_temp_prix`` (montant révisé livré par DALKIA) si un DPGF P1 révisé est importé ;
+    2. sinon reconstitution ``conso attendue (DJU) × prix OS3`` (``cpe_p1_gaz_revise``) en repli/projection.
+    Retourne ``(None, None)`` si aucune source (→ le poste P1 reste au budget base).
+    """
+    levels = get_dpgf_p1_levels(db, city_id, [year], lot=lot)
+    dpgf_revise = round(levels.get("rev_temp_prix", {}).get(year, 0.0), 2)
+    if dpgf_revise > 0:
+        return dpgf_revise, (
+            f"P1 gaz révisé DALKIA (DPGF « Rév T° & prix », source officielle) = {dpgf_revise:.0f} €. "
+            "Remplace le budget base contrat."
+        )
+    p1 = compute_p1_gaz_budget(db, city_id, year=year)
+    if p1["total"] > 0:
+        return p1["total"], (
+            f"P1 gaz reconstitué (aucun DPGF révisé importé pour {year}) : Σ (conso attendue × prix OS3) "
+            f"sur {len(p1['by_site'])} site(s) = {p1['total']:.0f} € (conso N-1 corrigée climat "
+            f"×{p1['climate_ratio']:.3f}). Repli/projection en attendant le DPGF révisé DALKIA."
+        )
+    return None, None
 
 
 def _poste_landing(
