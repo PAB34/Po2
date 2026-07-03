@@ -12,6 +12,7 @@ from app.api.routes.cvc import router as cvc_router
 from app.api.routes.enedis_async import router as enedis_async_router
 from app.api.routes.equipment import router as equipment_router
 from app.api.routes.engie import router as engie_router
+from app.api.routes.engie_budget import router as engie_budget_router
 from app.api.routes.gas_budget import router as gas_budget_router
 from app.api.routes.gas_invoice import router as gas_invoice_router
 from app.api.routes.marches import router as marches_router
@@ -39,6 +40,7 @@ api_router.include_router(enedis_sync_router, prefix="/api")
 api_router.include_router(engie_router, prefix="/api")
 api_router.include_router(gas_invoice_router, prefix="/api")
 api_router.include_router(gas_budget_router, prefix="/api")
+api_router.include_router(engie_budget_router, prefix="/api")
 api_router.include_router(grdf_router, prefix="/api")
 api_router.include_router(energie_router, prefix="/api")
 api_router.include_router(equipment_router, prefix="/api")

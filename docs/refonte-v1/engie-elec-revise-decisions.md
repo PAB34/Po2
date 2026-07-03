@@ -78,10 +78,112 @@ dans `MarketsBudgetPageV1.tsx`.
    PRM sans ENEDIS (fallback), PRM sans lien bâtiment (maille PRM seule).
 
 ## 4. Hors périmètre v1
-- Correction thermosensible / décomposition base-thermo de l'élec.
+- Décomposition **froid/climatisation** (DJU_froid) : seule la thermosensibilité **chauffage** est prise en v1.
 - EDF éclairage public (autre cible de conso, autre maille).
 - Table de suivi des indices TURPE/BPU (onglet « Indices & variables » déjà posé).
+- Calque **cible DALKIA** (conso objectif / intéressement) — incrément suivant.
 
 ## 5. Ce que je NE fais pas sans validation
-- Q2 (source conso attendue) et Q3 (BPU/TURPE vs dérivé N-1) — structurants.
 - Toucher le périmètre EDF (élec aussi, mais cible et maille différentes).
+
+---
+
+## 6. État de réalisation (2026-07-03)
+
+Backend **fait et testé** (6 tests sqlite verts) : `engie_elec_budget_revise.py`, `schemas/engie_budget.py`,
+`routes/engie_budget.py` → `GET /api/marches/engie-elec-budget-revise?year=`. Front à faire (§8).
+
+## 7. Détail du calcul (référence)
+
+> Objectif : comprendre chaque nombre de la page sans lire le code. Tout est **calculé à la volée**
+> (aucune table, aucune migration). Sources = factures ENGIE importées (réalisé + prix N-1), conso ENEDIS
+> (attendue), tables BPU/TURPE (révision).
+
+### 7.1 Périmètre et maille
+- On prend toutes les lignes de factures **`supplier = ENGIE`, `energy_type = electricity`** de la ville.
+- Clé de calcul = **PRM** (`EnergyInvoiceSite.prm_id`). Chaque PRM est ensuite rattaché à un **bâtiment**
+  via `BuildingMeterLink(fluid="ELECTRICITE")` ; les PRM sans lien sont regroupés en « Non affecté ».
+- Une ligne est datée par sa **période** (`period_start` → sinon `period_end`) : année N-1 = base de prix,
+  année Y = réalisé.
+
+### 7.2 Classification des lignes (fixe / variable)
+Chaque ligne a un `normalized_code` (produit par le parser ENGIE). On les range ainsi, **en excluant les
+lignes « total »** (`supply_total_ht`, `network_fixed_total`, `network_total_ht`, `tax_total`, …) qui
+agrègent déjà d'autres lignes → sinon double comptage.
+
+| Nature | Codes | Rôle |
+|---|---|---|
+| **VARIABLE** | `supply` (fourniture), `network_variable` (soutirage variable), `capacity`, `cee`, `contribution`, `green_energy`, taxes /kWh (`cspe`, `ticfe`, taxes communale/départementale), + pénalités `network_overrun*` | conso × prix |
+| **FIXE** | `network_management` (gestion), `network_counting` (comptage), `network_withdrawal`/`soutirage_fixed` (soutirage fixe), `cta`, `subscription` | termes fixes |
+
+> Les **pénalités de dépassement** comptent dans le réalisé variable mais **pas** dans le calcul des prix
+> unitaires (elles ne sont pas proportionnelles à la conso).
+
+### 7.3 Prix unitaires de référence (dérivés du N-1, par PRM)
+À partir des lignes **N-1** du PRM :
+```
+pu_fourniture  = Σ montant(supply)          / Σ kWh(supply)
+pu_reseau_var  = Σ montant(network_variable) / Σ kWh(supply)
+pu_autres_var  = Σ montant(autres variables) / Σ kWh(supply)
+fixe_reseau    = Σ montant(gestion + comptage + soutirage fixe)
+fixe_autre     = Σ montant(cta + abonnement)
+```
+
+### 7.4 Révision des prix (ce qui rend le budget « révisé »)
+- **Ratio BPU** (fourniture) : pour chaque poste (BASE/HP/HC…), prix BPU ENGIE de l'année Y ÷ prix BPU N-1
+  (`resolve_historical_bpu_price`), pondéré par les kWh du poste. Si non résolu (segment/poste manquant) →
+  **1,0** (prix N-1 tenu), `bpu_available = false`.
+- **Ratio TURPE** (réseau variable + fixe) : indice cumulé des évolutions moyennes HTA-BT
+  (`TURPE_EVOLUTION_EVENTS`) à mi-Y ÷ mi-N-1. Si aucune évolution → **1,0**, `turpe_available = false`.
+```
+pu_variable = pu_fourniture × ratio_BPU  +  pu_reseau_var × ratio_TURPE  +  pu_autres_var
+fixe        = fixe_reseau  × ratio_TURPE  +  fixe_autre
+```
+
+### 7.5 Conso attendue (N-1 ENEDIS + DJU thermosensible)
+Régression linéaire sur l'historique **ENEDIS** mensuel du PRM (mois complets, année Y exclue) :
+```
+kWh_mois ≈ base + pente × DJU_chauffage_mois           (régression moindres carrés)
+conso_mensuelle_attendue[m] = base + pente × DJU_normal[m]
+conso_attendue_an           = Σ_m conso_mensuelle_attendue[m]
+```
+- `DJU_normal[m]` = moyenne historique du DJU chauffage du mois calendaire m (hors année Y).
+- **Seule la part `pente × DJU` est climatique** ; la `base` (éclairage, bureautique, ventilation, froid
+  alimentaire) est tenue → **pas de surcorrection** (≠ ratio DJU global du gaz).
+- `part thermosensible = (Σ pente × DJU_normal) / conso_attendue_an` (affichée).
+- **Fallbacks** : pente ≤ 0 ou historique trop court/plat → conso = somme ENEDIS N-1 (`conso_method = enedis_flat`) ;
+  aucun ENEDIS → kWh facturés N-1 (`no_enedis`).
+
+### 7.6 Prévision de référence, réalisé, atterrissage
+```
+variable_prevision   = conso_attendue_an × pu_variable
+prevision_reference  = variable_prevision + fixe            (repère, PAS un budget contractuel)
+
+realise              = Σ lignes fixe+variable des factures Y du PRM
+mois_couverts        = mois réellement facturés en Y
+
+atterrissage :
+  - aucun réalisé Y            → = prevision_reference           (landing_method = prevision)
+  - année Y close (today > Y)  → = realise                       (realise_complet)
+  - sinon (année en cours)     → = realise
+                                   + Σ conso_mensuelle_attendue[mois NON couverts] × pu_variable
+                                   + (fixe_réalisé / mois_couverts) × nb_mois_restants   (mensuel)
+ecart = atterrissage − prevision_reference
+```
+La projection du reste utilise la **conso mensuelle attendue** (modèle thermo) des mois non facturés →
+cohérent, sans surcorrection climatique. Base = **mois réellement couverts** (le décalage de facturation
+ne fausse pas le prorata).
+
+### 7.7 Totaux et agrégat bâtiment
+Totaux marché = somme des PRM. Agrégat bâtiment = somme des PRM d'un même `building_id`
+(prévision / réalisé / atterrissage + nb PRM), PRM sans lien → « Non affecté ».
+
+### 7.8 Signaux de fiabilité exposés
+`enedis_available`, `bpu_available`, `turpe_available`, `conso_method`, `thermo_share`, `has_history`,
+et par PRM le rattachement bâtiment — pour que l'utilisateur sache **à quel point** chaque chiffre est
+révisé vs tenu à plat.
+
+## 8. Proposition front (à valider avant code)
+Voir la proposition détaillée en conversation (2026-07-03) : page `EngieBudgetReviseV1.tsx` clonée du gaz,
+avec bascule **maille PRM / bâtiment**, colonnes conso attendue (thermo %) + prix réf (ratios BPU/TURPE),
+bandeau de fiabilité (ENEDIS/BPU/TURPE), et emplacement réservé au **calque cible DALKIA**.
