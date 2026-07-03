@@ -14,6 +14,11 @@ function mwh(value: number | null | undefined) {
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} MWh`;
 }
 
+function pct(part: number | null | undefined, total: number | null | undefined) {
+  if (part == null || !total) return "—";
+  return `${Math.round((part / total) * 100)} %`;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Une erreur est survenue.";
 }
@@ -50,6 +55,11 @@ export function CpeCibleConsoV1() {
   });
   const data = query.data;
 
+  const items = data?.items ?? [];
+  const totalCible = items.reduce((s, i) => s + (i.nb_exercice ?? 0), 0);
+  const totalRealise = items.reduce((s, i) => s + (i.nc_realise ?? 0), 0);
+  const projectionAvailable = (data?.nb_sites_projetes ?? 0) > 0;
+
   return (
     <div className="po2-page-v1">
       <header className="po2-page-v1__head">
@@ -57,11 +67,10 @@ export function CpeCibleConsoV1() {
         <h1>Cible conso & intéressement (gaz), par site</h1>
         <p>
           Calque comparatif <strong>cible vs réalisé</strong> sur les sites CPE DALKIA : consommation cible
-          contractuelle (<strong>NB</strong>), recalée du climat (<strong>N'B projeté</strong>), face à la
-          consommation projetée de fin d'année (<strong>NC projeté</strong>). L'écart déclenche un
-          <strong> intéressement</strong> (conso sous la cible) ou une <strong>pénalité</strong> (au-dessus),
-          projetés via la formule contractuelle. Projection pro-rata DJU depuis le réalisé à date — indicatif.
-          Lecture seule. <em>Cible élec (IPMVP) : incrément suivant.</em>
+          contractuelle (<strong>NB</strong>) face à la consommation <strong>réalisée à date</strong>
+          {" "}(<strong>NC</strong>). Quand les DJU DALKIA sont disponibles, on projette la fin d'année
+          (N'B / NC projetés) et l'<strong>intéressement</strong> (conso sous la cible) ou la
+          {" "}<strong>pénalité</strong> (au-dessus). Lecture seule. <em>Cible élec (IPMVP) : incrément suivant.</em>
         </p>
       </header>
 
@@ -83,8 +92,8 @@ export function CpeCibleConsoV1() {
         </div>
         {data ? (
           <p className="po2-muted-line">
-            {data.nb_sites_projetes} sites projetés · DJU projeté annuel {data.dju_projete_annuel.toLocaleString("fr-FR")} /
-            réf. {data.dju_reference.toLocaleString("fr-FR")} · méthode {data.dju_method}
+            {items.length} sites · {projectionAvailable ? `${data.nb_sites_projetes} projetés` : "projection indisponible"}
+            {" · "}DJU projeté {data.dju_projete_annuel.toLocaleString("fr-FR")} / réf. {data.dju_reference.toLocaleString("fr-FR")}
           </p>
         ) : null}
       </Card>
@@ -98,21 +107,37 @@ export function CpeCibleConsoV1() {
 
       {data ? (
         <>
+          {!projectionAvailable && items.length > 0 ? (
+            <Card eyebrow="projection indisponible">
+              <p className="po2-muted-line">
+                ⚠ L'intéressement/pénalité <strong>projeté</strong> n'est pas calculable sur cet environnement :
+                les <strong>DJU DALKIA</strong> (Montpellier) ne sont pas chargés (données climatiques absentes).
+                Le tableau montre la <strong>cible NB</strong> et la <strong>conso réalisée à date</strong> ; les
+                colonnes projetées s'afficheront dès que les DJU seront disponibles.
+              </p>
+            </Card>
+          ) : null}
+
           <div className="po2-kpi-grid">
-            <KpiCard label="Net projeté" value={eur(data.net_projete)} detail="intéressement − pénalité" tone={data.net_projete > 0 ? "danger" : "good"} />
-            <KpiCard label="Intéressement projeté" value={eur(data.total_interessement_projete)} detail="conso sous la cible" tone="neutral" />
-            <KpiCard label="Pénalité projetée" value={eur(data.total_penalite_projete)} detail="conso au-dessus de la cible" tone="neutral" />
-            <KpiCard label="Sites projetés" value={String(data.nb_sites_projetes)} detail={`${annee} · fin T${trimestre}`} tone="neutral" />
+            <KpiCard label="Cible totale (NB)" value={mwh(totalCible)} detail={`${items.length} sites · ${annee}`} tone="neutral" />
+            <KpiCard label="Réalisé à date (NC)" value={mwh(totalRealise)} detail={`fin T${trimestre} · ${pct(totalRealise, totalCible)} de la cible`} tone="neutral" />
+            <KpiCard
+              label="Net intéressement projeté"
+              value={projectionAvailable ? eur(data.net_projete) : "—"}
+              detail={projectionAvailable ? "intéressement − pénalité" : "DJU DALKIA requis"}
+              tone={projectionAvailable ? (data.net_projete > 0 ? "danger" : "good") : "neutral"}
+            />
+            <KpiCard label="Pénalité projetée" value={projectionAvailable ? eur(data.total_penalite_projete) : "—"} detail="conso au-dessus cible" tone="neutral" />
           </div>
 
-          <Card title="Par site" eyebrow="cible (NB / N'B) vs conso projetée (NC) → intéressement / pénalité">
-            {data.items.length === 0 ? (
+          <Card title="Par site" eyebrow="cible NB vs conso réalisée (NC) → projection intéressement / pénalité">
+            {items.length === 0 ? (
               <p className="po2-muted-line">
-                Aucun site projetable sur {annee} (T{trimestre}) : relevés ou cibles NB manquants.
+                Aucun site sur {annee} : relevés de conso ou cibles NB manquants pour cet exercice.
               </p>
             ) : (
               <DataTable
-                rows={data.items}
+                rows={items}
                 getRowKey={(r: CpeAtterrissageItem) => r.site_id}
                 columns={[
                   {
@@ -125,29 +150,35 @@ export function CpeCibleConsoV1() {
                         <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>
                           {r.code_site}
                           {r.tarif ? ` · ${r.tarif}` : ""}
-                          {r.statut ? ` · ${r.statut}` : ""}
+                          {r.mois_realises ? ` · ${r.mois_realises} mois` : ""}
                         </div>
                       </div>
                     ),
                   },
-                  { key: "nb", header: "NB (cible)", sortValue: (r) => r.nb_exercice, render: (r) => mwh(r.nb_exercice) },
+                  { key: "nb", header: "Cible NB (an)", sortValue: (r) => r.nb_exercice, render: (r) => mwh(r.nb_exercice) },
+                  { key: "nc", header: "Réalisé à date (NC)", sortValue: (r) => r.nc_realise, render: (r) => mwh(r.nc_realise) },
+                  { key: "pct", header: "% cible", sortValue: (r) => (r.nb_exercice ? (r.nc_realise ?? 0) / r.nb_exercice : -1), render: (r) => pct(r.nc_realise, r.nb_exercice) },
                   { key: "nprimeb", header: "N'B projeté", sortValue: (r) => r.n_prime_b_projete, render: (r) => mwh(r.n_prime_b_projete) },
-                  { key: "nc", header: "NC projeté", sortValue: (r) => r.nc_projete, render: (r) => mwh(r.nc_projete) },
-                  { key: "ecart", header: "Écart (N'B−NC)", sortValue: (r) => r.ecart_projete, render: (r) => mwh(r.ecart_projete) },
+                  { key: "ncp", header: "NC projeté", sortValue: (r) => r.nc_projete, render: (r) => mwh(r.nc_projete) },
                   {
                     key: "type",
-                    header: "Type",
+                    header: "Projection",
                     sortValue: (r) => r.type_resultat,
-                    render: (r) => <StatusBadge tone={resultTone(r.type_resultat)}>{RESULT_LABEL[r.type_resultat ?? ""] ?? "—"}</StatusBadge>,
+                    render: (r) =>
+                      r.type_resultat ? (
+                        <StatusBadge tone={resultTone(r.type_resultat)}>{RESULT_LABEL[r.type_resultat] ?? "—"}</StatusBadge>
+                      ) : (
+                        <span className="po2-muted-line" style={{ fontSize: "0.8em", opacity: 0.6 }}>—</span>
+                      ),
                   },
                   { key: "montant", header: "Montant projeté", sortValue: (r) => r.montant_ht_projete, render: (r) => <strong>{eur(r.montant_ht_projete)}</strong> },
                 ]}
               />
             )}
             <p className="po2-muted-line">
-              Projection pro-rata DJU (extrapolation climatique) depuis le réalisé jusqu'à fin T{trimestre}.
-              Modèle pur-DJU indicatif — à caler sur le tableau DALKIA. Intéressement = facture DALKIA à la
-              collectivité ; pénalité = avoir en faveur de la collectivité.
+              NB = cible annuelle contractuelle ; NC = conso constatée. Projection (colonnes N'B / NC projetés,
+              intéressement) : pro-rata DJU (extrapolation climatique) depuis le réalisé jusqu'à fin T{trimestre},
+              modèle pur-DJU indicatif. Intéressement = facture DALKIA à la collectivité ; pénalité = avoir en sa faveur.
             </p>
           </Card>
         </>

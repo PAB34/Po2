@@ -46,6 +46,15 @@ sous-onglet dans `MarketsBudgetPageV1`. Zéro migration, zéro backend.
 1. Front : `CpeCibleConsoV1.tsx` (KPI + sélecteur trimestre + tableau triable) branché sur le tier DALKIA.
 2. `MarketsBudgetPageV1` : sous-onglet « Cible conso & intéressement » (DALKIA uniquement).
 
+## 3bis. Contrainte staging (2026-07-03) — dégradation propre
+Les CSV DJU (`energie/output/DJU/*.csv`, Sète **et** Montpellier DALKIA) sont **absents et non
+écrivables sur staging** (`energie_dir` en lecture seule ; même cause que l'ENEDIS vide). Or la
+**projection** d'intéressement dépend du **DJU réel DALKIA** → `dju_reel_ecoule=0` → colonnes projetées
+`None` (statut « incomplet »). Le **NC réalisé vient de la base** (dispo). Donc la vue mène désormais sur
+**cible NB vs conso réalisée à date (NC) + % cible** (toujours dispo), et n'affiche la projection (N'B/NC
+projetés, intéressement) que si le DJU est là, avec un **bandeau explicite** sinon. La projection
+s'activera d'elle-même quand les DJU seront chargés (env. avec `energie_dir` écrivable, ex. prod).
+
 ## 4. Hors périmètre v1
 - Cible **élec** IPMVP B / gate P2.4 (autre moteur).
 - Refonte de la méthode DJU (pur-DJU indicatif conservé).
