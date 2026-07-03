@@ -5486,8 +5486,11 @@ export type EngieBudgetRevisePointV1 = {
   prm: string;
   site_name: string | null;
   segment: string | null;
+  regroupement: string | null;
   building_id: number | null;
   building_name: string | null;
+  has_anomaly: boolean;
+  anomaly_count: number;
   kwh_n1: number;
   enedis_kwh_n1: number;
   conso_attendue_kwh: number;
@@ -5512,9 +5515,9 @@ export type EngieBudgetRevisePointV1 = {
   has_history: boolean;
 };
 
-export type EngieBudgetReviseBuildingV1 = {
-  building_id: number | null;
-  building_name: string | null;
+export type EngieBudgetReviseAggregateV1 = {
+  key: number | string | null;
+  label: string;
   prm_count: number;
   prevision_reference: number;
   realise: number;
@@ -5528,6 +5531,7 @@ export type EngieBudgetReviseV1 = {
   turpe_available: boolean;
   bpu_available: boolean;
   enedis_available: boolean;
+  anomaly_prm_count: number;
   totals: {
     fixe_prevision: number;
     variable_prevision: number;
@@ -5539,7 +5543,8 @@ export type EngieBudgetReviseV1 = {
     ecart_atterrissage_vs_prevision: number;
   };
   points: EngieBudgetRevisePointV1[];
-  buildings: EngieBudgetReviseBuildingV1[];
+  buildings: EngieBudgetReviseAggregateV1[];
+  regroupements: EngieBudgetReviseAggregateV1[];
   source_note: string;
 };
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, DataTable, KpiCard, SegmentControl, StatusBadge } from "../../design-system";
-import type { EngieBudgetRevisePointV1 } from "../../lib/api";
+import type { EngieBudgetReviseAggregateV1, EngieBudgetRevisePointV1 } from "../../lib/api";
 import { useEngieBudgetReviseV1 } from "./useEngieBudgetReviseV1";
 
 function eur(value: number) {
@@ -34,12 +34,26 @@ function ecartTone(point: EngieBudgetRevisePointV1) {
   return "ok" as const;
 }
 
-type Maille = "batiment" | "prm";
+type Maille = "regroupement" | "prm";
+
+function aggregateColumns() {
+  return [
+    { key: "label", header: "Regroupement", render: (r: EngieBudgetReviseAggregateV1) => (
+        <div>
+          <strong>{r.label}</strong>
+          <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>{r.prm_count} PRM</div>
+        </div>
+      ), sortValue: (r: EngieBudgetReviseAggregateV1) => r.label },
+    { key: "prevision", header: "Prévision réf.", render: (r: EngieBudgetReviseAggregateV1) => eur(r.prevision_reference), sortValue: (r: EngieBudgetReviseAggregateV1) => r.prevision_reference },
+    { key: "realise", header: "Réalisé à date", render: (r: EngieBudgetReviseAggregateV1) => eur(r.realise), sortValue: (r: EngieBudgetReviseAggregateV1) => r.realise },
+    { key: "atterrissage", header: "Atterrissage", render: (r: EngieBudgetReviseAggregateV1) => <strong>{eur(r.atterrissage)}</strong>, sortValue: (r: EngieBudgetReviseAggregateV1) => r.atterrissage },
+  ];
+}
 
 export function EngieBudgetReviseV1() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
-  const [maille, setMaille] = useState<Maille>("batiment");
+  const [maille, setMaille] = useState<Maille>("regroupement");
   const query = useEngieBudgetReviseV1(year);
   const data = query.data;
 
@@ -88,6 +102,17 @@ export function EngieBudgetReviseV1() {
 
       {data ? (
         <>
+          {data.anomaly_prm_count > 0 ? (
+            <Card eyebrow="fiabilité des données">
+              <p className="po2-muted-line">
+                ⚠ <strong>{data.anomaly_prm_count} PRM</strong> présentent une anomalie d'import (poste
+                « soutirage variable » facturé à un prix unitaire aberrant). Le montant est <strong>corrigé</strong>
+                {" "}(reconstitué sur la valeur mal placée) et le PRM est <strong>signalé</strong> dans le détail
+                Bâtiment/PRM. À réimporter après correction du parser ENGIE pour lever le signalement.
+              </p>
+            </Card>
+          ) : null}
+
           <div className="po2-kpi-grid">
             <KpiCard label="Atterrissage" value={eur(data.totals.atterrissage)} detail={`${year} · réalisé + reste projeté`} />
             <KpiCard label="Réalisé à date" value={eur(data.totals.realise)} detail={`fixe ${eur(data.totals.realise_fixe)} · variable ${eur(data.totals.realise_variable)}`} />
@@ -115,8 +140,8 @@ export function EngieBudgetReviseV1() {
               <SegmentControl
                 value={maille}
                 options={[
-                  { value: "batiment", label: "Par bâtiment" },
-                  { value: "prm", label: "Par PRM" },
+                  { value: "regroupement", label: "Regroupement" },
+                  { value: "prm", label: "Bâtiment/PRM" },
                 ]}
                 onChange={setMaille}
               />
@@ -126,28 +151,11 @@ export function EngieBudgetReviseV1() {
               <p className="po2-muted-line">
                 Aucune facture ENGIE sur {year - 1}/{year} : importe d'abord les factures ENGIE.
               </p>
-            ) : maille === "batiment" ? (
+            ) : maille === "regroupement" ? (
               <DataTable
-                rows={data.buildings}
-                getRowKey={(b) => String(b.building_id ?? "non-affecte")}
-                columns={[
-                  {
-                    key: "batiment",
-                    header: "Bâtiment",
-                    render: (b) => (
-                      <div>
-                        <strong>{b.building_name ?? "Non affecté"}</strong>
-                        <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>
-                          {b.prm_count} PRM
-                          {b.building_id === null ? " · à rattacher" : ""}
-                        </div>
-                      </div>
-                    ),
-                  },
-                  { key: "prevision", header: "Prévision réf.", render: (b) => eur(b.prevision_reference) },
-                  { key: "realise", header: "Réalisé à date", render: (b) => eur(b.realise) },
-                  { key: "atterrissage", header: "Atterrissage", render: (b) => <strong>{eur(b.atterrissage)}</strong> },
-                ]}
+                rows={data.regroupements}
+                getRowKey={(r) => String(r.key ?? "non-regroupe")}
+                columns={aggregateColumns()}
               />
             ) : (
               <DataTable
@@ -156,14 +164,17 @@ export function EngieBudgetReviseV1() {
                 columns={[
                   {
                     key: "prm",
-                    header: "PRM / site",
+                    header: "Bâtiment / PRM",
+                    sortValue: (p) => p.building_name ?? p.site_name ?? p.prm,
                     render: (p) => (
                       <div>
-                        <strong>{p.site_name ?? p.prm}</strong>
+                        <strong>{p.building_name ?? p.site_name ?? p.prm}</strong>
                         <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>
                           {p.prm}
                           {p.segment ? ` · ${p.segment}` : ""}
+                          {p.regroupement ? ` · ${p.regroupement}` : ""}
                           {p.building_id === null ? " · non rattaché" : ""}
+                          {p.has_anomaly ? " · ⚠ anomalie import" : ""}
                           {!p.has_history ? " · sans historique" : ""}
                         </div>
                       </div>
@@ -172,6 +183,7 @@ export function EngieBudgetReviseV1() {
                   {
                     key: "realise",
                     header: "Réalisé à date",
+                    sortValue: (p) => p.realise,
                     render: (p) => (
                       <div>
                         <strong>{eur(p.realise)}</strong>
@@ -184,6 +196,7 @@ export function EngieBudgetReviseV1() {
                   {
                     key: "conso",
                     header: "Conso attendue an",
+                    sortValue: (p) => p.conso_attendue_kwh,
                     render: (p) => (
                       <div>
                         {kwh(p.conso_attendue_kwh)}
@@ -197,6 +210,7 @@ export function EngieBudgetReviseV1() {
                   {
                     key: "prix",
                     header: "Prix réf.",
+                    sortValue: (p) => p.pu_variable_eur_kwh,
                     render: (p) => (
                       <div>
                         {p.pu_variable_eur_kwh.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} €/kWh
@@ -210,14 +224,15 @@ export function EngieBudgetReviseV1() {
                       </div>
                     ),
                   },
-                  { key: "atterrissage", header: "Atterrissage", render: (p) => <strong>{eur(p.atterrissage)}</strong> },
-                  { key: "prevision", header: "Prévision réf.", render: (p) => eur(p.prevision_reference) },
+                  { key: "atterrissage", header: "Atterrissage", sortValue: (p) => p.atterrissage, render: (p) => <strong>{eur(p.atterrissage)}</strong> },
+                  { key: "prevision", header: "Prévision réf.", sortValue: (p) => p.prevision_reference, render: (p) => eur(p.prevision_reference) },
                   {
                     key: "ecart",
                     header: "Écart / réf.",
+                    sortValue: (p) => p.ecart_atterrissage_vs_prevision,
                     render: (p) => <StatusBadge tone={ecartTone(p)}>{eur(p.ecart_atterrissage_vs_prevision)}</StatusBadge>,
                   },
-                  { key: "method", header: "Méthode", render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
+                  { key: "method", header: "Méthode", sortValue: (p) => p.landing_method, render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
                 ]}
               />
             )}
