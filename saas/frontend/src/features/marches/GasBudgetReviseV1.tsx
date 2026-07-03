@@ -101,6 +101,7 @@ export function GasBudgetReviseV1() {
                   {
                     key: "pce",
                     header: "PCE / site",
+                    sortValue: (p) => p.nom_site ?? p.pce,
                     render: (p) => (
                       <div>
                         <strong>{p.nom_site ?? p.pce}</strong>
@@ -114,6 +115,7 @@ export function GasBudgetReviseV1() {
                   {
                     key: "realise",
                     header: "Réalisé à date",
+                    sortValue: (p) => p.realise,
                     render: (p) => (
                       <div>
                         <strong>{eur(p.realise)}</strong>
@@ -126,6 +128,7 @@ export function GasBudgetReviseV1() {
                   {
                     key: "reste",
                     header: "Conso attendue an",
+                    sortValue: (p) => p.conso_attendue_kwh,
                     render: (p) => (
                       <div>
                         {kwh(p.conso_attendue_kwh)}
@@ -137,14 +140,15 @@ export function GasBudgetReviseV1() {
                       </div>
                     ),
                   },
-                  { key: "atterrissage", header: "Atterrissage", render: (p) => <strong>{eur(p.atterrissage)}</strong> },
-                  { key: "prevision", header: "Prévision réf.", render: (p) => eur(p.prevision_reference) },
+                  { key: "atterrissage", header: "Atterrissage", sortValue: (p) => p.atterrissage, render: (p) => <strong>{eur(p.atterrissage)}</strong> },
+                  { key: "prevision", header: "Prévision réf.", sortValue: (p) => p.prevision_reference, render: (p) => eur(p.prevision_reference) },
                   {
                     key: "ecart",
                     header: "Écart / réf.",
+                    sortValue: (p) => p.ecart_atterrissage_vs_prevision,
                     render: (p) => <StatusBadge tone={ecartTone(p)}>{eur(p.ecart_atterrissage_vs_prevision)}</StatusBadge>,
                   },
-                  { key: "method", header: "Méthode", render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
+                  { key: "method", header: "Méthode", sortValue: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method, render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
                 ]}
               />
             )}

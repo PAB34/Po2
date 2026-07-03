@@ -38,6 +38,10 @@ SHEETS_TO_PARSE: tuple[str, ...] = (
 
 # Ligne d'en-tête (1-indexed)
 HEADER_ROW = 13
+
+# Prix de soutirage variable (€/kWh) physiquement impossible au-delà de ce seuil :
+# sert à détecter que la colonne « Prix … (€) » contient en fait un montant (cf. feuille C5).
+_SOUTIRAGE_PU_MAX_EUR_KWH = 1.0
 # Première ligne de données
 DATA_START_ROW = 14
 
@@ -423,6 +427,24 @@ def _build_cee_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dict[str
     return lines
 
 
+def resolve_soutirage_variable(
+    qty: float | None, raw_price: float | None
+) -> tuple[float | None, float | None]:
+    """Résout (prix unitaire €/kWh, montant €) du soutirage variable depuis quantité + cellule « prix ».
+
+    ⚠ Incohérence ENGIE : sur certaines feuilles (ex. C5), la colonne « Prix composante de
+    Soutirage part variable X (€) » contient en réalité le MONTANT (€), pas un prix (€/kWh)
+    (elle vaut alors la « total part variable (€) »). Un prix de soutirage élec ≥ 1 €/kWh étant
+    impossible, on en déduit que la valeur est un montant : on ne remultiplie pas par la quantité
+    (sinon montant × quantité), on la prend comme montant et on recalcule le prix unitaire.
+    """
+    if raw_price is not None and abs(raw_price) > _SOUTIRAGE_PU_MAX_EUR_KWH and qty:
+        return raw_price / qty, raw_price
+    unit_price = raw_price
+    amount = qty * unit_price if (qty is not None and unit_price is not None) else None
+    return unit_price, amount
+
+
 def _build_delivery_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dict[str, Any]]:
     """Lignes acheminement : composante de gestion (CG), composante de comptage (CC),
     composante de soutirage part fixe, composantes part variable par poste.
@@ -483,10 +505,10 @@ def _build_delivery_lines(ws: Worksheet, row: int, idx: ColumnIndex) -> list[dic
                 if _cell_by_name(ws, row, idx, qty_alt) is not None:
                     qty_name = qty_alt
         qty = _coerce_float(_cell_by_name(ws, row, idx, qty_name))
-        unit_price = _coerce_float(_cell_by_name(ws, row, idx, price_name))
-        if not any([qty, unit_price]):
+        raw_price = _coerce_float(_cell_by_name(ws, row, idx, price_name))
+        if not any([qty, raw_price]):
             continue
-        amount = qty * unit_price if (qty is not None and unit_price is not None) else None
+        unit_price, amount = resolve_soutirage_variable(qty, raw_price)
         poste_bpu = POSTE_XLSX_TO_BPU.get(poste, poste.lower())
         lines.append(
             {

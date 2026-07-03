@@ -105,16 +105,18 @@ export function ContractBudgetLandingV1() {
                 rows={data.postes}
                 getRowKey={(p) => p.poste}
                 columns={[
-                  { key: "poste", header: "Poste", render: (p) => <strong>{p.label}</strong> },
-                  { key: "base", header: "Budget base (DPGF)", render: (p) => eur(p.budget_base) },
+                  { key: "poste", header: "Poste", sortValue: (p) => p.label, render: (p) => <strong>{p.label}</strong> },
+                  { key: "base", header: "Budget base (DPGF)", sortValue: (p) => p.budget_base, render: (p) => eur(p.budget_base) },
                   {
                     key: "coef",
                     header: "Coef. révision",
+                    sortValue: (p) => p.coefficient_revision,
                     render: (p) => (p.coefficient_revision !== 1 ? p.coefficient_revision.toFixed(4) : "—"),
                   },
                   {
                     key: "budget",
                     header: "Budget révisé",
+                    sortValue: (p) => p.budget_contractuel,
                     render: (p) => (
                       <div>
                         <strong>{eur(p.budget_contractuel)}</strong>
@@ -126,20 +128,22 @@ export function ContractBudgetLandingV1() {
                       </div>
                     ),
                   },
-                  { key: "realise", header: "Réalisé", render: (p) => eur(p.realise) },
-                  { key: "landing", header: "Atterrissage", render: (p) => eur(p.atterrissage) },
-                  { key: "reste", header: "Reste à facturer", render: (p) => eur(p.reste_a_facturer) },
+                  { key: "realise", header: "Réalisé", sortValue: (p) => p.realise, render: (p) => eur(p.realise) },
+                  { key: "landing", header: "Atterrissage", sortValue: (p) => p.atterrissage, render: (p) => eur(p.atterrissage) },
+                  { key: "reste", header: "Reste à facturer", sortValue: (p) => p.reste_a_facturer, render: (p) => eur(p.reste_a_facturer) },
                   {
                     key: "ecart",
                     header: "Écart réalisé/budget",
+                    sortValue: (p) => p.ecart_realise_vs_budget,
                     render: (p) => <StatusBadge tone={ecartTone(p)}>{eur(p.ecart_realise_vs_budget)}</StatusBadge>,
                   },
                   {
                     key: "taux",
                     header: "Taux fact.",
+                    sortValue: (p) => p.taux_facturation ?? -1,
                     render: (p) => (p.taux_facturation != null ? `${(p.taux_facturation * 100).toFixed(0)}%` : "-"),
                   },
-                  { key: "method", header: "Méthode", render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
+                  { key: "method", header: "Méthode", sortValue: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method, render: (p) => LANDING_METHOD_LABEL[p.landing_method] ?? p.landing_method },
                 ]}
               />
             )}
@@ -155,11 +159,11 @@ export function ContractBudgetLandingV1() {
                   rows={data.by_operation}
                   getRowKey={(r) => r.operation_number}
                   columns={[
-                    { key: "operation", header: "Opération", render: (r) => <strong>{r.operation_number}</strong> },
-                    { key: "postes", header: "Postes", render: (r) => r.postes.join(", ") },
-                    { key: "budget", header: "Budget contractuel", render: (r) => eur(r.budget_contractuel) },
-                    { key: "realise", header: "Réalisé", render: (r) => eur(r.realise) },
-                    { key: "landing", header: "Atterrissage", render: (r) => eur(r.atterrissage) },
+                    { key: "operation", header: "Opération", sortValue: (r) => r.operation_number, render: (r) => <strong>{r.operation_number}</strong> },
+                    { key: "postes", header: "Postes", sortValue: (r) => r.postes.join(", "), render: (r) => r.postes.join(", ") },
+                    { key: "budget", header: "Budget contractuel", sortValue: (r) => r.budget_contractuel, render: (r) => eur(r.budget_contractuel) },
+                    { key: "realise", header: "Réalisé", sortValue: (r) => r.realise, render: (r) => eur(r.realise) },
+                    { key: "landing", header: "Atterrissage", sortValue: (r) => r.atterrissage, render: (r) => eur(r.atterrissage) },
                   ]}
                 />
                 <p className="po2-muted-line">{data.projection_note}</p>

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Card, SegmentControl } from "../../design-system";
 import { ContractBudgetLandingV1 } from "./ContractBudgetLandingV1";
+import { CpeCibleConsoV1 } from "./CpeCibleConsoV1";
+import { ElecBudgetReviseV1 } from "./ElecBudgetReviseV1";
 import { GasBudgetReviseV1 } from "./GasBudgetReviseV1";
 import { IndicesVariablesV1 } from "./IndicesVariablesV1";
 
 type MarketTier = "dalkia" | "gaz" | "engie" | "edf";
-type SubView = "atterrissage" | "indices";
+type SubView = "atterrissage" | "cible" | "indices";
 
 type TierConfig = {
   value: MarketTier;
@@ -23,6 +25,7 @@ const TIERS: TierConfig[] = [
     families: ["dalkia"],
     subs: [
       { value: "atterrissage", label: "Atterrissage (budget / révisé / réalisé)" },
+      { value: "cible", label: "Cible conso & intéressement" },
       { value: "indices", label: "Indices & variables" },
     ],
   },
@@ -124,10 +127,16 @@ export function MarketsBudgetPageV1() {
 
       {activeSub === "indices" ? (
         <IndicesVariablesV1 embedded families={tierConfig.families} />
+      ) : tier === "dalkia" && activeSub === "cible" ? (
+        <CpeCibleConsoV1 />
       ) : tier === "dalkia" && activeSub === "atterrissage" ? (
         <ContractBudgetLandingV1 />
       ) : tier === "gaz" && activeSub === "atterrissage" ? (
         <GasBudgetReviseV1 />
+      ) : tier === "engie" && activeSub === "atterrissage" ? (
+        <ElecBudgetReviseV1 supplier="ENGIE" />
+      ) : tier === "edf" && activeSub === "atterrissage" ? (
+        <ElecBudgetReviseV1 supplier="EDF" />
       ) : (
         <ComingSoon tier={tier} />
       )}

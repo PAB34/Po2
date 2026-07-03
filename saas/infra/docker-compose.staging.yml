@@ -27,11 +27,15 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env.staging
+    environment:
+      # Dossier données énergie (DJU/ENEDIS) inscriptible : le repo est monté en lecture seule.
+      - ENERGIE_DIR=/data/energie
     depends_on:
       - db
     volumes:
       - ../../:/workspace:ro
       - invoice_data:/app/storage/invoices
+      - energie_data:/data/energie
     networks:
       internal: {}
       edge:
@@ -67,6 +71,7 @@ services:
 volumes:
   postgres_data:
   invoice_data:
+  energie_data:
 
 networks:
   internal:
