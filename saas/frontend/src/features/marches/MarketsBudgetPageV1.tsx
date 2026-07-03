@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, SegmentControl } from "../../design-system";
 import { ContractBudgetLandingV1 } from "./ContractBudgetLandingV1";
-import { EngieBudgetReviseV1 } from "./EngieBudgetReviseV1";
+import { ElecBudgetReviseV1 } from "./ElecBudgetReviseV1";
 import { GasBudgetReviseV1 } from "./GasBudgetReviseV1";
 import { IndicesVariablesV1 } from "./IndicesVariablesV1";
 
@@ -130,7 +130,9 @@ export function MarketsBudgetPageV1() {
       ) : tier === "gaz" && activeSub === "atterrissage" ? (
         <GasBudgetReviseV1 />
       ) : tier === "engie" && activeSub === "atterrissage" ? (
-        <EngieBudgetReviseV1 />
+        <ElecBudgetReviseV1 supplier="ENGIE" />
+      ) : tier === "edf" && activeSub === "atterrissage" ? (
+        <ElecBudgetReviseV1 supplier="EDF" />
       ) : (
         <ComingSoon tier={tier} />
       )}

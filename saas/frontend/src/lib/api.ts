@@ -5554,6 +5554,12 @@ export async function fetchEngieBudgetRevise(token: string, year: number): Promi
   return parseResponse<EngieBudgetReviseV1>(response);
 }
 
+export async function fetchEdfBudgetRevise(token: string, year: number): Promise<EngieBudgetReviseV1> {
+  const params = new URLSearchParams({ year: String(year) });
+  const response = await fetch(`${apiBaseUrl}/marches/edf-elec-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<EngieBudgetReviseV1>(response);
+}
+
 export type MarketVariablePointV1 = {
   period: string;
   value: number;
