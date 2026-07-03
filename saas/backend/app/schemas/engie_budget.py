@@ -7,8 +7,11 @@ class EngieBudgetRevisePointOut(BaseModel):
     prm: str
     site_name: str | None = None
     segment: str | None = None
+    regroupement: str | None = None
     building_id: int | None = None
     building_name: str | None = None
+    has_anomaly: bool = False
+    anomaly_count: int = 0
     kwh_n1: float
     enedis_kwh_n1: float
     conso_attendue_kwh: float
@@ -44,9 +47,9 @@ class EngieBudgetReviseTotalsOut(BaseModel):
     ecart_atterrissage_vs_prevision: float
 
 
-class EngieBudgetReviseBuildingOut(BaseModel):
-    building_id: int | None = None
-    building_name: str | None = None
+class EngieBudgetReviseAggregateOut(BaseModel):
+    key: int | str | None = None
+    label: str
     prm_count: int
     prevision_reference: float
     realise: float
@@ -60,7 +63,9 @@ class EngieBudgetReviseOut(BaseModel):
     turpe_available: bool
     bpu_available: bool
     enedis_available: bool
+    anomaly_prm_count: int
     totals: EngieBudgetReviseTotalsOut
     points: list[EngieBudgetRevisePointOut]
-    buildings: list[EngieBudgetReviseBuildingOut]
+    buildings: list[EngieBudgetReviseAggregateOut]
+    regroupements: list[EngieBudgetReviseAggregateOut]
     source_note: str

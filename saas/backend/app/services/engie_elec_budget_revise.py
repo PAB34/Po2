@@ -65,8 +65,27 @@ _IGNORE_TOTALS = {
 }
 
 
+# Prix unitaire élec physiquement impossible (€/kWh) → signature d'un bug d'import :
+# le parser ENGIE a, sur certaines factures, écrit le MONTANT dans la colonne « prix
+# unitaire » du soutirage variable, puis recalculé montant = quantité × prix (→ ×quantité).
+# Le vrai montant de la ligne ≈ la valeur mal placée (le prix stocké). On corrige + signale.
+_MAX_PLAUSIBLE_PU_EUR_KWH = 1.0
+
+
 def _num(value: float | int | None) -> float:
     return float(value) if value is not None else 0.0
+
+
+def _line_amount(line: dict[str, Any]) -> tuple[float, bool]:
+    """Montant HT d'une ligne + drapeau anomalie. Corrige le bug d'import soutirage variable."""
+    if (
+        line["code"] in _NETWORK_VAR
+        and _num(line.get("unit_price")) > _MAX_PLAUSIBLE_PU_EUR_KWH
+        and _num(line.get("quantity")) > 0
+    ):
+        # montant réel ≈ prix stocké (le montant a été mal placé dans la colonne prix).
+        return _num(line.get("unit_price")), True
+    return _num(line["amount"]), False
 
 
 def _line_year(period_start: date | None, period_end: date | None) -> int | None:
@@ -226,11 +245,21 @@ def _bpu_fourniture_ratio(
 def _reference_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
     """Prix unitaires (€/kWh) + parts fixes dérivés d'un lot de lignes N-1, par PRM."""
     kwh = sum(_num(l["quantity"]) for l in lines if l["code"] in _SUPPLY)
-    fourniture = sum(_num(l["amount"]) for l in lines if l["code"] in _SUPPLY)
-    reseau_var = sum(_num(l["amount"]) for l in lines if l["code"] in _NETWORK_VAR)
-    autres_var = sum(_num(l["amount"]) for l in lines if l["code"] in _OTHER_VAR)
-    fixe_reseau = sum(_num(l["amount"]) for l in lines if l["code"] in _NETWORK_FIXE)
-    fixe_autre = sum(_num(l["amount"]) for l in lines if l["code"] in _OTHER_FIXE)
+    fourniture = reseau_var = autres_var = fixe_reseau = fixe_autre = 0.0
+    anomalies = 0
+    for l in lines:
+        amount, flagged = _line_amount(l)
+        anomalies += 1 if flagged else 0
+        if l["code"] in _SUPPLY:
+            fourniture += amount
+        elif l["code"] in _NETWORK_VAR:
+            reseau_var += amount
+        elif l["code"] in _OTHER_VAR:
+            autres_var += amount
+        elif l["code"] in _NETWORK_FIXE:
+            fixe_reseau += amount
+        elif l["code"] in _OTHER_FIXE:
+            fixe_autre += amount
     postes_kwh: dict[str, float] = {}
     for l in lines:
         if l["code"] in _SUPPLY and l.get("poste"):
@@ -243,16 +272,21 @@ def _reference_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
         "fixe_reseau": fixe_reseau,
         "fixe_autre": fixe_autre,
         "postes_kwh": postes_kwh,
+        "anomalies": anomalies,
     }
 
 
 def _realise_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
     """Réalisé année Y décomposé fixe / variable, par PRM."""
-    variable = sum(
-        _num(l["amount"]) for l in lines
-        if l["code"] in (_SUPPLY | _NETWORK_VAR | _OTHER_VAR | _PENALTY)
-    )
-    fixe = sum(_num(l["amount"]) for l in lines if l["code"] in (_NETWORK_FIXE | _OTHER_FIXE))
+    variable = fixe = 0.0
+    anomalies = 0
+    for l in lines:
+        amount, flagged = _line_amount(l)
+        anomalies += 1 if flagged else 0
+        if l["code"] in (_SUPPLY | _NETWORK_VAR | _OTHER_VAR | _PENALTY):
+            variable += amount
+        elif l["code"] in (_NETWORK_FIXE | _OTHER_FIXE):
+            fixe += amount
     kwh = sum(_num(l["quantity"]) for l in lines if l["code"] in _SUPPLY)
     covered = {m for l in lines if (m := _line_month(l["period_start"], l["period_end"])) is not None}
     return {
@@ -261,6 +295,7 @@ def _realise_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
         "realise_total": round(variable + fixe, 2),
         "kwh_realise": kwh,
         "covered_months": covered,
+        "anomalies": anomalies,
     }
 
 
@@ -325,12 +360,16 @@ def _build_point(
         year, today, prevision_reference,
     )
 
+    anomaly_count = ref["anomalies"] + realise["anomalies"]
     return {
         "prm": prm,
         "site_name": site_meta.get("site_name"),
         "segment": site_meta.get("segment"),
+        "regroupement": site_meta.get("regroupement"),
         "building_id": link["building_id"] if link else None,
         "building_name": link["building_name"] if link else None,
+        "has_anomaly": anomaly_count > 0,
+        "anomaly_count": anomaly_count,
         "kwh_n1": round(ref["kwh"], 0),
         "enedis_kwh_n1": conso["enedis_kwh_n1"],
         "conso_attendue_kwh": round(conso["conso_attendue_kwh"], 0),
@@ -372,6 +411,7 @@ def _fetch_lines(db: Session, city_id: int | None) -> dict[str, dict[str, Any]]:
             EnergyInvoiceLine.normalized_code,
             EnergyInvoiceLine.poste,
             EnergyInvoiceLine.quantity,
+            EnergyInvoiceLine.unit_price_ht,
             EnergyInvoiceLine.amount_ht,
             EnergyInvoice.supplier,
         )
@@ -411,6 +451,7 @@ def _fetch_lines(db: Session, city_id: int | None) -> dict[str, dict[str, Any]]:
                 "code": code,
                 "poste": r.poste,
                 "quantity": r.quantity,
+                "unit_price": r.unit_price_ht,
                 "amount": r.amount_ht,
                 "period_start": r.period_start,
                 "period_end": r.period_end,
@@ -483,35 +524,38 @@ def build_engie_elec_budget_revise(
         totals["atterrissage"] - totals["prevision_reference"], 2
     )
 
-    # Agrégat par bâtiment (PRM sans lien = regroupés « non affecté »).
-    buildings: dict[Any, dict[str, Any]] = {}
-    for p in points:
-        key = p["building_id"]
-        b = buildings.setdefault(
-            key,
-            {
-                "building_id": key,
-                "building_name": p["building_name"] or ("Non affecté" if key is None else None),
-                "prm_count": 0,
-                "prevision_reference": 0.0,
-                "realise": 0.0,
-                "atterrissage": 0.0,
-            },
+    def _aggregate(key_field: str, none_label: str) -> list[dict[str, Any]]:
+        """Agrège les points par un champ (bâtiment ou regroupement)."""
+        acc: dict[Any, dict[str, Any]] = {}
+        for p in points:
+            key = p[key_field]
+            row = acc.setdefault(
+                key,
+                {
+                    "key": key if isinstance(key, int) or key is None else str(key),
+                    "label": (p.get("building_name") if key_field == "building_id" else key) or none_label,
+                    "prm_count": 0,
+                    "prevision_reference": 0.0,
+                    "realise": 0.0,
+                    "atterrissage": 0.0,
+                },
+            )
+            row["prm_count"] += 1
+            row["prevision_reference"] += p["prevision_reference"]
+            row["realise"] += p["realise"]
+            row["atterrissage"] += p["atterrissage"]
+        return sorted(
+            (
+                {**r,
+                 "prevision_reference": round(r["prevision_reference"], 2),
+                 "realise": round(r["realise"], 2),
+                 "atterrissage": round(r["atterrissage"], 2)}
+                for r in acc.values()
+            ),
+            key=lambda r: r["atterrissage"], reverse=True,
         )
-        b["prm_count"] += 1
-        b["prevision_reference"] += p["prevision_reference"]
-        b["realise"] += p["realise"]
-        b["atterrissage"] += p["atterrissage"]
-    building_rows = sorted(
-        (
-            {**b,
-             "prevision_reference": round(b["prevision_reference"], 2),
-             "realise": round(b["realise"], 2),
-             "atterrissage": round(b["atterrissage"], 2)}
-            for b in buildings.values()
-        ),
-        key=lambda b: b["atterrissage"], reverse=True,
-    )
+
+    anomaly_prm = sum(1 for p in points if p["has_anomaly"])
 
     return {
         "year": year,
@@ -520,9 +564,11 @@ def build_engie_elec_budget_revise(
         "turpe_available": turpe_available,
         "bpu_available": any(p["bpu_available"] for p in points),
         "enedis_available": any(p["enedis_available"] for p in points),
+        "anomaly_prm_count": anomaly_prm,
         "totals": totals,
         "points": points,
-        "buildings": building_rows,
+        "buildings": _aggregate("building_id", "Non affecté"),
+        "regroupements": _aggregate("regroupement", "Non regroupé"),
         "source_note": (
             "Budget prévisionnel de référence ENGIE élec (marché fourniture, tous PRM). Conso attendue = "
             "historique ENEDIS N-1 corrigé du climat sur la seule part thermosensible (régression kWh/DJU "
@@ -531,5 +577,11 @@ def build_engie_elec_budget_revise(
             "cumulées), fallback prix dérivés du N-1 par PRM. Atterrissage = réalisé Y (décomposé fixe/variable) "
             "+ reste projeté sur les mois NON couverts (conso mensuelle attendue × prix de référence). La cible "
             "DALKIA (là où elle existe) sera un calque comparatif — incrément suivant."
+            + (
+                f" ⚠ {anomaly_prm} PRM avec anomalie d'import (soutirage variable au prix aberrant, montant "
+                "corrigé sur la valeur mal placée et signalé) — à réimporter après correction du parser ENGIE."
+                if anomaly_prm
+                else ""
+            )
         ),
     }

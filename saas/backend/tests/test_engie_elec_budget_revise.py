@@ -46,6 +46,7 @@ def _seed_invoice(
     supplier: str = "ENGIE",
     segment: str | None = None,
     site_name: str | None = None,
+    regroupement: str | None = None,
     total_ht: float | None = None,
 ) -> None:
     """Crée une facture élec (invoice→site→period→lines). lines = (code, poste, qty, amount)."""
@@ -55,7 +56,9 @@ def _seed_invoice(
     )
     db.add(inv)
     db.flush()
-    site = EnergyInvoiceSite(invoice_id=inv.id, prm_id=prm, site_name=site_name, segment=segment)
+    site = EnergyInvoiceSite(
+        invoice_id=inv.id, prm_id=prm, site_name=site_name, segment=segment, regroupement=regroupement
+    )
     db.add(site)
     db.flush()
     period = EnergyInvoicePeriod(
@@ -258,6 +261,56 @@ def test_building_aggregation(db_session, monkeypatch):
     assert by_prm["PRM1"]["building_id"] == 10
     assert by_prm["PRM1"]["building_name"] == "Mairie"
     assert by_prm["PRM2"]["building_id"] is None
-    labels = {b["building_name"] for b in res["buildings"]}
+    labels = {b["label"] for b in res["buildings"]}
     assert "Mairie" in labels
     assert "Non affecté" in labels
+
+
+def test_regroupement_aggregation(db_session, monkeypatch):
+    _seed_invoice(
+        db_session, prm="PRM1", year=2025, month=6, regroupement="ECOLES",
+        lines=[("supply", "base", 10000, 500)],
+    )
+    _seed_invoice(
+        db_session, prm="PRM2", year=2025, month=6, regroupement="ECOLES",
+        lines=[("supply", "base", 20000, 900)],
+    )
+    _seed_invoice(
+        db_session, prm="PRM3", year=2025, month=6, regroupement=None,
+        lines=[("supply", "base", 5000, 300)],
+    )
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {})
+    _patch_prices(monkeypatch)
+
+    res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    by_label = {r["label"]: r for r in res["regroupements"]}
+    assert by_label["ECOLES"]["prm_count"] == 2
+    assert by_label["Non regroupé"]["prm_count"] == 1
+
+
+def test_anomaly_soutirage_variable_corrected(db_session, monkeypatch):
+    # Bug d'import : le montant (230,43) est mis dans le prix unitaire → montant stocké = 4761×230,43.
+    _seed_invoice(
+        db_session, prm="PRM1", year=2026, month=5,
+        lines=[
+            ("supply", "base", 4761, 358.46),
+            # quantity=4761, unit_price=230.43 (aberrant), amount=1097077 (=4761×230.43).
+            ("network_variable", "base", 4761, 1097077.23),
+        ],
+    )
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {})
+    _patch_prices(monkeypatch)
+    # On force le prix unitaire aberrant sur la ligne network_variable.
+    from app.models.invoice import EnergyInvoiceLine
+    line = db_session.query(EnergyInvoiceLine).filter(EnergyInvoiceLine.normalized_code == "network_variable").one()
+    line.unit_price_ht = 230.43
+    db_session.commit()
+
+    res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    p = res["points"][0]
+    assert p["has_anomaly"] is True
+    assert res["anomaly_prm_count"] == 1
+    # montant réseau variable corrigé = 230,43 (et non 1 097 077) → réalisé = 358,46 + 230,43.
+    assert p["realise"] == round(358.46 + 230.43, 2)
