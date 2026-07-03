@@ -35,7 +35,9 @@ from app.models.accounting_matrix import (
 )
 from app.models.cpe import CpeFinanceInvoice, CpeFinanceLine
 from app.services.cpe_accounting import get_current_cpe_contract_codes
+from app.services.cpe_dpgf_p1 import get_dpgf_p1_levels
 from app.services.cpe_market_tracking import build_market_tracking
+from app.services.cpe_p1_gaz_revise import compute_p1_gaz_budget
 
 # Correspondance poste CPE → scope de règle matrice (pour la projection sur operation_number).
 POSTE_SCOPE: dict[str, str] = {
@@ -174,12 +176,19 @@ def build_contract_budget_landing(
     resolved_today = today or date.today()
     progress = _year_progress_percent(year, resolved_today)
     coef_by_market = _revision_coef_by_market(db, city_id, year, resolved_today, contract_codes)
+    p1_override_budget, p1_override_detail = _p1_budget_override(db, city_id, year, lot)
 
     postes: list[dict[str, Any]] = []
     total_base = total_budget = total_realise = total_landing = 0.0
     for row in postes_src:
         cell = row["by_year"][0]
-        poste_out = _poste_landing(row["poste"], row["label"], cell["prevu"], cell["recu"], progress, coef_by_market)
+        override_budget = override_detail = None
+        if row["poste"] == "P1":
+            override_budget, override_detail = p1_override_budget, p1_override_detail
+        poste_out = _poste_landing(
+            row["poste"], row["label"], cell["prevu"], cell["recu"], progress, coef_by_market,
+            override_budget=override_budget, override_detail=override_detail,
+        )
         postes.append(poste_out)
         total_base += poste_out["budget_base"]
         total_budget += poste_out["budget_contractuel"]
@@ -208,10 +217,37 @@ def build_contract_budget_landing(
             "Budget base = prévu DPGF DALKIA (P20/P30/P10 nus) ; budget contractuel = base × coefficient de "
             "révision observé (Σrévisé/Σbase du dernier trimestre facturé, extrapolé — Option C) ; réalisé = "
             "reçu factures CPE (déjà révisé). Révision appliquée : P2 et P3/P3.4 (forfaits annuels). P1 gaz : "
-            "révision par prix unitaire du gaz (OS3/PEG), mécanisme propre non encore intégré ici → budget base. "
-            "P1-ELEC non révisé. Ne pas confondre avec l'intéressement (moteur DJU cpe_atterrissage)."
+            "budget révisé = DPGF « Rév T° & prix » officiel DALKIA en priorité, sinon reconstitution Σ (conso "
+            "attendue × prix OS3) par site en repli. P1-ELEC non révisé. Ne pas confondre avec l'intéressement "
+            "(moteur DJU cpe_atterrissage)."
         ),
     }
+
+
+def _p1_budget_override(
+    db: Session, city_id: int | None, year: int, lot: int | None
+) -> tuple[float | None, str | None]:
+    """Budget révisé P1 gaz : DPGF « Rév T° & prix » officiel prioritaire, sinon reconstitution OS3.
+
+    1. DPGF P1 ``rev_temp_prix`` (montant révisé livré par DALKIA) si un DPGF P1 révisé est importé ;
+    2. sinon reconstitution ``conso attendue (DJU) × prix OS3`` (``cpe_p1_gaz_revise``) en repli/projection.
+    Retourne ``(None, None)`` si aucune source (→ le poste P1 reste au budget base).
+    """
+    levels = get_dpgf_p1_levels(db, city_id, [year], lot=lot)
+    dpgf_revise = round(levels.get("rev_temp_prix", {}).get(year, 0.0), 2)
+    if dpgf_revise > 0:
+        return dpgf_revise, (
+            f"P1 gaz révisé DALKIA (DPGF « Rév T° & prix », source officielle) = {dpgf_revise:.0f} €. "
+            "Remplace le budget base contrat."
+        )
+    p1 = compute_p1_gaz_budget(db, city_id, year=year)
+    if p1["total"] > 0:
+        return p1["total"], (
+            f"P1 gaz reconstitué (aucun DPGF révisé importé pour {year}) : Σ (conso attendue × prix OS3) "
+            f"sur {len(p1['by_site'])} site(s) = {p1['total']:.0f} € (conso N-1 corrigée climat "
+            f"×{p1['climate_ratio']:.3f}). Repli/projection en attendant le DPGF révisé DALKIA."
+        )
+    return None, None
 
 
 def _poste_landing(
@@ -221,16 +257,28 @@ def _poste_landing(
     recu: float,
     progress: float,
     coef_by_market: dict[str, dict[str, Any]],
+    *,
+    override_budget: float | None = None,
+    override_detail: str | None = None,
 ) -> dict[str, Any]:
     budget_base = round(prevu, 2)
     realise = round(recu, 2)
-    market = REVISABLE_POSTE_MARKET.get(poste)
-    info = coef_by_market.get(market) if market else None
-    coef = info["coef"] if info else 1.0
-    budget = round(budget_base * coef, 2)  # budget contractuel révisé
+    if override_budget is not None:
+        # Poste reconstitué (P1 gaz = conso attendue × prix OS3), pas un coefficient sur base.
+        coef = round(override_budget / budget_base, 6) if budget_base > 0 else 1.0
+        budget = round(override_budget, 2)
+        detail = override_detail
+        market, info = None, None
+        method = "reconstitue_os3"
+    else:
+        market = REVISABLE_POSTE_MARKET.get(poste)
+        info = coef_by_market.get(market) if market else None
+        coef = info["coef"] if info else 1.0
+        budget = round(budget_base * coef, 2)  # budget contractuel révisé
+        detail = _revision_detail(market, info)
+        method = "contractuel_revise" if coef != 1.0 else "contractuel_fixe"
     if budget > 0:
         atterrissage = budget
-        method = "contractuel_revise" if coef != 1.0 else "contractuel_fixe"
     elif realise:
         atterrissage = _prorata_landing(realise, progress)
         method = "prorata"
@@ -242,7 +290,7 @@ def _poste_landing(
         "label": label,
         "budget_base": budget_base,
         "coefficient_revision": round(coef, 6),
-        "revision_detail": _revision_detail(market, info),
+        "revision_detail": detail,
         "budget_contractuel": budget,
         "realise": realise,
         "atterrissage": atterrissage,
