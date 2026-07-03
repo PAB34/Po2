@@ -80,8 +80,8 @@ def _line_amount(line: dict[str, Any]) -> tuple[float, bool]:
     """Montant HT d'une ligne + drapeau anomalie. Corrige le bug d'import soutirage variable."""
     if (
         line["code"] in _NETWORK_VAR
-        and _num(line.get("unit_price")) > _MAX_PLAUSIBLE_PU_EUR_KWH
-        and _num(line.get("quantity")) > 0
+        and abs(_num(line.get("unit_price"))) > _MAX_PLAUSIBLE_PU_EUR_KWH
+        and _num(line.get("quantity")) != 0
     ):
         # montant réel ≈ prix stocké (le montant a été mal placé dans la colonne prix).
         return _num(line.get("unit_price")), True
@@ -316,7 +316,8 @@ def _landing(
     pas de surcorrection (la base non thermosensible n'est pas mise à l'échelle du climat).
     """
     covered = realise["covered_months"]
-    if realise["kwh_realise"] <= 0 or not covered:
+    if not covered:
+        # Aucune facture Y → l'atterrissage se réduit au repère de prévision.
         return round(prevision_reference, 2), "prevision"
     if today.year > year:
         return round(realise["realise_total"], 2), "realise_complet"
