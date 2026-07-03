@@ -20,7 +20,10 @@ from app.models.invoice import (
 from app.services import energie
 from app.services import engie_elec_budget_revise as mod
 from app.services import turpe
-from app.services.engie_elec_budget_revise import build_engie_elec_budget_revise
+from app.services.engie_elec_budget_revise import (
+    build_edf_elec_budget_revise,
+    build_engie_elec_budget_revise,
+)
 
 
 @pytest.fixture()
@@ -198,13 +201,12 @@ def test_supplier_filter_and_totals_ignored(db_session, monkeypatch):
         db_session, prm="PRM_EDF", year=2025, month=6, supplier="EDF",
         lines=[("supply", "base", 10000, 500)],
     )
-    # Facture ENGIE avec une ligne « total » qui ne doit pas être comptée.
+    # Facture ENGIE avec un vrai total (supply_total_ht) qui ne doit pas gonfler le variable.
     _seed_invoice(
         db_session, prm="PRM1", year=2025, month=6,
         lines=[
             ("supply", "base", 10000, 500),
             ("supply_total_ht", None, None, 500),  # total → ignoré
-            ("network_fixed_total", None, None, 999),  # total → ignoré
         ],
     )
     monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
@@ -212,10 +214,11 @@ def test_supplier_filter_and_totals_ignored(db_session, monkeypatch):
     _patch_prices(monkeypatch)
 
     res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
-    assert res["prm_count"] == 1  # seul PRM1 (ENGIE)
+    assert res["prm_count"] == 1  # seul PRM1 (ENGIE), l'EDF est filtré
     p = res["points"][0]
     assert p["prm"] == "PRM1"
-    assert p["fixe_prevision"] == 0.0  # network_fixed_total ignoré → aucun fixe
+    # supply_total_ht ignoré → fourniture = 500 (pu 0,05), pas 1000 → variable prévision = 10000×0,05.
+    assert p["variable_prevision"] == 500.0
 
 
 def test_turpe_ratio_applies_to_network(db_session, monkeypatch):
@@ -314,3 +317,46 @@ def test_anomaly_soutirage_variable_corrected(db_session, monkeypatch):
     assert res["anomaly_prm_count"] == 1
     # montant réseau variable corrigé = 230,43 (et non 1 097 077) → réalisé = 358,46 + 230,43.
     assert p["realise"] == round(358.46 + 230.43, 2)
+
+
+def test_edf_photoperiod_consumption(db_session, monkeypatch):
+    # EDF éclairage public : N-1 (2025) reconduit, réparti par photopériode (plus l'hiver).
+    _seed_invoice(
+        db_session, prm="EP1", year=2025, month=6, supplier="EDF",
+        lines=[("supply", "base", 120000, 12000), ("network_fixed_total", None, None, 600)],
+    )
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {})  # pas d'ENEDIS
+    _patch_prices(monkeypatch)
+
+    res = build_edf_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    assert res["prm_count"] == 1
+    p = res["points"][0]
+    assert p["conso_method"] == "photoperiod_n1"
+    assert p["conso_attendue_kwh"] == 120000  # N-1 reconduit
+    # network_fixed_total compté comme fixe réseau (EDF n'a pas les composantes).
+    assert p["fixe_prevision"] == 600.0
+    # Vérifie la répartition mensuelle : janvier (nuit longue) > juillet (nuit courte).
+    from app.services.engie_elec_budget_revise import _photoperiod_monthly
+    w = _photoperiod_monthly()
+    assert w[1] > w[7]
+    assert abs(sum(w.values()) - 1.0) < 1e-9
+
+
+def test_network_fixed_total_ignored_when_components_present(db_session, monkeypatch):
+    # ENGIE : composantes + total → le total est ignoré (pas de double comptage).
+    _seed_invoice(
+        db_session, prm="PRM1", year=2025, month=6,
+        lines=[
+            ("supply", "base", 10000, 500),
+            ("network_management", None, None, 700),
+            ("network_fixed_total", None, None, 700),  # double les composantes → ignoré
+        ],
+    )
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: {})
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {})
+    _patch_prices(monkeypatch)
+
+    res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    p = res["points"][0]
+    assert p["fixe_prevision"] == 700.0  # 700, pas 1400

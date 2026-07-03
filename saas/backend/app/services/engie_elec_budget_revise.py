@@ -58,10 +58,21 @@ _OTHER_VAR = {
 }
 _OTHER_FIXE = {"cta", "subscription"}
 _PENALTY = {"network_overrun", "network_overrun_quadratic"}  # réel mais hors prix unitaire
+# ``network_fixed_total`` = total de la part fixe réseau. Chez ENGIE il DOUBLE les composantes
+# (gestion/comptage/soutirage fixe) → ignoré si elles existent ; chez EDF c'est la SEULE ligne de
+# fixe réseau → conservée. Arbitrage fait par PRM dans ``_strip_redundant_fixed_total``.
+_NETWORK_FIXE_TOTAL = "network_fixed_total"
 _IGNORE_TOTALS = {
-    "network_fixed_total", "network_total_ht", "supply_total", "supply_total_ht",
+    "network_total_ht", "supply_total", "supply_total_ht",
     "delivery_variable_total", "delivery_variable_full", "tax_total", "delivery_fixed_part",
     "energy_kwh",
+}
+
+# Poids mensuels ≈ heures de nuit (éclairage public, profil ~Sète lat. 43,4°N) : sert à répartir
+# la conso annuelle EDF sur l'année (plus l'hiver). Normalisé à la volée (somme = 1).
+_PHOTOPERIOD_NIGHT_WEIGHTS = {
+    1: 446.4, 2: 372.4, 3: 372.0, 4: 318.0, 5: 291.4, 6: 264.0,
+    7: 282.1, 8: 316.2, 9: 348.0, 10: 403.0, 11: 426.0, 12: 455.7,
 }
 
 
@@ -74,6 +85,22 @@ _MAX_PLAUSIBLE_PU_EUR_KWH = 1.0
 
 def _num(value: float | int | None) -> float:
     return float(value) if value is not None else 0.0
+
+
+def _photoperiod_monthly() -> dict[int, float]:
+    """Poids photopériode normalisés (somme = 1) par mois calendaire."""
+    total = sum(_PHOTOPERIOD_NIGHT_WEIGHTS.values())
+    return {m: w / total for m, w in _PHOTOPERIOD_NIGHT_WEIGHTS.items()}
+
+
+def _strip_redundant_fixed_total(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Retire ``network_fixed_total`` s'il double les composantes fixes réseau (cas ENGIE).
+
+    S'il n'y a pas de composantes (cas EDF), on le garde : c'est la seule part fixe réseau.
+    """
+    if any(l["code"] in _NETWORK_FIXE for l in lines):
+        return [l for l in lines if l["code"] != _NETWORK_FIXE_TOTAL]
+    return lines
 
 
 def _line_amount(line: dict[str, Any]) -> tuple[float, bool]:
@@ -127,19 +154,22 @@ def _expected_consumption(
     year: int,
     dju_normal: dict[int, float],
     kwh_invoice_n1: float,
+    conso_model: str,
+    photoperiod: dict[int, float],
 ) -> dict[str, Any]:
-    """Conso attendue par PRM = N-1 ENEDIS corrigé du climat (part thermosensible seule).
+    """Conso attendue par PRM, selon le modèle du marché.
 
-    Régression ``kWh_mois = base + pente × DJU_mois`` sur l'historique ENEDIS (mois
-    complets, année Y exclue). ``conso_mensuelle_attendue[m] = base + pente × DJU_normal[m]``.
-    Fallbacks : régression non exploitable → somme ENEDIS N-1 tenue à plat ; pas
-    d'ENEDIS → kWh facturés N-1 (marqué « sans ENEDIS »).
+    - ``thermo_dju`` (ENGIE) : N-1 ENEDIS corrigé du climat sur la part thermosensible seule
+      (régression ``kWh = base + pente × DJU``, projection ``base + pente × DJU_normal[m]``).
+    - ``photoperiod`` (EDF éclairage public) : N-1 reconduit à l'annuel, réparti sur les mois
+      selon le profil d'heures de nuit (pas de thermosensibilité).
+    Fallbacks : pas d'ENEDIS → kWh facturés N-1.
     """
     conso_by_month = energie._consumption_by_month().get(prm_id, {})
-    dju_by_ym = energie._dju_monthly_index()
+    enedis_n1 = sum(v for ym, v in conso_by_month.items() if ym[:4] == str(year - 1))
 
-    def _flat(annual: float, method: str, enedis: bool) -> dict[str, Any]:
-        monthly = {m: annual / 12.0 for m in range(1, 13)}
+    def _distribute(annual: float, weights: dict[int, float], method: str, enedis: bool) -> dict[str, Any]:
+        monthly = {m: annual * weights.get(m, 0.0) for m in range(1, 13)}
         return {
             "conso_attendue_kwh": annual,
             "monthly_expected": monthly,
@@ -149,7 +179,19 @@ def _expected_consumption(
             "enedis_kwh_n1": round(enedis_n1, 1) if enedis else 0.0,
         }
 
-    enedis_n1 = sum(v for ym, v in conso_by_month.items() if ym[:4] == str(year - 1))
+    flat_weights = {m: 1.0 / 12.0 for m in range(1, 13)}
+
+    if conso_model == "photoperiod":
+        # Éclairage public : annuel reconduit, réparti selon les heures de nuit.
+        if enedis_n1 > 0:
+            return _distribute(enedis_n1, photoperiod, "photoperiod", enedis=True)
+        return _distribute(kwh_invoice_n1, photoperiod, "photoperiod_n1", enedis=False)
+
+    # --- modèle thermosensible DJU (ENGIE) ---
+    dju_by_ym = energie._dju_monthly_index()
+
+    def _flat(annual: float, method: str, enedis: bool) -> dict[str, Any]:
+        return _distribute(annual, flat_weights, method, enedis)
 
     if not conso_by_month:
         return _flat(kwh_invoice_n1, "no_enedis", enedis=False)
@@ -256,7 +298,7 @@ def _reference_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
             reseau_var += amount
         elif l["code"] in _OTHER_VAR:
             autres_var += amount
-        elif l["code"] in _NETWORK_FIXE:
+        elif l["code"] in _NETWORK_FIXE or l["code"] == _NETWORK_FIXE_TOTAL:
             fixe_reseau += amount
         elif l["code"] in _OTHER_FIXE:
             fixe_autre += amount
@@ -285,7 +327,7 @@ def _realise_from_lines(lines: list[dict[str, Any]]) -> dict[str, Any]:
         anomalies += 1 if flagged else 0
         if l["code"] in (_SUPPLY | _NETWORK_VAR | _OTHER_VAR | _PENALTY):
             variable += amount
-        elif l["code"] in (_NETWORK_FIXE | _OTHER_FIXE):
+        elif l["code"] in (_NETWORK_FIXE | _OTHER_FIXE) or l["code"] == _NETWORK_FIXE_TOTAL:
             fixe += amount
     kwh = sum(_num(l["quantity"]) for l in lines if l["code"] in _SUPPLY)
     covered = {m for l in lines if (m := _line_month(l["period_start"], l["period_end"])) is not None}
@@ -344,11 +386,15 @@ def _build_point(
     turpe_ratio: float,
     bpu_references: list[Any],
     link: dict[str, Any] | None,
+    conso_model: str,
+    photoperiod: dict[int, float],
 ) -> dict[str, Any]:
+    lines_n1 = _strip_redundant_fixed_total(lines_n1)
+    lines_y = _strip_redundant_fixed_total(lines_y)
     ref = _reference_from_lines(lines_n1)
     realise = _realise_from_lines(lines_y)
 
-    conso = _expected_consumption(prm, year, dju_normal, ref["kwh"])
+    conso = _expected_consumption(prm, year, dju_normal, ref["kwh"], conso_model, photoperiod)
     bpu_ratio, bpu_available = _bpu_fourniture_ratio(bpu_references, site_meta, ref["postes_kwh"], year)
 
     pu_variable = ref["pu_fourniture"] * bpu_ratio + ref["pu_reseau_var"] * turpe_ratio + ref["pu_autres_var"]
@@ -398,8 +444,8 @@ def _build_point(
 
 # --------------------------------------------------------------------------- entrée
 
-def _fetch_lines(db: Session, city_id: int | None) -> dict[str, dict[str, Any]]:
-    """Lignes factures élec ENGIE de la ville, indexées par PRM (+ métadonnées site)."""
+def _fetch_lines(db: Session, city_id: int | None, supplier: str) -> dict[str, dict[str, Any]]:
+    """Lignes factures élec du fournisseur, indexées par PRM (+ métadonnées site)."""
     rows = db.execute(
         select(
             EnergyInvoiceSite.prm_id,
@@ -429,7 +475,7 @@ def _fetch_lines(db: Session, city_id: int | None) -> dict[str, dict[str, Any]]:
 
     by_prm: dict[str, dict[str, Any]] = {}
     for r in rows:
-        if normalize_bpu_supplier(r.supplier) != "ENGIE":
+        if normalize_bpu_supplier(r.supplier) != supplier:
             continue
         code = (r.normalized_code or "").strip()
         if not code or code in _IGNORE_TOTALS:
@@ -478,21 +524,28 @@ def _building_links(db: Session, city_id: int | None) -> dict[str, dict[str, Any
     }
 
 
-def build_engie_elec_budget_revise(
+def build_elec_budget_revise(
     db: Session,
     city_id: int | None = None,
     *,
     year: int,
+    supplier: str,
+    conso_model: str,
     today: date | None = None,
 ) -> dict[str, Any]:
-    """Budget révisé ENGIE élec par PRM (fixe/variable), réalisé et atterrissage pour ``year``."""
+    """Budget révisé élec par PRM (fixe/variable), réalisé et atterrissage — générique ENGIE/EDF.
+
+    ``supplier`` filtre les factures (``ENGIE``/``EDF``) et les prix BPU. ``conso_model`` choisit la
+    source de conso attendue : ``thermo_dju`` (ENGIE) ou ``photoperiod`` (EDF éclairage public).
+    """
     resolved_today = today or date.today()
 
-    by_prm = _fetch_lines(db, city_id)
+    by_prm = _fetch_lines(db, city_id, supplier)
     links = _building_links(db, city_id)
-    bpu_references = load_historical_bpu_prices(db, "ENGIE")
+    bpu_references = load_historical_bpu_prices(db, supplier)
     turpe_ratio, turpe_available = _turpe_ratio(year)
     dju_normal = _dju_normal_by_month(exclude_year=year)
+    photoperiod = _photoperiod_monthly()
 
     points: list[dict[str, Any]] = []
     for prm in sorted(by_prm):
@@ -505,6 +558,7 @@ def build_engie_elec_budget_revise(
             _build_point(
                 prm, entry["meta"], lines_n1, lines_y, year, resolved_today,
                 dju_normal, turpe_ratio, bpu_references, links.get(prm),
+                conso_model, photoperiod,
             )
         )
     points.sort(key=lambda p: p["atterrissage"], reverse=True)
@@ -571,18 +625,41 @@ def build_engie_elec_budget_revise(
         "buildings": _aggregate("building_id", "Non affecté"),
         "regroupements": _aggregate("regroupement", "Non regroupé"),
         "source_note": (
-            "Budget prévisionnel de référence ENGIE élec (marché fourniture, tous PRM). Conso attendue = "
-            "historique ENEDIS N-1 corrigé du climat sur la seule part thermosensible (régression kWh/DJU "
-            "chauffage par PRM ; base non thermosensible tenue) — pas de surcorrection DJU. Prix de référence = "
-            "fourniture révisée par ratio BPU (Y/N-1) + réseau révisé par ratio TURPE (évolutions moyennes "
-            "cumulées), fallback prix dérivés du N-1 par PRM. Atterrissage = réalisé Y (décomposé fixe/variable) "
-            "+ reste projeté sur les mois NON couverts (conso mensuelle attendue × prix de référence). La cible "
-            "DALKIA (là où elle existe) sera un calque comparatif — incrément suivant."
+            f"Budget prévisionnel de référence {supplier} élec (marché fourniture, tous PRM). Conso attendue = "
+            + (
+                "historique ENEDIS N-1 corrigé du climat sur la seule part thermosensible (régression kWh/DJU "
+                "chauffage par PRM ; base non thermosensible tenue) — pas de surcorrection DJU. "
+                if conso_model == "thermo_dju"
+                else "conso N-1 reconduite (éclairage public non thermosensible), répartie par mois selon le "
+                "profil d'heures de nuit (photopériode ~Sète). "
+            )
+            + "Prix de référence = fourniture révisée par ratio BPU (Y/N-1) + réseau révisé par ratio TURPE "
+            "(évolutions moyennes cumulées), fallback prix dérivés du N-1 par PRM. Atterrissage = réalisé Y "
+            "(décomposé fixe/variable) + reste projeté sur les mois NON couverts (conso mensuelle attendue × "
+            "prix de référence)."
             + (
                 f" ⚠ {anomaly_prm} PRM avec anomalie d'import (soutirage variable au prix aberrant, montant "
-                "corrigé sur la valeur mal placée et signalé) — à réimporter après correction du parser ENGIE."
+                "corrigé sur la valeur mal placée et signalé) — à réimporter après correction du parser."
                 if anomaly_prm
                 else ""
             )
         ),
     }
+
+
+def build_engie_elec_budget_revise(
+    db: Session, city_id: int | None = None, *, year: int, today: date | None = None
+) -> dict[str, Any]:
+    """Budget révisé ENGIE élec (conso attendue = N-1 ENEDIS + DJU thermosensible)."""
+    return build_elec_budget_revise(
+        db, city_id, year=year, supplier="ENGIE", conso_model="thermo_dju", today=today
+    )
+
+
+def build_edf_elec_budget_revise(
+    db: Session, city_id: int | None = None, *, year: int, today: date | None = None
+) -> dict[str, Any]:
+    """Budget révisé EDF éclairage public (conso attendue = N-1 reconduit + profil photopériode)."""
+    return build_elec_budget_revise(
+        db, city_id, year=year, supplier="EDF", conso_model="photoperiod", today=today
+    )
