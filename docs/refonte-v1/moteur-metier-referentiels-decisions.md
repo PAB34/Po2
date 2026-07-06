@@ -50,10 +50,21 @@ Point d'ancrage front : `saas/frontend/src/features/marches/MarketsBudgetPageV1.
     endpoints existants (`/api/cpe/dalkia-ref/*`, `/api/bpu/*`) — hooks `use…V1` dans `features/marches/`.
   - Tests : `npx tsc -b` (CI).
 
-- **T2 — Import dans le shell refonte (Q2)**
-  - Composants d'import DS V1 (upload/preview/confirm) réutilisant les endpoints d'import existants
-    (DPGF : import/preview/confirm ; BPU : `import` / `import-xlsx`).
-  - Tests : parcours import à blanc sur staging + tsc.
+- **T2 — Import dans le shell refonte (Q2) — EXIGENCE : état initial ET révisions**
+  L'import doit couvrir explicitement, pour chaque référentiel, **la version initiale ET ses révisions**
+  (question fondamentale user 2026-07-06). Mécanismes de versionnement existants à exposer :
+  - **BPU (fourniture)** : un `BpuDocument` par (fournisseur × année × lot × **avenant**) — champs
+    `valid_year`, `valid_from/to`, `amendment_number/label`, `market_subsequent`. Import via
+    `POST /bpu/import` (PDF) ou `/bpu/import-xlsx`. → initial = avenant nul ; révisions = avenants /
+    nouvelles années. ⚠️ **extraction OCR/parse** (`extraction_status`, `extraction_confidence`) : cf. gate §4bis.
+  - **DPGF DALKIA** : deux mécanismes distincts, tous deux à couvrir :
+    1. **Référentiel maître** `cpe_dalkia_ref_*` (base P1/P2/P3) versionné par **imports maîtres** +
+       **journal des actes** (`acte_type`/`acte_label`/`date_effet`, `is_active`) + moteur de diff.
+    2. **DPGF P1 gaz révisé séparé** `cpe_dpgf_p1_*`, **3 niveaux** : `contrat` → `rev_temp` (T°) →
+       `rev_temp_prix` (T° + prix OS3) = révisé officiel, livré par DALKIA à chaque OS
+       (cf. `dpgf-base-vs-revise-analyse.md`). Ligne d'import dédiée.
+    (P2/P3 : révision = indexation calculée ICHT-IME/FSD2/BT40, pas un import.)
+  - Tests : parcours import à blanc sur staging + tsc + guard backend versionnement.
 
 - **T3 — Renommage API `/api/marches/...` + alias (Q5)**
   - Nouveaux préfixes `/api/marches/cpe-dalkia/referentiel` et `/api/marches/herault-energie/bpu`
@@ -61,6 +72,24 @@ Point d'ancrage front : `saas/frontend/src/features/marches/MarketsBudgetPageV1.
   - Tests backend ciblés sur le routage/alias (pytest), non-régression des anciens préfixes.
 
 > On peut s'arrêter et livrer après T1 (valeur immédiate : consultation centralisée) avant d'engager T2/T3.
+
+## 4bis. Gate FIDÉLITÉ des données (remarque fondamentale user 2026-07-06)
+
+> « Vérifier que les données affichées correspondent bien au BPU de base fourni. »
+
+L'onglet Référentiel n'invente rien : il affiche ce qui est en base. **Mais le contenu BPU provient d'une
+extraction PDF/OCR** (champ `extraction_status` ∈ {ok, ocr_ok, ocr_review, manual, pending, error},
+`extraction_confidence`) → **la fidélité au document source n'est pas garantie automatiquement**. C'est
+précisément le risque signalé. Il existe déjà un antécédent : `docs/energie/BPU-Audit-PDF-vs-Excel-2026-06-08.md`.
+
+**Gate (bloquant avant de considérer le référentiel « fiable ») :**
+1. Sur staging (copie prod), lister par tier les documents et leur `extraction_status` ; prioriser
+   `ocr_review` / `manual` / `error`.
+2. Pour un échantillon, **comparer poste par poste** les valeurs affichées aux **documents sources**
+   (BPU PDF/Excel fournis, DPGF maître). Source de vérité à confirmer par l'utilisateur (emplacement des
+   fichiers de référence).
+3. Afficher dans l'UI Référentiel un **indicateur de fiabilité** (statut d'extraction + date) pour que
+   l'utilisateur voie d'un coup d'œil ce qui est vérifié vs à revoir. (déjà : colonne « Extraction » côté BPU élec).
 
 ## 5. Garde-fous (workflow)
 
