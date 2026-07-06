@@ -27,6 +27,23 @@ Décisions qui **remplacent Q3 et la structure** :
 - **Q1/Q5 caducs à court terme** : plus de regroupement sous « Marchés & contrats » (c'est un hub dédié) ;
   renommage API `/api/marches/...` **différé** (les pages legacy tapent les anciens préfixes, ça marche).
 
+## 0ter. ✅ CLÔTURE 2026-07-06 (fin de tranche)
+
+- **BPU Hérault Énergies → curé et EN PROD** (PR #43 mergée) : nouveau composant `BpuReferentielV1`
+  (2 sous-onglets **Consultation** / **Évolution**, pédagogie en infobulle, TURPE + camembert retirés,
+  admin repliée derrière « Gérer »). Page legacy `/energie/bpu` intacte.
+- **DPGF DALKIA (Q7 « même traitement ? ») → CLOSE, SANS SUITE.** Audit du `CpeDalkiaImportPage`
+  (1627 lignes) : contrairement au BPU, la page **n'a aucun bruit à retirer** (pas de pédagogie/TURPE/
+  camembert, thème clair) — elle est **déjà refondue** en « état en vigueur + journal des actes »
+  (workflow métier cohérent : diff de versions, aperçu classifié 7 catégories, imports). Le seul gain
+  d'une cure serait **cosmétique** (0 composant DS, 179 styles inline), pour un **coût élevé et un risque
+  réel** : opérations d'écriture critiques (import, ajout d'acte, révision de prix), alimente le contrôle
+  de factures (réf. acompte P1), routée aussi sur `/cpe/dalkia-import`. **Verdict : non rentable, pas de
+  réécriture.** Si l'incohérence visuelle gêne un jour → uniquement une passe **cosmétique légère et
+  ciblée** (typo/cartes/boutons), sans toucher la logique métier ni les imports.
+
+> **Chantier « moteur métier / référentiels marchés » = terminé** (hub en prod + décision DPGF actée).
+
 > Ce qui suit (§1 à §4) reflète le plan INITIAL, conservé pour trace mais **supplanté par ce §0bis**.
 
 ## 1. Décisions tranchées (2026-07-06) — INITIAL, voir §0bis pour l'état retenu
