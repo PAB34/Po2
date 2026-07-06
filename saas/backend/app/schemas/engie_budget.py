@@ -62,6 +62,7 @@ class EngieBudgetReviseOut(BaseModel):
     prm_count: int
     turpe_available: bool
     bpu_available: bool
+    bpu_applied_prm_count: int = 0
     enedis_available: bool
     anomaly_prm_count: int
     totals: EngieBudgetReviseTotalsOut

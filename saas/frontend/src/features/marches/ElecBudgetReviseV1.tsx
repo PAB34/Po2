@@ -47,9 +47,11 @@ const CONFIG: Record<ElecSupplier, SupplierConfig> = {
         <strong>atterrissage</strong> (réalisé à date + reste de l'année projeté). Chaque facture est
         décomposée en part <strong>fixe</strong> (gestion, comptage, soutirage fixe, CTA, abonnement) et
         part <strong>variable</strong> (conso × prix). La conso attendue vient d'ENEDIS, corrigée du climat
-        sur la seule part thermosensible (chauffage/clim), et les prix de référence sont révisés par le BPU
-        (fourniture) et le TURPE (acheminement). La <strong>« prévision de référence »</strong> (conso N-1
-        recalée) est un repère, pas un budget. Lecture seule.
+        sur la seule part thermosensible (chauffage/clim). Les prix de référence sont tenus au niveau du
+        <strong> N-1 réel</strong>, l'acheminement ajusté par le TURPE ; la fourniture n'est révisée par le
+        BPU que lorsque des prix BPU multi-millésimes existent pour le segment (voir l'indicateur ci-dessous).
+        La <strong>« prévision de référence »</strong> (conso N-1 recalée) est un repère, pas un budget.
+        Lecture seule.
       </>
     ),
   },
@@ -64,8 +66,10 @@ const CONFIG: Record<ElecSupplier, SupplierConfig> = {
         décomposée en part <strong>fixe</strong> (acheminement fixe, CTA, abonnement) et part{" "}
         <strong>variable</strong> (conso × prix). L'éclairage public n'étant <strong>pas thermosensible</strong>,
         la conso attendue reconduit le N-1 et se répartit sur l'année selon la <strong>photopériode</strong>
-        {" "}(heures de nuit, plus l'hiver). Prix de référence révisés par le BPU (fourniture) et le TURPE
-        (acheminement). La <strong>« prévision de référence »</strong> est un repère, pas un budget. Lecture seule.
+        {" "}(heures de nuit, plus l'hiver). Les prix de référence sont tenus au niveau du <strong>N-1 réel</strong>,
+        l'acheminement ajusté par le TURPE ; la fourniture n'est révisée par le BPU que lorsque des prix BPU
+        multi-millésimes existent pour le segment (voir l'indicateur ci-dessous). La
+        {" "}<strong>« prévision de référence »</strong> est un repère, pas un budget. Lecture seule.
       </>
     ),
   },
@@ -122,11 +126,24 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
           </label>
         </div>
         {data ? (
-          <p className="po2-muted-line">
-            {data.prm_count} PRM · ENEDIS {data.enedis_available ? "appliqué" : "indisponible (conso tenue)"} ·
-            {" "}BPU {data.bpu_available ? "appliqué" : "tenu (N-1)"} · TURPE{" "}
-            {data.turpe_available ? "appliqué" : "tenu (N-1)"}
-          </p>
+          <>
+            <p className="po2-muted-line">
+              {data.prm_count} PRM · ENEDIS {data.enedis_available ? "appliqué" : "indisponible (conso tenue)"} ·
+              {" "}BPU{" "}
+              {data.bpu_available
+                ? `appliqué (${data.bpu_applied_prm_count}/${data.prm_count} PRM)`
+                : "non appliqué (fourniture tenue N-1)"}
+              {" "}· TURPE {data.turpe_available ? "appliqué" : "tenu (N-1)"}
+            </p>
+            {!data.bpu_available ? (
+              <p className="po2-muted-line" style={{ color: "#b45309" }}>
+                ⚠ Révision BPU (fourniture) non applicable ici : un seul millésime de prix BPU
+                (le ratio année/N-1 est impossible) et/ou segment tarifaire non couvert. Le prix de
+                référence de la fourniture est <strong>tenu au niveau du N-1 réel</strong> (le TURPE
+                reste appliqué à l'acheminement). Chiffres justes, révision fourniture non chiffrée.
+              </p>
+            ) : null}
+          </>
         ) : null}
       </Card>
 
