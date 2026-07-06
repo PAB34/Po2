@@ -94,7 +94,37 @@ n'a pas lieu), calcul déjà disponible (`bpu_available`), zéro risque, zéro d
 - **Montants d'atterrissage inchangés** — seule l'honnêteté de l'affichage est corrigée.
 - Vérifs : `test_engie_elec_budget_revise.py` **11 passed** ; `tsc -b` **OK** ; deploy-staging **success**.
 
-**Reste (incréments séparés, non engagés)** :
-- **B — EDF** : mapper la fourniture EDF `poste None → BASE` + harmoniser le vocabulaire de segment
-  (`historical_segment_code_for_site` ↔ codes `import_bpu_xlsx` : C5_EP/ECLAIRAGE_PUBLIC, BATIMENT/C5_BAT_*).
-- **C — ENGIE** : charger ≥ 2 millésimes de BPU ENGIE + segments C2/C4 (dépend de fichiers sources).
+## 8. ⚠️ PIVOT 2026-07-06 (précision métier utilisateur) — reformule B et C
+
+**Fait métier** : le BPU fourniture vient du **marché groupé Hérault Énergie**, indexé par **typologie
+d'abonnement** (classe tarifaire), PAS par fournisseur. Le fournisseur (ENGIE / EDF / TotalEnergies) est
+seulement l'attributaire du lot/marché de l'année. Nouveau marché (2026) = ENGIE + EDF + TE ; ancien marché
+= EDF + TE seuls. **On dispose des BPU Hérault Énergie par typologie, y compris les années antérieures.**
+
+**Constat données (grilles FOURNITURE en base, par typologie × année)** :
+- Ancien marché (EDF/TE) : `C1..C4`, `C5_BAT_*`, `C5_EP`, `C5_BORNES` → couverts **jusqu'à 2025**.
+- Nouveau marché (2026) : `BATIMENT` (ENGIE), `ECLAIRAGE_PUBLIC` (EDF) → **2026 seulement**.
+- ⇒ 2025 ET 2026 existent, MAIS **la nomenclature des typologies a changé** entre les deux marchés.
+
+**Conséquences (supplantent le « Reste » du §7)** :
+- **Le vrai défaut = le scoping par fournisseur.** `load_historical_bpu_prices(db, supplier)` +
+  `resolve_historical_bpu_price` filtrent sur le fournisseur facturant → un PRM ENGIE 2026 ne voit que la
+  grille ENGIE (BATIMENT 2026) et jamais la grille N-1 de l'ancien marché. Il faut résoudre par
+  **typologie dans l'historique du marché Hérault Énergie**, fournisseur-agnostique.
+- **C ne nécessite AUCUN fichier** : les grilles 2025 (ancien) + 2026 (nouveau) sont déjà chargées. C
+  devient un **chantier de code**, fusionné avec B :
+  1. dé-scoper le fournisseur (résoudre par typologie + année, tous fournisseurs) ;
+  2. **table de correspondance des typologies ancien↔nouveau marché** (ex. `BATIMENT` 2026 ↔ `C2/C4/C5_BAT_*`
+     2025 selon la typologie fine du PRM ; `ECLAIRAGE_PUBLIC` ↔ `C5_EP`) — c'est l'ex-« harmonisation
+     vocab » (B4), désormais centrale ;
+  3. EDF fourniture `poste None → BASE` (B3, mono-poste éclairage public confirmé Q3).
+- **Ce qu'il me faut de l'utilisateur = une CONNAISSANCE, pas un fichier** : la correspondance des
+  typologies entre l'ancien marché (`C1..C4`, `C5_BAT_*`, `C5_EP`) et le nouveau (`BATIMENT`,
+  `ECLAIRAGE_PUBLIC`). Sans ce mapping validé, le ratio année/N-1 ne peut pas apparier les bonnes grilles.
+
+**Nouveau découpage** :
+- **B+C fusionnés** = « résoudre le BPU par typologie Hérault Énergie sur l'historique du marché »
+  (dé-scoping fournisseur + mapping typologies ancien↔nouveau + EDF poste BASE). Nécessite le mapping
+  typologies validé (Q5 ci-dessous). Un `.md` de décisions dédié avant de coder.
+- **Q5 (nouveau)** : valider la table de correspondance des typologies ancien↔nouveau marché.
+- Option A (déjà livrée) reste l'état honnête tant que B+C n'est pas fait.
