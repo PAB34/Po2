@@ -5,9 +5,10 @@ import { CpeCibleConsoV1 } from "./CpeCibleConsoV1";
 import { ElecBudgetReviseV1 } from "./ElecBudgetReviseV1";
 import { GasBudgetReviseV1 } from "./GasBudgetReviseV1";
 import { IndicesVariablesV1 } from "./IndicesVariablesV1";
+import { MarketReferentielV1 } from "./MarketReferentielV1";
 
 type MarketTier = "dalkia" | "gaz" | "engie" | "edf";
-type SubView = "atterrissage" | "cible" | "indices";
+type SubView = "referentiel" | "atterrissage" | "cible" | "indices";
 
 type TierConfig = {
   value: MarketTier;
@@ -24,6 +25,7 @@ const TIERS: TierConfig[] = [
     eyebrow: "Performance énergétique",
     families: ["dalkia"],
     subs: [
+      { value: "referentiel", label: "Référentiel (DPGF)" },
       { value: "atterrissage", label: "Atterrissage (budget / révisé / réalisé)" },
       { value: "cible", label: "Cible conso & intéressement" },
       { value: "indices", label: "Indices & variables" },
@@ -35,6 +37,7 @@ const TIERS: TierConfig[] = [
     eyebrow: "Hérault Énergie (Ville)",
     families: ["gaz"],
     subs: [
+      { value: "referentiel", label: "Référentiel (BPU gaz)" },
       { value: "atterrissage", label: "Atterrissage (fixe / variable)" },
       { value: "indices", label: "Indices & variables" },
     ],
@@ -45,6 +48,7 @@ const TIERS: TierConfig[] = [
     eyebrow: "Électricité",
     families: ["elec"],
     subs: [
+      { value: "referentiel", label: "Référentiel (BPU élec)" },
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },
     ],
@@ -55,6 +59,7 @@ const TIERS: TierConfig[] = [
     eyebrow: "Éclairage public",
     families: ["elec"],
     subs: [
+      { value: "referentiel", label: "Référentiel (BPU élec)" },
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },
     ],
@@ -125,7 +130,9 @@ export function MarketsBudgetPageV1() {
         <SegmentControl value={activeSub} options={tierConfig.subs} onChange={setSub} />
       </div>
 
-      {activeSub === "indices" ? (
+      {activeSub === "referentiel" ? (
+        <MarketReferentielV1 tier={tier} />
+      ) : activeSub === "indices" ? (
         <IndicesVariablesV1 embedded families={tierConfig.families} />
       ) : tier === "dalkia" && activeSub === "cible" ? (
         <CpeCibleConsoV1 />

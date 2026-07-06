@@ -5588,3 +5588,95 @@ export async function fetchMarketIndicesVariables(token: string, yearFrom: numbe
   const response = await fetch(`${apiBaseUrl}/marches/indices-variables?${params.toString()}`, { headers: buildHeaders(token) });
   return parseResponse<MarketIndicesVariablesV1>(response);
 }
+
+// --------------------------------------------------------------------------- //
+// Moteur métier — Référentiels des marchés (consultation, lecture seule)
+// Réutilise les endpoints existants : DPGF (cpe-dalkia-ref), BPU élec (bpu),
+// BPU gaz lot 7 (gas/invoices). Aucun nouveau backend.
+// --------------------------------------------------------------------------- //
+
+/** BPU électricité (ENGIE / EDF) — GET /api/bpu/documents (résumé liste). */
+export type MarketBpuDocumentV1 = {
+  id: number;
+  supplier: string;
+  valid_year: number;
+  valid_from: string | null;
+  valid_to: string | null;
+  market_subsequent: number | null;
+  lot_number: number;
+  amendment_number: number | null;
+  amendment_label: string | null;
+  pdf_filename: string;
+  extraction_status: string;
+  extraction_method: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function fetchMarketBpuDocuments(token: string, supplier: string): Promise<MarketBpuDocumentV1[]> {
+  const params = new URLSearchParams({ supplier });
+  const response = await fetch(`${apiBaseUrl}/bpu/documents?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<MarketBpuDocumentV1[]>(response);
+}
+
+/** BPU gaz lot 7 (TotalEnergies) — GET /api/gas/invoices/bpu. */
+export type MarketGasBpuPriceV1 = {
+  id: number;
+  annee: number;
+  profil: string;
+  fourniture_ht_mwh: number | null;
+  cee_ht_mwh: number | null;
+  cee_precarite_ht_mwh: number | null;
+  cpb_ht_mwh: number | null;
+  go_ht_mwh: number | null;
+  source: string | null;
+};
+
+export async function fetchMarketGasBpu(token: string): Promise<MarketGasBpuPriceV1[]> {
+  const response = await fetch(`${apiBaseUrl}/gas/invoices/bpu`, { headers: buildHeaders(token) });
+  return parseResponse<MarketGasBpuPriceV1[]>(response);
+}
+
+/** DPGF DALKIA — GET /api/cpe/dalkia-ref/active-summary (état en vigueur). */
+export type MarketDpgfSummaryV1 = {
+  has_data: boolean;
+  lot: number | null;
+  ref_year: number;
+  import_id: number | null;
+  import_ids: number[];
+  filename: string | null;
+  import_date: string | null;
+  nb_sites: number | null;
+  nb_ape: number | null;
+  ape_montant_ht: number | null;
+  p1_gaz_ref_year_ht: number | null;
+  p1_elec_ref_year_ht: number | null;
+  p2_ref_year_ht: number | null;
+  p3_ref_year_ht: number | null;
+  marche_total_ht: number | null;
+};
+
+export async function fetchMarketDpgfSummary(token: string, refYear: number): Promise<MarketDpgfSummaryV1> {
+  const params = new URLSearchParams({ ref_year: String(refYear) });
+  const response = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/active-summary?${params.toString()}`, { headers: buildHeaders(token) });
+  return parseResponse<MarketDpgfSummaryV1>(response);
+}
+
+/** DPGF DALKIA — GET /api/cpe/dalkia-ref/imports/all (journal des actes, toutes versions). */
+export type MarketDpgfImportV1 = {
+  id: number;
+  lot: number;
+  filename: string;
+  import_date: string;
+  nb_sites: number;
+  is_active: boolean;
+  notes: string | null;
+  acte_type: string | null;
+  acte_label: string | null;
+  date_effet: string | null;
+};
+
+export async function fetchMarketDpgfImports(token: string): Promise<MarketDpgfImportV1[]> {
+  const response = await fetch(`${apiBaseUrl}/cpe/dalkia-ref/imports/all`, { headers: buildHeaders(token) });
+  return parseResponse<MarketDpgfImportV1[]>(response);
+}
