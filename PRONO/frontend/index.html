@@ -63,6 +63,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="matchs" onclick="switchTab('matchs')">⚽ Matchs</button>
     <button class="tab" data-tab="actu" onclick="switchTab('actu')">📰 Actualité</button>
+    <button class="tab" data-tab="tests" onclick="switchTab('tests')">Tests</button>
   </div>
 
   <!-- Vue Matchs (tableau) -->
@@ -79,6 +80,19 @@
   <section id="view-actu" class="hidden">
     <div id="actuList"><div class="loading"><div class="spin"></div>Chargement de l'actu…</div></div>
   </section>
+  <!-- Vue Tests PRONO -->
+  <section id="view-tests" class="hidden">
+    <div class="testbar">
+      <button class="btn lime" onclick="loadDiagnostics(true)">Diagnostiquer</button>
+      <button class="btn" onclick="runValueCheck('scenarios')">Scenarios</button>
+      <button class="btn" onclick="runValueCheck('tickets')">Tickets candidats</button>
+      <button class="btn" onclick="runValueCheck('backtest')">Backtest scenarios</button>
+      <button class="btn" onclick="runValueCheck('coverage')">Couverture cotes</button>
+    </div>
+    <div id="testsStatus" class="note">Lance un diagnostic pour voir quelles briques PRONO sont disponibles.</div>
+    <div id="testsPanel" class="testgrid"></div>
+  </section>
+
 </div>
 
 <!-- Instructions d'installation (iOS / repli sans prompt natif) -->
@@ -111,3 +125,6 @@
 <script src="/app.js"></script>
 </body>
 </html>
+
+
+

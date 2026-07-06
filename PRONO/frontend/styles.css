@@ -241,3 +241,26 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
   font-size:9px;font-weight:900;letter-spacing:.01em;vertical-align:middle;
   box-shadow:0 1px 2px rgba(0,0,0,.18)}
 .dcard h4 .crest{margin-right:6px}
+
+/* ===== Tests PRONO value ===== */
+.testbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.testbar .btn{min-height:38px;border-radius:10px;font-size:13px}
+.teststatus.ok{border-color:rgba(34,197,94,.35);background:rgba(22,101,52,.24);color:#dcfce7}
+.teststatus.degraded{border-color:rgba(248,195,59,.45);background:rgba(120,83,15,.24);color:#fef3c7}
+.teststatus.error{border-color:rgba(239,68,68,.45);background:rgba(127,29,29,.28);color:#fee2e2}
+.testgrid{display:grid;gap:10px;margin-top:12px}
+.testsummary{display:flex;flex-wrap:wrap;gap:8px;background:var(--card);color:var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(3,18,12,.16)}
+.testsummary span{font-size:12px;font-weight:800;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+.testcard{background:var(--card);color:var(--ink);border-radius:14px;padding:12px 13px;box-shadow:0 8px 24px rgba(3,18,12,.16);border-left:5px solid #94a3b8}
+.testcard.ok{border-left-color:var(--green)}
+.testcard.degraded{border-left-color:var(--gold)}
+.testcard.error{border-left-color:var(--red)}
+.testhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.testhead b{font-family:var(--font-display);font-weight:400;text-transform:uppercase;font-size:16px}
+.testhead span{font-size:10px;font-weight:900;text-transform:uppercase;border-radius:999px;background:var(--soft);color:#475569;padding:4px 8px}
+.testcard p{margin:0 0 7px;font-size:13px;font-weight:700;color:#334155;line-height:1.4}
+.testmeta{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px}
+.jsonbox{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.jsonbox summary{cursor:pointer;font-size:12px;font-weight:900;color:var(--green)}
+.jsonbox pre{max-height:320px;overflow:auto;background:#061a2b;color:#d8ffe9;border-radius:10px;padding:10px;font-size:11px;line-height:1.45;white-space:pre-wrap}
+@media(max-width:560px){.testbar .btn{flex:1 1 calc(50% - 8px);justify-content:center}.testbar .btn.lime{flex-basis:100%}}

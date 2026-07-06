@@ -1,0 +1,78 @@
+﻿name: Deploy PRONO
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branche ou commit a deployer"
+        required: true
+        default: main
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "PRONO/**"
+      - ".github/workflows/deploy-prono.yml"
+
+concurrency:
+  group: deploy-prono
+  cancel-in-progress: false
+
+jobs:
+  deploy-prono:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            TARGET_DIR="${{ secrets.VPS_APP_PATH }}"
+            REPO_URL="${{ secrets.REPO_SSH_URL }}"
+            REF_INPUT="${{ github.event.inputs.ref }}"
+            REF_NAME="${REF_INPUT:-${{ github.ref_name }}}"
+            BRANCH_REF="origin/$REF_NAME"
+
+            mkdir -p "$TARGET_DIR"
+
+            if [ -d "$TARGET_DIR/.git" ]; then
+              REPO_DIR="$TARGET_DIR"
+            elif [ -d "$TARGET_DIR/repo/.git" ]; then
+              REPO_DIR="$TARGET_DIR/repo"
+            else
+              git clone "$REPO_URL" "$TARGET_DIR/repo"
+              REPO_DIR="$TARGET_DIR/repo"
+            fi
+
+            cd "$REPO_DIR"
+            git fetch --all
+            git reset --hard "$BRANCH_REF"
+
+            APP_DIR="$REPO_DIR/PRONO"
+            COMPOSE_FILE="$APP_DIR/infra/docker-compose.yml"
+            ENV_FILE="$APP_DIR/infra/.env"
+
+            if [ ! -f "$COMPOSE_FILE" ]; then
+              echo "PRONO compose introuvable: $COMPOSE_FILE" >&2
+              exit 1
+            fi
+
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "PRONO env introuvable: $ENV_FILE (a creer une fois sur le VPS depuis PRONO/infra/.env.example)" >&2
+              exit 1
+            fi
+
+            docker network create po2-edge 2>/dev/null || true
+
+            COMPOSE="docker compose -p prono -f $COMPOSE_FILE --project-directory $APP_DIR/infra --env-file $ENV_FILE"
+            $COMPOSE up -d --build
+
+            # Caddy doit reresoudre les conteneurs prono apres rebuild.
+            docker restart infra-caddy-1 2>/dev/null || true
+
+            sleep 3
+            curl -fsS https://ligue1.patrimoineaucarre.com/api/health >/dev/null

@@ -131,13 +131,21 @@ async function doChangePassword() {
 
 /* ---------- Onglets ---------- */
 let _actuLoaded = false;
+let _testsLoaded = false;
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
   $("#view-actu").classList.toggle("hidden", tab !== "actu");
+  $("#view-tests").classList.toggle("hidden", tab !== "tests");
   if (tab === "actu" && !_actuLoaded) loadActu();
+  if (tab === "tests" && !_testsLoaded) loadDiagnostics(false);
 }
-function refreshAll() { _actuLoaded = false; loadJournee(true); if (!$("#view-actu").classList.contains("hidden")) loadActu(); }
+function refreshAll() {
+  _actuLoaded = false;
+  loadJournee(true);
+  if (!$("#view-actu").classList.contains("hidden")) loadActu();
+  if (!$("#view-tests").classList.contains("hidden")) loadDiagnostics(true);
+}
 
 /* ---------- Helpers rendu ---------- */
 function confClass(c){const l=(c||"").toLowerCase();return l.includes("fort")?"fort":l.includes("moyen")?"moyen":"faible";}
@@ -276,5 +284,84 @@ async function loadActu(){
   }catch(e){ box.innerHTML=`<div class="note">Erreur de chargement de l'actu.</div>`; }
 }
 
+
+/* ---------- Tests PRONO value ---------- */
+const VALUE_CHECKS = {
+  scenarios: { label: "Scenarios", method: "GET", path: "/api/value/scenarios/ligue1/journee?refresh=1" },
+  tickets: { label: "Tickets candidats", method: "GET", path: "/api/value/ticket-families/ligue1" },
+  backtest: { label: "Backtest scenarios", method: "GET", path: "/api/value/backtests/ligue1/scenarios" },
+  coverage: { label: "Couverture cotes", method: "GET", path: "/api/value/coverage/odds" },
+};
+function setTestsStatus(text, kind="info") {
+  const box = $("#testsStatus");
+  if (!box) return;
+  box.textContent = text;
+  box.className = "note teststatus " + kind;
+}
+function renderJsonDetails(data) {
+  return `<details class="jsonbox"><summary>Details JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+}
+function testCard(title, status, body, data) {
+  const cls = status === "ok" ? "ok" : status === "error" ? "error" : "degraded";
+  return `<article class="testcard ${cls}"><div class="testhead"><b>${esc(title)}</b><span>${esc(status)}</span></div>${body}${renderJsonDetails(data)}</article>`;
+}
+function renderDiagnostics(data) {
+  const checks = data.checks || [];
+  const cards = checks.map(c => testCard(
+    c.name || "check",
+    c.status || (c.ok ? "ok" : "error"),
+    `<p>${esc(c.message || "")}</p><div class="testmeta">${c.count != null ? `Count: ${esc(c.count)}` : ""}${c.source ? ` � Source: ${esc(c.source)}` : ""}</div>`,
+    c
+  )).join("");
+  const summary = data.summary || {};
+  $("#testsPanel").innerHTML = `<div class="testsummary">
+    <span>Scenarios: <b>${summary.can_build_scenarios ? "OK" : "KO"}</b></span>
+    <span>Fixtures futures: <b>${summary.has_upcoming_fixtures ? "OK" : "degrade"}</b></span>
+    <span>Cotes: <b>${summary.has_odds_snapshots ? "OK" : "a brancher"}</b></span>
+  </div>${cards}`;
+  setTestsStatus(`Diagnostic termine : ${data.status || "ok"}.`, data.status || "ok");
+  _testsLoaded = true;
+}
+async function loadDiagnostics(refresh) {
+  setTestsStatus("Diagnostic en cours...");
+  $("#testsPanel").innerHTML = `<div class="loading"><div class="spin"></div>Diagnostic...</div>`;
+  try {
+    const data = await api("/api/value/diagnostics" + (refresh ? "?refresh=1" : ""));
+    renderDiagnostics(data);
+  } catch (e) {
+    setTestsStatus(e.message, "error");
+    $("#testsPanel").innerHTML = "";
+  }
+}
+function renderValueResult(kind, data) {
+  if (kind === "scenarios") {
+    return testCard("Scenarios Ligue 1", "ok", `<p>${esc(data.count || 0)} match(s) scenario.</p>`, data);
+  }
+  if (kind === "tickets") {
+    return testCard("Tickets candidats", data.n_candidates ? "ok" : "degraded", `<p>${esc(data.n_candidates || 0)} candidat(s) depuis ${esc(data.n_predictions || 0)} prediction(s).</p>`, data);
+  }
+  if (kind === "backtest") {
+    return testCard("Backtest scenarios", data.n_signals ? "ok" : "degraded", `<p>${esc(data.n_signals || 0)} signal(aux), ${esc(data.n_matched || 0)} prediction(s) matchee(s).</p>`, data);
+  }
+  if (kind === "coverage") {
+    return testCard("Couverture cotes", data.event_count ? "ok" : "degraded", `<p>${esc(data.event_count || 0)} evenement(s), ${esc(data.snapshot_count || 0)} snapshot(s).</p>`, data);
+  }
+  return testCard("Resultat", "ok", "", data);
+}
+async function runValueCheck(kind) {
+  const conf = VALUE_CHECKS[kind];
+  if (!conf) return;
+  setTestsStatus(`${conf.label} en cours...`);
+  try {
+    const data = await api(conf.path, { method: conf.method });
+    $("#testsPanel").innerHTML = renderValueResult(kind, data);
+    setTestsStatus(`${conf.label} termine.`, "ok");
+    _testsLoaded = true;
+  } catch (e) {
+    setTestsStatus(e.message, "error");
+  }
+}
+
 /* ---------- Boot ---------- */
 if (token()) showApp(); else $("#login").classList.remove("hidden");
+
