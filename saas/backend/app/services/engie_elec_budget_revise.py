@@ -40,9 +40,9 @@ from app.models.invoice import (
 )
 from app.services import energie, turpe
 from app.services.invoice_bpu import (
+    POSTE_TO_BPU_PERIOD,
     load_historical_bpu_prices,
     normalize_bpu_supplier,
-    resolve_historical_bpu_price,
 )
 
 # --------------------------------------------------------------------------- codes
@@ -251,32 +251,126 @@ def _turpe_ratio(year: int) -> tuple[float, bool]:
     return (cur / prev, True) if prev > 0 else (1.0, False)
 
 
+# --------------------------------------------------------------------------- typologie BPU
+# Le BPU fourniture vient du marché groupé HÉRAULT ÉNERGIE, indexé par TYPOLOGIE d'abonnement
+# (classe tarifaire ENEDIS), PAS par fournisseur (ENGIE/EDF/TE ne sont que l'attributaire du lot
+# l'année considérée). On résout donc par typologie canonique, tous fournisseurs confondus, ce qui
+# permet le ratio Y/N-1 même quand l'attributaire change entre l'ancien et le nouveau marché.
+# Cf. docs/refonte-v1/atterrissage-bpu-elec-decisions.md §8-10.
+_CANON_HTA = "HTA"          # C1/C2/C3 (haute tension)
+_CANON_BT_SUP36 = "BT_SUP36"  # C4 (BT > 36 kVA)
+_CANON_BT_INF36 = "BT_INF36"  # C5 bâtiment (BT ≤ 36 kVA)
+_CANON_EP = "EP"            # éclairage public
+_CANON_BUILDING_ANY = "BUILDING_ANY"  # nouveau marché 2026 : « Bâtiment » agrégé (collapse import)
+
+
+def _canonical_typology(segment_code: str) -> str | None:
+    """Typologie canonique d'un ``segment_code`` BPU stocké (ancien ou nouveau marché)."""
+    code = (segment_code or "").upper()
+    if code in ("C1", "C2", "C3"):
+        return _CANON_HTA
+    if code == "C4":
+        return _CANON_BT_SUP36
+    if code.startswith("C5_BAT"):
+        return _CANON_BT_INF36
+    if code == "C5_EP" or code.startswith("ECLAIRAGE_PUBLIC"):
+        return _CANON_EP
+    # Nouveau marché : granularité préservée (BATIMENT_HTA/BT/BT36) ou collapse (BATIMENT).
+    if code == "BATIMENT_HTA":
+        return _CANON_HTA
+    if code == "BATIMENT_BT":
+        return _CANON_BT_SUP36
+    if code == "BATIMENT_BT36":
+        return _CANON_BT_INF36
+    if code == "BATIMENT":
+        return _CANON_BUILDING_ANY
+    return None
+
+
+def _prm_canonical_typology(site_meta: dict[str, Any], is_public_lighting: bool) -> str | None:
+    """Typologie canonique d'un PRM depuis sa classe ENEDIS (+ usage éclairage public)."""
+    if is_public_lighting:
+        return _CANON_EP
+    segment = str(site_meta.get("segment") or "").upper().strip()
+    if segment in ("C1", "C2", "C3"):
+        return _CANON_HTA
+    if segment == "C4":
+        return _CANON_BT_SUP36
+    if segment == "C5":
+        return _CANON_BT_INF36
+    return None
+
+
+def build_bpu_fourniture_index(references: list[Any]) -> dict[str, dict[tuple, float]]:
+    """Index des prix FOURNITURE par (typologie canonique, année, poste) + repli (typologie, année).
+
+    Repli = moyenne des prix fourniture de la typologie/année, pour rester robuste aux libellés de
+    poste divergents entre marchés (ex. éclairage public mono-poste, collapse 2026).
+    """
+    by_poste: dict[tuple, list[float]] = {}
+    by_year: dict[tuple, list[float]] = {}
+    for ref in references:
+        if ref.component_type != "fourniture":
+            continue
+        canon = _canonical_typology(ref.segment_code)
+        if canon is None:
+            continue
+        price = float(ref.price_eur_per_mwh)
+        by_poste.setdefault((canon, ref.valid_year, (ref.period_code or "").upper()), []).append(price)
+        by_year.setdefault((canon, ref.valid_year), []).append(price)
+    return {
+        "by_poste": {k: sum(v) / len(v) for k, v in by_poste.items()},
+        "by_year": {k: sum(v) / len(v) for k, v in by_year.items()},
+    }
+
+
+def _lookup_fourniture(
+    index: dict[str, dict[tuple, float]], canon: str, year: int, period_code: str
+) -> float | None:
+    """Prix fourniture pour une typologie/année/poste, avec replis (poste → typologie-année,
+    puis typologie bâtiment agrégée BUILDING_ANY du nouveau marché collapse)."""
+    candidates = [canon]
+    if canon in (_CANON_HTA, _CANON_BT_SUP36, _CANON_BT_INF36):
+        candidates.append(_CANON_BUILDING_ANY)  # 2026 « Bâtiment » collapse
+    for c in candidates:
+        price = index["by_poste"].get((c, year, period_code))
+        if price is not None:
+            return price
+    for c in candidates:
+        price = index["by_year"].get((c, year))
+        if price is not None:
+            return price
+    return None
+
+
 def _bpu_fourniture_ratio(
-    references: list[Any],
+    index: dict[str, dict[tuple, float]],
     site_meta: dict[str, Any],
     postes_kwh: dict[str, float],
     year: int,
+    is_public_lighting: bool,
 ) -> tuple[float, bool]:
-    """Ratio fourniture BPU = Σ(kWh × prix_BPU_Y) / Σ(kWh × prix_BPU_N-1) par poste.
+    """Ratio fourniture BPU = Σ(kWh × prix_Y) / Σ(kWh × prix_N-1) par poste, résolu par typologie.
 
-    Best-effort : nécessite un segment tarifaire résolu et des prix BPU pour les deux
-    années. Sinon on renvoie (1,0, False) → le prix dérivé N-1 est tenu à plat.
+    Best-effort : nécessite une typologie résolue et des prix pour Y ET N-1. Sinon (1,0, False)
+    → le prix dérivé N-1 est tenu à plat.
     """
-    if not references or not site_meta.get("segment"):
+    canon = _prm_canonical_typology(site_meta, is_public_lighting)
+    if canon is None:
         return 1.0, False
+    # Éclairage public / PRM sans poste facturé (EDF) : un seul poste BASE (ratio scale-invariant).
+    weighted = {k: v for k, v in postes_kwh.items() if v > 0} or {"base": 1.0}
     num = den = 0.0
-    for poste, kwh in postes_kwh.items():
-        if kwh <= 0:
+    for poste, kwh in weighted.items():
+        period_code = POSTE_TO_BPU_PERIOD.get(str(poste or "").lower())
+        if period_code is None:
             continue
-        line = {"normalized_component": "supply", "poste": poste}
-        site_y = {**site_meta, "period_start": date(year, 7, 1)}
-        site_p = {**site_meta, "period_start": date(year - 1, 7, 1)}
-        ref_y = resolve_historical_bpu_price(references, site_y, line)
-        ref_p = resolve_historical_bpu_price(references, site_p, line)
-        if ref_y is None or ref_p is None:
+        price_y = _lookup_fourniture(index, canon, year, period_code)
+        price_p = _lookup_fourniture(index, canon, year - 1, period_code)
+        if price_y is None or price_p is None:
             continue
-        num += kwh * float(ref_y.price_eur_per_mwh)
-        den += kwh * float(ref_p.price_eur_per_mwh)
+        num += kwh * price_y
+        den += kwh * price_p
     if den > 0:
         return num / den, True
     return 1.0, False
@@ -386,7 +480,7 @@ def _build_point(
     today: date,
     dju_normal: dict[int, float],
     turpe_ratio: float,
-    bpu_references: list[Any],
+    bpu_index: dict[str, dict[tuple, float]],
     link: dict[str, Any] | None,
     conso_model: str,
     photoperiod: dict[int, float],
@@ -397,7 +491,10 @@ def _build_point(
     realise = _realise_from_lines(lines_y)
 
     conso = _expected_consumption(prm, year, dju_normal, ref["kwh"], conso_model, photoperiod)
-    bpu_ratio, bpu_available = _bpu_fourniture_ratio(bpu_references, site_meta, ref["postes_kwh"], year)
+    is_public_lighting = conso_model == "photoperiod"
+    bpu_ratio, bpu_available = _bpu_fourniture_ratio(
+        bpu_index, site_meta, ref["postes_kwh"], year, is_public_lighting
+    )
 
     # Dénominateur du prix unitaire N-1 : kWh facturés si présents (ENGIE), sinon kWh ENEDIS N-1
     # (EDF : les lignes fourniture n'ont pas de quantité → on prend la conso ENEDIS de l'année N-1).
@@ -551,7 +648,13 @@ def build_elec_budget_revise(
 
     by_prm = _fetch_lines(db, city_id, supplier)
     links = _building_links(db, city_id)
-    bpu_references = load_historical_bpu_prices(db, supplier)
+    # BPU = marché HÉRAULT ÉNERGIE par typologie, tous fournisseurs élec confondus (pas seulement
+    # l'attributaire courant) → indispensable au ratio Y/N-1 quand l'attributaire change (ex. ENGIE 2026
+    # vs EDF 2025). Cf. atterrissage-bpu-elec-decisions §8-10.
+    bpu_references: list[Any] = []
+    for elec_supplier in ("ENGIE", "EDF"):
+        bpu_references.extend(load_historical_bpu_prices(db, elec_supplier))
+    bpu_index = build_bpu_fourniture_index(bpu_references)
     turpe_ratio, turpe_available = _turpe_ratio(year)
     dju_normal = _dju_normal_by_month(exclude_year=year)
     photoperiod = _photoperiod_monthly()
@@ -566,7 +669,7 @@ def build_elec_budget_revise(
         points.append(
             _build_point(
                 prm, entry["meta"], lines_n1, lines_y, year, resolved_today,
-                dju_normal, turpe_ratio, bpu_references, links.get(prm),
+                dju_normal, turpe_ratio, bpu_index, links.get(prm),
                 conso_model, photoperiod,
             )
         )

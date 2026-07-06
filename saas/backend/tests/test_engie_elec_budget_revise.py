@@ -382,3 +382,62 @@ def test_network_fixed_total_ignored_when_components_present(db_session, monkeyp
     res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
     p = res["points"][0]
     assert p["fixe_prevision"] == 700.0  # 700, pas 1400
+
+
+# --------------------------------------------------------------------------- typologie BPU (B+C)
+from decimal import Decimal
+
+from app.services.invoice_bpu import HistoricalBpuPrice
+
+
+def _price(supplier, year, segment_code, period_code, eur_mwh):
+    return HistoricalBpuPrice(
+        document_id=1, supplier=supplier, valid_year=year, lot_number=1,
+        segment_code=segment_code, period_code=period_code, component_type="fourniture",
+        price_eur_per_mwh=Decimal(str(eur_mwh)), pdf_filename="x.pdf",
+    )
+
+
+def test_canonical_typology_mapping():
+    assert mod._canonical_typology("C2") == "HTA"
+    assert mod._canonical_typology("C4") == "BT_SUP36"
+    assert mod._canonical_typology("C5_BAT_4") == "BT_INF36"
+    assert mod._canonical_typology("C5_EP") == "EP"
+    assert mod._canonical_typology("ECLAIRAGE_PUBLIC") == "EP"
+    assert mod._canonical_typology("BATIMENT") == "BUILDING_ANY"
+    assert mod._canonical_typology("BATIMENT_BT36") == "BT_INF36"
+    assert mod._canonical_typology("BORNES") is None
+
+
+def test_bpu_ratio_cross_marche_engie_building():
+    # Nouveau marché 2026 = ENGIE « BATIMENT » (collapse) ; ancien 2025 = EDF par classe.
+    refs = [
+        _price("ENGIE", 2026, "BATIMENT", "HPH", 110.0),
+        _price("EDF", 2025, "C4", "HPH", 100.0),  # PRM C4 -> BT_SUP36
+    ]
+    index = mod.build_bpu_fourniture_index(refs)
+    # PRM bâtiment classe C4, facturé en HPH : ratio 2026/2025 = 110/100 = 1.1, dé-scopé du fournisseur
+    ratio, ok = mod._bpu_fourniture_ratio(index, {"segment": "C4"}, {"hph": 1000.0}, 2026, False)
+    assert ok is True
+    assert round(ratio, 4) == 1.1
+
+
+def test_bpu_ratio_edf_public_lighting_base():
+    # EDF éclairage public mono-poste : 2026 ECLAIRAGE_PUBLIC vs 2025 C5_EP, poste BASE.
+    refs = [
+        _price("EDF", 2026, "ECLAIRAGE_PUBLIC", "BASE", 52.0),
+        _price("EDF", 2025, "C5_EP", "BASE", 48.0),
+    ]
+    index = mod.build_bpu_fourniture_index(refs)
+    ratio, ok = mod._bpu_fourniture_ratio(index, {"segment": "C5"}, {}, 2026, True)
+    assert ok is True
+    assert round(ratio, 4) == round(52.0 / 48.0, 4)
+
+
+def test_bpu_ratio_missing_year_falls_back_flat():
+    # Un seul millésime -> pas de N-1 -> ratio neutre 1.0, bpu_available False.
+    refs = [_price("ENGIE", 2026, "BATIMENT", "HPH", 110.0)]
+    index = mod.build_bpu_fourniture_index(refs)
+    ratio, ok = mod._bpu_fourniture_ratio(index, {"segment": "C4"}, {"hph": 1000.0}, 2026, False)
+    assert ok is False
+    assert ratio == 1.0

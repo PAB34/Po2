@@ -188,3 +188,30 @@ Réponses utilisateur : pont « aucune idée, à toi de vérifier » · profils 
 
 ⇒ **Aucune donnée ni connaissance métier supplémentaire requise.** Prochaine étape = coder (import +
 résolveur), tests ciblés + validation lecture seule sur prod, puis staging.
+
+## 11. RÉALISÉ B+C — MVP isolé (branche `feat/bpu-typologie-resolver`, 2026-07-06)
+
+**Périmètre volontairement isolé (zéro risque contrôle factures)** : tout dans
+`services/engie_elec_budget_revise.py`. **Pas** de changement de l'import ni du résolveur partagé
+`resolve_historical_bpu_price` (utilisé par `invoice_analysis`). Pas de re-import prod.
+
+- Dé-scoping fournisseur : `build_elec_budget_revise` charge le BPU de **tous** les fournisseurs élec.
+- Résolution par **typologie canonique** : `_canonical_typology` (segment stocké → HTA / BT_SUP36 /
+  BT_INF36 / EP / BUILDING_ANY), `_prm_canonical_typology` (classe ENEDIS du PRM → typologie),
+  `build_bpu_fourniture_index` (index par (typologie, année, poste) + repli (typologie, année)),
+  `_bpu_fourniture_ratio` réécrit. Repli `BUILDING_ANY` = grille 2026 « Bâtiment » collapse.
+- EDF mono-poste : PRM sans poste facturé → BASE (`{"base": 1.0}`).
+- Tests : 15 passed (dont 4 nouveaux : mapping, ratio cross-marché, EDF ÉP, repli millésime unique).
+
+**Validation lecture seule prod (city 303, nouveau code en /tmp du conteneur)** :
+- **100 % des PRM** obtiennent désormais un ratio (avant : 0 %). ENGIE 2026 : 267/267 ; EDF 2026 : 362/362.
+- **EDF 2026 ratio 1.62 = RÉEL** (ÉP 2026 = 75,80 €/MWh vs 2025 = 46,80 ; ancien marché pré-crise pas cher)
+  → la révision corrige la sous-estimation. ENGIE 0.70–0.98 crédibles (collapse a gardé 1 prix/poste ;
+  4-saisons OK).
+- **Résidu connu** : le collapse 2026 « BATIMENT » écrase les variantes de tension sur les postes partagés
+  (HPH : BT 107,81 / HTA 109,46 / CU4 105,91) → ~3 % d'imprécision pour les bâtiments HTA/BT>36. Non
+  bloquant. **Correctif exact = Task #1 (import granulaire BATIMENT_HTA/BT/BT36)**, incrément séparé
+  car il touche le résolveur partagé du contrôle factures + impose un re-import (à faire avec tests
+  `invoice_analysis`).
+
+⇒ MVP prêt pour staging. Merge prod = accord explicite requis (les chiffres d'atterrissage élec bougent).
