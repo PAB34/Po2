@@ -36,6 +36,7 @@ import { RefonteV1SitesPage } from "./pages/RefonteV1SitesPage";
 import { RefonteV1MatricesPage } from "./pages/RefonteV1MatricesPage";
 import { RefonteV1MatricesPreviewPage } from "./pages/RefonteV1MatricesPreviewPage";
 import { RefonteV1MarketsPage } from "./pages/RefonteV1MarketsPage";
+import { RefonteV1ReferentielsPage } from "./pages/RefonteV1ReferentielsPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -250,6 +251,7 @@ export default function App() {
             <Route path="/refonte-v1/sites" element={<RefonteV1SitesPage />} />
             <Route path="/refonte-v1/matrices" element={<RefonteV1MatricesPage />} />
             <Route path="/refonte-v1/marches" element={<RefonteV1MarketsPage />} />
+            <Route path="/refonte-v1/referentiels" element={<RefonteV1ReferentielsPage />} />
             <Route path="/patrimoine" element={<ProductDomainPage domain="patrimoine" />} />
             <Route path="/patrimoine/sites" element={<Navigate to="/buildings/list" replace />} />
             <Route path="/patrimoine/rattachements" element={<Navigate to="/buildings/compteurs" replace />} />

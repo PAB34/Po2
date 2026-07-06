@@ -5,7 +5,31 @@
 > Objet : figer les décisions structurantes AVANT de coder l'onglet « Référentiel » de
 > `/refonte-v1/marches`. Base de travail : `origin/main` (worktree `feat/moteur-metier-referentiels`).
 
-## 1. Décisions tranchées (2026-07-06)
+## 0bis. ⚠️ PIVOT 2026-07-06 (après 1re livraison T1) — remplace une partie du §1
+
+Après avoir vu le stub à l'écran, l'utilisateur a recadré : **ne pas réécrire ce qui marche déjà**.
+Décisions qui **remplacent Q3 et la structure** :
+
+- **Q3 → EMBARQUER l'existant** (et non réécrire). Les pages legacy `CpeDalkiaImportPage` et
+  `EnergieBpuPage` sont complètes (import + révisions + diff + journal) et **sans paramètre d'URL**
+  → montées telles quelles dans le shell refonte. Réécriture DS V1 abandonnée (harmonisation cosmétique
+  différée, incrémentale).
+- **Structure → HUB CENTRAL unique** (et non un onglet par tier). Le moteur BPU est déjà **unifié tous
+  fournisseurs** (EDF/ENGIE/TotalE dans une seule page) → on ne le duplique pas par tier. Nouvelle entrée
+  nav **« Référentiels marchés »** (`/refonte-v1/referentiels`, section « Référentiels & admin »),
+  2 sous-onglets : **DPGF DALKIA** + **BPU Hérault Énergies**.
+- **Gate fidélité (§4bis) → allégée** : l'utilisateur fait confiance au moteur existant et n'a pas de
+  documents sources à fournir. **Comparaison poste-par-poste abandonnée.** Restent 2 items d'hygiène
+  **optionnels** (non bloquants) : ENGIE peu fourni (1 doc), actes DPGF non qualifiés.
+- **T1 stub retiré** : l'onglet « Référentiel » par tier + `MarketReferentielV1` + hooks + fetchers front
+  ont été supprimés (revert). Les **guard tests backend** (`test_marches_referentiel_read.py`) sont
+  **conservés** (les endpoints restent ceux utilisés par les pages embarquées).
+- **Q1/Q5 caducs à court terme** : plus de regroupement sous « Marchés & contrats » (c'est un hub dédié) ;
+  renommage API `/api/marches/...` **différé** (les pages legacy tapent les anciens préfixes, ça marche).
+
+> Ce qui suit (§1 à §4) reflète le plan INITIAL, conservé pour trace mais **supplanté par ce §0bis**.
+
+## 1. Décisions tranchées (2026-07-06) — INITIAL, voir §0bis pour l'état retenu
 
 | # | Question (audit §6) | Décision |
 |---|---|---|

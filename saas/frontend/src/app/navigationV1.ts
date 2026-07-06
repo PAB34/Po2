@@ -17,6 +17,7 @@ export const navigationV1: NavSectionV1[] = [
     { key: "technique", label: "Technique & CVC", to: "/refonte-v1/technique", comingSoon: true },
   ] },
   { label: "Référentiels & admin", items: [
+    { key: "referentiels", label: "Référentiels marchés", to: "/refonte-v1/referentiels" },
     { key: "matrices", label: "Matrices comptables", to: "/refonte-v1/matrices" },
     { key: "admin", label: "Administration", to: "/refonte-v1/administration", comingSoon: true },
   ] },
