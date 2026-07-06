@@ -1,15 +1,13 @@
 import { useState } from "react";
 import { SegmentControl } from "../../design-system";
 import { CpeDalkiaImportPage } from "../../pages/CpeDalkiaImportPage";
-import EnergieBpuPage from "../../pages/EnergieBpuPage";
+import { BpuReferentielV1 } from "./BpuReferentielV1";
 
-// Hub « Référentiels des marchés » : point d'entrée unique qui EMBARQUE les moteurs
-// existants et fonctionnels (pas de réécriture) —
-//   - DPGF DALKIA (CPE)      -> page CpeDalkiaImportPage (dossier de marché : import,
-//     sites, matrice, références DPGF, formules/indices, diff, journal des actes)
-//   - BPU Hérault Énergies   -> page EnergieBpuPage (tous fournisseurs EDF/ENGIE/TotalE :
-//     timeline, TURPE, documents/import, édition)
-// L'import et les révisions sont déjà gérés par ces pages ; ici on centralise l'accès.
+// Hub « Référentiels des marchés » : point d'entrée unique des référentiels de prix —
+//   - DPGF DALKIA (CPE)      -> page CpeDalkiaImportPage embarquée (dossier de marché complet :
+//     import, sites, matrice, références DPGF, formules/indices, diff, journal des actes)
+//   - BPU Hérault Énergies   -> vue curée DS V1 `BpuReferentielV1` (Consultation / Évolution,
+//     admin replié « Gérer » ; la page legacy /energie/bpu reste pour l'accès complet).
 
 type RefView = "dpgf" | "bpu";
 
@@ -32,7 +30,7 @@ export function MarketReferentielsHubV1() {
         <SegmentControl value={view} options={VIEWS} onChange={setView} />
       </div>
 
-      {view === "dpgf" ? <CpeDalkiaImportPage /> : <EnergieBpuPage />}
+      {view === "dpgf" ? <CpeDalkiaImportPage /> : <BpuReferentielV1 />}
     </div>
   );
 }
