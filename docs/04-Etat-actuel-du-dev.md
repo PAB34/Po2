@@ -19,7 +19,31 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mis a jour : 2026-07-02 (handoff Codex). Detail complet -> `Sessions/2026-07-02 - Indices variables marches staging.md`.
+> Mise à jour : **2026-07-03** (session Claude — budget révisé élec + moteur métier).
+
+- **PR #41 MERGÉE EN PROD** (santé 200) : atterrissage **ENGIE élec** + **EDF éclairage public** (moteur élec
+  générique fixe/variable par PRM, conso attendue = ENEDIS + DJU thermosensible ENGIE / photopériode EDF,
+  prix BPU+TURPE fallback N-1), **calque « Cible conso & intéressement » DALKIA** (`/refonte-v1/marches`),
+  **tri des colonnes** (DALKIA/ENGIE/EDF/gaz), **fix parser ENGIE** (soutirage variable : montant mal placé
+  dans la colonne prix), et **DJU auto-sync planifié** (Open-Meteo, `scheduler.py`). Aucune migration.
+- **Données prod corrigées** : 52 lignes ENGIE soutirage variable (6,50 M€ → 1 224 €). Vérifié prod : ENGIE
+  2026 réalisé 724 923 € (0 anomalie, ENEDIS 176 PRM) ; EDF 2026 prévision 87 816 € (ENEDIS 326).
+- **Infra** : staging a désormais un volume `energie_data` inscriptible + `ENERGIE_DIR` (repo monté `:ro`) ;
+  prod = bind mount déjà inscriptible. ⚠️ **ENEDIS sur staging = snapshot figé copié de prod** (pas de creds
+  live) ; DJU se récupèrent seuls (Open-Meteo) partout maintenant.
+- **⚠️ Action utilisateur en attente** : **importer le lot de factures ENGIE N-1 (2025)** (case « Importer et
+  mettre à jour ») → sinon la prévision ENGIE reste ≈ 0 (prix non dérivables sans historique).
+- **🎯 Prochain chantier = MOTEUR MÉTIER** : centraliser les **référentiels de marché DPGF/BPU** (DALKIA CPE +
+  Hérault Énergies ENGIE/EDF/TotalE, à venir SUEZ/SPIE) sous `/refonte-v1/marches` (onglet **Référentiel** par
+  tier), avec cohérence des adresses. **Audit complet écrit** → `docs/refonte-v1/moteur-metier-referentiels-marches-audit.md`.
+  Aujourd'hui les référentiels sont éclatés en legacy : DPGF = `/cpe/dalkia-import`, BPU = `/energie/bpu`.
+  **Décision structurante à prendre (Q1 du doc)** : regrouper BPU+DPGF sous « Marchés » (vision user) vs BPU
+  sous « Énergie » (doc 13). Réutilise le backend existant (`cpe-dalkia-ref`, `bpu`) = portage UX.
+- **Poste entreprise** : tests via `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 DATABASE_URL='sqlite:///./test.db' python -m pytest <tests_ciblés> -p no:cacheprovider`. npm/node absents → typecheck front via CI.
+
+### Précédent — 2026-07-02 (handoff Codex)
+
+> Detail complet -> `Sessions/2026-07-02 - Indices variables marches staging.md`.
 
 - **PR #37 MERGEE EN PROD** : budget contractuel revise par coefficient trimestriel DALKIA (P2/P3, P1 gaz exclu).
 - **PR #38 DRAFT SUR STAGING** (`codex/indices-variables`) : nouvelle vue lecture seule **Indices & variables** sur `/refonte-v1/marches` + endpoint `GET /api/marches/indices-variables?year_from=&year_to=`. CI verte (`backend`, `frontend`). Staging redeploye apres correction, health 200, revue UI Chrome OK.
