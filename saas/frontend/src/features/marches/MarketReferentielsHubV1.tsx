@@ -21,19 +21,14 @@ const VIEWS: { value: RefView; label: string }[] = [
 export function MarketReferentielsHubV1() {
   const [view, setView] = useState<RefView>("dpgf");
 
+  // Pas d'en-tête propre au hub : chaque page embarquée (CpeDalkiaImportPage / EnergieBpuPage)
+  // porte déjà son propre titre. On n'ajoute qu'un sélecteur compact pour éviter le double bandeau.
   return (
     <div className="po2-page-v1">
-      <header className="po2-page-v1__head">
-        <span className="po2-eyebrow">Moteurs métiers — Référentiels des marchés</span>
-        <h1>Référentiels contractuels — DPGF &amp; BPU</h1>
-        <p>
-          Point d'entrée unique des référentiels de prix des marchés : le DPGF du CPE DALKIA et les BPU de
-          fourniture Hérault Énergies. Import, révisions et historique sont assurés par les moteurs existants,
-          ici regroupés au même endroit.
-        </p>
-      </header>
-
-      <div className="po2-page-v1__viewswitch" style={{ marginBottom: "1rem" }}>
+      <div className="po2-page-v1__viewswitch" style={{ marginBottom: "0.5rem" }}>
+        <span className="po2-eyebrow" style={{ display: "block", marginBottom: 8 }}>
+          Référentiels des marchés
+        </span>
         <SegmentControl value={view} options={VIEWS} onChange={setView} />
       </div>
 
