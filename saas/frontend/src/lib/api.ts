@@ -5530,6 +5530,7 @@ export type EngieBudgetReviseV1 = {
   prm_count: number;
   turpe_available: boolean;
   bpu_available: boolean;
+  bpu_applied_prm_count: number;
   enedis_available: boolean;
   anomaly_prm_count: number;
   totals: {

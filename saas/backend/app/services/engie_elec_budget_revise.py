@@ -620,13 +620,15 @@ def build_elec_budget_revise(
         )
 
     anomaly_prm = sum(1 for p in points if p["has_anomaly"])
+    bpu_applied_prm = sum(1 for p in points if p["bpu_available"])
 
     return {
         "year": year,
         "generated_on": resolved_today.isoformat(),
         "prm_count": len(points),
         "turpe_available": turpe_available,
-        "bpu_available": any(p["bpu_available"] for p in points),
+        "bpu_available": bpu_applied_prm > 0,
+        "bpu_applied_prm_count": bpu_applied_prm,
         "enedis_available": any(p["enedis_available"] for p in points),
         "anomaly_prm_count": anomaly_prm,
         "totals": totals,
@@ -642,10 +644,18 @@ def build_elec_budget_revise(
                 else "conso N-1 reconduite (éclairage public non thermosensible), répartie par mois selon le "
                 "profil d'heures de nuit (photopériode ~Sète). "
             )
-            + "Prix de référence = fourniture révisée par ratio BPU (Y/N-1) + réseau révisé par ratio TURPE "
-            "(évolutions moyennes cumulées), fallback prix dérivés du N-1 par PRM. Atterrissage = réalisé Y "
-            "(décomposé fixe/variable) + reste projeté sur les mois NON couverts (conso mensuelle attendue × "
-            "prix de référence)."
+            + (
+                f"Prix de référence = fourniture révisée par ratio BPU (Y/N-1, appliqué sur "
+                f"{bpu_applied_prm}/{len(points)} PRM) + réseau révisé par ratio TURPE (évolutions moyennes "
+                "cumulées) ; à défaut, prix dérivés du N-1 par PRM. "
+                if bpu_applied_prm
+                else "Prix de référence = prix réels du N-1 par PRM, réseau ajusté par ratio TURPE "
+                "(acheminement). ⚠ La révision BPU (fourniture) n'est PAS appliquée : millésime BPU unique "
+                "(ratio année/N-1 impossible) et/ou segment tarifaire non couvert — la fourniture est tenue "
+                "au niveau du N-1 réel. "
+            )
+            + "Atterrissage = réalisé Y (décomposé fixe/variable) + reste projeté sur les mois NON couverts "
+            "(conso mensuelle attendue × prix de référence)."
             + (
                 f" ⚠ {anomaly_prm} PRM avec anomalie d'import (soutirage variable au prix aberrant, montant "
                 "corrigé sur la valeur mal placée et signalé) — à réimporter après correction du parser."
