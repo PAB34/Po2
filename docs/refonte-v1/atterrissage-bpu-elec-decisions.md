@@ -70,3 +70,31 @@ que le mécanisme BPU-ratio ne peut pas fonctionner avec la **forme actuelle** d
 **Q4 → Option A d'abord** : rendre la vue honnête (le libellé ne doit pas prétendre une révision BPU qui
 n'a pas lieu), calcul déjà disponible (`bpu_available`), zéro risque, zéro dépendance donnée. Traiter B
 (vocab EDF) et C (données ENGIE) comme des incréments séparés une fois Q2/Q3 clarifiés côté métier.
+
+## 7. DÉCISIONS TRANCHÉES + RÉALISÉ (2026-07-06)
+
+- **Q1 → Option A** retenue (rendre la vue honnête ; ambition BPU conservée, pas abandonnée). Option D
+  écartée (ne rien gagner de plus qu'A tout en jetant une capacité déjà codée).
+- **Q3 → EDF = mono-poste (BASE)** confirmé : les 425 lignes fourniture EDF ont `poste = None` et
+  l'éclairage public est facturé sur un compteur de nuit simple (pas de HP/HC). → réparable en incrément B
+  (mapper la fourniture EDF sur BASE), **pas** un défaut d'import.
+- **Q2 → non tranché** : dépend de la disponibilité de BPU ENGIE multi-millésimes + segments C2/C4
+  (fichiers à fournir par l'utilisateur). Bloquant pour C, hors périmètre de cette tranche.
+
+**Réalisé — Option A (branche `feat/atterrissage-bpu-elec`, PR à ouvrir, staging OK, NON mergé)** :
+- Backend `app/services/engie_elec_budget_revise.py` : `source_note` **conditionnel** (dit la vérité selon
+  que le BPU s'applique ou non) + nouveau champ `bpu_applied_prm_count` (n/total) ; `bpu_available` devient
+  `bpu_applied_prm_count > 0`.
+- Backend `app/schemas/engie_budget.py` : champ `bpu_applied_prm_count: int = 0` exposé par la route.
+- Front `features/marches/ElecBudgetReviseV1.tsx` : intros ENGIE + EDF reformulées (plus d'affirmation
+  « prix révisés par le BPU »), indicateur enrichi (`BPU appliqué (n/total)` vs `non appliqué (fourniture
+  tenue N-1)`), et **mention orange explicite** quand `!bpu_available` (« Révision BPU non applicable :
+  millésime unique / segment non couvert — fourniture tenue au N-1 réel, TURPE appliqué. Chiffres justes »).
+- Front `lib/api.ts` : type `EngieBudgetReviseV1` + `bpu_applied_prm_count`.
+- **Montants d'atterrissage inchangés** — seule l'honnêteté de l'affichage est corrigée.
+- Vérifs : `test_engie_elec_budget_revise.py` **11 passed** ; `tsc -b` **OK** ; deploy-staging **success**.
+
+**Reste (incréments séparés, non engagés)** :
+- **B — EDF** : mapper la fourniture EDF `poste None → BASE` + harmoniser le vocabulaire de segment
+  (`historical_segment_code_for_site` ↔ codes `import_bpu_xlsx` : C5_EP/ECLAIRAGE_PUBLIC, BATIMENT/C5_BAT_*).
+- **C — ENGIE** : charger ≥ 2 millésimes de BPU ENGIE + segments C2/C4 (dépend de fichiers sources).
