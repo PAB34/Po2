@@ -19,7 +19,28 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-07-03** (session Claude — budget révisé élec + moteur métier).
+> Mise à jour : **2026-07-06** (session Claude — moteur métier / référentiels marchés).
+
+- **✅ EN PROD (PR #42 mergée)** : **hub central « Référentiels marchés »** → `/refonte-v1/referentiels`
+  (section *Référentiels & admin*), 2 sous-onglets **DPGF DALKIA** + **BPU Hérault Énergies**.
+  ⚠️ **Pivot** vs l'audit : on a abandonné « onglet Référentiel par tier sous `/refonte-v1/marches` » au
+  profit d'un **hub central** qui **embarque les moteurs existants** (pas de réécriture). Q3/Q5/compa-fidélité
+  abandonnés. Cf. `docs/refonte-v1/moteur-metier-referentiels-decisions.md` **§0bis**.
+- **🔄 EN COURS (staging, PR #43, branche `feat/referentiels-ux`, worktree `C:\Users\pa.borja\Documents\Po2-ref-ux`)** :
+  **vue BPU curée DS V1** `saas/frontend/src/features/marches/BpuReferentielV1.tsx` (remplace l'embarquement
+  legacy dans le hub) — 2 sous-onglets *Consultation* (table BPU + drawer détail prix) / *Évolution* (graphe),
+  **TURPE retiré**, camembert codé en dur supprimé, pédagogie en infobulle, **admin replié « Gérer »**.
+  Page legacy `/energie/bpu` conservée. **En attente : validation visuelle user sur staging.**
+- **▶️ Prochaines étapes** : merger #43 **après validation** (⚠️ merge `main` = prod auto) ; puis **même
+  curation pour l'onglet DPGF DALKIA** (Q7, reportée).
+- **📄 Docs du chantier** : `moteur-metier-referentiels-trouvailles.md` (trouvailles/historique — moteur
+  BPU = `app/scripts/import_bpu_xlsx.py` + Excel `saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/…` ; ENGIE = 1
+  doc par nature ; actes DPGF = UI existante) · `referentiel-bpu-ux-decisions.md` (**§4bis** décisions UX) ·
+  `moteur-metier-referentiels-fidelite-inventaire.md`.
+- **🛠️ Env** : **node dispo** (portable) → typecheck front en local via jonction `node_modules` + `tsc.cmd -b`.
+
+> Reprise précédente (**2026-07-03**, Codex/Claude — budget révisé élec + cadrage moteur métier) conservée
+> ci-dessous pour trace. ⚠️ La cible « onglet Référentiel par tier » y est **supplantée** par le hub central.
 
 - **PR #41 MERGÉE EN PROD** (santé 200) : atterrissage **ENGIE élec** + **EDF éclairage public** (moteur élec
   générique fixe/variable par PRM, conso attendue = ENEDIS + DJU thermosensible ENGIE / photopériode EDF,
