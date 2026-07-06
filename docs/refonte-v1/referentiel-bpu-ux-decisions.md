@@ -41,6 +41,19 @@ Vue BPU curée, orientée **consultation** :
 - **Option B — nettoyer `EnergieBpuPage` en place** (retirer/replier les blocs) : plus rapide, mais garde
   le thème sombre legacy et impacte aussi `/energie/bpu`.
 
+## 4bis. DÉCISIONS TRANCHÉES (2026-07-06)
+- **Q1** → **les deux, en 2 sous-onglets distincts** dans la vue : **Consultation** (prix applicables) et
+  **Évolution** (graphe historique).
+- **Q2** → **Reconstruire au design-system V1** : nouveau composant `BpuReferentielV1` pour l'onglet BPU du
+  hub ; la page legacy `/energie/bpu` **reste intacte** (admin/full).
+- **Q3** → **retirer le bloc TURPE** de la vue référentiel BPU.
+- **Q5** → **supprimer** le camembert « poids TURPE dans la facture » (codé en dur, indicatif).
+- **Q4** → **pédagogie en infobulle** (définitions des composantes fourniture/capacité/CEE/GO), plus de gros blocs.
+- **Q6** → **admin replié derrière « Gérer »** (import xlsx / PDF-OCR + édition des prix).
+- **Q7** (DPGF même traitement) → **plus tard** ; on se concentre sur BPU d'abord.
+
+Cible retenue = 2 sous-onglets **Consultation** / **Évolution** + action **« Gérer »** (admin repliée).
+
 ## 5. Questions ouvertes (à trancher avant de coder)
 1. **Q1 — Job principal** de la vue BPU : consulter *le prix applicable* (opérationnel) ? voir *l'évolution
    historique* (analytique) ? les deux, avec lequel par défaut ?
