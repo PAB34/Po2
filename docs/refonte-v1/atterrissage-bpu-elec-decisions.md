@@ -156,7 +156,35 @@ alimentation [7]**, **Site/typologie [9]**, Poste, Prix fourniture. Constat :
   prix « BATIMENT ». **Pour apparier par classe, l'import 2026 doit préserver la tension** (ex.
   `BATIMENT_HTA`, `BATIMENT_BT`, `BATIMENT_BT36_<profil>`). Fix = **import-side + resolver-side**.
 
-- **Reste à valider (Q5, connaissance métier)** : (a) le pont HTA↔C1/C2/C3, BT>36↔C4, BT≤36↔C5 ci-dessus ;
-  (b) la correspondance fine des **profils de comptage BT≤36** 2026 (MUDT/SDT CU/LU/CU4) avec les variantes
-  `C5_BAT_1/2/4` 2025, ou une simplification acceptable ; (c) existe-t-il un doc officiel Hérault Énergie
-  de correspondance ancien↔nouveau ?
+## 10. Q5 TRANCHÉE (2026-07-06, vérifié par l'analyse — l'utilisateur délègue la vérif)
+
+Réponses utilisateur : pont « aucune idée, à toi de vérifier » · profils « je ne sais pas » · simplifier
+« oui si techniquement sans erreur » · doc officiel « Non ». → **vérifié depuis données + règles ENEDIS** :
+
+- **Pont CONFIRMÉ (réglementaire, non discrétionnaire)** : `C1/C2/C3 = HTA`, `C4 = BT > 36 kVA`,
+  `C5 = BT ≤ 36 kVA`. Auto-documenté par le classeur (rows 2026 ÉP « HTA - C2 », « BT>36 kVA - C4 ») et
+  **corroboré par les prix** : 2026 « BT » HPH 107,81 €/MWh ≈ 2025 « C4 » 107,96 €/MWh (10,796 c€/kWh).
+- **Simplification SANS PERTE, validée par les prix** :
+  - Côté **2025 (N-1)** : la fourniture est **plate par classe** (ex. C2 = 8,447 c€/kWh sur tous les
+    postes ; C4 = 10,796 ; C5_BAT = 10,586). Donc résoudre au niveau **classe** suffit, aucun poste fin.
+  - Côté **2026 (Y)** : la fourniture **varie par poste** (horosaisonnier) et par profil de comptage. Le
+    bon profil se **déduit de la structure de postes du PRM** : BASE → `SDT CU/LU` ; HP/HC → `MUDT` ;
+    HPH/HCH/HPE/HCE → `SDT CU4/MU4`. Pas d'arbitrage arbitraire → pas d'erreur.
+- **Deux différences structurelles à gérer (mécaniques)** :
+  1. **Unités** : 2025 en `c€/kWh`, 2026 en `€/MWh` (×10). L'import stocke `price_eur_per_mwh` → à
+     vérifier que la conversion c€/kWh→€/MWh est bien appliquée aux deux millésimes.
+  2. **Structure poste** : 2025 = prix fourniture **unique par classe** (répété sur tous les postes) ;
+     2026 = **différencié par poste**. Le ratio Σ(kWh_poste×prix_Y)/Σ(kWh_poste×prix_N-1) reste correct
+     (côté N-1, tous les postes portent le même prix de classe).
+
+### Règle de résolution retenue (à coder — B+C fusionnés)
+1. **Import** (`import_bpu_xlsx._normalize_segment`) : préserver la granularité 2026 « Bâtiment » →
+   `BATIMENT_HTA` / `BATIMENT_BT` / `BATIMENT_BT36_<profil>` au lieu d'un `BATIMENT` unique (bug §9).
+2. **Résolveur** (`resolve_historical_bpu_price` / `_bpu_fourniture_ratio`) : dé-scoper le fournisseur ;
+   résoudre par **typologie du marché en vigueur l'année**, via la classe ENEDIS du PRM (`segment`
+   C2/C4/C5) mappée : Y(2026) → bucket tension du nouveau marché (profil déduit des postes du PRM) ;
+   N-1(2025) → grille de classe de l'ancien marché.
+3. **EDF fourniture `poste None → BASE`** (B3, mono-poste éclairage public, Q3).
+
+⇒ **Aucune donnée ni connaissance métier supplémentaire requise.** Prochaine étape = coder (import +
+résolveur), tests ciblés + validation lecture seule sur prod, puis staging.
