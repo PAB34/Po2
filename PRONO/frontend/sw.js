@@ -3,7 +3,7 @@
  * le HTML, le JS ou le CSS : l'app affiche des données live et change
  * souvent, un cache agressif causerait des bugs de version périmée.
  * Seules les icônes (vraiment statiques) sont mises en cache. */
-const CACHE_NAME = "prono-static-v1";
+const CACHE_NAME = "prono-static-v2";
 const STATIC_ASSETS = [
   "/icons/icon-192.png",
   "/icons/icon-512.png",
