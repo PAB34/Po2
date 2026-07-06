@@ -128,3 +128,35 @@ seulement l'attributaire du lot/marché de l'année. Nouveau marché (2026) = EN
   typologies validé (Q5 ci-dessous). Un `.md` de décisions dédié avant de coder.
 - **Q5 (nouveau)** : valider la table de correspondance des typologies ancien↔nouveau marché.
 - Option A (déjà livrée) reste l'état honnête tant que B+C n'est pas fait.
+
+## 9. Analyse du classeur source `extraction_tarifs_BPU_herault.xlsx` (2026-07-06)
+
+Feuille `Prix_detailles` (178 lignes). Colonnes clés : Fournisseur, BPU/Marché, Lot, Année, **Tension/
+alimentation [7]**, **Site/typologie [9]**, Poste, Prix fourniture. Constat :
+
+- **Ancien marché (EDF, 2021→2025)** : prix rangés par **classe tarifaire ENEDIS** dans la colonne
+  typologie : `Sites C1/C2/C3/C4` (Lot 1, HTA/BT>36), `C5 Bornes` + `C5 Éclairage Public` (Lot 2),
+  `C5 bâtiment 1/2/4` + `C5 RAE` (Lot 3, BT≤36).
+- **Nouveau marché (2026)** : réorganisé par **usage** — `Bâtiment` (ENGIE, Lot 1) et `Éclairage Public`
+  (EDF, Lot 2) — puis subdivisé dans la colonne **Tension** par `HTA` / `BT` / `BT≤36 kVA` avec profil de
+  comptage (`MUDT`, `SDT CU`, `SDT LU`, `SDT CU4/MU4`). La classe C n'est plus le libellé principal, mais
+  reste lisible côté ÉP : le 2026 note explicitement `HTA - C2`, `BT>36 kVA - C4`.
+- **Pont dérivable des données** (à valider Q5) :
+  | Nouveau (2026) | Ancien (≤2025) | Classe ENEDIS du PRM |
+  |---|---|---|
+  | Bâtiment / HTA | C1, C2, C3 | C1/C2/C3 |
+  | Bâtiment / BT (>36 kVA) | C4 | C4 |
+  | Bâtiment / BT ≤36 kVA (MUDT, SDT…) | C5_BAT_* | C5 |
+  | Éclairage Public (toutes tensions) | C5_EP | C5 (usage ÉP) |
+  L'ancrage = la **classe ENEDIS du PRM** (déjà sur la facture, `EnergyInvoiceSite.segment` = C2/C4/C5).
+
+- **⚠️ Défaut d'import identifié** : `import_bpu_xlsx._normalize_segment` teste `Bâtiment` AVANT la tension
+  → **les 6 variantes 2026 (HTA/BT/BT≤36 profils) sont écrasées sous un seul `segment_code = BATIMENT`**
+  (contrainte unique `(document_id, segment_code)` → une seule survit). C'est pourquoi ENGIE n'a que 32
+  prix « BATIMENT ». **Pour apparier par classe, l'import 2026 doit préserver la tension** (ex.
+  `BATIMENT_HTA`, `BATIMENT_BT`, `BATIMENT_BT36_<profil>`). Fix = **import-side + resolver-side**.
+
+- **Reste à valider (Q5, connaissance métier)** : (a) le pont HTA↔C1/C2/C3, BT>36↔C4, BT≤36↔C5 ci-dessus ;
+  (b) la correspondance fine des **profils de comptage BT≤36** 2026 (MUDT/SDT CU/LU/CU4) avec les variantes
+  `C5_BAT_1/2/4` 2025, ou une simplification acceptable ; (c) existe-t-il un doc officiel Hérault Énergie
+  de correspondance ancien↔nouveau ?
