@@ -17,6 +17,11 @@ def news(team: str = Query(...), user=Depends(get_current_user)):
     return service.team_news(team)
 
 
+@router.get("/actu")
+def actu(user=Depends(get_current_user)):
+    return service.league_actu()
+
+
 @router.get("/health")
 def health(user=Depends(get_current_user)):
     return service.health()

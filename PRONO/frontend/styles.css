@@ -141,3 +141,126 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .loginmsg.show{display:block}
 .loginmsg.err{background:#fee2e2;color:#7f1d1d}
 .loginmsg.ok{background:#dcfce7;color:#14532d}
+
+/* ===== Onglets ===== */
+.tabs{display:flex;gap:5px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+  border-radius:13px;padding:5px;margin-bottom:14px}
+.tab{flex:1;background:transparent;color:#bfe6d2;border-radius:9px;min-height:40px;font-weight:800;font-size:14px}
+.tab.active{background:var(--lime);color:#172800}
+
+/* ===== Tableau des matchs ===== */
+.ptable{width:100%;border-collapse:collapse;background:var(--card);color:var(--ink);
+  border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+.ptable thead th{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted);padding:10px 4px;text-align:center;background:var(--soft)}
+.ptable thead th:first-child{text-align:left;padding-left:14px}
+.prow{cursor:pointer;border-top:1px solid var(--line)}
+.prow:hover{background:#f8fbf9}
+.prow td{padding:10px 4px;vertical-align:middle}
+.mcell{padding-left:14px!important;max-width:0;width:99%}
+.mteams{font-family:var(--font-display);font-weight:400;font-size:16px;line-height:1;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mteams .msep{color:var(--muted);margin:0 5px}
+.mteams .ma{color:#1f3d2e}
+.msub{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:10.5px;font-weight:700;color:var(--muted)}
+.cdot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.cdot.fort{background:var(--green)} .cdot.moyen{background:var(--gold)} .cdot.faible{background:#cbd5e1}
+.rowbadge.inj{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.pc{text-align:center;font-weight:800;font-size:13px;width:38px;color:#64748b}
+.pc.win{font-weight:900;color:#0c241b}
+.pc.h.win{background:rgba(25,163,90,.16)} .pc.d.win{background:rgba(148,163,184,.22)} .pc.a.win{background:rgba(37,99,235,.14)}
+.acell{width:54px;text-align:center}
+.actubtn{background:#eef6f1;color:#0c241b;border:1px solid #cfe3d7;border-radius:9px;
+  padding:7px 9px;font-size:11px;font-weight:900}
+.actubtn:active{transform:translateY(1px)}
+
+/* ligne de détail dépliée */
+.detailrow td{background:var(--soft);padding:12px}
+.detailrow .dcols{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.dlbl{margin-top:9px;font-size:11px;font-weight:900;color:#475569;text-transform:uppercase;letter-spacing:.05em}
+@media(max-width:560px){ .detailrow .dcols{grid-template-columns:1fr} .mteams{font-size:15px} .pc{width:34px;font-size:12px} }
+
+/* actu : flux plein écran (onglet Actualité) */
+.newslist.big .newsitem{background:var(--card);box-shadow:0 6px 18px rgba(3,18,12,.12);border:0;margin-bottom:9px;padding:12px 14px}
+.newslist.big .newsitem a{font-size:14px}
+
+/* ===== Enjeu (classement / situation au tableau) ===== */
+.rowbadge.hot{background:#ffedd5;color:#9a3412;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.stknote{background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;border-radius:11px;
+  padding:9px 12px;margin-bottom:11px;font-size:12.5px;font-weight:700;line-height:1.4}
+.stkrow{display:flex;flex-direction:column;gap:6px;margin-bottom:4px}
+.stkrank{font-size:11.5px;font-weight:800;color:#475569}
+.stkpill{display:inline-block;font-size:11.5px;font-weight:900;padding:5px 10px;border-radius:9px;
+  align-self:flex-start;line-height:1.3}
+.stkpill.stk-fort{background:#fee2e2;color:#b91c1c}
+.stkpill.stk-moyen{background:#fef3c7;color:#92400e}
+.stkpill.stk-faible{background:#e2e8f0;color:#475569}
+
+/* ===== Derby / rivalité ===== */
+.rowbadge.derby{background:#ede9fe;color:#5b21b6;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.derbynote{background:#f5f3ff;border:1px solid #ddd6fe;color:#4c1d95;border-radius:11px;
+  padding:9px 12px;margin-bottom:11px;font-size:12.5px;font-weight:700;line-height:1.4}
+
+/* ===== Trêve internationale / hivernale (bandeau journée) ===== */
+.breaknote{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:14px;
+  padding:11px 14px;margin-bottom:14px;font-size:13px;font-weight:700;line-height:1.45}
+
+/* ===== Niveau de lecture (consolidé : enjeu fort + derby + trêve) ===== */
+.rowbadge.ctx-nuancer{background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.rowbadge.ctx-volatil{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:1px 5px;font-size:9.5px;font-weight:900}
+.ctxblock{border-radius:13px;padding:11px 13px;margin-bottom:11px;font-size:12.5px;line-height:1.45}
+.ctxblock.ctx-standard{background:#f1f5f9;border:1px solid #e2e8f0;color:#334155}
+.ctxblock.ctx-nuancer{background:#fffbeb;border:1px solid #fde68a;color:#78350f}
+.ctxblock.ctx-volatil{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d}
+.ctxhead{font-weight:900;margin-bottom:6px}
+.ctxlist{margin:0 0 8px;padding-left:18px}
+.ctxlist li{margin-bottom:3px;font-weight:700}
+.ctxlist.empty{font-weight:700;opacity:.75;list-style:none;padding-left:0}
+.ctxfoot{font-size:11px;font-weight:600;opacity:.85}
+
+/* ===== Modale (instructions d'installation) ===== */
+.modal{position:fixed;inset:0;z-index:50;background:rgba(3,11,8,.7);display:flex;
+  align-items:center;justify-content:center;padding:16px}
+.modal.hidden{display:none}
+.modalBox{background:var(--card);color:var(--ink);border-radius:20px;padding:18px;
+  max-width:420px;width:100%;box-shadow:var(--shadow)}
+.modalHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.modalHead h3{margin:0;font-family:var(--font-display);font-weight:400;font-size:18px;text-transform:uppercase}
+.modalHead .btn{background:var(--soft);color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.installStep{margin-bottom:11px;font-size:13px;font-weight:700;color:#334155;line-height:1.45}
+.installStep b{display:block;color:var(--ink);margin-bottom:3px}
+
+/* ===== Résumé en un coup d'œil ===== */
+.summaryline{font-size:13px;font-weight:800;color:#eaf6ef;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:9px 13px;margin-bottom:12px}
+.summaryline span{margin-right:2px}
+
+/* ===== Badge club (initiales + couleur, pas de vrai logo) ===== */
+.crest{display:inline-flex;align-items:center;justify-content:center;
+  min-width:30px;height:18px;padding:0 5px;border-radius:5px;
+  font-size:9px;font-weight:900;letter-spacing:.01em;vertical-align:middle;
+  box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.dcard h4 .crest{margin-right:6px}
+
+/* ===== Tests PRONO value ===== */
+.testbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.testbar .btn{min-height:38px;border-radius:10px;font-size:13px}
+.teststatus.ok{border-color:rgba(34,197,94,.35);background:rgba(22,101,52,.24);color:#dcfce7}
+.teststatus.degraded{border-color:rgba(248,195,59,.45);background:rgba(120,83,15,.24);color:#fef3c7}
+.teststatus.error{border-color:rgba(239,68,68,.45);background:rgba(127,29,29,.28);color:#fee2e2}
+.testgrid{display:grid;gap:10px;margin-top:12px}
+.testsummary{display:flex;flex-wrap:wrap;gap:8px;background:var(--card);color:var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 8px 24px rgba(3,18,12,.16)}
+.testsummary span{font-size:12px;font-weight:800;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:7px 9px}
+.testcard{background:var(--card);color:var(--ink);border-radius:14px;padding:12px 13px;box-shadow:0 8px 24px rgba(3,18,12,.16);border-left:5px solid #94a3b8}
+.testcard.ok{border-left-color:var(--green)}
+.testcard.degraded{border-left-color:var(--gold)}
+.testcard.error{border-left-color:var(--red)}
+.testhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.testhead b{font-family:var(--font-display);font-weight:400;text-transform:uppercase;font-size:16px}
+.testhead span{font-size:10px;font-weight:900;text-transform:uppercase;border-radius:999px;background:var(--soft);color:#475569;padding:4px 8px}
+.testcard p{margin:0 0 7px;font-size:13px;font-weight:700;color:#334155;line-height:1.4}
+.testmeta{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px}
+.jsonbox{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+.jsonbox summary{cursor:pointer;font-size:12px;font-weight:900;color:var(--green)}
+.jsonbox pre{max-height:320px;overflow:auto;background:#061a2b;color:#d8ffe9;border-radius:10px;padding:10px;font-size:11px;line-height:1.45;white-space:pre-wrap}
+@media(max-width:560px){.testbar .btn{flex:1 1 calc(50% - 8px);justify-content:center}.testbar .btn.lime{flex-basis:100%}}

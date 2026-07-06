@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0a2e22">
   <title>Ligue 1 · Pronos</title>
+
+  <!-- PWA : installable sur l'écran d'accueil -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="L1 Pronos">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -34,29 +44,87 @@
   <div class="topbar">
     <div class="brand">
       <div class="logo">L1</div>
-      <div><b>Ligue 1 · Pronos</b><small>Probabilités &amp; actu des équipes</small></div>
+      <div><b>Ligue 1 · Pronos</b><small>Probabilités &amp; actu</small></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn sm" id="refreshBtn" onclick="loadJournee(true)">↻ Actualiser</button>
+      <button class="btn sm hidden" id="installBtn" onclick="installApp()">📲 Installer</button>
+      <button class="btn sm" id="refreshBtn" onclick="refreshAll()">↻</button>
+      <button class="btn sm" onclick="showAccount()">⚙️</button>
       <button class="btn sm" onclick="logout()">Quitter</button>
     </div>
   </div>
 
-  <div class="hero">
-    <span class="kicker">⚽ Prochaine journée</span>
-    <h1 id="heroTitle">Pronostics du jour</h1>
-    <div class="metaline" id="heroMeta"></div>
+  <div class="metaline" id="heroMeta" style="margin-bottom:10px"></div>
+  <div id="summaryLine" class="summaryline hidden"></div>
+  <div id="breakNote" class="breaknote hidden"></div>
+  <div id="healthAlert" class="alert hidden"></div>
+
+  <!-- Onglets -->
+  <div class="tabs">
+    <button class="tab active" data-tab="matchs" onclick="switchTab('matchs')">⚽ Matchs</button>
+    <button class="tab" data-tab="actu" onclick="switchTab('actu')">📰 Actualité</button>
+    <button class="tab" data-tab="tests" onclick="switchTab('tests')">Tests</button>
   </div>
 
-  <div id="healthAlert" class="alert hidden"></div>
-  <div id="list"><div class="loading"><div class="spin"></div>Chargement…</div></div>
+  <!-- Vue Matchs (tableau) -->
+  <section id="view-matchs">
+    <div id="list"><div class="loading"><div class="spin"></div>Chargement…</div></div>
+    <div class="note">
+      ℹ️ Probabilités = <b>consensus du marché</b> (cotes Pinnacle/Bet365, dévigottées).
+      L'actu et les blessés sont du <b>contexte</b> : ils n'entrent <b>pas</b> dans le calcul
+      des probabilités (les bookmakers les intègrent déjà).
+    </div>
+  </section>
 
-  <div class="note">
-    ℹ️ Probabilités issues du <b>consensus du marché</b> (cotes Pinnacle/Bet365, dévigottées).
-    Meilleure estimation gratuite, mais <b>aucun avantage</b> sur les bookmakers : outil de lecture.
+  <!-- Vue Actualité -->
+  <section id="view-actu" class="hidden">
+    <div id="actuList"><div class="loading"><div class="spin"></div>Chargement de l'actu…</div></div>
+  </section>
+  <!-- Vue Tests PRONO -->
+  <section id="view-tests" class="hidden">
+    <div class="testbar">
+      <button class="btn lime" onclick="loadDiagnostics(true)">Diagnostiquer</button>
+      <button class="btn" onclick="runValueCheck('scenarios')">Scenarios</button>
+      <button class="btn" onclick="runValueCheck('tickets')">Tickets candidats</button>
+      <button class="btn" onclick="runValueCheck('backtest')">Backtest scenarios</button>
+      <button class="btn" onclick="runValueCheck('coverage')">Couverture cotes</button>
+    </div>
+    <div id="testsStatus" class="note">Lance un diagnostic pour voir quelles briques PRONO sont disponibles.</div>
+    <div id="testsPanel" class="testgrid"></div>
+  </section>
+
+</div>
+
+<!-- Instructions d'installation (iOS / repli sans prompt natif) -->
+<div id="installModal" class="modal hidden" onclick="if(event.target.id==='installModal')hideInstall()">
+  <div class="modalBox">
+    <div class="modalHead"><h3>📲 Installer sur l'écran d'accueil</h3>
+      <button class="btn sm" onclick="hideInstall()">Fermer</button></div>
+    <div id="installContent"></div>
+  </div>
+</div>
+
+<!-- Mon compte (changer le mot de passe) -->
+<div id="accountModal" class="modal hidden" onclick="if(event.target.id==='accountModal')hideAccount()">
+  <div class="modalBox">
+    <div class="modalHead"><h3>⚙️ Mon compte</h3>
+      <button class="btn sm" onclick="hideAccount()">Fermer</button></div>
+    <div class="field"><label for="accEmail">Email</label>
+      <input id="accEmail" type="email" disabled></div>
+    <div class="field" style="margin-top:10px"><label for="curPwd">Mot de passe actuel</label>
+      <input id="curPwd" type="password" autocomplete="current-password"></div>
+    <div class="field" style="margin-top:10px"><label for="newPwd">Nouveau mot de passe</label>
+      <input id="newPwd" type="password" autocomplete="new-password" placeholder="8 caractères minimum"></div>
+    <div class="field" style="margin-top:10px"><label for="newPwd2">Confirmer le nouveau mot de passe</label>
+      <input id="newPwd2" type="password" autocomplete="new-password"></div>
+    <button class="btn lime block" style="margin-top:14px" onclick="doChangePassword()">Modifier le mot de passe</button>
+    <div id="accountMsg" class="loginmsg"></div>
   </div>
 </div>
 
 <script src="/app.js"></script>
 </body>
 </html>
+
+
+

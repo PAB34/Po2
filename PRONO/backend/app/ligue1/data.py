@@ -58,12 +58,33 @@ def _cache_fresh():
     return age_h < RAW_CACHE_TTL_HOURS
 
 
+
+def _empty_history() -> pd.DataFrame:
+    return pd.DataFrame(columns=["Season", "Kickoff", "HomeTeam", "AwayTeam", "FTR", "FTHG", "FTAG"])
+
+
+def _history_columns(raw: pd.DataFrame) -> list[str]:
+    base = ["Season", "Kickoff", "HomeTeam", "AwayTeam", "FTR", "FTHG", "FTAG"]
+    return [c for c in base if c in raw.columns] + [c for c in ODDS_COLS if c in raw.columns]
+
+
+def _load_history_cache() -> pd.DataFrame | None:
+    if not os.path.exists(RAW_CACHE):
+        return None
+    try:
+        raw = pd.read_pickle(RAW_CACHE)
+        required = {"Season", "Kickoff", "HomeTeam", "AwayTeam"}
+        if not required.issubset(raw.columns):
+            return None
+        return raw[_history_columns(raw)].copy()
+    except Exception:
+        return None
+
+
 def load_history(use_cache=True) -> pd.DataFrame:
     if use_cache and _cache_fresh():
-        raw = pd.read_pickle(RAW_CACHE)
-        base = ["Season", "Kickoff", "HomeTeam", "AwayTeam", "FTR", "FTHG", "FTAG"]
-        cols = [c for c in base if c in raw.columns] + [c for c in ODDS_COLS if c in raw.columns]
-        out = raw[cols].copy()
+        cached = _load_history_cache()
+        out = cached if cached is not None else _empty_history()
     else:
         frames = []
         for y in SEASON_START_YEARS:
@@ -76,17 +97,21 @@ def load_history(use_cache=True) -> pd.DataFrame:
             for c in ODDS_COLS + ["FTHG", "FTAG"]:
                 df[c] = pd.to_numeric(df.get(c), errors="coerce")
             frames.append(df[["Season", "Kickoff", "HomeTeam", "AwayTeam", "FTR", "FTHG", "FTAG"] + ODDS_COLS])
-        out = pd.concat(frames, ignore_index=True)
-        try:
-            out.to_pickle(RAW_CACHE)  # met à jour le cache
-        except Exception:
-            pass
+        if frames:
+            out = pd.concat(frames, ignore_index=True)
+            try:
+                out.to_pickle(RAW_CACHE)  # met a jour le cache
+            except Exception:
+                pass
+        else:
+            out = _load_history_cache() if use_cache else None
+            if out is None:
+                out = _empty_history()
     for c in ODDS_COLS:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors="coerce")
     out = out.dropna(subset=["HomeTeam", "AwayTeam", "Kickoff"])
     return out.sort_values("Kickoff").reset_index(drop=True)
-
 
 def load_upcoming() -> pd.DataFrame:
     """Prochains matchs de Ligue 1 avec cotes, depuis fixtures.csv."""
@@ -119,3 +144,7 @@ def fixtures_from_manual(rows) -> pd.DataFrame:
         df[c] = pd.to_numeric(df.get(c), errors="coerce")
     keep = ["Kickoff", "HomeTeam", "AwayTeam", "FTR"] + ODDS_COLS
     return df[keep]
+
+
+
+

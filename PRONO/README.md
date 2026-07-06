@@ -58,6 +58,18 @@ python -m uvicorn app.main:app --port 5000 --app-dir .
 5. Ouvrir `https://ligue1.patrimoineaucarre.com` → écran de connexion → tes identifiants.
    (HTTPS émis automatiquement par Caddy dès que le DNS est en place.)
 
+
+## Workflow GitHub Actions
+
+Le workflow `.github/workflows/deploy-prono.yml` déploie uniquement PRONO sur le VPS.
+Il se déclenche manuellement ou sur push `main`/`master` touchant `PRONO/**`.
+
+Pré-requis côté VPS :
+
+- `PRONO/infra/.env` existe et contient `PRONO_SECRET_KEY`, `PRONO_ADMIN_EMAIL`, `PRONO_ADMIN_PASSWORD` ;
+- le bloc Caddy `ligue1.patrimoineaucarre.com` est présent dans `saas/infra/caddy/Caddyfile` ;
+- le DNS `ligue1.patrimoineaucarre.com` pointe vers le VPS.
+
 ## Accès privé
 
 - Aucune inscription publique. **Un seul compte**, créé au démarrage depuis
@@ -76,3 +88,9 @@ python -m uvicorn app.main:app --port 5000 --app-dir .
 
 Dépendances backend : fastapi, uvicorn/gunicorn, python-jose, passlib/bcrypt,
 pandas, numpy, beautifulsoup4, lxml. **Pas de scipy.**
+
+## Pivot value betting booste
+
+Une specification de pivot vers un moteur de simulation/backtest value betting booste est ouverte dans `specs/value-betting-booste.md`.
+
+Regle de transition : l'ecran actuel conserve les probabilites de marche devigottees comme baseline. Le nouveau moteur doit d'abord rester separe, teste et valide par backtest walk-forward avant toute presentation front comme signal exploitable.

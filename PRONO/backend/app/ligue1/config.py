@@ -42,6 +42,57 @@ CONF_FORT = 0.60
 CONF_MOYEN = 0.45
 DRAW_MAX_FOR_FORT = 0.30
 
+# ------------------------------------------------------------------
+# Enjeu réel (classement) — zones européennes / relégation.
+# ⚠ Ces tailles de zone dépendent des règles UEFA de la saison (coefficient
+# pays) et peuvent varier d'une année à l'autre. Valeurs par défaut Ligue 1
+# (18 équipes depuis 2023-24) : ~5 places européennes (C1+C3+C4 combinées,
+# approximatif), 3 places de relégation (2 directes + 1 barrage).
+# À ajuster en début de saison si la réglementation change.
+LIGUE1_EUROPE_ZONE = 5
+LIGUE1_RELEGATION_ZONE = 3
+
+# ------------------------------------------------------------------
+# Seuil "en lutte" — DYNAMIQUE, pas une valeur fixe.
+# ------------------------------------------------------------------
+# Un écart de 8 points ne représente pas la même urgence en septembre (30
+# matchs restants, 90 points encore en jeu) qu'à 3 journées de la fin (9
+# points en jeu). Le seuil doit donc se resserrer mécaniquement à mesure que
+# la saison avance, pour rester cohérent avec la réalité sportive.
+#
+# Formule : threshold = clamp(SHARE * points_encore_en_jeu, FLOOR, CAP)
+#   - SHARE  : part des points restants encore en jeu en dessous de laquelle
+#              on considère l'écart comme "rattrapable" (0.35 ≈ l'équipe
+#              peut combler l'écart sans gagner la quasi-totalité de ses
+#              matchs restants).
+#   - CAP    : plafond, ≈ 2-3 victoires d'écart (le repère classique "encore
+#              jouable"). Gouverne tant qu'il reste beaucoup de matchs.
+#   - FLOOR  : plancher en toute fin de saison, pour ne pas exclure à tort
+#              un petit écart réel (1-3 points) lors des derniers matchs.
+LIGUE1_LUTTE_GAP_SHARE = 0.35
+LIGUE1_LUTTE_GAP_CAP = 8
+LIGUE1_LUTTE_GAP_FLOOR = 3
+
+# En dessous de ce nombre de matchs joués (sur l'ensemble de la saison), on
+# nuance les libellés "en lutte" comme prématurés (échantillon trop petit
+# pour que le classement soit significatif).
+LIGUE1_TRES_TOT_PLAYED_MAX_RATIO = 0.18   # ≈ 6 matchs sur 34
+# En dessous de ce nombre de matchs restants, on accentue l'urgence du
+# libellé ("décisif", "sprint final").
+LIGUE1_FIN_DE_SAISON_REMAINING_RATIO = 0.25  # ≈ les 8 derniers matchs sur 34
+
+# ------------------------------------------------------------------
+# Trêve internationale / hivernale — détectée depuis nos propres dates de
+# calendrier (cf. calendar_context.py), aucune source externe nécessaire.
+# ------------------------------------------------------------------
+# Écart (en jours) entre 2 journées au-delà duquel on considère que ce n'est
+# plus le rythme hebdomadaire normal (3-7 jours) mais une vraie coupure.
+BREAK_GAP_THRESHOLD_DAYS = 9
+# Mois où tombent les fenêtres internationales FIFA pendant une saison de
+# Ligue 1 (août à mai) : septembre, octobre, novembre, mars. Juin existe
+# aussi mais tombe hors saison. Stable d'une année sur l'autre.
+FIFA_WINDOW_MONTHS = {9, 10, 11, 3}
+
 # Regroupement en « journée » : nouveau bloc si l'écart entre 2 matchs dépasse N jours.
 JOURNEE_GAP_DAYS = 4
 
