@@ -63,6 +63,28 @@ partagé, de façon **additive** (n'enlève aucun match existant, en ajoute) :
 - Q2 — Désambiguïsation canonique : si plusieurs références partagent la typologie (ex. C5_BAT_1/2/4, même
   prix), prendre la plus récente / n'importe laquelle (prix identiques) — à confirmer sur données.
 
+## 6bis. RÉALISÉ + VALIDATION STAGING (2026-07-07)
+
+Code (branche `feat/bpu-import-granulaire`) : `_normalize_segment` + `_tension_bucket` (import granulaire
+bâtiment 2026) ; `_segment_code_candidates` + match `in candidates` dans `resolve_historical_bpu_price`
+(partagé). Atterrissage : aucun changement. 43 tests verts.
+
+**Re-import = `import_xlsx(path, force=True)`** : `force=True` fait un **remplacement propre**
+(delete doc existant + recreate) → pas de doublon, l'ancien `BATIMENT` collapse disparaît. **Fichier =
+`extraction_tarifs_electricite_BPU.xlsx`** (EDF+ENGIE, **sans** TotalEnergies) → évite d'ajouter par
+erreur le doc gaz TE (le fichier `_herault` l'ajouterait — écarté).
+
+**Validation staging (code déployé + re-import elec)** :
+- ENGIE segments : `BATIMENT` → **`BATIMENT_HTA` / `BATIMENT_BT` / `BATIMENT_BT36`** (collapse supprimé).
+- Contrôle factures : **C2 0→4/5, C4 0→4/5, C5 5/5** (gain net, zéro régression ; le 5ᵉ poste = BASE
+  absent des grilles 4-saisons HTA/BT, normal).
+- Atterrissage ENGIE 2026 : 267/267 BPU appliqués, prév. réf. 1,152 M€ → **1,135 M€** (affinage ~1 %).
+- EDF inchangé (16 docs). Aucun doc TE ajouté avec le fichier élec.
+
+**Procédure prod (après merge du code)** : 1) merge → déploie le nouveau code ; 2)
+`import_xlsx(extraction_tarifs_electricite_BPU.xlsx, force=True)` sur prod ; 3) vérifier segments +
+contrôle + atterrissage. Fenêtre merge→reimport sans régression (C5 reste matché via `BATIMENT`).
+
 ## 7. Recommandation
 Approche §4 (canonique, additive) = la seule qui supprime le résidu SANS casser le contrôle. Coût modéré,
 gain faible mais réel. Procéder avec les tests §5 comme filet. Sinon, statu quo assumé (résidu < 0,5 %).
