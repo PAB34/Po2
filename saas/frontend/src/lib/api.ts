@@ -5531,6 +5531,7 @@ export type EngieBudgetReviseV1 = {
   turpe_available: boolean;
   bpu_available: boolean;
   bpu_applied_prm_count: number;
+  reference_annee_en_vigueur_count: number;
   enedis_available: boolean;
   anomaly_prm_count: number;
   totals: {

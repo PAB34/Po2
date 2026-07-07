@@ -343,6 +343,29 @@ def _lookup_fourniture(
     return None
 
 
+def _bpu_fourniture_unit_price(
+    index: dict[str, dict[tuple, float]],
+    site_meta: dict[str, Any],
+    year: int,
+    is_public_lighting: bool,
+) -> float | None:
+    """Prix unitaire fourniture BPU (€/kWh) de la typologie du PRM pour l'année, moyenne postes.
+
+    Sert de référence quand le marché n'a pas d'historique N-1 (prix contractuel du marché en vigueur).
+    """
+    canon = _prm_canonical_typology(site_meta, is_public_lighting)
+    if canon is None:
+        return None
+    candidates = [canon]
+    if canon in (_CANON_HTA, _CANON_BT_SUP36, _CANON_BT_INF36):
+        candidates.append(_CANON_BUILDING_ANY)
+    for c in candidates:
+        price = index["by_year"].get((c, year))
+        if price is not None:
+            return price / 1000.0  # €/MWh → €/kWh
+    return None
+
+
 def _bpu_fourniture_ratio(
     index: dict[str, dict[tuple, float]],
     site_meta: dict[str, Any],
@@ -489,22 +512,39 @@ def _build_point(
     lines_y = _strip_redundant_fixed_total(lines_y)
     ref = _reference_from_lines(lines_n1)
     realise = _realise_from_lines(lines_y)
+    is_public_lighting = conso_model == "photoperiod"
+
+    # Marché sans historique N-1 (ex. ENGIE démarré l'année Y) : une référence bâtie sur N-1 serait nulle.
+    # Bascule « année en vigueur » : on prend les prix unitaires des factures Y (déjà au prix du marché
+    # courant), fourniture calée sur le BPU du marché quand dispo, appliqués à la conso attendue ENEDIS N-1.
+    reference_source = "historique_n1"
+    if ref["kwh"] <= 0 and any(_num(l["quantity"]) for l in lines_y if l["code"] in _SUPPLY):
+        ref = _reference_from_lines(lines_y)
+        reference_source = "annee_en_vigueur"
 
     conso = _expected_consumption(prm, year, dju_normal, ref["kwh"], conso_model, photoperiod)
-    is_public_lighting = conso_model == "photoperiod"
     bpu_ratio, bpu_available = _bpu_fourniture_ratio(
         bpu_index, site_meta, ref["postes_kwh"], year, is_public_lighting
     )
 
-    # Dénominateur du prix unitaire N-1 : kWh facturés si présents (ENGIE), sinon kWh ENEDIS N-1
+    # Dénominateur du prix unitaire : kWh facturés si présents (ENGIE), sinon kWh ENEDIS N-1
     # (EDF : les lignes fourniture n'ont pas de quantité → on prend la conso ENEDIS de l'année N-1).
     pu_denom = ref["kwh"] if ref["kwh"] > 0 else conso["enedis_kwh_n1"]
     pu_fourniture = (ref["fourniture"] / pu_denom) if pu_denom > 0 else 0.0
     pu_reseau_var = (ref["reseau_var"] / pu_denom) if pu_denom > 0 else 0.0
     pu_autres_var = (ref["autres_var"] / pu_denom) if pu_denom > 0 else 0.0
 
-    pu_variable = pu_fourniture * bpu_ratio + pu_reseau_var * turpe_ratio + pu_autres_var
-    fixe_prevision = ref["fixe_reseau"] * turpe_ratio + ref["fixe_autre"]
+    if reference_source == "annee_en_vigueur":
+        # Prix Y déjà courants → pas de révision Y/N-1 ; fourniture calée sur le BPU du marché si dispo.
+        bpu_ratio, eff_turpe = 1.0, 1.0
+        bpu_pu = _bpu_fourniture_unit_price(bpu_index, site_meta, year, is_public_lighting)
+        if bpu_pu is not None:
+            pu_fourniture, bpu_available = bpu_pu, True
+    else:
+        eff_turpe = turpe_ratio
+
+    pu_variable = pu_fourniture * bpu_ratio + pu_reseau_var * eff_turpe + pu_autres_var
+    fixe_prevision = ref["fixe_reseau"] * eff_turpe + ref["fixe_autre"]
     variable_prevision = conso["conso_attendue_kwh"] * pu_variable
     prevision_reference = variable_prevision + fixe_prevision
 
@@ -544,6 +584,7 @@ def _build_point(
         "atterrissage": atterrissage,
         "ecart_atterrissage_vs_prevision": round(atterrissage - prevision_reference, 2),
         "landing_method": method,
+        "reference_source": reference_source,
         "has_history": ref["kwh"] > 0 or conso["enedis_available"],
     }
 
@@ -724,12 +765,14 @@ def build_elec_budget_revise(
 
     anomaly_prm = sum(1 for p in points if p["has_anomaly"])
     bpu_applied_prm = sum(1 for p in points if p["bpu_available"])
+    ref_en_vigueur_prm = sum(1 for p in points if p.get("reference_source") == "annee_en_vigueur")
 
     return {
         "year": year,
         "generated_on": resolved_today.isoformat(),
         "prm_count": len(points),
         "turpe_available": turpe_available,
+        "reference_annee_en_vigueur_count": ref_en_vigueur_prm,
         "bpu_available": bpu_applied_prm > 0,
         "bpu_applied_prm_count": bpu_applied_prm,
         "enedis_available": any(p["enedis_available"] for p in points),

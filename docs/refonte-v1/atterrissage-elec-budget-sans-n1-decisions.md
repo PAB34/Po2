@@ -45,6 +45,23 @@ priori (sauf si le parseur bute sur un nouveau format).
 **Question ouverte** :
 - Q4 — Les factures EDF 2026 sont-elles disponibles (fichiers CSV) à importer, ou pas encore émises ?
 
+## 2bis. RÉALISÉ — Finding A (branche `feat/elec-budget-sans-n1`, 2026-07-07)
+
+Décisions tranchées (validées utilisateur) : Q1 → mode « année en vigueur » déclenché **seulement** si
+`ref["kwh"]==0` (aucune facture N-1) ET lignes fourniture Y avec quantité (protège EDF, dont la
+fourniture n'a pas de kWh, de basculer par erreur). Q2 → part fixe/réseau/taxes = **prix unitaires des
+factures Y** (déjà au prix du marché courant), fourniture **calée sur le BPU** du marché en vigueur si
+dispo. Q3 → PRM sans ENEDIS N-1 restent à 0 (assumé, comptés).
+
+Implémentation (`engie_elec_budget_revise.py`) : `_bpu_fourniture_unit_price` (prix fourniture BPU €/kWh
+par typologie), bascule dans `_build_point` (`reference_source` = `historique_n1` | `annee_en_vigueur`,
+pas de révision Y/N-1 en mode Y), compteur `reference_annee_en_vigueur_count`, champ front + mention.
+Tests : 17 passed (dont 2 nouveaux : fallback + non-régression historique_n1). tsc OK.
+
+**Validation prod (lecture seule)** : ENGIE 2026 budget de référence **136 € → 1 152 446 €** (254/267 PRM
+en « année en vigueur », 253/267 avec prévision > 0). Écart atterrissage/référence = +397 k€
+(surconsommation vs attendu N-1, désormais lisible). EDF inchangé (garde historique_n1 — Finding B).
+
 ## 3. Recommandation
 - **A = chantier de code** à forte valeur (rend le budget ENGIE 2026 réel) → à cadrer/coder.
 - **B = action données** (import) → dépend de fichiers utilisateur ; à confirmer (Q4) avant tout.

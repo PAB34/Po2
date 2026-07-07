@@ -33,6 +33,7 @@ class EngieBudgetRevisePointOut(BaseModel):
     atterrissage: float
     ecart_atterrissage_vs_prevision: float
     landing_method: str
+    reference_source: str = "historique_n1"
     has_history: bool
 
 
@@ -63,6 +64,7 @@ class EngieBudgetReviseOut(BaseModel):
     turpe_available: bool
     bpu_available: bool
     bpu_applied_prm_count: int = 0
+    reference_annee_en_vigueur_count: int = 0
     enedis_available: bool
     anomaly_prm_count: int
     totals: EngieBudgetReviseTotalsOut
