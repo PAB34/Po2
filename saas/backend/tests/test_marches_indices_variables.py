@@ -152,3 +152,34 @@ def test_build_indices_variables_swaps_inverted_years(db_session):
 
     assert report["year_from"] == 2025
     assert report["year_to"] == 2026
+
+def test_bpu_fourniture_series_by_typologie(db_session, monkeypatch):
+    from decimal import Decimal
+    from app.services import marches_indices_variables as mod
+    from app.services.invoice_bpu import HistoricalBpuPrice
+
+    def _p(supplier, year, seg, price):
+        return HistoricalBpuPrice(
+            document_id=1, supplier=supplier, valid_year=year, lot_number=1,
+            segment_code=seg, period_code="HPH", component_type="fourniture",
+            price_eur_per_mwh=Decimal(str(price)), pdf_filename="x.pdf",
+        )
+
+    fake = {
+        "ENGIE": [_p("ENGIE", 2026, "BATIMENT_HTA", 110.0), _p("ENGIE", 2026, "BATIMENT_BT36", 76.0)],
+        "EDF": [_p("EDF", 2025, "C2", 84.0), _p("EDF", 2025, "C5_EP", 46.0), _p("EDF", 2026, "ECLAIRAGE_PUBLIC", 75.0)],
+    }
+    monkeypatch.setattr(mod, "load_historical_bpu_prices", lambda db, s: fake.get(s, []))
+
+    report = build_indices_variables(db_session, city_id=1, year_from=2025, year_to=2026)
+    bpu = [s for s in report["series"] if s["family"] == "elec_bpu"]
+    codes = {s["code"] for s in bpu}
+    assert "BPU_FOURNITURE_HTA" in codes and "BPU_FOURNITURE_EP" in codes
+    hta = _series(report, "BPU_FOURNITURE_HTA")
+    assert hta["unit"] == "EUR/MWh" and hta["family"] == "elec_bpu"
+    # HTA : 2025 = C2 (84), 2026 = BATIMENT_HTA (110)
+    vals = {p["period"]: p["value"] for p in hta["points"]}
+    assert vals.get("2025") == 84.0 and vals.get("2026") == 110.0
+    # EP : 2025 = C5_EP (46), 2026 = ECLAIRAGE_PUBLIC (75)
+    ep = {p["period"]: p["value"] for p in _series(report, "BPU_FOURNITURE_EP")["points"]}
+    assert ep.get("2025") == 46.0 and ep.get("2026") == 75.0

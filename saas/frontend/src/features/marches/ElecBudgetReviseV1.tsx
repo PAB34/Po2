@@ -33,14 +33,12 @@ type SupplierConfig = {
   eyebrow: string;
   title: string;
   intro: ReactNode;
-  showDalkiaOverlay: boolean;
 };
 
 const CONFIG: Record<ElecSupplier, SupplierConfig> = {
   ENGIE: {
     eyebrow: "ENGIE électricité - atterrissage fixe / variable",
     title: "Atterrissage électricité ENGIE, par point de livraison (PRM)",
-    showDalkiaOverlay: true,
     intro: (
       <>
         Marché de fourniture (tous les PRM facturés ENGIE). Le chiffre utile est l'
@@ -58,7 +56,6 @@ const CONFIG: Record<ElecSupplier, SupplierConfig> = {
   EDF: {
     eyebrow: "EDF éclairage public - atterrissage fixe / variable",
     title: "Atterrissage éclairage public EDF, par point de livraison (PRM)",
-    showDalkiaOverlay: false,
     intro: (
       <>
         Marché de fourniture EDF (éclairage public + petits sites). Le chiffre utile est l'
@@ -186,16 +183,6 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
               detail="atterrissage - prévision"
             />
           </div>
-
-          {cfg.showDalkiaOverlay ? (
-            <Card title="Cible DALKIA" eyebrow="prochain incrément — calque comparatif">
-              <p className="po2-muted-line">
-                À venir : pour les sites sous cible DALKIA (conso objectif, intéressement/pénalités — y compris
-                sans P1 fourniture), un calque comparera la <strong>conso cible</strong> à la conso attendue et au
-                réalisé. Ça ne change pas le calcul du coût ci-dessous (prévisionnel neutre sur tous les PRM).
-              </p>
-            </Card>
-          ) : null}
 
           <Card
             title="Atterrissage"

@@ -43,7 +43,7 @@ const TIERS: TierConfig[] = [
     value: "engie",
     label: "ENGIE",
     eyebrow: "Électricité",
-    families: ["elec"],
+    families: ["elec", "elec_bpu"],
     subs: [
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },
@@ -53,29 +53,13 @@ const TIERS: TierConfig[] = [
     value: "edf",
     label: "EDF",
     eyebrow: "Éclairage public",
-    families: ["elec"],
+    families: ["elec", "elec_bpu"],
     subs: [
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },
     ],
   },
 ];
-
-function ComingSoon({ tier }: { tier: MarketTier }) {
-  const supplier = tier === "engie" ? "ENGIE" : "EDF";
-  return (
-    <div className="po2-page-v1">
-      <Card title={`Atterrissage ${supplier} — à venir`} eyebrow="prochain incrément">
-        <p className="po2-muted-line">
-          Le moteur d'atterrissage fixe / variable sera branché pour {supplier} sur le même patron que le gaz :
-          part variable = conso attendue (ENEDIS) × prix de référence (fourniture BPU + acheminement TURPE), part
-          fixe = abonnement + TURPE fixe. L'onglet « Indices &amp; variables » ci-dessus montre déjà l'évolution
-          TURPE utilisée pour la révision.
-        </p>
-      </Card>
-    </div>
-  );
-}
 
 export function MarketsBudgetPageV1() {
   const [tier, setTier] = useState<MarketTier>("dalkia");
@@ -138,7 +122,11 @@ export function MarketsBudgetPageV1() {
       ) : tier === "edf" && activeSub === "atterrissage" ? (
         <ElecBudgetReviseV1 supplier="EDF" />
       ) : (
-        <ComingSoon tier={tier} />
+        <div className="po2-page-v1">
+          <Card eyebrow="vue indisponible">
+            <p className="po2-muted-line">Aucune vue pour cette sélection.</p>
+          </Card>
+        </div>
       )}
     </div>
   );

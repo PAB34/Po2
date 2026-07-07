@@ -16,12 +16,23 @@ const FAMILY_LABELS: Record<string, string> = {
   dalkia: "DALKIA - indices et coefficients",
   gaz: "Gaz - PEG fourniture",
   elec: "Electricite - TURPE",
+  elec_bpu: "Electricite - prix fourniture BPU",
 };
 
 const FAMILY_DETAILS: Record<string, string> = {
   dalkia: "ICHT-IME, FSD2, BT40 et coefficients observes P2/P3",
   gaz: "Prix PEG mensuel consomme par le moteur gaz existant",
   elec: "Evolution moyenne HTA-BT et indice cumule TURPE",
+  elec_bpu: "Prix fourniture BPU par typologie (HTA, BT>36, BT≤36, eclairage public), marche Herault Energie",
+};
+
+// Nom court par famille pour le KPI « Familles » (affiche les familles reellement presentes,
+// pas une liste codee en dur).
+const FAMILY_SHORT: Record<string, string> = {
+  dalkia: "DALKIA",
+  gaz: "gaz",
+  elec: "electricite (TURPE)",
+  elec_bpu: "electricite (BPU)",
 };
 
 const COLORS = ["#2563eb", "#16a34a", "#dc2626", "#7c3aed", "#ea580c", "#0891b2"];
@@ -133,7 +144,11 @@ export function IndicesVariablesV1({ families: familyFilter, embedded = false }:
       {data ? (
         <>
           <div className="po2-kpi-grid">
-            <KpiCard label="Familles" value={String(familyEntries.length)} detail="DALKIA, gaz, electricite" />
+            <KpiCard
+              label="Familles"
+              value={String(familyEntries.length)}
+              detail={familyEntries.map(([family]) => FAMILY_SHORT[family] ?? family).join(", ") || "-"}
+            />
             <KpiCard label="Series" value={String(data.series.length)} detail={`${data.year_from} - ${data.year_to}`} />
             <KpiCard label="Points" value={String(pointsCount)} detail="valeurs normalisees" />
           </div>
