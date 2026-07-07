@@ -494,7 +494,9 @@ export function InvoicesDecisionPageV1() {
             >
               {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
             </Button>
-            <Button>Importer des factures</Button>
+            <Button variant="ghost" disabled title="Import à brancher (upload + parseurs) — chantier séparé">
+              Importer des factures
+            </Button>
           </div>
         </div>
 
