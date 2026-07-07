@@ -46,7 +46,9 @@ export function CpeCibleConsoV1() {
   const { token } = useAuth();
   const currentYear = new Date().getFullYear();
   const [annee, setAnnee] = useState(currentYear);
-  const [trimestre, setTrimestre] = useState(currentQuarter());
+  // Période entière : année en cours = tout le réalisé à date (dernier trimestre écoulé) ;
+  // année passée = année complète (T4). Plus de sélection manuelle par trimestre.
+  const trimestre = annee < currentYear ? 4 : currentQuarter();
 
   const query = useQuery({
     queryKey: ["cpe-atterrissage", annee, trimestre],
@@ -74,20 +76,11 @@ export function CpeCibleConsoV1() {
         </p>
       </header>
 
-      <Card title="Période" eyebrow="année + trimestre écoulé">
+      <Card title="Période" eyebrow="année (période entière à date)">
         <div className="po2-matrix-import-form" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <label>
             <span>Année</span>
             <input type="number" value={annee} onChange={(e) => setAnnee(Number(e.currentTarget.value) || currentYear)} />
-          </label>
-          <label>
-            <span>Trimestre réalisé</span>
-            <select value={trimestre} onChange={(e) => setTrimestre(Number(e.currentTarget.value))}>
-              <option value={1}>T1</option>
-              <option value={2}>T2</option>
-              <option value={3}>T3</option>
-              <option value={4}>T4</option>
-            </select>
           </label>
         </div>
         {data ? (
