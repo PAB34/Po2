@@ -143,6 +143,14 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
                 reste appliqué à l'acheminement). Chiffres justes, révision fourniture non chiffrée.
               </p>
             ) : null}
+            {data.reference_annee_en_vigueur_count > 0 ? (
+              <p className="po2-muted-line">
+                {data.reference_annee_en_vigueur_count}/{data.prm_count} PRM sans historique N-1 (marché
+                démarré cette année) : la <strong>prévision de référence</strong> est bâtie sur les prix du
+                marché en vigueur (fourniture BPU) × la consommation attendue ENEDIS N-1, au lieu d'un
+                historique de factures.
+              </p>
+            ) : null}
           </>
         ) : null}
       </Card>

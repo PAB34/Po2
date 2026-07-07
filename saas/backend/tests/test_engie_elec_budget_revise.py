@@ -441,3 +441,41 @@ def test_bpu_ratio_missing_year_falls_back_flat():
     ratio, ok = mod._bpu_fourniture_ratio(index, {"segment": "C4"}, {"hph": 1000.0}, 2026, False)
     assert ok is False
     assert ratio == 1.0
+
+
+def test_reference_annee_en_vigueur_sans_n1(db_session, monkeypatch):
+    # PRM sans facture N-1 (marche demarre en Y) : la reference bascule sur les prix de l'annee Y
+    # appliques a la conso ENEDIS N-1 -> prevision non nulle (au lieu de 0).
+    _seed_invoice(
+        db_session, prm="PRMNEW", year=2026, month=3, segment="C4", site_name="Mairie",
+        lines=[
+            ("supply", "base", 50000, 3000),          # 0,06 EUR/kWh
+            ("network_variable", "base", 50000, 800),  # 0,016 EUR/kWh
+            ("network_management", None, None, 600),
+        ],
+    )
+    dju, conso = _linear_history()
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: _dju_index(dju))
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {"PRMNEW": conso})
+    _patch_prices(monkeypatch)  # BPU vide -> fourniture reste au prix Y
+
+    res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    p = res["points"][0]
+    assert p["reference_source"] == "annee_en_vigueur"
+    assert p["prevision_reference"] > 0
+    assert res["reference_annee_en_vigueur_count"] == 1
+
+
+def test_reference_historique_n1_inchangee(db_session, monkeypatch):
+    # PRM avec facture N-1 : reste en mode historique_n1 (pas de regression).
+    _seed_invoice(
+        db_session, prm="PRM1", year=2025, month=6, segment="C4",
+        lines=[("supply", "base", 100000, 4000), ("network_management", None, None, 700)],
+    )
+    dju, conso = _linear_history()
+    monkeypatch.setattr(energie, "_dju_monthly_index", lambda: _dju_index(dju))
+    monkeypatch.setattr(energie, "_consumption_by_month", lambda: {"PRM1": conso})
+    _patch_prices(monkeypatch)
+    res = build_engie_elec_budget_revise(db_session, 1, year=2026, today=date(2026, 6, 30))
+    assert res["points"][0]["reference_source"] == "historique_n1"
+    assert res["reference_annee_en_vigueur_count"] == 0
