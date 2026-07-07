@@ -45,6 +45,14 @@ priori (sauf si le parseur bute sur un nouveau format).
 **Question ouverte** :
 - Q4 — Les factures EDF 2026 sont-elles disponibles (fichiers CSV) à importer, ou pas encore émises ?
 
+**RÉSOLU (2026-07-07) — pas d'action, décalage de facturation** : le fichier fourni
+(`saas/energie/EDF/20260612_..._EDF160626.csv`, 81 factures) est **déjà en base** (prod ET staging :
+81/81 duplicates, 0 créée) et couvre de la **conso 2025** (409/425 lignes en `date_fin_consommation`
+2025, seulement 12 en 2026). Les factures EDF éclairage public émises mi-2026 portent la conso 2025
+(décalage EDF). Donc le réalisé EDF **2026** faible n'est PAS un trou de données : la conso 2026 n'est
+**pas encore facturée**. L'atterrissage projette correctement le reste. → **Finding B clos, rien à
+importer/coder** tant que les factures de conso 2026 ne sont pas émises.
+
 ## 2bis. RÉALISÉ — Finding A (branche `feat/elec-budget-sans-n1`, 2026-07-07)
 
 Décisions tranchées (validées utilisateur) : Q1 → mode « année en vigueur » déclenché **seulement** si
