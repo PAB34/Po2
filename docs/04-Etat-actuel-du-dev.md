@@ -19,25 +19,36 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-07-06** (session Claude — moteur métier / référentiels marchés).
+> Mise à jour : **2026-07-07** (session Claude — atterrissage électrique : révision BPU + budget sans N-1).
 
-- **✅ EN PROD (PR #42 mergée)** : **hub central « Référentiels marchés »** → `/refonte-v1/referentiels`
-  (section *Référentiels & admin*), 2 sous-onglets **DPGF DALKIA** + **BPU Hérault Énergies**.
-  ⚠️ **Pivot** vs l'audit : on a abandonné « onglet Référentiel par tier sous `/refonte-v1/marches` » au
-  profit d'un **hub central** qui **embarque les moteurs existants** (pas de réécriture). Q3/Q5/compa-fidélité
-  abandonnés. Cf. `docs/refonte-v1/moteur-metier-referentiels-decisions.md` **§0bis**.
-- **🔄 EN COURS (staging, PR #43, branche `feat/referentiels-ux`, worktree `C:\Users\pa.borja\Documents\Po2-ref-ux`)** :
-  **vue BPU curée DS V1** `saas/frontend/src/features/marches/BpuReferentielV1.tsx` (remplace l'embarquement
-  legacy dans le hub) — 2 sous-onglets *Consultation* (table BPU + drawer détail prix) / *Évolution* (graphe),
-  **TURPE retiré**, camembert codé en dur supprimé, pédagogie en infobulle, **admin replié « Gérer »**.
-  Page legacy `/energie/bpu` conservée. **En attente : validation visuelle user sur staging.**
-- **▶️ Prochaines étapes** : merger #43 **après validation** (⚠️ merge `main` = prod auto) ; puis **même
-  curation pour l'onglet DPGF DALKIA** (Q7, reportée).
-- **📄 Docs du chantier** : `moteur-metier-referentiels-trouvailles.md` (trouvailles/historique — moteur
-  BPU = `app/scripts/import_bpu_xlsx.py` + Excel `saas/energie/HERAULT ENERGIE/HISTORIQUE BPU/…` ; ENGIE = 1
-  doc par nature ; actes DPGF = UI existante) · `referentiel-bpu-ux-decisions.md` (**§4bis** décisions UX) ·
-  `moteur-metier-referentiels-fidelite-inventaire.md`.
-- **🛠️ Env** : **node dispo** (portable) → typecheck front en local via jonction `node_modules` + `tsc.cmd -b`.
+- **✅ EN PROD — Référentiels** : vue **BPU curée** (`BpuReferentielV1`, PR #43 mergée) dans le hub
+  `/refonte-v1/referentiels` ; **DPGF DALKIA = pas de cure** (Q7 close, PR #44 : page déjà refondue, seul
+  gain cosmétique pour un risque réel → sans suite). Chantier « moteur métier / référentiels » **terminé**.
+- **✅ EN PROD — Atterrissage électrique** (`/refonte-v1/marches`, onglets ENGIE/EDF, service
+  `app/services/engie_elec_budget_revise.py`) :
+  - **Révision BPU par typologie** (PR #46) : le prix de référence est résolu par **typologie du marché
+    Hérault Énergie** (tous fournisseurs), plus par fournisseur facturant → le ratio Y/N-1 marche quand
+    l'attributaire change (ENGIE 2026 vs EDF 2025). Passé de 0 % à **100 % des PRM** révisés.
+  - **Budget de référence sans historique N-1** (PR #47) : marché neuf (ENGIE démarré 2026) → bascule
+    « année en vigueur » (prix Y + fourniture BPU × conso ENEDIS N-1). ENGIE 2026 réf. **136 € → ~1,14 M€**.
+  - **Import granulaire typologies 2026** (PR #48, + **re-import BPU prod** `import_xlsx` fichier élec
+    `force=True`) : `BATIMENT` collapse → **BATIMENT_HTA/BT/BT36** ; résolveur partagé par **jeu de codes
+    candidats** (additif). Effet : **contrôle factures gagne C2/C4 bâtiments** (0→4/5, C5 5/5, zéro régression).
+- **🟢 Finding B (EDF réalisé 2026 vide) = CLOS sans action** : décalage de facturation EDF (factures émises
+  2026 = conso 2025, déjà en base). La conso 2026 n'est pas encore facturée ; l'atterrissage projette. RAS.
+- **▶️ Prochaines étapes possibles** (rien de bloquant en attente) : (a) charger le **BPU gaz TE** en prod
+  (absent ; fichier `_herault`, impact module gaz — tâche séparée) ; (b) **Suivi des indices/variables**
+  (`/refonte-v1/marches`, transversal) ; (c) solder la **PR #32 factures** (validée staging, non mergée).
+- **📄 Docs du chantier** : `atterrissage-bpu-elec-decisions.md` (§8-11 typologie), `atterrissage-elec-budget-sans-n1-decisions.md`,
+  `bpu-import-granulaire-2026-decisions.md` (import granulaire + re-import).
+- **🛠️ Env / infra** : **node dispo** (portable) → typecheck front via jonction `node_modules` + `tsc.cmd -b`.
+  Déploiement staging via API : payload `{"ref":"main","inputs":{"ref":"<branche>"}}` (inputs.ref sinon
+  déploie main). Staging = base SÉPARÉE `po2-staging-db` ; re-import BPU = `import_xlsx(..., force=True)`
+  (remplacement propre du doc).
+
+> Reprise **2026-07-06** (référentiels marchés) conservée pour trace :
+> hub `/refonte-v1/referentiels` (PR #42) embarquant DPGF DALKIA + BPU ; vue BPU curée alors en cours (#43).
+> Docs : `moteur-metier-referentiels-decisions.md` §0bis-0ter, `referentiel-bpu-ux-decisions.md` §4bis.
 
 > Reprise précédente (**2026-07-03**, Codex/Claude — budget révisé élec + cadrage moteur métier) conservée
 > ci-dessous pour trace. ⚠️ La cible « onglet Référentiel par tier » y est **supplantée** par le hub central.
