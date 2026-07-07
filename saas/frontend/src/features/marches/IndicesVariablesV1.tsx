@@ -85,7 +85,8 @@ type IndicesVariablesV1Props = {
 
 export function IndicesVariablesV1({ families: familyFilter, embedded = false }: IndicesVariablesV1Props = {}) {
   const currentYear = new Date().getFullYear();
-  const [yearFrom, setYearFrom] = useState(currentYear - 1);
+  // Par défaut : de 2023 (début des données BPU/indices) à l'année en cours.
+  const [yearFrom, setYearFrom] = useState(Math.min(2023, currentYear));
   const [yearTo, setYearTo] = useState(currentYear);
   const query = useMarketIndicesVariablesV1(yearFrom, yearTo);
 
