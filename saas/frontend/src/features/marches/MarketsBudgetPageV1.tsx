@@ -43,7 +43,7 @@ const TIERS: TierConfig[] = [
     value: "engie",
     label: "ENGIE",
     eyebrow: "Électricité",
-    families: ["elec"],
+    families: ["elec", "elec_bpu"],
     subs: [
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },
@@ -53,7 +53,7 @@ const TIERS: TierConfig[] = [
     value: "edf",
     label: "EDF",
     eyebrow: "Éclairage public",
-    families: ["elec"],
+    families: ["elec", "elec_bpu"],
     subs: [
       { value: "atterrissage", label: "Atterrissage" },
       { value: "indices", label: "Indices & variables" },

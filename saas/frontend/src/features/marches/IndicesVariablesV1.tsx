@@ -16,12 +16,14 @@ const FAMILY_LABELS: Record<string, string> = {
   dalkia: "DALKIA - indices et coefficients",
   gaz: "Gaz - PEG fourniture",
   elec: "Electricite - TURPE",
+  elec_bpu: "Electricite - prix fourniture BPU",
 };
 
 const FAMILY_DETAILS: Record<string, string> = {
   dalkia: "ICHT-IME, FSD2, BT40 et coefficients observes P2/P3",
   gaz: "Prix PEG mensuel consomme par le moteur gaz existant",
   elec: "Evolution moyenne HTA-BT et indice cumule TURPE",
+  elec_bpu: "Prix fourniture BPU par typologie (HTA, BT>36, BT≤36, eclairage public), marche Herault Energie",
 };
 
 const COLORS = ["#2563eb", "#16a34a", "#dc2626", "#7c3aed", "#ea580c", "#0891b2"];

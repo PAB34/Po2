@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.services import cpe_accounting, gas_invoice
+from app.services.engie_elec_budget_revise import build_bpu_fourniture_index
+from app.services.invoice_bpu import load_historical_bpu_prices
 from app.services.turpe import list_turpe_evolution_events
 
 
@@ -13,6 +15,14 @@ INDEX_LABELS: dict[str, str] = {
     "ICHT_IME": "ICHT-IME",
     "FSD2": "FSD2",
     "BT40": "BT40",
+}
+
+# Typologies canoniques du marché Hérault Énergie (cf. engie_elec_budget_revise) → libellé de série.
+BPU_FOURNITURE_TYPOLOGIES: dict[str, str] = {
+    "HTA": "Fourniture BPU HTA (C1/C2/C3)",
+    "BT_SUP36": "Fourniture BPU BT>36 kVA (C4)",
+    "BT_INF36": "Fourniture BPU BT≤36 kVA (C5 bâtiment)",
+    "EP": "Fourniture BPU éclairage public",
 }
 
 
@@ -30,6 +40,7 @@ def build_indices_variables(
     series.extend(_cpe_observed_factor_series(db, city_id, year_from, year_to))
     series.append(_gas_peg_series(db, city_id, year_from, year_to))
     series.extend(_turpe_series(year_from, year_to))
+    series.extend(_bpu_fourniture_series(db, year_from, year_to))
 
     return {
         "year_from": year_from,
@@ -193,3 +204,44 @@ def _turpe_series(year_from: int, year_to: int) -> list[dict[str, Any]]:
             "points": sorted(cumulative_points, key=lambda point: point["period"]),
         },
     ]
+
+
+def _bpu_fourniture_series(db: Session, year_from: int, year_to: int) -> list[dict[str, Any]]:
+    """Prix de fourniture BPU (€/MWh) par typologie du marché Hérault Énergie et par année.
+
+    Réutilise l'index de l'atterrissage élec (moyenne postes, TOUS fournisseurs élec = marché groupé,
+    pas un fournisseur). Une série par typologie canonique (HTA / BT>36 / BT≤36 / éclairage public).
+    """
+    references: list[Any] = []
+    for supplier in ("ENGIE", "EDF"):
+        references.extend(load_historical_bpu_prices(db, supplier))
+    index = build_bpu_fourniture_index(references)
+    by_year = index["by_year"]
+
+    series: list[dict[str, Any]] = []
+    for canon, label in BPU_FOURNITURE_TYPOLOGIES.items():
+        points = []
+        for year in range(year_from, year_to + 1):
+            price = by_year.get((canon, year))
+            if price is None:
+                continue
+            points.append(
+                {
+                    "period": str(year),
+                    "value": round(float(price), 2),
+                    "label": label,
+                    "source": "BPU Hérault Énergie (moyenne postes, tous fournisseurs)",
+                }
+            )
+        series.append(
+            {
+                "code": f"BPU_FOURNITURE_{canon}",
+                "label": label,
+                "unit": "EUR/MWh",
+                "market": "Electricite",
+                "family": "elec_bpu",
+                "periodicity": "annee",
+                "points": sorted(points, key=lambda point: point["period"]),
+            }
+        )
+    return series
