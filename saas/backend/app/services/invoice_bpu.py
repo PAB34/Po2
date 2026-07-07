@@ -113,14 +113,14 @@ def resolve_historical_bpu_price(
     component_type = INVOICE_COMPONENT_TO_BPU_COMPONENT.get(line.get("normalized_component"))
     period_code = POSTE_TO_BPU_PERIOD.get(str(line.get("poste") or "").lower())
     billed_on = _line_reference_date(site, line)
-    segment_code = historical_segment_code_for_site(site)
-    if component_type is None or period_code is None or billed_on is None or segment_code is None:
+    segment_candidates = _segment_code_candidates(site)
+    if component_type is None or period_code is None or billed_on is None or not segment_candidates:
         return None
 
     matches = [
         reference
         for reference in references
-        if reference.segment_code == segment_code
+        if reference.segment_code in segment_candidates
         and reference.period_code == period_code
         and reference.component_type == component_type
         and document_applies_to_date(reference, billed_on)
@@ -277,6 +277,31 @@ def historical_segment_code_for_site(site: dict[str, Any]) -> str | None:
         return segment
 
     return None
+
+
+def _segment_code_candidates(site: dict[str, Any]) -> set[str]:
+    """Codes de segment BPU acceptables pour un site (match EXACT, ADDITIF).
+
+    Le nouveau marché Hérault Énergie 2026 code les bâtiments par usage+tension
+    (BATIMENT_HTA/BT/BT36), l'ancien par classe ENEDIS (C1..C4, C5_BAT_*). On propose
+    le code historique du site ET la traduction vers le nouveau marché, de sorte que la
+    résolution matche l'un OU l'autre selon l'année (filtrée par date). N'enlève aucun
+    match (précision C1/C2/C3 conservée), en ajoute (C2/C4 bâtiments 2026 désormais matchés).
+    """
+    base = historical_segment_code_for_site(site)
+    if base is None:
+        return set()
+    candidates = {base}
+    segment = str(site.get("segment") or "").upper().strip()
+    if base in {"C1", "C2", "C3"} or segment in {"C1", "C2", "C3"}:
+        candidates.add("BATIMENT_HTA")
+    elif base == "C4" or segment == "C4":
+        candidates.add("BATIMENT_BT")
+    if base == "BATIMENT":  # site C5 bâtiment (hors éclairage public)
+        candidates.add("BATIMENT_BT36")
+    elif base == "C5_EP":
+        candidates.add("ECLAIRAGE_PUBLIC")
+    return candidates
 
 
 def _line_reference_date(site: dict[str, Any], line: dict[str, Any]) -> date | None:

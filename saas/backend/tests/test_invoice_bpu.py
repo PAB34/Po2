@@ -281,3 +281,57 @@ def test_resolve_fixed_charge_respects_validity_and_ambiguity() -> None:
         valid_to=date(2025, 12, 31),
     )
     assert resolve_fixed_charge([ref, ref_other], "branchement_provisoire", date(2024, 6, 1)) is None
+
+
+def _bat_ref(segment_code, price):
+    return HistoricalBpuPrice(
+        document_id=30, supplier="ENGIE", valid_year=2026, lot_number=1,
+        segment_code=segment_code, period_code="HPH", component_type="fourniture",
+        price_eur_per_mwh=Decimal(str(price)), pdf_filename="engie2026.pdf",
+    )
+
+
+def _line():
+    return {"normalized_component": "supply", "poste": "hph"}
+
+
+def test_resolve_granular_batiment_2026_no_regression_and_gain():
+    # C5 batiment -> matche la grille granulaire BATIMENT_BT36 (nouveau marche).
+    site_c5 = {"segment": "C5", "period_start": date(2026, 2, 1)}
+    assert resolve_historical_bpu_price([_bat_ref("BATIMENT_BT36", 105.9)], site_c5, _line()).segment_code == "BATIMENT_BT36"
+    # ... et garde la compat avec l'ancien code collapse BATIMENT (pre re-import).
+    assert resolve_historical_bpu_price([_bat_ref("BATIMENT", 105.9)], site_c5, _line()).segment_code == "BATIMENT"
+
+    # C4 batiment -> desormais matche BATIMENT_BT (avant : 0 match).
+    site_c4 = {"segment": "C4", "period_start": date(2026, 2, 1)}
+    assert resolve_historical_bpu_price([_bat_ref("BATIMENT_BT", 107.8)], site_c4, _line()).segment_code == "BATIMENT_BT"
+    # C2 batiment -> matche BATIMENT_HTA.
+    site_c2 = {"segment": "C2", "period_start": date(2026, 2, 1)}
+    assert resolve_historical_bpu_price([_bat_ref("BATIMENT_HTA", 109.5)], site_c2, _line()).segment_code == "BATIMENT_HTA"
+
+
+def test_resolve_precision_c2_not_lumped():
+    # Precision preservee : un site C2 matche la grille C2 exacte (ancien marche)...
+    ref_c2 = HistoricalBpuPrice(
+        document_id=31, supplier="EDF", valid_year=2025, lot_number=1, segment_code="C2",
+        period_code="HPH", component_type="fourniture", price_eur_per_mwh=Decimal("84.47"),
+        pdf_filename="edf2025.pdf",
+    )
+    site_c2 = {"segment": "C2", "period_start": date(2025, 6, 1)}
+    assert resolve_historical_bpu_price([ref_c2], site_c2, _line()).segment_code == "C2"
+    # ... et ne matche PAS un BATIMENT_BT (mauvais bucket -> pas de faux match).
+    assert resolve_historical_bpu_price([_bat_ref("BATIMENT_BT", 107.8)], site_c2, _line()) is None
+
+
+def test_tension_bucket_and_normalize_batiment():
+    from app.scripts.import_bpu_xlsx import _normalize_segment, _tension_bucket
+    assert _tension_bucket("HTA") == "HTA"
+    assert _tension_bucket("BT > 36 kVA - C4") == "BT"
+    assert _tension_bucket("BT ≤ 36 kVA SDT CU4 / MU4") == "BT36"
+    assert _tension_bucket("BT") == "BT"
+    assert _tension_bucket(None) is None
+    # « Bâtiment » 2026 -> code granulaire ; ancien « Sites C4 » -> inchange.
+    assert _normalize_segment("Bâtiment", None, "HTA")[0] == "BATIMENT_HTA"
+    assert _normalize_segment("Bâtiment", None, "BT ≤ 36 kVA MUDT")[0] == "BATIMENT_BT36"
+    assert _normalize_segment("Sites C4", None, None)[0] == "C4"
+    assert _normalize_segment("Sites C5 Eclairage Public", None, None)[0] == "C5_EP"

@@ -24,7 +24,20 @@ Le collapse a, par chance, conservé un prix par poste issu de profils DISTINCTS
 `BATIMENT_BT36`, le match exact échoue → le contrôle **perd la couverture** des factures bâtiments 2026
 (pas de crash, mais `historical_checked_lines` chute). **Régression silencieuse à éviter.**
 
-## 4. Approche retenue (robuste, additive) — à valider
+## 4bis. Vérif empirique prod (2026-07-07) → change l'approche
+Test `resolve_historical_bpu_price` sur sites ENGIE : **C5 → matché 5/5** (code `BATIMENT`), **C2/C4 →
+0/5** (codes `C2`/`C4`, absents des prix ENGIE qui n'ont que `BATIMENT`). Donc :
+- ⚠️ Le **canonique par regroupement** (§4) fusionnerait C1/C2/C3 (prix DIFFÉRENTS : 54,8 / 84,5 / 90,6) →
+  faux mismatches côté contrôle. **ABANDONNÉ.**
+- Bon design = **jeu de codes candidats (match EXACT multiple, additif)** : le site propose {code actuel}
+  ∪ {traduction classe→nouveau marché}. `BATIMENT_*` en plus, jamais en remplacement → **aucune
+  régression** (C5 garde `BATIMENT`, gagne `BATIMENT_BT36`) et **gain** (C2→`BATIMENT_HTA`, C4→`BATIMENT_BT`
+  désormais matchés). La précision C1/C2/C3 est préservée (pas de fusion).
+- Atterrissage : **aucun changement de code** — `_canonical_typology` mappe déjà `BATIMENT_HTA/BT/BT36`,
+  donc après re-import un PRM C2 tape `BATIMENT_HTA` (fin du repli collapse `BUILDING_ANY`).
+- Éclairage public : **non granularisé** (mono-typologie) ; candidat {`C5_EP`, `ECLAIRAGE_PUBLIC`}.
+
+## 4. Approche INITIALE (canonique) — abandonnée, voir §4bis
 Rendre la résolution **par typologie canonique** au lieu d'un `segment_code` exact, dans le résolveur
 partagé, de façon **additive** (n'enlève aucun match existant, en ajoute) :
 1. **Import** : `_normalize_segment` produit `BATIMENT_HTA/BT/BT36` (et `ECLAIRAGE_PUBLIC_*`) selon la
