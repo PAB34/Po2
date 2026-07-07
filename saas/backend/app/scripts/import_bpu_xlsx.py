@@ -169,6 +169,21 @@ _SEGMENT_CODE_PATTERNS = [
 ]
 
 
+def _tension_bucket(tension: str | None) -> str | None:
+    """Bucket tarifaire du nouveau marché depuis la colonne Tension :
+    HTA (=C1/C2/C3), BT (BT > 36 kVA = C4), BT36 (BT ≤ 36 kVA = C5). None si indéterminé."""
+    if not tension:
+        return None
+    t = tension.upper().replace(" ", "")
+    if "HTA" in t:
+        return "HTA"
+    if "36" in t:
+        return "BT" if ">36" in t else "BT36"  # 'BT>36 kVA' = C4 ; 'BT≤36 kVA' = C5
+    if "BT" in t:
+        return "BT"  # 'BT' seul (> 36 kVA)
+    return None
+
+
 def _normalize_segment(site_label: str | None, turpe: str | None, tension: str | None) -> tuple[str, str]:
     """Détermine (segment_code, segment_type) depuis les colonnes xlsx.
 
@@ -179,20 +194,28 @@ def _normalize_segment(site_label: str | None, turpe: str | None, tension: str |
 
     Note importante : les sous-typologies C4/C5 (Bornes, Eclairage Public,
     Bâtiment numéroté, RAE 4 cadrans, etc.) produisent des codes DISTINCTS
-    pour éviter d'écraser plusieurs sites sous le même segment_code.
+    pour éviter d'écraser plusieurs sites sous le même segment_code. Le nouveau
+    marché « Bâtiment » 2026 est en plus subdivisé par tension (BATIMENT_HTA/BT/BT36)
+    pour ne pas perdre la distinction de classe (cf. bpu-import-granulaire-2026-decisions).
     """
     if site_label:
         for rx, fn in _SEGMENT_CODE_PATTERNS:
             m = rx.search(site_label)
             if m:
-                return fn(m)
+                code, seg_type = fn(m)
+                if code == "BATIMENT":
+                    bucket = _tension_bucket(tension)
+                    if bucket:
+                        return f"BATIMENT_{bucket}", seg_type
+                return code, seg_type
     if turpe:
         t = turpe.strip()
         m = re.match(r"^(C[1-5])$", t, re.IGNORECASE)
         if m:
             return m.group(1).upper(), SEGMENT_TYPE_SITE
         if "bâtiment" in t.lower() or "batiment" in t.lower():
-            return "BATIMENT", SEGMENT_TYPE_USAGE
+            bucket = _tension_bucket(tension)
+            return (f"BATIMENT_{bucket}" if bucket else "BATIMENT"), SEGMENT_TYPE_USAGE
         if "eclairage" in t.lower() or "éclairage" in t.lower():
             return "ECLAIRAGE_PUBLIC", SEGMENT_TYPE_USAGE
     if tension:
