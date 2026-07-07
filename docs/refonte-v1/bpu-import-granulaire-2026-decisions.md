@@ -85,6 +85,30 @@ erreur le doc gaz TE (le fichier `_herault` l'ajouterait — écarté).
 `import_xlsx(extraction_tarifs_electricite_BPU.xlsx, force=True)` sur prod ; 3) vérifier segments +
 contrôle + atterrissage. Fenêtre merge→reimport sans régression (C5 reste matché via `BATIMENT`).
 
+**FAIT EN PROD (2026-07-07, PR #48 + re-import)** : ENGIE segments = `BATIMENT_HTA/BT/BT36` ;
+docs `{EDF: 16, ENGIE: 1}` (aucun TE ajouté) ; contrôle **C2 0→4/5, C4 0→4/5, C5 5/5** ; atterrissage
+ENGIE 2026 réf. 1,152 M€ → **1,135 M€**. Aucune régression.
+
+## 6ter. Comparaison des 2 fichiers source `electricite` vs `_herault` (2026-07-07)
+
+Question utilisateur : le fichier `_herault` serait-il meilleur ? **Test A/B via l'import réel**
+(`import_xlsx force=True` sur staging, wipe préalable, snapshot complet supplier×année×segment×poste×composante) :
+
+| | `extraction_tarifs_electricite_BPU.xlsx` (utilisé) | `extraction_tarifs_BPU_herault.xlsx` |
+|---|---|---|
+| Import | 17 docs, **errors=0** | 18 docs, **errors=0** |
+| Clés de prix | 527 | 530 |
+
+**Diff ELEC → HERAULT** : clés seulement ELEC = **0** · prix communs différents = **0** · clés seulement
+HERAULT = **3** (toutes `TOTALENERGIES` 2026, segment **`INCONNU`**, **prix `None`**).
+
+**Conclusion** : les données **élec sont strictement identiques** (segments/postes/prix, y compris les
+`BATIMENT_HTA/BT/BT36`). La seule différence du `_herault` = 4 lignes **gaz TE Lot 7 (T1-T4)** qui **ne se
+parsent PAS** via cet import élec (→ segment `INCONNU`, prix vides). Charger `_herault` **injecterait un
+doc TE gaz inutilisable** → **le fichier `electricite` est le bon choix (et plus propre)**. Le BPU gaz
+TotalEnergies, s'il est voulu un jour, nécessite un **chemin de parse gaz dédié** (tâche séparée), pas ce
+script élec.
+
 ## 7. Recommandation
 Approche §4 (canonique, additive) = la seule qui supprime le résidu SANS casser le contrôle. Coût modéré,
 gain faible mais réel. Procéder avec les tests §5 comme filet. Sinon, statu quo assumé (résidu < 0,5 %).
