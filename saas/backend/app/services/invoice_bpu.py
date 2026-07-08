@@ -111,7 +111,11 @@ def resolve_historical_bpu_price(
     line: dict[str, Any],
 ) -> HistoricalBpuPrice | None:
     component_type = INVOICE_COMPONENT_TO_BPU_COMPONENT.get(line.get("normalized_component"))
-    period_code = POSTE_TO_BPU_PERIOD.get(str(line.get("poste") or "").lower())
+    poste_key = str(line.get("poste") or "").lower()
+    period_code = POSTE_TO_BPU_PERIOD.get(poste_key)
+    if period_code is None and not poste_key:
+        # Fourniture mono-poste sans poste facturé (ex. EDF éclairage public / petits sites) → BASE.
+        period_code = "BASE"
     billed_on = _line_reference_date(site, line)
     segment_candidates = _segment_code_candidates(site)
     if component_type is None or period_code is None or billed_on is None or not segment_candidates:
@@ -298,7 +302,9 @@ def _segment_code_candidates(site: dict[str, Any]) -> set[str]:
     elif base == "C4" or segment == "C4":
         candidates.add("BATIMENT_BT")
     if base == "BATIMENT":  # site C5 bâtiment (hors éclairage public)
-        candidates.add("BATIMENT_BT36")
+        # Nouveau marché ENGIE (BATIMENT_BT36) ET ancien marché EDF (C5_BAT_*). Variantes RAE
+        # (auto-consommation, prix distinct) EXCLUES pour éviter un double-match ambigu à BASE.
+        candidates.update({"BATIMENT_BT36", "C5_BAT_1", "C5_BAT_2", "C5_BAT_4", "C5_BAT_BASE"})
     elif base == "C5_EP":
         candidates.add("ECLAIRAGE_PUBLIC")
     return candidates
