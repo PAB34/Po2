@@ -1,7 +1,19 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { Button, Drawer, StatusBadge } from "../../design-system";
-import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useSupplierContactsV1 } from "./useCpeFinanceQueueV1";
+import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useInvoiceImportV1, useSupplierContactsV1, type InvoiceImportKind } from "./useCpeFinanceQueueV1";
+import { useAuth } from "../../providers/AuthProvider";
 import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput } from "../../lib/api";
+
+/** Import de factures réservé aux administrateurs (écriture sensible). */
+const INVOICE_IMPORT_ADMIN_ROLES = new Set(["ADMIN", "SUPERADMIN"]);
+function canImportInvoices(role: string | undefined) {
+  return INVOICE_IMPORT_ADMIN_ROLES.has((role ?? "").trim().toUpperCase().replace("-", "_"));
+}
+
+const IMPORT_KIND_OPTIONS: { value: InvoiceImportKind; label: string; accept: string; hint: string }[] = [
+  { value: "engie_xlsx", label: "ENGIE — export XLSX « Mes Factures »", accept: ".xlsx,.xlsm", hint: "Un fichier = plusieurs bordereaux." },
+  { value: "edf_csv", label: "EDF — export CSV de facturation", accept: ".csv", hint: "Un fichier = plusieurs factures." },
+];
 
 type CpeQueueInvoice = CpeFinanceControlReport["invoices"][number];
 type UnifiedStatus = "todo" | "valid" | "refused" | "disputed";
@@ -303,6 +315,9 @@ export function InvoicesDecisionPageV1() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [contactsOpen, setContactsOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const { user } = useAuth();
+  const canImport = canImportInvoices(user?.role);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const { contacts } = useSupplierContactsV1();
   const actions = useCpeInvoiceActionsV1();
@@ -494,7 +509,12 @@ export function InvoicesDecisionPageV1() {
             >
               {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
             </Button>
-            <Button variant="ghost" disabled title="Import à brancher (upload + parseurs) — chantier séparé">
+            <Button
+              variant="ghost"
+              onClick={() => setImportOpen(true)}
+              disabled={!canImport}
+              title={canImport ? "Importer un export de factures (ENGIE xlsx, EDF csv)" : "Import réservé aux administrateurs"}
+            >
               Importer des factures
             </Button>
           </div>
@@ -810,6 +830,10 @@ export function InvoicesDecisionPageV1() {
         <SupplierContactsEditor suppliers={editableSuppliers} />
       </Drawer>
 
+      {canImport ? (
+        <InvoiceImportDrawer open={importOpen} onClose={() => setImportOpen(false)} />
+      ) : null}
+
       {selected ? (
         <ReclamationDrawer
           key={`${selected.key}:${contactBySupplier.get(selected.supplier)?.updated_at ?? "none"}`}
@@ -822,6 +846,80 @@ export function InvoicesDecisionPageV1() {
         />
       ) : null}
     </div>
+  );
+}
+
+function InvoiceImportDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { runImport } = useInvoiceImportV1();
+  const [kind, setKind] = useState<InvoiceImportKind>("engie_xlsx");
+  const [file, setFile] = useState<File | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(false);
+  const option = IMPORT_KIND_OPTIONS.find((o) => o.value === kind)!;
+  const result = runImport.data;
+  const submit = () => {
+    if (!file) return;
+    runImport.mutate({ kind, file, forceUpdate });
+  };
+  const reset = () => { setFile(null); runImport.reset(); };
+  return (
+    <Drawer
+      open={open}
+      title="Importer des factures"
+      eyebrow="Import"
+      description="Sélectionnez le type d'export puis le fichier. Le contrôle est relancé automatiquement après import. Les doublons (même n° de facture) sont ignorés."
+      onClose={onClose}
+    >
+      <div className="po2-import-drawer" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <label className="po2-claim__field">
+          <span>Type d'export</span>
+          <select value={kind} onChange={(e) => { setKind(e.target.value as InvoiceImportKind); reset(); }}>
+            {IMPORT_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <label className="po2-claim__field">
+          <span>Fichier ({option.hint})</span>
+          <input
+            type="file"
+            accept={option.accept}
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); runImport.reset(); }}
+          />
+        </label>
+        <label style={{ display: "flex", gap: ".5rem", alignItems: "center", fontSize: ".85rem" }}>
+          <input type="checkbox" checked={forceUpdate} onChange={(e) => setForceUpdate(e.target.checked)} />
+          <span>Mettre à jour les factures déjà importées (ré-analyse ; conserve les décisions).</span>
+        </label>
+
+        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+          <Button onClick={submit} disabled={!file || runImport.isPending}>
+            {runImport.isPending ? "Import en cours…" : "Lancer l'import"}
+          </Button>
+          {file ? <Button variant="ghost" onClick={reset} disabled={runImport.isPending}>Réinitialiser</Button> : null}
+        </div>
+
+        {runImport.isPending ? (
+          <p className="po2-muted-line">Analyse du fichier en arrière-plan… (peut prendre jusqu'à une minute)</p>
+        ) : null}
+        {runImport.isError ? (
+          <p className="po2-action-error">Import : {(runImport.error as Error).message}</p>
+        ) : null}
+        {result ? (
+          <div className="po2-proto-control-list">
+            <article>
+              <StatusBadge tone={result.error_count > 0 ? "warn" : "ok"}>
+                {result.error_count > 0 ? "AVEC ERREURS" : "OK"}
+              </StatusBadge>
+              <div>
+                <strong>
+                  {result.imported_count} importée(s) · {result.duplicate_count} doublon(s) · {result.error_count} erreur(s)
+                </strong>
+                {result.items?.[0]?.message ? <small>{result.items[0].message}</small> : null}
+                {result.status === "processing" ? <small>Analyse toujours en cours — rouvrez la page dans un instant.</small> : null}
+              </div>
+            </article>
+          </div>
+        ) : null}
+      </div>
+    </Drawer>
   );
 }
 

@@ -5,6 +5,7 @@ import {
   fetchCpeFinanceControls,
   fetchCpeFinanceInvoiceLines,
   fetchCpeFinanceInvoices,
+  fetchEnergyInvoiceBatch,
   fetchEnergyInvoiceImports,
   fetchSupplierContacts,
   purgeCpeFinanceDuplicates,
@@ -13,10 +14,16 @@ import {
   recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
+  uploadEdfCsvInvoices,
+  uploadEngieXlsxInvoices,
   upsertSupplierContact,
+  type EnergyInvoiceBatchDetail,
   type SupplierContactInput,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
+
+/** Types de fichier d'import branchés en v1 (parseurs back existants). */
+export type InvoiceImportKind = "engie_xlsx" | "edf_csv";
 
 /** File de contrôle facture par facture (moteur CPE/DALKIA) + dates d'émission. */
 export function useCpeFinanceQueueV1() {
@@ -140,4 +147,39 @@ export function useCpeInvoiceActionsV1() {
     onSuccess: invalidate,
   });
   return { setStatus, setEnergyStatus, exportLiaison, purgeDuplicates, recomputeControls };
+}
+
+const IMPORT_POLL_INTERVAL_MS = 1500;
+const IMPORT_POLL_MAX_TRIES = 40; // ~60 s max
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Import d'un fichier de factures (ENGIE xlsx / EDF csv). L'analyse back est
+ *  asynchrone : on poste, puis on poll le batch jusqu'à finalisation pour renvoyer
+ *  le compte-rendu (créées / doublons / erreurs). Rafraîchit la file après import. */
+export function useInvoiceImportV1() {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const runImport = useMutation({
+    mutationFn: async (
+      { kind, file, forceUpdate }: { kind: InvoiceImportKind; file: File; forceUpdate: boolean },
+    ): Promise<EnergyInvoiceBatchDetail> => {
+      if (!token) throw new Error("Session absente.");
+      const batch = kind === "engie_xlsx"
+        ? await uploadEngieXlsxInvoices(token, file, forceUpdate)
+        : await uploadEdfCsvInvoices(token, file, forceUpdate);
+      let current = batch;
+      for (let i = 0; i < IMPORT_POLL_MAX_TRIES && current.status === "processing"; i += 1) {
+        await delay(IMPORT_POLL_INTERVAL_MS);
+        current = await fetchEnergyInvoiceBatch(token, batch.id);
+      }
+      return current;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    },
+  });
+  return { runImport };
 }
