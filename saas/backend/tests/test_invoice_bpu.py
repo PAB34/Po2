@@ -335,3 +335,20 @@ def test_tension_bucket_and_normalize_batiment():
     assert _normalize_segment("Bâtiment", None, "BT ≤ 36 kVA MUDT")[0] == "BATIMENT_BT36"
     assert _normalize_segment("Sites C4", None, None)[0] == "C4"
     assert _normalize_segment("Sites C5 Eclairage Public", None, None)[0] == "C5_EP"
+
+
+def test_resolve_edf_building_no_poste_matches_c5_bat():
+    # Facture EDF batiment C5, ligne fourniture SANS poste (mono-poste) -> C5_BAT_1 / BASE (ancien marche).
+    ref = HistoricalBpuPrice(
+        document_id=40, supplier="EDF", valid_year=2025, lot_number=3, segment_code="C5_BAT_1",
+        period_code="BASE", component_type="fourniture", price_eur_per_mwh=Decimal("105.86"),
+        pdf_filename="edf2025_lot3.pdf",
+    )
+    site = {"segment": "C5", "site_name": "CONSERVATOIRE", "period_start": date(2025, 6, 1)}
+    line = {"normalized_component": "supply", "poste": None}  # poste vide -> BASE
+    resolved = resolve_historical_bpu_price([ref], site, line)
+    assert resolved is not None and resolved.segment_code == "C5_BAT_1"
+
+    # Un site eclairage public (nom explicite) ne matche PAS le batiment C5_BAT (candidats differents).
+    site_ep = {"segment": "C5", "site_name": "Eclairage public rue X", "period_start": date(2025, 6, 1)}
+    assert resolve_historical_bpu_price([ref], site_ep, line) is None
