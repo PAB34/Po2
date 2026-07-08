@@ -2056,39 +2056,6 @@ export async function fetchEnergyInvoiceBatch(token: string, batchId: number): P
   return parseResponse<EnergyInvoiceBatchDetail>(response);
 }
 
-/** Upload de l'export XLSX ENGIE « Mes Factures » (N bordereaux). L'analyse tourne
- *  en arrière-plan côté back : le batch revient en `status: "processing"` puis se
- *  finalise ; poller `fetchEnergyInvoiceBatch` pour le compte-rendu. */
-export async function uploadEngieXlsxInvoices(
-  token: string,
-  file: File,
-  forceUpdate = false,
-): Promise<EnergyInvoiceBatchDetail> {
-  const form = new FormData();
-  form.append("file", file);
-  const response = await fetch(
-    `${apiBaseUrl}/billing/invoices/imports/xlsx?force_update=${forceUpdate}`,
-    { method: "POST", headers: buildAuthHeaders(token), body: form },
-  );
-  return parseResponse<EnergyInvoiceBatchDetail>(response);
-}
-
-/** Upload de l'export CSV de facturation EDF (N factures). Même flux asynchrone
- *  que l'import XLSX ENGIE (analyse en arrière-plan, poller le batch). */
-export async function uploadEdfCsvInvoices(
-  token: string,
-  file: File,
-  forceUpdate = false,
-): Promise<EnergyInvoiceBatchDetail> {
-  const form = new FormData();
-  form.append("file", file);
-  const response = await fetch(
-    `${apiBaseUrl}/billing/invoices/imports/edf-csv?force_update=${forceUpdate}`,
-    { method: "POST", headers: buildAuthHeaders(token), body: form },
-  );
-  return parseResponse<EnergyInvoiceBatchDetail>(response);
-}
-
 export async function fetchEnergyInvoiceImport(token: string, importId: number): Promise<EnergyInvoiceImportDetail> {
   const response = await fetch(`${apiBaseUrl}/billing/invoices/imports/${importId}`, {
     headers: buildHeaders(token),

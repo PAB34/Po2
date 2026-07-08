@@ -1,15 +1,9 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { Button, Drawer, StatusBadge } from "../../design-system";
 import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useInvoiceImportV1, useSupplierContactsV1, type InvoiceImportKind } from "./useCpeFinanceQueueV1";
-import { useAuth } from "../../providers/AuthProvider";
 import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput } from "../../lib/api";
 
-/** Import de factures réservé aux administrateurs (écriture sensible). */
-const INVOICE_IMPORT_ADMIN_ROLES = new Set(["ADMIN", "SUPERADMIN"]);
-function canImportInvoices(role: string | undefined) {
-  return INVOICE_IMPORT_ADMIN_ROLES.has((role ?? "").trim().toUpperCase().replace("-", "_"));
-}
-
+// Choix du fournisseur / type d'export = « chez qui » atterrit la facture.
 const IMPORT_KIND_OPTIONS: { value: InvoiceImportKind; label: string; accept: string; hint: string }[] = [
   { value: "engie_xlsx", label: "ENGIE — export XLSX « Mes Factures »", accept: ".xlsx,.xlsm", hint: "Un fichier = plusieurs bordereaux." },
   { value: "edf_csv", label: "EDF — export CSV de facturation", accept: ".csv", hint: "Un fichier = plusieurs factures." },
@@ -316,8 +310,6 @@ export function InvoicesDecisionPageV1() {
   const [contactsOpen, setContactsOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const { user } = useAuth();
-  const canImport = canImportInvoices(user?.role);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const { contacts } = useSupplierContactsV1();
   const actions = useCpeInvoiceActionsV1();
@@ -512,8 +504,7 @@ export function InvoicesDecisionPageV1() {
             <Button
               variant="ghost"
               onClick={() => setImportOpen(true)}
-              disabled={!canImport}
-              title={canImport ? "Importer un export de factures (ENGIE xlsx, EDF csv)" : "Import réservé aux administrateurs"}
+              title="Importer un export de factures (ENGIE xlsx, EDF csv)"
             >
               Importer des factures
             </Button>
@@ -830,9 +821,7 @@ export function InvoicesDecisionPageV1() {
         <SupplierContactsEditor suppliers={editableSuppliers} />
       </Drawer>
 
-      {canImport ? (
-        <InvoiceImportDrawer open={importOpen} onClose={() => setImportOpen(false)} />
-      ) : null}
+      <InvoiceImportDrawer open={importOpen} onClose={() => setImportOpen(false)} />
 
       {selected ? (
         <ReclamationDrawer
@@ -871,7 +860,7 @@ function InvoiceImportDrawer({ open, onClose }: { open: boolean; onClose: () => 
     >
       <div className="po2-import-drawer" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <label className="po2-claim__field">
-          <span>Type d'export</span>
+          <span>Fournisseur / type d'export</span>
           <select value={kind} onChange={(e) => { setKind(e.target.value as InvoiceImportKind); reset(); }}>
             {IMPORT_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>

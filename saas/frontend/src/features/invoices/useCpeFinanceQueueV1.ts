@@ -14,8 +14,8 @@ import {
   recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
-  uploadEdfCsvInvoices,
-  uploadEngieXlsxInvoices,
+  uploadEdfCsvExport,
+  uploadEngieXlsxExport,
   upsertSupplierContact,
   type EnergyInvoiceBatchDetail,
   type SupplierContactInput,
@@ -166,8 +166,8 @@ export function useInvoiceImportV1() {
     ): Promise<EnergyInvoiceBatchDetail> => {
       if (!token) throw new Error("Session absente.");
       const batch = kind === "engie_xlsx"
-        ? await uploadEngieXlsxInvoices(token, file, forceUpdate)
-        : await uploadEdfCsvInvoices(token, file, forceUpdate);
+        ? await uploadEngieXlsxExport(token, file, { forceUpdate })
+        : await uploadEdfCsvExport(token, file, { forceUpdate });
       let current = batch;
       for (let i = 0; i < IMPORT_POLL_MAX_TRIES && current.status === "processing"; i += 1) {
         await delay(IMPORT_POLL_INTERVAL_MS);

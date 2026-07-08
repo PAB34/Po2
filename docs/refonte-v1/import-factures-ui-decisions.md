@@ -22,11 +22,16 @@
 
 ## Décisions arrêtées (2026-07-08)
 
-- **Q1 → Tiroir** (`Drawer`) dans la page factures.
-- **Q2 → Choix explicite** du type (pas de détection auto en v1).
+- **Q1 → Tiroir** (`Drawer`) dans la page factures. Confirmé après comparaison avec une
+  variante « inline » (routage par extension) : l'utilisateur préfère le tiroir car il
+  **choisit explicitement le fournisseur/destination** (« chez qui la facture atterrit »).
+- **Q2 → Choix explicite** du fournisseur/type (pas de détection auto).
 - **Q3 → ENGIE xlsx + EDF csv** en v1. Gaz TE et DALKIA plus tard.
-- **Q4 → Endpoints existants par type** (aucun back à écrire).
-- **Q5 → Réservé ADMIN** : bouton/tiroir visibles uniquement pour un utilisateur admin.
+- **Q4 → Endpoints existants par type** (aucun back à écrire) : réutilise
+  `uploadEngieXlsxExport` / `uploadEdfCsvExport` déjà présents dans `lib/api.ts`.
+- **Q5 → Ouvert à tous** (revirement du 2026-07-08 : plus de restriction admin).
+- Analyse back **asynchrone** → le hook **poll** le batch pour afficher les vrais
+  compteurs (créées / doublons / erreurs), pas des 0.
 
 ## Questions à trancher + recommandations (historique)
 
