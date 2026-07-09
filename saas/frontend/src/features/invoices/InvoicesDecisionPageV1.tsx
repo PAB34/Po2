@@ -63,8 +63,6 @@ const NON_CONTROLABLE_CODES = new Set([
   // BPU : prix de référence absent (l'écart de prix réel reste contrôlé séparément)
   "BPU_CONFIG_MISSING", "BPU_LINES_MISSING",
   "BPU_REFERENCE_MISSING", "BPU_PRICE_MISSING", "BPU_FIXED_CHARGE_MISMATCH",
-  // Taxes : totaux incomplets (les écarts TVA/HT chiffrés restent en écart)
-  "TAX_TOTALS_MISSING",
   // Périodes : continuité / historique (PERIOD_INVALID = fin avant début reste un écart)
   "PERIOD_MISSING", 
   // Consommation : rapprochement ENEDIS / courbe de charge (donnée externe)
@@ -81,13 +79,14 @@ function isNonControlable(code: string) {
 
 const ANOMALY_CODES = new Set([
   "PERIOD_GAP", "PERIOD_OVERLAP", "DOUBLE_BILLING_PERIOD",
-  "POWER_OVERRUN_BILLED",
 ]);
 const EXPLAINED_CODES = new Set(["PERIOD_OVERLAP_EXPLAINED"]);
 /** Codes « informatifs » : visibles pour information mais jamais bloquants et sans
- *  impact sur la décision (écart conso vs ENEDIS/courbe de charge, regroupement absent). */
+ *  impact sur la décision (écart conso vs ENEDIS/courbe de charge, regroupement absent,
+ *  dépassement de puissance facturé, totaux de taxes incomplets). */
 const INFORMATIVE_CODES = new Set([
   "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH", "MISSING_REGROUPEMENT",
+  "POWER_OVERRUN_BILLED", "TAX_TOTALS_MISSING",
 ]);
 function isInformativeIssue(issue: { severity: string; code: string }) {
   return issue.severity === "info" || INFORMATIVE_CODES.has(issue.code);
@@ -98,6 +97,8 @@ const PROBLEM_TYPE_LABELS: Record<string, string> = {
   CONSUMPTION_ENEDIS_MISMATCH: "Écart conso ENEDIS",
   CONSUMPTION_LOAD_CURVE_MISMATCH: "Écart conso courbe de charge",
   MISSING_REGROUPEMENT: "Regroupement absent",
+  POWER_OVERRUN_BILLED: "Dépassement de puissance",
+  TAX_TOTALS_MISSING: "Totaux de taxes incomplets",
   DOUBLE_BILLING_PERIOD: "Double facturation",
   PERIOD_GAP: "Trou de facturation",
   PERIOD_OVERLAP: "Chevauchement de période",
@@ -120,11 +121,10 @@ const PROBLEM_TYPE_LABELS: Record<string, string> = {
 function problemTypeLabel(code: string) {
   return PROBLEM_TYPE_LABELS[code] ?? code.replace(/_/g, " ").toLowerCase();
 }
-/** Codes masqués sur la page Factures : le contrôle reste calculé côté backend
- *  (réutilisable plus tard dans la section Fluides) mais n'est pas affiché ni
- *  compté ici. Dépassement de puissance = pénalité réelle, pas un contrôle de
- *  facturation à trancher par la comptable. */
-const HIDDEN_ENERGY_CODES = new Set(["POWER_OVERRUN_BILLED"]);
+/** Codes masqués sur la page Factures (non affichés ni comptés). Vide aujourd'hui :
+ *  le dépassement de puissance est désormais affiché en « Informatif » (visible mais
+ *  non bloquant) plutôt que masqué. Mécanisme conservé pour un usage futur. */
+const HIDDEN_ENERGY_CODES = new Set<string>([]);
 function isHiddenIssue(issue: { code: string }) {
   return HIDDEN_ENERGY_CODES.has(issue.code);
 }

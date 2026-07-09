@@ -162,6 +162,17 @@ Question soulevée : compter une facture « expliquée » comme « OK » est-il 
 - **Filtre « par type de problème »** sur /factures : nouveau menu listant les problèmes réellement
   présents (ex. « Écart conso ENEDIS », « Double facturation »…) → filtre les factures qui l'ont.
 
+## Suivi (2026-07-09) — audit complet des codes de contrôle
+
+Passe sur les 12 codes réellement produits (staging city 303). Coquille + 2 arbitrages tranchés :
+- **Coquille `POWER_OVERRUN_BILLED`** : masqué à l'écran MAIS classé « anomalie » côté moteur → bloquait
+  l'auto-validation sans raison visible. **Corrigé** → « Informatif » **visible et non bloquant**
+  (retiré de `ANOMALY_CONTROL_CODES` + `HIDDEN_ENERGY_CODES` vidé).
+- **`TAX_TOTALS_MISSING`** : « bloqué » → **« Informatif »** (donnée incomplète, pas un écart).
+- **`PERIOD_GAP`** : reste « à expliquer » (un trou peut cacher une facture manquante).
+- Les autres codes (transition fournisseur, doublon, double facturation, chevauchement, écart prix BPU…)
+  sont cohérents entre back et front. ⚠ Recalcul nécessaire pour appliquer aux factures déjà importées.
+
 ## Ordre proposé
 1. **#4** (factures EDF bloquées) — diagnostic terminé, correctif ciblé, fort impact ressenti.
 2. **#1** (EDF atterrissage) — dépend des réponses Q1.1–Q1.3 pour trancher bug vs affichage.

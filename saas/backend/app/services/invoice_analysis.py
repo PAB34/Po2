@@ -296,18 +296,22 @@ ANOMALY_CONTROL_CODES = {
     "PERIOD_GAP",
     "PERIOD_OVERLAP",
     "DOUBLE_BILLING_PERIOD",
-    "POWER_OVERRUN_BILLED",
 }
 
 # Contrôles purement INFORMATIFS : visibles pour information, mais jamais bloquants
 # et sans impact sur la décision (n'empêchent pas l'auto-validation).
 #  - écart conso facturée vs référence ENEDIS / courbe de charge : petit écart normal
 #    (relevé estimé, bornes de période, arrondis) ;
-#  - regroupement (compte / CCC) absent : donnée d'organisation, pas de facturation.
+#  - regroupement (compte / CCC) absent : donnée d'organisation, pas de facturation ;
+#  - dépassement de puissance facturé : pénalité réelle à connaître, mais pas un
+#    contrôle de facturation qui doit bloquer la décision comptable ;
+#  - totaux de taxes incomplets : donnée absente, pas un écart de facturation.
 INFORMATIVE_CONTROL_CODES = {
     "CONSUMPTION_ENEDIS_MISMATCH",
     "CONSUMPTION_LOAD_CURVE_MISMATCH",
     "MISSING_REGROUPEMENT",
+    "POWER_OVERRUN_BILLED",
+    "TAX_TOTALS_MISSING",
 }
 
 EXPLAINED_CONTROL_CODES = {

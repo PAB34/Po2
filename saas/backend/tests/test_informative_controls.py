@@ -8,6 +8,8 @@ def test_consumption_and_regroupement_become_info():
         {"severity": "anomaly", "code": "CONSUMPTION_ENEDIS_MISMATCH", "message": "", "scope": "s"},
         {"severity": "warning", "code": "MISSING_REGROUPEMENT", "message": "", "scope": "s"},
         {"severity": "warning", "code": "CONSUMPTION_LOAD_CURVE_MISMATCH", "message": "", "scope": "s"},
+        {"severity": "anomaly", "code": "POWER_OVERRUN_BILLED", "message": "", "scope": "s"},
+        {"severity": "warning", "code": "TAX_TOTALS_MISSING", "message": "", "scope": "s"},
         {"severity": "anomaly", "code": "DOUBLE_BILLING_PERIOD", "message": "", "scope": "s"},
     ]
     _apply_invoice_severity_policy(issues)
@@ -15,6 +17,9 @@ def test_consumption_and_regroupement_become_info():
     assert by_code["CONSUMPTION_ENEDIS_MISMATCH"] == "info"
     assert by_code["MISSING_REGROUPEMENT"] == "info"
     assert by_code["CONSUMPTION_LOAD_CURVE_MISMATCH"] == "info"
+    # Coquille corrigée : dépassement de puissance et totaux taxes incomplets = info.
+    assert by_code["POWER_OVERRUN_BILLED"] == "info"
+    assert by_code["TAX_TOTALS_MISSING"] == "info"
     # Une vraie anomalie reste une anomalie (toujours bloquante).
     assert by_code["DOUBLE_BILLING_PERIOD"] == "anomaly"
 
