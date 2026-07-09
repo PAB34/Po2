@@ -20,6 +20,7 @@ type UnifiedRow = {
   error: number;
   anomaly: number;
   explained: number;
+  info: number;
   blocked: number;
   status: UnifiedStatus;
   processed: boolean;
@@ -56,14 +57,12 @@ function issueTone(severity: string) {
  *  SUPPLIER_UNKNOWN, NO_SITE_FOUND, MISSING_INVOICE_NUMBER, MISSING_TOTAL_TTC. */
 const NON_CONTROLABLE_CODES = new Set([
   // Identité / périmètre : donnée absente ou PRM hors référentiel (typique EDF)
-  "MISSING_INVOICE_DATE", "MISSING_REGROUPEMENT",
+  "MISSING_INVOICE_DATE",
   "MISSING_MARKET_REFERENCE", "MARKET_REFERENCE_MISMATCH",
   "MISSING_PRM", "UNKNOWN_PRM", "SUPPLIER_CONTRACT_MISMATCH",
   // BPU : prix de référence absent (l'écart de prix réel reste contrôlé séparément)
   "BPU_CONFIG_MISSING", "BPU_LINES_MISSING",
   "BPU_REFERENCE_MISSING", "BPU_PRICE_MISSING", "BPU_FIXED_CHARGE_MISMATCH",
-  // Taxes : totaux incomplets (les écarts TVA/HT chiffrés restent en écart)
-  "TAX_TOTALS_MISSING",
   // Périodes : continuité / historique (PERIOD_INVALID = fin avant début reste un écart)
   "PERIOD_MISSING", 
   // Consommation : rapprochement ENEDIS / courbe de charge (donnée externe)
@@ -80,15 +79,52 @@ function isNonControlable(code: string) {
 
 const ANOMALY_CODES = new Set([
   "PERIOD_GAP", "PERIOD_OVERLAP", "DOUBLE_BILLING_PERIOD",
-  "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH",
-  "POWER_OVERRUN_BILLED",
 ]);
 const EXPLAINED_CODES = new Set(["PERIOD_OVERLAP_EXPLAINED"]);
-/** Codes masqués sur la page Factures : le contrôle reste calculé côté backend
- *  (réutilisable plus tard dans la section Fluides) mais n'est pas affiché ni
- *  compté ici. Dépassement de puissance = pénalité réelle, pas un contrôle de
- *  facturation à trancher par la comptable. */
-const HIDDEN_ENERGY_CODES = new Set(["POWER_OVERRUN_BILLED"]);
+/** Codes « informatifs » : visibles pour information mais jamais bloquants et sans
+ *  impact sur la décision (écart conso vs ENEDIS/courbe de charge, regroupement absent,
+ *  dépassement de puissance facturé, totaux de taxes incomplets). */
+const INFORMATIVE_CODES = new Set([
+  "CONSUMPTION_ENEDIS_MISMATCH", "CONSUMPTION_LOAD_CURVE_MISMATCH", "MISSING_REGROUPEMENT",
+  "POWER_OVERRUN_BILLED", "TAX_TOTALS_MISSING",
+]);
+function isInformativeIssue(issue: { severity: string; code: string }) {
+  return issue.severity === "info" || INFORMATIVE_CODES.has(issue.code);
+}
+
+/** Libellés courts par type de problème, pour le filtre « par typologie ». */
+const PROBLEM_TYPE_LABELS: Record<string, string> = {
+  CONSUMPTION_ENEDIS_MISMATCH: "Écart conso ENEDIS",
+  CONSUMPTION_LOAD_CURVE_MISMATCH: "Écart conso courbe de charge",
+  MISSING_REGROUPEMENT: "Regroupement absent",
+  POWER_OVERRUN_BILLED: "Dépassement de puissance",
+  TAX_TOTALS_MISSING: "Totaux de taxes incomplets",
+  DOUBLE_BILLING_PERIOD: "Double facturation",
+  PERIOD_GAP: "Trou de facturation",
+  PERIOD_OVERLAP: "Chevauchement de période",
+  PERIOD_INVALID: "Période incohérente",
+  DUPLICATE_EXPORT_OR_REISSUE: "Doublon export / réédition",
+  DUPLICATE_INVOICE_NUMBER: "Numéro de facture en doublon",
+  FIXED_CHARGE_PERIOD_NOT_APPLICABLE: "Ligne fixe sans conso",
+  SUPPLIER_SWITCH_GAP_EXPLAINED: "Transition fournisseur",
+  PERIOD_OVERLAP_EXPLAINED: "Chevauchement expliqué",
+  BPU_PRICE_MISMATCH: "Écart prix BPU",
+  BPU_TARIFF_POSTE_INCONSISTENCY: "Incohérence poste/tarif BPU",
+  TOTAL_TTC_MISMATCH: "Écart total TTC",
+  LINE_AMOUNT_MISMATCH: "Écart montant de ligne",
+  HT_TOTAL_MISMATCH: "Écart total HT",
+  SUPPLIER_UNKNOWN: "Fournisseur inconnu",
+  NO_SITE_FOUND: "Aucun point de livraison",
+  UNKNOWN_PRM: "PRM hors référentiel",
+  SUPPLIER_CONTRACT_MISMATCH: "PRM rattaché à un autre fournisseur",
+};
+function problemTypeLabel(code: string) {
+  return PROBLEM_TYPE_LABELS[code] ?? code.replace(/_/g, " ").toLowerCase();
+}
+/** Codes masqués sur la page Factures (non affichés ni comptés). Vide aujourd'hui :
+ *  le dépassement de puissance est désormais affiché en « Informatif » (visible mais
+ *  non bloquant) plutôt que masqué. Mécanisme conservé pour un usage futur. */
+const HIDDEN_ENERGY_CODES = new Set<string>([]);
 function isHiddenIssue(issue: { code: string }) {
   return HIDDEN_ENERGY_CODES.has(issue.code);
 }
@@ -248,9 +284,10 @@ const BAR_SEGMENTS: { key: keyof Distribution; label: string; color: string }[] 
   { key: "explain", label: "À expliquer", color: "#b45309" },
   { key: "ecart", label: "Écarts", color: "#d9a13a" },
   { key: "explained", label: "Expliquées", color: "#7fb3a8" },
+  { key: "info", label: "Informatif", color: "#5b8def" },
   { key: "ok", label: "Sans écart", color: "#74b44a" },
 ];
-type Distribution = { ok: number; explained: number; ecart: number; explain: number; blocked: number };
+type Distribution = { ok: number; explained: number; info: number; ecart: number; explain: number; blocked: number };
 
 const CONTROL_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Tous les contrôles" },
@@ -260,6 +297,7 @@ const CONTROL_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "explain", label: "À expliquer" },
   { value: "blocked", label: "Bloquées" },
   { value: "explained", label: "Expliquées" },
+  { value: "info", label: "Informatif" },
 ];
 function matchesControl(r: UnifiedRow, f: string) {
   switch (f) {
@@ -269,13 +307,14 @@ function matchesControl(r: UnifiedRow, f: string) {
     case "explain": return r.anomaly > 0;
     case "blocked": return r.blocked > 0;
     case "explained": return r.explained > 0;
+    case "info": return r.info > 0;
     default: return true;
   }
 }
 
 // Colonnes triables : chaque clé correspond à un champ direct de UnifiedRow.
 type SortKey = "invoiceNumber" | "supplier" | "type" | "client" | "marche" | "perimetre"
-  | "total" | "ok" | "error" | "anomaly" | "explained" | "blocked" | "status";
+  | "total" | "ok" | "error" | "anomaly" | "explained" | "info" | "blocked" | "status";
 const COLUMNS: { key: SortKey; label: string; align?: "right"; title?: string }[] = [
   { key: "invoiceNumber", label: "Facture" },
   { key: "supplier", label: "Fournisseur" },
@@ -288,6 +327,7 @@ const COLUMNS: { key: SortKey; label: string; align?: "right"; title?: string }[
   { key: "error", label: "Écarts", align: "right", title: "Écarts réels de facturation" },
   { key: "anomaly", label: "À expliquer", align: "right", title: "Anomalies non résolues à expliquer au fournisseur" },
   { key: "explained", label: "Expliquées", align: "right", title: "Anomalies neutralisées (avoir, doublon exact, transition fournisseur, ligne fixe)" },
+  { key: "info", label: "Informatif", align: "right", title: "Informations non bloquantes (écart conso ENEDIS, regroupement absent)" },
   { key: "blocked", label: "Bloquées", align: "right", title: "Non contrôlable : référence ou donnée manquante" },
   { key: "status", label: "Décision" },
 ];
@@ -296,6 +336,7 @@ export function InvoicesDecisionPageV1() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [controlFilter, setControlFilter] = useState("all");
+  const [problemFilter, setProblemFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState<number | null>(null);
   const [monthFilter, setMonthFilter] = useState<number | null>(null);
@@ -324,7 +365,7 @@ export function InvoicesDecisionPageV1() {
         invoiceNumber: r.invoice_number, supplier: "DALKIA",
         type: r.invoice_type ?? "—", client: r.recipient_ref ?? "—",
         marche: r.contract_code ?? r.contract_label ?? "—", perimetre: r.market ?? "—",
-        total: r.total_ht, ok: r.ok, error: r.error, anomaly: 0, explained: 0, blocked: r.blocked,
+        total: r.total_ht, ok: r.ok, error: r.error, anomaly: 0, explained: 0, info: 0, blocked: r.blocked,
         status: CPE_TO_UNIFIED[r.invoice_status] ?? "todo",
         processed: r.invoice_status === "valide" || Boolean(r.finance_exported_at),
         month: info?.month ?? null, year: info?.year ?? null,
@@ -337,10 +378,11 @@ export function InvoicesDecisionPageV1() {
       const sites = e.site_count ? ` · ${e.site_count} site(s)` : "";
       const docType = e.filter_facets?.document_types?.[0];
       const energyIssues = (e.control_issues ?? []).filter((i) => !isHiddenIssue(i));
-      const explained = energyIssues.filter((i) => isExplainedIssue(i)).length;
-      const anomalies = energyIssues.filter((i) => isAnomalyIssue(i)).length;
-      const nonControlable = energyIssues.filter((i) => isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
-      const realErrors = energyIssues.filter((i) => (i.severity === "error" || i.severity === "blocking") && !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
+      const infoCount = energyIssues.filter((i) => isInformativeIssue(i)).length;
+      const explained = energyIssues.filter((i) => isExplainedIssue(i) && !isInformativeIssue(i)).length;
+      const anomalies = energyIssues.filter((i) => isAnomalyIssue(i) && !isInformativeIssue(i)).length;
+      const nonControlable = energyIssues.filter((i) => isNonControlable(i.code) && !isInformativeIssue(i) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
+      const realErrors = energyIssues.filter((i) => (i.severity === "error" || i.severity === "blocking") && !isInformativeIssue(i) && !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i)).length;
       out.push({
         key: `energy:${e.id}`, source: "energy", rowId: e.id,
         invoiceNumber: e.invoice_number ?? `import-${e.id}`, supplier: supplierFromEnergy(e),
@@ -348,7 +390,7 @@ export function InvoicesDecisionPageV1() {
         client: e.contract_holder ?? "—",
         marche: "Hérault Énergie",
         perimetre: (e.regroupement ?? "Portefeuille") + sites,
-        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, anomaly: anomalies, explained, blocked: nonControlable,
+        total: e.total_ht ?? e.total_ttc ?? 0, ok: 0, error: realErrors, anomaly: anomalies, explained, info: infoCount, blocked: nonControlable,
         status, processed: status === "valid",
         month: parseMonth(e.invoice_date), year: parseYear(e.invoice_date),
         periodStart: e.period_start, periodEnd: e.period_end,
@@ -376,7 +418,7 @@ export function InvoicesDecisionPageV1() {
       ? (detail.controls.data ?? [])
           .filter((c) => c.status === "error")
           .map((c) => ({ severity: "error", message: c.message || controlTypeLabel(c.control_type), code: c.control_type }))
-      : selected.issues.filter((i) => isAnomalyIssue(i) || (!isNonControlable(i.code) && !isExplainedIssue(i)));
+      : selected.issues.filter((i) => !isInformativeIssue(i) && (isAnomalyIssue(i) || (!isNonControlable(i.code) && !isExplainedIssue(i))));
     return aggregateIssues(issues).map((i) => (i.count > 1 ? `${i.message} (${i.count}×)` : i.message));
   }, [selected, detail.controls.data]);
 
@@ -418,6 +460,7 @@ export function InvoicesDecisionPageV1() {
       ecarts: rows.filter((r) => r.error > 0).length,
       anomalies: rows.filter((r) => r.anomaly > 0).length,
       expliquees: rows.filter((r) => r.explained > 0).length,
+      informatif: rows.filter((r) => r.info > 0).length,
       bloquees: rows.filter((r) => r.blocked > 0).length,
     };
   }, [rows]);
@@ -425,12 +468,13 @@ export function InvoicesDecisionPageV1() {
   const totalAmount = useMemo(() => rows.reduce((s, r) => s + (r.total || 0), 0), [rows]);
 
   const distribution = useMemo<Distribution>(() => {
-    const d: Distribution = { ok: 0, explained: 0, ecart: 0, explain: 0, blocked: 0 };
+    const d: Distribution = { ok: 0, explained: 0, info: 0, ecart: 0, explain: 0, blocked: 0 };
     for (const r of rows) {
       if (r.blocked > 0) d.blocked += 1;
       else if (r.error > 0) d.ecart += 1;
       else if (r.anomaly > 0) d.explain += 1;
       else if (r.explained > 0) d.explained += 1;
+      else if (r.info > 0) d.info += 1;
       else d.ok += 1;
     }
     return d;
@@ -441,12 +485,22 @@ export function InvoicesDecisionPageV1() {
     return rows.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (controlFilter !== "all" && !matchesControl(r, controlFilter)) return false;
+      if (problemFilter !== "all" && !r.issues.some((i) => i.code === problemFilter)) return false;
       if (supplierFilter !== "all" && r.supplier !== supplierFilter) return false;
       if (monthFilter !== null && !(r.year === effectiveYear && r.month === monthFilter)) return false;
       if (q && ![r.invoiceNumber, r.marche, r.perimetre, r.client, r.supplier].filter(Boolean).join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, query, statusFilter, controlFilter, supplierFilter, monthFilter, effectiveYear]);
+  }, [rows, query, statusFilter, controlFilter, problemFilter, supplierFilter, monthFilter, effectiveYear]);
+
+  // Types de problème réellement présents (pour le filtre par typologie).
+  const problemTypeOptions = useMemo(() => {
+    const codes = new Set<string>();
+    for (const r of rows) for (const i of r.issues) if (i.code) codes.add(i.code);
+    return Array.from(codes)
+      .map((code) => ({ value: code, label: problemTypeLabel(code) }))
+      .sort((a, b) => a.label.localeCompare(b.label, "fr"));
+  }, [rows]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -518,6 +572,9 @@ export function InvoicesDecisionPageV1() {
           </button>
           <button type="button" className={"po2-fact-kpi" + (controlFilter === "explained" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "explained" ? "all" : "explained")}>
             <span>Expliquées</span><strong>{kpis.expliquees}</strong><small>neutralisées (avoir, doublon…)</small>
+          </button>
+          <button type="button" className={"po2-fact-kpi" + (controlFilter === "info" ? " is-active" : "")} onClick={() => setControlFilter(controlFilter === "info" ? "all" : "info")}>
+            <span>Informatif</span><strong>{kpis.informatif}</strong><small>non bloquant (conso, regroupement)</small>
           </button>
         </div>
 
@@ -609,6 +666,10 @@ export function InvoicesDecisionPageV1() {
         <select value={controlFilter} onChange={(e) => setControlFilter(e.target.value)} aria-label="Filtrer résultat de contrôle">
           {CONTROL_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select value={problemFilter} onChange={(e) => setProblemFilter(e.target.value)} aria-label="Filtrer par type de problème">
+          <option value="all">Tous les types de problème</option>
+          {problemTypeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filtrer décision">
           <option value="all">Toutes les décisions</option>
           {UNIFIED_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -656,13 +717,14 @@ export function InvoicesDecisionPageV1() {
                   <td style={{ textAlign: "right" }}>
                     {row.source === "cpe"
                       ? <span style={{ color: row.ok ? "#166534" : "var(--po2-color-muted)" }}>{row.ok}</span>
-                      : (row.error === 0 && row.anomaly === 0 && row.explained === 0 && row.blocked === 0
+                      : (row.error === 0 && row.anomaly === 0 && row.explained === 0 && row.info === 0 && row.blocked === 0
                           ? <span style={{ color: "#166534", fontWeight: 700 }} title="Aucun écart ni point bloquant">✓</span>
                           : <span style={{ color: "var(--po2-color-muted)" }}>—</span>)}
                   </td>
                   <td style={{ textAlign: "right", color: row.error ? "#b91c1c" : "var(--po2-color-muted)", fontWeight: row.error ? 700 : 400 }}>{row.error || "-"}</td>
                   <td style={{ textAlign: "right", color: row.anomaly ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.anomaly ? 700 : 400 }}>{row.anomaly || "-"}</td>
                   <td style={{ textAlign: "right", color: row.explained ? "#166534" : "var(--po2-color-muted)", fontWeight: row.explained ? 700 : 400 }}>{row.explained || "-"}</td>
+                  <td style={{ textAlign: "right", color: row.info ? "#5b8def" : "var(--po2-color-muted)", fontWeight: row.info ? 700 : 400 }}>{row.info || "-"}</td>
                   <td style={{ textAlign: "right", color: row.blocked ? "#b45309" : "var(--po2-color-muted)", fontWeight: row.blocked ? 700 : 400 }}>{row.blocked || "-"}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <select value={row.status} disabled={actions.setStatus.isPending || actions.setEnergyStatus.isPending}
@@ -673,7 +735,7 @@ export function InvoicesDecisionPageV1() {
                   </td>
                 </tr>
               ))}
-              {filteredRows.length === 0 ? <tr><td colSpan={13} className="po2-muted-line">Aucune facture ne correspond aux filtres.</td></tr> : null}
+              {filteredRows.length === 0 ? <tr><td colSpan={14} className="po2-muted-line">Aucune facture ne correspond aux filtres.</td></tr> : null}
             </tbody>
           </table>
         )}
@@ -695,7 +757,7 @@ export function InvoicesDecisionPageV1() {
                 <b>{fmtPeriod(selected.periodStart, selected.periodEnd) ?? "—"}</b>
                 {selected.month !== null && selected.year !== null ? <small style={{ display: "block", marginTop: ".2rem", color: "var(--po2-color-muted)", fontSize: ".68rem" }}>émise {fmtMonthYear(selected.month, selected.year)}</small> : null}
               </div>
-              <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart · ${selected.anomaly} à expliquer · ${selected.explained} expliqué · ${selected.blocked} bloqué`}</b></div>
+              <div><span>Contrôles</span><b>{selected.source === "cpe" ? `${selected.ok} OK · ${selected.error} écart · ${selected.blocked} bloqué` : `${selected.error} écart · ${selected.anomaly} à expliquer · ${selected.explained} expliqué · ${selected.info} info · ${selected.blocked} bloqué`}</b></div>
               <div><span>Décision</span><b>{statusLabel(selected.status)}</b></div>
             </div>
 
@@ -709,10 +771,11 @@ export function InvoicesDecisionPageV1() {
             ) : (
               <>
                 {(() => {
-                  const explained = selected.issues.filter((i) => isExplainedIssue(i));
-                  const anomalies = selected.issues.filter((i) => isAnomalyIssue(i));
-                  const reals = selected.issues.filter((i) => !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i));
-                  const nc = selected.issues.filter((i) => isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i));
+                  const info = selected.issues.filter((i) => isInformativeIssue(i));
+                  const explained = selected.issues.filter((i) => isExplainedIssue(i) && !isInformativeIssue(i));
+                  const anomalies = selected.issues.filter((i) => isAnomalyIssue(i) && !isInformativeIssue(i));
+                  const reals = selected.issues.filter((i) => !isInformativeIssue(i) && !isNonControlable(i.code) && !isAnomalyIssue(i) && !isExplainedIssue(i));
+                  const nc = selected.issues.filter((i) => isNonControlable(i.code) && !isInformativeIssue(i) && !isAnomalyIssue(i) && !isExplainedIssue(i));
                   return (
                     <>
                       <h3>Écarts de contrôle{reals.length ? ` (${reals.length})` : ""}</h3>
@@ -749,6 +812,19 @@ export function InvoicesDecisionPageV1() {
                               <article key={iss.message}>
                                 <StatusBadge tone="ok">{iss.count > 1 ? `×${iss.count}` : "EXPLIQUÉ"}</StatusBadge>
                                 <div><strong>{iss.message}</strong><small>{explainExplained(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
+                              </article>
+                            ))}
+                          </div>
+                        </>
+                      ) : null}
+                      {info.length > 0 ? (
+                        <>
+                          <h3>Informatif · non bloquant ({info.length})</h3>
+                          <div className="po2-proto-control-list">
+                            {aggregateIssues(info).map((iss) => (
+                              <article key={iss.message}>
+                                <StatusBadge tone="neutral">{iss.count > 1 ? `×${iss.count}` : "INFO"}</StatusBadge>
+                                <div><strong>{iss.message}</strong><small>{explainEcart(iss.code)}{iss.count > 1 ? ` · ${iss.count} occurrences` : ""}</small></div>
                               </article>
                             ))}
                           </div>

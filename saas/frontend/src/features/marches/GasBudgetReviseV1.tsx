@@ -90,7 +90,7 @@ export function GasBudgetReviseV1() {
             />
           </div>
 
-          <Card title="Par PCE" eyebrow="réalisé (fixe/variable) + reste projeté = atterrissage">
+          <Card title="Atterrissage" eyebrow="réalisé (fixe/variable) + reste projeté">
             {data.points.length === 0 ? (
               <p className="po2-muted-line">Aucune facture gaz sur {year - 1}/{year} : importe d'abord les factures TotalEnergies.</p>
             ) : (
@@ -126,17 +126,34 @@ export function GasBudgetReviseV1() {
                     ),
                   },
                   {
-                    key: "reste",
+                    key: "conso",
                     header: "Conso attendue an",
                     sortValue: (p) => p.conso_attendue_kwh,
                     render: (p) => (
                       <div>
                         {kwh(p.conso_attendue_kwh)}
-                        {p.climate_ratio !== 1 || p.peg_ratio !== 1 ? (
+                        {p.climate_ratio !== 1 ? (
                           <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>
-                            climat ×{p.climate_ratio.toFixed(2)} · PEG ×{p.peg_ratio.toFixed(2)}
+                            climat ×{p.climate_ratio.toFixed(2)}
                           </div>
                         ) : null}
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "prix",
+                    header: "Prix réf.",
+                    sortValue: (p) => p.pu_variable_eur_kwh,
+                    render: (p) => (
+                      <div>
+                        {p.pu_variable_eur_kwh.toLocaleString("fr-FR", { maximumFractionDigits: 4 })} €/kWh
+                        {p.peg_ratio !== 1 ? (
+                          <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>
+                            PEG ×{p.peg_ratio.toFixed(2)}
+                          </div>
+                        ) : (
+                          <div className="po2-muted-line" style={{ fontSize: "0.72em", opacity: 0.7 }}>tenu N-1</div>
+                        )}
                       </div>
                     ),
                   },

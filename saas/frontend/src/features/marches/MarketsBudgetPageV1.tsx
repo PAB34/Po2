@@ -79,11 +79,11 @@ export function MarketsBudgetPageV1() {
   return (
     <div className="po2-page-v1">
       <header className="po2-page-v1__head">
-        <span className="po2-eyebrow">Marchés &amp; contrats</span>
-        <h1>Marchés — budget, atterrissage et indices</h1>
+        <span className="po2-eyebrow">Suivi des marchés</span>
+        <h1>Atterrissage &amp; indices par marché</h1>
         <p>
-          Choisis un marché (tiers), puis navigue entre son atterrissage (budget base / révisé / réalisé) et le
-          suivi des indices &amp; variables qui pilotent sa révision.
+          Choisis un marché (tiers), puis navigue entre son atterrissage (réalisé à date + reste de l'année
+          projeté) et le suivi des indices &amp; variables qui pilotent sa révision.
         </p>
       </header>
 
@@ -118,9 +118,9 @@ export function MarketsBudgetPageV1() {
       ) : tier === "gaz" && activeSub === "atterrissage" ? (
         <GasBudgetReviseV1 />
       ) : tier === "engie" && activeSub === "atterrissage" ? (
-        <ElecBudgetReviseV1 supplier="ENGIE" />
+        <ElecBudgetReviseV1 key="engie" supplier="ENGIE" />
       ) : tier === "edf" && activeSub === "atterrissage" ? (
-        <ElecBudgetReviseV1 supplier="EDF" />
+        <ElecBudgetReviseV1 key="edf" supplier="EDF" />
       ) : (
         <div className="po2-page-v1">
           <Card eyebrow="vue indisponible">

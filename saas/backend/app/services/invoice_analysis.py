@@ -108,7 +108,7 @@ def apply_parsed_to_invoice_import(
     invoice_import.control_status = control_report["status"]
     invoice_import.control_errors_count = control_report["error_count"]
     invoice_import.control_warnings_count = control_report["warning_count"]
-    _auto_validate_if_clean(invoice_import)
+    _auto_validate_if_clean(invoice_import, control_report)
     invoice_import.analysis_status = "partial" if parsed.get("parser_warnings") else "parsed"
     invoice_import.analysis_result_json = json.dumps(_json_ready(parsed), ensure_ascii=False)
     invoice_import.control_report_json = json.dumps(_json_ready(control_report), ensure_ascii=False)
@@ -116,7 +116,15 @@ def apply_parsed_to_invoice_import(
     return invoice_import
 
 
-def _auto_validate_if_clean(invoice_import: EnergyInvoiceImport) -> None:
+# Codes « expliqués » mais qui EMPÊCHENT l'auto-validation : un doublon exact peut
+# être un vrai doublon de facture (risque de double paiement). On laisse alors la
+# comptable confirmer d'un clic plutôt que de valider sans qu'un humain l'ait vu.
+_AUTO_VALIDATION_HOLD_CODES = {"DUPLICATE_EXPORT_OR_REISSUE"}
+
+
+def _auto_validate_if_clean(
+    invoice_import: EnergyInvoiceImport, control_report: dict[str, Any]
+) -> None:
     """Valide automatiquement une facture au contrôle entièrement vert.
 
     `control_status == "valid"` signifie déjà : aucune erreur, aucun warning et
@@ -125,16 +133,26 @@ def _auto_validate_if_clean(invoice_import: EnergyInvoiceImport) -> None:
     `to_review` : une décision humaine déjà prise (approved / rejected /
     dispute_sent) n'est jamais écrasée. `decision_by_user_id` reste nul, ce qui
     marque la validation comme automatique.
+
+    Exception : si un élément expliqué « à confirmer » est présent (cf.
+    `_AUTO_VALIDATION_HOLD_CODES`, ex. doublon exact), on n'auto-valide PAS — la
+    facture reste `to_review` pour un contrôle humain.
     """
     if (
-        invoice_import.control_status == "valid"
-        and invoice_import.decision_status == "to_review"
+        invoice_import.control_status != "valid"
+        or invoice_import.decision_status != "to_review"
     ):
-        invoice_import.decision_status = "approved"
-        invoice_import.decision_comment = (
-            "Validée automatiquement : contrôle sans écart, anomalie ni blocage."
-        )
-        invoice_import.decision_updated_at = datetime.now(timezone.utc)
+        return
+    if any(
+        str(item.get("code") or "") in _AUTO_VALIDATION_HOLD_CODES
+        for item in control_report.get("issues", [])
+    ):
+        return
+    invoice_import.decision_status = "approved"
+    invoice_import.decision_comment = (
+        "Validée automatiquement : contrôle sans écart, anomalie ni blocage."
+    )
+    invoice_import.decision_updated_at = datetime.now(timezone.utc)
 
 
 def _apply_parser_failure(
@@ -226,6 +244,7 @@ def _build_control_report(
     _check_consumption_against_enedis(sites, issue, consumption_summary)
     _check_billed_power_anomalies(sites, issue, power_summary)
 
+    _suppress_supplier_specific_controls(issues, parsed.get("supplier"))
     _apply_invoice_severity_policy(issues)
 
     error_count = sum(1 for item in issues if item["severity"] == "error")
@@ -277,9 +296,22 @@ ANOMALY_CONTROL_CODES = {
     "PERIOD_GAP",
     "PERIOD_OVERLAP",
     "DOUBLE_BILLING_PERIOD",
+}
+
+# Contrôles purement INFORMATIFS : visibles pour information, mais jamais bloquants
+# et sans impact sur la décision (n'empêchent pas l'auto-validation).
+#  - écart conso facturée vs référence ENEDIS / courbe de charge : petit écart normal
+#    (relevé estimé, bornes de période, arrondis) ;
+#  - regroupement (compte / CCC) absent : donnée d'organisation, pas de facturation ;
+#  - dépassement de puissance facturé : pénalité réelle à connaître, mais pas un
+#    contrôle de facturation qui doit bloquer la décision comptable ;
+#  - totaux de taxes incomplets : donnée absente, pas un écart de facturation.
+INFORMATIVE_CONTROL_CODES = {
     "CONSUMPTION_ENEDIS_MISMATCH",
     "CONSUMPTION_LOAD_CURVE_MISMATCH",
+    "MISSING_REGROUPEMENT",
     "POWER_OVERRUN_BILLED",
+    "TAX_TOTALS_MISSING",
 }
 
 EXPLAINED_CONTROL_CODES = {
@@ -288,6 +320,27 @@ EXPLAINED_CONTROL_CODES = {
     "PERIOD_OVERLAP_EXPLAINED",
     "SUPPLIER_SWITCH_GAP_EXPLAINED",
 }
+
+# Contrôles non pertinents pour l'éclairage public EDF : ses PRM sont rattachés à
+# un autre fournisseur dans le référentiel ENEDIS (mismatch structurel, pas une
+# anomalie de facturation) et ses lignes de fourniture n'ont ni période ni quantité
+# par point de livraison. On les SUPPRIME (règle « contrôle ≠ anomalie → supprimer »)
+# pour ne pas noyer les vraies anomalies EDF (double facturation, écart conso ENEDIS).
+_EDF_SUPPRESSED_CONTROL_CODES = {
+    "SUPPLIER_CONTRACT_MISMATCH",
+    "PERIOD_MISSING",
+    "CONSUMPTION_REFERENCE_MISSING",
+}
+
+
+def _suppress_supplier_specific_controls(issues: list[dict[str, Any]], supplier: str | None) -> None:
+    """Retire les contrôles propres à un fournisseur qui ne sont pas des anomalies de facturation."""
+    if (supplier or "").upper() != "EDF":
+        return
+    issues[:] = [
+        item for item in issues
+        if str(item.get("code") or "") not in _EDF_SUPPRESSED_CONTROL_CODES
+    ]
 
 
 def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
@@ -301,7 +354,9 @@ def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
     """
     for item in issues:
         code = str(item.get("code") or "")
-        if code in EXPLAINED_CONTROL_CODES:
+        if code in INFORMATIVE_CONTROL_CODES:
+            item["severity"] = "info"
+        elif code in EXPLAINED_CONTROL_CODES:
             item["severity"] = "explained"
         elif code in ANOMALY_CONTROL_CODES:
             item["severity"] = "anomaly"
