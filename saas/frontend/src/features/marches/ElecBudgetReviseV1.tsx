@@ -97,10 +97,12 @@ function aggregateColumns() {
 
 export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
+  // year null = pas de choix explicite → le back ouvre sur l'année significative recommandée.
+  const [year, setYear] = useState<number | null>(null);
   const [maille, setMaille] = useState<Maille>("regroupement");
   const query = useElecBudgetReviseV1(supplier, year);
   const data = query.data;
+  const displayYear = year ?? data?.recommended_year ?? currentYear;
   const cfg = CONFIG[supplier];
 
   return (
@@ -117,11 +119,17 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
             <span>Année</span>
             <input
               type="number"
-              value={year}
+              value={displayYear}
               onChange={(event) => setYear(Number(event.currentTarget.value) || currentYear)}
             />
           </label>
         </div>
+        {data && year === null && data.recommended_year !== currentYear ? (
+          <p className="po2-muted-line">
+            Ouvert par défaut sur <strong>{data.recommended_year}</strong> : l'année {currentYear} est encore
+            trop partielle (facturation en cours). Change l'année ci-dessus pour la voir quand même.
+          </p>
+        ) : null}
         {data ? (
           <>
             <p className="po2-muted-line">
@@ -157,7 +165,7 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
           <p className="po2-muted-line">Atterrissage indisponible : {errorMessage(query.error)}</p>
         </Card>
       ) : null}
-      {query.isFetching && !data ? <p className="po2-muted-line">Chargement de l'atterrissage {year}...</p> : null}
+      {query.isFetching && !data ? <p className="po2-muted-line">Chargement de l'atterrissage {displayYear}...</p> : null}
 
       {data ? (
         <>
@@ -173,7 +181,7 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
           ) : null}
 
           <div className="po2-kpi-grid">
-            <KpiCard label="Atterrissage" value={eur(data.totals.atterrissage)} detail={`${year} · réalisé + reste projeté`} />
+            <KpiCard label="Atterrissage" value={eur(data.totals.atterrissage)} detail={`${data.year} · réalisé + reste projeté`} />
             <KpiCard label="Réalisé à date" value={eur(data.totals.realise)} detail={`fixe ${eur(data.totals.realise_fixe)} · variable ${eur(data.totals.realise_variable)}`} />
             <KpiCard label="Prévision de référence" value={eur(data.totals.prevision_reference)} tone="neutral" detail="repère N-1 recalé (pas un budget)" />
             <KpiCard
@@ -200,7 +208,7 @@ export function ElecBudgetReviseV1({ supplier }: { supplier: ElecSupplier }) {
           >
             {data.points.length === 0 ? (
               <p className="po2-muted-line">
-                Aucune facture {supplier} sur {year - 1}/{year} : importe d'abord les factures {supplier}.
+                Aucune facture {supplier} sur {data.year - 1}/{data.year} : importe d'abord les factures {supplier}.
               </p>
             ) : maille === "regroupement" ? (
               <DataTable

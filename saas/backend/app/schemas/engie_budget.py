@@ -59,6 +59,8 @@ class EngieBudgetReviseAggregateOut(BaseModel):
 
 class EngieBudgetReviseOut(BaseModel):
     year: int
+    available_years: list[int] = []
+    recommended_year: int
     generated_on: str
     prm_count: int
     turpe_available: bool

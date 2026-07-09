@@ -226,6 +226,7 @@ def _build_control_report(
     _check_consumption_against_enedis(sites, issue, consumption_summary)
     _check_billed_power_anomalies(sites, issue, power_summary)
 
+    _suppress_supplier_specific_controls(issues, parsed.get("supplier"))
     _apply_invoice_severity_policy(issues)
 
     error_count = sum(1 for item in issues if item["severity"] == "error")
@@ -288,6 +289,27 @@ EXPLAINED_CONTROL_CODES = {
     "PERIOD_OVERLAP_EXPLAINED",
     "SUPPLIER_SWITCH_GAP_EXPLAINED",
 }
+
+# Contrôles non pertinents pour l'éclairage public EDF : ses PRM sont rattachés à
+# un autre fournisseur dans le référentiel ENEDIS (mismatch structurel, pas une
+# anomalie de facturation) et ses lignes de fourniture n'ont ni période ni quantité
+# par point de livraison. On les SUPPRIME (règle « contrôle ≠ anomalie → supprimer »)
+# pour ne pas noyer les vraies anomalies EDF (double facturation, écart conso ENEDIS).
+_EDF_SUPPRESSED_CONTROL_CODES = {
+    "SUPPLIER_CONTRACT_MISMATCH",
+    "PERIOD_MISSING",
+    "CONSUMPTION_REFERENCE_MISSING",
+}
+
+
+def _suppress_supplier_specific_controls(issues: list[dict[str, Any]], supplier: str | None) -> None:
+    """Retire les contrôles propres à un fournisseur qui ne sont pas des anomalies de facturation."""
+    if (supplier or "").upper() != "EDF":
+        return
+    issues[:] = [
+        item for item in issues
+        if str(item.get("code") or "") not in _EDF_SUPPRESSED_CONTROL_CODES
+    ]
 
 
 def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
