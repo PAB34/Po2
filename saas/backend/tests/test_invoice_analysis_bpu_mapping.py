@@ -32,7 +32,7 @@ def _decision_stub(control_status: str, decision_status: str) -> SimpleNamespace
 def test_auto_validate_only_when_control_clean_and_not_decided() -> None:
     # #7 : contrôle entièrement vert + décision encore to_review -> approved
     clean = _decision_stub("valid", "to_review")
-    _auto_validate_if_clean(clean)
+    _auto_validate_if_clean(clean, {"issues": []})
     assert clean.decision_status == "approved"
     assert clean.decision_comment is not None
     assert clean.decision_updated_at is not None
@@ -42,7 +42,7 @@ def test_auto_validate_never_overrides_human_decision() -> None:
     # une décision humaine (approved/rejected/dispute_sent) n'est jamais écrasée
     for human in ("approved", "rejected", "dispute_sent"):
         inv = _decision_stub("valid", human)
-        _auto_validate_if_clean(inv)
+        _auto_validate_if_clean(inv, {"issues": []})
         assert inv.decision_status == human
         assert inv.decision_comment is None
 
@@ -51,8 +51,18 @@ def test_auto_validate_skips_non_valid_controls() -> None:
     # review / invalid restent à traiter manuellement
     for control in ("review", "invalid", "not_checked"):
         inv = _decision_stub(control, "to_review")
-        _auto_validate_if_clean(inv)
+        _auto_validate_if_clean(inv, {"issues": []})
         assert inv.decision_status == "to_review"
+
+
+def test_auto_validate_holds_on_exact_duplicate() -> None:
+    # option (b) : un doublon exact « expliqué » ne doit PAS être auto-validé
+    # (risque de double paiement) → reste à confirmer par un humain.
+    inv = _decision_stub("valid", "to_review")
+    report = {"issues": [{"code": "DUPLICATE_EXPORT_OR_REISSUE", "severity": "explained"}]}
+    _auto_validate_if_clean(inv, report)
+    assert inv.decision_status == "to_review"
+    assert inv.decision_comment is None
 
 
 def test_bpu_component_field_maps_gas_components() -> None:

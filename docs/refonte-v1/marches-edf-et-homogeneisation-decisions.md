@@ -138,6 +138,18 @@ Rappel principe utilisateur (mémoire) : **« contrôle ≠ anomalie de facturat
 - **#3** — `GasBudgetReviseV1` aligné sur `ElecBudgetReviseV1` : ajout colonne **« Prix réf. »** (PEG),
   ratio climat isolé sous la conso, même titre/eyebrow de section. ENGIE/EDF partageaient déjà le composant.
 
+## Suivi (2026-07-09) — auto-validation & « expliqué »
+
+Question soulevée : compter une facture « expliquée » comme « OK » est-il judicieux ?
+- Constat code : `control_status == valid` ignore les « expliqués » → une facture avec uniquement
+  des anomalies expliquées était **auto-validée** (ADR 012, `_auto_validate_if_clean`).
+- **Décision (option b)** : on garde l'auto-validation des expliqués **sauf** le doublon exact
+  (`DUPLICATE_EXPORT_OR_REISSUE`) = risque de double paiement → reste `to_review` (à confirmer par un
+  humain). Implémenté via `_AUTO_VALIDATION_HOLD_CODES`. Test `test_auto_validate_holds_on_exact_duplicate`.
+- L'affichage garde « Expliquée » distinct de « Sans écart » (inchangé).
+- ⚠ Effet **à partir de maintenant** : les factures déjà auto-validées avec un doublon avant ce
+  correctif restent `approved` (l'auto-validation n'écrase jamais une décision existante).
+
 ## Ordre proposé
 1. **#4** (factures EDF bloquées) — diagnostic terminé, correctif ciblé, fort impact ressenti.
 2. **#1** (EDF atterrissage) — dépend des réponses Q1.1–Q1.3 pour trancher bug vs affichage.
