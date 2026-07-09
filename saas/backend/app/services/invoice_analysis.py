@@ -296,9 +296,18 @@ ANOMALY_CONTROL_CODES = {
     "PERIOD_GAP",
     "PERIOD_OVERLAP",
     "DOUBLE_BILLING_PERIOD",
+    "POWER_OVERRUN_BILLED",
+}
+
+# Contrôles purement INFORMATIFS : visibles pour information, mais jamais bloquants
+# et sans impact sur la décision (n'empêchent pas l'auto-validation).
+#  - écart conso facturée vs référence ENEDIS / courbe de charge : petit écart normal
+#    (relevé estimé, bornes de période, arrondis) ;
+#  - regroupement (compte / CCC) absent : donnée d'organisation, pas de facturation.
+INFORMATIVE_CONTROL_CODES = {
     "CONSUMPTION_ENEDIS_MISMATCH",
     "CONSUMPTION_LOAD_CURVE_MISMATCH",
-    "POWER_OVERRUN_BILLED",
+    "MISSING_REGROUPEMENT",
 }
 
 EXPLAINED_CONTROL_CODES = {
@@ -341,7 +350,9 @@ def _apply_invoice_severity_policy(issues: list[dict[str, Any]]) -> None:
     """
     for item in issues:
         code = str(item.get("code") or "")
-        if code in EXPLAINED_CONTROL_CODES:
+        if code in INFORMATIVE_CONTROL_CODES:
+            item["severity"] = "info"
+        elif code in EXPLAINED_CONTROL_CODES:
             item["severity"] = "explained"
         elif code in ANOMALY_CONTROL_CODES:
             item["severity"] = "anomaly"

@@ -150,6 +150,18 @@ Question soulevée : compter une facture « expliquée » comme « OK » est-il 
 - ⚠ Effet **à partir de maintenant** : les factures déjà auto-validées avec un doublon avant ce
   correctif restent `approved` (l'auto-validation n'écrase jamais une décision existante).
 
+## Suivi (2026-07-09) — catégorie « Informatif » + filtre par typologie (/factures)
+
+- **Nouvelle catégorie « Informatif »** (sévérité `info`) : visible mais **jamais bloquante**, sans
+  impact sur la décision (n'empêche pas l'auto-validation). Codes concernés :
+  `CONSUMPTION_ENEDIS_MISMATCH`, `CONSUMPTION_LOAD_CURVE_MISMATCH` (écart conso vs référence),
+  `MISSING_REGROUPEMENT`. Back : `INFORMATIVE_CONTROL_CODES` + `_apply_invoice_severity_policy`
+  (test `test_informative_controls.py`). Front : retirés de anomalie/bloqué, nouveau compteur/colonne/
+  segment « Informatif » (bleu), section dédiée dans le tiroir, exclus de la réclamation.
+  ⚠ Nécessite un **« Recalculer les contrôles »** pour s'appliquer aux factures déjà importées.
+- **Filtre « par type de problème »** sur /factures : nouveau menu listant les problèmes réellement
+  présents (ex. « Écart conso ENEDIS », « Double facturation »…) → filtre les factures qui l'ont.
+
 ## Ordre proposé
 1. **#4** (factures EDF bloquées) — diagnostic terminé, correctif ciblé, fort impact ressenti.
 2. **#1** (EDF atterrissage) — dépend des réponses Q1.1–Q1.3 pour trancher bug vs affichage.
