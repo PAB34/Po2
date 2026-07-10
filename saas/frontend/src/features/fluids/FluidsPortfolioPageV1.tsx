@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Card, KpiCard, SegmentControl } from "../../design-system";
-import { fetchEnergieOverview } from "../../lib/api";
+import { KpiCard, SegmentControl } from "../../design-system";
+import { fetchEnergieOverview, fetchFluidsClimate } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
+import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
+
+function pctLabel(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`;
+}
 
 function formatKwh(value: number | null | undefined): string {
   if (value == null) return "—";
@@ -19,6 +25,13 @@ export function FluidsPortfolioPageV1() {
   const { data: overview } = useQuery({
     queryKey: ["energie-overview"],
     queryFn: () => fetchEnergieOverview(token!),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+
+  const { data: climate } = useQuery({
+    queryKey: ["fluids-climate"],
+    queryFn: () => fetchFluidsClimate(token!),
     enabled: !!token,
     staleTime: 60_000,
   });
@@ -89,21 +102,24 @@ export function FluidsPortfolioPageV1() {
         </Link>
       </div>
 
+      <FluidsClimateSectionV1 climate={climate} />
+
       <div className="po2-kpi-grid">
         <KpiCard label="Consommation électricité" value={formatKwh(elecKwh)} detail="ENEDIS · année glissante" trend={elecCoveredPrms != null ? `${elecCoveredPrms.toLocaleString("fr-FR")} PRM couverts` : undefined} tone="neutral" />
         <KpiCard label="Couverture données élec" value={elecCoverage != null ? `${elecCoverage}%` : "—"} detail="PRM avec consommation collectée" tone="neutral" />
-        <KpiCard label="Corrigée du climat" value="à venir" detail="Évolution DJU-normalisée · incrément 2" tone="neutral" />
-        <KpiCard label="Thermosensibilité" value="à venir" detail="Pente kWh/DJU &amp; évolution N-1 · incrément 2" tone="neutral" />
+        <KpiCard
+          label="Rigueur climatique"
+          value={climate ? pctLabel(climate.heating.delta_previous_pct) : "—"}
+          detail={climate ? `DJU chauffage vs ${climate.previous_year}` : "DJU chauffage vs N-1"}
+          tone={climate && climate.heating.delta_previous_pct != null && climate.heating.delta_previous_pct < 0 ? "good" : "neutral"}
+        />
+        <KpiCard
+          label="Thermosensibilité"
+          value={climate?.thermal.sensitivity_kwh_per_dju != null ? `${climate.thermal.sensitivity_kwh_per_dju.toLocaleString("fr-FR")} kWh/DJU` : "—"}
+          detail={climate?.thermal.sensitivity_delta_pct != null ? `${pctLabel(climate.thermal.sensitivity_delta_pct)} vs ${climate.previous_year}` : "élec · pente conso/DJU"}
+          tone={climate && climate.thermal.sensitivity_delta_pct != null && climate.thermal.sensitivity_delta_pct > 0 ? "warning" : "neutral"}
+        />
       </div>
-
-      <Card className="po2-fluid-todo" title="Trajectoire climatique &amp; performance énergétique" eyebrow="Arrive à l'incrément 2">
-        <p>
-          Cette zone accueillera la trajectoire des DJU chauffage &amp; froid (2026 vs N-1 vs moyenne
-          pluriannuelle), la thermosensibilité du parc et son évolution vs N-1 (signature énergétique),
-          et le talon non climatique. Parti pris validé dans la maquette :
-          {" "}<code>docs/refonte-v1/fluides-maquette.html</code>.
-        </p>
-      </Card>
     </div>
   );
 }

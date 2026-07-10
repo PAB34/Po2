@@ -97,9 +97,12 @@ Branche : `feat/fluides-vue-globale` (worktree neuf off `origin/main`). Staging 
   dans `App.tsx` ; pages qui embarquent `EnergiePage` / `EnergieGazPage` dans `AppShellV1` ; eau = placeholder
   « À construire ». Vue globale : cartes d'accès + KPI conso composés depuis `GET /api/energie` (réel).
   Typecheck `npx tsc -b`.
-- **Incrément 2 — climat & performance (back + front)** : endpoint agrégé DJU chauffage/**froid** multi-années
-  (2026/N-1/moyenne) + **thermosensibilité** (pente conso~DJU), **talon**, évolution vs N-1 ; graphe
-  trajectoire + carte performance + signature énergétique. Tests pytest ciblés.
+- ✅ **Incrément 2 — climat & performance FAIT** : endpoint `GET /api/energie/fluids/climate`
+  (`get_fluids_climate`) = DJU chauffage/**froid** multi-années (N/N-1/moyenne, cumuls + Δ) +
+  **thermosensibilité** (régression conso~DJU), **talon**, **évolution vs N-1** (indicateur n°1) + R².
+  Front : trajectoire recharts (6 courbes chaud/froid × N/N-1/moy) + chips Δ + carte **performance**
+  (signature énergétique, part thermosensible/talon) + KPI Rigueur climatique & Thermosensibilité réels.
+  Thermosensibilité v1 = **élec** (gaz en calque ultérieur). `tests/test_fluids_climate.py` 5/5 ; `tsc -b` OK.
 - **Incrément 3 — surveillance & drawer** : brancher la préconisation réelle (`/energie/{prm}/preconisation`)
   dans le drawer des détails (déjà côté /energie ; à exposer dans la trame refonte le cas échéant).
 

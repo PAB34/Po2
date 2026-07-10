@@ -1136,6 +1136,44 @@ export async function fetchPrmDetail(token: string, prmId: string): Promise<PrmD
   return parseResponse<PrmDetail>(response);
 }
 
+export type FluidsClimateMonth = { month: number; current: number | null; previous: number | null; average: number | null; };
+export type FluidsClimateSeries = {
+  base_c: number;
+  monthly: FluidsClimateMonth[];
+  current_total: number | null;
+  previous_total: number | null;
+  average_total: number | null;
+  delta_previous_pct: number | null;
+  delta_average_pct: number | null;
+};
+export type FluidsThermal = {
+  scope: string;
+  sensitivity_kwh_per_dju: number | null;
+  sensitivity_previous: number | null;
+  sensitivity_delta_pct: number | null;
+  base_load_kwh_per_month: number | null;
+  thermosensitive_share_pct: number | null;
+  base_load_share_pct: number | null;
+  r2: number | null;
+  months_used: number;
+  reliable: boolean;
+};
+export type FluidsClimateOverview = {
+  current_year: number;
+  previous_year: number;
+  years_in_average: number;
+  heating: FluidsClimateSeries;
+  cooling: FluidsClimateSeries;
+  thermal: FluidsThermal;
+};
+
+export async function fetchFluidsClimate(token: string): Promise<FluidsClimateOverview> {
+  const response = await fetch(`${apiBaseUrl}/energie/fluids/climate`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<FluidsClimateOverview>(response);
+}
+
 export async function fetchPowerRecommendations(token: string): Promise<PowerRecommendationOverview> {
   const response = await fetch(`${apiBaseUrl}/energie/preconisations`, {
     headers: buildHeaders(token),

@@ -225,7 +225,48 @@
 .po2-fluid-access__soon { padding: .25rem .5rem; border-radius: 999px; color: #845c16; background: var(--po2-color-amber-soft); font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
 .po2-fluid-todo { border-style: dashed !important; }
 .po2-fluid-todo .po2-card__body { color: var(--po2-color-muted); }
-@media (max-width: 900px) { .po2-fluid-access-grid { grid-template-columns: 1fr; } }
+
+/* --- Fluides V1 : trajectoire climatique & performance --- */
+.po2-fluid-climate-grid { display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(18rem, .72fr); gap: .9rem; margin-bottom: 1rem; }
+.po2-fluid-chips { display: flex; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.po2-fluid-chip { flex: 1; min-width: 10rem; display: flex; align-items: baseline; gap: .5rem; padding: .55rem .7rem; border: 1px solid var(--po2-color-line); border-left-width: 3px; border-radius: var(--po2-radius-sm); background: color-mix(in srgb, var(--po2-color-ink) 3%, var(--po2-color-paper)); }
+.po2-fluid-chip--heat { border-left-color: #3e6ea8; }
+.po2-fluid-chip--cool { border-left-color: #e39a2c; }
+.po2-fluid-chip > span { color: var(--po2-color-muted); font-size: .62rem; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.po2-fluid-chip > b { font: 750 .95rem var(--po2-font-title); }
+.po2-fluid-chip em { font-style: normal; font-size: .62rem; font-weight: 750; padding: .12rem .35rem; border-radius: .35rem; color: var(--po2-color-muted); background: var(--po2-color-blue-soft); }
+.po2-fluid-chip em:first-of-type { margin-left: auto; }
+.po2-fluid-chip__down { color: #2c755e; background: var(--po2-color-mint-soft); }
+.po2-fluid-chip__up { color: #8c5e18; background: var(--po2-color-amber-soft); }
+.po2-fluid-legend { display: flex; flex-wrap: wrap; gap: .4rem .9rem; margin-top: .5rem; color: var(--po2-color-muted); font-size: .68rem; }
+.po2-fluid-legend span { display: flex; align-items: center; gap: .35rem; }
+.po2-fluid-legend i { width: 1rem; height: .55rem; border-radius: .2rem; display: block; }
+.po2-perf { padding: 1.05rem; border-radius: var(--po2-radius-lg); background: linear-gradient(150deg, #1d3150, #2f4969); color: #fff; }
+.po2-perf__head { display: flex; align-items: center; gap: .7rem; padding-bottom: .8rem; border-bottom: 1px solid #ffffff18; }
+.po2-perf__ic { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; border-radius: .75rem; color: #1d3150; background: var(--po2-color-mint); font-size: 1.15rem; }
+.po2-perf__head small { display: block; color: #b5c5d5; font-size: .6rem; text-transform: uppercase; letter-spacing: .09em; }
+.po2-perf__head strong { display: block; margin-top: .12rem; font: 750 1.35rem var(--po2-font-title); }
+.po2-perf__evo { display: flex; align-items: center; gap: .6rem; margin: .75rem 0; padding: .7rem .8rem; border-radius: var(--po2-radius-sm); background: #ffffff10; }
+.po2-perf__ev { font: 750 1.25rem var(--po2-font-title); }
+.po2-perf__evo--bad .po2-perf__ev { color: #f4a99f; }
+.po2-perf__evo--good .po2-perf__ev { color: #bfe6a8; }
+.po2-perf__evo small { display: block; color: #b5c5d5; font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; }
+.po2-perf__evo b { display: block; margin-top: .1rem; font-size: .72rem; color: #e6edf5; font-weight: 700; }
+.po2-perf__sig { margin: .4rem 0 .75rem; padding: .7rem; border: 1px solid #ffffff16; border-radius: var(--po2-radius-sm); background: #ffffff08; }
+.po2-perf__sig-cap { display: flex; justify-content: space-between; color: #b5c5d5; font-size: .6rem; margin-bottom: .35rem; }
+.po2-perf__sig svg { width: 100%; height: auto; display: block; }
+.po2-perf__ax { stroke: #ffffff30; stroke-width: 1; }
+.po2-perf__sig-prev { stroke: var(--po2-color-mint); stroke-width: 2.5; fill: none; }
+.po2-perf__sig-cur { stroke: #fff; stroke-width: 2.5; fill: none; }
+.po2-perf__sig-dotp { fill: var(--po2-color-mint); }
+.po2-perf__sig-dotc { fill: #fff; }
+.po2-perf__sig-lab { fill: #9fb0c4; font-size: .5rem; }
+.po2-perf__split { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: .6rem; }
+.po2-perf__split div { padding: .6rem; border: 1px solid #ffffff16; border-radius: var(--po2-radius-sm); background: #ffffff08; }
+.po2-perf__split b { display: block; font: 750 1rem var(--po2-font-title); }
+.po2-perf__split span { display: block; color: #aebed0; font-size: .6rem; margin-top: .1rem; }
+.po2-perf__note { margin: 0; padding: .65rem; border-radius: var(--po2-radius-sm); background: #ffffff0d; color: #dfe7f2; font-size: .68rem; line-height: 1.5; }
+@media (max-width: 900px) { .po2-fluid-access-grid, .po2-fluid-climate-grid { grid-template-columns: 1fr; } }
 .po2-accounting-axis-card span { color: var(--po2-color-muted); font-size: .7rem; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
 .po2-accounting-axis-card strong { min-height: 2.2rem; font-size: .86rem; line-height: 1.25; }
 .po2-invoice-history { display: grid; gap: .55rem; margin: 0; padding-left: 1.1rem; color: var(--po2-color-muted); font-size: .8rem; }

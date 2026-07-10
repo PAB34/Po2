@@ -289,6 +289,45 @@ class DjuMonthPoint(BaseModel):
     dju_froid: float
 
 
+class FluidsClimateMonth(BaseModel):
+    month: int
+    current: float | None
+    previous: float | None
+    average: float | None
+
+
+class FluidsClimateSeries(BaseModel):
+    base_c: float
+    monthly: list[FluidsClimateMonth]
+    current_total: float | None
+    previous_total: float | None
+    average_total: float | None
+    delta_previous_pct: float | None
+    delta_average_pct: float | None
+
+
+class FluidsThermal(BaseModel):
+    scope: str
+    sensitivity_kwh_per_dju: float | None
+    sensitivity_previous: float | None
+    sensitivity_delta_pct: float | None
+    base_load_kwh_per_month: float | None
+    thermosensitive_share_pct: float | None
+    base_load_share_pct: float | None
+    r2: float | None
+    months_used: int
+    reliable: bool
+
+
+class FluidsClimateOverview(BaseModel):
+    current_year: int
+    previous_year: int
+    years_in_average: int
+    heating: FluidsClimateSeries
+    cooling: FluidsClimateSeries
+    thermal: FluidsThermal
+
+
 class DjuPerfPoint(BaseModel):
     month: str
     kwh: float
