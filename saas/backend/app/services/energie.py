@@ -1241,10 +1241,10 @@ def _fluids_climate_series(dju_idx: dict[str, dict[str, float]], key: str, curre
 
 def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float], current: int, previous: int) -> dict[str, Any]:
     """Energy signature: regress monthly parc electricity vs heating DJU, per year."""
-    def regress(year: int) -> tuple[tuple[float, float, float | None] | None, list[float], list[float]]:
+    def regress(year: int, months: list[int] | None = None) -> tuple[tuple[float, float, float | None] | None, list[float], list[float]]:
         xs: list[float] = []
         ys: list[float] = []
-        for m in range(1, 13):
+        for m in (months if months is not None else list(range(1, 13))):
             entry = dju_idx.get(f"{year}-{m:02d}")
             kwh = conso.get(f"{year}-{m:02d}")
             if entry and kwh is not None:
@@ -1274,9 +1274,13 @@ def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float
     share = round(thermosensitive / total_kwh * 100, 1) if total_kwh > 0 else None
     base_share = round(intercept * len(ys) / total_kwh * 100, 1) if total_kwh > 0 else None
 
-    prev_reg, _, _ = regress(previous)
+    # Comparaison N-1 à PÉRIODE HOMOGÈNE : on régresse N-1 sur les mêmes mois que
+    # l'année en cours (sinon une année partielle biaise fortement la pente).
+    cur_months = [m for m in range(1, 13)
+                  if dju_idx.get(f"{current}-{m:02d}") and conso.get(f"{current}-{m:02d}") is not None]
+    prev_reg, _, _ = regress(previous, cur_months)
     prev_slope = prev_reg[0] if prev_reg else None
-    delta = round((slope - prev_slope) / prev_slope * 100, 1) if prev_slope else None
+    delta = round((slope - prev_slope) / prev_slope * 100, 1) if (prev_slope and len(cur_months) >= 4) else None
 
     return {
         "scope": "électricité",

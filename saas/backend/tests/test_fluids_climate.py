@@ -54,6 +54,27 @@ def test_thermal_sensitivity_and_evolution():
     assert thermal["reliable"] is True
 
 
+def test_thermal_delta_compares_same_months():
+    # N-1 complète mais NON linéaire (pente 2 sur jan-juin, pente 6 sur juil-déc → pente
+    # annuelle ~4). Année en cours = jan-juin seulement, pente 2. La comparaison correcte
+    # (mêmes mois) doit donner 0 %, PAS l'artefact dû à la pente annuelle N-1.
+    d6 = [100, 110, 120, 130, 140, 150]
+    idx = {}
+    conso = {}
+    for i, m in enumerate(range(1, 7)):
+        idx[f"2025-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
+        conso[f"2025-{m:02d}"] = 2 * d6[i] + 40
+    for i, m in enumerate(range(7, 13)):
+        idx[f"2025-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
+        conso[f"2025-{m:02d}"] = 6 * d6[i] + 40
+    for i, m in enumerate(range(1, 7)):
+        idx[f"2026-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
+        conso[f"2026-{m:02d}"] = 2 * d6[i] + 40
+    thermal = _fluids_thermal(idx, conso, 2026, 2025)
+    assert thermal["sensitivity_kwh_per_dju"] == 2.0
+    assert thermal["sensitivity_delta_pct"] == 0.0  # mêmes mois → pas d'artefact
+
+
 def test_get_fluids_climate_empty_is_safe(monkeypatch):
     monkeypatch.setattr(energie_mod, "_dju_monthly_index", lambda: {})
     out = get_fluids_climate()
