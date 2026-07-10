@@ -108,6 +108,48 @@ Branche : `feat/fluides-vue-globale` (worktree neuf off `origin/main`). Staging 
 
 ⚠️ Ne pas toucher `PRONO/*` ni `knockout_mc.py`. `git status` + pathspecs explicites, jamais de force-push.
 
+## 7. Audit données & backend (2026-07-10, sondage staging réel)
+
+### Données réellement disponibles (staging, city_id=303)
+
+| Donnée | Couverture réelle | Verdict |
+|---|---|---|
+| **DJU chauffage & froid** | 2015→2026 (139 mois) ; chaud OK, **froid OK** (53 mois>0, base 22) ; 2026 jusqu'à juillet | ✅ excellent |
+| **Conso élec (ENEDIS)** | 2023-05 → 2026-06, 422 700 lignes jour (2023 partiel) | ✅ bon (N/N-1 OK) |
+| **Conso gaz (GRDF `gas_consumptions`)** | **0 ligne**, 10 PCE, 0 rattaché bâtiment | ❌ **non chargé** |
+| **Puissance max ENEDIS** | **0 ligne** | ❌ absent |
+| **Courbe de charge ENEDIS** | **0 ligne** | ❌ absent |
+| **Eau (SUEZ)** | néant | ❌ à construire |
+
+### Backend réutilisable
+
+- Climat/perf : `get_fluids_climate` (nouveau), `_dju_monthly_index`, `_parc_elec_by_month`, `get_prm_dju_seasonal/performance`.
+- Élec : `_consumption_by_month`, `get_data_ranges`/`get_data_audit`, détail PRM.
+- Gaz : `gas_analytics.monthly_series` (DB, kWh PCS, **agrégeable parc**), `reconcile_p1` — **mais table vide**.
+- Calibrage/préco : `power_recommendations` (`get_power_recommendations`, `get_prm_power_recommendation`) — **dépend max power / CDC** (vides).
+
+### Constats / risques
+
+1. ⚠️ **Bug méthodo thermosensibilité N-1** : on compare la pente 2026 (6 mois, hiver) à la pente 2025
+   (12 mois) → **+73 % artefact**. Correctif = régresser N-1 sur **les mêmes mois** que l'année en cours
+   (comparaison à période homogène) + garde-fou nb mois. **Prioritaire** (KPI affiché faux sur staging).
+2. **Gaz bloqué** : `gas_consumptions` vide → thermosensibilité gaz, graphe conso gaz et KPI gaz
+   impossibles tant que la **collecte GRDF (Phases 2-5)** n'alimente pas la table.
+3. **Calibrage / drawer inc 3 / dérives CDC / surveillance abonnements bloqués** : max power + CDC vides.
+   Prérequis = **collecter la puissance max** (chemin léger ENEDIS via panneau collecte), puis CDC si profils fins.
+4. **Élec = seul fluide complet** aujourd'hui (conso + DJU). Enrichissable sans nouvelle donnée
+   (conso **corrigée du climat** DJU-normalisée : données présentes).
+
+### Étapes à venir (repriorisées)
+
+- **A. Correctif thermosensibilité** (rapide, sans nouvelle donnée) : comparaison N-1 à période homogène + fiabilité.
+- **B. Consolider l'élec** (données prêtes) : conso corrigée du climat (DJU-normalisée), éventuel drill par site.
+- **C. Débloquer calibrage/CDC** : collecter **max power** ENEDIS → calibrage + drawer inc 3 + dérives.
+- **D. Débloquer le gaz** : alimenter `gas_consumptions` (GRDF Phases 2-5) → thermosensibilité gaz + graphe + P1 réel.
+- **E. Eau** : à l'obtention d'une source SUEZ réelle.
+
+Priorité immédiate : **A** ; puis **B** (valeur, données prêtes) ; **C** et **D** = dépendances collecte à planifier.
+
 **Sortis de la vue globale → déplacés dans le détail du fluide :** dérives de courbe de charge
 (ENEDIS), **surveillance des contrats / abonnements à recalibrer** (sous-section de chaque fluide),
 anneau de qualité par distributeur.
