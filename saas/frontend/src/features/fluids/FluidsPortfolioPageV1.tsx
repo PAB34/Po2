@@ -5,6 +5,7 @@ import { KpiCard, SegmentControl } from "../../design-system";
 import { fetchEnergieOverview, fetchFluidsClimate } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
+import { FluidsAcquisitionDrawerV1 } from "./FluidsAcquisitionDrawerV1";
 
 function pctLabel(value: number | null | undefined): string {
   if (value == null) return "—";
@@ -21,6 +22,7 @@ function formatKwh(value: number | null | undefined): string {
 export function FluidsPortfolioPageV1() {
   const { token } = useAuth();
   const [period, setPeriod] = useState<"2026" | "2025">("2026");
+  const [acqOpen, setAcqOpen] = useState(false);
 
   const { data: overview } = useQuery({
     queryKey: ["energie-overview"],
@@ -63,7 +65,9 @@ export function FluidsPortfolioPageV1() {
         <b>Sources distributeurs</b>
         <span>ENEDIS · GRDF · SUEZ non raccordé · DJU Météo-France</span>
         {elecCoverage != null ? <span className="cov">Couverture élec {elecCoverage}%</span> : null}
+        <button type="button" className="po2-src-manage" onClick={() => setAcqOpen(true)}>⟳ Gérer la collecte</button>
       </div>
+      <FluidsAcquisitionDrawerV1 open={acqOpen} onClose={() => setAcqOpen(false)} />
 
       <div className="po2-fluid-lead">
         <h2>Entrer dans le détail par distributeur</h2>

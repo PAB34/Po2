@@ -3,7 +3,7 @@ import { AppShellV1 } from "../app/AppShellV1";
 import type { AppProfileV1 } from "../app/navigationV1";
 import { FluidsPortfolioPageV1 } from "../features/fluids/FluidsPortfolioPageV1";
 import { FluidWaterComingSoonV1 } from "../features/fluids/FluidWaterComingSoonV1";
-import { EnergiePage } from "./EnergiePage";
+import { EnergiePage, EnergieDataOpsPage } from "./EnergiePage";
 import { EnergieGazPage } from "./EnergieGazPage";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -25,6 +25,11 @@ export function RefonteV1FluidsPage() {
 // Sous-routes « détail par distributeur » : on embarque les pages legacy réelles (Option A, pas de réécriture).
 export function RefonteV1FluidElectricitePage() {
   return <FluidShell><EnergiePage /></FluidShell>;
+}
+
+// Fenêtre de collecte ENEDIS (acquisition) ré-hébergée dans le shell refonte.
+export function RefonteV1FluidElectriciteCollectePage() {
+  return <FluidShell><EnergieDataOpsPage /></FluidShell>;
 }
 
 export function RefonteV1FluidGazPage() {

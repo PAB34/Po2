@@ -267,6 +267,21 @@
 .po2-perf__split span { display: block; color: #aebed0; font-size: .6rem; margin-top: .1rem; }
 .po2-perf__note { margin: 0; padding: .65rem; border-radius: var(--po2-radius-sm); background: #ffffff0d; color: #dfe7f2; font-size: .68rem; line-height: 1.5; }
 @media (max-width: 900px) { .po2-fluid-access-grid, .po2-fluid-climate-grid { grid-template-columns: 1fr; } }
+
+/* --- Fluides V1 : acquisition des données --- */
+.po2-src-manage { margin-left: .75rem; padding: .35rem .6rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); background: var(--po2-color-paper); color: var(--po2-color-ink); font-size: .68rem; font-weight: 750; cursor: pointer; }
+.po2-src-manage:hover { border-color: var(--po2-color-mint); }
+.po2-acq-list { display: grid; gap: .7rem; }
+.po2-acq-item { display: grid; grid-template-columns: 2.6rem 1fr auto; align-items: center; gap: .8rem; padding: .85rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-md); background: var(--po2-color-paper); color: var(--po2-color-ink); text-align: left; cursor: pointer; }
+.po2-acq-item:hover { border-color: color-mix(in srgb, var(--po2-color-mint) 55%, var(--po2-color-line)); }
+.po2-acq-item__ic { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: .7rem; color: #fff; font-size: 1.15rem; }
+.po2-acq-item--elec .po2-acq-item__ic { background: linear-gradient(140deg, #2a6fb0, #1d3150); }
+.po2-acq-item--gaz .po2-acq-item__ic { background: linear-gradient(140deg, #e78d37, #c25f1c); }
+.po2-acq-item--eau .po2-acq-item__ic { background: linear-gradient(140deg, #5b93b8, #37627e); }
+.po2-acq-item__body { min-width: 0; }
+.po2-acq-item__body b { display: block; font-size: .82rem; }
+.po2-acq-item__body small { display: block; margin: .15rem 0 .3rem; color: var(--po2-color-muted); font-size: .68rem; }
+.po2-acq-item__open { color: #2a7765; font-weight: 800; font-size: .72rem; white-space: nowrap; }
 .po2-accounting-axis-card span { color: var(--po2-color-muted); font-size: .7rem; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
 .po2-accounting-axis-card strong { min-height: 2.2rem; font-size: .86rem; line-height: 1.25; }
 .po2-invoice-history { display: grid; gap: .55rem; margin: 0; padding-left: 1.1rem; color: var(--po2-color-muted); font-size: .8rem; }

@@ -234,6 +234,25 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
 .plan-item{display:flex;gap:10px;padding:13px;border:1px dashed var(--line);border-radius:13px}
 .plan-item .n{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:var(--blue-soft);font-size:11px;font-weight:800;flex-shrink:0}
 .plan-item b{display:block;font-size:10px}.plan-item small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+/* Acquisition */
+.src-manage{margin-left:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font-size:9px;font-weight:750}
+.src-manage:hover{border-color:var(--mint)}
+.acq-item{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:12px;padding:13px;margin-bottom:10px;border:1px solid var(--line);border-radius:14px}
+.acq-item .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#fff;font-size:17px}
+.acq-item.elec .ic{background:linear-gradient(140deg,#2a6fb0,#1d3150)}
+.acq-item.gaz .ic{background:linear-gradient(140deg,#e78d37,#c25f1c)}
+.acq-item.eau .ic{background:linear-gradient(140deg,#5b93b8,#37627e)}
+.acq-item b{display:block;font-size:12px}
+.acq-item small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.acq-gap{display:inline-block;margin-top:5px;padding:2px 6px;border-radius:6px;font-size:8px;font-weight:750}
+.acq-gap.bad{color:#9c3a35;background:var(--coral-soft)}
+.acq-gap.warn{color:#8c5e18;background:var(--amber-soft)}
+.acq-open{border:0;background:transparent;color:#2a7765;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.acq-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.acq-row:last-child{border-bottom:0}
+.acq-row b{display:block;font-size:10px}
+.acq-row small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.acq-row .btn{padding:6px 10px}
 .view{display:none}.view.active{display:block;animation:fade .2s ease}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.view.active{animation:none}.drawer{transition:none}}
@@ -252,7 +271,7 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
     <span class="nav-label">Moteurs métiers</span>
     <button class="nav-item active"><span class="nav-icon">⌁</span><span>Énergie / Fluides</span></button>
     <button class="nav-item"><span class="nav-icon">⌘</span><span>Marchés &amp; contrats</span></button>
-    <div class="side-note"><b>Maquette V1 · v4</b> — trajectoire climatique chaud+froid en tête + performance énergétique (thermosensibilité &amp; évolution N-1). Fenêtres distributeurs ENEDIS / GRDF / SUEZ. Données illustratives.</div>
+    <div class="side-note"><b>Maquette V1 · v5</b> — climat chaud+froid + performance ; fenêtres distributeurs ; <b>acquisition</b> (bande Sources → tiroir → collecte par distributeur). Données illustratives.</div>
   </aside>
 
   <main class="app-main">
@@ -282,8 +301,9 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
 
         <div class="source-strip">
           <span class="live-dot"></span><b>Sources</b>
-          <span>ENEDIS au 23 juin · GRDF au 21 juin · SUEZ non raccordé · DJU Météo-France au 30 juin</span>
-          <span class="cov">Couverture 96,8 %</span>
+          <span>ENEDIS au 9 juin · GRDF non chargé · SUEZ non raccordé · DJU Météo-France au 6 juil</span>
+          <span class="cov">Couverture élec 92 %</span>
+          <button class="src-manage" data-acq>⟳ Gérer la collecte</button>
         </div>
 
         <!-- ====== Trajectoire climatique (chaud+froid) + Performance — EN TÊTE ====== -->
@@ -426,6 +446,15 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
           </table></div>
           <p class="subs-note"><b>Méthode :</b> courbes de charge 30 min, puissance souscrite, percentiles et marge de sécurité par segment tarifaire.</p>
         </section>
+
+        <div class="subhead" id="collecte-elec"><span class="ic">⟳</span><div><h2>Collecte &amp; qualité des données</h2><p>Sync ENEDIS ré-hébergée dans la fenêtre (remplace la page /energie/donnees isolée)</p></div></div>
+        <section class="panel"><div class="panel-body">
+          <div class="acq-row"><div><b>Référentiel contractuel</b><small>PRM, puissances souscrites, raccordements</small></div><span class="status ok">à jour · 23 juin</span><button class="btn ghost">Mettre à jour</button></div>
+          <div class="acq-row"><div><b>DJU météo</b><small>degrés-jours chaud &amp; froid · Météo-France</small></div><span class="status ok">au 6 juil</span><button class="btn ghost">Synchroniser</button></div>
+          <div class="acq-row"><div><b>Consommations journalières</b><small>422 700 relevés</small></div><span class="status ok">au 9 juin</span><button class="btn ghost">Incrémentale</button></div>
+          <div class="acq-row"><div><b>Puissance max</b><small>indispensable au calibrage des abonnements</small></div><span class="status bad">absente</span><button class="btn mint">Collecter (chemin léger)</button></div>
+          <div class="acq-row"><div><b>Courbe de charge 30 min</b><small>profils fins &amp; dérives</small></div><span class="status bad">absente</span><button class="btn ghost">Collecter</button></div>
+        </div></section>
       </section>
 
       <!-- ============ FENÊTRE GRDF ============ -->
@@ -461,6 +490,13 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
           </table></div>
           <p class="subs-note"><b>Méthode :</b> profil hiver GRDF, CAR, tarif d'acheminement et composantes fixes du contrat — recommandation seulement si les données permettent la comparaison.</p>
         </section>
+
+        <div class="subhead" id="collecte-gaz"><span class="ic">⟳</span><div><h2>Collecte &amp; qualité des données</h2><p>Sync GRDF ADICT</p></div></div>
+        <section class="panel"><div class="panel-body">
+          <div class="acq-row"><div><b>Référentiel PCE</b><small>10 PCE · 0 rattaché à un bâtiment</small></div><span class="status warn">à compléter</span><button class="btn ghost">Synchroniser PCE</button></div>
+          <div class="acq-row"><div><b>Consommation mensuelle</b><small>relevés distributeur GRDF</small></div><span class="status bad">non chargée</span><button class="btn mint">Lancer la collecte</button></div>
+          <p style="margin:10px 0 0;color:var(--muted);font-size:9px">Prérequis : credentials GRDF ADICT configurés. Une fois la conso chargée → thermosensibilité gaz + graphe + rapprochement P1 réels.</p>
+        </div></section>
       </section>
 
       <!-- ============ FENÊTRE SUEZ (eau) ============ -->
@@ -494,6 +530,33 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
     </div>
   </main>
 </div>
+
+<!-- Drawer acquisition des données -->
+<aside class="drawer" id="acqDrawer" aria-hidden="true">
+  <div class="drawer-top">
+    <button class="drawer-close" data-close-drawer>×</button>
+    <span class="eyebrow">Acquisition des données</span>
+    <h2>Collecte par distributeur</h2>
+    <p>Choisir un distributeur pour ouvrir sa fenêtre de collecte. L'état ci-dessous vient des sources réelles.</p>
+  </div>
+  <div class="drawer-body">
+    <div class="acq-item elec">
+      <div class="ic">ϟ</div>
+      <div><b>Électricité — ENEDIS</b><small>Conso au 9 juin · 422 700 relevés · 446 PRM</small><span class="acq-gap bad">⚠ Puissance max &amp; courbe de charge absentes</span></div>
+      <button class="acq-open" data-collecte="elec">Ouvrir la collecte →</button>
+    </div>
+    <div class="acq-item gaz">
+      <div class="ic">♨</div>
+      <div><b>Gaz — GRDF</b><small>10 PCE référencés · 0 conso</small><span class="acq-gap bad">⚠ Consommation non chargée</span></div>
+      <button class="acq-open" data-collecte="gaz">Ouvrir la collecte →</button>
+    </div>
+    <div class="acq-item eau">
+      <div class="ic">◌</div>
+      <div><b>Eau — SUEZ</b><small>aucune source</small><span class="acq-gap warn">À raccorder</span></div>
+      <button class="acq-open" data-collecte="eau">Voir le chantier →</button>
+    </div>
+  </div>
+</aside>
 
 <!-- Drawer calibration (Q7) -->
 <div class="drawer-back" id="drawerBack"></div>
@@ -540,7 +603,7 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
     crumb.innerHTML=titles[id]||titles.global;
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  var drawer=document.getElementById('drawer'),dback=document.getElementById('drawerBack');
+  var drawer=document.getElementById('drawer'),acq=document.getElementById('acqDrawer'),dback=document.getElementById('drawerBack');
   var DATA={
     fonquerne:{t:'Centre sportif Fonquerne',m:'Électricité · PRM 30002411873001',vic:'↘',v:'Surdimensionné',vs:'250 kVA actuellement → 210 kVA recommandés',g:'3 840 €/an',cur:'250 kVA',ref:'184 kW',reco:'210 kVA'},
     hotel:{t:'Hôtel de Ville',m:'Électricité · PRM 30002411928412',vic:'!',v:'À sécuriser',vs:'160 kVA → 190 kVA (6 dépassements récents)',g:'+ 920 €/an',cur:'160 kVA',ref:'174 kW',reco:'190 kVA'},
@@ -554,9 +617,13 @@ td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
     document.getElementById('dwCur').textContent=d.cur;document.getElementById('dwRef').textContent=d.ref;document.getElementById('dwReco').textContent=d.reco;
     drawer.classList.add('open');dback.classList.add('open');drawer.setAttribute('aria-hidden','false');
   }
-  function closeDrawer(){drawer.classList.remove('open');dback.classList.remove('open');drawer.setAttribute('aria-hidden','true');}
+  function openAcq(){acq.classList.add('open');dback.classList.add('open');acq.setAttribute('aria-hidden','false');}
+  function openCollecte(dist){closeDrawer();goto(dist);setTimeout(function(){var el=document.getElementById('collecte-'+dist);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},280);}
+  function closeDrawer(){[drawer,acq].forEach(function(d){d.classList.remove('open');d.setAttribute('aria-hidden','true');});dback.classList.remove('open');}
   document.addEventListener('click',function(e){
     var g=e.target.closest('[data-goto]');if(g){goto(g.getAttribute('data-goto'));return;}
+    if(e.target.closest('[data-acq]')){openAcq();return;}
+    var col=e.target.closest('[data-collecte]');if(col){openCollecte(col.getAttribute('data-collecte'));return;}
     var dr=e.target.closest('[data-drawer]');if(dr){openDrawer(dr.getAttribute('data-drawer'));return;}
     if(e.target.closest('[data-close-drawer]')||e.target===dback){closeDrawer();return;}
   });

@@ -103,6 +103,13 @@ Branche : `feat/fluides-vue-globale` (worktree neuf off `origin/main`). Staging 
   Front : trajectoire recharts (6 courbes chaud/froid × N/N-1/moy) + chips Δ + carte **performance**
   (signature énergétique, part thermosensible/talon) + KPI Rigueur climatique & Thermosensibilité réels.
   Thermosensibilité v1 = **élec** (gaz en calque ultérieur). `tests/test_fluids_climate.py` 5/5 ; `tsc -b` OK.
+- ✅ **Incrément Acquisition FAIT** : bande « Sources » → bouton **« Gérer la collecte »** → **tiroir
+  Acquisition** (DS `Drawer`) listant ENEDIS / GRDF / SUEZ avec l'**état réel** (fraîcheur via
+  `data-ranges`, gaps « Puissance max/CDC absentes » et « Conso GRDF non chargée » via
+  `grdf/conso/status`) ; chaque ligne ouvre la **fenêtre de collecte** du distributeur. ENEDIS = nouvelle
+  sous-route `/refonte-v1/fluides/electricite/collecte` embarquant `EnergieDataOpsPage` (retire la page
+  isolée `/energie/donnees`). GRDF = collecte déjà dans la fenêtre gaz. SUEZ = placeholder. C'est le
+  **levier** des étapes C (puissance max) et D (gaz) du §7. `tsc -b` OK.
 - **Incrément 3 — surveillance & drawer** : brancher la préconisation réelle (`/energie/{prm}/preconisation`)
   dans le drawer des détails (déjà côté /energie ; à exposer dans la trame refonte le cas échéant).
 
