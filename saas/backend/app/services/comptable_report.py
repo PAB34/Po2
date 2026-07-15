@@ -1,0 +1,515 @@
+"""Rapport de controle comptable multi-marches.
+
+Increment 1-2 de la spec `demande-comptable-rapport-controle-spec.md` :
+parser les worklists comptables, rapprocher par numero fournisseur strictement
+trime, puis produire une feuille par marche sans synthese ni revision de prix.
+"""
+from __future__ import annotations
+
+import io
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import BinaryIO, Literal
+
+import openpyxl
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.cpe import CpeFinanceInvoice, CpeFinanceLine
+from app.models.gas_invoice import GasInvoice
+from app.models.invoice import EnergyInvoiceImport
+from app.services import cpe_accounting, energie_accounting
+
+MarketKey = Literal["dalkia", "engie", "edf", "totalenergies"]
+
+_SUPPLIER_INVOICE_RE = re.compile(r"^FAC\.\s*(\S+)\s+DU", re.IGNORECASE)
+_TTC_TOLERANCE = 0.01
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@dataclass(frozen=True)
+class WorklistInvoice:
+    row_number: int
+    accounting_number: str | None
+    supplier_invoice_number: str | None
+    label: str
+    total_ttc: float | None
+    invoice_date: object | None
+    arrival_date: object | None
+    supplier_code: str | None
+    supplier_name: str | None
+    invoice_status: str | None
+    liquidation_status: str | None
+    market_code: str | None
+    raw: dict[str, object | None]
+
+
+@dataclass(frozen=True)
+class WorklistParseResult:
+    sheet_name: str
+    rows: list[WorklistInvoice]
+
+
+@dataclass(frozen=True)
+class PlatformInvoice:
+    id: int
+    invoice_number: str
+    total_ttc: float | None
+    control_status: str | None
+    decision_status: str | None
+    raw: object
+
+
+@dataclass(frozen=True)
+class MarketConfig:
+    key: MarketKey
+    title: str
+    family: str
+
+
+MARKETS: tuple[MarketConfig, ...] = (
+    MarketConfig("dalkia", "DALKIA", "cpe"),
+    MarketConfig("engie", "ENGIE", "energy"),
+    MarketConfig("edf", "EDF", "energy"),
+    MarketConfig("totalenergies", "TotalEnergies", "gas"),
+)
+
+
+def extract_supplier_invoice_number(label: str | None) -> str | None:
+    """Extrait le numero fournisseur depuis `FAC. <num> DU`, sans autre normalisation."""
+    if not label:
+        return None
+    match = _SUPPLIER_INVOICE_RE.match(str(label).strip())
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def parse_comptable_worklist(source: bytes | str | Path | BinaryIO) -> WorklistParseResult:
+    """Parse une worklist comptable XLSX au format `_ShowList-NNN`.
+
+    Les lignes de total sans numero fournisseur sont ignorees. Les lignes avec
+    libelle facture malforme restent dans le resultat avec un numero a `None`,
+    afin d'apparaitre comme non rapprochables dans le rapport.
+    """
+    workbook = load_workbook(_as_stream(source), read_only=True, data_only=True)
+    sheet_name = next((name for name in workbook.sheetnames if name.startswith("_ShowList-")), workbook.sheetnames[0])
+    ws = workbook[sheet_name]
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        headers = [str(value).strip() if value is not None else "" for value in next(rows_iter)]
+    except StopIteration as exc:
+        raise ValueError("Worklist comptable vide.") from exc
+
+    header_index = {header: idx for idx, header in enumerate(headers) if header}
+    if "Libellé" not in header_index and "Libelle" not in header_index:
+        raise ValueError("Colonne Libellé absente de la worklist comptable.")
+
+    parsed: list[WorklistInvoice] = []
+    for excel_row_number, values in enumerate(rows_iter, start=2):
+        row = {header: values[idx] if idx < len(values) else None for header, idx in header_index.items()}
+        if not any(value not in (None, "") for value in row.values()):
+            continue
+        label = _text(_get(row, "Libellé", "Libelle")) or ""
+        if label.strip().upper() == "TOTAL":
+            continue
+        supplier_number = extract_supplier_invoice_number(label)
+        if not supplier_number and not label:
+            continue
+        parsed.append(
+            WorklistInvoice(
+                row_number=excel_row_number,
+                accounting_number=_text(_get(row, "Numéro", "Numero")),
+                supplier_invoice_number=supplier_number,
+                label=label,
+                total_ttc=_float(_get(row, "TTC")),
+                invoice_date=_get(row, "Date facture"),
+                arrival_date=_get(row, "Arrivée le", "Arrivee le"),
+                supplier_code=_text(_get(row, "Tiers (code)")),
+                supplier_name=_text(_get(row, "Tiers (Nom)")),
+                invoice_status=_text(_get(row, "Etat facture", "État facture")),
+                liquidation_status=_text(_get(row, "Etat liquidation", "État liquidation")),
+                market_code=_text(_get(row, "Marché", "Marche")),
+                raw=row,
+            )
+        )
+    return WorklistParseResult(sheet_name=sheet_name, rows=parsed)
+
+
+def build_comptable_control_workbook(
+    db: Session,
+    city_id: int,
+    files_by_market: dict[MarketKey, bytes],
+) -> bytes:
+    wb = Workbook()
+    default = wb.active
+    wb.remove(default)
+
+    for config in MARKETS:
+        ws = wb.create_sheet(config.title)
+        content = files_by_market.get(config.key)
+        if not content:
+            ws["A1"] = "Aucune facture à analyser"
+            ws["A1"].font = Font(bold=True)
+            ws.column_dimensions["A"].width = 34
+            continue
+        parsed = parse_comptable_worklist(content)
+        platform = _platform_index(db, city_id, config, [row.supplier_invoice_number for row in parsed.rows])
+        _write_market_sheet(db, ws, config, parsed, platform)
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+def _write_market_sheet(
+    db: Session,
+    ws,
+    config: MarketConfig,
+    parsed: WorklistParseResult,
+    platform: dict[str, PlatformInvoice],
+) -> None:
+    ws["A1"] = f"Rapport de controle comptable - {config.title}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"Source : feuille {parsed.sheet_name}"
+    ws["A2"].font = Font(italic=True)
+
+    headers = [
+        "Rapprochement",
+        "Numero fournisseur",
+        "Numero compta",
+        "Fournisseur",
+        "TTC compta",
+        "TTC plateforme",
+        "Ecart TTC",
+        "Date facture",
+        "Etat facture",
+        "Etat liquidation",
+        "Controle plateforme",
+        "Decision plateforme",
+        "Libelle compta",
+    ]
+    header_row = 4
+    _write_header(ws, header_row, headers)
+
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]] = []
+    for row_index, item in enumerate(parsed.rows, start=header_row + 1):
+        current = platform.get(item.supplier_invoice_number or "")
+        status, delta = _reconciliation_status(item, current)
+        if current is not None:
+            matched.append((item, current))
+        values = [
+            status,
+            item.supplier_invoice_number,
+            item.accounting_number,
+            item.supplier_name,
+            item.total_ttc,
+            current.total_ttc if current else None,
+            delta,
+            item.invoice_date,
+            item.invoice_status,
+            item.liquidation_status,
+            current.control_status if current else None,
+            current.decision_status if current else None,
+            item.label,
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_index, column=col, value=value)
+        for col in (5, 6, 7):
+            ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
+
+    detail_start = header_row + len(parsed.rows) + 3
+    ws.cell(row=detail_start, column=1, value="Décomposition comptable").font = Font(bold=True, size=12)
+    if not matched:
+        ws.cell(row=detail_start + 1, column=1, value="Aucune facture rapprochée.")
+    elif config.family == "cpe":
+        _write_cpe_decomposition(db, ws, detail_start + 1, matched)
+    elif config.family == "energy":
+        _write_energy_decomposition(db, ws, detail_start + 1, matched)
+    else:
+        _write_gas_decomposition(ws, detail_start + 1, matched)
+
+    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 46])
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.auto_filter.ref = f"A{header_row}:M{max(header_row + 1, header_row + len(parsed.rows))}"
+
+
+def _write_cpe_decomposition(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
+    headers_written = False
+    row_cursor = start_row
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, CpeFinanceInvoice):
+            continue
+        try:
+            content = cpe_accounting.build_detailed_finance_liaison_workbook(db, invoice)
+            liaison_wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            detail = liaison_wb["Lignes finance"]
+        except Exception as exc:  # pragma: no cover - garde-fou rapport operateur
+            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
+            ws.cell(row=row_cursor, column=2, value=f"Décomposition DALKIA indisponible : {exc}")
+            row_cursor += 1
+            continue
+        detail_rows = detail.iter_rows(values_only=True)
+        try:
+            liaison_headers = list(next(detail_rows))
+        except StopIteration:
+            continue
+        if not headers_written:
+            _write_header(ws, row_cursor, ["Numero fournisseur", *liaison_headers])
+            headers_written = True
+            row_cursor += 1
+        for values in detail_rows:
+            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
+            for col, value in enumerate(values, start=2):
+                ws.cell(row=row_cursor, column=col, value=value)
+            row_cursor += 1
+
+
+def _write_energy_decomposition(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
+    headers = [
+        "Numero fournisseur", "PRM", "Nom site", "Poste", "Libelle", "Montant HT",
+        "Service", "Fonction", "Antenne", "Operation", "Nature", "Libelle nature", "Codification",
+    ]
+    _write_header(ws, start_row, headers)
+    row_cursor = start_row + 1
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, EnergyInvoiceImport):
+            continue
+        rows = energie_accounting.resolve_invoice_codification(db, invoice)
+        if not rows:
+            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
+            ws.cell(row=row_cursor, column=4, value="Aucune ligne de codification disponible")
+            row_cursor += 1
+            continue
+        for line in rows:
+            values = [
+                worklist_row.supplier_invoice_number,
+                line.prm_id,
+                line.site_name,
+                line.poste,
+                line.label,
+                line.amount_ht,
+                line.service_code,
+                line.function_code,
+                line.antenna_code,
+                line.operation_code,
+                line.accounting_nature,
+                line.accounting_label,
+                "OK" if line.status == "ok" else "A CODIFIER",
+            ]
+            for col, value in enumerate(values, start=1):
+                ws.cell(row=row_cursor, column=col, value=value)
+            ws.cell(row=row_cursor, column=6).number_format = '#,##0.00 "EUR"'
+            row_cursor += 1
+
+
+def _write_gas_decomposition(ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
+    headers = ["Numero fournisseur", "PCE", "Site", "Total HT", "Total TTC", "Controle", "Note"]
+    _write_header(ws, start_row, headers)
+    row_cursor = start_row + 1
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, GasInvoice):
+            continue
+        values = [
+            worklist_row.supplier_invoice_number,
+            invoice.pce,
+            invoice.nom_site,
+            invoice.total_hors_tva,
+            invoice.total_ttc,
+            invoice.control_status,
+            "Décomposition comptable gaz non disponible dans l'incrément 2.",
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_cursor, column=col, value=value)
+        ws.cell(row=row_cursor, column=4).number_format = '#,##0.00 "EUR"'
+        ws.cell(row=row_cursor, column=5).number_format = '#,##0.00 "EUR"'
+        row_cursor += 1
+
+
+def _platform_index(
+    db: Session,
+    city_id: int,
+    config: MarketConfig,
+    invoice_numbers: list[str | None],
+) -> dict[str, PlatformInvoice]:
+    keys = sorted({number.strip() for number in invoice_numbers if number and number.strip()})
+    if not keys:
+        return {}
+    if config.family == "cpe":
+        return _cpe_index(db, city_id, keys)
+    if config.family == "gas":
+        return _gas_index(db, city_id, keys)
+    return _energy_index(db, city_id, keys, config.key)
+
+
+def _energy_index(db: Session, city_id: int, keys: list[str], market: MarketKey) -> dict[str, PlatformInvoice]:
+    stmt = (
+        select(EnergyInvoiceImport)
+        .where(EnergyInvoiceImport.city_id == city_id, EnergyInvoiceImport.invoice_number.in_(keys))
+        .order_by(EnergyInvoiceImport.updated_at.desc(), EnergyInvoiceImport.id.desc())
+    )
+    out: dict[str, PlatformInvoice] = {}
+    for invoice in db.scalars(stmt).all():
+        number = (invoice.invoice_number or "").strip()
+        if not number or number in out:
+            continue
+        if market == "engie" and not _looks_like_supplier(invoice, "ENGIE"):
+            continue
+        if market == "edf" and not _looks_like_supplier(invoice, "EDF"):
+            continue
+        out[number] = PlatformInvoice(
+            id=invoice.id,
+            invoice_number=number,
+            total_ttc=invoice.total_ttc,
+            control_status=_energy_control_label(invoice),
+            decision_status=invoice.decision_status,
+            raw=invoice,
+        )
+    return out
+
+
+def _cpe_index(db: Session, city_id: int, keys: list[str]) -> dict[str, PlatformInvoice]:
+    stmt = (
+        select(CpeFinanceInvoice)
+        .where(CpeFinanceInvoice.city_id == city_id, CpeFinanceInvoice.invoice_number.in_(keys))
+        .order_by(CpeFinanceInvoice.updated_at.desc(), CpeFinanceInvoice.id.desc())
+    )
+    invoices = db.scalars(stmt).all()
+    totals = _cpe_ttc_by_invoice_id(db, [invoice.id for invoice in invoices])
+    out: dict[str, PlatformInvoice] = {}
+    for invoice in invoices:
+        number = invoice.invoice_number.strip()
+        if number in out:
+            continue
+        out[number] = PlatformInvoice(
+            id=invoice.id,
+            invoice_number=number,
+            total_ttc=totals.get(invoice.id),
+            control_status=invoice.status,
+            decision_status=invoice.status,
+            raw=invoice,
+        )
+    return out
+
+
+def _gas_index(db: Session, city_id: int, keys: list[str]) -> dict[str, PlatformInvoice]:
+    stmt = (
+        select(GasInvoice)
+        .where(GasInvoice.city_id == city_id, GasInvoice.num_facture.in_(keys))
+        .order_by(GasInvoice.updated_at.desc(), GasInvoice.id.desc())
+    )
+    out: dict[str, PlatformInvoice] = {}
+    for invoice in db.scalars(stmt).all():
+        number = invoice.num_facture.strip()
+        if number in out:
+            continue
+        out[number] = PlatformInvoice(
+            id=invoice.id,
+            invoice_number=number,
+            total_ttc=invoice.total_ttc,
+            control_status=invoice.control_status,
+            decision_status=invoice.decision_status,
+            raw=invoice,
+        )
+    return out
+
+
+def _cpe_ttc_by_invoice_id(db: Session, invoice_ids: list[int]) -> dict[int, float]:
+    if not invoice_ids:
+        return {}
+    totals: dict[int, float] = {invoice_id: 0.0 for invoice_id in invoice_ids}
+    rows = db.execute(
+        select(CpeFinanceLine.invoice_id, CpeFinanceLine.amount_ht, CpeFinanceLine.vat_rate)
+        .where(CpeFinanceLine.invoice_id.in_(invoice_ids))
+    ).all()
+    for invoice_id, amount_ht, vat_rate in rows:
+        rate = (vat_rate or 0.0) / 100.0
+        totals[invoice_id] = totals.get(invoice_id, 0.0) + float(amount_ht or 0.0) * (1.0 + rate)
+    return {invoice_id: round(total, 2) for invoice_id, total in totals.items()}
+
+
+def _reconciliation_status(item: WorklistInvoice, current: PlatformInvoice | None) -> tuple[str, float | None]:
+    if item.supplier_invoice_number is None:
+        return "Numero fournisseur introuvable", None
+    if current is None:
+        return "Absente plateforme", None
+    if item.total_ttc is None or current.total_ttc is None:
+        return "Rapprochée", None
+    delta = round(current.total_ttc - item.total_ttc, 2)
+    if abs(delta) > _TTC_TOLERANCE:
+        return "Écart TTC", delta
+    return "Rapprochée", delta
+
+
+def _energy_control_label(invoice: EnergyInvoiceImport) -> str:
+    return f"{invoice.control_status} ({invoice.control_errors_count} erreur(s), {invoice.control_warnings_count} alerte(s))"
+
+
+def _looks_like_supplier(invoice: EnergyInvoiceImport, supplier: str) -> bool:
+    value = " ".join([invoice.supplier_guess or "", invoice.source or "", invoice.original_filename or ""]).upper()
+    return supplier in value
+
+
+def _write_header(ws, row: int, headers: list[object]) -> None:
+    fill = PatternFill("solid", fgColor="1F4E78")
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=row, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = fill
+
+
+def _set_widths(ws, widths: list[int]) -> None:
+    for index, width in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(index)].width = width
+
+
+def _as_stream(source: bytes | str | Path | BinaryIO) -> str | Path | BinaryIO:
+    if isinstance(source, bytes):
+        return io.BytesIO(source)
+    return source
+
+
+def _get(row: dict[str, object | None], *names: str) -> object | None:
+    for name in names:
+        if name in row:
+            return row[name]
+    return None
+
+
+def _text(value: object | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _float(value: object | None) -> float | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(" ", "").replace(",", ".")
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+__all__ = [
+    "MarketKey",
+    "WorklistInvoice",
+    "WorklistParseResult",
+    "XLSX_MEDIA_TYPE",
+    "build_comptable_control_workbook",
+    "extract_supplier_invoice_number",
+    "parse_comptable_worklist",
+]
