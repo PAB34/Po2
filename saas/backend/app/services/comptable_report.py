@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import BinaryIO, Literal
 
@@ -19,10 +20,11 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.cpe import CpeFinanceInvoice, CpeFinanceLine
+from app.models.cpe import CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
 from app.models.gas_invoice import GasInvoice
 from app.models.invoice import EnergyInvoiceImport
 from app.services import cpe_accounting, energie_accounting
+from app.services import engie_elec_budget_revise, gas_budget_revise
 
 MarketKey = Literal["dalkia", "engie", "edf", "totalenergies"]
 
@@ -159,7 +161,7 @@ def build_comptable_control_workbook(
             continue
         parsed = parse_comptable_worklist(content)
         platform = _platform_index(db, city_id, config, [row.supplier_invoice_number for row in parsed.rows])
-        _write_market_sheet(db, ws, config, parsed, platform)
+        _write_market_sheet(db, city_id, ws, config, parsed, platform)
 
     output = io.BytesIO()
     wb.save(output)
@@ -168,6 +170,7 @@ def build_comptable_control_workbook(
 
 def _write_market_sheet(
     db: Session,
+    city_id: int,
     ws,
     config: MarketConfig,
     parsed: WorklistParseResult,
@@ -222,7 +225,10 @@ def _write_market_sheet(
         for col in (5, 6, 7):
             ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
 
-    detail_start = header_row + len(parsed.rows) + 3
+    revision_start = header_row + len(parsed.rows) + 3
+    next_start = _write_revision_section(db, city_id, ws, revision_start, config, matched)
+
+    detail_start = next_start + 2
     ws.cell(row=detail_start, column=1, value="Décomposition comptable").font = Font(bold=True, size=12)
     if not matched:
         ws.cell(row=detail_start + 1, column=1, value="Aucune facture rapprochée.")
@@ -238,6 +244,181 @@ def _write_market_sheet(
     ws.auto_filter.ref = f"A{header_row}:M{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
+
+def _write_revision_section(
+    db: Session,
+    city_id: int,
+    ws,
+    start_row: int,
+    config: MarketConfig,
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
+) -> int:
+    ws.cell(row=start_row, column=1, value="Révision de prix").font = Font(bold=True, size=12)
+    if not matched:
+        ws.cell(row=start_row + 1, column=1, value="Aucune facture rapprochée.")
+        return start_row + 2
+    if config.family == "cpe":
+        return _write_cpe_revision_section(db, ws, start_row + 1, matched)
+    if config.family == "energy":
+        return _write_energy_revision_section(db, city_id, ws, start_row + 1, config, matched)
+    return _write_gas_revision_section(db, city_id, ws, start_row + 1, matched)
+
+
+def _write_cpe_revision_section(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
+    headers = [
+        "Numero fournisseur", "Controle", "Statut", "Indice annee", "Indice trimestre",
+        "ICHT-IME", "BT40", "FSD2", "Facteur", "Prix base", "Prix revise attendu",
+        "Prix revise facture", "Ecart", "Message",
+    ]
+    _write_header(ws, start_row, headers)
+    row_cursor = start_row + 1
+    invoice_ids = [current.id for _worklist, current in matched]
+    controls = db.scalars(
+        select(CpeFinanceControl)
+        .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
+        .where(CpeFinanceControl.control_type.in_(("revision_p2", "revision_p3", "p1_gaz_pu_os3", "p1_gaz_acompte_dpgf")))
+        .order_by(CpeFinanceControl.invoice_id, CpeFinanceControl.control_type)
+    ).all() if invoice_ids else []
+    by_invoice: dict[int, list[CpeFinanceControl]] = {}
+    for control in controls:
+        by_invoice.setdefault(control.invoice_id, []).append(control)
+    for worklist_row, current in matched:
+        invoice_controls = by_invoice.get(current.id, [])
+        if not invoice_controls:
+            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
+            ws.cell(row=row_cursor, column=2, value="Pas de révision applicable ou contrôle non disponible")
+            row_cursor += 1
+            continue
+        for control in invoice_controls:
+            values = [
+                worklist_row.supplier_invoice_number,
+                control.control_type,
+                control.status,
+                control.index_year,
+                control.index_quarter,
+                control.icht_ime_value,
+                control.bt40_value,
+                control.fsd2_value,
+                control.expected_factor,
+                control.base_price,
+                control.expected_revised_price,
+                control.actual_revised_price,
+                control.delta_abs,
+                control.message,
+            ]
+            for col, value in enumerate(values, start=1):
+                ws.cell(row=row_cursor, column=col, value=value)
+            for col in (10, 11, 12, 13):
+                ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
+            row_cursor += 1
+    return row_cursor
+
+
+def _write_energy_revision_section(
+    db: Session,
+    city_id: int,
+    ws,
+    start_row: int,
+    config: MarketConfig,
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
+) -> int:
+    headers = [
+        "Numero fournisseur", "PRM", "Annee", "Ratio BPU", "Ratio TURPE", "BPU disponible",
+        "Source reference", "Realise", "Atterrissage", "Note",
+    ]
+    _write_header(ws, start_row, headers)
+    row_cursor = start_row + 1
+    budget_cache: dict[int, dict] = {}
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, EnergyInvoiceImport):
+            continue
+        year = _invoice_year_for_revision(invoice, worklist_row)
+        budget = budget_cache.get(year)
+        if budget is None:
+            budget = _safe_energy_budget_revise(db, city_id, config.key, year)
+            budget_cache[year] = budget
+        point_by_prm = {str(point.get("prm")): point for point in budget.get("points", []) if point.get("prm")}
+        prms = _invoice_prms(invoice)
+        if not prms:
+            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
+            ws.cell(row=row_cursor, column=10, value="Aucun PRM normalisé disponible pour rattacher la révision.")
+            row_cursor += 1
+            continue
+        for prm in prms:
+            point = point_by_prm.get(prm)
+            values = [
+                worklist_row.supplier_invoice_number,
+                prm,
+                year,
+                point.get("bpu_ratio") if point else None,
+                point.get("turpe_ratio") if point else None,
+                point.get("bpu_available") if point else None,
+                point.get("reference_source") if point else None,
+                point.get("realise") if point else None,
+                point.get("atterrissage") if point else None,
+                "BPU/TURPE appliqués au point de livraison" if point else "Point absent du moteur budget révisé",
+            ]
+            for col, value in enumerate(values, start=1):
+                ws.cell(row=row_cursor, column=col, value=value)
+            for col in (8, 9):
+                ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
+            row_cursor += 1
+    return row_cursor
+
+
+def _write_gas_revision_section(db: Session, city_id: int, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
+    headers = [
+        "Numero fournisseur", "PCE", "Annee", "Ratio PEG", "Ratio climat", "PEG disponible",
+        "Realise", "Atterrissage", "Note",
+    ]
+    _write_header(ws, start_row, headers)
+    row_cursor = start_row + 1
+    budget_cache: dict[int, dict] = {}
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, GasInvoice):
+            continue
+        year = _date_year(invoice.fin_conso) or _date_year(invoice.debut_conso) or _date_year(invoice.date_comptable) or _date_year(worklist_row.invoice_date) or date.today().year
+        budget = budget_cache.get(year)
+        if budget is None:
+            budget = _safe_gas_budget_revise(db, city_id, year)
+            budget_cache[year] = budget
+        point_by_pce = {str(point.get("pce")): point for point in budget.get("points", []) if point.get("pce")}
+        point = point_by_pce.get(invoice.pce)
+        values = [
+            worklist_row.supplier_invoice_number,
+            invoice.pce,
+            year,
+            point.get("peg_ratio") if point else None,
+            point.get("climate_ratio") if point else None,
+            budget.get("peg_available"),
+            point.get("realise") if point else None,
+            point.get("atterrissage") if point else None,
+            "PEG + climat appliqués au PCE" if point else "PCE absent du moteur budget révisé gaz",
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_cursor, column=col, value=value)
+        for col in (7, 8):
+            ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
+        row_cursor += 1
+    return row_cursor
+
+
+def _safe_energy_budget_revise(db: Session, city_id: int, market: MarketKey, year: int) -> dict:
+    try:
+        if market == "edf":
+            return engie_elec_budget_revise.build_edf_elec_budget_revise(db, city_id, year=year)
+        return engie_elec_budget_revise.build_engie_elec_budget_revise(db, city_id, year=year)
+    except Exception as exc:  # pragma: no cover - rapport robuste si reference incomplete
+        return {"points": [], "totals": {}, "error": str(exc)}
+
+
+def _safe_gas_budget_revise(db: Session, city_id: int, year: int) -> dict:
+    try:
+        return gas_budget_revise.build_gas_budget_revise(db, city_id, year=year)
+    except Exception as exc:  # pragma: no cover
+        return {"points": [], "totals": {}, "error": str(exc)}
 def _write_cpe_decomposition(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
     headers_written = False
     row_cursor = start_row
@@ -448,6 +629,41 @@ def _reconciliation_status(item: WorklistInvoice, current: PlatformInvoice | Non
     return "Rapprochée", delta
 
 
+
+def _invoice_year_for_revision(invoice: EnergyInvoiceImport, worklist_row: WorklistInvoice) -> int:
+    return (
+        _date_year(invoice.period_end)
+        or _date_year(invoice.period_start)
+        or _date_year(invoice.invoice_date)
+        or _date_year(worklist_row.invoice_date)
+        or date.today().year
+    )
+
+
+def _invoice_prms(invoice: EnergyInvoiceImport) -> list[str]:
+    normalized = invoice.normalized_invoice
+    if normalized is None:
+        return []
+    prms: list[str] = []
+    for site in normalized.sites:
+        prm = _text(site.prm_id)
+        if prm and prm not in prms:
+            prms.append(prm)
+    return prms
+
+
+def _date_year(value: object | None) -> int | None:
+    if value is None:
+        return None
+    year = getattr(value, "year", None)
+    if isinstance(year, int):
+        return year
+    text = str(value).strip()
+    if len(text) >= 4 and text[:4].isdigit():
+        return int(text[:4])
+    if len(text) >= 10 and text[6:10].isdigit():
+        return int(text[6:10])
+    return None
 def _energy_control_label(invoice: EnergyInvoiceImport) -> str:
     return f"{invoice.control_status} ({invoice.control_errors_count} erreur(s), {invoice.control_warnings_count} alerte(s))"
 
