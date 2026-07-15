@@ -7,6 +7,7 @@ trime, puis produire une feuille par marche sans synthese ni revision de prix.
 from __future__ import annotations
 
 import io
+import json
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -63,6 +64,7 @@ class PlatformInvoice:
     total_ttc: float | None
     control_status: str | None
     decision_status: str | None
+    problem_summary: str | None
     raw: object
 
 
@@ -296,6 +298,7 @@ def _write_market_sheet(
         "Etat liquidation",
         "Controle plateforme",
         "Decision plateforme",
+        "Motif / point à vérifier",
         "Libelle compta",
     ]
     header_row = 4
@@ -318,8 +321,9 @@ def _write_market_sheet(
             item.invoice_date,
             item.invoice_status,
             item.liquidation_status,
-            current.control_status if current else None,
-            current.decision_status if current else None,
+            _control_label(config.family, current.control_status if current else None),
+            _decision_label(config.family, current.decision_status if current else None),
+            _row_problem_summary(status, delta, current),
             item.label,
         ]
         for col, value in enumerate(values, start=1):
@@ -341,9 +345,9 @@ def _write_market_sheet(
     else:
         _write_gas_decomposition(ws, detail_start + 1, matched)
 
-    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 46])
+    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 48, 46])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:M{max(header_row + 1, header_row + len(parsed.rows))}"
+    ws.auto_filter.ref = f"A{header_row}:N{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
 
@@ -632,6 +636,153 @@ def _platform_index(
     return _energy_index(db, city_id, keys, config.key)
 
 
+
+_CONTROL_LABELS: dict[str, str] = {
+    "valid": "Conforme",
+    "ok": "Conforme",
+    "warning": "Alerte",
+    "error": "Écart",
+    "blocked": "Bloqué",
+    "not_checked": "Non contrôlé",
+    "a_controler": "À contrôler",
+    "valide": "Validée",
+    "refuse": "Refusée",
+    "conteste": "Contestée",
+}
+
+_DECISION_LABELS: dict[str, str] = {
+    "approved": "Approuvée",
+    "to_review": "À contrôler",
+    "rejected": "Refusée",
+    "dispute_sent": "Contestée",
+    "valide": "Validée",
+    "a_controler": "À contrôler",
+    "refuse": "Refusée",
+    "conteste": "Contestée",
+}
+
+_PROBLEM_CODE_LABELS: dict[str, str] = {
+    "invoice_total_ht": "Total HT incohérent",
+    "invoice_period": "Période de facture incohérente",
+    "invoice_timeline": "Dates facture/échéance incohérentes",
+    "p1_gaz_pu_os3": "Prix unitaire P1 gaz différent de l'OS3",
+    "p1_gaz_acompte_dpgf": "Acompte P1 gaz différent du DPGF",
+    "p2p3_base_dpgf": "Montant P2/P3 différent du DPGF",
+    "revision_p2": "Indice de révision P2 à vérifier",
+    "revision_p3": "Indice de révision P3 à vérifier",
+    "p2_4_objectives": "Intéressement P2.4 à vérifier",
+    "accounting_nature": "Imputation comptable absente",
+    "accounting_site": "Site comptable non rattaché",
+    "BPU_PRICE_MISMATCH": "Écart prix BPU",
+    "BPU_TARIFF_POSTE_INCONSISTENCY": "Incohérence poste/tarif BPU",
+    "TOTAL_TTC_MISMATCH": "Écart total TTC",
+    "LINE_AMOUNT_MISMATCH": "Écart montant de ligne",
+    "HT_TOTAL_MISMATCH": "Écart total HT",
+    "MISSING_INVOICE_NUMBER": "Numéro de facture absent",
+    "MISSING_TOTAL_TTC": "Total TTC absent",
+    "SUPPLIER_UNKNOWN": "Fournisseur non reconnu",
+    "NO_SITE_FOUND": "Aucun point de livraison détecté",
+    "UNKNOWN_PRM": "PRM hors référentiel",
+    "SUPPLIER_CONTRACT_MISMATCH": "PRM rattaché à un autre fournisseur",
+    "MISSING_PRM": "PRM absent",
+    "BPU_REFERENCE_MISSING": "Référence BPU absente",
+    "BPU_PRICE_MISSING": "Prix BPU absent",
+    "ENEDIS_CONSUMPTION_MISSING": "Données ENEDIS absentes",
+    "POWER_REFERENCE_MISSING": "Référence de puissance absente",
+    "TAX_TOTALS_MISSING": "Totaux de taxes incomplets",
+}
+
+_NON_APPROVED_DECISIONS = {"to_review", "rejected", "dispute_sent", "a_controler", "refuse", "conteste"}
+
+
+def _control_label(family: str, status: str | None) -> str | None:
+    if not status:
+        return None
+    if "(" in status:
+        code, details = status.split("(", 1)
+        return f"{_CONTROL_LABELS.get(code.strip(), code.strip())} ({details}"
+    return _CONTROL_LABELS.get(status, status)
+
+
+def _decision_label(family: str, status: str | None) -> str | None:
+    if not status:
+        return None
+    return _DECISION_LABELS.get(status, status)
+
+
+def _row_problem_summary(status: str, delta: float | None, current: PlatformInvoice | None) -> str | None:
+    if current is None:
+        return "Facture non trouvée dans la plateforme."
+    if status == "Numero fournisseur introuvable":
+        return "Numéro fournisseur non extrait du libellé comptable."
+    if delta is not None and abs(delta) > _TTC_TOLERANCE:
+        return f"Écart TTC plateforme - compta : {delta:.2f} EUR."
+    if current.decision_status in _NON_APPROVED_DECISIONS:
+        return current.problem_summary or "Décision non finalisée dans la plateforme."
+    return current.problem_summary
+
+
+def _problem_label(code: object | None, fallback: object | None = None) -> str:
+    if code:
+        text = str(code)
+        return _PROBLEM_CODE_LABELS.get(text, text.replace("_", " ").lower())
+    if fallback:
+        return str(fallback)
+    return "Point de contrôle à vérifier"
+
+
+def _summarize_problem_counts(items: list[tuple[str | None, str | None]]) -> str | None:
+    counts: dict[str, int] = {}
+    for code, message in items:
+        label = _problem_label(code, message)
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return None
+    selected = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:3]
+    parts = [f"{label} ({count})" if count > 1 else label for label, count in selected]
+    remaining = sum(counts.values()) - sum(count for _label, count in selected)
+    suffix = f" ; +{remaining} autre(s)" if remaining > 0 else ""
+    return " ; ".join(parts) + suffix
+
+
+def _energy_problem_summary(invoice: EnergyInvoiceImport) -> str | None:
+    if invoice.decision_comment:
+        return invoice.decision_comment
+    issues = [
+        (issue.get("code"), issue.get("message"))
+        for issue in invoice.control_issues
+        if isinstance(issue, dict)
+    ]
+    summary = _summarize_problem_counts(issues)
+    if summary:
+        return summary
+    if invoice.decision_status == "to_review" and invoice.control_status == "valid":
+        return "Contrôles conformes ; décision plateforme restant à valider."
+    return None
+
+
+def _gas_problem_summary(invoice: GasInvoice) -> str | None:
+    if invoice.decision_comment:
+        return invoice.decision_comment
+    issues: list[tuple[str | None, str | None]] = []
+    if invoice.control_issues_json:
+        try:
+            raw = json.loads(invoice.control_issues_json)
+        except json.JSONDecodeError:
+            raw = []
+        if isinstance(raw, list):
+            for issue in raw:
+                if isinstance(issue, dict):
+                    issues.append((issue.get("code"), issue.get("message")))
+                else:
+                    issues.append((None, str(issue)))
+    summary = _summarize_problem_counts(issues)
+    if summary:
+        return summary
+    if invoice.decision_status == "to_review" and invoice.control_status == "valid":
+        return "Contrôles conformes ; décision plateforme restant à valider."
+    return None
+
 def _energy_index(db: Session, city_id: int, keys: list[str], market: MarketKey) -> dict[str, PlatformInvoice]:
     stmt = (
         select(EnergyInvoiceImport)
@@ -653,6 +804,7 @@ def _energy_index(db: Session, city_id: int, keys: list[str], market: MarketKey)
             total_ttc=invoice.total_ttc,
             control_status=_energy_control_label(invoice),
             decision_status=invoice.decision_status,
+            problem_summary=_energy_problem_summary(invoice),
             raw=invoice,
         )
     return out
@@ -665,22 +817,79 @@ def _cpe_index(db: Session, city_id: int, keys: list[str]) -> dict[str, Platform
         .order_by(CpeFinanceInvoice.updated_at.desc(), CpeFinanceInvoice.id.desc())
     )
     invoices = db.scalars(stmt).all()
-    totals = _cpe_ttc_by_invoice_id(db, [invoice.id for invoice in invoices])
+    invoice_ids = [invoice.id for invoice in invoices]
+    totals = _cpe_ttc_by_invoice_id(db, invoice_ids)
+    control_summaries = _cpe_control_summaries(db, invoice_ids)
     out: dict[str, PlatformInvoice] = {}
     for invoice in invoices:
         number = invoice.invoice_number.strip()
         if number in out:
             continue
+        summary = control_summaries.get(invoice.id, {})
         out[number] = PlatformInvoice(
             id=invoice.id,
             invoice_number=number,
             total_ttc=totals.get(invoice.id),
-            control_status=invoice.status,
+            control_status=summary.get("control_status") or invoice.status,
             decision_status=invoice.status,
+            problem_summary=summary.get("problem_summary") or _cpe_decision_problem_summary(invoice),
             raw=invoice,
         )
     return out
 
+
+
+def _cpe_control_summaries(db: Session, invoice_ids: list[int]) -> dict[int, dict[str, str | None]]:
+    if not invoice_ids:
+        return {}
+    rows = db.execute(
+        select(CpeFinanceControl.invoice_id, CpeFinanceControl.status, CpeFinanceControl.control_type, CpeFinanceControl.message)
+        .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
+    ).all()
+    by_invoice: dict[int, list[tuple[str | None, str | None, str | None]]] = {}
+    for invoice_id, status, control_type, message in rows:
+        by_invoice.setdefault(invoice_id, []).append((status, control_type, message))
+
+    summaries: dict[int, dict[str, str | None]] = {}
+    for invoice_id in invoice_ids:
+        controls = by_invoice.get(invoice_id, [])
+        errors = [(control_type, message) for status, control_type, message in controls if status == "error"]
+        blocked = [(control_type, message) for status, control_type, message in controls if status == "blocked"]
+        warnings = [(control_type, message) for status, control_type, message in controls if status == "warning"]
+        if errors:
+            summaries[invoice_id] = {
+                "control_status": f"error ({len(errors)} écart(s), {len(blocked)} bloqué(s))",
+                "problem_summary": _summarize_problem_counts(errors + blocked),
+            }
+        elif blocked:
+            summaries[invoice_id] = {
+                "control_status": f"blocked ({len(blocked)} bloqué(s))",
+                "problem_summary": _summarize_problem_counts(blocked),
+            }
+        elif warnings:
+            summaries[invoice_id] = {
+                "control_status": f"warning ({len(warnings)} alerte(s))",
+                "problem_summary": _summarize_problem_counts(warnings),
+            }
+        elif controls:
+            summaries[invoice_id] = {
+                "control_status": "valid",
+                "problem_summary": None,
+            }
+        else:
+            summaries[invoice_id] = {
+                "control_status": "not_checked",
+                "problem_summary": "Aucun contrôle CPE disponible pour cette facture.",
+            }
+    return summaries
+
+
+def _cpe_decision_problem_summary(invoice: CpeFinanceInvoice) -> str | None:
+    if invoice.notes:
+        return invoice.notes
+    if invoice.status == "a_controler":
+        return "Contrôles conformes ou non bloquants ; décision DALKIA restant à valider."
+    return None
 
 def _gas_index(db: Session, city_id: int, keys: list[str]) -> dict[str, PlatformInvoice]:
     stmt = (
@@ -699,6 +908,7 @@ def _gas_index(db: Session, city_id: int, keys: list[str]) -> dict[str, Platform
             total_ttc=invoice.total_ttc,
             control_status=invoice.control_status,
             decision_status=invoice.decision_status,
+            problem_summary=_gas_problem_summary(invoice),
             raw=invoice,
         )
     return out
