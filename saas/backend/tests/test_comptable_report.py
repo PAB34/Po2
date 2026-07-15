@@ -49,8 +49,9 @@ def test_build_report_creates_one_sheet_per_market_without_uploads() -> None:
     content = build_comptable_control_workbook(db=None, city_id=303, files_by_market={})
     wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
 
-    assert wb.sheetnames == ["DALKIA", "ENGIE", "EDF", "TotalEnergies"]
-    for sheet_name in wb.sheetnames:
+    assert wb.sheetnames == ["Synthèse", "DALKIA", "ENGIE", "EDF", "TotalEnergies"]
+    assert wb["Synthèse"]["A1"].value == "Synthèse - rapport de contrôle comptable"
+    for sheet_name in ["DALKIA", "ENGIE", "EDF", "TotalEnergies"]:
         assert wb[sheet_name]["A1"].value == "Aucune facture à analyser"
 
 

@@ -24,7 +24,7 @@ from app.models.cpe import CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
 from app.models.gas_invoice import GasInvoice
 from app.models.invoice import EnergyInvoiceImport
 from app.services import cpe_accounting, energie_accounting
-from app.services import engie_elec_budget_revise, gas_budget_revise
+from app.services import accounting_contract_budget, engie_elec_budget_revise, gas_budget_revise
 
 MarketKey = Literal["dalkia", "engie", "edf", "totalenergies"]
 
@@ -151,15 +151,24 @@ def build_comptable_control_workbook(
     default = wb.active
     wb.remove(default)
 
+    parsed_by_market: dict[MarketKey, WorklistParseResult] = {}
+    for config in MARKETS:
+        content = files_by_market.get(config.key)
+        if content:
+            parsed_by_market[config.key] = parse_comptable_worklist(content)
+
+    report_year = _infer_report_year(parsed_by_market) or date.today().year
+    summary_ws = wb.create_sheet("Synthèse")
+    _write_summary_sheet(db, city_id, summary_ws, report_year, parsed_by_market)
+
     for config in MARKETS:
         ws = wb.create_sheet(config.title)
-        content = files_by_market.get(config.key)
-        if not content:
+        parsed = parsed_by_market.get(config.key)
+        if parsed is None:
             ws["A1"] = "Aucune facture à analyser"
             ws["A1"].font = Font(bold=True)
             ws.column_dimensions["A"].width = 34
             continue
-        parsed = parse_comptable_worklist(content)
         platform = _platform_index(db, city_id, config, [row.supplier_invoice_number for row in parsed.rows])
         _write_market_sheet(db, city_id, ws, config, parsed, platform)
 
@@ -168,6 +177,99 @@ def build_comptable_control_workbook(
     return output.getvalue()
 
 
+
+def _write_summary_sheet(
+    db: Session,
+    city_id: int,
+    ws,
+    report_year: int,
+    parsed_by_market: dict[MarketKey, WorklistParseResult],
+) -> None:
+    ws["A1"] = "Synthèse - rapport de contrôle comptable"
+    ws["A1"].font = Font(bold=True, size=15)
+    ws["A2"] = f"Année de référence : {report_year}"
+    ws["A2"].font = Font(italic=True)
+
+    headers = ["Marché", "Fichier compta", "Factures worklist", "Réalisé à date", "Atterrissage", "Note"]
+    _write_header(ws, 4, headers)
+    row_cursor = 5
+    total_realise = 0.0
+    total_landing = 0.0
+    for config in MARKETS:
+        parsed = parsed_by_market.get(config.key)
+        summary = _market_summary(db, city_id, config, report_year)
+        realise = summary.get("realise")
+        landing = summary.get("atterrissage")
+        if isinstance(realise, (int, float)):
+            total_realise += float(realise)
+        if isinstance(landing, (int, float)):
+            total_landing += float(landing)
+        values = [
+            config.title,
+            "oui" if parsed else "non",
+            len(parsed.rows) if parsed else 0,
+            realise,
+            landing,
+            summary.get("note"),
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_cursor, column=col, value=value)
+        for col in (4, 5):
+            ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
+        row_cursor += 1
+
+    ws.cell(row=row_cursor, column=1, value="Total général").font = Font(bold=True)
+    ws.cell(row=row_cursor, column=4, value=round(total_realise, 2)).number_format = '#,##0.00 "EUR"'
+    ws.cell(row=row_cursor, column=5, value=round(total_landing, 2)).number_format = '#,##0.00 "EUR"'
+    _set_widths(ws, [20, 14, 18, 18, 18, 90])
+
+
+def _market_summary(db: Session, city_id: int, config: MarketConfig, report_year: int) -> dict[str, object]:
+    try:
+        if config.key == "dalkia":
+            data = accounting_contract_budget.build_contract_budget_landing(db, city_id, year=report_year)
+            totals = data.get("totals", {})
+            return {
+                "realise": totals.get("realise"),
+                "atterrissage": totals.get("atterrissage"),
+                "note": data.get("source_note"),
+            }
+        if config.key == "engie":
+            data = engie_elec_budget_revise.build_engie_elec_budget_revise(db, city_id, year=report_year)
+        elif config.key == "edf":
+            data = engie_elec_budget_revise.build_edf_elec_budget_revise(db, city_id, year=report_year)
+        else:
+            data = gas_budget_revise.build_gas_budget_revise(db, city_id, year=report_year)
+        totals = data.get("totals", {})
+        return {
+            "realise": totals.get("realise"),
+            "atterrissage": totals.get("atterrissage"),
+            "note": data.get("source_note"),
+        }
+    except Exception as exc:  # pragma: no cover - l'export reste utile même si un moteur est incomplet
+        return {"realise": None, "atterrissage": None, "note": f"Synthèse indisponible : {exc}"}
+
+
+def _infer_report_year(parsed_by_market: dict[MarketKey, WorklistParseResult]) -> int | None:
+    counts: dict[int, int] = {}
+    for parsed in parsed_by_market.values():
+        for row in parsed.rows:
+            year = _date_year(row.invoice_date) or _year_from_raw(row.raw.get("Exercice"))
+            if year:
+                counts[year] = counts.get(year, 0) + 1
+    if not counts:
+        return None
+    return sorted(counts.items(), key=lambda item: (item[1], item[0]), reverse=True)[0][0]
+
+
+def _year_from_raw(value: object | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        year = int(str(value).strip()[:4])
+    except ValueError:
+        return None
+    return year if 1990 <= year <= 2100 else None
 def _write_market_sheet(
     db: Session,
     city_id: int,
