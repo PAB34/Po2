@@ -316,6 +316,9 @@ class FluidsThermal(BaseModel):
     base_load_share_pct: float | None
     r2: float | None
     months_used: int
+    window_months: int
+    current_period: str | None
+    previous_period: str | None
     reliable: bool
 
 

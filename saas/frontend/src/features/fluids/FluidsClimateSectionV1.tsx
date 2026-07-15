@@ -112,12 +112,12 @@ export function FluidsClimateSectionV1({ climate }: { climate: FluidsClimateOver
             <div className={`po2-perf__evo ${evoClass}`}>
               <span className="po2-perf__ev">{pct(delta, 1)}</span>
               <div>
-                <small>Thermosensibilité vs {previous_year}</small>
+                <small>Thermosensibilité · 12 mois glissants</small>
                 <b>{delta != null && delta > 0 ? "⚠ le parc consomme plus par degré — performance qui se dégrade" : "performance stable ou en amélioration à climat égal"}</b>
               </div>
             </div>
             <div className="po2-perf__sig">
-              <div className="po2-perf__sig-cap"><span>Signature énergétique (conso / DJU)</span><span>{previous_year} → {current_year}</span></div>
+              <div className="po2-perf__sig-cap"><span>Signature énergétique (conso / DJU)</span><span>{thermal.previous_period ?? "—"} → {thermal.current_period ?? "—"}</span></div>
               <svg viewBox="0 0 300 96" role="img" aria-label="Signature énergétique : pente actuelle vs N-1">
                 <line x1="26" y1="82" x2="290" y2="82" className="po2-perf__ax" />
                 <line x1="26" y1="10" x2="26" y2="82" className="po2-perf__ax" />
@@ -134,9 +134,9 @@ export function FluidsClimateSectionV1({ climate }: { climate: FluidsClimateOver
               <div><b>{thermal.base_load_share_pct != null ? `${thermal.base_load_share_pct.toLocaleString("fr-FR")} %` : "—"}</b><span>talon non climatique</span></div>
             </div>
             <p className="po2-perf__note">
-              À climat égal, la pente {thermal.sensitivity_delta_pct != null && thermal.sensitivity_delta_pct > 0 ? "monte" : "évolue"} vs {previous_year} :
-              signal de performance intrinsèque, indépendant de la météo. Périmètre : {thermal.scope} · {thermal.months_used} mois
-              {thermal.r2 != null ? ` · R² ${thermal.r2.toLocaleString("fr-FR")}` : ""}.
+              À climat égal, la pente {thermal.sensitivity_delta_pct != null && thermal.sensitivity_delta_pct > 0 ? "monte" : "évolue"} sur 12 mois glissants
+              ({thermal.previous_period ?? "—"} → {thermal.current_period ?? "—"}) : signal de performance intrinsèque, indépendant de la météo.
+              Périmètre : {thermal.scope} · {thermal.months_used} mois{thermal.r2 != null ? ` · R² ${thermal.r2.toLocaleString("fr-FR")}` : ""}.
             </p>
           </>
         ) : (

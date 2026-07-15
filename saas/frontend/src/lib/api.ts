@@ -1156,6 +1156,9 @@ export type FluidsThermal = {
   base_load_share_pct: number | null;
   r2: number | null;
   months_used: number;
+  window_months: number;
+  current_period: string | null;
+  previous_period: string | null;
   reliable: boolean;
 };
 export type FluidsClimateOverview = {

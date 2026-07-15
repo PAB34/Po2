@@ -38,7 +38,8 @@ def test_series_current_previous_average():
     assert series["delta_previous_pct"] == round((90 - 120) / 120 * 100, 1)
 
 
-def test_thermal_sensitivity_and_evolution():
+def test_thermal_rolling_window_evolution():
+    # 24 mois : fenêtre courante = 12 derniers (pente 3), fenêtre précédente = 12 avant (pente 2).
     idx = {}
     conso = {}
     for m in range(1, 13):
@@ -47,32 +48,30 @@ def test_thermal_sensitivity_and_evolution():
         conso[f"2025-{m:02d}"] = 2 * dju + 50  # slope 2
         idx[f"2026-{m:02d}"] = {"dju_chauffe": dju, "dju_froid": 0}
         conso[f"2026-{m:02d}"] = 3 * dju + 50  # slope 3
-    thermal = _fluids_thermal(idx, conso, 2026, 2025)
+    thermal = _fluids_thermal(idx, conso)
     assert thermal["sensitivity_kwh_per_dju"] == 3.0
     assert thermal["sensitivity_previous"] == 2.0
     assert thermal["sensitivity_delta_pct"] == 50.0
+    assert thermal["window_months"] == 12
+    assert thermal["current_period"] == "01/2026 – 12/2026"
+    assert thermal["previous_period"] == "01/2025 – 12/2025"
     assert thermal["reliable"] is True
 
 
-def test_thermal_delta_compares_same_months():
-    # N-1 complète mais NON linéaire (pente 2 sur jan-juin, pente 6 sur juil-déc → pente
-    # annuelle ~4). Année en cours = jan-juin seulement, pente 2. La comparaison correcte
-    # (mêmes mois) doit donner 0 %, PAS l'artefact dû à la pente annuelle N-1.
-    d6 = [100, 110, 120, 130, 140, 150]
+def test_thermal_no_previous_window_when_short_history():
+    # 12 mois seulement : fenêtre courante pleine, pas de fenêtre précédente → delta None
+    # (on n'invente pas une évolution sans historique comparable).
     idx = {}
     conso = {}
-    for i, m in enumerate(range(1, 7)):
-        idx[f"2025-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
-        conso[f"2025-{m:02d}"] = 2 * d6[i] + 40
-    for i, m in enumerate(range(7, 13)):
-        idx[f"2025-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
-        conso[f"2025-{m:02d}"] = 6 * d6[i] + 40
-    for i, m in enumerate(range(1, 7)):
-        idx[f"2026-{m:02d}"] = {"dju_chauffe": d6[i], "dju_froid": 0}
-        conso[f"2026-{m:02d}"] = 2 * d6[i] + 40
-    thermal = _fluids_thermal(idx, conso, 2026, 2025)
+    for m in range(1, 13):
+        dju = 100 + m
+        idx[f"2026-{m:02d}"] = {"dju_chauffe": dju, "dju_froid": 0}
+        conso[f"2026-{m:02d}"] = 2 * dju + 50
+    thermal = _fluids_thermal(idx, conso)
     assert thermal["sensitivity_kwh_per_dju"] == 2.0
-    assert thermal["sensitivity_delta_pct"] == 0.0  # mêmes mois → pas d'artefact
+    assert thermal["sensitivity_previous"] is None
+    assert thermal["sensitivity_delta_pct"] is None
+    assert thermal["reliable"] is True
 
 
 def test_get_fluids_climate_empty_is_safe(monkeypatch):

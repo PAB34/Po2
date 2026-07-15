@@ -1239,18 +1239,16 @@ def _fluids_climate_series(dju_idx: dict[str, dict[str, float]], key: str, curre
     }
 
 
-def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float], current: int, previous: int) -> dict[str, Any]:
-    """Energy signature: regress monthly parc electricity vs heating DJU, per year."""
-    def regress(year: int, months: list[int] | None = None) -> tuple[tuple[float, float, float | None] | None, list[float], list[float]]:
-        xs: list[float] = []
-        ys: list[float] = []
-        for m in (months if months is not None else list(range(1, 13))):
-            entry = dju_idx.get(f"{year}-{m:02d}")
-            kwh = conso.get(f"{year}-{m:02d}")
-            if entry and kwh is not None:
-                xs.append(entry["dju_chauffe"])
-                ys.append(kwh)
-        return _linreg(xs, ys), xs, ys
+def _month_label(ym: str) -> str:
+    return f"{ym[5:7]}/{ym[0:4]}"
+
+
+def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float], window: int = 12) -> dict[str, Any]:
+    """Signature énergétique sur FENÊTRE GLISSANTE : régression conso parc ~ DJU chauffage
+    sur les `window` derniers mois vs les `window` mois précédents. La fenêtre de 12 mois
+    garantit une saisonnalité complète (hiver + été) → pente stable et comparaison robuste,
+    contrairement à une comparaison d'années civiles partielles."""
+    keys = sorted(ym for ym in conso if ym in dju_idx and conso.get(ym) is not None)
 
     empty = {
         "scope": "électricité",
@@ -1261,26 +1259,38 @@ def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float
         "thermosensitive_share_pct": None,
         "base_load_share_pct": None,
         "r2": None,
-        "months_used": 0,
+        "months_used": len(keys),
+        "window_months": window,
+        "current_period": None,
+        "previous_period": None,
         "reliable": False,
     }
-
-    cur_reg, xs, ys = regress(current)
-    if not cur_reg:
+    if len(keys) < 4:
         return empty
-    slope, intercept, r2 = cur_reg
-    total_kwh = sum(ys)
-    thermosensitive = slope * sum(xs)
-    share = round(thermosensitive / total_kwh * 100, 1) if total_kwh > 0 else None
-    base_share = round(intercept * len(ys) / total_kwh * 100, 1) if total_kwh > 0 else None
 
-    # Comparaison N-1 à PÉRIODE HOMOGÈNE : on régresse N-1 sur les mêmes mois que
-    # l'année en cours (sinon une année partielle biaise fortement la pente).
-    cur_months = [m for m in range(1, 13)
-                  if dju_idx.get(f"{current}-{m:02d}") and conso.get(f"{current}-{m:02d}") is not None]
-    prev_reg, _, _ = regress(previous, cur_months)
-    prev_slope = prev_reg[0] if prev_reg else None
-    delta = round((slope - prev_slope) / prev_slope * 100, 1) if (prev_slope and len(cur_months) >= 4) else None
+    def reg(kk: list[str]) -> tuple[tuple[float, float, float | None] | None, float, float]:
+        xs = [dju_idx[k]["dju_chauffe"] for k in kk]
+        ys = [conso[k] for k in kk]
+        return _linreg(xs, ys), sum(xs), sum(ys)
+
+    cur_keys = keys[-window:]
+    prev_keys = keys[-2 * window:-window]
+
+    cur_reg, sum_x, sum_y = reg(cur_keys)
+    if not cur_reg:
+        return {**empty, "months_used": len(cur_keys)}
+    slope, intercept, r2 = cur_reg
+    share = round(slope * sum_x / sum_y * 100, 1) if sum_y > 0 else None
+    base_share = round(intercept * len(cur_keys) / sum_y * 100, 1) if sum_y > 0 else None
+
+    prev_slope = None
+    if len(prev_keys) >= 4:
+        prev_reg, _, _ = reg(prev_keys)
+        prev_slope = prev_reg[0] if prev_reg else None
+    delta = round((slope - prev_slope) / prev_slope * 100, 1) if prev_slope else None
+
+    def period(kk: list[str]) -> str | None:
+        return f"{_month_label(kk[0])} – {_month_label(kk[-1])}" if kk else None
 
     return {
         "scope": "électricité",
@@ -1291,8 +1301,11 @@ def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float
         "thermosensitive_share_pct": share,
         "base_load_share_pct": base_share,
         "r2": round(r2, 2) if r2 is not None else None,
-        "months_used": len(ys),
-        "reliable": len(ys) >= 4 and (r2 is None or r2 >= 0.5),
+        "months_used": len(cur_keys),
+        "window_months": window,
+        "current_period": period(cur_keys),
+        "previous_period": period(prev_keys) if len(prev_keys) >= 4 else None,
+        "reliable": len(cur_keys) >= 8 and (r2 is None or r2 >= 0.5),
     }
 
 
@@ -1303,7 +1316,7 @@ def get_fluids_climate() -> dict[str, Any]:
     years = sorted({int(ym[:4]) for ym in dju_idx if ym[:4].isdigit()})
     if not years:
         empty_series = {"base_c": 0.0, "monthly": [], "current_total": None, "previous_total": None, "average_total": None, "delta_previous_pct": None, "delta_average_pct": None}
-        return {"current_year": 0, "previous_year": 0, "years_in_average": 0, "heating": empty_series, "cooling": {**empty_series}, "thermal": _fluids_thermal({}, {}, 0, -1)}
+        return {"current_year": 0, "previous_year": 0, "years_in_average": 0, "heating": empty_series, "cooling": {**empty_series}, "thermal": _fluids_thermal({}, {})}
 
     current = years[-1]
     previous = current - 1
@@ -1316,7 +1329,7 @@ def get_fluids_climate() -> dict[str, Any]:
         "years_in_average": len(prior_years),
         "heating": {"base_c": 18.0, **_fluids_climate_series(dju_idx, "dju_chauffe", current, previous, prior_years)},
         "cooling": {"base_c": 22.0, **_fluids_climate_series(dju_idx, "dju_froid", current, previous, prior_years)},
-        "thermal": _fluids_thermal(dju_idx, conso, current, previous),
+        "thermal": _fluids_thermal(dju_idx, conso),
     }
 
 

@@ -120,7 +120,7 @@ export function FluidsPortfolioPageV1() {
         <KpiCard
           label="Thermosensibilité"
           value={climate?.thermal.sensitivity_kwh_per_dju != null ? `${climate.thermal.sensitivity_kwh_per_dju.toLocaleString("fr-FR")} kWh/DJU` : "—"}
-          detail={climate?.thermal.sensitivity_delta_pct != null ? `${pctLabel(climate.thermal.sensitivity_delta_pct)} vs ${climate.previous_year}` : "élec · pente conso/DJU"}
+          detail={climate?.thermal.sensitivity_delta_pct != null ? `${pctLabel(climate.thermal.sensitivity_delta_pct)} vs 12 mois préc.` : "élec · pente conso/DJU (12 mois)"}
           tone={climate && climate.thermal.sensitivity_delta_pct != null && climate.thermal.sensitivity_delta_pct > 0 ? "warning" : "neutral"}
         />
       </div>
