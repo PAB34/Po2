@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button, StatusBadge } from "../design-system";
 
 type PreviewInvoiceStatus = "new" | "review" | "dispute" | "validated" | "exported" | "history";
@@ -274,7 +275,7 @@ export function RefonteV1InvoicesPreviewPage() {
                 <option value="technique">Technique</option>
               </select>
             </label>
-            <Button variant="secondary">+ Importer</Button>
+            <Link className="po2-button po2-button--secondary" to="/refonte-v1/factures">+ Importer</Link>
           </div>
         </header>
 
@@ -287,7 +288,7 @@ export function RefonteV1InvoicesPreviewPage() {
             </div>
             <div className="po2-prototype-actions">
               <Button variant="ghost">Rapports d'import</Button>
-              <Button>Importer des factures</Button>
+              <Link className="po2-button po2-button--primary" to="/refonte-v1/factures">Importer des factures</Link>
             </div>
           </header>
 
