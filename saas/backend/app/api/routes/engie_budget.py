@@ -14,9 +14,12 @@ router = APIRouter(prefix="/marches", tags=["marches"])
 
 @router.get("/engie-elec-budget-revise", response_model=EngieBudgetReviseOut)
 def get_engie_elec_budget_revise(
-    year: int = Query(..., ge=2000, le=2100),
+    year: int | None = Query(None, ge=2000, le=2100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Budget révisé ENGIE électricité (fixe/variable) par PRM, avec réalisé et atterrissage."""
+    """Budget révisé ENGIE électricité (fixe/variable) par PRM, avec réalisé et atterrissage.
+
+    ``year`` omis → l'année significative recommandée (évite d'ouvrir sur une année trop partielle).
+    """
     return build_engie_elec_budget_revise(db, current_user.city_id, year=year)

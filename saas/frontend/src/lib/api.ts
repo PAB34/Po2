@@ -5526,6 +5526,8 @@ export type EngieBudgetReviseAggregateV1 = {
 
 export type EngieBudgetReviseV1 = {
   year: number;
+  available_years: number[];
+  recommended_year: number;
   generated_on: string;
   prm_count: number;
   turpe_available: boolean;
@@ -5550,15 +5552,19 @@ export type EngieBudgetReviseV1 = {
   source_note: string;
 };
 
-export async function fetchEngieBudgetRevise(token: string, year: number): Promise<EngieBudgetReviseV1> {
-  const params = new URLSearchParams({ year: String(year) });
-  const response = await fetch(`${apiBaseUrl}/marches/engie-elec-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+export async function fetchEngieBudgetRevise(token: string, year: number | null): Promise<EngieBudgetReviseV1> {
+  const params = new URLSearchParams();
+  if (year != null) params.set("year", String(year));
+  const qs = params.toString();
+  const response = await fetch(`${apiBaseUrl}/marches/engie-elec-budget-revise${qs ? `?${qs}` : ""}`, { headers: buildHeaders(token) });
   return parseResponse<EngieBudgetReviseV1>(response);
 }
 
-export async function fetchEdfBudgetRevise(token: string, year: number): Promise<EngieBudgetReviseV1> {
-  const params = new URLSearchParams({ year: String(year) });
-  const response = await fetch(`${apiBaseUrl}/marches/edf-elec-budget-revise?${params.toString()}`, { headers: buildHeaders(token) });
+export async function fetchEdfBudgetRevise(token: string, year: number | null): Promise<EngieBudgetReviseV1> {
+  const params = new URLSearchParams();
+  if (year != null) params.set("year", String(year));
+  const qs = params.toString();
+  const response = await fetch(`${apiBaseUrl}/marches/edf-elec-budget-revise${qs ? `?${qs}` : ""}`, { headers: buildHeaders(token) });
   return parseResponse<EngieBudgetReviseV1>(response);
 }
 

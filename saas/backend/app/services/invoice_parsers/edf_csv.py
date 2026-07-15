@@ -85,6 +85,62 @@ def _line(family: str, label: str, component: str, amount: float | None, raw: st
     }
 
 
+# Fourniture EDF par poste : (poste BPU, colonne kWh, colonne montant €). Postes saisonniers
+# HPSB/HCSB (saison basse = été) → HPE/HCE ; HPSH/HCSH (saison haute = hiver) → HPH/HCH.
+_EDF_SUPPLY_POSTES = [
+    ("base", "consommation_kwh_base", "montant_htva_base"),
+    ("hp", "consommation_kwh_hp", "montant_htva_hp"),
+    ("hc", "consommation_kwh_hc", "montant_htva_hc"),
+    ("hph", "consommation_kwh_hpsh", "montant_htva_hpsh"),
+    ("hch", "consommation_kwh_hcsh", "montant_htva_hcsh"),
+    ("hpe", "consommation_kwh_hpsb", "montant_htva_hpsb"),
+    ("hce", "consommation_kwh_hcsb", "montant_htva_hcsb"),
+    ("pointe", "consommation_kwh_pointe", "montant_htva_pointe"),
+]
+
+
+def _supply_line(poste: str, kwh: float, amount: float, period_start, period_end) -> dict[str, Any]:
+    unit = round(amount / kwh, 6) if kwh else None
+    return {
+        "family": "electricity",
+        "label": f"Fourniture {poste.upper()}",
+        "normalized_component": "supply",
+        "poste": poste,
+        "period_start": period_start,
+        "period_end": period_end,
+        "quantity": round(kwh, 3),
+        "quantity_unit": "kWh",
+        "unit_price_ht": unit,
+        "unit_price_unit": "EUR/kWh",
+        "amount_ht": round(amount, 2),
+        "vat_rate": None,
+        "raw_line": f"EDF:supply:{poste}",
+    }
+
+
+def _supply_lines(row: dict[str, str], period_start, period_end) -> list[dict[str, Any]]:
+    """Lignes fourniture EDF par poste (kWh + prix unitaire = montant/kWh).
+
+    Le CSV EDF fournit kWh ET montant par poste → on émet une ligne par poste renseigné, avec un
+    prix unitaire dérivé (contrôlable au BPU). Repli BASE = total fourniture / conso totale quand le
+    détail par poste est absent (ex. certains sites C4). Dernier repli = montant seul (comportement legacy).
+    """
+    out: list[dict[str, Any] | None] = []
+    for poste, kwh_col, amt_col in _EDF_SUPPLY_POSTES:
+        kwh = _f(row.get(kwh_col))
+        amount = _f(row.get(amt_col))
+        if kwh and kwh > 0 and amount is not None:
+            out.append(_supply_line(poste, kwh, amount, period_start, period_end))
+    if not any(out):
+        total = _f(row.get("total_fourniture_elec_ht_euros"))
+        conso = _f(row.get("conso_elec_facturee_kwh"))
+        if total is not None and conso and conso > 0:
+            out.append(_supply_line("base", conso, total, period_start, period_end))
+        elif total is not None:
+            out.append(_line("electricity", "Fourniture électricité", "supply", total, "EDF:supply"))
+    return [l for l in out if l]
+
+
 def _build_site(row: dict[str, str]) -> dict[str, Any]:
     street, postcode, city = _split_address(row.get("adresse_site"))
     period_start = _date(row.get("date_de_debut_de_consommation"))
@@ -122,7 +178,7 @@ def _build_site(row: dict[str, str]) -> dict[str, Any]:
     )
 
     lines = [
-        _line("electricity", "Fourniture électricité", "supply", _f(row.get("total_fourniture_elec_ht_euros")), "EDF:supply"),
+        *_supply_lines(row, period_start, period_end),
         _line("electricity", "Abonnement", "subscription", _f(row.get("abonnement_ht_euros")), "EDF:subscription"),
         _line("electricity", "Mécanisme de capacité", "capacity", _f(row.get("mecanisme_de_capacite_ht_euros")), "EDF:capacity"),
         _line("electricity", "Contribution CEE", "cee", _f(row.get("cee_ht_euros")), "EDF:cee"),

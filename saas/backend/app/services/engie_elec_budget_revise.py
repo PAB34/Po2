@@ -671,11 +671,36 @@ def _building_links(db: Session, city_id: int | None) -> dict[str, dict[str, Any
     }
 
 
+def _years_overview(by_prm: dict[str, dict[str, Any]], current_year: int) -> tuple[list[int], int]:
+    """Années présentes dans les factures + année « significative » recommandée par défaut.
+
+    Recommandée = l'année la plus récente couvrant au moins 6 mois de facturation distincts
+    (évite d'ouvrir sur une année en cours trop partielle, ex. EDF 2026) ; à défaut la plus
+    récente avec des données ; à défaut l'année courante.
+    """
+    months_by_year: dict[int, set[int]] = {}
+    for entry in by_prm.values():
+        for line in entry["lines"]:
+            year = _line_year(line["period_start"], line["period_end"])
+            if year is None:
+                continue
+            month = _line_month(line["period_start"], line["period_end"])
+            bucket = months_by_year.setdefault(year, set())
+            if month is not None:
+                bucket.add(month)
+    available = sorted(months_by_year)
+    if not available:
+        return [], current_year
+    significant = [y for y in available if len(months_by_year[y]) >= 6]
+    recommended = max(significant) if significant else max(available)
+    return available, recommended
+
+
 def build_elec_budget_revise(
     db: Session,
     city_id: int | None = None,
     *,
-    year: int,
+    year: int | None = None,
     supplier: str,
     conso_model: str,
     today: date | None = None,
@@ -684,10 +709,14 @@ def build_elec_budget_revise(
 
     ``supplier`` filtre les factures (``ENGIE``/``EDF``) et les prix BPU. ``conso_model`` choisit la
     source de conso attendue : ``thermo_dju`` (ENGIE) ou ``photoperiod`` (EDF éclairage public).
+    ``year`` omis → l'année significative recommandée (cf. ``_years_overview``).
     """
     resolved_today = today or date.today()
 
     by_prm = _fetch_lines(db, city_id, supplier)
+    available_years, recommended_year = _years_overview(by_prm, resolved_today.year)
+    if year is None:
+        year = recommended_year
     links = _building_links(db, city_id)
     # BPU = marché HÉRAULT ÉNERGIE par typologie, tous fournisseurs élec confondus (pas seulement
     # l'attributaire courant) → indispensable au ratio Y/N-1 quand l'attributaire change (ex. ENGIE 2026
@@ -769,6 +798,8 @@ def build_elec_budget_revise(
 
     return {
         "year": year,
+        "available_years": available_years,
+        "recommended_year": recommended_year,
         "generated_on": resolved_today.isoformat(),
         "prm_count": len(points),
         "turpe_available": turpe_available,
@@ -813,7 +844,7 @@ def build_elec_budget_revise(
 
 
 def build_engie_elec_budget_revise(
-    db: Session, city_id: int | None = None, *, year: int, today: date | None = None
+    db: Session, city_id: int | None = None, *, year: int | None = None, today: date | None = None
 ) -> dict[str, Any]:
     """Budget révisé ENGIE élec (conso attendue = N-1 ENEDIS + DJU thermosensible)."""
     return build_elec_budget_revise(
@@ -822,7 +853,7 @@ def build_engie_elec_budget_revise(
 
 
 def build_edf_elec_budget_revise(
-    db: Session, city_id: int | None = None, *, year: int, today: date | None = None
+    db: Session, city_id: int | None = None, *, year: int | None = None, today: date | None = None
 ) -> dict[str, Any]:
     """Budget révisé EDF éclairage public (conso attendue = N-1 reconduit + profil photopériode)."""
     return build_elec_budget_revise(
