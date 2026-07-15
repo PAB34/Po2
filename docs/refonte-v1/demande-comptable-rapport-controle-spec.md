@@ -17,7 +17,7 @@ Urgence pilotée par : **« contrôle de facture avec rapport à fournir à la c
 | # | Chantier | Urgence | Dépendances |
 |---|---|---|---|
 | **C1** | **Volet « Demande comptable » + rapport de contrôle Excel multi-marchés** | 🔴 haute | s'appuie sur imports existants + atterrissages + export finance |
-| C2 | Import drawer : ajouter **ENGIE csv**, **DALKIA**, **gaz TE** | 🟠 (bloque le merge prod de #56) | parseurs back existants |
+| C2 | Import drawer : ajouter **gaz TE** + **DALKIA** (ENGIE reste xlsx, déjà OK) | 🟠 (bloque le merge prod de #56) | parseurs back existants |
 | C3 | Réimport **matrice comptable V2** (codification à jour) | 🟢 | endpoint import matrice existant |
 
 Découpage exécutable en §6.
@@ -167,8 +167,16 @@ services de révision (prix).
 
 ### 3.6 Questions ouvertes (à trancher avant de coder C1)
 
-- **Q1** — Format exact de `invoice_number` côté plateforme (energy + CPE) vs n° extrait du worklist :
-  vérifier sur données réelles que le rapprochement matche (normalisation à définir).
+- ~~**Q1**~~ **RÉSOLU (2026-07-10, validé sur données staging)** : le n° extrait du `Libellé` matche
+  **exactement** le format `invoice_number` en base, pour les deux marchés :
+  - ENGIE : worklist `150000071294` ↔ base `150000066747…` (même format 12 chiffres) ;
+  - DALKIA : worklist `0001E2607QRY8` ↔ base `cpe_finance_invoices.invoice_number` `0001E2603LE96…`
+    (même format ; le suffixe `2607` = 2e trimestre 2026, `2603/2604` = déjà en base).
+  Le rapprochement se fait donc par **égalité stricte `invoice_number`** (trim), sans normalisation
+  complexe. La worklist réelle matche peu AUJOURD'HUI (1/25 ENGIE, 0/50 DALKIA) uniquement parce que ces
+  factures de juillet **ne sont pas encore importées** → c'est le cas « Absente plateforme » (§3.3), et
+  ça **valide le workflow** : d'abord « Importer des factures », ensuite « Demande comptable ».
+  Extraction confirmée : regex `^FAC\.\s*(\S+)\s+DU` sur `Libellé` (25 n° ENGIE, 50 n° DALKIA extraits).
 - **Q2** — Périmètre v1 des marchés dans le rapport : les 4 (DALKIA/ENGIE/EDF/TE) d'emblée, ou DALKIA+ENGIE
   d'abord (les 2 fichiers réels fournis) ?
 - **Q3** — Synthèse : année de référence (dernière année significative comme l'atterrissage marchés ?) et
@@ -188,19 +196,18 @@ services de révision (prix).
 
 ---
 
-## 4. CHANTIER 2 — Import drawer : ENGIE csv + DALKIA + gaz TE
+## 4. CHANTIER 2 — Import drawer : ajouter gaz TE + DALKIA (ENGIE reste xlsx)
 
 ### 4.1 Existant
 Tiroir actuel (`InvoicesDecisionPageV1.tsx`, `InvoiceImportKind = "engie_xlsx" | "edf_csv"`) : 2 types.
+ENGIE (xlsx « Mes Factures ») et EDF (csv) sont **déjà couverts**.
 Parsers/endpoints back existants : ENGIE xlsx (`/billing/invoices/imports/xlsx`), EDF csv
 (`/billing/invoices/imports/edf-csv`), gaz TE (`/gas/invoices/import`), DALKIA (`/cpe/dalkia-ref/preview`
 + `/confirm`, flux 2 étapes).
 
 ### 4.2 À faire
-- **ENGIE csv** (point B — l'utilisateur récupère ENGIE **nativement en csv**, pas xlsx) :
-  vérifier si un parser ENGIE csv existe ; sinon en écrire un (calqué sur `edf_csv_import` /
-  `engie_xlsx_import`) + endpoint `/billing/invoices/imports/engie-csv` ; ajouter le type au tiroir.
-  ⚠️ **Obtenir un échantillon réel du csv ENGIE** avant de coder le parser (Q4.4-1).
+- ~~ENGIE csv~~ **ABANDONNÉ (2026-07-10)** : l'utilisateur récupère bien ENGIE en **xlsx** (« Mes
+  Factures »), **déjà supporté** dans le tiroir. Pas de parser csv ENGIE à écrire.
 - **Gaz TotalEnergies** : ajouter au tiroir (endpoint `/gas/invoices/import` existant).
 - **DALKIA** : flux 2 étapes (aperçu → confirmation) — soit intégrer dans le tiroir (aperçu puis bouton
   confirmer), soit lien vers `/cpe/dalkia-import`. À trancher Q4.4-2.
@@ -210,9 +217,9 @@ Décision utilisateur : **ces ajouts doivent être dans #56 avant merge prod**. 
 `feat/factures-import-ui` (au moins ENGIE csv + gaz ; DALKIA selon Q4.4-2) puis re-tester, puis merger.
 
 ### 4.4 Questions ouvertes
-- **Q1** — Échantillon réel du **csv ENGIE** (colonnes/séparateur) — indispensable pour le parser.
-- **Q2** — DALKIA dans le tiroir (aperçu/confirm intégrés) ou renvoi vers `/cpe/dalkia-import` ?
-- **Q3** — Le tiroir devient multi-type (5 types) : garder le sélecteur simple ou grouper par famille ?
+- **Q1** — DALKIA dans le tiroir (aperçu/confirm intégrés) ou renvoi vers `/cpe/dalkia-import` ?
+- **Q2** — Le tiroir devient multi-type (4 types : ENGIE xlsx, EDF csv, gaz TE, DALKIA) : garder le
+  sélecteur simple ou grouper par famille ?
 
 ---
 
@@ -232,8 +239,8 @@ Endpoint : `POST /accounting-matrices/contracts/{contract_id}/import-preview` pu
 ## 6. Découpage pour effort moyen / Codex
 
 **Effort moyen (moi, prochaine session)** — le mieux cadré, à faire d'abord :
-- C2 (ENGIE csv + gaz dans le tiroir) → débloque le merge prod de #56 (après échantillon csv ENGIE).
-- C1 incréments 1–2 (parser worklist + feuilles marché du rapport).
+- C2 (**gaz** + **DALKIA** dans le tiroir ; ENGIE xlsx + EDF csv déjà OK) → débloque le merge prod de #56.
+- C1 incréments 1–2 (parser worklist + feuilles marché du rapport) — clé de rapprochement déjà validée (§3.6 Q1).
 
 **Codex (quand tokens limités)** — tâches mécaniques bien spécifiées :
 - C1 incréments 3–5 (révision de prix, synthèse, front volet) en suivant §3.2/§3.3/§3.5.
