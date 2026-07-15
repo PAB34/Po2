@@ -1,7 +1,7 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { Button, Drawer, StatusBadge } from "../../design-system";
-import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useSupplierContactsV1 } from "./useCpeFinanceQueueV1";
-import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput } from "../../lib/api";
+import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useComptableReportV1, useSupplierContactsV1 } from "./useCpeFinanceQueueV1";
+import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput, ComptableReportFiles } from "../../lib/api";
 
 type CpeQueueInvoice = CpeFinanceControlReport["invoices"][number];
 type UnifiedStatus = "todo" | "valid" | "refused" | "disputed";
@@ -343,6 +343,7 @@ export function InvoicesDecisionPageV1() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [comptableOpen, setComptableOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const { contacts } = useSupplierContactsV1();
@@ -534,6 +535,7 @@ export function InvoicesDecisionPageV1() {
           </div>
           <div className="po2-prototype-actions">
             <Button variant="ghost" onClick={() => setContactsOpen(true)}>Contacts fournisseurs</Button>
+            <Button variant="ghost" onClick={() => setComptableOpen(true)}>Demande comptable</Button>
             <Button
               variant="ghost"
               onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
@@ -876,6 +878,8 @@ export function InvoicesDecisionPageV1() {
         ) : null}
       </Drawer>
 
+      <ComptableReportDrawer open={comptableOpen} onClose={() => setComptableOpen(false)} />
+
       <Drawer
         open={contactsOpen}
         title="Contacts fournisseurs"
@@ -898,6 +902,66 @@ export function InvoicesDecisionPageV1() {
         />
       ) : null}
     </div>
+  );
+}
+
+const COMPTABLE_MARKETS: { key: keyof ComptableReportFiles; label: string }[] = [
+  { key: "dalkia", label: "DALKIA (CPE)" },
+  { key: "engie", label: "ENGIE" },
+  { key: "edf", label: "EDF" },
+  { key: "totalenergies", label: "TotalEnergies gaz" },
+];
+
+function ComptableReportDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { generate } = useComptableReportV1();
+  const [files, setFiles] = useState<ComptableReportFiles>({});
+  const hasFile = Object.values(files).some(Boolean);
+  const setMarketFile = (market: keyof ComptableReportFiles) => (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setFiles((prev) => ({ ...prev, [market]: file }));
+    generate.reset();
+  };
+  const clearMarket = (market: keyof ComptableReportFiles) => {
+    setFiles((prev) => {
+      const next = { ...prev };
+      delete next[market];
+      return next;
+    });
+    generate.reset();
+  };
+  return (
+    <Drawer
+      open={open}
+      title="Demande comptable"
+      eyebrow="Rapport XLSX"
+      description="Worklists comptables par marché, puis génération du rapport de contrôle."
+      onClose={onClose}
+    >
+      <div className="po2-import-drawer" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="po2-proto-control-list">
+          {COMPTABLE_MARKETS.map((market) => {
+            const file = files[market.key];
+            return (
+              <article key={market.key} style={{ gridTemplateColumns: "1fr auto" }}>
+                <div>
+                  <strong>{market.label}</strong>
+                  <small>{file ? file.name : "Aucun fichier"}</small>
+                  <input type="file" accept=".xlsx,.xlsm,.xls" onChange={setMarketFile(market.key)} style={{ marginTop: ".5rem" }} />
+                </div>
+                {file ? <Button variant="ghost" onClick={() => clearMarket(market.key)} disabled={generate.isPending}>Retirer</Button> : null}
+              </article>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+          <Button onClick={() => generate.mutate(files)} disabled={!hasFile || generate.isPending}>
+            {generate.isPending ? "Génération…" : "Générer le rapport"}
+          </Button>
+        </div>
+        {generate.isError ? <p className="po2-action-error">Rapport : {(generate.error as Error).message}</p> : null}
+        {generate.isSuccess ? <p className="po2-muted-line">Rapport téléchargé.</p> : null}
+      </div>
+    </Drawer>
   );
 }
 

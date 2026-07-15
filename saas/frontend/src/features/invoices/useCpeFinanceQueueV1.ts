@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  downloadComptableControlReport,
   downloadCpeFinanceInvoiceLiaison,
   fetchCpeFinanceControlReport,
   fetchCpeFinanceControls,
@@ -14,6 +15,7 @@ import {
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
   upsertSupplierContact,
+  type ComptableReportFiles,
   type SupplierContactInput,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
@@ -140,4 +142,23 @@ export function useCpeInvoiceActionsV1() {
     onSuccess: invalidate,
   });
   return { setStatus, setEnergyStatus, exportLiaison, purgeDuplicates, recomputeControls };
+}
+
+export function useComptableReportV1() {
+  const { token } = useAuth();
+  const generate = useMutation({
+    mutationFn: async (files: ComptableReportFiles) => {
+      if (!token) throw new Error("Session absente.");
+      const blob = await downloadComptableControlReport(token, files);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport-controle-comptable-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
+  });
+  return { generate };
 }

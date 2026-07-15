@@ -4472,6 +4472,24 @@ export async function downloadCpeFinanceControlReport(token: string): Promise<Bl
   return response.blob();
 }
 
+export type ComptableReportFiles = Partial<Record<"dalkia" | "engie" | "edf" | "totalenergies", File>>;
+
+export async function downloadComptableControlReport(token: string, files: ComptableReportFiles): Promise<Blob> {
+  const form = new FormData();
+  for (const [market, file] of Object.entries(files)) {
+    if (file) form.append(market, file);
+  }
+  const response = await fetch(`${apiBaseUrl}/billing/comptable/rapport-controle.xlsx`, {
+    method: "POST",
+    headers: buildAuthHeaders(token),
+    body: form,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Erreur ${response.status}`);
+  }
+  return response.blob();
+}
 export type CpeMarketTrackingCell = {
   year: number;
   prevu: number;
