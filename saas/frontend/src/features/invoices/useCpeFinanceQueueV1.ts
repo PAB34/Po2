@@ -14,6 +14,7 @@ import {
   recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
+  importGasInvoices,
   uploadEdfCsvExport,
   uploadEngieXlsxExport,
   upsertSupplierContact,
@@ -23,7 +24,12 @@ import {
 import { useAuth } from "../../providers/AuthProvider";
 
 /** Types de fichier d'import branchés en v1 (parseurs back existants). */
-export type InvoiceImportKind = "engie_xlsx" | "edf_csv";
+export type InvoiceImportKind = "engie_xlsx" | "edf_csv" | "gas_te";
+
+type InvoiceImportResult = Pick<
+  EnergyInvoiceBatchDetail,
+  "status" | "imported_count" | "duplicate_count" | "error_count" | "items"
+>;
 
 /** File de contrôle facture par facture (moteur CPE/DALKIA) + dates d'émission. */
 export function useCpeFinanceQueueV1() {
@@ -154,6 +160,11 @@ const IMPORT_POLL_MAX_TRIES = 40; // ~60 s max
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+function numberFromImportSummary(summary: Record<string, unknown>, key: string) {
+  const value = summary[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 /** Import d'un fichier de factures (ENGIE xlsx / EDF csv). L'analyse back est
  *  asynchrone : on poste, puis on poll le batch jusqu'à finalisation pour renvoyer
  *  le compte-rendu (créées / doublons / erreurs). Rafraîchit la file après import. */
@@ -163,8 +174,35 @@ export function useInvoiceImportV1() {
   const runImport = useMutation({
     mutationFn: async (
       { kind, file, forceUpdate }: { kind: InvoiceImportKind; file: File; forceUpdate: boolean },
-    ): Promise<EnergyInvoiceBatchDetail> => {
+    ): Promise<InvoiceImportResult> => {
       if (!token) throw new Error("Session absente.");
+      if (kind === "gas_te") {
+        const summary = await importGasInvoices(token, file, forceUpdate);
+        const created = numberFromImportSummary(summary, "created");
+        const updated = numberFromImportSummary(summary, "updated");
+        const skipped = numberFromImportSummary(summary, "skipped");
+        const valid = numberFromImportSummary(summary, "valid");
+        const review = numberFromImportSummary(summary, "review");
+        const invalid = numberFromImportSummary(summary, "invalid");
+        return {
+          status: "completed",
+          imported_count: created + updated,
+          duplicate_count: skipped,
+          error_count: invalid,
+          items: [{
+            id: 0,
+            invoice_import_id: null,
+            original_filename: file.name,
+            archive_filename: null,
+            content_type: file.type || null,
+            file_size_bytes: file.size,
+            sha256: null,
+            status: invalid > 0 ? "completed_with_errors" : "imported",
+            message: `${created} creee(s), ${updated} mise(s) a jour, ${skipped} ignoree(s). Controle : ${valid} OK, ${review} a revoir, ${invalid} KO.`,
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
       const batch = kind === "engie_xlsx"
         ? await uploadEngieXlsxExport(token, file, { forceUpdate })
         : await uploadEdfCsvExport(token, file, { forceUpdate });
@@ -177,6 +215,8 @@ export function useInvoiceImportV1() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["gas-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["gas-portfolio"] });
       queryClient.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
       queryClient.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
     },

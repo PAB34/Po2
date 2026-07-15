@@ -7,6 +7,7 @@ import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, Energy
 const IMPORT_KIND_OPTIONS: { value: InvoiceImportKind; label: string; accept: string; hint: string }[] = [
   { value: "engie_xlsx", label: "ENGIE — export XLSX « Mes Factures »", accept: ".xlsx,.xlsm", hint: "Un fichier = plusieurs bordereaux." },
   { value: "edf_csv", label: "EDF — export CSV de facturation", accept: ".csv", hint: "Un fichier = plusieurs factures." },
+  { value: "gas_te", label: "TotalEnergies gaz - export XLSX detail factures", accept: ".xlsx,.xlsm,.xls", hint: "Table a plat TotalEnergies, une ligne par facture." },
 ];
 
 type CpeQueueInvoice = CpeFinanceControlReport["invoices"][number];
@@ -961,6 +962,18 @@ function InvoiceImportDrawer({ open, onClose }: { open: boolean; onClose: () => 
           {file ? <Button variant="ghost" onClick={reset} disabled={runImport.isPending}>Réinitialiser</Button> : null}
         </div>
 
+        <div className="po2-proto-control-list">
+          <article>
+            <StatusBadge tone="neutral">DALKIA</StatusBadge>
+            <div>
+              <strong>Factures CPE DALKIA</strong>
+              <small>Le flux DALKIA passe par un apercu puis une confirmation. Utilisez la page dediee pour importer le referentiel sans perdre cette verification.</small>
+              <a className="po2-button po2-button--ghost" href="/cpe/dalkia-import" style={{ marginTop: ".6rem", width: "fit-content" }}>
+                Ouvrir l'import DALKIA
+              </a>
+            </div>
+          </article>
+        </div>
         {runImport.isPending ? (
           <p className="po2-muted-line">Analyse du fichier en arrière-plan… (peut prendre jusqu'à une minute)</p>
         ) : null}
