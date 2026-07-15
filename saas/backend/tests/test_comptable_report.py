@@ -97,6 +97,7 @@ def test_energy_revision_section_writes_bpu_and_turpe_ratios(monkeypatch) -> Non
         total_ttc=120.0,
         control_status="ok",
         decision_status="approved",
+        problem_summary=None,
         raw=invoice,
     )
 
@@ -106,3 +107,97 @@ def test_energy_revision_section_writes_bpu_and_turpe_ratios(monkeypatch) -> Non
     assert ws.cell(row=2, column=4).value == 1.12
     assert ws.cell(row=2, column=5).value == 1.04
     assert ws.cell(row=2, column=9).value == 240.0
+
+def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
+    monkeypatch.setattr(comptable_report, "_write_revision_section", lambda *args: 8)
+    monkeypatch.setattr(comptable_report, "_write_energy_decomposition", lambda *args: None)
+    workbook = openpyxl.Workbook()
+    ws = workbook.active
+    parsed = comptable_report.WorklistParseResult(
+        sheet_name="_ShowList-001",
+        rows=[
+            WorklistInvoice(
+                row_number=2,
+                accounting_number="202600001",
+                supplier_invoice_number="F-ENGIE-1",
+                label="FAC. F-ENGIE-1 DU 01/07/2026",
+                total_ttc=120.0,
+                invoice_date="01/07/2026",
+                arrival_date=None,
+                supplier_code=None,
+                supplier_name="ENGIE",
+                invoice_status=None,
+                liquidation_status=None,
+                market_code=None,
+                raw={},
+            )
+        ],
+    )
+    platform = {
+        "F-ENGIE-1": PlatformInvoice(
+            id=1,
+            invoice_number="F-ENGIE-1",
+            total_ttc=120.0,
+            control_status="valid (0 erreur(s), 1 alerte(s))",
+            decision_status="to_review",
+            problem_summary="Écart prix BPU",
+            raw=EnergyInvoiceImport(invoice_number="F-ENGIE-1"),
+        )
+    }
+
+    comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
+
+    assert ws.cell(row=5, column=11).value == "Conforme (0 erreur(s), 1 alerte(s))"
+    assert ws.cell(row=5, column=12).value == "À contrôler"
+    assert ws.cell(row=5, column=13).value == "Écart prix BPU"
+
+
+def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:
+    current = PlatformInvoice(
+        id=1,
+        invoice_number="F-1",
+        total_ttc=130.0,
+        control_status="valid",
+        decision_status="approved",
+        problem_summary=None,
+        raw=object(),
+    )
+
+    assert comptable_report._row_problem_summary("Écart TTC", 10.0, current) == "Écart TTC plateforme - compta : 10.00 EUR."
+
+
+class _FakeExecuteResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
+
+class _FakeDb:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def execute(self, _stmt):
+        return _FakeExecuteResult(self._rows)
+
+
+def test_cpe_control_summaries_identify_real_dalkia_control_reasons() -> None:
+    db = _FakeDb(
+        [
+            (1, "error", "p2p3_base_dpgf", "Montant divergent"),
+            (1, "blocked", "accounting_site", "Site absent"),
+            (2, "ok", "invoice_total_ht", "OK"),
+        ]
+    )
+
+    summaries = comptable_report._cpe_control_summaries(db, [1, 2, 3])
+
+    assert summaries[1]["control_status"] == "error (1 écart(s), 1 bloqué(s))"
+    assert "Montant P2/P3 différent du DPGF" in summaries[1]["problem_summary"]
+    assert "Site comptable non rattaché" in summaries[1]["problem_summary"]
+    assert summaries[2] == {"control_status": "valid", "problem_summary": None}
+    assert summaries[3] == {
+        "control_status": "not_checked",
+        "problem_summary": "Aucun contrôle CPE disponible pour cette facture.",
+    }
