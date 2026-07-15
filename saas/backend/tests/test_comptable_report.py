@@ -4,6 +4,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
+from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
 from app.models.invoice import EnergyInvoice, EnergyInvoiceImport, EnergyInvoiceSite
 from app.services import comptable_report
 from app.services.comptable_report import (
@@ -107,6 +108,114 @@ def test_energy_revision_section_writes_bpu_and_turpe_ratios(monkeypatch) -> Non
     assert ws.cell(row=2, column=4).value == 1.12
     assert ws.cell(row=2, column=5).value == 1.04
     assert ws.cell(row=2, column=9).value == 240.0
+
+
+def test_cpe_accounting_summary_writes_invoice_level_prices_and_codes() -> None:
+    class FakeScalarResult:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def all(self):
+            return self.rows
+
+    class FakeScalarDb:
+        def __init__(self, sequences):
+            self.sequences = list(sequences)
+
+        def scalars(self, _stmt):
+            return FakeScalarResult(self.sequences.pop(0))
+
+    workbook = openpyxl.Workbook()
+    ws = workbook.active
+    invoice = CpeFinanceInvoice(id=10, invoice_number="D-1", contract_code="C001", total_ht=120.0)
+    worklist = WorklistInvoice(
+        row_number=2,
+        accounting_number="202600001",
+        supplier_invoice_number="D-1",
+        label="FAC. D-1 DU 30/06/2026",
+        total_ttc=144.0,
+        invoice_date="30/06/2026",
+        arrival_date=None,
+        supplier_code=None,
+        supplier_name="DALKIA",
+        invoice_status=None,
+        liquidation_status=None,
+        market_code=None,
+        raw={},
+    )
+    platform = PlatformInvoice(
+        id=10,
+        invoice_number="D-1",
+        total_ttc=144.0,
+        control_status="blocked",
+        decision_status="a_controler",
+        problem_summary="Imputation comptable absente",
+        raw=invoice,
+    )
+    lines = [
+        CpeFinanceLine(
+            id=1,
+            invoice_id=10,
+            row_number=1,
+            market="P2",
+            billed_item="P2",
+            accounting_site_id=100,
+            site_code_detected="S1",
+            base_price=1000.0,
+            revised_price=1030.0,
+            accounting_nature="6156",
+            accounting_label="Maintenance",
+        ),
+        CpeFinanceLine(
+            id=2,
+            invoice_id=10,
+            row_number=2,
+            market="P3",
+            billed_item="P3.4",
+            accounting_site_id=100,
+            site_code_detected="S1",
+            base_price=500.0,
+            revised_price=515.0,
+            accounting_nature=None,
+        ),
+    ]
+    controls = [
+        CpeFinanceControl(
+            invoice_id=10,
+            line_id=1,
+            control_type="revision_p2",
+            index_year=2026,
+            index_quarter=2,
+            delta_abs=0.01,
+        )
+    ]
+    sites = [
+        CpeAccountingSiteMapping(
+            id=100,
+            code_site="S1",
+            site_name="Site 1",
+            service_code="020",
+            function_code="F01",
+            antenna_code="A01",
+            operation_code="98004",
+        )
+    ]
+    db = FakeScalarDb([lines, controls, sites])
+
+    comptable_report._write_cpe_accounting_summary(db, ws, 1, [(worklist, platform)])
+
+    assert ws.cell(row=3, column=1).value == "D-1"
+    assert ws.cell(row=3, column=6).value == 1500.0
+    assert ws.cell(row=3, column=7).value == 1545.0
+    assert ws.cell(row=3, column=8).value == 45.0
+    assert ws.cell(row=3, column=10).value == 0.01
+    assert ws.cell(row=3, column=11).value == "2026 T2"
+    assert ws.cell(row=3, column=12).value == "020"
+    assert ws.cell(row=3, column=15).value == "98004"
+    assert ws.cell(row=3, column=16).value == "6156 - Maintenance"
+    assert ws.cell(row=3, column=17).value == "A completer : 1 nature(s) a completer"
+    assert ws.cell(row=3, column=18).value == "Imputation comptable absente"
+
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
     monkeypatch.setattr(comptable_report, "_write_revision_section", lambda *args: 8)

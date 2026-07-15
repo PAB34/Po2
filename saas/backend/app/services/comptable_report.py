@@ -21,7 +21,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.cpe import CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
+from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
 from app.models.gas_invoice import GasInvoice
 from app.models.invoice import EnergyInvoiceImport
 from app.services import cpe_accounting, energie_accounting
@@ -332,6 +332,8 @@ def _write_market_sheet(
             ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
 
     revision_start = header_row + len(parsed.rows) + 3
+    if config.family == "cpe":
+        revision_start = _write_cpe_accounting_summary(db, ws, revision_start, matched) + 2
     next_start = _write_revision_section(db, city_id, ws, revision_start, config, matched)
 
     detail_start = next_start + 2
@@ -345,11 +347,120 @@ def _write_market_sheet(
     else:
         _write_gas_decomposition(ws, detail_start + 1, matched)
 
-    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 48, 46])
+    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 48, 46, 20, 32, 28, 52])
     ws.freeze_panes = f"A{header_row + 1}"
     ws.auto_filter.ref = f"A{header_row}:N{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
+
+
+def _write_cpe_accounting_summary(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
+    ws.cell(row=start_row, column=1, value="Vue comptable par facture").font = Font(bold=True, size=12)
+    headers = [
+        "Numero fournisseur",
+        "Contrat",
+        "Marches / postes",
+        "Lignes",
+        "Sites",
+        "Prix base annuel",
+        "Prix revise annuel",
+        "Revision annuelle",
+        "Montant HT facture",
+        "Ecart revision",
+        "Indices",
+        "Services",
+        "Fonctions",
+        "Antennes",
+        "Operations",
+        "Natures comptables",
+        "Statut imputation",
+        "Point a corriger",
+    ]
+    header_row = start_row + 1
+    _write_header(ws, header_row, headers)
+    if not matched:
+        ws.cell(row=header_row + 1, column=1, value="Aucune facture rapprochee.")
+        return header_row + 2
+
+    invoice_ids = [current.id for _worklist, current in matched]
+    lines = list(db.scalars(
+        select(CpeFinanceLine)
+        .where(CpeFinanceLine.invoice_id.in_(invoice_ids))
+        .order_by(CpeFinanceLine.invoice_id, CpeFinanceLine.row_number)
+    ).all())
+    controls = list(db.scalars(
+        select(CpeFinanceControl)
+        .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
+        .where(CpeFinanceControl.control_type.in_(("revision_p2", "revision_p3")))
+        .order_by(CpeFinanceControl.invoice_id, CpeFinanceControl.control_type, CpeFinanceControl.id)
+    ).all())
+    site_ids = sorted({line.accounting_site_id for line in lines if line.accounting_site_id})
+    sites = {
+        site.id: site
+        for site in db.scalars(
+            select(CpeAccountingSiteMapping).where(CpeAccountingSiteMapping.id.in_(site_ids))
+        ).all()
+    } if site_ids else {}
+
+    lines_by_invoice: dict[int, list[CpeFinanceLine]] = {}
+    for line in lines:
+        lines_by_invoice.setdefault(line.invoice_id, []).append(line)
+    controls_by_invoice: dict[int, list[CpeFinanceControl]] = {}
+    for control in controls:
+        controls_by_invoice.setdefault(control.invoice_id, []).append(control)
+
+    row_cursor = header_row + 1
+    for worklist_row, current in matched:
+        invoice = current.raw
+        invoice_lines = lines_by_invoice.get(current.id, [])
+        invoice_controls = controls_by_invoice.get(current.id, [])
+        site_values = [
+            _site_summary_value(line, sites.get(line.accounting_site_id or 0))
+            for line in invoice_lines
+        ]
+        services = [sites[line.accounting_site_id].service_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].service_code]
+        functions = [sites[line.accounting_site_id].function_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].function_code]
+        antennas = [sites[line.accounting_site_id].antenna_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].antenna_code]
+        operations = [sites[line.accounting_site_id].operation_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].operation_code]
+        natures = [
+            f"{line.accounting_nature} - {line.accounting_label}" if line.accounting_label else line.accounting_nature
+            for line in invoice_lines
+            if line.accounting_nature
+        ]
+        base_total = _sum_present(line.base_price for line in invoice_lines)
+        revised_total = _sum_present(line.revised_price for line in invoice_lines)
+        revision_total = (
+            round(revised_total - base_total, 2)
+            if base_total is not None and revised_total is not None
+            else None
+        )
+        revision_delta = _sum_present(control.delta_abs for control in invoice_controls)
+        values = [
+            worklist_row.supplier_invoice_number,
+            _text(getattr(invoice, "contract_code", None)) if isinstance(invoice, CpeFinanceInvoice) else None,
+            _join_unique(f"{line.market or '-'} / {line.billed_item or '-'}" for line in invoice_lines),
+            len(invoice_lines) or None,
+            _join_unique(value for value in site_values if value),
+            base_total,
+            revised_total,
+            revision_total,
+            getattr(invoice, "total_ht", None) if isinstance(invoice, CpeFinanceInvoice) else None,
+            revision_delta,
+            _join_unique(f"{control.index_year} T{control.index_quarter}" for control in invoice_controls if control.index_year and control.index_quarter),
+            _join_unique(services),
+            _join_unique(functions),
+            _join_unique(antennas),
+            _join_unique(operations),
+            _join_unique(natures) or "A COMPLETER",
+            _cpe_accounting_status(invoice_lines),
+            current.problem_summary,
+        ]
+        for col, value in enumerate(values, start=1):
+            ws.cell(row=row_cursor, column=col, value=value)
+        for col in (6, 7, 8, 9, 10):
+            ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
+        row_cursor += 1
+    return row_cursor
 
 def _write_revision_section(
     db: Session,
@@ -984,6 +1095,50 @@ def _looks_like_supplier(invoice: EnergyInvoiceImport, supplier: str) -> bool:
     value = " ".join([invoice.supplier_guess or "", invoice.source or "", invoice.original_filename or ""]).upper()
     return supplier in value
 
+
+
+def _join_unique(values, *, limit: int = 6) -> str | None:
+    seen: list[str] = []
+    for value in values:
+        text = _text(value)
+        if text and text not in seen:
+            seen.append(text)
+    if not seen:
+        return None
+    suffix = f" ; +{len(seen) - limit}" if len(seen) > limit else ""
+    return " ; ".join(seen[:limit]) + suffix
+
+
+def _sum_present(values) -> float | None:
+    total = 0.0
+    found = False
+    for value in values:
+        if value is None:
+            continue
+        total += float(value)
+        found = True
+    return round(total, 2) if found else None
+
+
+def _site_summary_value(line: CpeFinanceLine, site: CpeAccountingSiteMapping | None) -> str | None:
+    if site and site.site_name:
+        return f"{line.site_code_detected or site.code_site} - {site.site_name}"
+    return line.site_code_detected
+
+
+def _cpe_accounting_status(lines: list[CpeFinanceLine]) -> str:
+    if not lines:
+        return "Aucune ligne"
+    missing_nature = sum(1 for line in lines if not line.accounting_nature)
+    missing_site = sum(1 for line in lines if not line.accounting_site_id)
+    if missing_nature == 0 and missing_site == 0:
+        return "OK"
+    parts = []
+    if missing_nature:
+        parts.append(f"{missing_nature} nature(s) a completer")
+    if missing_site:
+        parts.append(f"{missing_site} site(s) a rattacher")
+    return "A completer : " + ", ".join(parts)
 
 def _write_header(ws, row: int, headers: list[object]) -> None:
     fill = PatternFill("solid", fgColor="1F4E78")
