@@ -149,7 +149,9 @@ Branche : `feat/fluides-vue-globale` (worktree neuf off `origin/main`). Staging 
 
 ### Étapes à venir (repriorisées)
 
-- **A. Correctif thermosensibilité** (rapide, sans nouvelle donnée) : comparaison N-1 à période homogène + fiabilité.
+- ✅ **A. Thermosensibilité FAIT** : passée en **fenêtre glissante 12 mois** (courante vs 12 mois
+  précédents) → saisonnalité complète, pente robuste. Sur staging : **+13,2 %** (07/2025–06/2026 vs
+  07/2024–06/2025, r² 0,64) au lieu de l'artefact +73 % de la comparaison d'années civiles partielles.
 - **B. Consolider l'élec** (données prêtes) : conso corrigée du climat (DJU-normalisée), éventuel drill par site.
 - **C. Débloquer calibrage/CDC** : collecter **max power** ENEDIS → calibrage + drawer inc 3 + dérives.
 - **D. Débloquer le gaz** : alimenter `gas_consumptions` (GRDF Phases 2-5) → thermosensibilité gaz + graphe + P1 réel.
