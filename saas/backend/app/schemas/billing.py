@@ -229,3 +229,46 @@ class EnergyLiaisonPreview(BaseModel):
     rows_count: int = 0
     blocked_count: int = 0
     rows: list[EnergyLiaisonPreviewRow] = []
+
+# ---------------------------------------------------------------------------
+# Controle PDF fournisseur pour ecarts comptables
+# ---------------------------------------------------------------------------
+
+
+class SupplierPdfControlSite(BaseModel):
+    prm: str | None = None
+    site_name: str | None = None
+    segment: str | None = None
+    fic_number: str | None = None
+    total_ttc: float | None = None
+    pdf_page_start: int | None = None
+    pdf_page_end: int | None = None
+
+
+class SupplierPdfControlTotals(BaseModel):
+    pdf_total_ttc: float | None = None
+    platform_total_ttc: float | None = None
+    delta_platform_minus_pdf: float | None = None
+    pdf_sites_total_ttc: float | None = None
+
+
+class SupplierPdfControlCounts(BaseModel):
+    pdf_sites_count: int = 0
+    platform_sites_count: int = 0
+    missing_in_platform_count: int = 0
+    missing_in_pdf_count: int = 0
+
+
+class SupplierPdfControlResult(BaseModel):
+    supplier: str
+    invoice_number: str | None = None
+    status: str
+    diagnosis: str
+    recommendation: str
+    totals: SupplierPdfControlTotals
+    counts: SupplierPdfControlCounts
+    missing_in_platform: list[SupplierPdfControlSite] = []
+    missing_in_pdf: list[SupplierPdfControlSite] = []
+    pdf_sites: list[SupplierPdfControlSite] = []
+    platform_sites: list[SupplierPdfControlSite] = []
+    parser_warnings: list[str] = []
