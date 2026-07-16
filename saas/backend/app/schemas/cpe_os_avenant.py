@@ -40,6 +40,17 @@ class CpeOsAvenantLineOut(CpeOsAvenantLineBase):
     updated_at: datetime
 
 
+class CpeOsAvenantAnnualImpact(BaseModel):
+    year: int
+    ratio: float
+    p1_gaz_ht: float
+    p1_elec_ht: float
+    p1_ht: float
+    p2_ht: float
+    p3_ht: float
+    total_ht: float
+
+
 class CpeOsAvenantImpact(BaseModel):
     p1_gaz_annual_ht: float
     p1_elec_annual_ht: float
@@ -51,6 +62,7 @@ class CpeOsAvenantImpact(BaseModel):
     remaining_market_ht: float
     effective_year: int | None
     first_year_ratio: float
+    annual_impacts: list[CpeOsAvenantAnnualImpact] = Field(default_factory=list)
 
 
 class CpeOsAvenantRequestCreate(BaseModel):

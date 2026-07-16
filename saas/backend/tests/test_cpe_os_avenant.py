@@ -53,6 +53,31 @@ def _seed_reference(db: Session) -> None:
             p3_total_ht=4500.0,
         )
     )
+    db.add(
+        CpeDalkiaRefP1Gaz(
+            import_id=imp.id,
+            city_id=1,
+            code_site="VDS-ENS 01",
+            period_idx=2,
+            period_label="2027",
+            period_year=2027,
+            pce="24300000000000",
+            type_tarif="T2",
+            p10_total_ht=9000.0,
+        )
+    )
+    db.add(
+        CpeDalkiaRefP2P3(
+            import_id=imp.id,
+            city_id=1,
+            code_site="VDS-ENS 01",
+            period_idx=2,
+            period_label="2027",
+            period_year=2027,
+            p2_total_ht=3000.0,
+            p3_total_ht=5000.0,
+        )
+    )
     db.commit()
 
 
@@ -100,3 +125,22 @@ def test_add_request_uses_target_amounts(db_session: Session):
     result = create_request(db_session, 1, 42, payload)
     assert result["impact"]["p1_annual_ht"] == pytest.approx(10000.0)
     assert result["impact"]["total_annual_ht"] == pytest.approx(20000.0)
+
+
+def test_remove_request_projects_each_budget_year_with_daily_prorata(db_session: Session):
+    _seed_reference(db_session)
+    payload = CpeOsAvenantRequestCreate(
+        title="Sortie Ecole test mi-annee",
+        change_type="remove",
+        lot=1,
+        effective_date=date(2026, 7, 1),
+        lines=[CpeOsAvenantLineCreate(action="remove", code_site="VDS-ENS 01", site_name=None, lot=1)],
+    )
+    result = create_request(db_session, 1, 42, payload)
+    annual = result["impact"]["annual_impacts"]
+    assert annual[0]["year"] == 2026
+    assert annual[0]["ratio"] == pytest.approx(184 / 365)
+    assert annual[0]["total_ht"] == pytest.approx(round(-15000.0 * (184 / 365), 2))
+    assert annual[1]["year"] == 2027
+    assert annual[1]["total_ht"] == pytest.approx(-17000.0)
+    assert result["impact"]["first_year_prorata_ht"] == annual[0]["total_ht"]

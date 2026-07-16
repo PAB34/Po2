@@ -1,7 +1,7 @@
 """Service layer for CPE DALKIA OS / avenant preparation dossiers."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -18,6 +18,7 @@ from app.models.cpe_dalkia import (
 from app.schemas.cpe_os_avenant import CpeOsAvenantRequestCreate, CpeOsAvenantRequestUpdate
 
 CONTRACT_END_YEAR = 2033
+CONTRACT_END_DATE = date(2033, 10, 12)
 VALID_STATUSES = {
     "draft",
     "sent_to_dalkia",
@@ -56,6 +57,20 @@ def _sum_for_site(db: Session, model, column_name: str, *, import_ids: list[int]
         )
     )
     return float(value or 0.0)
+
+
+def _has_site_year(db: Session, model, *, import_ids: list[int], code_site: str, year: int) -> bool:
+    if not import_ids:
+        return False
+    return bool(
+        db.scalar(
+            select(func.count(model.id)).where(
+                model.import_id.in_(import_ids),
+                model.code_site == code_site,
+                model.period_year == year,
+            )
+        )
+    )
 
 
 def reference_for_site(
@@ -116,14 +131,6 @@ def list_site_options(db: Session, city_id: int | None, *, year: int, lot: int |
     return options
 
 
-def _year_ratio(effective_date: date | None) -> float:
-    if effective_date is None:
-        return 1.0
-    start = date(effective_date.year, 1, 1)
-    end = date(effective_date.year + 1, 1, 1)
-    return max(0.0, min(1.0, (end - effective_date).days / (end - start).days))
-
-
 def _delta(action: str, current: float | None, target: float | None) -> float:
     current_value = float(current or 0.0)
     target_value = float(target or 0.0)
@@ -143,7 +150,98 @@ def _line_impact(line: CpeContractChangeLine) -> dict[str, float]:
     return {"p1_gaz_annual_ht": p1_gaz, "p1_elec_annual_ht": p1_elec, "p2_annual_ht": p2, "p3_annual_ht": p3}
 
 
-def build_impact(request: CpeContractChangeRequest, lines: list[CpeContractChangeLine]) -> dict[str, Any]:
+def _is_leap(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+
+def _exercise_ratio(year: int, effective_date: date | None) -> float:
+    """Share of a civil exercise impacted by the change, exact to the day."""
+    start = date(year, 1, 1)
+    end_exclusive = date(year + 1, 1, 1)
+    if effective_date is not None:
+        start = max(start, effective_date)
+    end_exclusive = min(end_exclusive, CONTRACT_END_DATE + timedelta(days=1))
+    if start >= end_exclusive:
+        return 0.0
+    days_in_year = 366 if _is_leap(year) else 365
+    return (end_exclusive - start).days / days_in_year
+
+
+def _line_year_impact(
+    db: Session,
+    city_id: int | None,
+    request: CpeContractChangeRequest,
+    line: CpeContractChangeLine,
+    year: int,
+) -> dict[str, float]:
+    if line.code_site and line.action in {"remove", "modify"}:
+        lot = line.lot or request.lot
+        import_ids = _active_import_ids(db, city_id, lot)
+        ref = reference_for_site(db, city_id, code_site=line.code_site, year=year, lot=lot)
+        has_p1_gaz = _has_site_year(
+            db, CpeDalkiaRefP1Gaz, import_ids=import_ids, code_site=line.code_site, year=year
+        )
+        has_p1_elec = _has_site_year(
+            db, CpeDalkiaRefP1Elec, import_ids=import_ids, code_site=line.code_site, year=year
+        )
+        current_p1_gaz = ref["p1_gaz_annual_ht"] if has_p1_gaz else line.current_p1_gaz_annual_ht
+        current_p1_elec = ref["p1_elec_annual_ht"] if has_p1_elec else line.current_p1_elec_annual_ht
+        has_p2p3 = _has_site_year(db, CpeDalkiaRefP2P3, import_ids=import_ids, code_site=line.code_site, year=year)
+        current_p2 = ref["p2_annual_ht"] if has_p2p3 else line.current_p2_annual_ht
+        current_p3 = ref["p3_annual_ht"] if has_p2p3 else line.current_p3_annual_ht
+        p1_gaz = _delta(line.action, current_p1_gaz, line.p1_gaz_annual_ht)
+        p1_elec = _delta(line.action, current_p1_elec, line.p1_elec_annual_ht)
+        p2 = _delta(line.action, current_p2, line.p2_annual_ht)
+        p3 = _delta(line.action, current_p3, line.p3_annual_ht)
+        return {"p1_gaz_ht": p1_gaz, "p1_elec_ht": p1_elec, "p2_ht": p2, "p3_ht": p3}
+    impact = _line_impact(line)
+    return {
+        "p1_gaz_ht": impact["p1_gaz_annual_ht"],
+        "p1_elec_ht": impact["p1_elec_annual_ht"],
+        "p2_ht": impact["p2_annual_ht"],
+        "p3_ht": impact["p3_annual_ht"],
+    }
+
+
+def build_annual_impacts(
+    db: Session,
+    city_id: int | None,
+    request: CpeContractChangeRequest,
+    lines: list[CpeContractChangeLine],
+) -> list[dict[str, Any]]:
+    start_year = request.effective_date.year if request.effective_date else date.today().year
+    rows: list[dict[str, Any]] = []
+    for year in range(start_year, CONTRACT_END_YEAR + 1):
+        ratio = _exercise_ratio(year, request.effective_date)
+        if ratio <= 0:
+            continue
+        totals = {"p1_gaz_ht": 0.0, "p1_elec_ht": 0.0, "p2_ht": 0.0, "p3_ht": 0.0}
+        for line in lines:
+            impact = _line_year_impact(db, city_id, request, line, year)
+            for key, value in impact.items():
+                totals[key] += value * ratio
+        p1 = totals["p1_gaz_ht"] + totals["p1_elec_ht"]
+        total = p1 + totals["p2_ht"] + totals["p3_ht"]
+        rows.append(
+            {
+                "year": year,
+                "ratio": round(ratio, 6),
+                "p1_gaz_ht": round(totals["p1_gaz_ht"], 2),
+                "p1_elec_ht": round(totals["p1_elec_ht"], 2),
+                "p1_ht": round(p1, 2),
+                "p2_ht": round(totals["p2_ht"], 2),
+                "p3_ht": round(totals["p3_ht"], 2),
+                "total_ht": round(total, 2),
+            }
+        )
+    return rows
+
+
+def build_impact(
+    request: CpeContractChangeRequest,
+    lines: list[CpeContractChangeLine],
+    annual_impacts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     totals = {"p1_gaz_annual_ht": 0.0, "p1_elec_annual_ht": 0.0, "p2_annual_ht": 0.0, "p3_annual_ht": 0.0}
     for line in lines:
         impact = _line_impact(line)
@@ -151,17 +249,24 @@ def build_impact(request: CpeContractChangeRequest, lines: list[CpeContractChang
             totals[key] += value
     p1 = totals["p1_gaz_annual_ht"] + totals["p1_elec_annual_ht"]
     annual = p1 + totals["p2_annual_ht"] + totals["p3_annual_ht"]
-    ratio = _year_ratio(request.effective_date)
     year = request.effective_date.year if request.effective_date else None
-    remaining_years = (CONTRACT_END_YEAR - year + ratio) if year else 1.0
+    ratio = _exercise_ratio(year, request.effective_date) if year else 1.0
+    yearly = annual_impacts or []
+    first_year_prorata = next((row["total_ht"] for row in yearly if row["year"] == year), annual * ratio)
+    remaining_market = (
+        sum(row["total_ht"] for row in yearly)
+        if yearly
+        else annual * ((CONTRACT_END_YEAR - year + ratio) if year else 1.0)
+    )
     return {
         **{key: round(value, 2) for key, value in totals.items()},
         "p1_annual_ht": round(p1, 2),
         "total_annual_ht": round(annual, 2),
-        "first_year_prorata_ht": round(annual * ratio, 2),
-        "remaining_market_ht": round(annual * max(0.0, remaining_years), 2),
+        "first_year_prorata_ht": round(first_year_prorata, 2),
+        "remaining_market_ht": round(remaining_market, 2),
         "effective_year": year,
         "first_year_ratio": round(ratio, 4),
+        "annual_impacts": yearly,
     }
 
 
@@ -173,7 +278,8 @@ def _request_to_dict(db: Session, request: CpeContractChangeRequest) -> dict[str
             .order_by(CpeContractChangeLine.id)
         ).all()
     )
-    return {**request.__dict__, "lines": lines, "impact": build_impact(request, lines)}
+    annual_impacts = build_annual_impacts(db, request.city_id, request, lines)
+    return {**request.__dict__, "lines": lines, "impact": build_impact(request, lines, annual_impacts)}
 
 
 def list_requests(db: Session, city_id: int | None) -> list[dict[str, Any]]:

@@ -19,6 +19,17 @@ type CpeSiteOption = {
   total_annual_ht: number;
 };
 
+type CpeOsAvenantAnnualImpact = {
+  year: number;
+  ratio: number;
+  p1_gaz_ht: number;
+  p1_elec_ht: number;
+  p1_ht: number;
+  p2_ht: number;
+  p3_ht: number;
+  total_ht: number;
+};
+
 type CpeOsAvenantImpact = {
   p1_gaz_annual_ht: number;
   p1_elec_annual_ht: number;
@@ -30,6 +41,7 @@ type CpeOsAvenantImpact = {
   remaining_market_ht: number;
   effective_year: number | null;
   first_year_ratio: number;
+  annual_impacts: CpeOsAvenantAnnualImpact[];
 };
 
 type CpeOsAvenantRequest = {
@@ -77,13 +89,20 @@ function dateValue(value: string): Date | null {
   return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
-function yearProgressFrom(value: string): number {
-  const date = dateValue(value);
-  if (!date) return 1;
-  const year = date.getFullYear();
-  const start = new Date(year, 0, 1).getTime();
-  const end = new Date(year + 1, 0, 1).getTime();
-  return Math.max(0, Math.min(1, (end - date.getTime()) / (end - start)));
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function exerciseRatio(year: number, effectiveDateValue: string): number {
+  const effective = dateValue(effectiveDateValue);
+  const start = new Date(year, 0, 1);
+  const endExclusive = new Date(year + 1, 0, 1);
+  const contractEndExclusive = new Date(2033, 9, 13);
+  const from = effective && effective > start ? effective : start;
+  const to = endExclusive < contractEndExclusive ? endExclusive : contractEndExclusive;
+  if (from >= to) return 0;
+  const days = (to.getTime() - from.getTime()) / 86_400_000;
+  return days / (isLeapYear(year) ? 366 : 365);
 }
 
 function stepTone(status: OsStep["status"]) {
@@ -206,16 +225,34 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
           p3: selectedSites.reduce((sum, site) => sum + site.p3_annual_ht, 0),
         }
       : { p1, p2, p3 };
-    const annual = direction * (base.p1 + base.p2 + base.p3);
-    const prorata = annual * yearProgressFrom(effectiveDate);
-    const remainingYears = 2033 - (dateValue(effectiveDate)?.getFullYear() ?? 2026) + yearProgressFrom(effectiveDate);
+    const p1Delta = direction * base.p1;
+    const p2Delta = direction * base.p2;
+    const p3Delta = direction * base.p3;
+    const annual = p1Delta + p2Delta + p3Delta;
+    const startYear = dateValue(effectiveDate)?.getFullYear() ?? 2026;
+    const annualImpacts = Array.from({ length: Math.max(0, 2033 - startYear + 1) }, (_, index) => startYear + index)
+      .map((budgetYear) => {
+        const ratio = exerciseRatio(budgetYear, effectiveDate);
+        return {
+          year: budgetYear,
+          ratio,
+          p1: p1Delta * ratio,
+          p2: p2Delta * ratio,
+          p3: p3Delta * ratio,
+          total: annual * ratio,
+        };
+      })
+      .filter((row) => row.ratio > 0);
+    const prorata = annualImpacts[0]?.total ?? 0;
+    const remainingMarket = annualImpacts.reduce((sum, row) => sum + row.total, 0);
     return {
-      p1: direction * base.p1,
-      p2: direction * base.p2,
-      p3: direction * base.p3,
+      p1: p1Delta,
+      p2: p2Delta,
+      p3: p3Delta,
       annual,
       prorata,
-      remainingMarket: annual * Math.max(0, remainingYears),
+      remainingMarket,
+      annualImpacts,
     };
   }, [effectiveDate, kind, p1, p2, p3, selectedSites]);
 
@@ -393,6 +430,17 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
           { key: "current", header: "Reference actuelle", render: (row) => eur(row.current) },
           { key: "delta", header: "Impact annuel", render: (row) => <StatusBadge tone={row.delta >= 0 ? "warn" : "ok"}>{eur(row.delta)}</StatusBadge> },
           { key: "after", header: "Projection apres mouvement", render: (row) => eur(row.after) },
+        ]} />
+      </Card>
+
+      <Card title="Projection par exercice" eyebrow="Prorata au jour pres">
+        <DataTable rows={impact.annualImpacts} getRowKey={(row) => row.year} columns={[
+          { key: "year", header: "Exercice", render: (row) => <strong>{row.year}</strong> },
+          { key: "ratio", header: "Part exercice", render: (row) => `${Math.round(row.ratio * 1000) / 10} %`, sortValue: (row) => row.ratio },
+          { key: "p1", header: "P1", render: (row) => eur(row.p1), sortValue: (row) => row.p1 },
+          { key: "p2", header: "P2", render: (row) => eur(row.p2), sortValue: (row) => row.p2 },
+          { key: "p3", header: "P3", render: (row) => eur(row.p3), sortValue: (row) => row.p3 },
+          { key: "total", header: "Total HT", render: (row) => <StatusBadge tone={row.total >= 0 ? "warn" : "ok"}>{eur(row.total)}</StatusBadge>, sortValue: (row) => row.total },
         ]} />
       </Card>
 
