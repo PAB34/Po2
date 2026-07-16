@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -47,6 +47,22 @@ def create_os_avenant_request(
 ) -> CpeOsAvenantRequestOut:
     return CpeOsAvenantRequestOut.model_validate(
         svc.create_request(db, current_user.city_id, current_user.id, payload)
+    )
+
+@router.get("/{request_id}/impact.xlsx")
+def export_os_avenant_impact_workbook(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    result = svc.build_impact_workbook(db, current_user.city_id, request_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Dossier OS / avenant introuvable.")
+    content, filename = result
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

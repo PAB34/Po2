@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import io
 from datetime import date
 
 import pytest
+from openpyxl import load_workbook
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -10,7 +12,7 @@ from app.core.db import Base
 from app.models.city import City
 from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz, CpeDalkiaRefP2P3, CpeDalkiaRefSite
 from app.schemas.cpe_os_avenant import CpeOsAvenantLineCreate, CpeOsAvenantRequestCreate
-from app.services.cpe_os_avenant import create_request, list_site_options
+from app.services.cpe_os_avenant import build_impact_workbook, create_request, list_site_options
 
 
 @pytest.fixture()
@@ -144,3 +146,23 @@ def test_remove_request_projects_each_budget_year_with_daily_prorata(db_session:
     assert annual[1]["year"] == 2027
     assert annual[1]["total_ht"] == pytest.approx(-17000.0)
     assert result["impact"]["first_year_prorata_ht"] == annual[0]["total_ht"]
+
+def test_impact_workbook_exports_summary_lines_and_projection(db_session: Session):
+    _seed_reference(db_session)
+    payload = CpeOsAvenantRequestCreate(
+        title="Sortie Ecole test",
+        change_type="remove",
+        lot=1,
+        effective_date=date(2026, 7, 1),
+        lines=[CpeOsAvenantLineCreate(action="remove", code_site="VDS-ENS 01", site_name=None, lot=1)],
+    )
+    created = create_request(db_session, 1, 42, payload)
+    exported = build_impact_workbook(db_session, 1, created["id"])
+    assert exported is not None
+    content, filename = exported
+    assert filename == f"impact-os-avenant-{created['id']}.xlsx"
+    wb = load_workbook(io.BytesIO(content), data_only=True)
+    assert wb.sheetnames == ["Synthese", "Lignes", "Projection"]
+    assert wb["Synthese"]["A1"].value == "Dossier OS / avenant CPE DALKIA"
+    assert wb["Lignes"]["A2"].value == "remove"
+    assert wb["Projection"]["A2"].value == 2026

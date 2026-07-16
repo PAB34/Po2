@@ -1,8 +1,13 @@
 """Service layer for CPE DALKIA OS / avenant preparation dossiers."""
 from __future__ import annotations
 
+import io
 from datetime import date, timedelta
 from typing import Any
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -363,3 +368,117 @@ def update_request(
     db.commit()
     db.refresh(request)
     return _request_to_dict(db, request)
+
+
+def _style_header(ws, row: int, columns: int) -> None:
+    fill = PatternFill("solid", fgColor="1F4E78")
+    for column in range(1, columns + 1):
+        cell = ws.cell(row=row, column=column)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = fill
+
+
+def _money(cell) -> None:
+    cell.number_format = '#,##0 "EUR"'
+
+
+def _autofit(ws, max_width: int = 42) -> None:
+    for column in range(1, ws.max_column + 1):
+        letter = get_column_letter(column)
+        width = 12
+        for cell in ws[letter]:
+            if cell.value is None:
+                continue
+            width = max(width, min(max_width, len(str(cell.value)) + 2))
+        ws.column_dimensions[letter].width = width
+
+
+def build_impact_workbook(db: Session, city_id: int | None, request_id: int) -> tuple[bytes, str] | None:
+    dossier = get_request(db, city_id, request_id)
+    if dossier is None:
+        return None
+    lines: list[CpeContractChangeLine] = dossier["lines"]
+    impact = dossier["impact"]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Synthese"
+    ws["A1"] = "Dossier OS / avenant CPE DALKIA"
+    ws["A1"].font = Font(bold=True, size=14)
+    summary_rows = [
+        ("Dossier", dossier["title"]),
+        ("Statut", dossier["status"]),
+        ("Type", dossier["change_type"]),
+        ("Lot", dossier["lot"]),
+        ("Date effet", dossier["effective_date"]),
+        ("OS", dossier["os_number"]),
+        ("Avenant", dossier["avenant_number"]),
+        ("Motif", dossier["reason"]),
+    ]
+    row = 3
+    for label, value in summary_rows:
+        ws.cell(row=row, column=1, value=label).font = Font(bold=True)
+        ws.cell(row=row, column=2, value=value)
+        row += 1
+    row += 1
+    ws.append(["Indicateur", "Montant HT"])
+    _style_header(ws, row, 2)
+    for label, key in [
+        ("Impact annuel", "total_annual_ht"),
+        ("Impact annee de prise d'effet", "first_year_prorata_ht"),
+        ("Projection fin de marche", "remaining_market_ht"),
+        ("P1 annuel", "p1_annual_ht"),
+        ("P2 annuel", "p2_annual_ht"),
+        ("P3 annuel", "p3_annual_ht"),
+    ]:
+        row += 1
+        ws.cell(row=row, column=1, value=label)
+        amount = ws.cell(row=row, column=2, value=impact.get(key))
+        _money(amount)
+    _autofit(ws)
+
+    ws_lines = wb.create_sheet("Lignes")
+    line_headers = [
+        "Action", "Code site", "Site", "Lot", "PCE/PDL", "Tarif",
+        "P1 gaz actuel", "P1 elec actuel", "P2 actuel", "P3 actuel",
+        "P1 gaz cible", "P1 elec cible", "P2 cible", "P3 cible",
+        "Impact annuel",
+    ]
+    ws_lines.append(line_headers)
+    _style_header(ws_lines, 1, len(line_headers))
+    for line in lines:
+        line_impact = _line_impact(line)
+        total = sum(line_impact.values())
+        values = [
+            line.action, line.code_site, line.site_name, line.lot, line.pce, line.tarif,
+            line.current_p1_gaz_annual_ht, line.current_p1_elec_annual_ht, line.current_p2_annual_ht, line.current_p3_annual_ht,
+            line.p1_gaz_annual_ht, line.p1_elec_annual_ht, line.p2_annual_ht, line.p3_annual_ht,
+            round(total, 2),
+        ]
+        ws_lines.append(values)
+    for row_cells in ws_lines.iter_rows(min_row=2, min_col=7, max_col=15):
+        for cell in row_cells:
+            _money(cell)
+    _autofit(ws_lines)
+    ws_lines.freeze_panes = "A2"
+
+    ws_projection = wb.create_sheet("Projection")
+    projection_headers = ["Exercice", "Part exercice", "P1 gaz", "P1 elec", "P1", "P2", "P3", "Total HT"]
+    ws_projection.append(projection_headers)
+    _style_header(ws_projection, 1, len(projection_headers))
+    for annual in impact.get("annual_impacts", []):
+        ws_projection.append([
+            annual["year"], annual["ratio"], annual["p1_gaz_ht"], annual["p1_elec_ht"],
+            annual["p1_ht"], annual["p2_ht"], annual["p3_ht"], annual["total_ht"],
+        ])
+    for row_cells in ws_projection.iter_rows(min_row=2, min_col=2, max_col=8):
+        row_cells[0].number_format = "0.0%"
+        for cell in row_cells[1:]:
+            _money(cell)
+    _autofit(ws_projection)
+    ws_projection.freeze_panes = "A2"
+
+    output = io.BytesIO()
+    wb.save(output)
+    filename = f"impact-os-avenant-{request_id}.xlsx"
+    return output.getvalue(), filename

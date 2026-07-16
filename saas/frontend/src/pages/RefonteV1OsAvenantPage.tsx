@@ -30,6 +30,25 @@ type CpeOsAvenantAnnualImpact = {
   total_ht: number;
 };
 
+type CpeOsAvenantLine = {
+  id: number;
+  action: ChangeKind;
+  code_site: string | null;
+  site_name: string | null;
+  lot: number | null;
+  pce: string | null;
+  tarif: string | null;
+  current_p1_gaz_annual_ht: number | null;
+  current_p1_elec_annual_ht: number | null;
+  current_p2_annual_ht: number | null;
+  current_p3_annual_ht: number | null;
+  p1_gaz_annual_ht: number | null;
+  p1_elec_annual_ht: number | null;
+  p2_annual_ht: number | null;
+  p3_annual_ht: number | null;
+  notes: string | null;
+};
+
 type CpeOsAvenantImpact = {
   p1_gaz_annual_ht: number;
   p1_elec_annual_ht: number;
@@ -53,7 +72,10 @@ type CpeOsAvenantRequest = {
   effective_date: string | null;
   os_number: string | null;
   avenant_number: string | null;
+  reason: string | null;
+  notes: string | null;
   created_at: string;
+  lines: CpeOsAvenantLine[];
   impact: CpeOsAvenantImpact;
 };
 
@@ -160,6 +182,23 @@ async function createRequest(token: string, payload: unknown): Promise<CpeOsAven
   return parseJson<CpeOsAvenantRequest>(response);
 }
 
+async function downloadImpactWorkbook(token: string, requestId: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/cpe/os-avenants/${requestId}/impact.xlsx`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(await response.text() || `Erreur HTTP ${response.status}`);
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  const filename = match?.[1] ?? `impact-os-avenant-${requestId}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function RefonteV1OsAvenantPage() {
   const { logout, token, user } = useAuth();
   const [profile, setProfile] = useState<AppProfileV1>("direction");
@@ -186,6 +225,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
 
   const year = dateValue(effectiveDate)?.getFullYear() ?? new Date().getFullYear();
 
@@ -212,9 +252,17 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, year]);
 
+  useEffect(() => {
+    if (requests.length > 0 && !requests.some((request) => request.id === selectedRequestId)) {
+      setSelectedRequestId(requests[0].id);
+    }
+    if (requests.length === 0 && selectedRequestId !== null) setSelectedRequestId(null);
+  }, [requests, selectedRequestId]);
+
   const selectedSites = siteOptions.filter((site) => selectedSiteCodes.includes(site.code_site));
   const selectedSite = selectedSites[0] ?? siteOptions[0] ?? FALLBACK_SITE_OPTIONS[0];
   const signedOsCount = requests.filter((request) => ["os_signed", "in_service"].includes(request.status)).length || 3;
+  const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
 
   const impact = useMemo(() => {
     const direction = kind === "remove" ? -1 : 1;
@@ -272,6 +320,19 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
   function setAllSelectedSites(checked: boolean) {
     setSelectedSiteCodes(checked ? siteOptions.map((site) => site.code_site) : []);
   }
+  async function handleDownloadImpact(requestId: number) {
+    if (!token) {
+      setMessage("Authentification requise.");
+      return;
+    }
+    setMessage(null);
+    try {
+      await downloadImpactWorkbook(token, requestId);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Export impossible.");
+    }
+  }
+
   async function handleCreate() {
     if (!token) {
       setMessage("Authentification requise.");
@@ -454,9 +515,43 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
             { key: "annual", header: "Impact annuel", render: (row) => eur(row.impact.total_annual_ht), sortValue: (row) => row.impact.total_annual_ht },
             { key: "prorata", header: "Prorata", render: (row) => eur(row.impact.first_year_prorata_ht), sortValue: (row) => row.impact.first_year_prorata_ht },
             { key: "remaining", header: "Reste marche", render: (row) => eur(row.impact.remaining_market_ht), sortValue: (row) => row.impact.remaining_market_ht },
+            { key: "actions", header: "Actions", render: (row) => <Button variant="ghost" onClick={() => setSelectedRequestId(row.id)}>Ouvrir</Button> },
           ]} />
         )}
       </Card>
+
+      {selectedRequest ? (
+        <Card title={selectedRequest.title} eyebrow="Detail dossier">
+          <div style={{ display: "grid", gap: "1rem" }}>
+            <div className="po2-kpi-grid">
+              <KpiCard label="Impact annuel" value={eur(selectedRequest.impact.total_annual_ht)} detail="P1 + P2 + P3" tone={selectedRequest.impact.total_annual_ht >= 0 ? "warning" : "good"} />
+              <KpiCard label="Annee de prise d'effet" value={eur(selectedRequest.impact.first_year_prorata_ht)} detail={selectedRequest.effective_date ?? "Date a preciser"} />
+              <KpiCard label="Fin de marche" value={eur(selectedRequest.impact.remaining_market_ht)} detail="Projection jusqu'au 12/10/2033" />
+              <KpiCard label="Lignes" value={String(selectedRequest.lines.length)} detail="Sites ou mouvements" tone="info" />
+            </div>
+            <div style={{ display: "flex", gap: ".6rem", flexWrap: "wrap" }}>
+              <Button variant="primary" onClick={() => void handleDownloadImpact(selectedRequest.id)}>Telecharger l'impact Excel</Button>
+              <Button variant="ghost" disabled>Generer OS EXE1</Button>
+            </div>
+            <DataTable rows={selectedRequest.lines} getRowKey={(row) => row.id} columns={[
+              { key: "action", header: "Action", render: (row) => <StatusBadge tone={row.action === "remove" ? "ok" : "warn"}>{row.action === "remove" ? "Suppression" : row.action === "add" ? "Ajout" : "Modification"}</StatusBadge> },
+              { key: "site", header: "Site", render: (row) => <span><strong>{row.code_site ?? "-"}</strong><small className="po2-muted-line">{row.site_name ?? "Site a preciser"}</small></span> },
+              { key: "lot", header: "Lot", render: (row) => row.lot ?? "-" },
+              { key: "p1", header: "P1 actuel", render: (row) => eur((row.current_p1_gaz_annual_ht ?? 0) + (row.current_p1_elec_annual_ht ?? 0)) },
+              { key: "p2", header: "P2 actuel", render: (row) => eur(row.current_p2_annual_ht ?? 0) },
+              { key: "p3", header: "P3 actuel", render: (row) => eur(row.current_p3_annual_ht ?? 0) },
+            ]} />
+            <DataTable rows={selectedRequest.impact.annual_impacts} getRowKey={(row) => row.year} columns={[
+              { key: "year", header: "Exercice", render: (row) => <strong>{row.year}</strong> },
+              { key: "ratio", header: "Part", render: (row) => `${Math.round(row.ratio * 1000) / 10} %` },
+              { key: "p1", header: "P1", render: (row) => eur(row.p1_ht) },
+              { key: "p2", header: "P2", render: (row) => eur(row.p2_ht) },
+              { key: "p3", header: "P3", render: (row) => eur(row.p3_ht) },
+              { key: "total", header: "Total", render: (row) => <StatusBadge tone={row.total_ht >= 0 ? "warn" : "ok"}>{eur(row.total_ht)}</StatusBadge> },
+            ]} />
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }
