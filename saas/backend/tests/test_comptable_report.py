@@ -295,6 +295,10 @@ def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) ->
             )
         ],
     )
+    invoice = EnergyInvoiceImport(invoice_number="F-ENGIE-1")
+    invoice.normalized_invoice = EnergyInvoice(
+        sites=[EnergyInvoiceSite(prm_id=f"PRM-{index}") for index in range(1, 6)]
+    )
     platform = {
         "F-ENGIE-1": PlatformInvoice(
             id=1,
@@ -303,17 +307,23 @@ def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) ->
             control_status="valid",
             decision_status="approved",
             problem_summary=None,
-            raw=EnergyInvoiceImport(invoice_number="F-ENGIE-1"),
+            raw=invoice,
         )
     }
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
-    assert ws.cell(row=5, column=1).value == "Écart TTC"
+    assert ws.cell(row=5, column=1).value == "\u00c9cart TTC"
     assert ws.cell(row=5, column=7).value == -3274.43
-    assert ws.cell(row=5, column=9).value == "Écart TTC"
-    assert ws.cell(row=5, column=10).value == "À contrôler"
-    assert ws.cell(row=5, column=17).value == "Écart TTC Po2 - Chorus : -3274.43 EUR."
+    assert ws.cell(row=5, column=9).value == "\u00c9cart TTC"
+    assert ws.cell(row=5, column=10).value == "\u00c0 contr\u00f4ler"
+    assert ws.cell(row=5, column=17).value == (
+        "\u00c9cart TTC Po2 - Chorus : -3274.43 EUR. "
+        "Po2 contient 5 site(s) ; 5 PRM ; 2084.66 EUR TTC import\u00e9s ; "
+        "Chorus/compta attend 5359.09 EUR TTC. "
+        "Il manque probablement une ou plusieurs FIC/sites dans l'export fournisseur import\u00e9. "
+        "Comparer avec le PDF fournisseur Chorus."
+    )
 
 def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:
     current = PlatformInvoice(

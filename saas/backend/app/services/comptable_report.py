@@ -335,7 +335,7 @@ def _write_market_sheet(
             enrichment.get("revision_delta"),
             enrichment.get("revision_control"),
             enrichment.get("accounting"),
-            _join_unique([_row_problem_summary(status, delta, current), enrichment.get("issue")], limit=2),
+            _join_unique([_row_problem_summary(status, delta, current, item), enrichment.get("issue")], limit=2),
         ]
         for col, value in enumerate(values, start=1):
             ws.cell(row=row_index, column=col, value=value)
@@ -877,16 +877,51 @@ def _decision_label(family: str, status: str | None) -> str | None:
     return _DECISION_LABELS.get(status, status)
 
 
-def _row_problem_summary(status: str, delta: float | None, current: PlatformInvoice | None) -> str | None:
+def _row_problem_summary(
+    status: str,
+    delta: float | None,
+    current: PlatformInvoice | None,
+    worklist_row: WorklistInvoice | None = None,
+) -> str | None:
     if current is None:
-        return "Facture non trouvée dans la plateforme."
+        return "Facture non trouv\u00e9e dans la plateforme."
     if status == "Numero fournisseur introuvable":
-        return "Numéro fournisseur non extrait du libellé comptable."
+        return "Num\u00e9ro fournisseur non extrait du libell\u00e9 comptable."
     if delta is not None and abs(delta) > _TTC_TOLERANCE:
-        return f"Écart TTC Po2 - Chorus : {delta:.2f} EUR."
+        return _ttc_gap_problem_summary(delta, current, worklist_row)
     if current.decision_status in _NON_APPROVED_DECISIONS:
-        return current.problem_summary or "Décision non finalisée dans la plateforme."
+        return current.problem_summary or "D\u00e9cision non finalis\u00e9e dans la plateforme."
     return current.problem_summary
+
+
+def _ttc_gap_problem_summary(
+    delta: float,
+    current: PlatformInvoice,
+    worklist_row: WorklistInvoice | None,
+) -> str:
+    base = f"\u00c9cart TTC Po2 - Chorus : {delta:.2f} EUR."
+    if not isinstance(current.raw, EnergyInvoiceImport):
+        return base
+    normalized = current.raw.normalized_invoice
+    if normalized is None or not normalized.sites:
+        return f"{base} V\u00e9rifier que le fichier fournisseur import\u00e9 dans Po2 couvre toute la facture Chorus/compta."
+    site_count = len(normalized.sites)
+    prm_count = len({prm for prm in (_text(site.prm_id) for site in normalized.sites) if prm})
+    platform_total = current.total_ttc
+    chorus_total = worklist_row.total_ttc if worklist_row else None
+    details = [f"Po2 contient {site_count} site(s)"]
+    if prm_count:
+        details.append(f"{prm_count} PRM")
+    if platform_total is not None:
+        details.append(f"{platform_total:.2f} EUR TTC import\u00e9s")
+    if chorus_total is not None:
+        details.append(f"Chorus/compta attend {chorus_total:.2f} EUR TTC")
+    direction = (
+        "Il manque probablement une ou plusieurs FIC/sites dans l'export fournisseur import\u00e9."
+        if delta < 0
+        else "Po2 contient probablement plus de lignes que la facture Chorus/compta rapproch\u00e9e."
+    )
+    return f"{base} {' ; '.join(details)}. {direction} Comparer avec le PDF fournisseur Chorus."
 
 
 def _problem_label(code: object | None, fallback: object | None = None) -> str:
