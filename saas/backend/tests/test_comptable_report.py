@@ -204,7 +204,9 @@ def test_cpe_accounting_summary_writes_invoice_level_prices_and_codes() -> None:
 
     assert summary["base_price"] == 1500.0
     assert summary["revised_price"] == 1545.0
-    assert summary["revision"] == "revision 45.00 EUR ; ecart 0.01 EUR ; 2026 T2"
+    assert summary["revision_amount"] == 45.0
+    assert summary["revision_delta"] == 0.01
+    assert summary["revision_control"] == "2026 T2"
     assert "service: 020" in summary["accounting"]
     assert "operation: 98004" in summary["accounting"]
     assert "nature: 6156 - Maintenance" in summary["accounting"]
@@ -215,7 +217,7 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
     monkeypatch.setattr(
         comptable_report,
         "_market_line_enrichments",
-        lambda *args: {1: {"issue": "Codification incomplete"}},
+        lambda *args: {1: {"issue": "Codification incomplete", "revision_amount": 12.0, "revision_delta": 0.5, "revision_control": "BPU 1.0"}},
     )
     workbook = openpyxl.Workbook()
     ws = workbook.active
@@ -253,10 +255,19 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
-    assert ws.cell(row=4, column=15).value == "Point a corriger"
+    assert ws.cell(row=4, column=5).value == "TTC Chorus / compta"
+    assert ws.cell(row=4, column=6).value == "TTC Po2 reconstruit"
+    assert ws.cell(row=4, column=7).value == "Ecart TTC Po2 - Chorus"
+    assert ws.cell(row=4, column=13).value == "Revision appliquee"
+    assert ws.cell(row=4, column=14).value == "Ecart revision"
+    assert ws.cell(row=4, column=15).value == "Controle indices / ratios"
+    assert ws.cell(row=4, column=17).value == "Point a corriger"
     assert ws.cell(row=5, column=9).value == "Conforme (0 erreur(s), 1 alerte(s))"
     assert ws.cell(row=5, column=10).value == comptable_report._decision_label("energy", "to_review")
-    assert ws.cell(row=5, column=15).value == "Ecart prix BPU ; Codification incomplete"
+    assert ws.cell(row=5, column=13).value == 12.0
+    assert ws.cell(row=5, column=14).value == 0.5
+    assert ws.cell(row=5, column=15).value == "BPU 1.0"
+    assert ws.cell(row=5, column=17).value == "Ecart prix BPU ; Codification incomplete"
     assert ws.cell(row=8, column=1).value is None
 
 
@@ -271,7 +282,7 @@ def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:
         raw=object(),
     )
 
-    assert comptable_report._row_problem_summary("Écart TTC", 10.0, current) == "Écart TTC plateforme - compta : 10.00 EUR."
+    assert comptable_report._row_problem_summary("Écart TTC", 10.0, current) == "Écart TTC Po2 - Chorus : 10.00 EUR."
 
 
 class _FakeExecuteResult:

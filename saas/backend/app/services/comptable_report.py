@@ -297,15 +297,17 @@ def _write_market_sheet(
         "Numero fournisseur",
         "Numero compta",
         "Fournisseur",
-        "TTC compta",
-        "TTC plateforme",
-        "Ecart TTC",
+        "TTC Chorus / compta",
+        "TTC Po2 reconstruit",
+        "Ecart TTC Po2 - Chorus",
         "Date facture",
         "Controle",
         "Decision",
         "Prix base",
         "Prix revise",
-        "Revision / ecart",
+        "Revision appliquee",
+        "Ecart revision",
+        "Controle indices / ratios",
         "Ecriture comptable",
         "Point a corriger",
     ]
@@ -329,18 +331,20 @@ def _write_market_sheet(
             _decision_label(config.family, current.decision_status if current else None),
             enrichment.get("base_price"),
             enrichment.get("revised_price"),
-            enrichment.get("revision"),
+            enrichment.get("revision_amount"),
+            enrichment.get("revision_delta"),
+            enrichment.get("revision_control"),
             enrichment.get("accounting"),
             _join_unique([_row_problem_summary(status, delta, current), enrichment.get("issue")], limit=2),
         ]
         for col, value in enumerate(values, start=1):
             ws.cell(row=row_index, column=col, value=value)
-        for col in (5, 6, 7, 11, 12, 13):
+        for col in (5, 6, 7, 11, 12, 13, 14):
             ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
 
-    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 20, 18, 14, 14, 18, 58, 58])
+    _set_widths(ws, [18, 22, 16, 18, 18, 18, 18, 14, 20, 18, 14, 14, 16, 26, 42, 58, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:O{max(header_row + 1, header_row + len(parsed.rows))}"
+    ws.auto_filter.ref = f"A{header_row}:Q{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
 
@@ -402,10 +406,6 @@ def _cpe_line_enrichments(db: Session, matched: list[tuple[WorklistInvoice, Plat
         )
         revision_delta = _sum_present(control.delta_abs for control in invoice_controls)
         revision_parts = []
-        if revision_total is not None:
-            revision_parts.append(f"revision {revision_total:.2f} EUR")
-        if revision_delta is not None:
-            revision_parts.append(f"ecart {revision_delta:.2f} EUR")
         indices = _join_unique(
             f"{control.index_year} T{control.index_quarter}"
             for control in invoice_controls
@@ -433,7 +433,9 @@ def _cpe_line_enrichments(db: Session, matched: list[tuple[WorklistInvoice, Plat
         out[current.id] = {
             "base_price": base_total,
             "revised_price": revised_total,
-            "revision": _join_unique(revision_parts),
+            "revision_amount": revision_total,
+            "revision_delta": revision_delta,
+            "revision_control": _join_unique(revision_parts),
             "accounting": accounting or "A COMPLETER",
             "issue": None if _cpe_accounting_status(invoice_lines) == "OK" else _cpe_accounting_status(invoice_lines),
         }
@@ -479,7 +481,9 @@ def _energy_line_enrichments(
         out[current.id] = {
             "base_price": None,
             "revised_price": None,
-            "revision": _join_unique(revision_notes),
+            "revision_amount": None,
+            "revision_delta": None,
+            "revision_control": _join_unique(revision_notes),
             "accounting": accounting or "A CODIFIER",
             "issue": None if accounting else "Codification comptable absente ou incomplete.",
         }
@@ -495,7 +499,9 @@ def _gas_line_enrichments(matched: list[tuple[WorklistInvoice, PlatformInvoice]]
         out[current.id] = {
             "base_price": invoice.total_hors_tva,
             "revised_price": None,
-            "revision": None,
+            "revision_amount": None,
+            "revision_delta": None,
+            "revision_control": None,
             "accounting": _join_unique([invoice.pce, invoice.nom_site]),
             "issue": None,
         }
@@ -866,7 +872,7 @@ def _row_problem_summary(status: str, delta: float | None, current: PlatformInvo
     if status == "Numero fournisseur introuvable":
         return "Numéro fournisseur non extrait du libellé comptable."
     if delta is not None and abs(delta) > _TTC_TOLERANCE:
-        return f"Écart TTC plateforme - compta : {delta:.2f} EUR."
+        return f"Écart TTC Po2 - Chorus : {delta:.2f} EUR."
     if current.decision_status in _NON_APPROVED_DECISIONS:
         return current.problem_summary or "Décision non finalisée dans la plateforme."
     return current.problem_summary
