@@ -271,6 +271,50 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
     assert ws.cell(row=8, column=1).value is None
 
 
+def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) -> None:
+    monkeypatch.setattr(comptable_report, "_market_line_enrichments", lambda *args: {})
+    workbook = openpyxl.Workbook()
+    ws = workbook.active
+    parsed = comptable_report.WorklistParseResult(
+        sheet_name="_ShowList-001",
+        rows=[
+            WorklistInvoice(
+                row_number=2,
+                accounting_number="202600001",
+                supplier_invoice_number="F-ENGIE-1",
+                label="FAC. F-ENGIE-1 DU 01/07/2026",
+                total_ttc=5359.09,
+                invoice_date="01/07/2026",
+                arrival_date=None,
+                supplier_code=None,
+                supplier_name="ENGIE",
+                invoice_status=None,
+                liquidation_status=None,
+                market_code=None,
+                raw={},
+            )
+        ],
+    )
+    platform = {
+        "F-ENGIE-1": PlatformInvoice(
+            id=1,
+            invoice_number="F-ENGIE-1",
+            total_ttc=2084.66,
+            control_status="valid",
+            decision_status="approved",
+            problem_summary=None,
+            raw=EnergyInvoiceImport(invoice_number="F-ENGIE-1"),
+        )
+    }
+
+    comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
+
+    assert ws.cell(row=5, column=1).value == "Écart TTC"
+    assert ws.cell(row=5, column=7).value == -3274.43
+    assert ws.cell(row=5, column=9).value == "Écart TTC"
+    assert ws.cell(row=5, column=10).value == "À contrôler"
+    assert ws.cell(row=5, column=17).value == "Écart TTC Po2 - Chorus : -3274.43 EUR."
+
 def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:
     current = PlatformInvoice(
         id=1,

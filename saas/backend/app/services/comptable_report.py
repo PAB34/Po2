@@ -327,8 +327,8 @@ def _write_market_sheet(
             current.total_ttc if current else None,
             delta,
             item.invoice_date,
-            _control_label(config.family, current.control_status if current else None),
-            _decision_label(config.family, current.decision_status if current else None),
+            _report_control_label(status, config, current),
+            _report_decision_label(status, config, current),
             enrichment.get("base_price"),
             enrichment.get("revised_price"),
             enrichment.get("revision_amount"),
@@ -850,6 +850,17 @@ _PROBLEM_CODE_LABELS: dict[str, str] = {
 
 _NON_APPROVED_DECISIONS = {"to_review", "rejected", "dispute_sent", "a_controler", "refuse", "conteste"}
 
+
+def _report_control_label(reconciliation_status: str, config: MarketConfig, current: PlatformInvoice | None) -> str | None:
+    if reconciliation_status in {"Écart TTC", "Absente plateforme", "Numero fournisseur introuvable"}:
+        return reconciliation_status
+    return _control_label(config.family, current.control_status if current else None)
+
+
+def _report_decision_label(reconciliation_status: str, config: MarketConfig, current: PlatformInvoice | None) -> str | None:
+    if reconciliation_status in {"Écart TTC", "Absente plateforme", "Numero fournisseur introuvable"}:
+        return "À contrôler"
+    return _decision_label(config.family, current.decision_status if current else None)
 
 def _control_label(family: str, status: str | None) -> str | None:
     if not status:
