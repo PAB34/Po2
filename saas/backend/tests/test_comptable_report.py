@@ -125,8 +125,6 @@ def test_cpe_accounting_summary_writes_invoice_level_prices_and_codes() -> None:
         def scalars(self, _stmt):
             return FakeScalarResult(self.sequences.pop(0))
 
-    workbook = openpyxl.Workbook()
-    ws = workbook.active
     invoice = CpeFinanceInvoice(id=10, invoice_number="D-1", contract_code="C001", total_ht=120.0)
     worklist = WorklistInvoice(
         row_number=2,
@@ -202,24 +200,23 @@ def test_cpe_accounting_summary_writes_invoice_level_prices_and_codes() -> None:
     ]
     db = FakeScalarDb([lines, controls, sites])
 
-    comptable_report._write_cpe_accounting_summary(db, ws, 1, [(worklist, platform)])
+    summary = comptable_report._cpe_line_enrichments(db, [(worklist, platform)])[10]
 
-    assert ws.cell(row=3, column=1).value == "D-1"
-    assert ws.cell(row=3, column=6).value == 1500.0
-    assert ws.cell(row=3, column=7).value == 1545.0
-    assert ws.cell(row=3, column=8).value == 45.0
-    assert ws.cell(row=3, column=10).value == 0.01
-    assert ws.cell(row=3, column=11).value == "2026 T2"
-    assert ws.cell(row=3, column=12).value == "020"
-    assert ws.cell(row=3, column=15).value == "98004"
-    assert ws.cell(row=3, column=16).value == "6156 - Maintenance"
-    assert ws.cell(row=3, column=17).value == "A completer : 1 nature(s) a completer"
-    assert ws.cell(row=3, column=18).value == "Imputation comptable absente"
+    assert summary["base_price"] == 1500.0
+    assert summary["revised_price"] == 1545.0
+    assert summary["revision"] == "revision 45.00 EUR ; ecart 0.01 EUR ; 2026 T2"
+    assert "service: 020" in summary["accounting"]
+    assert "operation: 98004" in summary["accounting"]
+    assert "nature: 6156 - Maintenance" in summary["accounting"]
+    assert summary["issue"] == "A completer : 1 nature(s) a completer"
 
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
-    monkeypatch.setattr(comptable_report, "_write_revision_section", lambda *args: 8)
-    monkeypatch.setattr(comptable_report, "_write_energy_decomposition", lambda *args: None)
+    monkeypatch.setattr(
+        comptable_report,
+        "_market_line_enrichments",
+        lambda *args: {1: {"issue": "Codification incomplete"}},
+    )
     workbook = openpyxl.Workbook()
     ws = workbook.active
     parsed = comptable_report.WorklistParseResult(
@@ -249,16 +246,18 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
             total_ttc=120.0,
             control_status="valid (0 erreur(s), 1 alerte(s))",
             decision_status="to_review",
-            problem_summary="Écart prix BPU",
+            problem_summary="Ecart prix BPU",
             raw=EnergyInvoiceImport(invoice_number="F-ENGIE-1"),
         )
     }
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
-    assert ws.cell(row=5, column=11).value == "Conforme (0 erreur(s), 1 alerte(s))"
-    assert ws.cell(row=5, column=12).value == "À contrôler"
-    assert ws.cell(row=5, column=13).value == "Écart prix BPU"
+    assert ws.cell(row=4, column=15).value == "Point a corriger"
+    assert ws.cell(row=5, column=9).value == "Conforme (0 erreur(s), 1 alerte(s))"
+    assert ws.cell(row=5, column=10).value == comptable_report._decision_label("energy", "to_review")
+    assert ws.cell(row=5, column=15).value == "Ecart prix BPU ; Codification incomplete"
+    assert ws.cell(row=8, column=1).value is None
 
 
 def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:

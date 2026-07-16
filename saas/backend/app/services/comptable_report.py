@@ -285,6 +285,13 @@ def _write_market_sheet(
     ws["A2"] = f"Source : feuille {parsed.sheet_name}"
     ws["A2"].font = Font(italic=True)
 
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]] = []
+    for item in parsed.rows:
+        current = platform.get(item.supplier_invoice_number or "")
+        if current is not None:
+            matched.append((item, current))
+    enrichments = _market_line_enrichments(db, city_id, config, matched)
+
     headers = [
         "Rapprochement",
         "Numero fournisseur",
@@ -294,22 +301,21 @@ def _write_market_sheet(
         "TTC plateforme",
         "Ecart TTC",
         "Date facture",
-        "Etat facture",
-        "Etat liquidation",
-        "Controle plateforme",
-        "Decision plateforme",
-        "Motif / point à vérifier",
-        "Libelle compta",
+        "Controle",
+        "Decision",
+        "Prix base",
+        "Prix revise",
+        "Revision / ecart",
+        "Ecriture comptable",
+        "Point a corriger",
     ]
     header_row = 4
     _write_header(ws, header_row, headers)
 
-    matched: list[tuple[WorklistInvoice, PlatformInvoice]] = []
     for row_index, item in enumerate(parsed.rows, start=header_row + 1):
         current = platform.get(item.supplier_invoice_number or "")
         status, delta = _reconciliation_status(item, current)
-        if current is not None:
-            matched.append((item, current))
+        enrichment = enrichments.get(current.id if current else -1, {})
         values = [
             status,
             item.supplier_invoice_number,
@@ -319,81 +325,55 @@ def _write_market_sheet(
             current.total_ttc if current else None,
             delta,
             item.invoice_date,
-            item.invoice_status,
-            item.liquidation_status,
             _control_label(config.family, current.control_status if current else None),
             _decision_label(config.family, current.decision_status if current else None),
-            _row_problem_summary(status, delta, current),
-            item.label,
+            enrichment.get("base_price"),
+            enrichment.get("revised_price"),
+            enrichment.get("revision"),
+            enrichment.get("accounting"),
+            _join_unique([_row_problem_summary(status, delta, current), enrichment.get("issue")], limit=2),
         ]
         for col, value in enumerate(values, start=1):
             ws.cell(row=row_index, column=col, value=value)
-        for col in (5, 6, 7):
+        for col in (5, 6, 7, 11, 12, 13):
             ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
 
-    revision_start = header_row + len(parsed.rows) + 3
-    if config.family == "cpe":
-        revision_start = _write_cpe_accounting_summary(db, ws, revision_start, matched) + 2
-    next_start = _write_revision_section(db, city_id, ws, revision_start, config, matched)
-
-    detail_start = next_start + 2
-    ws.cell(row=detail_start, column=1, value="Décomposition comptable").font = Font(bold=True, size=12)
-    if not matched:
-        ws.cell(row=detail_start + 1, column=1, value="Aucune facture rapprochée.")
-    elif config.family == "cpe":
-        _write_cpe_decomposition(db, ws, detail_start + 1, matched)
-    elif config.family == "energy":
-        _write_energy_decomposition(db, ws, detail_start + 1, matched)
-    else:
-        _write_gas_decomposition(ws, detail_start + 1, matched)
-
-    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 24, 28, 20, 20, 48, 46, 20, 32, 28, 52])
+    _set_widths(ws, [18, 22, 16, 18, 14, 14, 14, 14, 20, 18, 14, 14, 18, 58, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:N{max(header_row + 1, header_row + len(parsed.rows))}"
+    ws.auto_filter.ref = f"A{header_row}:O{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
 
-
-def _write_cpe_accounting_summary(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
-    ws.cell(row=start_row, column=1, value="Vue comptable par facture").font = Font(bold=True, size=12)
-    headers = [
-        "Numero fournisseur",
-        "Contrat",
-        "Marches / postes",
-        "Lignes",
-        "Sites",
-        "Prix base annuel",
-        "Prix revise annuel",
-        "Revision annuelle",
-        "Montant HT facture",
-        "Ecart revision",
-        "Indices",
-        "Services",
-        "Fonctions",
-        "Antennes",
-        "Operations",
-        "Natures comptables",
-        "Statut imputation",
-        "Point a corriger",
-    ]
-    header_row = start_row + 1
-    _write_header(ws, header_row, headers)
+def _market_line_enrichments(
+    db: Session,
+    city_id: int,
+    config: MarketConfig,
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
+) -> dict[int, dict[str, object | None]]:
     if not matched:
-        ws.cell(row=header_row + 1, column=1, value="Aucune facture rapprochee.")
-        return header_row + 2
+        return {}
+    if config.family == "cpe":
+        return _cpe_line_enrichments(db, matched)
+    if config.family == "energy":
+        return _energy_line_enrichments(db, city_id, config, matched)
+    if config.family == "gas":
+        return _gas_line_enrichments(matched)
+    return {}
 
+
+def _cpe_line_enrichments(db: Session, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> dict[int, dict[str, object | None]]:
     invoice_ids = [current.id for _worklist, current in matched]
     lines = list(db.scalars(
         select(CpeFinanceLine)
         .where(CpeFinanceLine.invoice_id.in_(invoice_ids))
         .order_by(CpeFinanceLine.invoice_id, CpeFinanceLine.row_number)
-    ).all())
+    ).all()) if invoice_ids else []
     controls = list(db.scalars(
         select(CpeFinanceControl)
         .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
         .where(CpeFinanceControl.control_type.in_(("revision_p2", "revision_p3")))
         .order_by(CpeFinanceControl.invoice_id, CpeFinanceControl.control_type, CpeFinanceControl.id)
-    ).all())
+    ).all()) if invoice_ids else []
     site_ids = sorted({line.accounting_site_id for line in lines if line.accounting_site_id})
     sites = {
         site.id: site
@@ -409,15 +389,31 @@ def _write_cpe_accounting_summary(db: Session, ws, start_row: int, matched: list
     for control in controls:
         controls_by_invoice.setdefault(control.invoice_id, []).append(control)
 
-    row_cursor = header_row + 1
-    for worklist_row, current in matched:
-        invoice = current.raw
+    out: dict[int, dict[str, object | None]] = {}
+    for _worklist_row, current in matched:
         invoice_lines = lines_by_invoice.get(current.id, [])
         invoice_controls = controls_by_invoice.get(current.id, [])
-        site_values = [
-            _site_summary_value(line, sites.get(line.accounting_site_id or 0))
-            for line in invoice_lines
-        ]
+        base_total = _sum_present(line.base_price for line in invoice_lines)
+        revised_total = _sum_present(line.revised_price for line in invoice_lines)
+        revision_total = (
+            round(revised_total - base_total, 2)
+            if base_total is not None and revised_total is not None
+            else None
+        )
+        revision_delta = _sum_present(control.delta_abs for control in invoice_controls)
+        revision_parts = []
+        if revision_total is not None:
+            revision_parts.append(f"revision {revision_total:.2f} EUR")
+        if revision_delta is not None:
+            revision_parts.append(f"ecart {revision_delta:.2f} EUR")
+        indices = _join_unique(
+            f"{control.index_year} T{control.index_quarter}"
+            for control in invoice_controls
+            if control.index_year and control.index_quarter
+        )
+        if indices:
+            revision_parts.append(indices)
+
         services = [sites[line.accounting_site_id].service_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].service_code]
         functions = [sites[line.accounting_site_id].function_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].function_code]
         antennas = [sites[line.accounting_site_id].antenna_code for line in invoice_lines if line.accounting_site_id in sites and sites[line.accounting_site_id].antenna_code]
@@ -427,40 +423,83 @@ def _write_cpe_accounting_summary(db: Session, ws, start_row: int, matched: list
             for line in invoice_lines
             if line.accounting_nature
         ]
-        base_total = _sum_present(line.base_price for line in invoice_lines)
-        revised_total = _sum_present(line.revised_price for line in invoice_lines)
-        revision_total = (
-            round(revised_total - base_total, 2)
-            if base_total is not None and revised_total is not None
-            else None
+        accounting = _join_unique([
+            _prefixed_join("service", services),
+            _prefixed_join("fonction", functions),
+            _prefixed_join("antenne", antennas),
+            _prefixed_join("operation", operations),
+            _prefixed_join("nature", natures),
+        ])
+        out[current.id] = {
+            "base_price": base_total,
+            "revised_price": revised_total,
+            "revision": _join_unique(revision_parts),
+            "accounting": accounting or "A COMPLETER",
+            "issue": None if _cpe_accounting_status(invoice_lines) == "OK" else _cpe_accounting_status(invoice_lines),
+        }
+    return out
+
+
+def _energy_line_enrichments(
+    db: Session,
+    city_id: int,
+    config: MarketConfig,
+    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
+) -> dict[int, dict[str, object | None]]:
+    out: dict[int, dict[str, object | None]] = {}
+    budget_cache: dict[int, dict] = {}
+    for worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, EnergyInvoiceImport):
+            continue
+        accounting_rows = energie_accounting.resolve_invoice_codification(db, invoice)
+        accounting = _join_unique(
+            _prefixed_join(label, values)
+            for label, values in [
+                ("service", [row.service_code for row in accounting_rows if row.service_code]),
+                ("fonction", [row.function_code for row in accounting_rows if row.function_code]),
+                ("antenne", [row.antenna_code for row in accounting_rows if row.antenna_code]),
+                ("operation", [row.operation_code for row in accounting_rows if row.operation_code]),
+                ("nature", [row.accounting_nature for row in accounting_rows if row.accounting_nature]),
+            ]
         )
-        revision_delta = _sum_present(control.delta_abs for control in invoice_controls)
-        values = [
-            worklist_row.supplier_invoice_number,
-            _text(getattr(invoice, "contract_code", None)) if isinstance(invoice, CpeFinanceInvoice) else None,
-            _join_unique(f"{line.market or '-'} / {line.billed_item or '-'}" for line in invoice_lines),
-            len(invoice_lines) or None,
-            _join_unique(value for value in site_values if value),
-            base_total,
-            revised_total,
-            revision_total,
-            getattr(invoice, "total_ht", None) if isinstance(invoice, CpeFinanceInvoice) else None,
-            revision_delta,
-            _join_unique(f"{control.index_year} T{control.index_quarter}" for control in invoice_controls if control.index_year and control.index_quarter),
-            _join_unique(services),
-            _join_unique(functions),
-            _join_unique(antennas),
-            _join_unique(operations),
-            _join_unique(natures) or "A COMPLETER",
-            _cpe_accounting_status(invoice_lines),
-            current.problem_summary,
-        ]
-        for col, value in enumerate(values, start=1):
-            ws.cell(row=row_cursor, column=col, value=value)
-        for col in (6, 7, 8, 9, 10):
-            ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
-        row_cursor += 1
-    return row_cursor
+        year = _invoice_year_for_revision(invoice, worklist_row)
+        budget = budget_cache.get(year)
+        if budget is None:
+            budget = _safe_energy_budget_revise(db, city_id, config.key, year)
+            budget_cache[year] = budget
+        point_by_prm = {str(point.get("prm")): point for point in budget.get("points", []) if point.get("prm")}
+        revision_notes = []
+        for prm in _invoice_prms(invoice):
+            point = point_by_prm.get(prm)
+            if point:
+                revision_notes.append(
+                    f"{prm}: BPU {point.get('bpu_ratio') or '-'} / TURPE {point.get('turpe_ratio') or '-'}"
+                )
+        out[current.id] = {
+            "base_price": None,
+            "revised_price": None,
+            "revision": _join_unique(revision_notes),
+            "accounting": accounting or "A CODIFIER",
+            "issue": None if accounting else "Codification comptable absente ou incomplete.",
+        }
+    return out
+
+
+def _gas_line_enrichments(matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> dict[int, dict[str, object | None]]:
+    out: dict[int, dict[str, object | None]] = {}
+    for _worklist_row, current in matched:
+        invoice = current.raw
+        if not isinstance(invoice, GasInvoice):
+            continue
+        out[current.id] = {
+            "base_price": invoice.total_hors_tva,
+            "revised_price": None,
+            "revision": None,
+            "accounting": _join_unique([invoice.pce, invoice.nom_site]),
+            "issue": None,
+        }
+    return out
 
 def _write_revision_section(
     db: Session,
@@ -1096,6 +1135,10 @@ def _looks_like_supplier(invoice: EnergyInvoiceImport, supplier: str) -> bool:
     return supplier in value
 
 
+
+def _prefixed_join(label: str, values) -> str | None:
+    joined = _join_unique(values)
+    return f"{label}: {joined}" if joined else None
 
 def _join_unique(values, *, limit: int = 6) -> str | None:
     seen: list[str] = []
