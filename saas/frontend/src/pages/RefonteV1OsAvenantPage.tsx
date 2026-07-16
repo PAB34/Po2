@@ -155,7 +155,7 @@ export function RefonteV1OsAvenantPage() {
 
 function OsAvenantWorkspace({ token }: { token: string | null }) {
   const [kind, setKind] = useState<ChangeKind>("add");
-  const [siteCode, setSiteCode] = useState(FALLBACK_SITE_OPTIONS[0].code_site);
+  const [selectedSiteCodes, setSelectedSiteCodes] = useState<string[]>([FALLBACK_SITE_OPTIONS[0].code_site]);
   const [newSite, setNewSite] = useState("Nouveau site a integrer");
   const [lot, setLot] = useState<"1" | "2">("1");
   const [effectiveDate, setEffectiveDate] = useState("2026-09-01");
@@ -178,7 +178,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
       const [sites, dossiers] = await Promise.all([fetchSiteOptions(token, year), fetchRequests(token)]);
       if (sites.length > 0) {
         setSiteOptions(sites);
-        if (!sites.some((site) => site.code_site === siteCode)) setSiteCode(sites[0].code_site);
+        if (!selectedSiteCodes.some((code) => sites.some((site) => site.code_site === code))) setSelectedSiteCodes([sites[0].code_site]);
       }
       setRequests(dossiers);
     } catch (err) {
@@ -193,13 +193,18 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, year]);
 
-  const selectedSite = siteOptions.find((site) => site.code_site === siteCode) ?? siteOptions[0] ?? FALLBACK_SITE_OPTIONS[0];
+  const selectedSites = siteOptions.filter((site) => selectedSiteCodes.includes(site.code_site));
+  const selectedSite = selectedSites[0] ?? siteOptions[0] ?? FALLBACK_SITE_OPTIONS[0];
   const signedOsCount = requests.filter((request) => ["os_signed", "in_service"].includes(request.status)).length || 3;
 
   const impact = useMemo(() => {
     const direction = kind === "remove" ? -1 : 1;
     const base = kind === "remove"
-      ? { p1: selectedSite.p1_gaz_annual_ht + selectedSite.p1_elec_annual_ht, p2: selectedSite.p2_annual_ht, p3: selectedSite.p3_annual_ht }
+      ? {
+          p1: selectedSites.reduce((sum, site) => sum + site.p1_gaz_annual_ht + site.p1_elec_annual_ht, 0),
+          p2: selectedSites.reduce((sum, site) => sum + site.p2_annual_ht, 0),
+          p3: selectedSites.reduce((sum, site) => sum + site.p3_annual_ht, 0),
+        }
       : { p1, p2, p3 };
     const annual = direction * (base.p1 + base.p2 + base.p3);
     const prorata = annual * yearProgressFrom(effectiveDate);
@@ -212,16 +217,24 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
       prorata,
       remainingMarket: annual * Math.max(0, remainingYears),
     };
-  }, [effectiveDate, kind, p1, p2, p3, selectedSite]);
+  }, [effectiveDate, kind, p1, p2, p3, selectedSites]);
 
   const rows = [
-    { poste: "P1", current: kind === "remove" ? selectedSite.p1_gaz_annual_ht + selectedSite.p1_elec_annual_ht : 0, delta: impact.p1, after: kind === "remove" ? 0 : impact.p1 },
-    { poste: "P2", current: kind === "remove" ? selectedSite.p2_annual_ht : 0, delta: impact.p2, after: kind === "remove" ? 0 : impact.p2 },
-    { poste: "P3", current: kind === "remove" ? selectedSite.p3_annual_ht : 0, delta: impact.p3, after: kind === "remove" ? 0 : impact.p3 },
+    { poste: "P1", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p1_gaz_annual_ht + site.p1_elec_annual_ht, 0) : 0, delta: impact.p1, after: kind === "remove" ? 0 : impact.p1 },
+    { poste: "P2", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p2_annual_ht, 0) : 0, delta: impact.p2, after: kind === "remove" ? 0 : impact.p2 },
+    { poste: "P3", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p3_annual_ht, 0) : 0, delta: impact.p3, after: kind === "remove" ? 0 : impact.p3 },
   ];
 
-  const title = kind === "remove" ? `${selectedSite.code_site} - ${selectedSite.site_name}` : newSite;
+  const removeTitle = selectedSites.length === 0 ? "Aucun site selectionne" : selectedSites.length === 1 ? `${selectedSite.code_site} - ${selectedSite.site_name}` : `${selectedSites.length} sites a supprimer`;
+  const title = kind === "remove" ? removeTitle : newSite;
 
+  function toggleSelectedSite(code: string) {
+    setSelectedSiteCodes((prev) => prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code]);
+  }
+
+  function setAllSelectedSites(checked: boolean) {
+    setSelectedSiteCodes(checked ? siteOptions.map((site) => site.code_site) : []);
+  }
   async function handleCreate() {
     if (!token) {
       setMessage("Authentification requise.");
@@ -230,20 +243,24 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
     setSaving(true);
     setMessage(null);
     try {
-      const line = kind === "remove"
-        ? {
+      if (kind === "remove" && selectedSites.length === 0) {
+        setMessage("Selectionne au moins un site a supprimer.");
+        return;
+      }
+      const lines = kind === "remove"
+        ? selectedSites.map((site) => ({
             action: kind,
-            code_site: selectedSite.code_site,
-            site_name: selectedSite.site_name,
-            lot: selectedSite.lot,
-            pce: selectedSite.pce,
-            tarif: selectedSite.tarif,
-            current_p1_gaz_annual_ht: selectedSite.p1_gaz_annual_ht,
-            current_p1_elec_annual_ht: selectedSite.p1_elec_annual_ht,
-            current_p2_annual_ht: selectedSite.p2_annual_ht,
-            current_p3_annual_ht: selectedSite.p3_annual_ht,
-          }
-        : {
+            code_site: site.code_site,
+            site_name: site.site_name,
+            lot: site.lot,
+            pce: site.pce,
+            tarif: site.tarif,
+            current_p1_gaz_annual_ht: site.p1_gaz_annual_ht,
+            current_p1_elec_annual_ht: site.p1_elec_annual_ht,
+            current_p2_annual_ht: site.p2_annual_ht,
+            current_p3_annual_ht: site.p3_annual_ht,
+          }))
+        : [{
             action: kind,
             site_name: newSite,
             lot: Number(lot),
@@ -251,14 +268,14 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
             p1_elec_annual_ht: 0,
             p2_annual_ht: p2,
             p3_annual_ht: p3,
-          };
+          }];
       await createRequest(token, {
         title,
         change_type: kind,
         lot: kind === "remove" ? selectedSite.lot : Number(lot),
         effective_date: effectiveDate,
         reason: "Preparation avenant CPE DALKIA depuis Po2",
-        lines: [line],
+        lines,
       });
       setMessage("Dossier cree. Il apparait dans le portefeuille ci-dessous.");
       await reload();
@@ -300,14 +317,25 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
             </label>
 
             {kind === "remove" ? (
-              <label className="po2-claim__field">
-                <span>Site a supprimer</span>
-                <select value={siteCode} onChange={(event) => setSiteCode(event.target.value)}>
+              <div style={{ display: "grid", gap: ".45rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: ".75rem" }}>
+                  <strong>Sites a supprimer</strong>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: ".4rem", color: "var(--po2-color-muted)", fontSize: ".85rem" }}>
+                    <input type="checkbox" checked={selectedSiteCodes.length === siteOptions.length && siteOptions.length > 0} onChange={(event) => setAllSelectedSites(event.target.checked)} />
+                    Tout selectionner
+                  </label>
+                </div>
+                <div style={{ maxHeight: "15rem", overflow: "auto", border: "1px solid var(--po2-color-line)", borderRadius: "var(--po2-radius-sm)", background: "var(--po2-color-canvas)" }}>
                   {siteOptions.map((site) => (
-                    <option key={site.code_site} value={site.code_site}>{site.code_site} - {site.site_name}</option>
+                    <label key={site.code_site} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: ".65rem", alignItems: "center", padding: ".65rem .75rem", borderBottom: "1px solid var(--po2-color-line)" }}>
+                      <input type="checkbox" checked={selectedSiteCodes.includes(site.code_site)} onChange={() => toggleSelectedSite(site.code_site)} />
+                      <span><strong>{site.code_site}</strong><small className="po2-muted-line">{site.site_name}</small></span>
+                      <span>{eur(site.total_annual_ht)}</span>
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+                <p className="po2-muted-line" style={{ margin: 0 }}>{selectedSites.length} site(s) selectionne(s).</p>
+              </div>
             ) : (
               <label className="po2-claim__field">
                 <span>Site concerne</span>
