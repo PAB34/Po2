@@ -40,7 +40,13 @@ def _seed_reference(db: Session) -> None:
             period_year=2026,
             pce="24300000000000",
             type_tarif="T2",
-            p10_total_ht=8000.0,
+            prix_unitaire_ht=92.46,
+            atrd_ht=1020.74,
+            cta_ht=43.52,
+            p10_fixe_ht=1064.26,
+            qt_mwhpcs=115.0,
+            p10_var_ht=10632.9,
+            p10_total_ht=11697.16,
         )
     )
     db.add(
@@ -51,8 +57,16 @@ def _seed_reference(db: Session) -> None:
             period_idx=1,
             period_label="2026",
             period_year=2026,
-            p2_total_ht=2500.0,
-            p3_total_ht=4500.0,
+            p2_1_ht=700.0,
+            p2_2_ht=800.0,
+            p2_3_ht=900.0,
+            p2_4_ht=247.0,
+            p2_total_ht=2647.0,
+            p3_1_ht=1000.0,
+            p3_2_ht=1500.0,
+            p3_3_ht=2000.0,
+            p3_4_ht=1124.0,
+            p3_total_ht=5624.0,
         )
     )
     db.add(
@@ -89,8 +103,13 @@ def test_site_options_read_active_dpgf_amounts(db_session: Session):
     assert len(options) == 1
     assert options[0]["code_site"] == "VDS-ENS 01"
     assert options[0]["site_name"] == "Ecole test"
-    assert options[0]["p1_gaz_annual_ht"] == pytest.approx(8000.0)
-    assert options[0]["total_annual_ht"] == pytest.approx(15000.0)
+    assert options[0]["source_year"] == 2026
+    assert options[0]["p1_gaz_annual_ht"] == pytest.approx(11697.16)
+    assert options[0]["p2p3_detail"]["p2_1_ht"] == pytest.approx(700.0)
+    assert options[0]["p2p3_detail"]["p3_total_ht"] == pytest.approx(5624.0)
+    assert options[0]["p1_gaz_lines"][0]["prix_unitaire_ht"] == pytest.approx(92.46)
+    assert options[0]["p1_gaz_lines"][0]["qt_mwhpcs"] == pytest.approx(115.0)
+    assert options[0]["total_annual_ht"] == pytest.approx(19968.16)
 
 
 def test_remove_request_hydrates_current_amounts_and_negative_impact(db_session: Session):
@@ -104,9 +123,9 @@ def test_remove_request_hydrates_current_amounts_and_negative_impact(db_session:
     )
     result = create_request(db_session, 1, 42, payload)
     assert result["lines"][0].site_name == "Ecole test"
-    assert result["lines"][0].current_p1_gaz_annual_ht == pytest.approx(8000.0)
-    assert result["impact"]["total_annual_ht"] == pytest.approx(-15000.0)
-    assert result["impact"]["first_year_prorata_ht"] == pytest.approx(-15000.0)
+    assert result["lines"][0].current_p1_gaz_annual_ht == pytest.approx(11697.16)
+    assert result["impact"]["total_annual_ht"] == pytest.approx(-19968.16)
+    assert result["impact"]["first_year_prorata_ht"] == pytest.approx(-19968.16)
 
 
 def test_add_request_uses_target_amounts(db_session: Session):
@@ -142,7 +161,7 @@ def test_remove_request_projects_each_budget_year_with_daily_prorata(db_session:
     annual = result["impact"]["annual_impacts"]
     assert annual[0]["year"] == 2026
     assert annual[0]["ratio"] == pytest.approx(184 / 365)
-    assert annual[0]["total_ht"] == pytest.approx(round(-15000.0 * (184 / 365), 2))
+    assert annual[0]["total_ht"] == pytest.approx(round(-19968.16 * (184 / 365), 2))
     assert annual[1]["year"] == 2027
     assert annual[1]["total_ht"] == pytest.approx(-17000.0)
     assert result["impact"]["first_year_prorata_ht"] == annual[0]["total_ht"]

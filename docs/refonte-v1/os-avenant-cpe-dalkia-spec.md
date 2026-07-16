@@ -32,9 +32,9 @@ pas importe.
   existant.
 - Offre finale DALKIA `01_24BT039_L1_AE_ANNEXES_OFFRE_FINALE.xlsx` : source de controle et de
   comparaison pour les ajouts, notamment :
-  - `Annexe 3.1 - P2 - A` : P2 par site et par exercice ;
-  - `Annexe 4 - P3` : P3 par site et par exercice ;
-  - `Annexe 6 - P1 GAZ` : P1 gaz, typologies T1/T2/T3/T4, QT, prix unitaires et coefficients ;
+  - `Annexe 3.1 - P2 - A` : P2 par site et par exercice ; les lignes 8-10 posent les periodes, les colonnes P2.1/P2.2/P2.3/P2.4 et le total ;
+  - `Annexe 4 - P3` : P3 par site et par exercice ; les lignes 8-10 posent les periodes, les colonnes P3.1/P3.2/P3.3/P3.4 et le total ;
+  - `Annexe 6 - P1 GAZ` : P1 gaz ; les lignes 9-10 exposent les prix unitaires T1/T2, puis les lignes de sites a partir de la zone P1 fixe/P1 variable donnent PCE, tarif, QT, part fixe, variable et total ;
   - `RECAP MARCHE` : recapitulatif financier global.
 - `CCAPM.docx` : confirme que les modifications de perimetre avec impact financier sont actees par
   avenant, et que certains prix P1 gaz sont formalises par ordre de service.
@@ -53,9 +53,10 @@ montant de chaque exercice, pas seulement le montant de l'annee de prise d'effet
 
 ### Ajout de site
 
-Pour un ajout, v1 accepte encore des montants saisis ou estimes. La cible suivante est de proposer
-un site comparable et de pre-remplir les montants P1/P2/P3 depuis l'offre finale ou le referentiel
-DPGF, puis de laisser DALKIA completer/justifier.
+Pour un ajout, v1 propose un site comparable et pre-remplit P1/P2/P3 depuis le DPGF actif.
+L'ecran affiche les composants source disponibles : P1 gaz/electricite, prix unitaire, QT, part
+fixe/variable, total, et decomposition P2/P3. La saisie reste modifiable pour ajuster le cas reel
+avant validation DALKIA, mais le point de depart ne doit plus etre un zero manuel.
 
 ### Prorata et fin de marche
 
@@ -102,8 +103,7 @@ controle de facture.
 
 1. Finaliser la projection par exercice budgetaire dans l'API et l'ecran.
 2. Ajouter une page detail dossier avec lignes, statut, historique simple et actions.
-3. Renforcer l'ajout de site avec selection de site comparable.
-4. Generer le tableau d'impact telechargeable.
-5. Generer l'OS EXE1.
-6. Generer la fiche de preparation avenant.
-7. Brancher l'estimation revisee P2/P3 et le traitement P1 gaz sans modifier la base contractuelle.
+3. Generer l'OS EXE1.
+4. Generer la fiche de preparation avenant.
+5. Brancher l'estimation revisee P2/P3 et le traitement P1 gaz sans modifier la base contractuelle.
+6. Ajouter un vrai assistant de comparaison pour choisir le site comparable le plus pertinent.

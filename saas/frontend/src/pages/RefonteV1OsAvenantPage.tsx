@@ -6,10 +6,44 @@ import { useAuth } from "../providers/AuthProvider";
 
 type ChangeKind = "add" | "remove" | "modify";
 
+type CpeP1GazLine = {
+  pce: string | null;
+  type_tarif: string | null;
+  prix_unitaire_ht: number | null;
+  atrd_ht: number | null;
+  cta_ht: number | null;
+  p10_fixe_ht: number | null;
+  qt_mwhpcs: number | null;
+  p10_var_ht: number | null;
+  p10_total_ht: number | null;
+};
+
+type CpeP1ElecLine = {
+  pdl: string | null;
+  prix_unitaire_ht: number | null;
+  qt_mwh: number | null;
+  p10_var_ht: number | null;
+  p10_total_ht: number | null;
+};
+
+type CpeP2P3Detail = {
+  p2_1_ht: number;
+  p2_2_ht: number;
+  p2_3_ht: number;
+  p2_4_ht: number;
+  p2_total_ht: number;
+  p3_1_ht: number;
+  p3_2_ht: number;
+  p3_3_ht: number;
+  p3_4_ht: number;
+  p3_total_ht: number;
+};
+
 type CpeSiteOption = {
   code_site: string;
   site_name: string;
   lot: number | null;
+  source_year?: number | null;
   pce: string | null;
   tarif: string | null;
   p1_gaz_annual_ht: number;
@@ -17,6 +51,9 @@ type CpeSiteOption = {
   p2_annual_ht: number;
   p3_annual_ht: number;
   total_annual_ht: number;
+  p1_gaz_lines?: CpeP1GazLine[];
+  p1_elec_lines?: CpeP1ElecLine[];
+  p2p3_detail?: CpeP2P3Detail;
 };
 
 type CpeOsAvenantAnnualImpact = {
@@ -104,6 +141,21 @@ const STEPS: OsStep[] = [
 
 function eur(value: number): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
+}
+
+function eurNullable(value: number | null | undefined): string {
+  return eur(Number(value ?? 0));
+}
+
+function numberNullable(value: number | null | undefined, maximumFractionDigits = 2): string {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits }).format(Number(value ?? 0));
+}
+
+function p2p3Breakdown(detail: CpeP2P3Detail | undefined, prefix: "p2" | "p3"): string {
+  if (!detail) return "detail non disponible";
+  return [1, 2, 3, 4]
+    .map((index) => `${prefix.toUpperCase()}.${index} ${eurNullable(detail[`${prefix}_${index}_ht` as keyof CpeP2P3Detail])}`)
+    .join(" - ");
 }
 
 function dateValue(value: string): Date | null {
@@ -214,6 +266,7 @@ export function RefonteV1OsAvenantPage() {
 function OsAvenantWorkspace({ token }: { token: string | null }) {
   const [kind, setKind] = useState<ChangeKind>("add");
   const [selectedSiteCodes, setSelectedSiteCodes] = useState<string[]>([FALLBACK_SITE_OPTIONS[0].code_site]);
+  const [comparableSiteCode, setComparableSiteCode] = useState(FALLBACK_SITE_OPTIONS[0].code_site);
   const [newSite, setNewSite] = useState("Nouveau site a integrer");
   const [lot, setLot] = useState<"1" | "2">("1");
   const [effectiveDate, setEffectiveDate] = useState("2026-09-01");
@@ -238,6 +291,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
       if (sites.length > 0) {
         setSiteOptions(sites);
         if (!selectedSiteCodes.some((code) => sites.some((site) => site.code_site === code))) setSelectedSiteCodes([sites[0].code_site]);
+        if (!sites.some((site) => site.code_site === comparableSiteCode)) setComparableSiteCode(sites[0].code_site);
       }
       setRequests(dossiers);
     } catch (err) {
@@ -261,8 +315,20 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
 
   const selectedSites = siteOptions.filter((site) => selectedSiteCodes.includes(site.code_site));
   const selectedSite = selectedSites[0] ?? siteOptions[0] ?? FALLBACK_SITE_OPTIONS[0];
+  const comparableSite = siteOptions.find((site) => site.code_site === comparableSiteCode) ?? siteOptions[0] ?? FALLBACK_SITE_OPTIONS[0];
   const signedOsCount = requests.filter((request) => ["os_signed", "in_service"].includes(request.status)).length || 3;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
+  const comparableP1GazLines = comparableSite.p1_gaz_lines ?? [];
+  const comparableP1ElecLines = comparableSite.p1_elec_lines ?? [];
+  const comparableP2P3Detail = comparableSite.p2p3_detail;
+
+  useEffect(() => {
+    if (kind === "remove" || !comparableSite) return;
+    setLot(String(comparableSite.lot ?? 1) as "1" | "2");
+    setP1(Math.round(comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht));
+    setP2(Math.round(comparableSite.p2_annual_ht));
+    setP3(Math.round(comparableSite.p3_annual_ht));
+  }, [kind, comparableSite]);
 
   const impact = useMemo(() => {
     const direction = kind === "remove" ? -1 : 1;
@@ -362,10 +428,15 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
             action: kind,
             site_name: newSite,
             lot: Number(lot),
-            p1_gaz_annual_ht: p1,
-            p1_elec_annual_ht: 0,
+            p1_gaz_annual_ht: comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht > 0
+              ? Math.round((p1 * comparableSite.p1_gaz_annual_ht) / (comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht) * 100) / 100
+              : p1,
+            p1_elec_annual_ht: comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht > 0
+              ? Math.round((p1 * comparableSite.p1_elec_annual_ht) / (comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht) * 100) / 100
+              : 0,
             p2_annual_ht: p2,
             p3_annual_ht: p3,
+            notes: `Estimation initiale reprise du site comparable ${comparableSite.code_site} - ${comparableSite.site_name}.`,
           }];
       await createRequest(token, {
         title,
@@ -435,10 +506,55 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
                 <p className="po2-muted-line" style={{ margin: 0 }}>{selectedSites.length} site(s) selectionne(s).</p>
               </div>
             ) : (
-              <label className="po2-claim__field">
-                <span>Site concerne</span>
-                <input value={newSite} onChange={(event) => setNewSite(event.target.value)} />
-              </label>
+              <div style={{ display: "grid", gap: ".85rem" }}>
+                <label className="po2-claim__field">
+                  <span>Site a integrer</span>
+                  <input value={newSite} onChange={(event) => setNewSite(event.target.value)} />
+                </label>
+                <label className="po2-claim__field">
+                  <span>Site comparable pour pre-remplir P1/P2/P3</span>
+                  <select value={comparableSiteCode} onChange={(event) => setComparableSiteCode(event.target.value)}>
+                    {siteOptions.map((site) => (
+                      <option key={site.code_site} value={site.code_site}>{site.code_site} - {site.site_name}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="po2-decision-list">
+                  <article className="po2-decision-item">
+                    <StatusBadge tone="info">Source DPGF</StatusBadge>
+                    <div>
+                      <strong>{comparableSite.code_site} - {comparableSite.site_name}</strong>
+                      <small>Exercice {comparableSite.source_year ?? year} - P1 {eur(comparableSite.p1_gaz_annual_ht + comparableSite.p1_elec_annual_ht)} - P2 {eur(comparableSite.p2_annual_ht)} - P3 {eur(comparableSite.p3_annual_ht)}</small>
+                    </div>
+                  </article>
+                  {comparableP1GazLines.length > 0 ? comparableP1GazLines.slice(0, 2).map((line, index) => (
+                    <article className="po2-decision-item" key={`${line.pce ?? "gaz"}-${index}`}>
+                      <StatusBadge tone="neutral">P1 gaz</StatusBadge>
+                      <div>
+                        <strong>{line.type_tarif ?? "Tarif"} - {line.pce ?? "PCE non renseigne"}</strong>
+                        <small>PU {numberNullable(line.prix_unitaire_ht)} EUR/MWhPCS - QT {numberNullable(line.qt_mwhpcs)} MWhPCS - fixe {eurNullable(line.p10_fixe_ht)} - variable {eurNullable(line.p10_var_ht)} - total {eurNullable(line.p10_total_ht)}</small>
+                      </div>
+                    </article>
+                  )) : null}
+                  {comparableP1ElecLines.length > 0 ? comparableP1ElecLines.slice(0, 2).map((line, index) => (
+                    <article className="po2-decision-item" key={`${line.pdl ?? "elec"}-${index}`}>
+                      <StatusBadge tone="neutral">P1 elec</StatusBadge>
+                      <div>
+                        <strong>{line.pdl ?? "PDL non renseigne"}</strong>
+                        <small>PU {numberNullable(line.prix_unitaire_ht)} EUR/MWh - QT {numberNullable(line.qt_mwh)} MWh - variable {eurNullable(line.p10_var_ht)} - total {eurNullable(line.p10_total_ht)}</small>
+                      </div>
+                    </article>
+                  )) : null}
+                  <article className="po2-decision-item">
+                    <StatusBadge tone="neutral">P2/P3</StatusBadge>
+                    <div>
+                      <strong>Annexe 3.1 et Annexe 4</strong>
+                      <small>{p2p3Breakdown(comparableP2P3Detail, "p2")} - total P2 {eurNullable(comparableP2P3Detail?.p2_total_ht)}</small>
+                      <small>{p2p3Breakdown(comparableP2P3Detail, "p3")} - total P3 {eurNullable(comparableP2P3Detail?.p3_total_ht)}</small>
+                    </div>
+                  </article>
+                </div>
+              </div>
             )}
 
             <div className="po2-contact-card__grid">
@@ -457,9 +573,9 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
 
             {kind !== "remove" ? (
               <div className="po2-contact-card__grid">
-                <label className="po2-claim__field"><span>P1 annuel HT estime</span><input type="number" value={p1} onChange={(event) => setP1(Number(event.target.value))} /></label>
-                <label className="po2-claim__field"><span>P2 annuel HT estime</span><input type="number" value={p2} onChange={(event) => setP2(Number(event.target.value))} /></label>
-                <label className="po2-claim__field"><span>P3 annuel HT estime</span><input type="number" value={p3} onChange={(event) => setP3(Number(event.target.value))} /></label>
+                <label className="po2-claim__field"><span>P1 annuel HT pre-rempli</span><input type="number" value={p1} onChange={(event) => setP1(Number(event.target.value))} /></label>
+                <label className="po2-claim__field"><span>P2 annuel HT pre-rempli</span><input type="number" value={p2} onChange={(event) => setP2(Number(event.target.value))} /></label>
+                <label className="po2-claim__field"><span>P3 annuel HT pre-rempli</span><input type="number" value={p3} onChange={(event) => setP3(Number(event.target.value))} /></label>
               </div>
             ) : null}
 

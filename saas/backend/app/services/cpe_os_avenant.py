@@ -78,6 +78,82 @@ def _has_site_year(db: Session, model, *, import_ids: list[int], code_site: str,
     )
 
 
+def _p1_gaz_lines_for_site(db: Session, *, import_ids: list[int], code_site: str, year: int) -> list[dict[str, Any]]:
+    if not import_ids:
+        return []
+    rows = db.scalars(
+        select(CpeDalkiaRefP1Gaz)
+        .where(
+            CpeDalkiaRefP1Gaz.import_id.in_(import_ids),
+            CpeDalkiaRefP1Gaz.code_site == code_site,
+            CpeDalkiaRefP1Gaz.period_year == year,
+        )
+        .order_by(CpeDalkiaRefP1Gaz.pce, CpeDalkiaRefP1Gaz.id)
+    ).all()
+    return [
+        {
+            "pce": row.pce,
+            "type_tarif": row.type_tarif,
+            "prix_unitaire_ht": row.prix_unitaire_ht,
+            "atrd_ht": row.atrd_ht,
+            "cta_ht": row.cta_ht,
+            "p10_fixe_ht": row.p10_fixe_ht,
+            "qt_mwhpcs": row.qt_mwhpcs,
+            "p10_var_ht": row.p10_var_ht,
+            "p10_total_ht": row.p10_total_ht,
+        }
+        for row in rows
+    ]
+
+
+def _p1_elec_lines_for_site(db: Session, *, import_ids: list[int], code_site: str, year: int) -> list[dict[str, Any]]:
+    if not import_ids:
+        return []
+    rows = db.scalars(
+        select(CpeDalkiaRefP1Elec)
+        .where(
+            CpeDalkiaRefP1Elec.import_id.in_(import_ids),
+            CpeDalkiaRefP1Elec.code_site == code_site,
+            CpeDalkiaRefP1Elec.period_year == year,
+        )
+        .order_by(CpeDalkiaRefP1Elec.pdl, CpeDalkiaRefP1Elec.id)
+    ).all()
+    return [
+        {
+            "pdl": row.pdl,
+            "prix_unitaire_ht": row.prix_unitaire_ht,
+            "qt_mwh": row.qt_mwh,
+            "p10_var_ht": row.p10_var_ht,
+            "p10_total_ht": row.p10_total_ht,
+        }
+        for row in rows
+    ]
+
+
+def _p2p3_detail_for_site(db: Session, *, import_ids: list[int], code_site: str, year: int) -> dict[str, float]:
+    if not import_ids:
+        return {}
+    columns = (
+        "p2_1_ht",
+        "p2_2_ht",
+        "p2_3_ht",
+        "p2_4_ht",
+        "p2_total_ht",
+        "p3_1_ht",
+        "p3_2_ht",
+        "p3_3_ht",
+        "p3_4_ht",
+        "p3_total_ht",
+    )
+    query = select(*[func.coalesce(func.sum(getattr(CpeDalkiaRefP2P3, column)), 0.0) for column in columns]).where(
+        CpeDalkiaRefP2P3.import_id.in_(import_ids),
+        CpeDalkiaRefP2P3.code_site == code_site,
+        CpeDalkiaRefP2P3.period_year == year,
+    )
+    values = db.execute(query).one()
+    return {column: float(value or 0.0) for column, value in zip(columns, values)}
+
+
 def reference_for_site(
     db: Session,
     city_id: int | None,
@@ -107,12 +183,16 @@ def reference_for_site(
         "code_site": code_site,
         "site_name": site.nom_batiment if site else code_site,
         "lot": site.lot if site else lot,
+        "source_year": year,
         "pce": gaz.pce if gaz else None,
         "tarif": gaz.type_tarif if gaz else None,
         "p1_gaz_annual_ht": _sum_for_site(db, CpeDalkiaRefP1Gaz, "p10_total_ht", import_ids=import_ids, code_site=code_site, year=year),
         "p1_elec_annual_ht": _sum_for_site(db, CpeDalkiaRefP1Elec, "p10_total_ht", import_ids=import_ids, code_site=code_site, year=year),
         "p2_annual_ht": _sum_for_site(db, CpeDalkiaRefP2P3, "p2_total_ht", import_ids=import_ids, code_site=code_site, year=year),
         "p3_annual_ht": _sum_for_site(db, CpeDalkiaRefP2P3, "p3_total_ht", import_ids=import_ids, code_site=code_site, year=year),
+        "p1_gaz_lines": _p1_gaz_lines_for_site(db, import_ids=import_ids, code_site=code_site, year=year),
+        "p1_elec_lines": _p1_elec_lines_for_site(db, import_ids=import_ids, code_site=code_site, year=year),
+        "p2p3_detail": _p2p3_detail_for_site(db, import_ids=import_ids, code_site=code_site, year=year),
     }
 
 

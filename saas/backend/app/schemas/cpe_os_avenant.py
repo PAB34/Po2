@@ -115,10 +115,44 @@ class CpeOsAvenantRequestOut(BaseModel):
     impact: CpeOsAvenantImpact
 
 
+class CpeOsAvenantP1GazLine(BaseModel):
+    pce: str | None = None
+    type_tarif: str | None = None
+    prix_unitaire_ht: float | None = None
+    atrd_ht: float | None = None
+    cta_ht: float | None = None
+    p10_fixe_ht: float | None = None
+    qt_mwhpcs: float | None = None
+    p10_var_ht: float | None = None
+    p10_total_ht: float | None = None
+
+
+class CpeOsAvenantP1ElecLine(BaseModel):
+    pdl: str | None = None
+    prix_unitaire_ht: float | None = None
+    qt_mwh: float | None = None
+    p10_var_ht: float | None = None
+    p10_total_ht: float | None = None
+
+
+class CpeOsAvenantP2P3Detail(BaseModel):
+    p2_1_ht: float = 0.0
+    p2_2_ht: float = 0.0
+    p2_3_ht: float = 0.0
+    p2_4_ht: float = 0.0
+    p2_total_ht: float = 0.0
+    p3_1_ht: float = 0.0
+    p3_2_ht: float = 0.0
+    p3_3_ht: float = 0.0
+    p3_4_ht: float = 0.0
+    p3_total_ht: float = 0.0
+
+
 class CpeOsAvenantSiteOption(BaseModel):
     code_site: str
     site_name: str | None = None
     lot: int | None
+    source_year: int | None = None
     pce: str | None = None
     tarif: str | None = None
     p1_gaz_annual_ht: float = 0.0
@@ -126,3 +160,6 @@ class CpeOsAvenantSiteOption(BaseModel):
     p2_annual_ht: float = 0.0
     p3_annual_ht: float = 0.0
     total_annual_ht: float = 0.0
+    p1_gaz_lines: list[CpeOsAvenantP1GazLine] = Field(default_factory=list)
+    p1_elec_lines: list[CpeOsAvenantP1ElecLine] = Field(default_factory=list)
+    p2p3_detail: CpeOsAvenantP2P3Detail = Field(default_factory=CpeOsAvenantP2P3Detail)
