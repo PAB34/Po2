@@ -14,6 +14,7 @@ export const navigationV1: NavSectionV1[] = [
   { label: "Moteurs métiers", items: [
     { key: "fluids", label: "Énergie / Fluides", to: "/refonte-v1/fluides" },
     { key: "contracts", label: "Marchés & contrats", to: "/refonte-v1/marches" },
+    { key: "os-avenant", label: "OS & avenants CPE", to: "/refonte-v1/os-avenant" },
     { key: "technique", label: "Technique & CVC", to: "/refonte-v1/technique", comingSoon: true },
   ] },
   { label: "Référentiels & admin", items: [
