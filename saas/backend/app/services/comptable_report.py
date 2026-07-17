@@ -283,6 +283,12 @@ def _write_market_sheet(
     if config.key == "dalkia":
         _write_dalkia_comptable_sheet(db, ws, parsed, platform)
         return
+    if config.family == "energy":
+        _write_energy_comptable_sheet(db, city_id, ws, config, parsed, platform)
+        return
+    if config.family == "gas":
+        _write_gas_comptable_sheet(ws, config, parsed, platform)
+        return
 
     ws["A1"] = f"Rapport de controle comptable - {config.title}"
     ws["A1"].font = Font(bold=True, size=14)
@@ -351,6 +357,242 @@ def _write_market_sheet(
     ws.auto_filter.ref = f"A{header_row}:Q{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
+
+
+def _write_energy_comptable_sheet(
+    db: Session,
+    city_id: int,
+    ws,
+    config: MarketConfig,
+    parsed: WorklistParseResult,
+    platform: dict[str, PlatformInvoice],
+) -> None:
+    ws["A1"] = f"Demande comptable - {config.title}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"Source : feuille {parsed.sheet_name}"
+    ws["A2"].font = Font(italic=True)
+
+    matched = [
+        (item, current)
+        for item in parsed.rows
+        if (current := platform.get(item.supplier_invoice_number or "")) is not None
+    ]
+    enrichments = _market_line_enrichments(db, city_id, config, matched)
+
+    headers = [
+        "FOURNISSEUR",
+        "NUMERO DE FACTURE",
+        "NUMERO COMPTA",
+        "DATE FACTURE",
+        "SITE / POINT",
+        "PRM",
+        "POSTE FACTURE",
+        "LIBELLE",
+        "MONTANT HT",
+        "TTC COMPTA",
+        "TTC PO2",
+        "ECART TTC",
+        "SERVICE",
+        "FONCTION",
+        "NATURE",
+        "OPERATION",
+        "ANTENNE",
+        "LC",
+        "REVISION / INDICES",
+        "CONTROLE PO2",
+        "POINT A CORRIGER",
+    ]
+    header_row = 4
+    _write_header(ws, header_row, headers)
+    row_cursor = header_row + 1
+
+    for item in parsed.rows:
+        current = platform.get(item.supplier_invoice_number or "")
+        status, delta = _reconciliation_status(item, current)
+        enrichment = enrichments.get(current.id if current else -1, {})
+        lines = _energy_report_lines(db, current)
+
+        if not lines:
+            values = [
+                config.title,
+                item.supplier_invoice_number,
+                item.accounting_number,
+                item.invoice_date,
+                None,
+                None,
+                None,
+                item.label,
+                None,
+                item.total_ttc,
+                current.total_ttc if current else None,
+                delta,
+                None,
+                None,
+                None,
+                None,
+                None,
+                enrichment.get("accounting"),
+                enrichment.get("revision_control"),
+                _report_control_label(status, config, current),
+                _join_unique([_row_problem_summary(status, delta, current, item), enrichment.get("issue")], limit=2),
+            ]
+            _write_energy_values(ws, row_cursor, values)
+            row_cursor += 1
+            continue
+
+        for line in lines:
+            values = [
+                config.title,
+                item.supplier_invoice_number,
+                item.accounting_number,
+                item.invoice_date,
+                line.site_name,
+                line.prm_id,
+                line.poste,
+                line.label,
+                line.amount_ht,
+                item.total_ttc,
+                current.total_ttc if current else None,
+                delta,
+                line.service_code,
+                line.function_code,
+                line.accounting_nature,
+                line.operation_code,
+                line.antenna_code,
+                _energy_report_lc(line),
+                enrichment.get("revision_control"),
+                _report_control_label(status, config, current),
+                _energy_line_observation(status, delta, current, item, line, enrichment),
+            ]
+            _write_energy_values(ws, row_cursor, values)
+            row_cursor += 1
+
+    _set_widths(ws, [16, 22, 16, 14, 32, 18, 16, 40, 14, 14, 14, 14, 12, 12, 12, 14, 12, 42, 32, 18, 58])
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.auto_filter.ref = f"A{header_row}:U{max(header_row + 1, row_cursor - 1)}"
+
+
+def _write_energy_values(ws, row: int, values: list[object | None]) -> None:
+    for col, value in enumerate(values, start=1):
+        ws.cell(row=row, column=col, value=value)
+    for col in (9, 10, 11, 12):
+        ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
+
+
+def _energy_report_lines(db: Session, current: PlatformInvoice | None) -> list[energie_accounting.LiaisonRow]:
+    if current is None or not isinstance(current.raw, EnergyInvoiceImport):
+        return []
+    return energie_accounting.resolve_invoice_codification(db, current.raw)
+
+
+def _energy_report_lc(line: energie_accounting.LiaisonRow) -> str | None:
+    parts = [
+        line.function_code,
+        line.accounting_nature,
+        line.operation_code,
+        line.service_code,
+        line.antenna_code,
+    ]
+    return "-".join(str(part).strip() for part in parts if _text(part))
+
+
+def _energy_line_observation(
+    status: str,
+    delta: float | None,
+    current: PlatformInvoice,
+    item: WorklistInvoice,
+    line: energie_accounting.LiaisonRow,
+    enrichment: dict[str, object | None],
+) -> str | None:
+    issues = [_row_problem_summary(status, delta, current, item)]
+    if line.status != "ok":
+        missing = []
+        if not line.service_code or not line.function_code:
+            missing.append("site/PRM")
+        if not line.accounting_nature:
+            missing.append("nature")
+        if missing:
+            issues.append(f"Codification comptable incomplete ({', '.join(missing)}).")
+        else:
+            issues.append("Codification comptable a verifier.")
+    return _join_unique(issues, limit=3)
+
+
+def _write_gas_comptable_sheet(
+    ws,
+    config: MarketConfig,
+    parsed: WorklistParseResult,
+    platform: dict[str, PlatformInvoice],
+) -> None:
+    ws["A1"] = f"Demande comptable - {config.title}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"Source : feuille {parsed.sheet_name}"
+    ws["A2"].font = Font(italic=True)
+
+    headers = [
+        "FOURNISSEUR",
+        "NUMERO DE FACTURE",
+        "NUMERO COMPTA",
+        "DATE FACTURE",
+        "SITE / POINT",
+        "PCE",
+        "POSTE FACTURE",
+        "MONTANT HT",
+        "TVA",
+        "TTC COMPTA",
+        "TTC PO2",
+        "ECART TTC",
+        "LC",
+        "CONTROLE PO2",
+        "POINT A CORRIGER",
+    ]
+    header_row = 4
+    _write_header(ws, header_row, headers)
+    row_cursor = header_row + 1
+
+    for item in parsed.rows:
+        current = platform.get(item.supplier_invoice_number or "")
+        status, delta = _reconciliation_status(item, current)
+        invoice = current.raw if current and isinstance(current.raw, GasInvoice) else None
+        values = [
+            config.title,
+            item.supplier_invoice_number,
+            item.accounting_number,
+            getattr(invoice, "date_comptable", None) or item.invoice_date,
+            _join_unique([getattr(invoice, "nom_site", None), getattr(invoice, "lib_regroupement", None)]),
+            getattr(invoice, "pce", None),
+            getattr(invoice, "type_detail", None),
+            getattr(invoice, "total_hors_tva", None),
+            _gas_vat_total(invoice),
+            item.total_ttc,
+            current.total_ttc if current else None,
+            delta,
+            _join_unique([getattr(invoice, "pce", None), getattr(invoice, "nom_site", None)]),
+            _report_control_label(status, config, current),
+            _row_problem_summary(status, delta, current, item),
+        ]
+        _write_gas_values(ws, row_cursor, values)
+        row_cursor += 1
+
+    _set_widths(ws, [16, 22, 16, 14, 34, 18, 16, 14, 12, 14, 14, 14, 42, 18, 58])
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.auto_filter.ref = f"A{header_row}:O{max(header_row + 1, row_cursor - 1)}"
+
+
+def _write_gas_values(ws, row: int, values: list[object | None]) -> None:
+    for col, value in enumerate(values, start=1):
+        ws.cell(row=row, column=col, value=value)
+    for col in (8, 9, 10, 11, 12):
+        ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
+
+
+def _gas_vat_total(invoice: GasInvoice | None) -> float | None:
+    if invoice is None:
+        return None
+    values = [invoice.tva_tn, invoice.tva_tr]
+    if all(value is None for value in values):
+        return None
+    return round(sum(value or 0 for value in values), 2)
 
 
 def _write_dalkia_comptable_sheet(

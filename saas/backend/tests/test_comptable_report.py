@@ -315,8 +315,43 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
     monkeypatch.setattr(
         comptable_report,
         "_market_line_enrichments",
-        lambda *args: {1: {"issue": "Codification incomplete", "revision_amount": 12.0, "revision_delta": 0.5, "revision_control": "BPU 1.0"}},
+        lambda *args: {1: {"issue": None, "revision_control": "PRM-1: BPU 1.0 / TURPE 1.0"}},
     )
+    liaison_rows = [
+        comptable_report.energie_accounting.LiaisonRow(
+            prm_id="PRM-1",
+            site_name="Hotel de ville",
+            poste="ABONNEMENT",
+            label="Abonnement",
+            quantity=1,
+            unit_price_ht=100.0,
+            amount_ht=100.0,
+            service_code="ELEC",
+            function_code="020",
+            antenna_code="ANT",
+            operation_code="OP1",
+            accounting_nature="60612",
+            accounting_label="Electricite",
+            status="ok",
+        ),
+        comptable_report.energie_accounting.LiaisonRow(
+            prm_id="PRM-2",
+            site_name="Gymnase",
+            poste="ACHEMINEMENT",
+            label="Acheminement",
+            quantity=1,
+            unit_price_ht=20.0,
+            amount_ht=20.0,
+            service_code="SPORT",
+            function_code="411",
+            antenna_code="GYMN",
+            operation_code=None,
+            accounting_nature="60612",
+            accounting_label="Electricite",
+            status="ok",
+        ),
+    ]
+    monkeypatch.setattr(comptable_report.energie_accounting, "resolve_invoice_codification", lambda *_args: liaison_rows)
     workbook = openpyxl.Workbook()
     ws = workbook.active
     parsed = comptable_report.WorklistParseResult(
@@ -353,24 +388,30 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
-    assert ws.cell(row=4, column=5).value == "TTC Chorus / compta"
-    assert ws.cell(row=4, column=6).value == "TTC Po2 reconstruit"
-    assert ws.cell(row=4, column=7).value == "Ecart TTC Po2 - Chorus"
-    assert ws.cell(row=4, column=13).value == "Revision appliquee"
-    assert ws.cell(row=4, column=14).value == "Ecart revision"
-    assert ws.cell(row=4, column=15).value == "Controle indices / ratios"
-    assert ws.cell(row=4, column=17).value == "Point a corriger"
-    assert ws.cell(row=5, column=9).value == "Conforme (0 erreur(s), 1 alerte(s))"
-    assert ws.cell(row=5, column=10).value == comptable_report._decision_label("energy", "to_review")
-    assert ws.cell(row=5, column=13).value == 12.0
-    assert ws.cell(row=5, column=14).value == 0.5
-    assert ws.cell(row=5, column=15).value == "BPU 1.0"
-    assert ws.cell(row=5, column=17).value == "Ecart prix BPU ; Codification incomplete"
+    assert ws.cell(row=4, column=1).value == "FOURNISSEUR"
+    assert ws.cell(row=4, column=5).value == "SITE / POINT"
+    assert ws.cell(row=4, column=9).value == "MONTANT HT"
+    assert ws.cell(row=4, column=18).value == "LC"
+    assert ws.cell(row=4, column=19).value == "REVISION / INDICES"
+    assert ws.cell(row=4, column=21).value == "POINT A CORRIGER"
+    assert ws.cell(row=5, column=1).value == "ENGIE"
+    assert ws.cell(row=5, column=2).value == "F-ENGIE-1"
+    assert ws.cell(row=5, column=5).value == "Hotel de ville"
+    assert ws.cell(row=5, column=6).value == "PRM-1"
+    assert ws.cell(row=5, column=9).value == 100.0
+    assert ws.cell(row=5, column=18).value == "020-60612-OP1-ELEC-ANT"
+    assert ws.cell(row=5, column=19).value == "PRM-1: BPU 1.0 / TURPE 1.0"
+    assert ws.cell(row=5, column=20).value == "Conforme (0 erreur(s), 1 alerte(s))"
+    assert ws.cell(row=5, column=21).value == "Ecart prix BPU"
+    assert ws.cell(row=6, column=2).value == "F-ENGIE-1"
+    assert ws.cell(row=6, column=5).value == "Gymnase"
+    assert ws.cell(row=6, column=18).value == "411-60612-SPORT-GYMN"
     assert ws.cell(row=8, column=1).value is None
 
 
 def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) -> None:
     monkeypatch.setattr(comptable_report, "_market_line_enrichments", lambda *args: {})
+    monkeypatch.setattr(comptable_report.energie_accounting, "resolve_invoice_codification", lambda *_args: [])
     workbook = openpyxl.Workbook()
     ws = workbook.active
     parsed = comptable_report.WorklistParseResult(
@@ -411,17 +452,17 @@ def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) ->
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
-    assert ws.cell(row=5, column=1).value == "\u00c9cart TTC"
-    assert ws.cell(row=5, column=7).value == -3274.43
-    assert ws.cell(row=5, column=9).value == "\u00c9cart TTC"
-    assert ws.cell(row=5, column=10).value == "\u00c0 contr\u00f4ler"
-    assert ws.cell(row=5, column=17).value == (
+    assert ws.cell(row=5, column=1).value == "ENGIE"
+    assert ws.cell(row=5, column=12).value == -3274.43
+    assert ws.cell(row=5, column=20).value == "\u00c9cart TTC"
+    assert ws.cell(row=5, column=21).value == (
         "\u00c9cart TTC Po2 - Chorus : -3274.43 EUR. "
         "Po2 contient 5 site(s) ; 5 PRM ; 2084.66 EUR TTC import\u00e9s ; "
         "Chorus/compta attend 5359.09 EUR TTC. "
         "Il manque probablement une ou plusieurs FIC/sites dans l'export fournisseur import\u00e9. "
         "Comparer avec le PDF fournisseur Chorus."
     )
+
 
 def test_row_problem_summary_explains_ttc_gap_before_decision() -> None:
     current = PlatformInvoice(
