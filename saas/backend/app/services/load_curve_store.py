@@ -103,6 +103,83 @@ def _connect_ro() -> sqlite3.Connection | None:
     return sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
 
 
+def data_range_summary() -> dict[str, Any]:
+    """Return global load-curve date range from SQLite without scanning the huge CSV."""
+    con = _connect_ro()
+    if con is None:
+        return {"first_date": None, "last_date": None, "row_count": 0, "stale": _is_stale()}
+    try:
+        first_date, last_date, row_count = con.execute(
+            "SELECT MIN(substr(dt, 1, 10)), MAX(substr(dt, 1, 10)), COUNT(*) FROM load_curve"
+        ).fetchone()
+    finally:
+        con.close()
+    return {
+        "first_date": first_date,
+        "last_date": last_date,
+        "row_count": int(row_count or 0),
+        "stale": _is_stale(),
+    }
+
+
+def coverage_summary() -> dict[str, Any]:
+    """Return per-PRM coverage from the SQLite index, shaped like energie._source_coverage."""
+    con = _connect_ro()
+    empty = {
+        "first_date": None,
+        "last_date": None,
+        "row_count": 0,
+        "bad_date_rows": 0,
+        "prms": {},
+        "stale": _is_stale(),
+    }
+    if con is None:
+        return empty
+
+    try:
+        rows = con.execute(
+            """
+            SELECT
+                prm_id,
+                MIN(substr(dt, 1, 10)),
+                MAX(substr(dt, 1, 10)),
+                COUNT(DISTINCT substr(dt, 1, 10)),
+                COUNT(*)
+            FROM load_curve
+            WHERE prm_id <> ''
+            GROUP BY prm_id
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    first_date = None
+    last_date = None
+    row_count = 0
+    prms: dict[str, dict[str, Any]] = {}
+    for prm_id, prm_first, prm_last, covered_days, prm_rows in rows:
+        row_count += int(prm_rows or 0)
+        if prm_first and (first_date is None or prm_first < first_date):
+            first_date = prm_first
+        if prm_last and (last_date is None or prm_last > last_date):
+            last_date = prm_last
+        prms[str(prm_id)] = {
+            "row_count": int(prm_rows or 0),
+            "covered_days": int(covered_days or 0),
+            "first_date": prm_first,
+            "last_date": prm_last,
+        }
+
+    return {
+        "first_date": first_date,
+        "last_date": last_date,
+        "row_count": row_count,
+        "bad_date_rows": 0,
+        "prms": prms,
+        "stale": _is_stale(),
+    }
+
+
 def points_for_prm(
     prm_id: str,
     start: date | None = None,

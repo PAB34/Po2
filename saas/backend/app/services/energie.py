@@ -195,6 +195,27 @@ def _source_coverage(rel_path: str, date_col: str) -> dict[str, Any]:
     }
 
 
+def _load_curve_data_range() -> dict[str, Any]:
+    summary = load_curve_store.data_range_summary()
+    if summary.get("row_count"):
+        return summary
+
+    path = _energie_path("enedis_load_curve.csv")
+    if path.exists() and path.stat().st_size <= 50 * 1024 * 1024:
+        return _scan_csv_dates("enedis_load_curve.csv", "datetime")
+    return summary
+
+
+def _load_curve_source_coverage() -> dict[str, Any]:
+    coverage = load_curve_store.coverage_summary()
+    if coverage.get("row_count"):
+        return coverage
+
+    path = _energie_path("enedis_load_curve.csv")
+    if path.exists() and path.stat().st_size <= 50 * 1024 * 1024:
+        return _source_coverage("enedis_load_curve.csv", "datetime")
+    return coverage
+
 @lru_cache(maxsize=1)
 def get_data_ranges() -> dict[str, Any]:
     """Retourne les plages de dates disponibles pour chaque source de données."""
@@ -208,7 +229,7 @@ def get_data_ranges() -> dict[str, Any]:
     return {
         "consumption": _scan_csv_dates("enedis_data.csv", "date"),
         "max_power": _scan_csv_dates("enedis_max_power.csv", "date"),
-        "load_curve": _scan_csv_dates("enedis_load_curve.csv", "datetime"),
+        "load_curve": _load_curve_data_range(),
         "dju": _scan_csv_dates("DJU/dju_sete.csv", "date"),
         "contracts": {"count": contracts_count},
     }
@@ -241,7 +262,9 @@ def get_data_audit() -> dict[str, Any]:
         },
     }
     coverages = {
-        key: _source_coverage(config["filename"], config["date_col"])
+        key: _load_curve_source_coverage()
+        if key == "load_curve"
+        else _source_coverage(config["filename"], config["date_col"])
         for key, config in source_configs.items()
     }
     source_prms = {key: set(value["prms"]) for key, value in coverages.items()}
