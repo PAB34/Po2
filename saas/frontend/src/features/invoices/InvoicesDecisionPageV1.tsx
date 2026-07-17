@@ -1,8 +1,14 @@
 import { useMemo, useState, type ChangeEvent } from "react";
 import { Button, Drawer, StatusBadge } from "../../design-system";
-import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useSupplierContactsV1 } from "./useCpeFinanceQueueV1";
-import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput } from "../../lib/api";
+import { useCpeFinanceQueueV1, useCpeInvoiceDetailV1, useCpeInvoiceActionsV1, useComptableReportV1, useInvoiceImportV1, useSupplierContactsV1, type InvoiceImportKind } from "./useCpeFinanceQueueV1";
+import type { CpeFinanceControl, CpeFinanceControlReport, CpeFinanceLine, EnergyInvoiceImport, SupplierContact, SupplierContactInput, ComptableReportFiles } from "../../lib/api";
 
+// Choix du fournisseur / type d'export = chez qui atterrit la facture.
+const IMPORT_KIND_OPTIONS: { value: InvoiceImportKind; label: string; accept: string; hint: string }[] = [
+  { value: "engie_xlsx", label: "ENGIE - export XLSX Mes Factures", accept: ".xlsx,.xlsm", hint: "Un fichier = plusieurs bordereaux." },
+  { value: "edf_csv", label: "EDF - export CSV de facturation", accept: ".csv", hint: "Un fichier = plusieurs factures." },
+  { value: "gas_te", label: "TotalEnergies gaz - export XLSX detail factures", accept: ".xlsx,.xlsm,.xls", hint: "Table a plat TotalEnergies, une ligne par facture." },
+];
 type CpeQueueInvoice = CpeFinanceControlReport["invoices"][number];
 type UnifiedStatus = "todo" | "valid" | "refused" | "disputed";
 type UnifiedRow = {
@@ -343,6 +349,8 @@ export function InvoicesDecisionPageV1() {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [contactsOpen, setContactsOpen] = useState(false);
+  const [comptableOpen, setComptableOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
   const { report, invoices, energy } = useCpeFinanceQueueV1();
   const { contacts } = useSupplierContactsV1();
@@ -534,6 +542,7 @@ export function InvoicesDecisionPageV1() {
           </div>
           <div className="po2-prototype-actions">
             <Button variant="ghost" onClick={() => setContactsOpen(true)}>Contacts fournisseurs</Button>
+            <Button variant="ghost" onClick={() => setComptableOpen(true)}>Demande comptable</Button>
             <Button
               variant="ghost"
               onClick={() => { if (window.confirm("Supprimer les factures en double (même numéro) ? La plus récente est conservée.")) actions.purgeDuplicates.mutate(); }}
@@ -548,7 +557,11 @@ export function InvoicesDecisionPageV1() {
             >
               {actions.recomputeControls.isPending ? "Recalcul…" : "Recalculer les contrôles"}
             </Button>
-            <Button variant="ghost" disabled title="Import à brancher (upload + parseurs) — chantier séparé">
+            <Button
+              variant="ghost"
+              onClick={() => setImportOpen(true)}
+              title="Importer un export de factures (ENGIE xlsx, EDF csv, gaz TotalEnergies)"
+            >
               Importer des factures
             </Button>
           </div>
@@ -876,6 +889,9 @@ export function InvoicesDecisionPageV1() {
         ) : null}
       </Drawer>
 
+      <ComptableReportDrawer open={comptableOpen} onClose={() => setComptableOpen(false)} />
+      <InvoiceImportDrawer open={importOpen} onClose={() => setImportOpen(false)} />
+
       <Drawer
         open={contactsOpen}
         title="Contacts fournisseurs"
@@ -898,6 +914,150 @@ export function InvoicesDecisionPageV1() {
         />
       ) : null}
     </div>
+  );
+}
+
+function InvoiceImportDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { runImport } = useInvoiceImportV1();
+  const [kind, setKind] = useState<InvoiceImportKind>("engie_xlsx");
+  const [file, setFile] = useState<File | null>(null);
+  const [forceUpdate, setForceUpdate] = useState(false);
+  const option = IMPORT_KIND_OPTIONS.find((o) => o.value === kind)!;
+  const result = runImport.data;
+  const submit = () => {
+    if (!file) return;
+    runImport.mutate({ kind, file, forceUpdate });
+  };
+  const reset = () => {
+    setFile(null);
+    runImport.reset();
+  };
+  return (
+    <Drawer
+      open={open}
+      title="Importer des factures"
+      eyebrow="Import"
+      description="Selectionnez le type d'export puis le fichier. Le controle est relance automatiquement apres import. Les doublons (meme numero de facture) sont ignores."
+      onClose={onClose}
+    >
+      <div className="po2-import-drawer" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <label className="po2-claim__field">
+          <span>Fournisseur / type d'export</span>
+          <select value={kind} onChange={(e) => { setKind(e.target.value as InvoiceImportKind); reset(); }}>
+            {IMPORT_KIND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <label className="po2-claim__field">
+          <span>Fichier ({option.hint})</span>
+          <input
+            type="file"
+            accept={option.accept}
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); runImport.reset(); }}
+          />
+        </label>
+        <label style={{ display: "flex", gap: ".5rem", alignItems: "center", fontSize: ".85rem" }}>
+          <input type="checkbox" checked={forceUpdate} onChange={(e) => setForceUpdate(e.target.checked)} />
+          <span>Mettre a jour les factures deja importees (re-analyse ; conserve les decisions).</span>
+        </label>
+
+        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+          <Button onClick={submit} disabled={!file || runImport.isPending}>
+            {runImport.isPending ? "Import en cours..." : "Lancer l'import"}
+          </Button>
+          {file ? <Button variant="ghost" onClick={reset} disabled={runImport.isPending}>Reinitialiser</Button> : null}
+        </div>
+
+        <div className="po2-proto-control-list">
+          <article>
+            <StatusBadge tone="neutral">DALKIA</StatusBadge>
+            <div>
+              <strong>Factures CPE DALKIA</strong>
+              <small>Le flux DALKIA passe par un apercu puis une confirmation. Utilisez la page dediee pour importer le referentiel sans perdre cette verification.</small>
+              <a className="po2-button po2-button--ghost" href="/cpe/dalkia-import" style={{ marginTop: ".6rem", width: "fit-content" }}>
+                Ouvrir l'import DALKIA
+              </a>
+            </div>
+          </article>
+        </div>
+        {runImport.isPending ? <p className="po2-muted-line">Analyse du fichier en arriere-plan... (peut prendre jusqu'a une minute)</p> : null}
+        {runImport.isError ? <p className="po2-action-error">Import : {(runImport.error as Error).message}</p> : null}
+        {result ? (
+          <div className="po2-proto-control-list">
+            <article>
+              <StatusBadge tone={result.error_count > 0 ? "warn" : "ok"}>
+                {result.error_count > 0 ? "AVEC ERREURS" : "OK"}
+              </StatusBadge>
+              <div>
+                <strong>
+                  {result.imported_count} importee(s) · {result.duplicate_count} doublon(s) · {result.error_count} erreur(s)
+                </strong>
+                {result.items?.[0]?.message ? <small>{result.items[0].message}</small> : null}
+                {result.status === "processing" ? <small>Analyse toujours en cours - rouvrez la page dans un instant.</small> : null}
+              </div>
+            </article>
+          </div>
+        ) : null}
+      </div>
+    </Drawer>
+  );
+}
+const COMPTABLE_MARKETS: { key: keyof ComptableReportFiles; label: string }[] = [
+  { key: "dalkia", label: "DALKIA (CPE)" },
+  { key: "engie", label: "ENGIE" },
+  { key: "edf", label: "EDF" },
+  { key: "totalenergies", label: "TotalEnergies gaz" },
+];
+
+function ComptableReportDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { generate } = useComptableReportV1();
+  const [files, setFiles] = useState<ComptableReportFiles>({});
+  const hasFile = Object.values(files).some(Boolean);
+  const setMarketFile = (market: keyof ComptableReportFiles) => (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setFiles((prev) => ({ ...prev, [market]: file }));
+    generate.reset();
+  };
+  const clearMarket = (market: keyof ComptableReportFiles) => {
+    setFiles((prev) => {
+      const next = { ...prev };
+      delete next[market];
+      return next;
+    });
+    generate.reset();
+  };
+  return (
+    <Drawer
+      open={open}
+      title="Demande comptable"
+      eyebrow="Rapport XLSX"
+      description="Worklists comptables par marché, puis génération du rapport de contrôle."
+      onClose={onClose}
+    >
+      <div className="po2-import-drawer" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="po2-proto-control-list">
+          {COMPTABLE_MARKETS.map((market) => {
+            const file = files[market.key];
+            return (
+              <article key={market.key} style={{ gridTemplateColumns: "1fr auto" }}>
+                <div>
+                  <strong>{market.label}</strong>
+                  <small>{file ? file.name : "Aucun fichier"}</small>
+                  <input type="file" accept=".xlsx,.xlsm,.xls" onChange={setMarketFile(market.key)} style={{ marginTop: ".5rem" }} />
+                </div>
+                {file ? <Button variant="ghost" onClick={() => clearMarket(market.key)} disabled={generate.isPending}>Retirer</Button> : null}
+              </article>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+          <Button onClick={() => generate.mutate(files)} disabled={!hasFile || generate.isPending}>
+            {generate.isPending ? "Génération…" : "Générer le rapport"}
+          </Button>
+        </div>
+        {generate.isError ? <p className="po2-action-error">Rapport : {(generate.error as Error).message}</p> : null}
+        {generate.isSuccess ? <p className="po2-muted-line">Rapport téléchargé.</p> : null}
+      </div>
+    </Drawer>
   );
 }
 

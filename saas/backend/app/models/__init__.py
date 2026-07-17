@@ -56,6 +56,7 @@ from app.models.cpe_dalkia import (
     CpeDalkiaRefRecap,
     CpeDalkiaRefSite,
 )
+from app.models.cpe_contract_change import CpeContractChangeLine, CpeContractChangeRequest
 from app.models.cpe_dpgf_p1 import CpeDpgfP1Import, CpeDpgfP1Line
 from app.models.cpe import (
     CpeAccountingNatureRule,

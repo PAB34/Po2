@@ -283,6 +283,7 @@ export default function CpeDalkiaPage() {
   const [trimestre, setTrimestre] = useState<number>(2);
   const [showPuForm, setShowPuForm] = useState(false);
   const [puInput, setPuInput] = useState("");
+  const [revisionEvidenceMessage, setRevisionEvidenceMessage] = useState<string | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [financePreview, setFinancePreview] = useState<CpeFinancePreview | null>(null);
   const [view, setView] = useState<CpeView>("cockpit");
@@ -576,20 +577,42 @@ export default function CpeDalkiaPage() {
   });
 
   const uploadRevisionEvidencePdfM = useMutation({
-    mutationFn: (file: File) => uploadCpeRevisionEvidencePdf(token!, file),
-    onSuccess: () => {
+    mutationFn: async (file: File) => {
+      const evidence = await uploadCpeRevisionEvidencePdf(token!, file);
+      try {
+        const indices = await applyCpeInvoiceEvidenceDeclaredIndices(token!, evidence.id);
+        return { evidence, indices, applyError: null as string | null };
+      } catch (error) {
+        return {
+          evidence,
+          indices: [] as CpeRevisionIndex[],
+          applyError: error instanceof Error ? error.message : "Application des indices impossible.",
+        };
+      }
+    },
+    onSuccess: ({ evidence, indices, applyError }) => {
       qc.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
       qc.invalidateQueries({ queryKey: ["cpe-revision-evidences"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
+      qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
+      setRevisionEvidenceMessage(
+        applyError
+          ? `${evidence.original_filename} importé, mais indices non appliqués : ${applyError}`
+          : `${evidence.original_filename} importé : ${indices.length} indice(s) appliqué(s) comme déclarés DALKIA à vérifier.`,
+      );
     },
+    onError: () => setRevisionEvidenceMessage(null),
   });
 
   const applyEvidenceIndicesM = useMutation({
     mutationFn: (evidenceId: number) => applyCpeInvoiceEvidenceDeclaredIndices(token!, evidenceId),
-    onSuccess: () => {
+    onSuccess: (indices) => {
       qc.invalidateQueries({ queryKey: ["cpe-revision-indices"] });
       qc.invalidateQueries({ queryKey: ["cpe-revision-observations"] });
       qc.invalidateQueries({ queryKey: ["cpe-revision-evidences"] });
+      setRevisionEvidenceMessage(`${indices.length} indice(s) appliqué(s) comme déclarés DALKIA à vérifier.`);
     },
+    onError: () => setRevisionEvidenceMessage(null),
   });
 
   const bilan: CpeBilanAnnuel | undefined = bilanQ.data;
@@ -666,6 +689,14 @@ export default function CpeDalkiaPage() {
           indices={revisionIndicesQ.data ?? []}
           revisionObservations={revisionObservationsQ.data ?? []}
           revisionEvidences={revisionEvidencesQ.data ?? []}
+          revisionEvidenceMessage={revisionEvidenceMessage}
+          revisionEvidenceError={
+            uploadRevisionEvidencePdfM.error instanceof Error
+              ? uploadRevisionEvidencePdfM.error.message
+              : applyEvidenceIndicesM.error instanceof Error
+                ? applyEvidenceIndicesM.error.message
+                : null
+          }
           controlReport={recalculateAllControlsM.data ?? financeControlReportQ.data ?? null}
           loading={siteMappingsQ.isLoading || accountingRulesQ.isLoading || contractReferencesQ.isLoading || financeBatchesQ.isLoading}
           codificationImportPending={codificationImportM.isPending}
@@ -2034,6 +2065,8 @@ function CpeFinanceReference({
   indices,
   revisionObservations,
   revisionEvidences,
+  revisionEvidenceMessage,
+  revisionEvidenceError,
   controlReport,
   loading,
   codificationImportPending,
@@ -2087,6 +2120,8 @@ function CpeFinanceReference({
   indices: CpeRevisionIndex[];
   revisionObservations: CpeRevisionObservation[];
   revisionEvidences: CpeInvoiceEvidence[];
+  revisionEvidenceMessage: string | null;
+  revisionEvidenceError: string | null;
   controlReport: CpeFinanceControlReport | null;
   loading: boolean;
   codificationImportPending: boolean;
@@ -2661,6 +2696,14 @@ function CpeFinanceReference({
             }}
           />
         </div>
+        {revisionEvidenceMessage ? (
+          <p style={{ color: revisionEvidenceMessage.includes("non appliqués") ? "#9a3412" : "#166534", fontSize: 13, margin: "-6px 0 12px" }}>
+            {revisionEvidenceMessage}
+          </p>
+        ) : null}
+        {revisionEvidenceError ? (
+          <p style={{ color: "#dc2626", fontSize: 13, margin: "-6px 0 12px" }}>{revisionEvidenceError}</p>
+        ) : null}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 18 }}>
           {[

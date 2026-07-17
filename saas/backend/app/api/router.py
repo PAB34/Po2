@@ -4,6 +4,7 @@ from app.api.routes.accounting_matrix import router as accounting_matrix_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.cpe import router as cpe_router
 from app.api.routes.cpe_dalkia import router as cpe_dalkia_router
+from app.api.routes.cpe_os_avenant import router as cpe_os_avenant_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.bpu import router as bpu_router
 from app.api.routes.buildings import router as buildings_router
@@ -48,6 +49,7 @@ api_router.include_router(energie_router, prefix="/api")
 api_router.include_router(equipment_router, prefix="/api")
 api_router.include_router(cpe_router, prefix="/api")
 api_router.include_router(cpe_dalkia_router, prefix="/api")
+api_router.include_router(cpe_os_avenant_router, prefix="/api")
 api_router.include_router(accounting_matrix_router, prefix="/api")
 api_router.include_router(marches_router, prefix="/api")
 api_router.include_router(health_router, prefix="/api")

@@ -1,24 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  downloadComptableControlReport,
   downloadCpeFinanceInvoiceLiaison,
   fetchCpeFinanceControlReport,
   fetchCpeFinanceControls,
   fetchCpeFinanceInvoiceLines,
   fetchCpeFinanceInvoices,
+  fetchEnergyInvoiceBatch,
   fetchEnergyInvoiceImports,
   fetchSupplierContacts,
+  importGasInvoices,
   purgeCpeFinanceDuplicates,
   purgeEnergyInvoiceDuplicates,
   reanalyzeAllEnergyInvoices,
   recalculateAllCpeFinanceControls,
   updateCpeFinanceInvoice,
   updateEnergyInvoiceDecision,
+  uploadEdfCsvExport,
+  uploadEngieXlsxExport,
   upsertSupplierContact,
+  type ComptableReportFiles,
+  type EnergyInvoiceBatchDetail,
   type SupplierContactInput,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 
-/** File de contrôle facture par facture (moteur CPE/DALKIA) + dates d'émission. */
+/** Types de fichier d'import branches en v1 (parseurs back existants). */
+export type InvoiceImportKind = "engie_xlsx" | "edf_csv" | "gas_te";
+
+type InvoiceImportResult = Pick<
+  EnergyInvoiceBatchDetail,
+  "status" | "imported_count" | "duplicate_count" | "error_count" | "items"
+>;
+
+/** File de controle facture par facture (moteur CPE/DALKIA) + dates d'emission. */
 export function useCpeFinanceQueueV1() {
   const { token } = useAuth();
   const report = useQuery({
@@ -42,7 +57,7 @@ export function useCpeFinanceQueueV1() {
   return { report, invoices, energy };
 }
 
-/** Contacts fournisseurs (réclamations) : liste + upsert par fournisseur. */
+/** Contacts fournisseurs (reclamations) : liste + upsert par fournisseur. */
 export function useSupplierContactsV1() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -62,7 +77,7 @@ export function useSupplierContactsV1() {
   return { contacts, save };
 }
 
-/** Détail d'une facture : contrôles par type + lignes (décomposition comptable). */
+/** Detail d'une facture : controles par type + lignes (decomposition comptable). */
 export function useCpeInvoiceDetailV1(invoiceId: number | null) {
   const { token } = useAuth();
   const controls = useQuery({
@@ -80,7 +95,7 @@ export function useCpeInvoiceDetailV1(invoiceId: number | null) {
   return { controls, lines };
 }
 
-/** Actions comptable : valider un numéro de facture, exporter la fiche finance. */
+/** Actions comptable : valider un numero de facture, exporter la fiche finance. */
 export function useCpeInvoiceActionsV1() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -140,4 +155,90 @@ export function useCpeInvoiceActionsV1() {
     onSuccess: invalidate,
   });
   return { setStatus, setEnergyStatus, exportLiaison, purgeDuplicates, recomputeControls };
+}
+
+const IMPORT_POLL_INTERVAL_MS = 1500;
+const IMPORT_POLL_MAX_TRIES = 40; // ~60 s max
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function numberFromImportSummary(summary: Record<string, unknown>, key: string) {
+  const value = summary[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/** Import d'un fichier de factures (ENGIE xlsx / EDF csv / gaz TE). */
+export function useInvoiceImportV1() {
+  const { token } = useAuth();
+  const queryClient = useQueryClient();
+  const runImport = useMutation({
+    mutationFn: async (
+      { kind, file, forceUpdate }: { kind: InvoiceImportKind; file: File; forceUpdate: boolean },
+    ): Promise<InvoiceImportResult> => {
+      if (!token) throw new Error("Session absente.");
+      if (kind === "gas_te") {
+        const summary = await importGasInvoices(token, file, forceUpdate);
+        const created = numberFromImportSummary(summary, "created");
+        const updated = numberFromImportSummary(summary, "updated");
+        const skipped = numberFromImportSummary(summary, "skipped");
+        const valid = numberFromImportSummary(summary, "valid");
+        const review = numberFromImportSummary(summary, "review");
+        const invalid = numberFromImportSummary(summary, "invalid");
+        return {
+          status: "completed",
+          imported_count: created + updated,
+          duplicate_count: skipped,
+          error_count: invalid,
+          items: [{
+            id: 0,
+            invoice_import_id: null,
+            original_filename: file.name,
+            archive_filename: null,
+            content_type: file.type || null,
+            file_size_bytes: file.size,
+            sha256: null,
+            status: invalid > 0 ? "completed_with_errors" : "imported",
+            message: `${created} creee(s), ${updated} mise(s) a jour, ${skipped} ignoree(s). Controle : ${valid} OK, ${review} a revoir, ${invalid} KO.`,
+            created_at: new Date().toISOString(),
+          }],
+        };
+      }
+      const batch = kind === "engie_xlsx"
+        ? await uploadEngieXlsxExport(token, file, { forceUpdate })
+        : await uploadEdfCsvExport(token, file, { forceUpdate });
+      let current = batch;
+      for (let i = 0; i < IMPORT_POLL_MAX_TRIES && current.status === "processing"; i += 1) {
+        await delay(IMPORT_POLL_INTERVAL_MS);
+        current = await fetchEnergyInvoiceBatch(token, batch.id);
+      }
+      return current;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["energy-invoice-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["gas-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["gas-portfolio"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-finance-control-report"] });
+      queryClient.invalidateQueries({ queryKey: ["cpe-finance-invoices"] });
+    },
+  });
+  return { runImport };
+}
+
+export function useComptableReportV1() {
+  const { token } = useAuth();
+  const generate = useMutation({
+    mutationFn: async (files: ComptableReportFiles) => {
+      if (!token) throw new Error("Session absente.");
+      const blob = await downloadComptableControlReport(token, files);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport-controle-comptable-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
+  });
+  return { generate };
 }

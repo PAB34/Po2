@@ -1,7 +1,7 @@
 from hashlib import sha256
 from threading import Thread
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -27,6 +27,7 @@ from app.schemas.billing import (
     EnergyCodificationImportResult,
     EnergyLiaisonPreview,
     EnergyLiaisonPreviewRow,
+    SupplierPdfControlResult,
     TurpeVersionOut,
 )
 from app.schemas.supplier_contact import SupplierContactIn, SupplierContactOut
@@ -56,6 +57,8 @@ from app.services.billing import (
 )
 from app.services.billing_bpu_sync import apply_config_sync, preview_config_sync
 from app.services import energie_accounting as accounting_svc
+from app.services import comptable_report as comptable_report_svc
+from app.services import supplier_invoice_pdf_control as pdf_control_svc
 from app.services.invoices import (
     analyze_existing_invoice_import,
     create_invoice_batch,
@@ -831,6 +834,60 @@ def delete_energy_nature_rule(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Règle de nature introuvable")
     accounting_svc.delete_nature_rule(db, obj)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+
+@router.post("/comptable/rapport-controle.xlsx")
+async def export_comptable_control_report(
+    dalkia: UploadFile | None = File(default=None),
+    engie: UploadFile | None = File(default=None),
+    edf: UploadFile | None = File(default=None),
+    totalenergies: UploadFile | None = File(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    city_id = _require_city(current_user)
+    uploads: dict[comptable_report_svc.MarketKey, bytes] = {}
+    for key, upload in (
+        ("dalkia", dalkia),
+        ("engie", engie),
+        ("edf", edf),
+        ("totalenergies", totalenergies),
+    ):
+        if upload is not None and upload.filename:
+            uploads[key] = await upload.read()
+    try:
+        content = comptable_report_svc.build_comptable_control_workbook(db, city_id, uploads)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type=comptable_report_svc.XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": 'attachment; filename="rapport-controle-comptable.xlsx"'},
+    )
+
+
+@router.post("/comptable/pdf-control/engie", response_model=SupplierPdfControlResult)
+async def control_engie_supplier_pdf(
+    invoice_number: str = Form(...),
+    file: UploadFile = File(..., description="Facture fournisseur ENGIE PDF"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    city_id = _require_city(current_user)
+    raw = await file.read()
+    try:
+        return pdf_control_svc.control_engie_supplier_pdf(
+            db,
+            city_id,
+            invoice_number,
+            raw,
+            filename=file.filename or "facture-engie.pdf",
+        )
+    except pdf_control_svc.PlatformInvoiceNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except pdf_control_svc.PdfControlError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/invoices/imports/{invoice_import_id}/codification", response_model=EnergyLiaisonPreview)
