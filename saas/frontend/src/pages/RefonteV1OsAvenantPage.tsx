@@ -495,17 +495,19 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
                   </label>
                 </div>
                 <div style={{ maxHeight: "15rem", overflow: "auto", border: "1px solid var(--po2-color-line)", borderRadius: "var(--po2-radius-sm)", background: "var(--po2-color-canvas)" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "auto minmax(12rem, 1fr) 5.5rem 5.5rem 6rem", gap: ".65rem", alignItems: "center", padding: ".5rem .75rem", borderBottom: "1px solid var(--po2-color-line)", color: "var(--po2-color-muted)", fontSize: ".78rem", fontWeight: 700, textTransform: "uppercase" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "auto minmax(12rem, 1fr) 5.25rem 5.25rem 5.25rem 6rem", gap: ".65rem", alignItems: "center", padding: ".5rem .75rem", borderBottom: "1px solid var(--po2-color-line)", color: "var(--po2-color-muted)", fontSize: ".78rem", fontWeight: 700, textTransform: "uppercase" }}>
                     <span />
                     <span>Site</span>
+                    <span style={{ textAlign: "right" }}>P1</span>
                     <span style={{ textAlign: "right" }}>P2</span>
                     <span style={{ textAlign: "right" }}>P3</span>
                     <span style={{ textAlign: "right" }}>Total</span>
                   </div>
                   {siteOptions.map((site) => (
-                    <label key={site.code_site} style={{ display: "grid", gridTemplateColumns: "auto minmax(12rem, 1fr) 5.5rem 5.5rem 6rem", gap: ".65rem", alignItems: "center", padding: ".65rem .75rem", borderBottom: "1px solid var(--po2-color-line)" }}>
+                    <label key={site.code_site} style={{ display: "grid", gridTemplateColumns: "auto minmax(12rem, 1fr) 5.25rem 5.25rem 5.25rem 6rem", gap: ".65rem", alignItems: "center", padding: ".65rem .75rem", borderBottom: "1px solid var(--po2-color-line)" }}>
                       <input type="checkbox" checked={selectedSiteCodes.includes(site.code_site)} onChange={() => toggleSelectedSite(site.code_site)} />
                       <span><strong>{site.code_site}</strong><small className="po2-muted-line">{site.site_name}</small></span>
+                      <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{eur(site.p1_gaz_annual_ht + site.p1_elec_annual_ht)}</span>
                       <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{eur(site.p2_annual_ht)}</span>
                       <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{eur(site.p3_annual_ht)}</span>
                       <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{eur(site.total_annual_ht)}</span>
