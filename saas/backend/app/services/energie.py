@@ -1151,10 +1151,9 @@ def get_dju_monthly() -> list[dict[str, Any]]:
     rows = _dju_rows()
     by_month: dict[str, dict[str, float]] = {}
     for r in rows:
-        d = r.get("date", "")
-        if len(d) < 7:
+        ym = _month_key(r.get("date"))
+        if ym is None:
             continue
-        ym = d[:7]  # YYYY-MM
         h = _safe_float(r.get("dju_chauffage_base_18")) or 0.0
         c = _safe_float(r.get("dju_froid_base_22")) or 0.0
         if ym not in by_month:
@@ -1178,10 +1177,9 @@ def _dju_monthly_index() -> dict[str, dict[str, float]]:
     rows = _dju_rows()
     by_month: dict[str, dict[str, float]] = {}
     for r in rows:
-        d = r.get("date", "")
-        if len(d) < 7:
+        ym = _month_key(r.get("date"))
+        if ym is None:
             continue
-        ym = d[:7]
         h = _safe_float(r.get("dju_chauffage_base_18")) or 0.0
         c = _safe_float(r.get("dju_froid_base_22")) or 0.0
         if ym not in by_month:
