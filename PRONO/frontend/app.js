@@ -464,9 +464,10 @@ function renderTennisBrackets() {
   </button>`).join("");
   const t = tournaments[_selectedBracket];
   const rounds = (t.rounds || []).map(r => `<div class="bround"><div class="broundh">${esc(r.name)}</div>${(r.matches || []).map(bracketMatch).join("")}</div>`).join("");
+  const sourceLabel = t.source ? `source ${t.source}` : "source";
   return `<div class="bracketToolbar">${chips}</div>
     <div class="bracketPanel">
-      <div class="bracketTitle"><div><b>${esc(t.name)}</b><span>${esc(t.location || "")}</span></div><a href="${esc(t.source_url)}" target="_blank" rel="noopener">source ESPN</a></div>
+      <div class="bracketTitle"><div><b>${esc(t.name)}</b><span>${esc(t.location || "")}</span></div><a href="${esc(t.source_url)}" target="_blank" rel="noopener">${esc(sourceLabel)}</a></div>
       <div class="bracketRounds">${rounds}</div>
     </div>`;
 }
