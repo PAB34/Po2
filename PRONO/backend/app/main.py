@@ -9,6 +9,7 @@ from app.config import settings
 from app.db import init_db_and_seed
 from app.auth import router as auth_router
 from app.routes_ligue1 import router as ligue1_router
+from app.routes_tennis import router as tennis_router
 from app.routes_value import router as value_router
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
@@ -23,6 +24,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(ligue1_router)
+app.include_router(tennis_router)
 app.include_router(value_router)
 
 

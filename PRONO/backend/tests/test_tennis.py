@@ -1,0 +1,81 @@
+﻿import unittest
+from unittest.mock import patch
+
+from app import tennis
+
+
+class TennisServiceTests(unittest.TestCase):
+    def test_build_tennis_filters_and_scores_matches(self):
+        feed = {
+            "last_updated": "2026-07-17T12:00:00Z",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "ATP Hamburg",
+                    "player1": "Market Player A (1)",
+                    "player2": "Market Player B (2)",
+                    "odds1": "1.50",
+                    "odds2": "2.70",
+                },
+                {
+                    "tour": "ATP",
+                    "tournament": "Challenger Turin",
+                    "player1": "Player A",
+                    "player2": "Player B",
+                    "odds1": "1.80",
+                    "odds2": "2.00",
+                },
+                {
+                    "tour": "WTA",
+                    "tournament": "Wimbledon",
+                    "player1": "Grass Player A",
+                    "player2": "Grass Player B",
+                    "odds1": "2.40",
+                    "odds2": "1.62",
+                },
+            ],
+        }
+
+        with patch.object(tennis, "fetch_feed", return_value=feed):
+            payload = tennis.build_tennis()
+
+        self.assertEqual(payload["feed_updated"], "2026-07-17T12:00:00Z")
+        self.assertEqual(len(payload["atp"]), 1)
+        self.assertEqual(payload["atp"][0]["surface"], "Terre")
+        self.assertEqual(payload["atp"][0]["favori"], "Market Player A")
+        self.assertEqual(payload["atp"][0]["match"], "Market Player A vs Market Player B")
+        self.assertIn("proba_brute", payload["atp"][0])
+        self.assertIn("preuves", payload["atp"][0])
+        self.assertEqual(len(payload["wta"]), 1)
+        self.assertEqual(payload["wta"][0]["surface"], "Gazon")
+        self.assertEqual(payload["wta"][0]["favori"], "Grass Player B")
+
+    def test_build_tennis_penalizes_ruud_with_coach_and_h2h(self):
+        feed = {
+            "last_updated": "2026-07-17T12:00:00Z",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "Gstaad",
+                    "player1": "Cerundolo J. (6)",
+                    "player2": "Ruud C. (2)",
+                    "odds1": 3.43,
+                    "odds2": 1.31,
+                }
+            ],
+        }
+
+        with patch.object(tennis, "fetch_feed", return_value=feed):
+            payload = tennis.build_tennis()
+
+        row = payload["atp"][0]
+        self.assertEqual(row["favori"], "Ruud C.")
+        self.assertEqual(row["h2h"], "1-0")
+        self.assertIn("Gstaad 2025", row["alerte"])
+        self.assertLess(row["proba"], row["proba_brute"])
+        self.assertLess(row["proba"], row["proba_marche"])
+        self.assertEqual(row["cycle2"], "sous-rythme")
+
+
+if __name__ == "__main__":
+    unittest.main()

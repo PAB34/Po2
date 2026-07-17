@@ -65,7 +65,7 @@ async function installApp() {
 }
 function showInstallInstructions() {
   const ua = navigator.userAgent, iOS = /iphone|ipad|ipod/i.test(ua), android = /android/i.test(ua);
-  let html = `<div class="installStep"><b>Installer Ligue 1 · Pronos</b>L'app s'ouvre alors en plein écran, comme une appli normale.</div>`;
+  let html = `<div class="installStep"><b>Installer Ligue 1 - Pronos</b>L'app s'ouvre alors en plein écran, comme une appli normale.</div>`;
   if (iOS) html += `<div class="installStep"><b>Sur iPhone (Safari)</b>Bouton Partager (carré avec flèche), puis « Sur l'écran d'accueil ».</div>`;
   else if (android) html += `<div class="installStep"><b>Sur Android (Chrome)</b>Menu ⋮ en haut à droite, puis « Ajouter à l'écran d'accueil » ou « Installer l'application ».</div>`;
   else html += `<div class="installStep"><b>Sur ordinateur</b>Utilise l'icône d'installation dans la barre d'adresse du navigateur (Chrome/Edge).</div>`;
@@ -132,19 +132,27 @@ async function doChangePassword() {
 /* ---------- Onglets ---------- */
 let _actuLoaded = false;
 let _testsLoaded = false;
+let _tennisLoaded = false;
+let _tennisData = null;
+let _tennisBrackets = null;
+let _tennisMode = "matches";
+let _selectedBracket = 0;
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
   $("#view-actu").classList.toggle("hidden", tab !== "actu");
   $("#view-tests").classList.toggle("hidden", tab !== "tests");
+  $("#view-tennis").classList.toggle("hidden", tab !== "tennis");
   if (tab === "actu" && !_actuLoaded) loadActu();
   if (tab === "tests" && !_testsLoaded) loadDiagnostics(false);
+  if (tab === "tennis" && !_tennisLoaded) loadTennis(false);
 }
 function refreshAll() {
   _actuLoaded = false;
   loadJournee(true);
   if (!$("#view-actu").classList.contains("hidden")) loadActu();
   if (!$("#view-tests").classList.contains("hidden")) loadDiagnostics(true);
+  if (!$("#view-tennis").classList.contains("hidden")) loadTennis(true);
 }
 
 /* ---------- Helpers rendu ---------- */
@@ -166,7 +174,7 @@ function injuryList(b){
   if(!b.injuries||!b.injuries.length)return `<div class="dyn" style="color:#15803d">Aucun blessé connu ✓</div>`;
   return `<ul class="injlist">`+b.injuries.map(i=>{
     const ko=/ligament|fracture|rupture/i.test(i.injury)?"ko":"";
-    const ret=i.return&&i.return!=="non précisé"?` · retour ${esc(i.return)}`:"";
+    const ret=i.return&&i.return!=="non précisé"?` - retour ${esc(i.return)}`:"";
     return `<li><span class="${ko}">${esc(i.player)}</span> <span style="color:#64748b">(${esc(i.position)})</span> — ${esc(i.injury)}${ret}</li>`;
   }).join("")+`</ul>`;
 }
@@ -174,7 +182,7 @@ function stakesBlock(st){
   if(!st || st.rank==null) return "";
   return `<div class="dlbl">Enjeu</div>
     <div class="stkrow">
-      <span class="stkrank">${st.rank}<sup>e</sup>/${st.n_teams} · ${st.points} pts${st.games_remaining?` · ${st.games_remaining} matchs restants`:""}</span>
+      <span class="stkrank">${st.rank}<sup>e</sup>/${st.n_teams} - ${st.points} pts${st.games_remaining?` - ${st.games_remaining} matchs restants`:""}</span>
       <span class="stkpill ${stakesClass(st.level)}">${esc(st.enjeu_label)}</span>
     </div>`;
 }
@@ -248,7 +256,7 @@ function renderSummaryLine(matches){
   if(nuances) chips.push(`⚠️ ${nuances} à nuancer`);
   if(derbies) chips.push(`⚔️ ${derbies} derby${derbies>1?"s":""}`);
   sl.classList.remove("hidden");
-  sl.innerHTML=chips.map(c=>`<span>${esc(c)}</span>`).join(" · ");
+  sl.innerHTML=chips.map(c=>`<span>${esc(c)}</span>`).join(" - ");
 }
 
 async function loadJournee(force){
@@ -362,6 +370,132 @@ async function runValueCheck(kind) {
   }
 }
 
+
+/* ---------- Tennis ---------- */
+function pctTennis(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round(n) + "%" : "-";
+}
+function numTennis(value, digits = 2) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : "-";
+}
+function signedTennis(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "-";
+  return `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+}
+function tennisSignals(row) {
+  const chips = [
+    `${esc(row.joueur1 || "J1")}: ${esc(row.cycle1 || "-")} / ${esc(row.fatigue1 || "-")}`,
+    `${esc(row.joueur2 || "J2")}: ${esc(row.cycle2 || "-")} / ${esc(row.fatigue2 || "-")}`,
+    `H2H ${esc(row.h2h || "0-0")}`,
+  ].map(t => `<span>${t}</span>`).join("");
+  const alert = row.alerte ? `<div class="talert">${esc(row.alerte)}</div>` : "";
+  const proofs = row.preuves ? `<div class="tproof">${esc(row.preuves)}</div>` : "";
+  return `<div class="tchips">${chips}</div>${alert}${proofs}`;
+}
+function tennisTable(rows) {
+  if (!rows || !rows.length) return `<div class="note">Aucun match cote pour le moment.</div>`;
+  return `<div class="tenwrap"><table class="tentable"><thead><tr>
+    <th>Tournoi</th><th>Match</th><th>Favori</th>
+    <th class="n">Coach</th><th class="n">Brut</th><th class="n">Marche</th><th class="n">Ajust.</th><th class="n">Cote</th><th class="n">3 sets</th>
+  </tr></thead><tbody>${rows.map(row => {
+    const adj = Number(row.ajustement || 0);
+    const adjCls = adj <= -5 ? "neg" : adj >= 5 ? "pos" : "flat";
+    return `<tr>
+      <td><b>${esc(row.tournoi)}</b><div class="tsub">${esc(row.surface)}${row.heure ? ` - ${esc(row.heure)}` : ""}</div></td>
+      <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
+      <td class="favn">${esc(row.favori)}<div class="tsub">${esc(row.modele === "elo_surface" ? "Elo surface + coach" : "Marche + coach")}</div></td>
+      <td class="n probten">${pctTennis(row.proba)}<span style="width:${Math.max(8, Number(row.proba || 0) * 0.46)}px"></span></td>
+      <td class="n">${pctTennis(row.proba_brute)}</td>
+      <td class="n">${pctTennis(row.proba_marche)}</td>
+      <td class="n tadj ${adjCls}">${signedTennis(row.ajustement)}</td>
+      <td class="n">${numTennis(row.cote)}</td>
+      <td class="n">${pctTennis(row.p3)}</td>
+    </tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+function tennisModeBar() {
+  return `<div class="tenmode">
+    <button class="${_tennisMode === "matches" ? "active" : ""}" onclick="setTennisMode('matches')">Matchs coach</button>
+    <button class="${_tennisMode === "brackets" ? "active" : ""}" onclick="setTennisMode('brackets')">Tableaux</button>
+  </div>`;
+}
+function setTennisMode(mode) {
+  _tennisMode = mode;
+  renderTennis();
+  if (mode === "brackets" && !_tennisBrackets) loadTennisBrackets(false);
+}
+function renderTennis() {
+  const box = $("#tennisContent");
+  if (!_tennisData) return;
+  const body = _tennisMode === "brackets" ? renderTennisBrackets() : renderTennisMatches();
+  box.innerHTML = tennisModeBar() + body;
+}
+function renderTennisMatches() {
+  const data = _tennisData || {};
+  return `<div class="tensection"><h3>ATP <span>${(data.atp || []).length} matchs</span></h3>${tennisTable(data.atp)}</div>
+    <div class="tensection"><h3>WTA <span>${(data.wta || []).length} matchs</span></h3>${tennisTable(data.wta)}</div>`;
+}
+function playerSlot(p) {
+  const seed = p && p.seed ? `<span class="bseed">${esc(p.seed)}</span>` : "";
+  const score = p && p.score && p.score.length ? `<span class="bscore">${p.score.map(esc).join(" ")}</span>` : "";
+  const cls = p && p.winner ? " winner" : "";
+  return `<div class="bplayer${cls}">${seed}<span class="bname">${esc((p && p.name) || "TBD")}</span>${score}</div>`;
+}
+function bracketMatch(m) {
+  return `<div class="bmatch">
+    <div class="bstatus">${esc(m.status || "")}</div>
+    ${playerSlot(m.player1)}${playerSlot(m.player2)}
+  </div>`;
+}
+function selectBracket(i) {
+  _selectedBracket = i;
+  renderTennis();
+}
+function renderTennisBrackets() {
+  if (!_tennisBrackets) return `<div class="loading"><div class="spin"></div>Chargement des tableaux...</div>`;
+  const tournaments = _tennisBrackets.tournaments || [];
+  if (!tournaments.length) return `<div class="note">Aucun tableau complet trouve pour les tournois en cours.</div>`;
+  if (_selectedBracket >= tournaments.length) _selectedBracket = 0;
+  const chips = tournaments.map((t, i) => `<button class="bchip ${i === _selectedBracket ? "active" : ""}" onclick="selectBracket(${i})">
+    <b>${esc(t.tour)}</b> ${esc(t.name)} <span>${esc(t.completed_matches)}/${esc(t.total_matches)}</span>
+  </button>`).join("");
+  const t = tournaments[_selectedBracket];
+  const rounds = (t.rounds || []).map(r => `<div class="bround"><div class="broundh">${esc(r.name)}</div>${(r.matches || []).map(bracketMatch).join("")}</div>`).join("");
+  return `<div class="bracketToolbar">${chips}</div>
+    <div class="bracketPanel">
+      <div class="bracketTitle"><div><b>${esc(t.name)}</b><span>${esc(t.location || "")}</span></div><a href="${esc(t.source_url)}" target="_blank" rel="noopener">source ESPN</a></div>
+      <div class="bracketRounds">${rounds}</div>
+    </div>`;
+}
+async function loadTennisBrackets(force) {
+  const main = $("#tennisContent");
+  if (!_tennisBrackets) main.innerHTML = tennisModeBar() + `<div class="loading"><div class="spin"></div>Chargement des tableaux...</div>`;
+  try {
+    _tennisBrackets = await api("/api/tennis/brackets" + (force ? "?refresh=1" : ""));
+    renderTennis();
+  } catch (e) {
+    main.innerHTML = tennisModeBar() + `<div class="note">Erreur de chargement des tableaux : ${esc(e.message || "source indisponible")}</div>`;
+  }
+}
+async function loadTennis(force) {
+  const box = $("#tennisContent");
+  box.innerHTML = `<div class="loading"><div class="spin"></div>${force ? "Actualisation" : "Chargement"} des matchs...</div>`;
+  $("#refreshBtn").disabled = true;
+  try {
+    _tennisData = await api("/api/tennis/matches" + (force ? "?refresh=1" : ""));
+    if (force) _tennisBrackets = null;
+    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}`;
+    renderTennis();
+    _tennisLoaded = true;
+    if (_tennisMode === "brackets") loadTennisBrackets(force);
+  } catch (e) {
+    box.innerHTML = `<div class="note">Erreur de chargement Tennis : ${esc(e.message || "flux indisponible")}</div>`;
+  }
+  $("#refreshBtn").disabled = false;
+}
 /* ---------- Boot ---------- */
 if (token()) showApp(); else $("#login").classList.remove("hidden");
 
