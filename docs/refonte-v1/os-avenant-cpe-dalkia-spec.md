@@ -24,6 +24,8 @@ pas importe.
 - La date d'effet doit produire un prorata au jour pres.
 - Les impacts doivent etre visibles en impact annuel plein, prorata de l'annee de prise d'effet,
   projection par exercice budgetaire, et projection jusqu'a la fin du marche.
+- L'impact financier d'avenant retient P2 + P3. P1 reste affiche en contexte, mais n'est pas retenu
+  dans l'incidence car les consommations energie restent dues par la collectivite.
 - Les documents generes sont telechargeables dans Po2 ; pas de signature integree en v1.
 
 ## Sources contractuelles
@@ -46,7 +48,8 @@ pas importe.
 ### Suppression de site
 
 Pour une suppression, Po2 lit les montants du site dans le DPGF actif pour l'exercice concerne :
-P1 gaz, P1 electricite, P2 et P3. Le delta est negatif.
+P1 gaz, P1 electricite, P2 et P3. Le delta financier d'avenant est negatif mais limite a P2 + P3 ;
+P1 est conserve comme information de contexte, non retenue dans l'impact.
 
 Si le DPGF contient des montants differents selon les exercices, la projection doit utiliser le
 montant de chaque exercice, pas seulement le montant de l'annee de prise d'effet.
@@ -56,7 +59,7 @@ montant de chaque exercice, pas seulement le montant de l'annee de prise d'effet
 Pour un ajout, v1 propose un site comparable et pre-remplit P1/P2/P3 depuis le DPGF actif.
 L'ecran affiche les composants source disponibles : P1 gaz/electricite, prix unitaire, QT, part
 fixe/variable, total, et decomposition P2/P3. La saisie reste modifiable pour ajuster le cas reel
-avant validation DALKIA, mais le point de depart ne doit plus etre un zero manuel.
+avant validation DALKIA, mais le calcul d'impact ne retient que P2 + P3.
 
 ### Prorata et fin de marche
 

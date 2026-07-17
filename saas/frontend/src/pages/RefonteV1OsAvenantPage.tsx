@@ -125,9 +125,9 @@ type OsStep = {
 const apiBaseUrl = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
 
 const FALLBACK_SITE_OPTIONS: CpeSiteOption[] = [
-  { code_site: "VDS-SPORT 02.02", site_name: "Le Barrou - Halle Louis Marty", lot: 1, pce: null, tarif: null, p1_gaz_annual_ht: 11800, p1_elec_annual_ht: 0, p2_annual_ht: 4350, p3_annual_ht: 7200, total_annual_ht: 23350 },
-  { code_site: "VDS-CULT 05", site_name: "Musee Paul Valery", lot: 1, pce: null, tarif: "T2", p1_gaz_annual_ht: 15400, p1_elec_annual_ht: 0, p2_annual_ht: 5100, p3_annual_ht: 9800, total_annual_ht: 30300 },
-  { code_site: "CCAS 04", site_name: "EHPAD Laurent Antoine", lot: 2, pce: null, tarif: "T3", p1_gaz_annual_ht: 22600, p1_elec_annual_ht: 0, p2_annual_ht: 6900, p3_annual_ht: 12600, total_annual_ht: 42100 },
+  { code_site: "VDS-SPORT 02.02", site_name: "Le Barrou - Halle Louis Marty", lot: 1, pce: null, tarif: null, p1_gaz_annual_ht: 11800, p1_elec_annual_ht: 0, p2_annual_ht: 4350, p3_annual_ht: 7200, total_annual_ht: 11550 },
+  { code_site: "VDS-CULT 05", site_name: "Musee Paul Valery", lot: 1, pce: null, tarif: "T2", p1_gaz_annual_ht: 15400, p1_elec_annual_ht: 0, p2_annual_ht: 5100, p3_annual_ht: 9800, total_annual_ht: 14900 },
+  { code_site: "CCAS 04", site_name: "EHPAD Laurent Antoine", lot: 2, pce: null, tarif: "T3", p1_gaz_annual_ht: 22600, p1_elec_annual_ht: 0, p2_annual_ht: 6900, p3_annual_ht: 12600, total_annual_ht: 19500 },
 ];
 
 const STEPS: OsStep[] = [
@@ -339,10 +339,10 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
           p3: selectedSites.reduce((sum, site) => sum + site.p3_annual_ht, 0),
         }
       : { p1, p2, p3 };
-    const p1Delta = direction * base.p1;
+    const p1Reference = direction * base.p1;
     const p2Delta = direction * base.p2;
     const p3Delta = direction * base.p3;
-    const annual = p1Delta + p2Delta + p3Delta;
+    const annual = p2Delta + p3Delta;
     const startYear = dateValue(effectiveDate)?.getFullYear() ?? 2026;
     const annualImpacts = Array.from({ length: Math.max(0, 2033 - startYear + 1) }, (_, index) => startYear + index)
       .map((budgetYear) => {
@@ -350,7 +350,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
         return {
           year: budgetYear,
           ratio,
-          p1: p1Delta * ratio,
+          p1: 0,
           p2: p2Delta * ratio,
           p3: p3Delta * ratio,
           total: annual * ratio,
@@ -360,7 +360,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
     const prorata = annualImpacts[0]?.total ?? 0;
     const remainingMarket = annualImpacts.reduce((sum, row) => sum + row.total, 0);
     return {
-      p1: p1Delta,
+      p1: p1Reference,
       p2: p2Delta,
       p3: p3Delta,
       annual,
@@ -371,7 +371,6 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
   }, [effectiveDate, kind, p1, p2, p3, selectedSites]);
 
   const rows = [
-    { poste: "P1", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p1_gaz_annual_ht + site.p1_elec_annual_ht, 0) : 0, delta: impact.p1, after: kind === "remove" ? 0 : impact.p1 },
     { poste: "P2", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p2_annual_ht, 0) : 0, delta: impact.p2, after: kind === "remove" ? 0 : impact.p2 },
     { poste: "P3", current: kind === "remove" ? selectedSites.reduce((sum, site) => sum + site.p3_annual_ht, 0) : 0, delta: impact.p3, after: kind === "remove" ? 0 : impact.p3 },
   ];
@@ -467,7 +466,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
       </header>
 
       <div className="po2-kpi-grid">
-        <KpiCard label="Impact annuel HT" value={eur(impact.annual)} detail="Delta P1 + P2 + P3" tone={impact.annual >= 0 ? "warning" : "good"} />
+        <KpiCard label="Impact annuel HT" value={eur(impact.annual)} detail="Delta P2 + P3, P1 non retenu" tone={impact.annual >= 0 ? "warning" : "good"} />
         <KpiCard label="Impact prorata" value={eur(impact.prorata)} detail={`Date d'effet ${effectiveDate || "non renseignee"}`} />
         <KpiCard label="Reste marche estime" value={eur(impact.remainingMarket)} detail="Projection jusqu'en 2033" />
         <KpiCard label="OS a regrouper" value={String(signedOsCount)} detail={requests.length ? "Selon les dossiers Po2" : "A preparer dans un EXE10"} tone="info" />
@@ -501,7 +500,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
                     <span style={{ textAlign: "right" }}>P1</span>
                     <span style={{ textAlign: "right" }}>P2</span>
                     <span style={{ textAlign: "right" }}>P3</span>
-                    <span style={{ textAlign: "right" }}>Total</span>
+                    <span style={{ textAlign: "right" }}>Impact</span>
                   </div>
                   {siteOptions.map((site) => (
                     <label key={site.code_site} style={{ display: "grid", gridTemplateColumns: "auto minmax(12rem, 1fr) 5.25rem 5.25rem 5.25rem 6rem", gap: ".65rem", alignItems: "center", padding: ".65rem .75rem", borderBottom: "1px solid var(--po2-color-line)" }}>
@@ -625,7 +624,6 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
         <DataTable rows={impact.annualImpacts} getRowKey={(row) => row.year} columns={[
           { key: "year", header: "Exercice", render: (row) => <strong>{row.year}</strong> },
           { key: "ratio", header: "Part exercice", render: (row) => `${Math.round(row.ratio * 1000) / 10} %`, sortValue: (row) => row.ratio },
-          { key: "p1", header: "P1", render: (row) => eur(row.p1), sortValue: (row) => row.p1 },
           { key: "p2", header: "P2", render: (row) => eur(row.p2), sortValue: (row) => row.p2 },
           { key: "p3", header: "P3", render: (row) => eur(row.p3), sortValue: (row) => row.p3 },
           { key: "total", header: "Total HT", render: (row) => <StatusBadge tone={row.total >= 0 ? "warn" : "ok"}>{eur(row.total)}</StatusBadge>, sortValue: (row) => row.total },
@@ -651,7 +649,7 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
         <Card title={selectedRequest.title} eyebrow="Detail dossier">
           <div style={{ display: "grid", gap: "1rem" }}>
             <div className="po2-kpi-grid">
-              <KpiCard label="Impact annuel" value={eur(selectedRequest.impact.total_annual_ht)} detail="P1 + P2 + P3" tone={selectedRequest.impact.total_annual_ht >= 0 ? "warning" : "good"} />
+              <KpiCard label="Impact annuel" value={eur(selectedRequest.impact.total_annual_ht)} detail="P2 + P3, P1 non retenu" tone={selectedRequest.impact.total_annual_ht >= 0 ? "warning" : "good"} />
               <KpiCard label="Annee de prise d'effet" value={eur(selectedRequest.impact.first_year_prorata_ht)} detail={selectedRequest.effective_date ?? "Date a preciser"} />
               <KpiCard label="Fin de marche" value={eur(selectedRequest.impact.remaining_market_ht)} detail="Projection jusqu'au 12/10/2033" />
               <KpiCard label="Lignes" value={String(selectedRequest.lines.length)} detail="Sites ou mouvements" tone="info" />
@@ -671,7 +669,6 @@ function OsAvenantWorkspace({ token }: { token: string | null }) {
             <DataTable rows={selectedRequest.impact.annual_impacts} getRowKey={(row) => row.year} columns={[
               { key: "year", header: "Exercice", render: (row) => <strong>{row.year}</strong> },
               { key: "ratio", header: "Part", render: (row) => `${Math.round(row.ratio * 1000) / 10} %` },
-              { key: "p1", header: "P1", render: (row) => eur(row.p1_ht) },
               { key: "p2", header: "P2", render: (row) => eur(row.p2_ht) },
               { key: "p3", header: "P3", render: (row) => eur(row.p3_ht) },
               { key: "total", header: "Total", render: (row) => <StatusBadge tone={row.total_ht >= 0 ? "warn" : "ok"}>{eur(row.total_ht)}</StatusBadge> },

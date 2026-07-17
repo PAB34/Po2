@@ -211,7 +211,7 @@ def list_site_options(db: Session, city_id: int | None, *, year: int, lot: int |
             continue
         seen.add(site.code_site)
         ref = reference_for_site(db, city_id, code_site=site.code_site, year=year, lot=site.lot)
-        total = ref["p1_gaz_annual_ht"] + ref["p1_elec_annual_ht"] + ref["p2_annual_ht"] + ref["p3_annual_ht"]
+        total = ref["p2_annual_ht"] + ref["p3_annual_ht"]
         options.append({**ref, "total_annual_ht": round(total, 2)})
     return options
 
@@ -228,11 +228,10 @@ def _delta(action: str, current: float | None, target: float | None) -> float:
 
 def _line_impact(line: CpeContractChangeLine) -> dict[str, float]:
     action = line.action
-    p1_gaz = _delta(action, line.current_p1_gaz_annual_ht, line.p1_gaz_annual_ht)
-    p1_elec = _delta(action, line.current_p1_elec_annual_ht, line.p1_elec_annual_ht)
+    # P1 is energy consumption context. The avenant impact keeps only P2/P3.
     p2 = _delta(action, line.current_p2_annual_ht, line.p2_annual_ht)
     p3 = _delta(action, line.current_p3_annual_ht, line.p3_annual_ht)
-    return {"p1_gaz_annual_ht": p1_gaz, "p1_elec_annual_ht": p1_elec, "p2_annual_ht": p2, "p3_annual_ht": p3}
+    return {"p1_gaz_annual_ht": 0.0, "p1_elec_annual_ht": 0.0, "p2_annual_ht": p2, "p3_annual_ht": p3}
 
 
 def _is_leap(year: int) -> bool:
@@ -263,22 +262,12 @@ def _line_year_impact(
         lot = line.lot or request.lot
         import_ids = _active_import_ids(db, city_id, lot)
         ref = reference_for_site(db, city_id, code_site=line.code_site, year=year, lot=lot)
-        has_p1_gaz = _has_site_year(
-            db, CpeDalkiaRefP1Gaz, import_ids=import_ids, code_site=line.code_site, year=year
-        )
-        has_p1_elec = _has_site_year(
-            db, CpeDalkiaRefP1Elec, import_ids=import_ids, code_site=line.code_site, year=year
-        )
-        current_p1_gaz = ref["p1_gaz_annual_ht"] if has_p1_gaz else line.current_p1_gaz_annual_ht
-        current_p1_elec = ref["p1_elec_annual_ht"] if has_p1_elec else line.current_p1_elec_annual_ht
         has_p2p3 = _has_site_year(db, CpeDalkiaRefP2P3, import_ids=import_ids, code_site=line.code_site, year=year)
         current_p2 = ref["p2_annual_ht"] if has_p2p3 else line.current_p2_annual_ht
         current_p3 = ref["p3_annual_ht"] if has_p2p3 else line.current_p3_annual_ht
-        p1_gaz = _delta(line.action, current_p1_gaz, line.p1_gaz_annual_ht)
-        p1_elec = _delta(line.action, current_p1_elec, line.p1_elec_annual_ht)
         p2 = _delta(line.action, current_p2, line.p2_annual_ht)
         p3 = _delta(line.action, current_p3, line.p3_annual_ht)
-        return {"p1_gaz_ht": p1_gaz, "p1_elec_ht": p1_elec, "p2_ht": p2, "p3_ht": p3}
+        return {"p1_gaz_ht": 0.0, "p1_elec_ht": 0.0, "p2_ht": p2, "p3_ht": p3}
     impact = _line_impact(line)
     return {
         "p1_gaz_ht": impact["p1_gaz_annual_ht"],
@@ -306,7 +295,7 @@ def build_annual_impacts(
             for key, value in impact.items():
                 totals[key] += value * ratio
         p1 = totals["p1_gaz_ht"] + totals["p1_elec_ht"]
-        total = p1 + totals["p2_ht"] + totals["p3_ht"]
+        total = totals["p2_ht"] + totals["p3_ht"]
         rows.append(
             {
                 "year": year,
@@ -333,7 +322,7 @@ def build_impact(
         for key, value in impact.items():
             totals[key] += value
     p1 = totals["p1_gaz_annual_ht"] + totals["p1_elec_annual_ht"]
-    annual = p1 + totals["p2_annual_ht"] + totals["p3_annual_ht"]
+    annual = totals["p2_annual_ht"] + totals["p3_annual_ht"]
     year = request.effective_date.year if request.effective_date else None
     ratio = _exercise_ratio(year, request.effective_date) if year else 1.0
     yearly = annual_impacts or []
@@ -504,10 +493,10 @@ def build_impact_workbook(db: Session, city_id: int | None, request_id: int) -> 
     ws.append(["Indicateur", "Montant HT"])
     _style_header(ws, row, 2)
     for label, key in [
-        ("Impact annuel", "total_annual_ht"),
+        ("Impact annuel P2+P3", "total_annual_ht"),
         ("Impact annee de prise d'effet", "first_year_prorata_ht"),
         ("Projection fin de marche", "remaining_market_ht"),
-        ("P1 annuel", "p1_annual_ht"),
+        ("P1 annuel non retenu", "p1_annual_ht"),
         ("P2 annuel", "p2_annual_ht"),
         ("P3 annuel", "p3_annual_ht"),
     ]:
@@ -522,7 +511,7 @@ def build_impact_workbook(db: Session, city_id: int | None, request_id: int) -> 
         "Action", "Code site", "Site", "Lot", "PCE/PDL", "Tarif",
         "P1 gaz actuel", "P1 elec actuel", "P2 actuel", "P3 actuel",
         "P1 gaz cible", "P1 elec cible", "P2 cible", "P3 cible",
-        "Impact annuel",
+        "Impact annuel P2+P3",
     ]
     ws_lines.append(line_headers)
     _style_header(ws_lines, 1, len(line_headers))
@@ -543,7 +532,7 @@ def build_impact_workbook(db: Session, city_id: int | None, request_id: int) -> 
     ws_lines.freeze_panes = "A2"
 
     ws_projection = wb.create_sheet("Projection")
-    projection_headers = ["Exercice", "Part exercice", "P1 gaz", "P1 elec", "P1", "P2", "P3", "Total HT"]
+    projection_headers = ["Exercice", "Part exercice", "P1 non retenu", "P1 elec non retenu", "P1", "P2", "P3", "Total HT P2+P3"]
     ws_projection.append(projection_headers)
     _style_header(ws_projection, 1, len(projection_headers))
     for annual in impact.get("annual_impacts", []):
