@@ -137,6 +137,7 @@ let _tennisData = null;
 let _tennisBrackets = null;
 let _tennisMode = "matches";
 let _selectedBracket = 0;
+let _bracketTourFilter = "all";
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
@@ -442,13 +443,36 @@ function playerSlot(p) {
   const seed = p && p.seed ? `<span class="bseed">${esc(p.seed)}</span>` : "";
   const score = p && p.score && p.score.length ? `<span class="bscore">${p.score.map(esc).join(" ")}</span>` : "";
   const cls = p && p.winner ? " winner" : "";
-  return `<div class="bplayer${cls}">${seed}<span class="bname">${esc((p && p.name) || "TBD")}</span>${score}</div>`;
+  return `<div class="bplayer${cls}">${seed}<span class="bname" title="${esc((p && p.name) || "TBD")}">${esc((p && p.name) || "TBD")}</span>${score}</div>`;
 }
 function bracketMatch(m) {
   return `<div class="bmatch">
-    <div class="bstatus">${esc(m.status || "")}</div>
+    <div class="bstatus" title="${esc(m.status || "")}">${esc(m.status || "")}</div>
     ${playerSlot(m.player1)}${playerSlot(m.player2)}
   </div>`;
+}
+function bracketState(t) {
+  const done = Number(t.completed_matches || 0), total = Number(t.total_matches || 0);
+  if (!total) return "Indisponible";
+  if (done <= 0) return "A venir";
+  if (done >= total) return "Termine";
+  return "En cours";
+}
+function bracketErrors(errors) {
+  if (!errors || !errors.length) return "";
+  const items = errors.map(e => `<li><b>${esc(e.tour || "")}</b> ${esc(e.name || "Tournoi")} <span>${esc(e.source || "source")}</span> - ${esc(e.error || "Erreur")}</li>`).join("");
+  return `<details class="berrors"><summary>${errors.length} source${errors.length > 1 ? "s" : ""} en erreur</summary><ul>${items}</ul></details>`;
+}
+function bracketFilters(tournaments) {
+  const count = tour => tour === "all" ? tournaments.length : tournaments.filter(t => t.tour === tour).length;
+  return `<div class="bracketFilters">
+    ${["all", "ATP", "WTA"].map(tour => `<button class="bfilter ${_bracketTourFilter === tour ? "active" : ""}" aria-pressed="${_bracketTourFilter === tour}" onclick="setBracketTourFilter('${tour}')">${tour === "all" ? "Tous" : tour}<span>${count(tour)}</span></button>`).join("")}
+  </div>`;
+}
+function setBracketTourFilter(tour) {
+  _bracketTourFilter = tour;
+  _selectedBracket = 0;
+  renderTennis();
 }
 function selectBracket(i) {
   _selectedBracket = i;
@@ -457,19 +481,26 @@ function selectBracket(i) {
 function renderTennisBrackets() {
   if (!_tennisBrackets) return `<div class="loading"><div class="spin"></div>Chargement des tableaux...</div>`;
   const tournaments = _tennisBrackets.tournaments || [];
-  if (!tournaments.length) return `<div class="note">Aucun tableau complet trouve pour les tournois en cours.</div>`;
-  if (_selectedBracket >= tournaments.length) _selectedBracket = 0;
-  const chips = tournaments.map((t, i) => `<button class="bchip ${i === _selectedBracket ? "active" : ""}" onclick="selectBracket(${i})">
-    <b>${esc(t.tour)}</b> ${esc(t.name)} <span>${esc(t.completed_matches)}/${esc(t.total_matches)}</span>
+  const errors = _tennisBrackets.errors || [];
+  const filtered = _bracketTourFilter === "all" ? tournaments : tournaments.filter(t => t.tour === _bracketTourFilter);
+  const meta = `<div class="bracketMeta"><span>${esc(tournaments.length)} tableau${tournaments.length > 1 ? "x" : ""}</span><span>Mis a jour ${esc(_tennisBrackets.updated || "-")}</span><span>${esc(_tennisBrackets.source || "Sources tennis")}</span></div>`;
+  const top = `<div class="bracketTop">${meta}${bracketFilters(tournaments)}</div>`;
+  const diagnostics = bracketErrors(errors);
+  if (!tournaments.length) return `${top}<div class="note">Aucun tableau complet trouve pour les tournois en cours.</div>${diagnostics}`;
+  if (!filtered.length) return `${top}<div class="note">Aucun tableau ${esc(_bracketTourFilter)} disponible pour le moment.</div>${diagnostics}`;
+  if (_selectedBracket >= filtered.length) _selectedBracket = 0;
+  const chips = filtered.map((t, i) => `<button class="bchip ${i === _selectedBracket ? "active" : ""}" aria-pressed="${i === _selectedBracket}" title="${esc(t.name)}" onclick="selectBracket(${i})">
+    <b>${esc(t.tour)}</b><span class="bchipName">${esc(t.name)}</span><span class="bchipCount">${esc(t.completed_matches)}/${esc(t.total_matches)} joues</span>
   </button>`).join("");
-  const t = tournaments[_selectedBracket];
+  const t = filtered[_selectedBracket];
   const rounds = (t.rounds || []).map(r => `<div class="bround"><div class="broundh">${esc(r.name)}</div>${(r.matches || []).map(bracketMatch).join("")}</div>`).join("");
   const sourceLabel = t.source ? `source ${t.source}` : "source";
-  return `<div class="bracketToolbar">${chips}</div>
+  const sourceLink = t.source_url ? `<a href="${esc(t.source_url)}" target="_blank" rel="noopener">${esc(sourceLabel)}</a>` : `<span class="bsource">${esc(sourceLabel)}</span>`;
+  return `${top}<div class="bracketToolbar">${chips}</div>
     <div class="bracketPanel">
-      <div class="bracketTitle"><div><b>${esc(t.name)}</b><span>${esc(t.location || "")}</span></div><a href="${esc(t.source_url)}" target="_blank" rel="noopener">${esc(sourceLabel)}</a></div>
+      <div class="bracketTitle"><div><b title="${esc(t.name)}">${esc(t.name)}</b><span>${esc(t.location || "")}${t.location ? " - " : ""}${esc(bracketState(t))} - ${esc(t.completed_matches)}/${esc(t.total_matches)} joues</span></div>${sourceLink}</div>
       <div class="bracketRounds">${rounds}</div>
-    </div>`;
+    </div>${diagnostics}`;
 }
 async function loadTennisBrackets(force) {
   const main = $("#tennisContent");
