@@ -130,7 +130,7 @@
 .po2-decision-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; padding: .75rem; border: 1px solid var(--po2-color-line); border-radius: var(--po2-radius-sm); }
 .po2-decision-item strong, .po2-decision-item small { display: block; }
 .po2-decision-item small { margin-top: .15rem; color: var(--po2-color-muted); font-size: .75rem; }
-@media (max-width: 1100px) { .po2-shell-v1 { grid-template-columns: 1fr; } .po2-shell-v1__sidebar { position: static; height: auto; } .po2-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .po2-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .po2-shell-v1__topbar { align-items: stretch; flex-direction: column; padding: .8rem; } .po2-shell-v1__search { max-width: none; width: 100%; } .po2-kpi-grid { grid-template-columns: 1fr; } .po2-decision-item { grid-template-columns: 1fr; } }
 
 .po2-matrix-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
