@@ -111,6 +111,15 @@ def _c_mean(tmin: float | None, tmax: float | None, base: float | None) -> float
     return round(max((tmin + tmax) / 2 - base, 0), 2)
 
 
+def _parse_iso_day(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
 def _season_h(ds: str) -> str:
     m, y = int(ds[5:7]), int(ds[:4])
     return f"{y}/{y + 1}" if m >= 9 else f"{y - 1}/{y}"
@@ -152,15 +161,21 @@ def _sync_profile(profile: DjuProfile) -> tuple[str | None, int]:
 
     start_d = date.fromisoformat(_HISTORY_START)
     if path.exists() and path.stat().st_size > 0:
-        max_d: str | None = None
+        max_d: date | None = None
+        ignored_dates = 0
         with open(path, encoding="utf-8", newline="") as f:
             for r in _csv.DictReader(f):
-                d = r.get("date", "")
-                if d and (max_d is None or d > max_d):
-                    max_d = d
+                parsed = _parse_iso_day(r.get("date"))
+                if parsed is None:
+                    ignored_dates += 1
+                    continue
+                if max_d is None or parsed > max_d:
+                    max_d = parsed
+        if ignored_dates:
+            _log(f"{profile.label}: {ignored_dates} ligne(s) DJU ignoree(s), date invalide.")
         if max_d:
-            start_d = date.fromisoformat(max_d) + timedelta(days=1)
-            _log(f"{profile.label}: reprise depuis {start_d} (données jusqu'au {max_d})")
+            start_d = max_d + timedelta(days=1)
+            _log(f"{profile.label}: reprise depuis {start_d} (donnees jusqu'au {max_d.isoformat()})")
 
     if start_d > end_d:
         _log(f"{profile.label}: DJU déjà à jour.")

@@ -184,29 +184,42 @@ function SubSyncRow({
 function SyncPanel({ token }: { token: string }) {
   const [expanded, setExpanded] = useState(true);
   const [customerRefreshUntil, setCustomerRefreshUntil] = useState(0);
+  const [collectionRefreshUntil, setCollectionRefreshUntil] = useState(0);
 
   const { data: consumptionStatus, refetch: refetchConsumption } = useQuery({
     queryKey: ["sync-consumption-status"],
     queryFn: () => fetchSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 3000 : false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as SyncStatus | undefined)?.status;
+      return status === "running" || Date.now() < collectionRefreshUntil ? 3000 : false;
+    },
   });
 
   const { data: maxPowerStatus, refetch: refetchMaxPower } = useQuery({
     queryKey: ["sync-max-power-status"],
     queryFn: () => fetchMaxPowerSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as SyncStatus | undefined)?.status === "running" ? 3000 : false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as SyncStatus | undefined)?.status;
+      return status === "running" || Date.now() < collectionRefreshUntil ? 3000 : false;
+    },
   });
 
   const { data: loadCurveStatus, refetch: refetchLoadCurve } = useQuery({
     queryKey: ["sync-load-curve-status"],
     queryFn: () => fetchLoadCurveSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as LoadCurveSyncStatus | undefined)?.status === "running" ? 5000 : false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as LoadCurveSyncStatus | undefined)?.status;
+      return status === "running" || Date.now() < collectionRefreshUntil ? 5000 : false;
+    },
   });
 
   const { data: djuStatus, refetch: refetchDju } = useQuery({
     queryKey: ["sync-dju-status"],
     queryFn: () => fetchDjuSyncStatus(token),
-    refetchInterval: (query) => (query.state.data as DjuSyncStatus | undefined)?.status === "running" ? 2000 : false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as DjuSyncStatus | undefined)?.status;
+      return status === "running" || Date.now() < collectionRefreshUntil ? 2000 : false;
+    },
   });
 
   const customerQuery = useQuery({
@@ -218,10 +231,16 @@ function SyncPanel({ token }: { token: string }) {
     },
   });
   const { data: customerStatus, refetch: refetchCustomer } = customerQuery;
+  const refetchAfterStart = (refetch: () => unknown) => {
+    setCollectionRefreshUntil(Date.now() + 60_000);
+    setTimeout(() => { void refetch(); }, 250);
+    setTimeout(() => { void refetch(); }, 1500);
+    setTimeout(() => { void refetch(); }, 4000);
+  };
 
   const djuMutation = useMutation({
     mutationFn: () => startDjuSync(token),
-    onSuccess: () => { setTimeout(() => refetchDju(), 500); },
+    onSuccess: () => { refetchAfterStart(refetchDju); },
   });
 
   const customerMutation = useMutation({
@@ -236,17 +255,17 @@ function SyncPanel({ token }: { token: string }) {
 
   const consumptionMutation = useMutation({
     mutationFn: (options?: { historyDays?: number; prmLimit?: number }) => startSync(token, options),
-    onSuccess: () => { setTimeout(() => refetchConsumption(), 500); },
+    onSuccess: () => { refetchAfterStart(refetchConsumption); },
   });
 
   const maxPowerMutation = useMutation({
     mutationFn: (options?: { historyDays?: number; prmLimit?: number }) => startMaxPowerSync(token, options),
-    onSuccess: () => { setTimeout(() => refetchMaxPower(), 500); },
+    onSuccess: () => { refetchAfterStart(refetchMaxPower); },
   });
 
   const loadCurveMutation = useMutation({
     mutationFn: (options?: { historyDays?: number; prmLimit?: number; resetState?: boolean }) => startLoadCurveSync(token, options),
-    onSuccess: () => { setTimeout(() => refetchLoadCurve(), 500); },
+    onSuccess: () => { refetchAfterStart(refetchLoadCurve); },
   });
 
   const customerProgress = customerStatus && customerStatus.sources_total > 0
@@ -258,6 +277,14 @@ function SyncPanel({ token }: { token: string }) {
     (customerMutation.isError ? (customerMutation.error as Error).message : null) ??
     (customerQuery.isError ? (customerQuery.error as Error).message : null);
 
+  const djuDisplayStatus = djuMutation.isPending ? "running" : djuStatus?.status;
+  const djuDisplayError = djuStatus?.error ?? (djuMutation.isError ? (djuMutation.error as Error).message : null);
+  const consumptionDisplayStatus = consumptionMutation.isPending ? "running" : consumptionStatus?.status;
+  const consumptionDisplayError = consumptionStatus?.error ?? (consumptionMutation.isError ? (consumptionMutation.error as Error).message : null);
+  const maxPowerDisplayStatus = maxPowerMutation.isPending ? "running" : maxPowerStatus?.status;
+  const maxPowerDisplayError = maxPowerStatus?.error ?? (maxPowerMutation.isError ? (maxPowerMutation.error as Error).message : null);
+  const loadCurveDisplayStatus = loadCurveMutation.isPending ? "running" : loadCurveStatus?.status;
+  const loadCurveDisplayError = loadCurveStatus?.error ?? (loadCurveMutation.isError ? (loadCurveMutation.error as Error).message : null);
   const consumptionProgress = consumptionStatus && consumptionStatus.prms_total > 0
     ? Math.round((consumptionStatus.prms_done / consumptionStatus.prms_total) * 100)
     : null;
@@ -269,11 +296,11 @@ function SyncPanel({ token }: { token: string }) {
     : null;
 
   const anyRunning =
-    djuStatus?.status === "running" ||
+    djuDisplayStatus === "running" ||
     customerStatus?.status === "running" ||
-    consumptionStatus?.status === "running" ||
-    maxPowerStatus?.status === "running" ||
-    loadCurveStatus?.status === "running";
+    consumptionDisplayStatus === "running" ||
+    maxPowerDisplayStatus === "running" ||
+    loadCurveDisplayStatus === "running";
   const anyPending =
     djuMutation.isPending ||
     customerMutation.isPending ||
@@ -321,12 +348,12 @@ function SyncPanel({ token }: { token: string }) {
             <SubSyncRow
               label="DJU météo"
               description="Met à jour les degrés-jours utiles aux analyses conso x météo."
-              status={djuStatus?.status}
+              status={djuDisplayStatus}
               lastDate={djuStatus?.last_sync_date}
               rowsAdded={djuStatus?.rows_added}
-              error={djuStatus?.error}
+              error={djuDisplayError}
               log={djuStatus?.log}
-              isRunning={djuStatus?.status === "running"}
+              isRunning={djuDisplayStatus === "running"}
               isPending={djuMutation.isPending || anyBusy}
               actionLabel="Synchroniser les DJU"
               onIncremental={() => djuMutation.mutate()}
@@ -357,12 +384,12 @@ function SyncPanel({ token }: { token: string }) {
             <SubSyncRow
               label="Consommations journalières"
               description="Alimente enedis_data.csv, utilisé par les pages énergie, les factures et les préconisations."
-              status={consumptionStatus?.status}
+              status={consumptionDisplayStatus}
               lastDate={consumptionStatus?.last_sync_date}
               rowsAdded={consumptionStatus?.rows_added}
-              error={consumptionStatus?.error}
+              error={consumptionDisplayError}
               log={consumptionStatus?.log}
-              isRunning={consumptionStatus?.status === "running"}
+              isRunning={consumptionDisplayStatus === "running"}
               isPending={consumptionMutation.isPending || anyBusy}
               progress={consumptionProgress}
               actionLabel="Mise à jour incrémentale"
@@ -375,12 +402,12 @@ function SyncPanel({ token }: { token: string }) {
             <SubSyncRow
               label="Puissances max journalières"
               description="Alimente enedis_max_power.csv. C'est le chemin léger à privilégier pour récupérer les pics historiques sans collecter toute la courbe de charge."
-              status={maxPowerStatus?.status}
+              status={maxPowerDisplayStatus}
               lastDate={maxPowerStatus?.last_sync_date}
               rowsAdded={maxPowerStatus?.rows_added}
-              error={maxPowerStatus?.error}
+              error={maxPowerDisplayError}
               log={maxPowerStatus?.log}
-              isRunning={maxPowerStatus?.status === "running"}
+              isRunning={maxPowerDisplayStatus === "running"}
               isPending={maxPowerMutation.isPending || anyBusy}
               progress={maxPowerProgress}
               actionLabel="Mise à jour incrémentale"
@@ -393,12 +420,12 @@ function SyncPanel({ token }: { token: string }) {
             <SubSyncRow
               label="Courbes de charge"
               description="Collecte fine par pas de mesure. Utile pour analyser les profils, mais à lancer seulement si la Pmax et la conso journalière ne suffisent pas."
-              status={loadCurveStatus?.status}
+              status={loadCurveDisplayStatus}
               lastDate={loadCurveStatus?.last_sync_date}
               rowsAdded={loadCurveStatus?.rows_added}
-              error={loadCurveStatus?.error}
+              error={loadCurveDisplayError}
               log={loadCurveStatus?.log}
-              isRunning={loadCurveStatus?.status === "running"}
+              isRunning={loadCurveDisplayStatus === "running"}
               isPending={loadCurveMutation.isPending || anyBusy}
               progress={loadCurveProgress}
               actionLabel="Mise à jour incrémentale"
