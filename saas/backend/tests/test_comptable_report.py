@@ -1,3 +1,4 @@
+from datetime import date
 from io import BytesIO
 from pathlib import Path
 
@@ -211,6 +212,103 @@ def test_cpe_accounting_summary_writes_invoice_level_prices_and_codes() -> None:
     assert "operation: 98004" in summary["accounting"]
     assert "nature: 6156 - Maintenance" in summary["accounting"]
     assert summary["issue"] == "A completer : 1 nature(s) a completer"
+
+
+
+def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
+    class FakeScalarResult:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def all(self):
+            return self.rows
+
+    class FakeScalarDb:
+        def __init__(self, sequences):
+            self.sequences = list(sequences)
+
+        def scalars(self, _stmt):
+            return FakeScalarResult(self.sequences.pop(0))
+
+    invoice = CpeFinanceInvoice(
+        id=10,
+        invoice_number="0001E2607QRY8",
+        contract_code="C00190116O",
+        invoice_date=date(2026, 6, 30),
+        total_ht=457.86,
+        status="valide",
+    )
+    worklist = WorklistInvoice(
+        row_number=2,
+        accounting_number="202605379",
+        supplier_invoice_number="0001E2607QRY8",
+        label="FAC. 0001E2607QRY8 DU 30/06/2026",
+        total_ttc=549.43,
+        invoice_date=date(2026, 6, 30),
+        arrival_date=None,
+        supplier_code=None,
+        supplier_name="DALKIA",
+        invoice_status=None,
+        liquidation_status=None,
+        market_code=None,
+        raw={},
+    )
+    platform = {
+        "0001E2607QRY8": PlatformInvoice(
+            id=10,
+            invoice_number="0001E2607QRY8",
+            total_ttc=549.43,
+            control_status="valid",
+            decision_status="valide",
+            problem_summary=None,
+            raw=invoice,
+        )
+    }
+    line = CpeFinanceLine(
+        id=1,
+        invoice_id=10,
+        row_number=1,
+        contract_code="C00190116O",
+        market="P3",
+        billed_item="P3",
+        service_sold="P3 - GARANTIE TOTALE",
+        vat_rate=20,
+        amount_ht=457.86,
+        base_price=1775.0,
+        revised_price=1831.42,
+        detail="ENTRETIEN VDS-ENS 19 - CENTRE DE LOISIR LE VALLON-ALSH P3 - GARANTIE TOTALE",
+        accounting_site_id=100,
+        site_code_detected="VDS-ENS 19",
+        accounting_nature="6156",
+        accounting_label="Maintenance",
+    )
+    site = CpeAccountingSiteMapping(
+        id=100,
+        code_site="VDS-ENS 19",
+        site_name="Centre de loisir Le Vallon",
+        manager="BATI",
+        service_code="XSCO",
+        function_code="331",
+        antenna_code="ALSH",
+    )
+    db = FakeScalarDb([[line], [site]])
+    workbook = openpyxl.Workbook()
+    ws = workbook.active
+    parsed = comptable_report.WorklistParseResult(sheet_name="_ShowList-001", rows=[worklist])
+
+    comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
+
+    assert ws.cell(row=4, column=1).value == "CODE CONTRAT"
+    assert ws.cell(row=4, column=13).value == "VIREMENT OK"
+    assert ws.cell(row=5, column=4).value == "P3"
+    assert ws.cell(row=5, column=6).value == 457.86
+    assert ws.cell(row=5, column=7).value == '=IFERROR(+J5*F5/H5,"")'
+    assert ws.cell(row=5, column=8).value == 1831.42
+    assert ws.cell(row=5, column=9).value == 1775.0
+    assert ws.cell(row=5, column=10).value == "=+H5-I5"
+    assert ws.cell(row=5, column=12).value == "BATI-331-21351-98003-XSCO-ALSH"
+    assert ws.cell(row=5, column=13).value == '=IFERROR(+F5*(1+E5/100),"")'
+    assert ws.cell(row=5, column=16).value is None
 
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:

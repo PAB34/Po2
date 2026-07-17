@@ -280,6 +280,10 @@ def _write_market_sheet(
     parsed: WorklistParseResult,
     platform: dict[str, PlatformInvoice],
 ) -> None:
+    if config.key == "dalkia":
+        _write_dalkia_comptable_sheet(db, ws, parsed, platform)
+        return
+
     ws["A1"] = f"Rapport de controle comptable - {config.title}"
     ws["A1"].font = Font(bold=True, size=14)
     ws["A2"] = f"Source : feuille {parsed.sheet_name}"
@@ -346,6 +350,246 @@ def _write_market_sheet(
     ws.freeze_panes = f"A{header_row + 1}"
     ws.auto_filter.ref = f"A{header_row}:Q{max(header_row + 1, header_row + len(parsed.rows))}"
 
+
+
+
+def _write_dalkia_comptable_sheet(
+    db: Session,
+    ws,
+    parsed: WorklistParseResult,
+    platform: dict[str, PlatformInvoice],
+) -> None:
+    ws["A1"] = "Demande comptable - DALKIA"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A2"] = f"Source : feuille {parsed.sheet_name}"
+    ws["A2"].font = Font(italic=True)
+
+    invoice_ids = [
+        current.id
+        for current in platform.values()
+        if isinstance(current.raw, CpeFinanceInvoice)
+    ]
+    lines = list(db.scalars(
+        select(CpeFinanceLine)
+        .where(CpeFinanceLine.invoice_id.in_(invoice_ids))
+        .order_by(CpeFinanceLine.invoice_id, CpeFinanceLine.row_number)
+    ).all()) if invoice_ids else []
+    site_ids = sorted({line.accounting_site_id for line in lines if line.accounting_site_id})
+    sites = {
+        site.id: site
+        for site in db.scalars(
+            select(CpeAccountingSiteMapping).where(CpeAccountingSiteMapping.id.in_(site_ids))
+        ).all()
+    } if site_ids else {}
+    lines_by_invoice: dict[int, list[CpeFinanceLine]] = {}
+    for line in lines:
+        lines_by_invoice.setdefault(line.invoice_id, []).append(line)
+
+    headers = [
+        "CODE CONTRAT",
+        "NUMERO DE FACTURE",
+        "DATE D'EDITION",
+        "POSTE FACTURE",
+        "TAUX DE TVA",
+        "MONTANT HT",
+        "DONT REVISION HT",
+        "PRIX REVISE",
+        "VALEUR DE BASE",
+        "REVISION HT",
+        "LIEU OU DETAIL DE LA PRESTATION",
+        "LC",
+        "VIREMENT OK",
+        "NUMERO COMPTA",
+        "CONTROLE PO2",
+        "POINT A CORRIGER",
+    ]
+    header_row = 4
+    _write_header(ws, header_row, headers)
+    row_cursor = header_row + 1
+    first_data_row = row_cursor
+
+    for item in parsed.rows:
+        current = platform.get(item.supplier_invoice_number or "")
+        status, delta = _reconciliation_status(item, current)
+        invoice_lines = lines_by_invoice.get(current.id, []) if current else []
+        if not current or not invoice_lines:
+            values = [
+                None,
+                item.supplier_invoice_number,
+                item.invoice_date,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                item.label,
+                None,
+                item.total_ttc,
+                item.accounting_number,
+                _report_control_label(status, MARKETS[0], current),
+                _row_problem_summary(status, delta, current, item),
+            ]
+            _write_dalkia_values(ws, row_cursor, values)
+            row_cursor += 1
+            continue
+
+        for line in invoice_lines:
+            site = sites.get(line.accounting_site_id or 0)
+            base_price, revised_price = _cpe_report_prices(line)
+            nature, _label, operation = _cpe_report_accounting(line, site)
+            observation = _dalkia_line_observation(status, delta, current, item, line, site, nature, operation)
+            values = [
+                line.contract_code or getattr(current.raw, "contract_code", None),
+                item.supplier_invoice_number,
+                getattr(current.raw, "invoice_date", None) or item.invoice_date,
+                _cpe_report_poste(line),
+                line.vat_rate,
+                line.amount_ht,
+                None,
+                revised_price,
+                base_price,
+                None,
+                _cpe_report_detail(line, site),
+                _cpe_report_lc(line, site, nature, operation),
+                None,
+                item.accounting_number,
+                _report_control_label(status, MARKETS[0], current),
+                observation,
+            ]
+            _write_dalkia_values(ws, row_cursor, values)
+            if line.amount_ht is not None and revised_price:
+                ws.cell(row=row_cursor, column=7, value=f'=IFERROR(+J{row_cursor}*F{row_cursor}/H{row_cursor},"")')
+            if base_price is not None and revised_price is not None:
+                ws.cell(row=row_cursor, column=10, value=f"=+H{row_cursor}-I{row_cursor}")
+            if line.amount_ht is not None and line.vat_rate is not None:
+                ws.cell(row=row_cursor, column=13, value=f'=IFERROR(+F{row_cursor}*(1+E{row_cursor}/100),"")')
+            row_cursor += 1
+
+    if row_cursor > first_data_row:
+        total_row = row_cursor
+        ws.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True)
+        for col in (6, 7, 10, 13):
+            letter = get_column_letter(col)
+            ws.cell(row=total_row, column=col, value=f"=SUM({letter}{first_data_row}:{letter}{row_cursor - 1})")
+            ws.cell(row=total_row, column=col).font = Font(bold=True)
+            ws.cell(row=total_row, column=col).number_format = '#,##0.00 "EUR"'
+        row_cursor += 1
+
+    _set_widths(ws, [16, 22, 14, 16, 10, 14, 18, 14, 14, 14, 48, 42, 14, 16, 18, 58])
+    ws.freeze_panes = f"A{header_row + 1}"
+    ws.auto_filter.ref = f"A{header_row}:P{max(header_row + 1, row_cursor - 1)}"
+
+
+def _write_dalkia_values(ws, row: int, values: list[object | None]) -> None:
+    for col, value in enumerate(values, start=1):
+        ws.cell(row=row, column=col, value=value)
+    for col in (6, 7, 8, 9, 10, 13):
+        ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
+    ws.cell(row=row, column=5).number_format = '0.00'
+
+
+def _cpe_report_prices(line: CpeFinanceLine) -> tuple[float | None, float | None]:
+    base = line.base_price if line.base_price is not None else _cpe_line_raw_float(line, "prix_de_base")
+    revised = line.revised_price if line.revised_price is not None else _cpe_line_raw_float(line, "prix_ou_forfait_revise")
+    return base, revised
+
+
+def _cpe_line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
+    if not line.raw_json:
+        return None
+    try:
+        raw = json.loads(line.raw_json)
+    except json.JSONDecodeError:
+        return None
+    return _float(raw.get(key))
+
+
+def _cpe_report_accounting(
+    line: CpeFinanceLine,
+    site: CpeAccountingSiteMapping | None,
+) -> tuple[str | None, str | None, str | None]:
+    nature = _text(line.accounting_nature)
+    label = _text(line.accounting_label)
+    operation = _text(site.operation_code) if site else None
+    if _is_cpe_p3_line(line):
+        nature = "21351"
+        label = label or "Batiments publics"
+        operation = operation or _cpe_p3_operation_fallback(line, site)
+    return nature, label, operation
+
+
+def _cpe_report_lc(
+    line: CpeFinanceLine,
+    site: CpeAccountingSiteMapping | None,
+    nature: str | None,
+    operation: str | None,
+) -> str | None:
+    if not site and not nature:
+        return None
+    parts = [
+        site.manager if site else None,
+        site.function_code if site else None,
+        nature,
+        operation,
+        site.service_code if site else None,
+        site.antenna_code if site else None,
+    ]
+    return "-".join(str(part).strip() for part in parts if _text(part))
+
+
+def _cpe_report_poste(line: CpeFinanceLine) -> str | None:
+    return _text(line.billed_item) or _text(line.market)
+
+
+def _cpe_report_detail(line: CpeFinanceLine, site: CpeAccountingSiteMapping | None) -> str | None:
+    if line.detail:
+        return line.detail
+    parts = [_text(line.site_code_detected), _text(site.site_name if site else None), _text(line.service_sold)]
+    return " - ".join(part for part in parts if part)
+
+
+def _is_cpe_p3_line(line: CpeFinanceLine) -> bool:
+    poste = " ".join(filter(None, [_text(line.market), _text(line.billed_item), _text(line.service_sold)])).upper()
+    return "P3" in poste
+
+
+def _cpe_p3_operation_fallback(line: CpeFinanceLine, site: CpeAccountingSiteMapping | None) -> str | None:
+    poste = (_cpe_report_poste(line) or "").upper().replace("-", ".")
+    if "P3.4" in poste:
+        return "98023"
+    function = (_text(site.function_code) if site else "") or ""
+    service = ((_text(site.service_code) if site else "") or "").upper()
+    if function.startswith(("211", "212", "213", "283", "331")) or service in {"ENS", "XSCO"}:
+        return "98003"
+    if function.startswith(("314", "315", "312")) or service in {"MUSE", "CULT"}:
+        return "98001"
+    if function.startswith(("321", "322", "323", "324")) or service in {"GYMN", "STAD", "PISC", "NAUT"}:
+        return "98002"
+    return "98004"
+
+
+def _dalkia_line_observation(
+    status: str,
+    delta: float | None,
+    current: PlatformInvoice,
+    item: WorklistInvoice,
+    line: CpeFinanceLine,
+    site: CpeAccountingSiteMapping | None,
+    nature: str | None,
+    operation: str | None,
+) -> str | None:
+    issues = [
+        _row_problem_summary(status, delta, current, item),
+    ]
+    if not site:
+        issues.append("Site comptable non rattache.")
+    if not nature:
+        issues.append("Nature comptable absente.")
+    if _is_cpe_p3_line(line) and not operation:
+        issues.append("Operation investissement P3 absente.")
+    return _join_unique(issues, limit=3)
 
 
 def _market_line_enrichments(
