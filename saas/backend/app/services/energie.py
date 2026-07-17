@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -91,8 +91,8 @@ def _scan_csv_dates(rel_path: str, date_col: str) -> dict[str, Any]:
             return {"first_date": None, "last_date": None, "row_count": 0}
         for row in reader:
             if len(row) > col_idx:
-                d = row[col_idx][:10]
-                if len(d) == 10:
+                d = _normalize_day(row[col_idx])
+                if d:
                     count += 1
                     if min_d is None or d < min_d:
                         min_d = d
@@ -143,14 +143,13 @@ def _source_coverage(rel_path: str, date_col: str) -> dict[str, Any]:
             if len(row) <= max(prm_idx, date_idx):
                 continue
             prm_id = row[prm_idx].strip()
-            raw_date = row[date_idx][:10]
+            raw_date = _normalize_day(row[date_idx])
             if not prm_id:
                 continue
-            try:
-                parsed_date = date.fromisoformat(raw_date)
-            except ValueError:
+            if raw_date is None:
                 bad_date_rows += 1
                 continue
+            parsed_date = date.fromisoformat(raw_date)
 
             row_count += 1
             if first_date is None or raw_date < first_date:
@@ -478,6 +477,27 @@ def _csv_rows_path(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
+def _normalize_day(value: str | None) -> str | None:
+    """Return an ISO date for ENEDIS CSV rows, accepting legacy French dates."""
+    if not value:
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    candidate = raw[:10]
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(candidate, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _month_key(value: str | None) -> str | None:
+    normalized = _normalize_day(value)
+    return normalized[:7] if normalized else None
+
+
 @lru_cache(maxsize=1)
 def _contracts() -> dict[str, dict[str, str]]:
     return {r["usage_point_id"]: r for r in _csv_rows("enedis_contracts.csv")}
@@ -510,7 +530,10 @@ def _max_power_index() -> dict[str, list[dict[str, Any]]]:
             fval = float(raw)
         except ValueError:
             continue
-        index.setdefault(uid, []).append({"date": r["date"], "value_va": fval})
+        normalized_date = _normalize_day(r.get("date"))
+        if normalized_date is None:
+            continue
+        index.setdefault(uid, []).append({"date": normalized_date, "value_va": fval})
     for uid in index:
         index[uid].sort(key=lambda x: x["date"])
     return index
@@ -528,7 +551,10 @@ def _daily_consumption_index() -> dict[str, list[dict[str, Any]]]:
             fval = float(raw)
         except ValueError:
             continue
-        index.setdefault(uid, []).append({"date": r["date"], "value_wh": fval})
+        normalized_date = _normalize_day(r.get("date"))
+        if normalized_date is None:
+            continue
+        index.setdefault(uid, []).append({"date": normalized_date, "value_wh": fval})
     for uid in index:
         index[uid].sort(key=lambda x: x["date"])
     return index
@@ -1172,7 +1198,9 @@ def _consumption_by_month() -> dict[str, dict[str, float]]:
     for prm_id, points in _daily_consumption_index().items():
         by_month: dict[str, float] = {}
         for p in points:
-            ym = p["date"][:7]
+            ym = _month_key(p.get("date"))
+            if ym is None:
+                continue
             by_month[ym] = by_month.get(ym, 0.0) + p["value_wh"] / 1000.0
         result[prm_id] = {ym: round(v, 2) for ym, v in by_month.items()}
     return result
