@@ -173,6 +173,11 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["match_source"], "ESPN")
         self.assertEqual(row["odds_status"], "indisponibles")
         self.assertIsNone(row["cote"])
+    def test_scoreboard_tournament_names_keep_clay_surface(self):
+        self.assertEqual(tennis._surface("Nordea Open"), "Terre")
+        self.assertEqual(tennis._surface("EFG Swiss Open Gstaad"), "Terre")
+        self.assertEqual(tennis._surface("Plava Laguna Croatia Open Umag"), "Terre")
+        self.assertEqual(tennis._surface("Generali Open"), "Terre")
 
 if __name__ == "__main__":
     unittest.main()

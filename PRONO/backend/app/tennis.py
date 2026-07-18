@@ -21,7 +21,7 @@ FEED = "https://raw.githubusercontent.com/Mriganka-codes/tennis_data/main/matche
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/tennis/{league}/scoreboard?region=us&lang=en&dates={dates}&limit=1000"
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures|davis cup|billie jean king", re.I)
 CLAY = (
-    "gstaad", "bastad", "kitzbuhel", "kitzbuehel", "hamburg", "umag", "cordenons",
+    "gstaad", "bastad", "nordea", "swedish open", "efg swiss", "kitzbuhel", "kitzbuehel", "generali open", "hamburg", "umag", "plava laguna", "cordenons",
     "monte carlo", "madrid", "rome", "roland", "french open", "barcelona",
     "munich", "estoril", "geneva", "lyon", "buenos aires", "rio",
     "santiago", "cordoba", "marrakech", "houston", "bucharest", "iasi",
