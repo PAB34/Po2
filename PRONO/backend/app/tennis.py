@@ -10,7 +10,8 @@ import json
 import re
 import unicodedata
 import urllib.request
-from datetime import datetime
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from app.tennis_brackets import build_brackets_from_matches
 from app.tennis_coach import TennisCoach
@@ -29,6 +30,9 @@ GRASS = (
     "wimbledon", "halle", "queens", "newport", "mallorca", "eastbourne",
     "stuttgart", "nottingham", "bad homburg",
 )
+PARIS_TZ = ZoneInfo("Europe/Paris")
+PAST_MATCH_GRACE = timedelta(minutes=30)
+FUTURE_MATCH_HORIZON = timedelta(days=4)
 _COACH: TennisCoach | None = None
 
 
@@ -59,6 +63,68 @@ def _surface(tournament: str) -> str:
     if any(re.search(r"\b" + word + r"\b", normalized) for word in GRASS):
         return "Gazon"
     return "Dur"
+
+
+def _now_paris() -> datetime:
+    return datetime.now(PARIS_TZ)
+
+
+def _parse_feed_updated(value: str | None) -> datetime:
+    text = str(value or "").strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        parsed = _now_paris()
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=PARIS_TZ)
+    return parsed.astimezone(PARIS_TZ)
+
+
+def _parse_match_clock(value: str | None) -> time | None:
+    match = re.search(r"(\d{1,2})[:h](\d{2})", str(value or ""))
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return time(hour, minute, tzinfo=PARIS_TZ)
+
+
+def _infer_kickoff(raw: dict, feed_updated: datetime) -> datetime | None:
+    clock = _parse_match_clock(raw.get("time"))
+    if not clock:
+        return None
+    kickoff = datetime.combine(feed_updated.date(), clock, tzinfo=PARIS_TZ)
+    if kickoff < feed_updated - timedelta(hours=2):
+        kickoff += timedelta(days=1)
+    return kickoff
+
+
+def _date_label(kickoff: datetime, now: datetime) -> str:
+    delta = (kickoff.date() - now.date()).days
+    if delta == 0:
+        return "Aujourd'hui"
+    if delta == 1:
+        return "Demain"
+    if delta == -1:
+        return "Hier"
+    return kickoff.strftime("%d/%m")
+
+
+def _match_timing(raw: dict, feed_updated: datetime, now: datetime) -> dict:
+    kickoff = _infer_kickoff(raw, feed_updated)
+    if not kickoff:
+        return {"kickoff": None, "past": False, "too_far": False, "display": raw.get("time", ""), "label": ""}
+    past = kickoff < now - PAST_MATCH_GRACE
+    too_far = kickoff > now + FUTURE_MATCH_HORIZON
+    label = _date_label(kickoff, now)
+    return {
+        "kickoff": kickoff,
+        "past": past,
+        "too_far": too_far,
+        "display": f"{label} {kickoff.strftime('%H:%M')}",
+        "label": label,
+    }
 
 
 def _set_probability(match_probability: float) -> float:
@@ -109,13 +175,18 @@ def _favorite_fields(match: dict, odds1: float, odds2: float, intel: dict) -> di
     }
 
 
-def _rows(matches: list[dict], tour: str) -> list[dict]:
+def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime) -> tuple[list[dict], int]:
     rows = []
+    filtered_past = 0
     coach = _coach()
     for raw in matches:
         if raw.get("tour") != tour or not raw.get("odds1") or not raw.get("odds2"):
             continue
         if LOW_LEVEL.search(raw.get("tournament", "")):
+            continue
+        timing = _match_timing(raw, feed_updated, now)
+        if timing["past"] or timing["too_far"]:
+            filtered_past += 1
             continue
         try:
             odds1, odds2 = float(raw["odds1"]), float(raw["odds2"])
@@ -126,7 +197,7 @@ def _rows(matches: list[dict], tour: str) -> list[dict]:
 
         match = {
             "tournament": raw.get("tournament", ""),
-            "time": raw.get("time", ""),
+            "time": timing["display"],
             "player1": _seedless(raw.get("player1")),
             "player2": _seedless(raw.get("player2")),
             "tour": tour,
@@ -138,6 +209,8 @@ def _rows(matches: list[dict], tour: str) -> list[dict]:
         row = {
             "tournoi": match["tournament"],
             "heure": match["time"],
+            "kickoff": timing["kickoff"].isoformat() if timing["kickoff"] else None,
+            "date_label": timing["label"],
             "surface": match["surface"],
             "match": f"{match['player1']} vs {match['player2']}",
             "joueur1": match["player1"],
@@ -153,8 +226,18 @@ def _rows(matches: list[dict], tour: str) -> list[dict]:
         }
         row.update(_favorite_fields(match, odds1, odds2, intel))
         rows.append(row)
-    rows.sort(key=lambda row: -row["proba"])
-    return rows
+    rows.sort(key=lambda row: (row.get("kickoff") or "9999", row["tournoi"], -row["proba"]))
+    return rows, filtered_past
+
+
+def _upcoming_matches(matches: list[dict], feed_updated: datetime, now: datetime) -> list[dict]:
+    upcoming = []
+    for raw in matches:
+        timing = _match_timing(raw, feed_updated, now)
+        if timing["past"] or timing["too_far"]:
+            continue
+        upcoming.append(raw)
+    return upcoming
 
 
 def fetch_feed() -> dict:
@@ -166,14 +249,23 @@ def fetch_feed() -> dict:
 def build_tennis() -> dict:
     data = fetch_feed()
     matches = data.get("matches", [])
+    now = _now_paris()
+    feed_updated = _parse_feed_updated(data.get("last_updated"))
+    atp, atp_filtered = _rows(matches, "ATP", feed_updated, now)
+    wta, wta_filtered = _rows(matches, "WTA", feed_updated, now)
     return {
-        "updated": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
-        "atp": _rows(matches, "ATP"),
-        "wta": _rows(matches, "WTA"),
+        "feed_age_hours": round((now - feed_updated).total_seconds() / 3600, 1),
+        "filtered_past": atp_filtered + wta_filtered,
+        "time_policy": "Matchs passes masques: horaire infere depuis last_updated + time, marge 30 min.",
+        "atp": atp,
+        "wta": wta,
     }
 
 
 def build_tennis_brackets() -> dict:
     data = fetch_feed()
-    return build_brackets_from_matches(data.get("matches", []))
+    now = _now_paris()
+    feed_updated = _parse_feed_updated(data.get("last_updated"))
+    return build_brackets_from_matches(_upcoming_matches(data.get("matches", []), feed_updated, now))

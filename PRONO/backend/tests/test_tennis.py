@@ -1,4 +1,5 @@
-﻿import unittest
+import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from app import tennis
@@ -50,6 +51,40 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(payload["wta"][0]["surface"], "Gazon")
         self.assertEqual(payload["wta"][0]["favori"], "Grass Player B")
 
+    def test_build_tennis_hides_past_timed_matches(self):
+        feed = {
+            "last_updated": "2026-07-18T09:00:00",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "Gstaad",
+                    "player1": "Past Player A",
+                    "player2": "Past Player B",
+                    "time": "08:00",
+                    "odds1": 1.7,
+                    "odds2": 2.2,
+                },
+                {
+                    "tour": "ATP",
+                    "tournament": "Gstaad",
+                    "player1": "Future Player A",
+                    "player2": "Future Player B",
+                    "time": "11:00",
+                    "odds1": 1.8,
+                    "odds2": 2.0,
+                },
+            ],
+        }
+
+        now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "_now_paris", return_value=now):
+            payload = tennis.build_tennis()
+
+        self.assertEqual(payload["filtered_past"], 1)
+        self.assertEqual(len(payload["atp"]), 1)
+        self.assertEqual(payload["atp"][0]["match"], "Future Player A vs Future Player B")
+        self.assertEqual(payload["atp"][0]["heure"], "Aujourd'hui 11:00")
+        self.assertIsNotNone(payload["atp"][0]["kickoff"])
     def test_build_tennis_penalizes_ruud_with_coach_and_h2h(self):
         feed = {
             "last_updated": "2026-07-17T12:00:00Z",

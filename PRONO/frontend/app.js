@@ -519,7 +519,9 @@ async function loadTennis(force) {
   try {
     _tennisData = await api("/api/tennis/matches" + (force ? "?refresh=1" : ""));
     if (force) _tennisBrackets = null;
-    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}`;
+    const masked = Number(_tennisData.filtered_past || 0);
+    const age = Number(_tennisData.feed_age_hours);
+    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}${Number.isFinite(age) ? `<span>Age flux : ${esc(age)}h</span>` : ""}${masked ? `<span>${esc(masked)} passes masques</span>` : ""}`;
     renderTennis();
     _tennisLoaded = true;
     if (_tennisMode === "brackets") loadTennisBrackets(force);
