@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles-20260718-wide.css">
+  <link rel="stylesheet" href="/styles-20260718-decision.css">
 </head>
 <body>
 
@@ -99,13 +99,13 @@
     <div class="tennis-head">
       <div>
         <div class="kicker">TENNIS</div>
-        <h2>Pronostics tennis</h2>
+        <h2>Lecture tennis</h2>
       </div>
       <div id="tennisMeta" class="metaline"></div>
     </div>
     <div id="tennisContent"><div class="loading"><div class="spin"></div>Chargement des matchs...</div></div>
     <div class="note">
-      Confrontations a venir = scoreboard ATP/WTA. Le tableau affiche uniquement les matchs avec cote vainqueur rattachee au meme duo de joueurs. Le marche est l'ancre; Elo, forme, fatigue et H2H sont ponderes selon la qualite des preuves. Fav 2-0 / Fav 2-1 / 3 sets et marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Le profil aces n'est pas une ligne bookmaker. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
+      Le marche devigotte est la reference. L'Elo surface reste un contrepoint independant; forme et H2H sont descriptifs, tandis que fatigue, recuperation et qualite des donnees determinent la vigilance et la largeur de la fourchette. Les marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
     </div>
   </section>
 </div>
@@ -137,11 +137,11 @@
   </div>
 </div>
 
-<script src="/app-20260718-wide.js"></script>
+<script src="/app-20260718-decision.js"></script>
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => setTimeout(() => {
-      navigator.serviceWorker.register("/sw-20260718-wide.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
+      navigator.serviceWorker.register("/sw-20260718-decision.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
     }, 0));
   }
 </script>

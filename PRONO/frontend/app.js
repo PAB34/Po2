@@ -407,12 +407,14 @@ function tennisMarkets(markets) {
   return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc([m.detail, m.source ? "Source: " + m.source : "", m.confidence ? "Confiance: " + m.confidence : ""].filter(Boolean).join(" | "))}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
 }
 const TENNIS_SORT_COLUMNS = [
-  ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"], ["favori", "Favori"],
-  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
+  ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"],
+  ["decision", "Lecture"], ["proba_marche", "Marche", "n"], ["proba_elo", "Elo surface", "n"],
+  ["ecart_elo", "Ecart", "n"], ["impact_contexte", "Contexte"], ["cote", "Cote", "n"],
+  ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
-  return _tennisSort.dir === "asc" ? " ↑" : " ↓";
+  return _tennisSort.dir === "asc" ? " ^" : " v";
 }
 function tennisHeader(key, label, cls = "") {
   return `<th class="${cls}"><button class="sorthead" onclick="setTennisSort('${key}')" aria-label="Trier par ${esc(label)}">${esc(label)}${tennisSortIcon(key)}</button></th>`;
@@ -424,7 +426,9 @@ function setTennisSort(key) {
 function tennisSortValue(row, key) {
   if (key === "kickoff") return row.kickoff || row.heure || "9999";
   if (key === "markets") return Math.max(...(row.markets || []).map(m => Number(m.prob || 0)), 0);
-  if (["proba", "proba_brute", "proba_marche", "ajustement", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
+  if (["proba_marche", "proba_elo", "ecart_elo", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
+  const decisionOrder = { strong: 4, watch: 3, insufficient: 2, favorable: 1, neutral: 0 };
+  if (key === "decision") return decisionOrder[row.decision_level] ?? -1;
   return String(row[key] || "").toLowerCase();
 }
 function sortedTennisRows(rows) {
@@ -436,24 +440,36 @@ function sortedTennisRows(rows) {
     return String(a.match || "").localeCompare(String(b.match || ""));
   });
 }
+function tennisDecision(row) {
+  const range = row.fourchette_min == null || row.fourchette_max == null ? "-" : `${row.fourchette_min}-${row.fourchette_max}%`;
+  return `<div class="tdecision ${esc(row.decision_level || "neutral")}">
+    <span>${esc(row.decision || "Neutre")}</span>
+    <b>${esc(row.favori || "-")}</b>
+    <small>Fourchette ${esc(range)} | fiabilite ${esc(row.qualite || "faible")}</small>
+  </div>`;
+}
+function tennisContext(row) {
+  return `<div class="tcontext ${esc(row.impact_contexte || "neutre")}">
+    <b>${esc(row.impact_contexte || "neutre")}</b>
+    <span>${esc(row.decision_detail || "aucun facteur discriminant")}</span>
+  </div>`;
+}
 function tennisTable(rows) {
   if (!rows || !rows.length) return `<div class="note">Aucun match a venir pour le moment.</div>`;
   const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
-    const adj = Number(row.ajustement || 0);
-    const adjCls = adj <= -5 ? "neg" : adj >= 5 ? "pos" : "flat";
-    const modelName = row.modele === "marche+elo_surface" ? "Marche + Elo pondere + coach" : "Marche + coach";
-    const modelLabel = `${modelName} | fiabilite ${row.qualite || "faible"} | +/-${row.incertitude_pts || "?"} pts`;
+    const gap = Number(row.ecart_elo);
+    const gapCls = !Number.isFinite(gap) ? "flat" : gap <= -5 ? "neg" : gap >= 5 ? "pos" : "flat";
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
       <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
-      <td class="favn">${esc(row.favori)}<div class="tsub">${esc(modelLabel)}</div></td>
-      <td class="n probten">${pctTennis(row.proba)}<span style="width:${Math.max(8, Number(row.proba || 0) * 0.46)}px"></span></td>
-      <td class="n">${pctTennis(row.proba_brute)}</td>
-      <td class="n">${row.odds_status === "ok" ? pctTennis(row.proba_marche) : "-"}</td>
-      <td class="n tadj ${adjCls}">${signedTennis(row.ajustement)}</td>
+      <td>${tennisDecision(row)}</td>
+      <td class="n probten">${pctTennis(row.proba_marche)}<span style="width:${Math.max(8, Number(row.proba_marche || 0) * 0.46)}px"></span></td>
+      <td class="n">${row.proba_elo == null ? "-" : pctTennis(row.proba_elo)}</td>
+      <td class="n tadj ${gapCls}">${row.ecart_elo == null ? "-" : signedTennis(row.ecart_elo)}</td>
+      <td>${tennisContext(row)}</td>
       <td class="n">${numTennis(row.cote)}</td>
       <td>${tennisMarkets(row.markets)}</td>
       <td class="n">${pctTennis(row.p20)}</td>
@@ -464,7 +480,7 @@ function tennisTable(rows) {
 }
 function tennisModeBar() {
   return `<div class="tenmode">
-    <button class="${_tennisMode === "matches" ? "active" : ""}" onclick="setTennisMode('matches')">Matchs coach</button>
+    <button class="${_tennisMode === "matches" ? "active" : ""}" onclick="setTennisMode('matches')">Lecture matchs</button>
     <button class="${_tennisMode === "brackets" ? "active" : ""}" onclick="setTennisMode('brackets')">Tableaux</button>
   </div>`;
 }
@@ -482,7 +498,7 @@ function renderTennis() {
 function renderTennisMatches() {
   const data = _tennisData || {};
   const rows = [...(data.atp || []).map(r => ({ ...r, tour: "ATP" })), ...(data.wta || []).map(r => ({ ...r, tour: "WTA" }))];
-  return `<div class="tensection"><h3>Matchs coach <span>${rows.length} matchs - ${(data.atp || []).length} ATP / ${(data.wta || []).length} WTA</span></h3>${tennisTable(rows)}</div>`;
+  return `<div class="tensection"><h3>Lecture des matchs <span>${rows.length} matchs - ${(data.atp || []).length} ATP / ${(data.wta || []).length} WTA</span></h3>${tennisTable(rows)}</div>`;
 }
 function playerSlot(p) {
   const seed = p && p.seed ? `<span class="bseed">${esc(p.seed)}</span>` : "";

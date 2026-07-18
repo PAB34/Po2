@@ -1,3 +1,6 @@
+import os
+import sqlite3
+import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -81,7 +84,7 @@ class TennisServiceTests(unittest.TestCase):
         }
 
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["filtered_past"], 1)
@@ -135,8 +138,10 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["favori"], "Ruud C.")
         self.assertEqual(row["h2h"], "1-0")
         self.assertIn("Gstaad 2025", row["alerte"])
-        self.assertLess(row["proba"], row["proba_brute"])
-        self.assertLess(row["proba"], row["proba_marche"])
+        self.assertEqual(row["proba"], row["proba_marche"])
+        self.assertIsNone(row["ajustement"])
+        self.assertIn(row["decision"], {"Vigilance", "Vigilance forte"})
+        self.assertLess(row["proba_elo"], row["proba_marche"])
         self.assertEqual(row["cycle2"], "sous-rythme")
 
     def test_scoreboard_matchups_override_stale_market_pairs(self):
@@ -214,6 +219,47 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["cote"], 2.82 if row["favori"] == "Alejandro Tabilo" else 1.42)
         self.assertNotEqual(row["proba_marche"], 50.0)
 
+
+
+    def test_form_signals_do_not_shift_market_probability(self):
+        coach = tennis._coach()
+        stats_hot = {
+            "matchs_90j": 12,
+            "serie": 8,
+            "momentum_90j": 35,
+            "winrate_90j": 0.9,
+            "derniere_date": "2026-07-17",
+        }
+        stats_cold = dict(stats_hot, serie=-5, momentum_90j=-30, winrate_90j=0.2)
+        self.assertEqual(coach.context_assessment(stats_hot, None)["score"], coach.context_assessment(stats_cold, None)["score"])
+
+    def test_elo_divergence_creates_vigilance_and_range_without_shifting_market(self):
+        neutral = {"score": 0.0, "label": "neutre", "positives": [], "risks": []}
+        decision = tennis._coach()._decision(0.60, 0.45, neutral, neutral, 0.90)
+        aligned = tennis._coach()._decision(0.60, 0.59, neutral, neutral, 0.90)
+        self.assertEqual(decision["label"], "Vigilance forte")
+        self.assertAlmostEqual(sum(decision["range_p1"]) / 2, 0.60)
+        self.assertGreater(decision["range_p1"][1] - decision["range_p1"][0], aligned["range_p1"][1] - aligned["range_p1"][0])
+
+    def test_decision_history_is_persisted_and_reconciled(self):
+        row = {
+            "tour": "ATP", "kickoff": "2026-07-18T14:00:00+02:00", "tournoi": "Test Open",
+            "joueur1": "Player A", "joueur2": "Player B", "favori": "Player A",
+            "cote": 1.8, "proba_marche": 55.0, "proba_elo": 53.0, "ecart_elo": -2.0,
+            "decision": "Neutre", "decision_level": "neutral", "impact_contexte": "neutre",
+            "qualite": "moyenne", "fourchette_min": 50.0, "fourchette_max": 60.0,
+        }
+        completed = [{"winner": "Player A", "loser": "Player B"}]
+        calculated_at = datetime(2026, 7, 18, 12, 0, tzinfo=tennis.PARIS_TZ)
+        with tempfile.TemporaryDirectory(dir=r"C:\tmp") as directory, patch.dict(os.environ, {"PRONO_DATA_DIR": directory}):
+            self.assertTrue(tennis._record_decision_history([row], completed, calculated_at))
+            path = os.path.join(directory, "tennis", "decision_history.sqlite3")
+            with sqlite3.connect(path) as db:
+                cursor = db.execute("SELECT market_probability, decision, result_winner FROM tennis_decisions")
+                stored = cursor.fetchone()
+                cursor.close()
+            db.close()
+        self.assertEqual(stored, (55.0, "Neutre", "Player A"))
 
     def test_calibration_improves_2025_holdout(self):
         report = tennis._coach().calibration_report(2025)

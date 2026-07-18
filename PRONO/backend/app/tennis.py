@@ -7,10 +7,14 @@ sinon le match est affiche sans cote pour eviter les affiches de tour precedent.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sqlite3
 import unicodedata
 import urllib.request
+from contextlib import closing
 from datetime import datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.tennis_brackets import build_brackets_from_matches
@@ -231,24 +235,38 @@ def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
 
 
 def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, intel: dict) -> dict:
-    p1 = intel["p1"]
-    fav1 = p1 >= 0.5
-    favorite_probability = p1 if fav1 else 1 - p1
-    raw_fav = intel["raw_p1"] if fav1 else 1 - intel["raw_p1"]
-    market_fav = intel["market_p1"] if fav1 else 1 - intel["market_p1"]
+    market_p1 = intel["market_p1"]
+    fav1 = market_p1 >= 0.5
+    favorite_probability = market_p1 if fav1 else 1 - market_p1
     favorite = match["player1"] if fav1 else match["player2"]
     favorite_odds = odds1 if fav1 else odds2
+    elo_p1 = intel.get("elo_p1")
+    elo_favorite = (elo_p1 if fav1 else 1 - elo_p1) if elo_p1 is not None else None
+    decision = intel["decision"]
+    low_p1, high_p1 = decision["range_p1"]
+    range_favorite = (low_p1, high_p1) if fav1 else (1 - high_p1, 1 - low_p1)
     cycle_fav = intel["cycle1"] if fav1 else intel["cycle2"]
     cycle_opp = intel["cycle2"] if fav1 else intel["cycle1"]
     calibration = _coach().market_priors(match.get("tour", "ATP"), match.get("surface", "Dur"), favorite_probability)
     rates = calibration["rates"]
     p21_share = rates["favorite_2_1_share"]
+    decision_reasons = decision.get("reasons") or []
     return {
         "favori": _seedless(favorite),
+        # Compatibility: proba now explicitly equals the market reference.
         "proba": _round_pct(favorite_probability),
-        "proba_brute": _round_pct(raw_fav),
-        "proba_marche": _round_pct(market_fav),
-        "ajustement": round((favorite_probability - raw_fav) * 100, 1),
+        "proba_marche": _round_pct(favorite_probability),
+        "proba_elo": _round_pct(elo_favorite) if elo_favorite is not None else None,
+        "proba_brute": _round_pct(elo_favorite) if elo_favorite is not None else None,
+        "ecart_elo": round((elo_favorite - favorite_probability) * 100, 1) if elo_favorite is not None else None,
+        "ajustement": None,
+        "decision": decision["label"],
+        "decision_level": decision["level"],
+        "impact_contexte": decision["context_label"],
+        "score_contexte": decision["context_score"],
+        "decision_detail": " ; ".join(decision_reasons) if decision_reasons else "aucun facteur contextuel discriminant",
+        "fourchette_min": _round_pct(range_favorite[0]),
+        "fourchette_max": _round_pct(range_favorite[1]),
         "cote": round(favorite_odds, 2) if favorite_odds else None,
         "p20": round(favorite_probability * (1 - p21_share) * 100),
         "p21": round(favorite_probability * p21_share * 100),
@@ -488,6 +506,7 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
         intel = coach.enrich(match, market_p1)
         h2h = intel.get("h2h") or {}
         row = {
+            "tour": tour,
             "tournoi": match["tournament"],
             "heure": match["time"],
             "kickoff": timing["kickoff"].isoformat() if timing["kickoff"] else None,
@@ -534,6 +553,78 @@ def fetch_feed() -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _storage_pair(player1: str, player2: str) -> str:
+    return "|".join(sorted(_player_pair_key(player1, player2)))
+
+
+def _record_decision_history(rows: list[dict], completed: list[dict], calculated_at: datetime) -> bool:
+    root = os.environ.get("PRONO_DATA_DIR")
+    if not root:
+        return False
+    path = Path(root) / "tennis" / "decision_history.sqlite3"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with closing(sqlite3.connect(path, timeout=10)) as db, db:
+            pragma = db.execute("PRAGMA journal_mode=WAL")
+            pragma.fetchone()
+            pragma.close()
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS tennis_decisions (
+                    id INTEGER PRIMARY KEY,
+                    calculated_at TEXT NOT NULL,
+                    kickoff TEXT,
+                    tour TEXT NOT NULL,
+                    tournament TEXT,
+                    pair_key TEXT NOT NULL,
+                    player1 TEXT NOT NULL,
+                    player2 TEXT NOT NULL,
+                    favorite TEXT,
+                    favorite_odds REAL,
+                    market_probability REAL,
+                    elo_probability REAL,
+                    elo_gap REAL,
+                    decision TEXT,
+                    decision_level TEXT,
+                    context_label TEXT,
+                    quality TEXT,
+                    range_min REAL,
+                    range_max REAL,
+                    result_winner TEXT,
+                    result_recorded_at TEXT,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE(calculated_at, tour, kickoff, pair_key)
+                )
+            """)
+            stamp = calculated_at.isoformat(timespec="minutes")
+            for row in rows:
+                db.execute("""
+                    INSERT OR IGNORE INTO tennis_decisions (
+                        calculated_at, kickoff, tour, tournament, pair_key, player1, player2,
+                        favorite, favorite_odds, market_probability, elo_probability, elo_gap,
+                        decision, decision_level, context_label, quality, range_min, range_max,
+                        payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    stamp, row.get("kickoff"), row.get("tour"), row.get("tournoi"),
+                    _storage_pair(row.get("joueur1", ""), row.get("joueur2", "")),
+                    row.get("joueur1"), row.get("joueur2"), row.get("favori"), row.get("cote"),
+                    row.get("proba_marche"), row.get("proba_elo"), row.get("ecart_elo"),
+                    row.get("decision"), row.get("decision_level"), row.get("impact_contexte"),
+                    row.get("qualite"), row.get("fourchette_min"), row.get("fourchette_max"),
+                    json.dumps(row, ensure_ascii=True, separators=(",", ":")),
+                ))
+            for result in completed:
+                pair_key = _storage_pair(result.get("winner", ""), result.get("loser", ""))
+                db.execute("""
+                    UPDATE tennis_decisions
+                    SET result_winner = ?, result_recorded_at = ?
+                    WHERE pair_key = ? AND result_winner IS NULL
+                """, (result.get("winner"), stamp, pair_key))
+        db.close()
+        return True
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return False
+
 def build_tennis() -> dict:
     data = fetch_feed()
     odds_matches = data.get("matches", [])
@@ -548,6 +639,7 @@ def build_tennis() -> dict:
     atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
     external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
+    history_recorded = _record_decision_history(atp + wta, completed_results, now)
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
@@ -560,6 +652,7 @@ def build_tennis() -> dict:
         "filtered_unpriced": atp_unpriced + wta_unpriced,
         "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; seuls les matchs avec cote rattachee au meme duo de joueurs sont affiches.",
         "external_sources": external_sources,
+        "decision_history_recorded": history_recorded,
         "atp": atp,
         "wta": wta,
     }

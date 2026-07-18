@@ -274,7 +274,7 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .tensection h3{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px;font-family:var(--font-display);font-weight:400;font-size:20px;line-height:1;text-transform:uppercase}
 .tensection h3 span{font-family:var(--font-body);font-size:12px;font-weight:900;color:#bfe6d2;text-transform:none}
 .tenwrap{overflow-x:auto;border-radius:16px;background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
-.tentable{width:100%;min-width:1480px;border-collapse:collapse;font-size:13px}
+.tentable{width:100%;min-width:1640px;border-collapse:collapse;font-size:13px}
 .tentable th,.tentable td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
 .tentable th{background:var(--soft);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
 .tentable tr:last-child td{border-bottom:0}
@@ -301,6 +301,18 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .mkt.moyen{border-color:#fde68a;background:#fffbeb;color:#7c2d12}
 .mkt.faible{border-color:#cbd5e1;background:#f8fafc;color:#475569}
 .mkt.info{border-color:#dbeafe;background:#eff6ff;color:#1e3a8a}
+.tdecision{display:grid;gap:3px;min-width:190px;max-width:230px}
+.tdecision>span{width:max-content;max-width:100%;padding:4px 7px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;font-size:10px;font-weight:950;text-transform:uppercase}
+.tdecision>b{color:#0f172a;font-size:13px;line-height:1.2}
+.tdecision>small{color:#64748b;font-size:10px;font-weight:850;line-height:1.25}
+.tdecision.strong>span{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+.tdecision.watch>span{border-color:#fcd34d;background:#fffbeb;color:#92400e}
+.tdecision.favorable>span{border-color:#86efac;background:#f0fdf4;color:#166534}
+.tdecision.insufficient>span{border-color:#cbd5e1;background:#f1f5f9;color:#475569}
+.tcontext{display:grid;gap:4px;min-width:180px;max-width:240px}
+.tcontext>b{font-size:10px;font-weight:950;text-transform:uppercase;color:#475569}
+.tcontext>span{font-size:11px;font-weight:800;line-height:1.3;color:#475569;white-space:normal}
+.tcontext.defavorable>b{color:#b91c1c}.tcontext.favorable>b{color:#15803d}
 .tadj{font-weight:950}.tadj.neg{color:#b91c1c}.tadj.pos{color:#15803d}.tadj.flat{color:#64748b}
 .surf{font-size:11px;font-weight:900;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:3px 8px}
 .probten span{display:inline-block;height:7px;border-radius:999px;background:var(--green-2);vertical-align:middle;margin-left:7px;max-width:46px}
@@ -319,4 +331,4 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .bmatch{border:1px solid #dbe7df;background:#fbfefc;border-radius:10px;padding:8px;margin-bottom:8px;min-height:76px}.bstatus{height:16px;font-size:10px;font-weight:950;text-transform:uppercase;color:#64748b;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bplayer{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:5px;align-items:center;min-height:22px;color:#334155;font-size:12px;font-weight:800}.bplayer.winner{color:#062e20;font-weight:950}.bseed{font-size:10px;color:#64748b;text-align:center}.bname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bscore{font-variant-numeric:tabular-nums;color:#0f172a;font-size:11px;font-weight:950;white-space:nowrap}
 .berrors{margin:10px 0 0;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:10px;color:#e8fff3;padding:9px 10px;font-size:12px;font-weight:850}.berrors summary{cursor:pointer;font-weight:950}.berrors ul{margin:8px 0 0;padding-left:18px}.berrors li{margin:4px 0}.berrors span{opacity:.72}
-@media(max-width:560px){#app.tennis-wide{padding-left:10px;padding-right:10px}.tennis-head{display:block}.tennis-head .metaline{justify-content:flex-start;text-align:left;margin-top:8px}.tabs{overflow-x:auto}.tab{min-width:92px;flex:0 0 auto}.tentable{min-width:1320px}.bracketTop{align-items:stretch}.bracketFilters{width:100%}.bfilter{flex:1}.bracketTitle{align-items:flex-start}.bracketTitle b{font-size:18px}.bracketRounds{padding:10px}.bround{flex-basis:215px}}
+@media(max-width:560px){#app.tennis-wide{padding-left:10px;padding-right:10px}.tennis-head{display:block}.tennis-head .metaline{justify-content:flex-start;text-align:left;margin-top:8px}.tabs{overflow-x:auto}.tab{min-width:92px;flex:0 0 auto}.tentable{min-width:1500px}.bracketTop{align-items:stretch}.bracketFilters{width:100%}.bfilter{flex:1}.bracketTitle{align-items:flex-start}.bracketTitle b{font-size:18px}.bracketRounds{padding:10px}.bround{flex-basis:215px}}

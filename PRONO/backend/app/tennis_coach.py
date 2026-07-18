@@ -89,15 +89,6 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
-def _logit(p: float) -> float:
-    p = min(0.95, max(0.05, float(p)))
-    return math.log(p / (1 - p))
-
-
-def _sigmoid(x: float) -> float:
-    return 1 / (1 + math.exp(-x))
-
-
 def _elo_probability(elo_a: float, elo_b: float) -> float:
     return 1 / (1 + 10 ** ((elo_b - elo_a) / ELO_SCALE))
 
@@ -168,40 +159,22 @@ class TennisCoach:
         ctx1 = self._player_context(player1, ctx, match.get("tournament"))
         ctx2 = self._player_context(player2, ctx, match.get("tournament"))
 
-        raw_p1 = market_p1
-        source = "marche"
         elo1 = self._surface_elo(stats1, surf)
         elo2 = self._surface_elo(stats2, surf)
-        if elo1 is not None and elo2 is not None:
-            elo_p1 = _elo_probability(elo1, elo2)
-            elo_weight = self._elo_weight(stats1, stats2)
-            raw_p1 = _sigmoid((1 - elo_weight) * _logit(market_p1) + elo_weight * _logit(elo_p1))
-            source = "marche+elo_surface"
+        elo_p1 = _elo_probability(elo1, elo2) if elo1 is not None and elo2 is not None else None
 
+        # Form remains descriptive. Only current load, recovery and data quality
+        # feed the contextual decision, avoiding a second count of recent results.
         cycle1 = self.cycle(player1, stats1, ctx1)
         cycle2 = self.cycle(player2, stats2, ctx2)
+        context1 = self.context_assessment(stats1, ctx1)
+        context2 = self.context_assessment(stats2, ctx2)
         h2h = self.h2h(player1, player2, match.get("tournament"), surf, circ)
-        score1, score2 = cycle1["score"], cycle2["score"]
-        if h2h.get("same_tournament"):
-            rec = h2h["same_tournament"]
-            if rec["winner_side"] == 1:
-                score1 += 0.03
-                score2 -= 0.02
-            else:
-                score2 += 0.03
-                score1 -= 0.02
-        elif h2h.get("last") and norm(h2h["last"].get("surface")) == surf:
-            rec = h2h["last"]
-            if rec["winner_side"] == 1:
-                score1 += 0.015
-                score2 -= 0.01
-            else:
-                score2 += 0.015
-                score1 -= 0.01
 
         evidence_quality = self._evidence_quality(stats1, stats2, ctx1, ctx2)
-        delta = max(-0.22, min(0.22, (score1 - score2) * (0.35 + 0.65 * evidence_quality)))
-        coach_p1 = max(0.05, min(0.95, _sigmoid(_logit(raw_p1) + delta)))
+        quality_score = round(0.55 + 0.45 * evidence_quality, 2)
+        quality = "elevee" if quality_score >= 0.82 else "moyenne" if quality_score >= 0.68 else "faible"
+        decision = self._decision(market_p1, elo_p1, context1, context2, quality_score)
 
         proofs = []
         if cycle1["evidence"]:
@@ -210,23 +183,24 @@ class TennisCoach:
             proofs.append(f"{player2}: " + "; ".join(cycle2["evidence"][:4]))
         if h2h.get("alert"):
             proofs.append(h2h["alert"])
-        if source == "marche":
-            proofs.append("Elo surface indisponible: base marche conservee")
+        if elo_p1 is None:
+            proofs.append("Elo surface indisponible: marche conserve comme unique reference probabiliste")
 
-        quality_score = round(0.55 + 0.45 * evidence_quality, 2)
-        quality = "elevee" if quality_score >= 0.82 else "moyenne" if quality_score >= 0.68 else "faible"
-        uncertainty = round(3.5 + (1 - quality_score) * 12, 1)
         return {
-            "p1": coach_p1,
-            "raw_p1": raw_p1,
+            "p1": market_p1,
+            "raw_p1": elo_p1 if elo_p1 is not None else market_p1,
             "market_p1": market_p1,
-            "adjustment_pts_p1": (coach_p1 - raw_p1) * 100,
-            "source": source,
+            "elo_p1": elo_p1,
+            "adjustment_pts_p1": 0.0,
+            "source": "marche_ancre",
             "quality": quality,
             "quality_score": quality_score,
-            "uncertainty_pts": uncertainty,
+            "uncertainty_pts": decision["uncertainty_pts"],
             "cycle1": cycle1,
             "cycle2": cycle2,
+            "context1": context1,
+            "context2": context2,
+            "decision": decision,
             "serve1": self._serve_profile(stats1),
             "serve2": self._serve_profile(stats2),
             "h2h": h2h,
@@ -234,14 +208,116 @@ class TennisCoach:
             "external_sources": sorted(set(cycle1.get("external_sources", []) + cycle2.get("external_sources", []))),
         }
 
-    def _elo_weight(self, stats1: dict[str, Any], stats2: dict[str, Any]) -> float:
-        samples = [min(_int(stats.get("matchs_chartes")), 40) for stats in (stats1, stats2)]
-        if min(samples) >= 20:
-            return 0.28
-        if min(samples) >= 10:
-            return 0.22
-        return 0.15
+    def context_assessment(self, stats: dict[str, Any] | None, ctx: dict[str, Any] | None) -> dict[str, Any]:
+        score = 0.0
+        positives: list[str] = []
+        risks: list[str] = []
+        if not stats:
+            risks.append("donnees joueur incompletes")
+        else:
+            matches_90 = _int(stats.get("matchs_90j"))
+            last = _parse_date(stats.get("derniere_date"))
+            if matches_90 <= 4:
+                risks.append(f"volume recent faible ({matches_90} matchs/90j)")
+            if last and (date.today() - last).days >= 30:
+                risks.append(f"reference locale ancienne ({(date.today() - last).days}j)")
 
+        if ctx:
+            tours = _int(ctx.get("tours_gagnes"))
+            sets_lost = _int(ctx.get("sets_laches"))
+            games = _int(ctx.get("jeux_joues"))
+            last_games = _int(ctx.get("dernier_jeux"))
+            decisifs = _int(ctx.get("decisifs"))
+            matches_14 = _int(ctx.get("matchs_14j"))
+            minutes = _int(ctx.get("charge_minutes_est"))
+            repos = ctx.get("repos_jours")
+            if tours >= 2 and sets_lost == 0:
+                score += 0.04
+                positives.append("parcours propre sans set perdu")
+            elif tours >= 1:
+                score += 0.02
+                positives.append(f"{tours} tour(s) franchi(s)")
+            if games >= 65 or minutes >= 150:
+                score -= 0.12
+                risks.append(f"charge tournoi lourde ({games} jeux, ~{minutes} min)")
+            elif games >= 45 or minutes >= 110:
+                score -= 0.06
+                risks.append(f"charge tournoi a surveiller ({games} jeux, ~{minutes} min)")
+            if last_games >= 30:
+                score -= 0.05
+                risks.append(f"dernier match long ({last_games} jeux)")
+            if decisifs >= 2:
+                score -= 0.06
+                risks.append(f"{decisifs} matchs decisifs")
+            elif decisifs == 1:
+                score -= 0.03
+                risks.append("dernier match en 3 sets")
+            if matches_14 >= 5:
+                score -= 0.04
+                risks.append(f"{matches_14} matchs sur 14j")
+            if repos is not None:
+                rest = int(float(repos))
+                if rest == 0:
+                    score -= 0.08
+                    risks.append("enchainement sans jour de repos")
+                elif rest >= 8:
+                    risks.append(f"{rest}j sans match officiel")
+        else:
+            risks.append("parcours du tournoi non detecte")
+
+        score = max(-0.30, min(0.10, score))
+        label = "favorable" if score >= 0.05 else "defavorable" if score <= -0.05 else "neutre"
+        return {"score": score, "label": label, "positives": positives, "risks": risks}
+
+    def _decision(self, market_p1: float, elo_p1: float | None, context1: dict[str, Any], context2: dict[str, Any], quality_score: float) -> dict[str, Any]:
+        favorite_is_p1 = market_p1 >= 0.5
+        context_delta_p1 = context1["score"] - context2["score"]
+        favorite_context = context_delta_p1 if favorite_is_p1 else -context_delta_p1
+        elo_gap_favorite = None
+        if elo_p1 is not None:
+            market_favorite = market_p1 if favorite_is_p1 else 1 - market_p1
+            elo_favorite = elo_p1 if favorite_is_p1 else 1 - elo_p1
+            elo_gap_favorite = elo_favorite - market_favorite
+
+        favorite_context_data = context1 if favorite_is_p1 else context2
+        opponent_context_data = context2 if favorite_is_p1 else context1
+        favorable_reasons = list(favorite_context_data["positives"])
+        favorable_reasons.extend(f"adversaire: {reason}" for reason in opponent_context_data["risks"][:2])
+        risk_reasons = list(favorite_context_data["risks"])
+        risk_reasons.extend(f"adversaire en contexte favorable: {reason}" for reason in opponent_context_data["positives"][:2])
+        if elo_gap_favorite is not None and abs(elo_gap_favorite) >= 0.07:
+            direction = "superieur" if elo_gap_favorite > 0 else "inferieur"
+            risk_reasons.insert(0, f"Elo surface {direction} au marche ({elo_gap_favorite * 100:+.1f} pts)")
+
+        if quality_score < 0.68:
+            label, level = "Donnees insuffisantes", "insufficient"
+        elif favorite_context <= -0.12 or (elo_gap_favorite is not None and abs(elo_gap_favorite) >= 0.12):
+            label, level = "Vigilance forte", "strong"
+        elif favorite_context <= -0.05 or (elo_gap_favorite is not None and abs(elo_gap_favorite) >= 0.07):
+            label, level = "Vigilance", "watch"
+        elif favorite_context >= 0.05 and elo_gap_favorite is not None and abs(elo_gap_favorite) <= 0.06:
+            label, level = "Contexte favorable", "favorable"
+        else:
+            label, level = "Neutre", "neutral"
+
+        elo_divergence = abs(elo_p1 - market_p1) if elo_p1 is not None else 0.0
+        width = 0.025 + (1 - quality_score) * 0.08
+        width += min(0.06, elo_divergence * 0.30)
+        width += min(0.025, abs(context_delta_p1) * 0.08)
+        width = min(0.10, width)
+        low_p1 = max(0.05, market_p1 - width)
+        high_p1 = min(0.95, market_p1 + width)
+        reasons = risk_reasons if level in {"strong", "watch", "insufficient"} else favorable_reasons if level == "favorable" else []
+        return {
+            "label": label,
+            "level": level,
+            "context_label": "favorable" if favorite_context >= 0.05 else "defavorable" if favorite_context <= -0.05 else "neutre",
+            "context_score": round(favorite_context, 3),
+            "elo_gap_favorite": round(elo_gap_favorite, 4) if elo_gap_favorite is not None else None,
+            "range_p1": [low_p1, high_p1],
+            "uncertainty_pts": round((high_p1 - low_p1) * 50, 1),
+            "reasons": reasons[:4],
+        }
     def _evidence_quality(self, stats1: dict[str, Any] | None, stats2: dict[str, Any] | None, ctx1: dict[str, Any] | None, ctx2: dict[str, Any] | None) -> float:
         stats_score = sum(bool(stats) for stats in (stats1, stats2)) / 2
         sample_score = sum(min(_int((stats or {}).get("matchs_chartes")) / 20, 1) for stats in (stats1, stats2)) / 2
@@ -453,7 +529,7 @@ class TennisCoach:
                 repos_i = int(float(repos))
                 if repos_i == 0:
                     score -= 0.06
-                    evidence.append("enchaînement sans repos")
+                    evidence.append("enchainement sans repos")
                 elif repos_i >= 8:
                     score -= 0.05
                     evidence.append(f"{repos_i}j sans match officiel")
