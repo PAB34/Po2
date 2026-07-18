@@ -139,6 +139,7 @@ let _tennisMode = "matches";
 let _selectedBracket = 0;
 let _bracketTourFilter = "all";
 let _tennisSort = { key: "kickoff", dir: "asc" };
+let _tennisQuery = "";
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#app").classList.toggle("tennis-wide", tab === "tennis");
@@ -408,16 +409,24 @@ function tennisMarkets(markets) {
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"],
-  ["forme", "Forme"], ["decision", "Lecture"], ["proba_marche", "Marche", "n"], ["proba_elo", "Elo surface", "n"],
-  ["ecart_elo", "Ecart", "n"], ["impact_contexte", "Contexte"], ["cote", "Cote", "n"],
+  ["forme", "Forme"], ["decision", "Lecture"], ["proba_marche", "Marche", "n"],
+  ["proba_elo_surface", "Elo surface", "n"], ["proba_elo_global", "Elo global", "n"],
+  ["ecart_elo", "Lecture Elo"], ["impact_contexte", "Contexte"], ["cote", "Cote", "n"],
   ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
+const TENNIS_HEADER_HELP = {
+  forme: "Signal descriptif: activite, serie, momentum, victoires recentes et charge du tournoi.",
+  proba_elo_surface: "Probabilite Elo calculee uniquement avec les matchs sur la surface du jour.",
+  proba_elo_global: "Probabilite Elo calculee sur l'ensemble des surfaces.",
+  ecart_elo: "Difference entre l'Elo de reference et le consensus du marche pour le favori.",
+};
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
   return _tennisSort.dir === "asc" ? " ^" : " v";
 }
 function tennisHeader(key, label, cls = "") {
-  return `<th class="${cls}"><button class="sorthead" onclick="setTennisSort('${key}')" aria-label="Trier par ${esc(label)}">${esc(label)}${tennisSortIcon(key)}</button></th>`;
+  const help = TENNIS_HEADER_HELP[key] ? ` title="${esc(TENNIS_HEADER_HELP[key])}"` : "";
+  return `<th class="${cls}"><button class="sorthead" onclick="setTennisSort('${key}')" aria-label="Trier par ${esc(label)}"${help}>${esc(label)}${tennisSortIcon(key)}</button></th>`;
 }
 function setTennisSort(key) {
   _tennisSort = _tennisSort.key === key ? { key, dir: _tennisSort.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "kickoff" ? "asc" : "desc" };
@@ -427,7 +436,8 @@ function tennisSortValue(row, key) {
   if (key === "kickoff") return row.kickoff || row.heure || "9999";
   if (key === "markets") return Math.max(...(row.markets || []).map(m => Number(m.prob || 0)), 0);
   if (key === "forme") return `${row.cycle1 || ""} ${row.cycle2 || ""}`.toLowerCase();
-  if (["proba_marche", "proba_elo", "ecart_elo", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
+  if (key === "ecart_elo") return row.ecart_elo == null ? -9999 : Math.abs(Number(row.ecart_elo));
+  if (["proba_marche", "proba_elo_surface", "proba_elo_global", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
   const decisionOrder = { strong: 4, watch: 3, insufficient: 2, favorable: 1, neutral: 0 };
   if (key === "decision") return decisionOrder[row.decision_level] ?? -1;
   return String(row[key] || "").toLowerCase();
@@ -462,16 +472,27 @@ function tennisForm(row) {
     <span><b>${esc(row.joueur2 || "J2")}</b>${esc(row.cycle2 || "inconnue")}</span>
   </div>`;
 }
-function tennisElo(row) {
-  if (row.proba_elo != null) return pctTennis(row.proba_elo);
-  return `<span class="tmissing" title="${esc(row.elo_detail || "Historique de surface insuffisant pour au moins un joueur")}">Indispo</span>`;
+function tennisElo(row, key) {
+  if (row[key] != null) return pctTennis(row[key]);
+  const fallback = key === "proba_elo_surface" ? row.elo_detail : "Historique global insuffisant pour au moins un joueur";
+  return `<span class="tmissing" title="${esc(fallback || "Historique insuffisant")}">Indispo</span>`;
+}
+function tennisGap(row) {
+  if (row.ecart_elo == null) return `<span class="tmissing">Indispo</span>`;
+  const gap = Number(row.ecart_elo);
+  const abs = Math.abs(gap);
+  const source = row.elo_reference === "global" ? "Global" : "Surface";
+  const state = abs < 3 ? "aligned" : gap < 0 ? "prudent" : "optimistic";
+  const label = state === "aligned" ? "Aligne" : state === "prudent" ? "Elo plus prudent" : "Elo plus optimiste";
+  const position = Math.max(4, Math.min(96, 50 + gap * 2.5));
+  return `<div class="tgap ${state}" title="${esc(source)}: ${signedTennis(gap)} points par rapport au marche">
+    <b>${label}</b><span>${source} ${signedTennis(gap)} pts</span><i><em style="left:${position}%"></em></i>
+  </div>`;
 }
 function tennisTable(rows) {
-  if (!rows || !rows.length) return `<div class="note">Aucun match a venir pour le moment.</div>`;
+  if (!rows || !rows.length) return `<div class="note">${_tennisQuery ? "Aucun match ne correspond a la recherche." : "Aucun match a venir pour le moment."}</div>`;
   const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
-    const gap = Number(row.ecart_elo);
-    const gapCls = !Number.isFinite(gap) ? "flat" : gap <= -5 ? "neg" : gap >= 5 ? "pos" : "flat";
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
@@ -480,8 +501,9 @@ function tennisTable(rows) {
       <td>${tennisForm(row)}</td>
       <td>${tennisDecision(row)}</td>
       <td class="n probten">${pctTennis(row.proba_marche)}<span style="width:${Math.max(8, Number(row.proba_marche || 0) * 0.46)}px"></span></td>
-      <td class="n">${tennisElo(row)}</td>
-      <td class="n tadj ${gapCls}">${row.ecart_elo == null ? "-" : signedTennis(row.ecart_elo)}</td>
+      <td class="n">${tennisElo(row, "proba_elo_surface")}</td>
+      <td class="n">${tennisElo(row, "proba_elo_global")}</td>
+      <td>${tennisGap(row)}</td>
       <td>${tennisContext(row)}</td>
       <td class="n">${numTennis(row.cote)}</td>
       <td>${tennisMarkets(row.markets)}</td>
@@ -508,10 +530,51 @@ function renderTennis() {
   const body = _tennisMode === "brackets" ? renderTennisBrackets() : renderTennisMatches();
   box.innerHTML = tennisModeBar() + body;
 }
-function renderTennisMatches() {
+function tennisAllRows() {
   const data = _tennisData || {};
-  const rows = [...(data.atp || []).map(r => ({ ...r, tour: "ATP" })), ...(data.wta || []).map(r => ({ ...r, tour: "WTA" }))];
-  return `<div class="tensection"><h3>Lecture des matchs <span>${rows.length} matchs - ${(data.atp || []).length} ATP / ${(data.wta || []).length} WTA</span></h3>${tennisTable(rows)}</div>`;
+  return [...(data.atp || []).map(r => ({ ...r, tour: "ATP" })), ...(data.wta || []).map(r => ({ ...r, tour: "WTA" }))];
+}
+function tennisSearchText(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+function filteredTennisRows(rows) {
+  const words = tennisSearchText(_tennisQuery).split(/\s+/).filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(row => {
+    const haystack = tennisSearchText([
+      row.tour, row.tournoi, row.match, row.joueur1, row.joueur2, row.favori,
+      row.surface, row.cycle1, row.cycle2, row.decision, row.impact_contexte,
+    ].join(" "));
+    return words.every(word => haystack.includes(word));
+  });
+}
+function tennisMatchesResults(allRows) {
+  const rows = filteredTennisRows(allRows);
+  const count = rows.length === allRows.length ? `${rows.length} matchs` : `${rows.length} sur ${allRows.length} matchs`;
+  return `<h3>Lecture des matchs <span>${count}</span></h3>${tennisTable(rows)}`;
+}
+function setTennisSearch(value) {
+  _tennisQuery = value;
+  const results = $("#tennisMatchesResults");
+  if (results) results.innerHTML = tennisMatchesResults(tennisAllRows());
+  const clear = $("#tennisSearchClear");
+  if (clear) clear.classList.toggle("hidden", !_tennisQuery);
+}
+function clearTennisSearch() {
+  _tennisQuery = "";
+  renderTennis();
+  const input = $("#tennisSearch");
+  if (input) input.focus();
+}
+function renderTennisMatches() {
+  const rows = tennisAllRows();
+  return `<div class="tensection">
+    <div class="tencontrols"><div class="tensearch">
+      <input id="tennisSearch" type="search" value="${esc(_tennisQuery)}" placeholder="Joueur, tournoi, circuit, surface..." aria-label="Rechercher dans les matchs" oninput="setTennisSearch(this.value)">
+      <button id="tennisSearchClear" class="${_tennisQuery ? "" : "hidden"}" onclick="clearTennisSearch()" title="Effacer la recherche" aria-label="Effacer la recherche">x</button>
+    </div></div>
+    <div id="tennisMatchesResults">${tennisMatchesResults(rows)}</div>
+  </div>`;
 }
 function playerSlot(p) {
   const seed = p && p.seed ? `<span class="bseed">${esc(p.seed)}</span>` : "";

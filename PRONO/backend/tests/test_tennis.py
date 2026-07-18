@@ -53,6 +53,8 @@ class TennisServiceTests(unittest.TestCase):
         self.assertIn("markets", payload["atp"][0])
         self.assertIn("qualite", payload["atp"][0])
         self.assertIn("elo_detail", payload["atp"][0])
+        self.assertIn("proba_elo_surface", payload["atp"][0])
+        self.assertIn("proba_elo_global", payload["atp"][0])
         self.assertEqual("historique calibre", payload["atp"][0]["markets"][0]["source"])
         self.assertEqual({"total_games", "handicap_games", "aces", "tiebreak"}, {m["key"] for m in payload["atp"][0]["markets"]})
         self.assertEqual(len(payload["wta"]), 1)
@@ -248,6 +250,12 @@ class TennisServiceTests(unittest.TestCase):
         decision = tennis._coach()._decision(0.67, 0.55, favorite, opponent, 0.90)
         self.assertEqual(decision["label"], "Vigilance forte")
         self.assertEqual(decision["context_label"], "avantage relatif")
+
+    def test_surface_elo_does_not_silently_fallback_to_global(self):
+        coach = tennis._coach()
+        stats = {"elo_global": 1700, "elo_clay": None}
+        self.assertIsNone(coach._surface_elo(stats, "clay"))
+        self.assertEqual(coach._global_elo(stats), 1700.0)
 
     def test_decision_history_is_persisted_and_reconciled(self):
         row = {

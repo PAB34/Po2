@@ -153,6 +153,7 @@ class TennisCoach:
         player2 = match["player2"]
         circ = match.get("tour", "ATP")
         surf = surface_key(match.get("surface", "Dur"))
+        surface_label = {"hard": "dur", "clay": "terre", "grass": "gazon"}.get(surf, surf)
         stats1 = self.player_stats(player1, circ)
         stats2 = self.player_stats(player2, circ)
         ctx = self.context()
@@ -161,7 +162,12 @@ class TennisCoach:
 
         elo1 = self._surface_elo(stats1, surf)
         elo2 = self._surface_elo(stats2, surf)
-        elo_p1 = _elo_probability(elo1, elo2) if elo1 is not None and elo2 is not None else None
+        surface_elo_p1 = _elo_probability(elo1, elo2) if elo1 is not None and elo2 is not None else None
+        global_elo1 = self._global_elo(stats1)
+        global_elo2 = self._global_elo(stats2)
+        global_elo_p1 = _elo_probability(global_elo1, global_elo2) if global_elo1 is not None and global_elo2 is not None else None
+        elo_p1 = surface_elo_p1 if surface_elo_p1 is not None else global_elo_p1
+        elo_reference = "surface" if surface_elo_p1 is not None else "global" if global_elo_p1 is not None else None
         elo_missing_players = [
             player for player, elo in ((player1, elo1), (player2, elo2)) if elo is None
         ]
@@ -177,7 +183,7 @@ class TennisCoach:
         evidence_quality = self._evidence_quality(stats1, stats2, ctx1, ctx2)
         quality_score = round(0.55 + 0.45 * evidence_quality, 2)
         quality = "elevee" if quality_score >= 0.82 else "moyenne" if quality_score >= 0.68 else "faible"
-        decision = self._decision(market_p1, elo_p1, context1, context2, quality_score)
+        decision = self._decision(market_p1, elo_p1, context1, context2, quality_score, elo_reference)
 
         proofs = []
         if cycle1["evidence"]:
@@ -186,16 +192,22 @@ class TennisCoach:
             proofs.append(f"{player2}: " + "; ".join(cycle2["evidence"][:4]))
         if h2h.get("alert"):
             proofs.append(h2h["alert"])
-        if elo_p1 is None:
-            proofs.append("Elo surface indisponible: marche conserve comme unique reference probabiliste")
+        if surface_elo_p1 is None:
+            if global_elo_p1 is not None:
+                proofs.append("Elo surface indisponible: Elo global utilise comme contrepoint")
+            else:
+                proofs.append("Elo surface et global indisponibles: marche conserve comme unique reference probabiliste")
 
         return {
             "p1": market_p1,
             "raw_p1": elo_p1 if elo_p1 is not None else market_p1,
             "market_p1": market_p1,
             "elo_p1": elo_p1,
+            "surface_elo_p1": surface_elo_p1,
+            "global_elo_p1": global_elo_p1,
+            "elo_reference": elo_reference,
             "elo_missing_reason": (
-                f"Historique {surf} insuffisant pour " + ", ".join(elo_missing_players)
+                f"Historique {surface_label} insuffisant pour " + ", ".join(elo_missing_players)
                 if elo_missing_players else None
             ),
             "adjustment_pts_p1": 0.0,
@@ -276,7 +288,7 @@ class TennisCoach:
         label = "favorable" if score >= 0.05 else "defavorable" if score <= -0.05 else "neutre"
         return {"score": score, "label": label, "positives": positives, "risks": risks}
 
-    def _decision(self, market_p1: float, elo_p1: float | None, context1: dict[str, Any], context2: dict[str, Any], quality_score: float) -> dict[str, Any]:
+    def _decision(self, market_p1: float, elo_p1: float | None, context1: dict[str, Any], context2: dict[str, Any], quality_score: float, elo_reference: str | None = "surface") -> dict[str, Any]:
         favorite_is_p1 = market_p1 >= 0.5
         context_delta_p1 = context1["score"] - context2["score"]
         favorite_context = context_delta_p1 if favorite_is_p1 else -context_delta_p1
@@ -294,7 +306,7 @@ class TennisCoach:
         risk_reasons.extend(f"atout adversaire: {reason}" for reason in opponent_context_data["positives"][:2])
         if elo_gap_favorite is not None and abs(elo_gap_favorite) >= 0.07:
             direction = "superieur" if elo_gap_favorite > 0 else "inferieur"
-            risk_reasons.insert(0, f"Elo surface {direction} au marche ({elo_gap_favorite * 100:+.1f} pts)")
+            risk_reasons.insert(0, f"Elo {elo_reference or 'reference'} {direction} au marche ({elo_gap_favorite * 100:+.1f} pts)")
 
         if quality_score < 0.68:
             label, level = "Donnees insuffisantes", "insufficient"
@@ -622,8 +634,10 @@ class TennisCoach:
     def _surface_elo(self, stats: dict[str, Any] | None, surf: str) -> float | None:
         if not stats:
             return None
-        value = stats.get(f"elo_{surf}") or stats.get("elo_global")
-        return _float(value)
+        return _float(stats.get(f"elo_{surf}"))
+
+    def _global_elo(self, stats: dict[str, Any] | None) -> float | None:
+        return _float(stats.get("elo_global")) if stats else None
 
     def _load_stats(self) -> dict[str, dict[str, dict[str, Any]]]:
         files = {"ATP": "joueurs_stats.csv", "WTA": "joueurs_stats_wta.csv"}

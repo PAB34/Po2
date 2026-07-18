@@ -241,7 +241,11 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     favorite = match["player1"] if fav1 else match["player2"]
     favorite_odds = odds1 if fav1 else odds2
     elo_p1 = intel.get("elo_p1")
+    surface_elo_p1 = intel.get("surface_elo_p1")
+    global_elo_p1 = intel.get("global_elo_p1")
     elo_favorite = (elo_p1 if fav1 else 1 - elo_p1) if elo_p1 is not None else None
+    surface_elo_favorite = (surface_elo_p1 if fav1 else 1 - surface_elo_p1) if surface_elo_p1 is not None else None
+    global_elo_favorite = (global_elo_p1 if fav1 else 1 - global_elo_p1) if global_elo_p1 is not None else None
     decision = intel["decision"]
     low_p1, high_p1 = decision["range_p1"]
     range_favorite = (low_p1, high_p1) if fav1 else (1 - high_p1, 1 - low_p1)
@@ -257,6 +261,9 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "proba": _round_pct(favorite_probability),
         "proba_marche": _round_pct(favorite_probability),
         "proba_elo": _round_pct(elo_favorite) if elo_favorite is not None else None,
+        "proba_elo_surface": _round_pct(surface_elo_favorite) if surface_elo_favorite is not None else None,
+        "proba_elo_global": _round_pct(global_elo_favorite) if global_elo_favorite is not None else None,
+        "elo_reference": intel.get("elo_reference"),
         "elo_detail": intel.get("elo_missing_reason"),
         "proba_brute": _round_pct(elo_favorite) if elo_favorite is not None else None,
         "ecart_elo": round((elo_favorite - favorite_probability) * 100, 1) if elo_favorite is not None else None,

@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles-20260718-clarity.css">
+  <link rel="stylesheet" href="/styles-20260718-explore.css">
 </head>
 <body>
 
@@ -105,7 +105,7 @@
     </div>
     <div id="tennisContent"><div class="loading"><div class="spin"></div>Chargement des matchs...</div></div>
     <div class="note">
-      Le marche devigotte est la reference. L'Elo surface reste un contrepoint independant; forme et H2H sont descriptifs, tandis que fatigue, recuperation et qualite des donnees determinent la vigilance et la largeur de la fourchette. Les marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
+      Le marche devigotte est la reference. Les Elo surface et global restent des contrepoints independants; forme et H2H sont descriptifs, tandis que fatigue, recuperation et qualite des donnees determinent la vigilance et la largeur de la fourchette. Les marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
     </div>
   </section>
 </div>
@@ -137,11 +137,11 @@
   </div>
 </div>
 
-<script src="/app-20260718-clarity.js"></script>
+<script src="/app-20260718-explore.js"></script>
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => setTimeout(() => {
-      navigator.serviceWorker.register("/sw-20260718-clarity.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
+      navigator.serviceWorker.register("/sw-20260718-explore.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
     }, 0));
   }
 </script>
