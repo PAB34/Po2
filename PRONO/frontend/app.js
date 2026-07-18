@@ -392,8 +392,8 @@ function signedTennis(value) {
 }
 function tennisSignals(row) {
   const chips = [
-    `${esc(row.joueur1 || "J1")}: charge ${esc(row.fatigue1 || "inconnue")}`,
-    `${esc(row.joueur2 || "J2")}: charge ${esc(row.fatigue2 || "inconnue")}`,
+    `${esc(row.joueur1 || "J1")}: ${esc(row.fatigue1 || "charge inconnue")}`,
+    `${esc(row.joueur2 || "J2")}: ${esc(row.fatigue2 || "charge inconnue")}`,
     `H2H ${esc(row.h2h || "0-0")}`,
     row.match_source ? `Source ${esc(row.match_source)}` : "",
     row.odds_status && row.odds_status !== "ok" ? "Cotes indisponibles" : "",
