@@ -138,6 +138,13 @@
 </div>
 
 <script src="/app-20260718-wide.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => setTimeout(() => {
+      navigator.serviceWorker.register("/sw-20260718-wide.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
+    }, 0));
+  }
+</script>
 </body>
 </html>
 

@@ -44,7 +44,7 @@ async function api(path, opts = {}) {
 /* ---------- PWA : installation ---------- */
 let _deferredInstallPrompt = null;
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw-20260718-wide.js", { updateViaCache: "none" }).catch(() => {}));
 }
 const _isStandalone = () => window.matchMedia("(display-mode: standalone)").matches
   || window.navigator.standalone === true;

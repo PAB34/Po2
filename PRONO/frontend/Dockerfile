@@ -6,5 +6,6 @@ COPY styles.css /usr/share/nginx/html/styles-20260718-wide.css
 COPY app.js /usr/share/nginx/html/app.js
 COPY app.js /usr/share/nginx/html/app-20260718-wide.js
 COPY sw.js /usr/share/nginx/html/sw.js
+COPY sw.js /usr/share/nginx/html/sw-20260718-wide.js
 COPY manifest.json /usr/share/nginx/html/manifest.json
 COPY icons /usr/share/nginx/html/icons
