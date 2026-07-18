@@ -62,6 +62,7 @@ class TennisServiceTests(unittest.TestCase):
         )
         self.assertIn("props", payload["atp"][0])
         self.assertIn("concordance", payload["atp"][0])
+        self.assertEqual(len(payload["atp"][0]["levels"]), 2)
         self.assertEqual(len(payload["wta"]), 1)
         self.assertEqual(payload["wta"][0]["surface"], "Gazon")
         self.assertEqual(payload["wta"][0]["favori"], "Grass Player B")
@@ -329,6 +330,18 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(conflict["level"], "conflict")
         self.assertEqual(aligned["level"], "aligned")
 
+    def test_multi_surname_alias_restores_merida_elo_without_faking_service_stats(self):
+        coach = tennis._coach()
+        stats = coach.player_stats("Daniel Merida", "ATP")
+        level = coach.level_profile("Daniel Merida", "ATP", "Terre")
+        props = coach.props.predict("ATP", "clay", "Damir Dzumhur", "Daniel Merida")
+
+        self.assertEqual(stats["player"], "Merida Aguilar D.")
+        self.assertEqual(level["elo_global"], 1568.0)
+        self.assertEqual(level["elo_surface"], 1562.0)
+        self.assertEqual(level["sample"], 10)
+        self.assertIsNotNone(props["players"][0])
+        self.assertIsNone(props["players"][1])
     def test_live_match_is_kept_after_kickoff_grace(self):
         now = datetime(2026, 7, 18, 18, 0, tzinfo=tennis.PARIS_TZ)
         timing = tennis._match_timing(

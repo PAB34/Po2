@@ -304,6 +304,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "score_contexte": decision["context_score"],
         "decision_detail": " ; ".join(decision_reasons) if decision_reasons else "aucun facteur contextuel discriminant",
         "props": intel.get("props"),
+        "levels": intel.get("levels") or [],
         "concordance": (intel.get("concordance") or {}).get("label"),
         "concordance_level": (intel.get("concordance") or {}).get("level"),
         "concordance_detail": (intel.get("concordance") or {}).get("detail"),
@@ -615,6 +616,7 @@ def _pending_final_rows(matches: list[dict], feed_updated: datetime, now: dateti
             "match_source": raw.get("source") or "ESPN",
             "odds_status": "en_attente",
             "props": _coach().props.predict(tour, surface, player1, player2),
+            "levels": [_coach().level_profile(player1, tour, surface), _coach().level_profile(player2, tour, surface)],
         })
     rows.sort(key=lambda row: (row.get("kickoff") or "9999", row["tournoi"], row["match"]))
     return rows

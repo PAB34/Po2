@@ -529,12 +529,28 @@ function tennisThresholds(items) {
 function tennisPropMetric(label, value, suffix = "", note = "") {
   return `<div class="prop-metric"><span>${esc(label)}</span><b>${value == null ? "-" : esc(value) + suffix}</b>${note ? `<small>${esc(note)}</small>` : ""}</div>`;
 }
-function tennisPropsPlayer(player) {
-  if (!player) return `<section class="tprop-player unavailable"><h5>Profil indisponible</h5></section>`;
+function tennisLevel(level) {
+  if (!level || (level.elo_global == null && level.elo_surface == null)) return `<div class="prop-level unavailable"><b>Elo indisponible</b><span>Historique insuffisant ou joueur non rapproche</span></div>`;
+  const sample = Number(level.sample || 0);
+  return `<div class="prop-level" title="${esc(level.source || "agregat Elo local")}">
+    <span><small>Elo global</small><b>${level.elo_global == null ? "-" : esc(Math.round(level.elo_global))}</b></span>
+    <span><small>Elo ${esc(rowSurfaceLabel(level.surface))}</small><b>${level.elo_surface == null ? "-" : esc(Math.round(level.elo_surface))}</b></span>
+    <span><small>Echantillon Elo</small><b>${esc(sample)} match${sample > 1 ? "s" : ""}</b></span>
+    <span><small>Statut</small><b>${level.established ? "Etabli" : "Exploratoire"}</b></span>
+  </div>`;
+}
+function rowSurfaceLabel(surface) {
+  return ({clay: "terre", grass: "gazon", hard: "dur"})[surface] || "surface";
+}
+function tennisPropsPlayer(player, level) {
+  const name = (player && player.player) || (level && level.player) || "Joueur";
+  const sampleLabel = player ? `${esc(player.confidence || "faible")} | ${esc(player.sample_surface || 0)} surface, ${esc(player.sample_total || 0)} total` : "statistiques de service indisponibles";
+  const header = `<div class="prop-player-head"><h5>${esc(name)}</h5><span>${sampleLabel}</span></div>${tennisLevel(level)}`;
+  if (!player) return `<section class="tprop-player unavailable">${header}<div class="prop-data-missing"><b>Aces, service et breaks non calcules</b><span>Aucun historique brut match par match suffisamment fiable n'a ete retrouve pour ce joueur.</span></div></section>`;
   const aceRange = player.aces_interval || [];
   const dfRange = player.double_faults_interval || [];
   return `<section class="tprop-player">
-    <div class="prop-player-head"><h5>${esc(player.player || "Joueur")}</h5><span>${esc(player.confidence || "faible")} | ${esc(player.sample_surface || 0)} surface, ${esc(player.sample_total || 0)} total</span></div>
+    ${header}
     <div class="prop-metrics">
       ${tennisPropMetric("Aces attendus", numTennis(player.aces_expected, 1), "", aceRange.length ? `Intervalle 80%: ${aceRange[0]}-${aceRange[1]}` : "")}
       ${tennisPropMetric("Doubles fautes", numTennis(player.double_faults_expected, 1), "", dfRange.length ? `Intervalle 80%: ${dfRange[0]}-${dfRange[1]}` : "")}
@@ -558,12 +574,13 @@ function tennisPropsPanel(row) {
   const props = row.props;
   if (!props || !props.players || !props.players.length) return `<div class="tprop-panel unavailable"><b>Statistiques joueurs indisponibles</b><span>L'historique est insuffisant pour construire ce profil.</span></div>`;
   return `<div class="tprop-panel">
-    <div class="prop-panel-head"><div><b>Profil service et retour</b><span>${esc(row.surface || props.surface || "Surface inconnue")} | modele joueur + adversaire + surface</span></div><div><b>${pctTennis(props.tiebreak_probability)}</b><span>Au moins un tie-break</span></div></div>
-    <div class="prop-players">${props.players.map(tennisPropsPlayer).join("")}</div>
+    <div class="prop-panel-head"><div><b>Niveau, service et retour</b><span>${esc(row.surface || props.surface || "Surface inconnue")} | modele joueur + adversaire + surface</span></div><div><b>${pctTennis(props.tiebreak_probability)}</b><span>Au moins un tie-break</span></div></div>
+    <div class="prop-players">${props.players.map((player, index) => tennisPropsPlayer(player, (row.levels || [])[index])).join("")}</div>
     ${tennisValidation(props)}
     <p>Seuils statistiques issus de l'historique match par match. Ils ne representent pas les lignes actuellement proposees par un bookmaker.</p>
   </div>`;
-}function tennisTable(rows) {
+}
+function tennisTable(rows) {
   if (!rows || !rows.length) return `<div class="note">${_tennisQuery ? "Aucun match ne correspond a la recherche." : "Aucun match a venir pour le moment."}</div>`;
   const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {

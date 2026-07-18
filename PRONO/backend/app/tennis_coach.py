@@ -64,6 +64,17 @@ def short_key(name: Any) -> str | None:
     return f"{parts[-1]} {parts[0][0]}"
 
 
+def stats_keys(name: Any) -> list[str]:
+    normalized = norm(name)
+    parts = normalized.split()
+    candidates = [normalized, short_key(name)]
+    if len(parts) >= 3:
+        if len(parts[-1]) == 1:
+            candidates.extend(f"{word} {parts[-1]}" for word in parts[:-1])
+        else:
+            candidates.extend(f"{word} {parts[0][0]}" for word in parts[1:])
+    return list(dict.fromkeys(key for key in candidates if key))
+
 def _float(value: Any, default: float | None = None) -> float | None:
     try:
         if value is None or pd.isna(value):
@@ -226,6 +237,7 @@ class TennisCoach:
             "context2": context2,
             "decision": decision,
             "props": props,
+            "levels": [self.level_profile(player1, circ, surf), self.level_profile(player2, circ, surf)],
             "concordance": concordance,
             "serve1": self._serve_profile(stats1),
             "serve2": self._serve_profile(stats2),
@@ -463,7 +475,20 @@ class TennisCoach:
 
     def player_stats(self, name: str, circ: str) -> dict[str, Any] | None:
         bucket = self.stats.get(str(circ).upper(), {})
-        return bucket.get(norm(name)) or bucket.get(short_key(name) or "")
+        return next((bucket[key] for key in stats_keys(name) if key in bucket), None)
+
+    def level_profile(self, name: str, circ: str, surface: str) -> dict[str, Any]:
+        stats = self.player_stats(name, circ)
+        surface = surface_key(surface)
+        return {
+            "player": name,
+            "elo_global": self._global_elo(stats),
+            "elo_surface": self._surface_elo(stats, surface),
+            "surface": surface,
+            "sample": _int((stats or {}).get("n_matchs_total")),
+            "established": bool((stats or {}).get("etabli")),
+            "source": "agregat Elo local",
+        }
 
     def cycle(self, name: str, stats: dict[str, Any] | None, ctx: dict[str, Any] | None) -> dict[str, Any]:
         score = 0.0
@@ -686,9 +711,8 @@ class TennisCoach:
             df = pd.read_csv(path)
             for row in df.to_dict("records"):
                 player = row.get("player")
-                for key in (norm(player), short_key(player)):
-                    if key:
-                        out[circ][key] = row
+                for key in stats_keys(player):
+                    out[circ][key] = row
         advanced_files = {"ATP": "stats_avancees_atp.csv", "WTA": "stats_avancees_wta.csv"}
         for circ, filename in advanced_files.items():
             path = self.dataset_dir / filename
@@ -697,9 +721,8 @@ class TennisCoach:
             df = pd.read_csv(path)
             for row in df.to_dict("records"):
                 player = row.get("player")
-                for key in (norm(player), short_key(player)):
-                    if key:
-                        out[circ].setdefault(key, {"player": player}).update(row)
+                for key in stats_keys(player):
+                    out[circ].setdefault(key, {"player": player}).update(row)
         return out
 
     def _load_history(self) -> pd.DataFrame:
