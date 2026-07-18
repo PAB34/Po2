@@ -223,6 +223,7 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             "h2h": f"{h2h.get('wins1', 0)}-{h2h.get('wins2', 0)}",
             "alerte": h2h.get("alert"),
             "preuves": intel.get("proofs"),
+            "external_sources": intel.get("external_sources", []),
         }
         row.update(_favorite_fields(match, odds1, odds2, intel))
         rows.append(row)
@@ -253,12 +254,14 @@ def build_tennis() -> dict:
     feed_updated = _parse_feed_updated(data.get("last_updated"))
     atp, atp_filtered = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered = _rows(matches, "WTA", feed_updated, now)
+    external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
         "feed_age_hours": round((now - feed_updated).total_seconds() / 3600, 1),
         "filtered_past": atp_filtered + wta_filtered,
         "time_policy": "Matchs passes masques: horaire infere depuis last_updated + time, marge 30 min.",
+        "external_sources": external_sources,
         "atp": atp,
         "wta": wta,
     }

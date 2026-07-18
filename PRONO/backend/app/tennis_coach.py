@@ -1,4 +1,4 @@
-﻿"""Coach/fatigue layer for PRONO tennis matches.
+"""Coach/fatigue layer for PRONO tennis matches.
 
 The public feed gives upcoming matches and odds. This module adds a second lens:
 - surface Elo/form stats when known,
@@ -9,6 +9,7 @@ The public feed gives upcoming matches and odds. This module adds a second lens:
 from __future__ import annotations
 
 import glob
+import json
 import math
 import os
 import re
@@ -31,6 +32,8 @@ ELO_SCALE = 1025.0
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures", re.I)
 SEED_RE = re.compile(r"\s*\(\d+\)\s*$")
 TE_URL = "https://www.tennisexplorer.com/results/?type={tour}-single&year={y}&month={m}&day={d}"
+SPORTSCORE_TEAM_URL = "https://sportscore.com/api/widget/team/?sport=tennis&slug={slug}&limit=10"
+SPORTSCORE_TTL = 12 * 3600
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 
 
@@ -137,6 +140,7 @@ class TennisCoach:
         self.history = self._load_history()
         self._ctx: dict[str, dict[str, Any]] | None = None
         self._ctx_loaded_at = 0.0
+        self._freshness_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     def enrich(self, match: dict[str, Any], market_p1: float) -> dict[str, Any]:
         player1 = match["player1"]
@@ -203,7 +207,65 @@ class TennisCoach:
             "cycle2": cycle2,
             "h2h": h2h,
             "proofs": " | ".join(proofs),
+            "external_sources": sorted(set(cycle1.get("external_sources", []) + cycle2.get("external_sources", []))),
         }
+
+    def _canonical_player_name(self, name: str, stats: dict[str, Any] | None) -> str:
+        candidate = str((stats or {}).get("player") or name or "").strip()
+        if candidate and "." not in candidate:
+            return candidate
+        key = short_key(name) or short_key(candidate)
+        if key and len(self.history):
+            mask = (self.history["winner_short"] == key) | (self.history["loser_short"] == key)
+            hits = self.history[mask].sort_values("date_i", ascending=False)
+            if len(hits):
+                row = hits.iloc[0]
+                if row.get("winner_short") == key:
+                    return str(row.get("winner_name") or candidate or name)
+                return str(row.get("loser_name") or candidate or name)
+        return candidate or name
+
+    def _sportscore_slug(self, name: str) -> str:
+        return "-".join(re.sub(r"[^a-z0-9]+", " ", norm(name)).split())
+
+    def _sportscore_freshness(self, name: str, stats: dict[str, Any] | None) -> dict[str, Any]:
+        canonical = self._canonical_player_name(name, stats)
+        slug = self._sportscore_slug(canonical)
+        if not slug:
+            return {"status": "unknown", "source": "SportScore", "name": canonical}
+        cached = self._freshness_cache.get(slug)
+        if cached and time.time() - cached[0] < SPORTSCORE_TTL:
+            return cached[1]
+        result = {"status": "unknown", "source": "SportScore", "name": canonical}
+        try:
+            request = urlrequest.Request(SPORTSCORE_TEAM_URL.format(slug=slug), headers={"User-Agent": UA})
+            data = json.loads(urlrequest.urlopen(request, timeout=12).read().decode("utf-8"))
+            team_name = ((data.get("team") or {}).get("name") or canonical)
+            finished = []
+            for match in data.get("matches", []):
+                if str(match.get("status") or "").lower() != "finished":
+                    continue
+                raw_time = str(match.get("time") or "").replace("Z", "+00:00")
+                try:
+                    played_at = datetime.fromisoformat(raw_time).date()
+                except ValueError:
+                    continue
+                finished.append({
+                    "date": played_at,
+                    "days": max(0, (date.today() - played_at).days),
+                    "competition": match.get("competition") or "",
+                    "home": match.get("home") or "",
+                    "away": match.get("away") or "",
+                })
+            if finished:
+                latest = max(finished, key=lambda item: item["date"])
+                result = {"status": "confirmed_recent" if latest["days"] <= 14 else "probable_inactive", "source": "SportScore", "name": team_name, **latest}
+            else:
+                result = {"status": "no_finished_match", "source": "SportScore", "name": team_name, "count": data.get("count", 0)}
+        except Exception as exc:
+            result = {"status": "unavailable", "source": "SportScore", "name": canonical, "error": type(exc).__name__}
+        self._freshness_cache[slug] = (time.time(), result)
+        return result
 
     def player_stats(self, name: str, circ: str) -> dict[str, Any] | None:
         bucket = self.stats.get(str(circ).upper(), {})
@@ -212,8 +274,18 @@ class TennisCoach:
     def cycle(self, name: str, stats: dict[str, Any] | None, ctx: dict[str, Any] | None) -> dict[str, Any]:
         score = 0.0
         evidence: list[str] = []
+        external_sources: set[str] = set()
         if not stats:
             evidence.append("forme longue inconnue")
+            fresh = self._sportscore_freshness(name, stats)
+            if fresh.get("status") == "confirmed_recent":
+                external_sources.add("SportScore")
+                evidence.append(f"match recent retrouve SportScore ({fresh.get('days')}j)")
+            elif fresh.get("status") == "probable_inactive":
+                external_sources.add("SportScore")
+                evidence.append(f"absence recente probable SportScore ({fresh.get('days')}j)")
+            elif fresh.get("status") in {"no_finished_match", "unknown"}:
+                evidence.append("donnee recente non retrouvee en source secondaire")
         else:
             matches_90 = _int(stats.get("matchs_90j"))
             serie = _int(stats.get("serie"))
@@ -227,8 +299,18 @@ class TennisCoach:
             if last:
                 days = (date.today() - last).days
                 if days >= 30:
-                    score -= 0.10
-                    evidence.append(f"dernier match reference il y a {days}j")
+                    fresh = self._sportscore_freshness(name, stats)
+                    if fresh.get("status") == "confirmed_recent":
+                        external_sources.add("SportScore")
+                        score -= 0.02
+                        evidence.append(f"donnee locale ancienne, match recent retrouve SportScore ({fresh.get('days')}j)")
+                    elif fresh.get("status") == "probable_inactive":
+                        external_sources.add("SportScore")
+                        score -= 0.10
+                        evidence.append(f"inactivite probable: dernier match SportScore il y a {fresh.get('days')}j")
+                    else:
+                        score -= 0.07
+                        evidence.append(f"dernier match reference il y a {days}j; donnee recente non confirmee")
                 elif days <= 7:
                     score += 0.03
                     evidence.append("rythme competitif recent")
@@ -335,7 +417,7 @@ class TennisCoach:
             label = "alerte forme"
         else:
             label = "plateau"
-        return {"label": label, "fatigue": fatigue_label, "score": score, "evidence": evidence}
+        return {"label": label, "fatigue": fatigue_label, "score": score, "evidence": evidence, "external_sources": sorted(external_sources)}
 
     def h2h(self, player1: str, player2: str, tournament: str | None, surf: str) -> dict[str, Any]:
         if self.history is None or not len(self.history):

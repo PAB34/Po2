@@ -37,7 +37,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["feed_updated"], "2026-07-17T12:00:00Z")
@@ -77,7 +77,7 @@ class TennisServiceTests(unittest.TestCase):
         }
 
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "_now_paris", return_value=now):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["filtered_past"], 1)
@@ -85,6 +85,30 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(payload["atp"][0]["match"], "Future Player A vs Future Player B")
         self.assertEqual(payload["atp"][0]["heure"], "Aujourd'hui 11:00")
         self.assertIsNotNone(payload["atp"][0]["kickoff"])
+
+    def test_build_tennis_marks_stale_local_data_confirmed_by_secondary_source(self):
+        feed = {
+            "last_updated": "2026-07-17T12:00:00Z",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "Gstaad",
+                    "player1": "Cerundolo J. (6)",
+                    "player2": "Ruud C. (2)",
+                    "odds1": 3.43,
+                    "odds2": 1.31,
+                }
+            ],
+        }
+        secondary = {"status": "confirmed_recent", "days": 1, "source": "SportScore"}
+
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value=secondary):
+            payload = tennis.build_tennis()
+
+        row = payload["atp"][0]
+        self.assertIn("SportScore", payload["external_sources"])
+        self.assertIn("match recent retrouve SportScore", row["preuves"])
+
     def test_build_tennis_penalizes_ruud_with_coach_and_h2h(self):
         feed = {
             "last_updated": "2026-07-17T12:00:00Z",
@@ -100,7 +124,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]

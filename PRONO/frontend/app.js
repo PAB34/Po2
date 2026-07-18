@@ -521,7 +521,9 @@ async function loadTennis(force) {
     if (force) _tennisBrackets = null;
     const masked = Number(_tennisData.filtered_past || 0);
     const age = Number(_tennisData.feed_age_hours);
-    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}${Number.isFinite(age) ? `<span>Age flux : ${esc(age)}h</span>` : ""}${masked ? `<span>${esc(masked)} passes masques</span>` : ""}`;
+    const usesSportScore = (_tennisData.external_sources || []).includes("SportScore");
+    const sportScoreCredit = usesSportScore ? `<span><a href="https://sportscore.com/" rel="dofollow">Powered by SportScore</a></span>` : "";
+    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}${Number.isFinite(age) ? `<span>Age flux : ${esc(age)}h</span>` : ""}${masked ? `<span>${esc(masked)} passes masques</span>` : ""}${sportScoreCredit}`;
     renderTennis();
     _tennisLoaded = true;
     if (_tennisMode === "brackets") loadTennisBrackets(force);
