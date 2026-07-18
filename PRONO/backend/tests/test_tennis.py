@@ -178,6 +178,41 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(tennis._surface("EFG Swiss Open Gstaad"), "Terre")
         self.assertEqual(tennis._surface("Plava Laguna Croatia Open Umag"), "Terre")
         self.assertEqual(tennis._surface("Generali Open"), "Terre")
+    def test_scoreboard_matchups_attach_abbreviated_market_odds(self):
+        feed = {
+            "last_updated": "2026-07-18T09:00:00Z",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "Bastad",
+                    "player1": "Rublev A. (1)",
+                    "player2": "Tabilo A. (3)",
+                    "time": "14:30",
+                    "odds1": 1.42,
+                    "odds2": 2.82,
+                }
+            ],
+        }
+        scoreboard = [
+            {
+                "tour": "ATP",
+                "tournament": "Nordea Open",
+                "player1": "Alejandro Tabilo",
+                "player2": "Andrey Rublev",
+                "kickoff": "2026-07-18T14:30:00+02:00",
+                "source": "ESPN",
+            }
+        ]
+        now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
+
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_matches", return_value=scoreboard), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+            payload = tennis.build_tennis()
+
+        row = payload["atp"][0]
+        self.assertEqual(row["odds_status"], "ok")
+        self.assertEqual(row["odds_source"], "market-feed")
+        self.assertEqual(row["cote"], 2.82 if row["favori"] == "Alejandro Tabilo" else 1.42)
+        self.assertNotEqual(row["proba_marche"], 50.0)
 
 if __name__ == "__main__":
     unittest.main()

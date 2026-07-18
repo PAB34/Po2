@@ -193,17 +193,38 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     }
 
 
-def _player_signature(name: str) -> str:
+def _player_signatures(name: str) -> set[str]:
     words = _norm_words(name)
     if not words:
-        return ""
+        return set()
     if len(words) == 1:
-        return words[0]
-    return f"{words[-1]}:{words[0][0]}"
+        return {words[0]}
+    aliases = set()
+    if len(words[-1]) == 1:
+        initial = words[-1][0]
+        aliases.add(f"{words[0]}:{initial}")
+        if len(words) > 2:
+            aliases.add(f"{words[-2]}:{initial}")
+    else:
+        initial = words[0][0]
+        aliases.add(f"{words[-1]}:{initial}")
+        if len(words) > 2:
+            aliases.add(f"{words[-2]}:{initial}")
+    return aliases
+
+
+def _player_signature(name: str) -> str:
+    aliases = sorted(_player_signatures(name))
+    return aliases[0] if aliases else ""
 
 
 def _player_pair_key(player1: str, player2: str) -> frozenset[str]:
     return frozenset(sig for sig in (_player_signature(player1), _player_signature(player2)) if sig)
+
+
+def _player_pair_keys(player1: str, player2: str) -> list[frozenset[str]]:
+    left, right = _player_signatures(player1), _player_signatures(player2)
+    return [frozenset((a, b)) for a in left for b in right if a and b and a != b]
 
 
 def _odds_index(matches: list[dict]) -> dict[tuple[str, frozenset[str]], list[dict]]:
@@ -212,11 +233,21 @@ def _odds_index(matches: list[dict]) -> dict[tuple[str, frozenset[str]], list[di
         odds1, odds2 = _valid_odds(raw.get("odds1"), raw.get("odds2"))
         if not odds1 or not odds2:
             continue
-        key = (str(raw.get("tour") or "").upper(), _player_pair_key(raw.get("player1", ""), raw.get("player2", "")))
-        if len(key[1]) != 2:
-            continue
-        index.setdefault(key, []).append(raw)
+        tour = str(raw.get("tour") or "").upper()
+        for pair_key in _player_pair_keys(raw.get("player1", ""), raw.get("player2", "")):
+            if len(pair_key) != 2:
+                continue
+            index.setdefault((tour, pair_key), []).append(raw)
     return index
+
+
+def _find_odds_candidate(index: dict[tuple[str, frozenset[str]], list[dict]], match: dict) -> dict | None:
+    tour = str(match.get("tour") or "").upper()
+    for pair_key in _player_pair_keys(match.get("player1", ""), match.get("player2", "")):
+        candidates = index.get((tour, pair_key)) or []
+        if candidates:
+            return candidates[0]
+    return None
 
 
 def _attach_odds(scoreboard: list[dict], odds_matches: list[dict]) -> list[dict]:
@@ -224,20 +255,17 @@ def _attach_odds(scoreboard: list[dict], odds_matches: list[dict]) -> list[dict]
     out = []
     for match in scoreboard:
         item = dict(match)
-        key = (str(item.get("tour") or "").upper(), _player_pair_key(item.get("player1", ""), item.get("player2", "")))
-        candidates = indexed.get(key) or []
-        if candidates:
-            candidate = candidates[0]
+        candidate = _find_odds_candidate(indexed, item)
+        if candidate:
             odds1, odds2 = _valid_odds(candidate.get("odds1"), candidate.get("odds2"))
-            c1 = _player_signature(candidate.get("player1", ""))
-            s1 = _player_signature(item.get("player1", ""))
-            if c1 == s1:
+            candidate_left = _player_signatures(candidate.get("player1", ""))
+            scoreboard_left = _player_signatures(item.get("player1", ""))
+            if candidate_left & scoreboard_left:
                 item.update({"odds1": odds1, "odds2": odds2, "odds_source": "market-feed"})
             else:
                 item.update({"odds1": odds2, "odds2": odds1, "odds_source": "market-feed"})
         out.append(item)
     return out
-
 
 def _competitor_name(competitor: dict) -> str:
     athlete = competitor.get("athlete") or {}
