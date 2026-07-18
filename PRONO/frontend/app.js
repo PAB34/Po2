@@ -141,6 +141,7 @@ let _bracketTourFilter = "all";
 let _tennisSort = { key: "kickoff", dir: "asc" };
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  $("#app").classList.toggle("tennis-wide", tab === "tennis");
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
   $("#view-actu").classList.toggle("hidden", tab !== "actu");
   $("#view-tests").classList.toggle("hidden", tab !== "tests");
