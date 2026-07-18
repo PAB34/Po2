@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import glob
 import math
+import os
 import re
+import threading
 import unicodedata
 from collections import defaultdict
 from datetime import date
@@ -12,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from app.tennis_live_stats import TennisMyLifeLiveSource
+
 
 TRAIN_START = 2021
 TRAIN_END = 2024
@@ -272,6 +276,12 @@ class TennisPropsEngine:
         self.matches = self._load_matches()
         self.model = _PropsModel(self.matches)
         self._validation_cache: dict[int, dict[str, Any]] = {}
+        runtime = Path(os.environ.get("PRONO_DATA_DIR") or (self.dataset_dir / "_runtime"))
+        self.live_source = TennisMyLifeLiveSource(runtime / "tennis" / "live_props")
+        self._live_attempted: set[str] = set()
+        self._live_players: set[str] = set()
+        self._live_lock = threading.Lock()
+        self._match_keys = {self._match_key(match) for match in self.matches}
 
     def _load_matches(self) -> list[dict[str, Any]]:
         matches: list[dict[str, Any]] = []
@@ -306,12 +316,25 @@ class TennisPropsEngine:
         if values["w_SvGms"] <= 0 or values["l_SvGms"] <= 0:
             return None
         winner_breaks = max(0.0, (values["w_bpFaced"] or 0) - (values["w_bpSaved"] or 0))
+        if any(value is not None and value < 0 for value in values.values()):
+            return None
+        for saved, faced in (("w_bpSaved", "w_bpFaced"), ("l_bpSaved", "l_bpFaced")):
+            if values[saved] is not None and values[faced] is not None and values[saved] > values[faced]:
+                return None
+        if (values["w_ace"] > 4 * values["w_SvGms"] or
+                values["l_ace"] > 4 * values["l_SvGms"] or
+                values["w_df"] > 4 * values["w_SvGms"] or
+                values["l_df"] > 4 * values["l_SvGms"]):
+            return None
         loser_breaks = max(0.0, (values["l_bpFaced"] or 0) - (values["l_bpSaved"] or 0))
         try:
-            date_i = int(float(row.get("tourney_date") or 0))
+            raw_date = str(row.get("tourney_date") or "")
+            date_i = (int(raw_date[:10].replace("-", ""))
+                      if len(raw_date) >= 10 and raw_date[4] == "-"
+                      else int(float(raw_date or 0)))
         except (TypeError, ValueError):
             date_i = 0
-        if date_i > int(date.today().strftime("%Y%m%d")):
+        if date_i <= 0 or date_i > int(date.today().strftime("%Y%m%d")):
             return None
         winner, loser = str(row.get("winner_name") or "").strip(), str(row.get("loser_name") or "").strip()
         if not winner or not loser:
@@ -336,8 +359,56 @@ class TennisPropsEngine:
             ],
         }
 
+    @staticmethod
+    def _match_key(match: dict[str, Any]) -> tuple[Any, ...]:
+        players = sorted(_norm(row.get("player")) for row in match.get("players", []))
+        return (match.get("tour"), match.get("date"), *players)
+
+    def _ensure_live_player(self, tour: str, player: str) -> None:
+        if str(tour).upper() != "ATP" or not self.live_source.enabled:
+            return
+        player_key = _norm(player)
+        if not player_key:
+            return
+        resolved = self.model._resolve("ATP", player)
+        total = int((self.model.player.get(("ATP", "all", resolved), {})
+                     if resolved else {}).get("matches") or 0)
+        if total >= 30 or player_key in self._live_attempted:
+            return
+        with self._live_lock:
+            if player_key in self._live_attempted:
+                return
+            self._live_attempted.add(player_key)
+            rows = self.live_source.player_matches(player)
+            parsed_rows = []
+            for row in rows:
+                parsed = self._parse_match("ATP", row)
+                if parsed:
+                    parsed_rows.append(parsed)
+            if parsed_rows:
+                self._live_players.add(player_key)
+            added = False
+            for parsed in parsed_rows:
+                key = self._match_key(parsed)
+                if key in self._match_keys:
+                    continue
+                self._match_keys.add(key)
+                self.matches.append(parsed)
+                added = True
+            if added:
+                self.model = _PropsModel(self.matches)
+
+    def _mark_sources(self, prediction: dict[str, Any], players: tuple[str, str]) -> None:
+        for profile, player in zip(prediction.get("players") or [], players):
+            if profile is not None:
+                profile["source"] = ("TennisMyLife live + archives"
+                                     if _norm(player) in self._live_players else "archives locales")
+
     def predict(self, tour: str, surface: str, player1: str, player2: str) -> dict[str, Any]:
+        self._ensure_live_player(tour, player1)
+        self._ensure_live_player(tour, player2)
         prediction = self.model.predict(tour, surface, player1, player2)
+        self._mark_sources(prediction, (player1, player2))
         prediction["validation"] = self.validation_report(2025)["markets"]
         return prediction
 

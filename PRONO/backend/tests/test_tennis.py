@@ -5,6 +5,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
+from app.tennis_coach import DATASET_DIR
+from app.tennis_props import TennisPropsEngine
 from app import tennis
 
 
@@ -342,6 +344,43 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(level["sample"], 10)
         self.assertIsNotNone(props["players"][0])
         self.assertIsNone(props["players"][1])
+
+    def test_live_atp_feed_fills_missing_merida_service_profile(self):
+        engine = TennisPropsEngine(DATASET_DIR)
+        live_rows = [{
+            "tourney_date": "2026-07-17T00:00:00.000Z",
+            "surface": "Clay",
+            "winner_name": "Daniel Merida",
+            "loser_name": "Roman Andres Burruchaga",
+            "score": "6-4 6-2",
+            "w_ace": 4,
+            "w_df": 1,
+            "w_SvGms": 9,
+            "w_bpSaved": 3,
+            "w_bpFaced": 4,
+            "l_ace": 1,
+            "l_df": 1,
+            "l_SvGms": 9,
+            "l_bpSaved": 5,
+            "l_bpFaced": 9,
+        }]
+
+        invalid = {**live_rows[0], "w_bpSaved": 5}
+        self.assertIsNone(engine._parse_match("ATP", invalid))
+
+
+        with patch.dict(os.environ, {"PRONO_TENNIS_LIVE_STATS": "1"}), patch.object(
+            engine.live_source, "player_matches", return_value=live_rows,
+        ) as fetch:
+            props = engine.predict("ATP", "clay", "Damir Dzumhur", "Daniel Merida")
+
+        fetch.assert_called_once_with("Daniel Merida")
+        merida = props["players"][1]
+        self.assertIsNotNone(merida)
+        self.assertEqual(merida["sample_surface"], 1)
+        self.assertEqual(merida["source"], "TennisMyLife live + archives")
+        self.assertGreater(merida["aces_expected"], 0)
+        self.assertGreater(merida["break_probability"], 0)
 
     def test_full_wta_name_keeps_elo_when_advanced_stats_use_another_spelling(self):
         coach = tennis.TennisCoach()

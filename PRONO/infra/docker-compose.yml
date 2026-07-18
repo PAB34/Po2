@@ -12,6 +12,7 @@ services:
       - ./.env
     environment:
       PRONO_DATA_DIR: /data
+      PRONO_TENNIS_LIVE_STATS: "1"
     volumes:
       - prono_data:/data
     networks:

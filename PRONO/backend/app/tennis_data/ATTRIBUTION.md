@@ -10,3 +10,9 @@ They are used for non-commercial statistical calibration and H2H context.
 
 The files in `tml/` come from the TennisMyLife database:
 https://github.com/Tennismylife/TML-Database
+
+ATP players with sparse local coverage may be supplemented at runtime from the
+public TennisMyLife player pages and `api/players/allmatches` feed. Responses
+are cached for 24 hours, validated before use, and are not redistributed.
+
+All TennisMyLife data is used only for this private, non-commercial dashboard.

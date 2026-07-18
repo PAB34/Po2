@@ -4,7 +4,7 @@ COPY index.html /usr/share/nginx/html/index.html
 COPY styles.css /usr/share/nginx/html/styles.css
 COPY styles.css /usr/share/nginx/html/styles-20260718-level2.css
 COPY app.js /usr/share/nginx/html/app.js
-COPY app.js /usr/share/nginx/html/app-20260718-level2.js
+COPY app.js /usr/share/nginx/html/app-20260718-liveprops1.js
 COPY sw.js /usr/share/nginx/html/sw.js
 COPY sw.js /usr/share/nginx/html/sw-20260718-level2.js
 COPY manifest.json /usr/share/nginx/html/manifest.json

@@ -544,7 +544,7 @@ function rowSurfaceLabel(surface) {
 }
 function tennisPropsPlayer(player, level) {
   const name = (player && player.player) || (level && level.player) || "Joueur";
-  const sampleLabel = player ? `${esc(player.confidence || "faible")} | ${esc(player.sample_surface || 0)} surface, ${esc(player.sample_total || 0)} total` : "statistiques de service indisponibles";
+  const sampleLabel = player ? `${esc(player.confidence || "faible")} | ${esc(player.sample_surface || 0)} surface, ${esc(player.sample_total || 0)} total${player.source ? ` | ${esc(player.source)}` : ""}` : "statistiques de service indisponibles";
   const header = `<div class="prop-player-head"><h5>${esc(name)}</h5><span>${sampleLabel}</span></div>${tennisLevel(level)}`;
   if (!player) return `<section class="tprop-player unavailable">${header}<div class="prop-data-missing"><b>Aces, service et breaks non calcules</b><span>Aucun historique brut match par match suffisamment fiable n'a ete retrouve pour ce joueur.</span></div></section>`;
   const aceRange = player.aces_interval || [];
