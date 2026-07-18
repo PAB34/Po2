@@ -138,6 +138,7 @@ let _tennisBrackets = null;
 let _tennisMode = "matches";
 let _selectedBracket = 0;
 let _bracketTourFilter = "all";
+let _tennisSort = { key: "kickoff", dir: "asc" };
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
@@ -396,16 +397,45 @@ function tennisSignals(row) {
   const proofs = row.preuves ? `<div class="tproof">${esc(row.preuves)}</div>` : "";
   return `<div class="tchips">${chips}</div>${alert}${proofs}`;
 }
+const TENNIS_SORT_COLUMNS = [
+  ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"], ["favori", "Favori"],
+  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["p3", "3 sets", "n"],
+];
+function tennisSortIcon(key) {
+  if (_tennisSort.key !== key) return "";
+  return _tennisSort.dir === "asc" ? " ↑" : " ↓";
+}
+function tennisHeader(key, label, cls = "") {
+  return `<th class="${cls}"><button class="sorthead" onclick="setTennisSort('${key}')" aria-label="Trier par ${esc(label)}">${esc(label)}${tennisSortIcon(key)}</button></th>`;
+}
+function setTennisSort(key) {
+  _tennisSort = _tennisSort.key === key ? { key, dir: _tennisSort.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "kickoff" ? "asc" : "desc" };
+  renderTennis();
+}
+function tennisSortValue(row, key) {
+  if (key === "kickoff") return row.kickoff || row.heure || "9999";
+  if (["proba", "proba_brute", "proba_marche", "ajustement", "cote", "p3"].includes(key)) return Number(row[key] ?? -9999);
+  return String(row[key] || "").toLowerCase();
+}
+function sortedTennisRows(rows) {
+  const dir = _tennisSort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const av = tennisSortValue(a, _tennisSort.key), bv = tennisSortValue(b, _tennisSort.key);
+    if (av < bv) return -dir;
+    if (av > bv) return dir;
+    return String(a.match || "").localeCompare(String(b.match || ""));
+  });
+}
 function tennisTable(rows) {
   if (!rows || !rows.length) return `<div class="note">Aucun match cote pour le moment.</div>`;
-  return `<div class="tenwrap"><table class="tentable"><thead><tr>
-    <th>Tournoi</th><th>Match</th><th>Favori</th>
-    <th class="n">Coach</th><th class="n">Brut</th><th class="n">Marche</th><th class="n">Ajust.</th><th class="n">Cote</th><th class="n">3 sets</th>
-  </tr></thead><tbody>${rows.map(row => {
+  const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
+  return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
     const adj = Number(row.ajustement || 0);
     const adjCls = adj <= -5 ? "neg" : adj >= 5 ? "pos" : "flat";
     return `<tr>
-      <td><b>${esc(row.tournoi)}</b><div class="tsub">${esc(row.surface)}${row.heure ? ` - ${esc(row.heure)}` : ""}</div></td>
+      <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
+      <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
+      <td><b>${esc(row.tournoi)}</b></td>
       <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
       <td class="favn">${esc(row.favori)}<div class="tsub">${esc(row.modele === "elo_surface" ? "Elo surface + coach" : "Marche + coach")}</div></td>
       <td class="n probten">${pctTennis(row.proba)}<span style="width:${Math.max(8, Number(row.proba || 0) * 0.46)}px"></span></td>
@@ -436,8 +466,8 @@ function renderTennis() {
 }
 function renderTennisMatches() {
   const data = _tennisData || {};
-  return `<div class="tensection"><h3>ATP <span>${(data.atp || []).length} matchs</span></h3>${tennisTable(data.atp)}</div>
-    <div class="tensection"><h3>WTA <span>${(data.wta || []).length} matchs</span></h3>${tennisTable(data.wta)}</div>`;
+  const rows = [...(data.atp || []).map(r => ({ ...r, tour: "ATP" })), ...(data.wta || []).map(r => ({ ...r, tour: "WTA" }))];
+  return `<div class="tensection"><h3>Matchs coach <span>${rows.length} matchs - ${(data.atp || []).length} ATP / ${(data.wta || []).length} WTA</span></h3>${tennisTable(rows)}</div>`;
 }
 function playerSlot(p) {
   const seed = p && p.seed ? `<span class="bseed">${esc(p.seed)}</span>` : "";
