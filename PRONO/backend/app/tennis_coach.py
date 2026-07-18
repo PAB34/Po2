@@ -23,6 +23,8 @@ from typing import Any
 import pandas as pd
 from bs4 import BeautifulSoup
 
+from app.tennis_calibration import HistoricalCalibration
+
 DATASET_DIR = Path(__file__).resolve().parent / "tennis_data"
 RUNTIME_DIR = Path(os.environ.get("PRONO_DATA_DIR") or (DATASET_DIR / "_runtime")) / "tennis"
 RECENT_CACHE = RUNTIME_DIR / "week_results.csv"
@@ -149,6 +151,8 @@ class TennisCoach:
         self.dataset_dir = Path(dataset_dir)
         self.stats = self._load_stats()
         self.history = self._load_history()
+        self.calibration = HistoricalCalibration(self.history)
+        self._live_results = pd.DataFrame()
         self._ctx: dict[str, dict[str, Any]] | None = None
         self._ctx_loaded_at = 0.0
         self._freshness_cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -169,33 +173,34 @@ class TennisCoach:
         elo1 = self._surface_elo(stats1, surf)
         elo2 = self._surface_elo(stats2, surf)
         if elo1 is not None and elo2 is not None:
-            raw_p1 = _elo_probability(elo1, elo2)
-            source = "elo_surface"
+            elo_p1 = _elo_probability(elo1, elo2)
+            elo_weight = self._elo_weight(stats1, stats2)
+            raw_p1 = _sigmoid((1 - elo_weight) * _logit(market_p1) + elo_weight * _logit(elo_p1))
+            source = "marche+elo_surface"
 
         cycle1 = self.cycle(player1, stats1, ctx1)
         cycle2 = self.cycle(player2, stats2, ctx2)
-        h2h = self.h2h(player1, player2, match.get("tournament"), surf)
-
-        score1 = cycle1["score"]
-        score2 = cycle2["score"]
+        h2h = self.h2h(player1, player2, match.get("tournament"), surf, circ)
+        score1, score2 = cycle1["score"], cycle2["score"]
         if h2h.get("same_tournament"):
             rec = h2h["same_tournament"]
             if rec["winner_side"] == 1:
-                score1 += 0.08
-                score2 -= 0.05
+                score1 += 0.03
+                score2 -= 0.02
             else:
-                score2 += 0.08
-                score1 -= 0.05
+                score2 += 0.03
+                score1 -= 0.02
         elif h2h.get("last") and norm(h2h["last"].get("surface")) == surf:
             rec = h2h["last"]
             if rec["winner_side"] == 1:
-                score1 += 0.05
-                score2 -= 0.03
+                score1 += 0.015
+                score2 -= 0.01
             else:
-                score2 += 0.05
-                score1 -= 0.03
+                score2 += 0.015
+                score1 -= 0.01
 
-        delta = max(-0.55, min(0.55, score1 - score2))
+        evidence_quality = self._evidence_quality(stats1, stats2, ctx1, ctx2)
+        delta = max(-0.22, min(0.22, (score1 - score2) * (0.35 + 0.65 * evidence_quality)))
         coach_p1 = max(0.05, min(0.95, _sigmoid(_logit(raw_p1) + delta)))
 
         proofs = []
@@ -208,12 +213,18 @@ class TennisCoach:
         if source == "marche":
             proofs.append("Elo surface indisponible: base marche conservee")
 
+        quality_score = round(0.55 + 0.45 * evidence_quality, 2)
+        quality = "elevee" if quality_score >= 0.82 else "moyenne" if quality_score >= 0.68 else "faible"
+        uncertainty = round(3.5 + (1 - quality_score) * 12, 1)
         return {
             "p1": coach_p1,
             "raw_p1": raw_p1,
             "market_p1": market_p1,
             "adjustment_pts_p1": (coach_p1 - raw_p1) * 100,
             "source": source,
+            "quality": quality,
+            "quality_score": quality_score,
+            "uncertainty_pts": uncertainty,
             "cycle1": cycle1,
             "cycle2": cycle2,
             "serve1": self._serve_profile(stats1),
@@ -223,6 +234,30 @@ class TennisCoach:
             "external_sources": sorted(set(cycle1.get("external_sources", []) + cycle2.get("external_sources", []))),
         }
 
+    def _elo_weight(self, stats1: dict[str, Any], stats2: dict[str, Any]) -> float:
+        samples = [min(_int(stats.get("matchs_chartes")), 40) for stats in (stats1, stats2)]
+        if min(samples) >= 20:
+            return 0.28
+        if min(samples) >= 10:
+            return 0.22
+        return 0.15
+
+    def _evidence_quality(self, stats1: dict[str, Any] | None, stats2: dict[str, Any] | None, ctx1: dict[str, Any] | None, ctx2: dict[str, Any] | None) -> float:
+        stats_score = sum(bool(stats) for stats in (stats1, stats2)) / 2
+        sample_score = sum(min(_int((stats or {}).get("matchs_chartes")) / 20, 1) for stats in (stats1, stats2)) / 2
+        context_score = sum(bool(ctx) for ctx in (ctx1, ctx2)) / 2
+        return min(1.0, 0.45 * stats_score + 0.35 * sample_score + 0.20 * context_score)
+
+    def market_priors(self, tour: str, surface: str, favorite_probability: float) -> dict[str, Any]:
+        return self.calibration.estimate(tour, surface, favorite_probability)
+
+    def calibration_report(self, test_year: int = 2025) -> dict[str, Any]:
+        return self.calibration.report(test_year)
+
+    def set_live_results(self, rows: list[dict[str, Any]]) -> None:
+        self._live_results = pd.DataFrame(rows)
+        self._ctx = None
+        self._ctx_loaded_at = 0.0
     def _serve_profile(self, stats: dict[str, Any] | None) -> dict[str, Any]:
         if not stats:
             return {"available": False}
@@ -447,17 +482,18 @@ class TennisCoach:
             label = "plateau"
         return {"label": label, "fatigue": fatigue_label, "score": score, "evidence": evidence, "external_sources": sorted(external_sources)}
 
-    def h2h(self, player1: str, player2: str, tournament: str | None, surf: str) -> dict[str, Any]:
+    def h2h(self, player1: str, player2: str, tournament: str | None, surf: str, circ: str) -> dict[str, Any]:
         if self.history is None or not len(self.history):
             return {"wins1": 0, "wins2": 0, "alert": None, "last": None, "same_tournament": None}
         k1, k2 = norm(player1), norm(player2)
         s1, s2 = short_key(player1), short_key(player2)
-        h = self.history[
+        circuit = self.history["tour"].eq(str(circ).upper())
+        h = self.history[circuit & (
             (((self.history["winner_k"] == k1) | (self.history["winner_short"] == s1))
              & ((self.history["loser_k"] == k2) | (self.history["loser_short"] == s2)))
             | (((self.history["winner_k"] == k2) | (self.history["winner_short"] == s2))
                & ((self.history["loser_k"] == k1) | (self.history["loser_short"] == s1)))
-        ].copy()
+        )].copy()
         if not len(h):
             return {"wins1": 0, "wins2": 0, "alert": None, "last": None, "same_tournament": None}
         h["winner_side"] = h.apply(lambda r: 1 if r["winner_k"] == k1 or r["winner_short"] == s1 else 2, axis=1)
@@ -534,40 +570,52 @@ class TennisCoach:
 
     def _load_history(self) -> pd.DataFrame:
         frames = []
-        cols = {"tourney_date", "tourney_name", "surface", "winner_name", "loser_name", "score", "round"}
-        for path in glob.glob(str(self.dataset_dir / "tml" / "*.csv")):
-            try:
-                df = pd.read_csv(path, usecols=lambda c: c in cols, dtype=str)
-            except (OSError, ValueError):
-                continue
-            if len(df):
-                frames.append(df)
+        cols = {
+            "tourney_date", "tourney_name", "surface", "winner_name", "loser_name",
+            "score", "round", "best_of", "winner_rank_points", "loser_rank_points",
+        }
+        sources = (("ATP", self.dataset_dir / "tml"), ("WTA", self.dataset_dir / "tml_wta"))
+        for tour, directory in sources:
+            for path in glob.glob(str(directory / "*.csv")):
+                try:
+                    df = pd.read_csv(path, usecols=lambda c: c in cols, dtype=str)
+                except (OSError, ValueError):
+                    continue
+                if len(df):
+                    df["tour"] = tour
+                    frames.append(df)
         if not frames:
             return pd.DataFrame()
         out = pd.concat(frames, ignore_index=True)
+        for column in cols:
+            if column not in out:
+                out[column] = None
         out["winner_k"] = out["winner_name"].map(norm)
         out["loser_k"] = out["loser_name"].map(norm)
         out["winner_short"] = out["winner_name"].map(short_key)
         out["loser_short"] = out["loser_name"].map(short_key)
         out["date_i"] = pd.to_numeric(out["tourney_date"], errors="coerce").fillna(0).astype(int)
         return out
-
     def _recent_results(self) -> pd.DataFrame:
+        base = pd.DataFrame()
         if RECENT_CACHE.exists() and time.time() - RECENT_CACHE.stat().st_mtime < RECENT_TTL:
-            return pd.read_csv(RECENT_CACHE)
-        if os.environ.get("PRONO_DATA_DIR"):
+            base = pd.read_csv(RECENT_CACHE)
+        elif os.environ.get("PRONO_DATA_DIR"):
             try:
-                df = self._scrape_recent(days=10)
-                if len(df):
+                base = self._scrape_recent(days=10)
+                if len(base):
                     RECENT_CACHE.parent.mkdir(parents=True, exist_ok=True)
-                    df.to_csv(RECENT_CACHE, index=False, encoding="utf-8")
-                    return df
+                    base.to_csv(RECENT_CACHE, index=False, encoding="utf-8")
             except Exception:
-                pass
-        if PACKAGE_RECENT.exists():
-            return pd.read_csv(PACKAGE_RECENT)
-        return pd.DataFrame()
-
+                base = pd.DataFrame()
+        if base.empty and PACKAGE_RECENT.exists():
+            base = pd.read_csv(PACKAGE_RECENT)
+        frames = [frame.dropna(axis=1, how="all") for frame in (base, self._live_results) if frame is not None and len(frame)]
+        if not frames:
+            return pd.DataFrame()
+        combined = pd.concat(frames, ignore_index=True)
+        identity = [column for column in ("date", "tour", "tournament", "winner", "loser") if column in combined]
+        return combined.drop_duplicates(subset=identity, keep="last") if identity else combined
     def _scrape_recent(self, days: int = 10, delay: float = 0.2) -> pd.DataFrame:
         rows = []
         today = date.today()

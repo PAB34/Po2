@@ -135,17 +135,6 @@ def _match_timing(raw: dict, feed_updated: datetime, now: datetime) -> dict:
     }
 
 
-def _set_probability(match_probability: float) -> float:
-    lo, hi = 0.5, 1.0
-    for _ in range(50):
-        mid = (lo + hi) / 2
-        if mid * mid * (3 - 2 * mid) < match_probability:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
-
-
 def _market_probability(odds1: float, odds2: float) -> float:
     implied1, implied2 = 1 / odds1, 1 / odds2
     return implied1 / (implied1 + implied2)
@@ -153,10 +142,6 @@ def _market_probability(odds1: float, odds2: float) -> float:
 
 def _round_pct(value: float) -> float:
     return round(value * 100, 1)
-
-
-def _clamp(value: float, low: float = 0.05, high: float = 0.95) -> float:
-    return max(low, min(high, value))
 
 
 def _profile_number(profile: dict, key: str) -> float | None:
@@ -178,94 +163,62 @@ def _signal_strength(probability: float | None) -> str:
     return "faible"
 
 
-def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str) -> dict:
+def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str, source: str, confidence: str, sample: int) -> dict:
     return {
         "key": key,
         "label": label,
         "pick": pick,
         "prob": round(probability * 100) if probability is not None else None,
         "force": _signal_strength(probability),
-        "source": "estime",
+        "source": source,
+        "confidence": confidence,
+        "sample": sample,
         "detail": detail,
     }
 
 
-def _secondary_markets(match: dict, intel: dict, favorite_probability: float, set_probability: float) -> list[dict]:
-    p3 = 2 * set_probability * (1 - set_probability)
-    tightness = 1 - abs(favorite_probability - 0.5) * 2
-    surface = str(match.get("surface") or "Dur")
-    surface_total = 0.02 if surface == "Dur" else 0.03 if surface == "Gazon" else 0.01
-    over_games = _clamp(0.33 + p3 * 0.62 + tightness * 0.18 + surface_total, 0.12, 0.88)
-    if over_games >= 0.56:
-        total_pick, total_prob = "Over 22.5 jeux", over_games
-    elif over_games <= 0.44:
-        total_pick, total_prob = "Under 22.5 jeux", 1 - over_games
-    else:
-        total_pick, total_prob = "Total jeux neutre", 0.5
+def _calibrated_pick(probability: float, positive: str, negative: str) -> tuple[str, float | None]:
+    if probability >= 0.58:
+        return positive, probability
+    if probability <= 0.42:
+        return negative, 1 - probability
+    return "Pas d'avantage statistique", None
 
-    handicap_cover = _clamp(0.43 + (favorite_probability - 0.5) * 0.82 - p3 * 0.16, 0.15, 0.85)
-    if handicap_cover >= 0.56:
-        handicap_pick, handicap_prob = "Favori -2.5 jeux", handicap_cover
-    elif handicap_cover <= 0.46:
-        handicap_pick, handicap_prob = "Adversaire +2.5 jeux", 1 - handicap_cover
-    else:
-        handicap_pick, handicap_prob = "Handicap neutre", 0.5
+
+def _secondary_markets(match: dict, intel: dict, favorite_probability: float, calibration: dict) -> list[dict]:
+    rates = calibration["rates"]
+    sample = calibration["sample"]
+    confidence = calibration["confidence"]
+    training = calibration["training"]
+    source = "historique calibre"
+    suffix = f"echantillon {sample}, apprentissage {training}, confiance {confidence}"
+
+    total_pick, total_prob = _calibrated_pick(rates["over_22_5"], "Over 22.5 jeux", "Under 22.5 jeux")
+    handicap_pick, handicap_prob = _calibrated_pick(rates["favorite_cover_2_5"], "Favori -2.5 jeux", "Adversaire +2.5 jeux")
+    tiebreak_pick, tiebreak_prob = _calibrated_pick(rates["tiebreak"], "Tie-break oui", "Tie-break non")
+    markets = [
+        _market_item("total_games", "Total jeux", total_pick, total_prob, f"P(Over) {rates['over_22_5']:.0%}; {suffix}", source, confidence, sample),
+        _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"P(favori -2.5) {rates['favorite_cover_2_5']:.0%}; {suffix}", source, confidence, sample),
+        _market_item("tiebreak", "Tie-break", tiebreak_pick, tiebreak_prob, f"P(au moins un tie-break) {rates['tiebreak']:.0%}; {suffix}", source, confidence, sample),
+    ]
 
     serve1, serve2 = intel.get("serve1") or {}, intel.get("serve2") or {}
     ace1, ace2 = _profile_number(serve1, "ace_pct"), _profile_number(serve2, "ace_pct")
-    return1, return2 = _profile_number(serve1, "return_won_pct"), _profile_number(serve2, "return_won_pct")
-    first1, first2 = _profile_number(serve1, "first_won_pct"), _profile_number(serve2, "first_won_pct")
-    sample1, sample2 = _profile_number(serve1, "sample"), _profile_number(serve2, "sample")
-    sample_label = f", echantillon {int(sample1 or 0)}+{int(sample2 or 0)} matchs" if sample1 or sample2 else ""
-    markets = [
-        _market_item("total_games", "Total jeux", total_pick, total_prob, f"3 sets {round(p3 * 100)}%, match serre {round(tightness * 100)}%"),
-        _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"favori coach {round(favorite_probability * 100)}%, 3 sets {round(p3 * 100)}%"),
-    ]
-
+    sample1, sample2 = int(_profile_number(serve1, "sample") or 0), int(_profile_number(serve2, "sample") or 0)
     if ace1 is not None and ace2 is not None:
-        ace_total = ace1 + ace2
-        ace_base = 0.23 + ace_total / 52
-        if surface == "Gazon":
-            ace_base += 0.08
-        elif surface == "Dur":
-            ace_base += 0.04
-        else:
-            ace_base -= 0.02
-        ace_prob = _clamp(ace_base, 0.12, 0.88)
-        if ace_prob >= 0.56:
-            ace_pick, ace_display = "Over aces", ace_prob
-        elif ace_prob <= 0.42:
-            ace_pick, ace_display = "Under aces", 1 - ace_prob
-        else:
-            ace_pick, ace_display = "Aces neutre", 0.5
-        markets.append(_market_item("aces", "Aces", ace_pick, ace_display, f"ace% cumule {ace_total:.1f}{sample_label}"))
-
-        ret_values = [value for value in (return1, return2) if value is not None]
-        first_values = [value for value in (first1, first2) if value is not None]
-        avg_return = sum(ret_values) / len(ret_values) if ret_values else 39.0
-        avg_first = sum(first_values) / len(first_values) if first_values else 69.0
-        tb_prob = 0.14 + tightness * 0.13 + ace_total / 115 + max(0, avg_first - 68) / 140 + max(0, 40 - avg_return) / 100
-        if surface == "Gazon":
-            tb_prob += 0.07
-        elif surface == "Dur":
-            tb_prob += 0.03
-        else:
-            tb_prob -= 0.03
-        tb_prob = _clamp(tb_prob, 0.08, 0.72)
-        if tb_prob >= 0.45:
-            tb_pick, tb_display = "Tie-break oui", tb_prob
-        elif tb_prob >= 0.30:
-            tb_pick, tb_display = "Tie-break a surveiller", tb_prob
-        else:
-            tb_pick, tb_display = "Tie-break bas", 1 - tb_prob
-        markets.append(_market_item("tiebreak", "Tie-break", tb_pick, tb_display, f"ace% {ace_total:.1f}, retour gagne {avg_return:.1f}%{sample_label}"))
+        ace_confidence = "elevee" if min(sample1, sample2) >= 20 else "moyenne" if min(sample1, sample2) >= 10 else "faible"
+        markets.append(_market_item(
+            "aces", "Aces", f"Profil combine {ace1 + ace2:.1f}%", None,
+            f"Taux d'aces observes, {sample1}+{sample2} matchs; aucune ligne bookmaker disponible",
+            "stats joueurs observees", ace_confidence, sample1 + sample2,
+        ))
     else:
-        markets.extend([
-            _market_item("aces", "Aces", "Stats service insuff.", None, "ace% joueur manquant"),
-            _market_item("tiebreak", "Tie-break", "Signal incomplet", None, "stats service/retour manquantes"),
-        ])
+        markets.append(_market_item(
+            "aces", "Aces", "Profil indisponible", None,
+            "Une probabilite d'Over/Under aces exige une ligne bookmaker et les profils des deux joueurs",
+            "donnees insuffisantes", "faible", sample1 + sample2,
+        ))
     return markets
-
 
 def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
     try:
@@ -283,11 +236,13 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     favorite_probability = p1 if fav1 else 1 - p1
     raw_fav = intel["raw_p1"] if fav1 else 1 - intel["raw_p1"]
     market_fav = intel["market_p1"] if fav1 else 1 - intel["market_p1"]
-    set_probability = _set_probability(favorite_probability)
     favorite = match["player1"] if fav1 else match["player2"]
     favorite_odds = odds1 if fav1 else odds2
     cycle_fav = intel["cycle1"] if fav1 else intel["cycle2"]
     cycle_opp = intel["cycle2"] if fav1 else intel["cycle1"]
+    calibration = _coach().market_priors(match.get("tour", "ATP"), match.get("surface", "Dur"), favorite_probability)
+    rates = calibration["rates"]
+    p21_share = rates["favorite_2_1_share"]
     return {
         "favori": _seedless(favorite),
         "proba": _round_pct(favorite_probability),
@@ -295,16 +250,16 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "proba_marche": _round_pct(market_fav),
         "ajustement": round((favorite_probability - raw_fav) * 100, 1),
         "cote": round(favorite_odds, 2) if favorite_odds else None,
-        "p20": round(set_probability * set_probability * 100),
-        "p21": round(2 * set_probability * set_probability * (1 - set_probability) * 100),
-        "p3": round(2 * set_probability * (1 - set_probability) * 100),
-        "markets": _secondary_markets(match, intel, favorite_probability, set_probability),
+        "p20": round(favorite_probability * (1 - p21_share) * 100),
+        "p21": round(favorite_probability * p21_share * 100),
+        "p3": round(rates["three_sets"] * 100),
+        "markets": _secondary_markets(match, intel, favorite_probability, calibration),
+        "market_calibration": {"sample": calibration["sample"], "confidence": calibration["confidence"], "training": calibration["training"]},
         "cycle_favori": cycle_fav["label"],
         "fatigue_favori": cycle_fav["fatigue"],
         "cycle_adversaire": cycle_opp["label"],
         "fatigue_adversaire": cycle_opp["fatigue"],
     }
-
 
 def _player_signatures(name: str) -> set[str]:
     words = _norm_words(name)
@@ -403,12 +358,49 @@ def _fetch_espn_scoreboard(league: str, dates: str) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
+def _score_value(line: dict) -> int | None:
+    value = str(line.get("value") if line.get("value") is not None else line.get("displayValue") or "").strip()
+    match = re.match(r"\d+", value)
+    return int(match.group()) if match else None
+
+
+def _completed_scoreboard_row(competition: dict, tour: str, tournament: str, kickoff: datetime) -> dict | None:
+    competitors = competition.get("competitors", [])
+    if len(competitors) != 2:
+        return None
+    winner = next((entry for entry in competitors if entry.get("winner") is True), None)
+    loser = next((entry for entry in competitors if entry is not winner), None)
+    if winner is None or loser is None:
+        return None
+    winner_name, loser_name = _competitor_name(winner), _competitor_name(loser)
+    if not winner_name or not loser_name:
+        return None
+    winner_games = [_score_value(line) for line in winner.get("linescores", [])]
+    loser_games = [_score_value(line) for line in loser.get("linescores", [])]
+    pairs = [(left, right) for left, right in zip(winner_games, loser_games) if left is not None and right is not None]
+    if not pairs:
+        return None
+    return {
+        "date": kickoff.date().isoformat(),
+        "tour": tour,
+        "tournament": tournament,
+        "winner": winner_name,
+        "loser": loser_name,
+        "sets_w": sum(left > right for left, right in pairs),
+        "sets_l": sum(right > left for left, right in pairs),
+        "games_w": sum(left for left, _ in pairs),
+        "games_l": sum(right for _, right in pairs),
+        "tiebreaks": sum({left, right} == {6, 7} for left, right in pairs),
+        "odds_w": None,
+        "odds_l": None,
+        "source": "ESPN",
+    }
+
+
+def fetch_scoreboard_snapshot(now: datetime | None = None) -> tuple[list[dict], list[dict]]:
     now = now or _now_paris()
-    start = now.strftime("%Y%m%d")
-    end = (now + FUTURE_MATCH_HORIZON).strftime("%Y%m%d")
-    dates = f"{start}-{end}"
-    rows = []
+    dates = f"{(now - timedelta(days=14)).strftime('%Y%m%d')}-{(now + FUTURE_MATCH_HORIZON).strftime('%Y%m%d')}"
+    upcoming, completed = [], []
     wanted = {"ATP": "Men's Singles", "WTA": "Women's Singles"}
     for league, tour in (("atp", "ATP"), ("wta", "WTA")):
         data = _fetch_espn_scoreboard(league, dates)
@@ -421,17 +413,24 @@ def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
                 if grouping_name != wanted[tour]:
                     continue
                 for competition in grouping.get("competitions", []):
-                    status = ((competition.get("status") or {}).get("type") or {})
-                    if status.get("state") == "post" or status.get("completed"):
-                        continue
                     kickoff = _parse_espn_date(competition.get("startDate") or competition.get("date"))
-                    if not kickoff or kickoff < now - PAST_MATCH_GRACE or kickoff > now + FUTURE_MATCH_HORIZON:
+                    if not kickoff:
                         continue
-                    names = [_competitor_name(c) for c in competition.get("competitors", [])]
+                    status = ((competition.get("status") or {}).get("type") or {})
+                    is_completed = status.get("state") == "post" or status.get("completed")
+                    if is_completed:
+                        if kickoff >= now - timedelta(days=14):
+                            row = _completed_scoreboard_row(competition, tour, tournament, kickoff)
+                            if row:
+                                completed.append(row)
+                        continue
+                    if kickoff < now - PAST_MATCH_GRACE or kickoff > now + FUTURE_MATCH_HORIZON:
+                        continue
+                    names = [_competitor_name(entry) for entry in competition.get("competitors", [])]
                     names = [name for name in names if name]
                     if len(names) != 2 or any(_strip(name) in {"tbd", "bye"} for name in names):
                         continue
-                    rows.append({
+                    upcoming.append({
                         "tour": tour,
                         "tournament": tournament,
                         "time": kickoff.isoformat(),
@@ -440,16 +439,23 @@ def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
                         "player2": names[1],
                         "source": "ESPN",
                     })
-    seen = set()
-    unique = []
-    for row in sorted(rows, key=lambda r: (r["kickoff"], r["tour"], r["tournament"], r["player1"], r["player2"])):
+    seen, unique = set(), []
+    for row in sorted(upcoming, key=lambda item: (item["kickoff"], item["tour"], item["tournament"], item["player1"], item["player2"])):
         key = (row["tour"], row["kickoff"], _player_pair_key(row["player1"], row["player2"]))
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(row)
-    return unique
+        if key not in seen:
+            seen.add(key)
+            unique.append(row)
+    completed_seen, completed_unique = set(), []
+    for row in completed:
+        key = (row["date"], row["tour"], row["tournament"], _player_pair_key(row["winner"], row["loser"]))
+        if key not in completed_seen:
+            completed_seen.add(key)
+            completed_unique.append(row)
+    return unique, completed_unique
 
+
+def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
+    return fetch_scoreboard_snapshot(now)[0]
 
 def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime) -> tuple[list[dict], int, int]:
     rows = []
@@ -491,6 +497,9 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             "joueur1": match["player1"],
             "joueur2": match["player2"],
             "modele": intel.get("source"),
+            "qualite": intel.get("quality"),
+            "qualite_score": intel.get("quality_score"),
+            "incertitude_pts": intel.get("uncertainty_pts"),
             "cycle1": intel["cycle1"]["label"],
             "cycle2": intel["cycle2"]["label"],
             "fatigue1": intel["cycle1"]["fatigue"],
@@ -531,9 +540,10 @@ def build_tennis() -> dict:
     now = _now_paris()
     feed_updated = _parse_feed_updated(data.get("last_updated"))
     try:
-        scoreboard_matches = fetch_scoreboard_matches(now)
+        scoreboard_matches, completed_results = fetch_scoreboard_snapshot(now)
     except Exception:
-        scoreboard_matches = []
+        scoreboard_matches, completed_results = [], []
+    _coach().set_live_results(completed_results)
     matches = _attach_odds(scoreboard_matches, odds_matches) if scoreboard_matches else odds_matches
     atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
@@ -544,6 +554,8 @@ def build_tennis() -> dict:
         "feed_age_hours": round((now - feed_updated).total_seconds() / 3600, 1),
         "scoreboard_source": "ESPN" if scoreboard_matches else "market-feed-fallback",
         "scoreboard_count": len(scoreboard_matches),
+        "scoreboard_completed_count": len(completed_results),
+        "calibration": {"training": "2021-2024", "validation": "2025 hors echantillon", "method": "frequences hierarchiques ATP/WTA par surface et force du favori"},
         "filtered_past": atp_filtered + wta_filtered,
         "filtered_unpriced": atp_unpriced + wta_unpriced,
         "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; seuls les matchs avec cote rattachee au meme duo de joueurs sont affiches.",

@@ -37,7 +37,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["feed_updated"], "2026-07-17T12:00:00Z")
@@ -48,6 +48,8 @@ class TennisServiceTests(unittest.TestCase):
         self.assertIn("proba_brute", payload["atp"][0])
         self.assertIn("preuves", payload["atp"][0])
         self.assertIn("markets", payload["atp"][0])
+        self.assertIn("qualite", payload["atp"][0])
+        self.assertEqual("historique calibre", payload["atp"][0]["markets"][0]["source"])
         self.assertEqual({"total_games", "handicap_games", "aces", "tiebreak"}, {m["key"] for m in payload["atp"][0]["markets"]})
         self.assertEqual(len(payload["wta"]), 1)
         self.assertEqual(payload["wta"][0]["surface"], "Gazon")
@@ -104,7 +106,7 @@ class TennisServiceTests(unittest.TestCase):
         }
         secondary = {"status": "confirmed_recent", "days": 1, "source": "SportScore"}
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value=secondary):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value=secondary):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -126,7 +128,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -164,7 +166,7 @@ class TennisServiceTests(unittest.TestCase):
         ]
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_matches", return_value=scoreboard), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["scoreboard_source"], "ESPN")
@@ -203,7 +205,7 @@ class TennisServiceTests(unittest.TestCase):
         ]
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_matches", return_value=scoreboard), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -212,5 +214,25 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["cote"], 2.82 if row["favori"] == "Alejandro Tabilo" else 1.42)
         self.assertNotEqual(row["proba_marche"], 50.0)
 
+
+    def test_calibration_improves_2025_holdout(self):
+        report = tennis._coach().calibration_report(2025)
+        self.assertGreater(report["count"], 4000)
+        for scores in report["markets"].values():
+            self.assertLess(scores["brier"], scores["baseline_brier"])
+
+    def test_completed_scoreboard_match_feeds_fatigue_context(self):
+        competition = {
+            "competitors": [
+                {"winner": True, "athlete": {"displayName": "Winner A"}, "linescores": [{"value": 6}, {"value": 7}]},
+                {"winner": False, "athlete": {"displayName": "Loser B"}, "linescores": [{"value": 4}, {"value": 6}]},
+            ]
+        }
+        kickoff = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
+        row = tennis._completed_scoreboard_row(competition, "ATP", "Nordea Open", kickoff)
+        self.assertEqual(row["winner"], "Winner A")
+        self.assertEqual(row["games_w"], 13)
+        self.assertEqual(row["sets_w"], 2)
+        self.assertEqual(row["tiebreaks"], 1)
 if __name__ == "__main__":
     unittest.main()

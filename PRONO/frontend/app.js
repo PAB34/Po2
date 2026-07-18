@@ -404,11 +404,11 @@ function tennisSignals(row) {
 }
 function tennisMarkets(markets) {
   if (!markets || !markets.length) return `<div class="tmarkets empty">-</div>`;
-  return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc(m.detail || "Marche estime")}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
+  return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc([m.detail, m.source ? "Source: " + m.source : "", m.confidence ? "Confiance: " + m.confidence : ""].filter(Boolean).join(" | "))}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"], ["favori", "Favori"],
-  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["markets", "Marches joues"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
+  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
@@ -442,7 +442,8 @@ function tennisTable(rows) {
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
     const adj = Number(row.ajustement || 0);
     const adjCls = adj <= -5 ? "neg" : adj >= 5 ? "pos" : "flat";
-    const modelLabel = row.odds_status === "ok" ? (row.modele === "elo_surface" ? "Elo surface + coach" : "Marche + coach") : (row.modele === "elo_surface" ? "Elo surface + coach" : "Coach sans cote");
+    const modelName = row.modele === "marche+elo_surface" ? "Marche + Elo pondere + coach" : "Marche + coach";
+    const modelLabel = `${modelName} | fiabilite ${row.qualite || "faible"} | +/-${row.incertitude_pts || "?"} pts`;
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
