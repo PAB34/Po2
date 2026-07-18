@@ -236,6 +236,23 @@ class TennisServiceTests(unittest.TestCase):
         stats_cold = dict(stats_hot, serie=-5, momentum_90j=-30, winrate_90j=0.2)
         self.assertEqual(coach.context_assessment(stats_hot, None)["score"], coach.context_assessment(stats_cold, None)["score"])
 
+    def test_form_label_is_independent_from_tournament_load(self):
+        coach = tennis._coach()
+        stats = {
+            "matchs_90j": 8, "serie": 3, "momentum_90j": 10,
+            "winrate_90j": 0.75, "derniere_date": "2026-07-18",
+        }
+        heavy_load = {
+            "tours_gagnes": 3, "sets_laches": 2, "jeux_joues": 80,
+            "dernier_jeux": 32, "decisifs": 2, "tiebreaks": 2,
+            "matchs_14j": 6, "charge_minutes_est": 220, "repos_jours": 0,
+        }
+        fresh = coach.cycle("Player A", stats, None)
+        tired = coach.cycle("Player A", stats, heavy_load)
+        self.assertEqual(fresh["label"], tired["label"])
+        self.assertEqual(tired["fatigue"], "charge lourde")
+        self.assertLess(tired["combined_score"], tired["score"])
+
     def test_elo_divergence_creates_vigilance_and_range_without_shifting_market(self):
         neutral = {"score": 0.0, "label": "neutre", "positives": [], "risks": []}
         decision = tennis._coach()._decision(0.60, 0.45, neutral, neutral, 0.90)

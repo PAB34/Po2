@@ -505,6 +505,7 @@ class TennisCoach:
                     score += 0.03
                     evidence.append("signal positif mais echantillon court")
 
+        form_score = max(-0.35, min(0.30, score))
         fatigue_label = "parcours inconnu"
         if ctx:
             tours = _int(ctx.get("tours_gagnes"))
@@ -564,18 +565,18 @@ class TennisCoach:
         else:
             evidence.append("parcours tournoi non detecte")
 
-        score = max(-0.35, min(0.30, score))
-        if score >= 0.16:
+        combined_score = max(-0.35, min(0.30, score))
+        if form_score >= 0.16:
             label = "pic probable"
-        elif score >= 0.07:
+        elif form_score >= 0.07:
             label = "montee"
-        elif score <= -0.18:
+        elif form_score <= -0.18:
             label = "sous-rythme"
-        elif score <= -0.07:
+        elif form_score <= -0.07:
             label = "alerte forme"
         else:
             label = "plateau"
-        return {"label": label, "fatigue": fatigue_label, "score": score, "evidence": evidence, "external_sources": sorted(external_sources)}
+        return {"label": label, "fatigue": fatigue_label, "score": form_score, "combined_score": combined_score, "evidence": evidence, "external_sources": sorted(external_sources)}
 
     def h2h(self, player1: str, player2: str, tournament: str | None, surf: str, circ: str) -> dict[str, Any]:
         if self.history is None or not len(self.history):
