@@ -24,6 +24,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from app.tennis_calibration import HistoricalCalibration
+from app.tennis_props import TennisPropsEngine
 
 DATASET_DIR = Path(__file__).resolve().parent / "tennis_data"
 RUNTIME_DIR = Path(os.environ.get("PRONO_DATA_DIR") or (DATASET_DIR / "_runtime")) / "tennis"
@@ -143,7 +144,9 @@ class TennisCoach:
         self.stats = self._load_stats()
         self.history = self._load_history()
         self.calibration = HistoricalCalibration(self.history)
+        self.props = TennisPropsEngine(self.dataset_dir)
         self._live_results = pd.DataFrame()
+        self._live_signature = "[]"
         self._ctx: dict[str, dict[str, Any]] | None = None
         self._ctx_loaded_at = 0.0
         self._freshness_cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -184,6 +187,8 @@ class TennisCoach:
         quality_score = round(0.55 + 0.45 * evidence_quality, 2)
         quality = "elevee" if quality_score >= 0.82 else "moyenne" if quality_score >= 0.68 else "faible"
         decision = self._decision(market_p1, elo_p1, context1, context2, quality_score, elo_reference)
+        props = self.props.predict(circ, surf, player1, player2)
+        concordance = self._concordance(market_p1, decision, cycle1, cycle2, quality_score)
 
         proofs = []
         if cycle1["evidence"]:
@@ -220,6 +225,8 @@ class TennisCoach:
             "context1": context1,
             "context2": context2,
             "decision": decision,
+            "props": props,
+            "concordance": concordance,
             "serve1": self._serve_profile(stats1),
             "serve2": self._serve_profile(stats2),
             "h2h": h2h,
@@ -337,6 +344,31 @@ class TennisCoach:
             "uncertainty_pts": round((high_p1 - low_p1) * 50, 1),
             "reasons": reasons[:4],
         }
+
+    @staticmethod
+    def _concordance(market_p1: float, decision: dict[str, Any], cycle1: dict[str, Any], cycle2: dict[str, Any], quality_score: float) -> dict[str, Any]:
+        favorite_is_p1 = market_p1 >= 0.5
+        form_delta = cycle1["score"] - cycle2["score"]
+        favorite_form = form_delta if favorite_is_p1 else -form_delta
+        elo_gap = decision.get("elo_gap_favorite")
+        if quality_score < 0.68:
+            label, level, detail = "Donnees faibles", "insufficient", "couverture insuffisante pour croiser les signaux"
+        elif elo_gap is None:
+            label, level, detail = "Marche seul", "partial", "Elo indisponible; forme conservee comme contexte descriptif"
+        elif elo_gap <= -0.07 and favorite_form <= -0.07:
+            label, level, detail = "Conflit fort", "conflict", "Elo et forme s'opposent au favori du marche"
+        elif elo_gap <= -0.07:
+            label, level, detail = "Divergence Elo", "watch", "Elo plus prudent que le marche"
+        elif favorite_form <= -0.07:
+            label, level, detail = "Forme contraire", "watch", "forme recente opposee au favori du marche"
+        elif elo_gap >= 0.07 and favorite_form >= -0.03:
+            label, level, detail = "Elo renforce", "strong", "Elo et forme ne contredisent pas le marche"
+        elif abs(elo_gap) <= 0.05 and favorite_form >= -0.03:
+            label, level, detail = "Concordance forte", "aligned", "marche, Elo et forme sont coherents"
+        else:
+            label, level, detail = "Concordance partielle", "mixed", "signaux globalement compatibles mais non unanimes"
+        return {"label": label, "level": level, "detail": detail, "form_delta": round(favorite_form, 3)}
+
     def _evidence_quality(self, stats1: dict[str, Any] | None, stats2: dict[str, Any] | None, ctx1: dict[str, Any] | None, ctx2: dict[str, Any] | None) -> float:
         stats_score = sum(bool(stats) for stats in (stats1, stats2)) / 2
         sample_score = sum(min(_int((stats or {}).get("matchs_chartes")) / 20, 1) for stats in (stats1, stats2)) / 2
@@ -350,6 +382,10 @@ class TennisCoach:
         return self.calibration.report(test_year)
 
     def set_live_results(self, rows: list[dict[str, Any]]) -> None:
+        signature = json.dumps(rows, sort_keys=True, default=str, separators=(",", ":"))
+        if signature == self._live_signature:
+            return
+        self._live_signature = signature
         self._live_results = pd.DataFrame(rows)
         self._ctx = None
         self._ctx_loaded_at = 0.0

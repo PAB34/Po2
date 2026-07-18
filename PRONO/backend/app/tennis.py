@@ -189,6 +189,23 @@ def _calibrated_pick(probability: float, positive: str, negative: str) -> tuple[
     return "Pas d'avantage statistique", None
 
 
+def _prop_validation_note(props: dict, key: str) -> str:
+    result = (props.get("validation") or {}).get(key) or {}
+    if result.get("brier") is None:
+        return "validation indisponible"
+    status = "valide" if result.get("validated") else "experimental"
+    return f"{status} sur 2025: Brier {result['brier']:.3f} vs baseline {result['baseline_brier']:.3f}, n={result.get('sample', 0)}"
+
+
+def _central_threshold(items: list[dict], expected: float) -> dict | None:
+    return min(items or [], key=lambda item: abs((float(item.get("line") or 0) + 0.5) - expected), default=None)
+
+
+def _props_confidence(players: list[dict]) -> str:
+    levels = {"faible": 0, "moyenne": 1, "elevee": 2}
+    return min((player.get("confidence", "faible") for player in players), key=lambda value: levels.get(value, 0), default="faible")
+
+
 def _secondary_markets(match: dict, intel: dict, favorite_probability: float, calibration: dict) -> list[dict]:
     rates = calibration["rates"]
     sample = calibration["sample"]
@@ -199,29 +216,42 @@ def _secondary_markets(match: dict, intel: dict, favorite_probability: float, ca
 
     total_pick, total_prob = _calibrated_pick(rates["over_22_5"], "Over 22.5 jeux", "Under 22.5 jeux")
     handicap_pick, handicap_prob = _calibrated_pick(rates["favorite_cover_2_5"], "Favori -2.5 jeux", "Adversaire +2.5 jeux")
-    tiebreak_pick, tiebreak_prob = _calibrated_pick(rates["tiebreak"], "Tie-break oui", "Tie-break non")
     markets = [
         _market_item("total_games", "Total jeux", total_pick, total_prob, f"P(Over) {rates['over_22_5']:.0%}; {suffix}", source, confidence, sample),
         _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"P(favori -2.5) {rates['favorite_cover_2_5']:.0%}; {suffix}", source, confidence, sample),
-        _market_item("tiebreak", "Tie-break", tiebreak_pick, tiebreak_prob, f"P(au moins un tie-break) {rates['tiebreak']:.0%}; {suffix}", source, confidence, sample),
     ]
 
-    serve1, serve2 = intel.get("serve1") or {}, intel.get("serve2") or {}
-    ace1, ace2 = _profile_number(serve1, "ace_pct"), _profile_number(serve2, "ace_pct")
-    sample1, sample2 = int(_profile_number(serve1, "sample") or 0), int(_profile_number(serve2, "sample") or 0)
-    if ace1 is not None and ace2 is not None:
-        ace_confidence = "elevee" if min(sample1, sample2) >= 20 else "moyenne" if min(sample1, sample2) >= 10 else "faible"
-        markets.append(_market_item(
-            "aces", "Aces", f"Profil combine {ace1 + ace2:.1f}%", None,
-            f"Taux d'aces observes, {sample1}+{sample2} matchs; aucune ligne bookmaker disponible",
-            "stats joueurs observees", ace_confidence, sample1 + sample2,
-        ))
+    props = intel.get("props") or {}
+    prop_players = [player for player in props.get("players", []) if player]
+    tie_probability = float(props.get("tiebreak_probability") or round(rates["tiebreak"] * 100)) / 100
+    tiebreak_pick, tiebreak_prob = _calibrated_pick(tie_probability, "Tie-break oui", "Tie-break non")
+    tie_source = "modele tenue de service" if len(prop_players) == 2 else source
+    tie_detail = f"P(au moins un tie-break) {tie_probability:.0%}; {_prop_validation_note(props, 'tiebreak')}"
+    markets.append(_market_item("tiebreak", "Tie-break", tiebreak_pick, tiebreak_prob, tie_detail, tie_source, confidence, int(props.get("sample") or sample)))
+
+    if prop_players:
+        prop_confidence = _props_confidence(prop_players)
+        prop_sample = sum(int(player.get("sample_surface") or 0) for player in prop_players)
+        ace_parts, df_parts, hold_parts, break_parts = [], [], [], []
+        for player in prop_players:
+            name = _seedless(player.get("player") or "Joueur")
+            ace_threshold = _central_threshold(player.get("aces_thresholds") or [], float(player.get("aces_expected") or 0))
+            df_threshold = _central_threshold(player.get("double_faults_thresholds") or [], float(player.get("double_faults_expected") or 0))
+            ace_suffix = f"; O{ace_threshold['line']} {ace_threshold['over']}%" if ace_threshold else ""
+            df_suffix = f"; O{df_threshold['line']} {df_threshold['over']}%" if df_threshold else ""
+            ace_parts.append(f"{name} {player.get('aces_expected')} [{'-'.join(map(str, player.get('aces_interval') or []))}]{ace_suffix}")
+            df_parts.append(f"{name} {player.get('double_faults_expected')} [{'-'.join(map(str, player.get('double_faults_interval') or []))}]{df_suffix}")
+            hold_parts.append(f"{name} {player.get('hold_probability')}%")
+            break_parts.append(f"{name} {player.get('breaks_expected')} ({player.get('break_probability')}% 1+)")
+        markets.extend([
+            _market_item("aces", "Aces joueur", " | ".join(ace_parts), None, _prop_validation_note(props, "aces_reference"), "modele joueur/surface", prop_confidence, prop_sample),
+            _market_item("double_faults", "Doubles fautes", " | ".join(df_parts), None, _prop_validation_note(props, "double_faults_3_plus"), "modele joueur/surface", prop_confidence, prop_sample),
+            _market_item("hold", "Tenue service", " | ".join(hold_parts), None, _prop_validation_note(props, "broken"), "modele service/retour", prop_confidence, prop_sample),
+            _market_item("breaks", "Breaks joueur", " | ".join(break_parts), None, _prop_validation_note(props, "break_1_plus"), "modele service/retour", prop_confidence, prop_sample),
+        ])
     else:
-        markets.append(_market_item(
-            "aces", "Aces", "Profil indisponible", None,
-            "Une probabilite d'Over/Under aces exige une ligne bookmaker et les profils des deux joueurs",
-            "donnees insuffisantes", "faible", sample1 + sample2,
-        ))
+        for key, label in (("aces", "Aces joueur"), ("double_faults", "Doubles fautes"), ("hold", "Tenue service"), ("breaks", "Breaks joueur")):
+            markets.append(_market_item(key, label, "Profil indisponible", None, "joueurs non retrouves dans l'historique statistique", "donnees insuffisantes", "faible", 0))
     return markets
 
 def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
@@ -273,6 +303,10 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "impact_contexte": decision["context_label"],
         "score_contexte": decision["context_score"],
         "decision_detail": " ; ".join(decision_reasons) if decision_reasons else "aucun facteur contextuel discriminant",
+        "props": intel.get("props"),
+        "concordance": (intel.get("concordance") or {}).get("label"),
+        "concordance_level": (intel.get("concordance") or {}).get("level"),
+        "concordance_detail": (intel.get("concordance") or {}).get("detail"),
         "fourchette_min": _round_pct(range_favorite[0]),
         "fourchette_max": _round_pct(range_favorite[1]),
         "cote": round(favorite_odds, 2) if favorite_odds else None,
@@ -656,6 +690,7 @@ def build_tennis() -> dict:
         "scoreboard_count": len(scoreboard_matches),
         "scoreboard_completed_count": len(completed_results),
         "calibration": {"training": "2021-2024", "validation": "2025 hors echantillon", "method": "frequences hierarchiques ATP/WTA par surface et force du favori"},
+        "props_validation": _coach().props.validation_report(2025),
         "filtered_past": atp_filtered + wta_filtered,
         "filtered_unpriced": atp_unpriced + wta_unpriced,
         "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; seuls les matchs avec cote rattachee au meme duo de joueurs sont affiches.",

@@ -56,7 +56,12 @@ class TennisServiceTests(unittest.TestCase):
         self.assertIn("proba_elo_surface", payload["atp"][0])
         self.assertIn("proba_elo_global", payload["atp"][0])
         self.assertEqual("historique calibre", payload["atp"][0]["markets"][0]["source"])
-        self.assertEqual({"total_games", "handicap_games", "aces", "tiebreak"}, {m["key"] for m in payload["atp"][0]["markets"]})
+        self.assertEqual(
+            {"total_games", "handicap_games", "aces", "double_faults", "hold", "breaks", "tiebreak"},
+            {m["key"] for m in payload["atp"][0]["markets"]},
+        )
+        self.assertIn("props", payload["atp"][0])
+        self.assertIn("concordance", payload["atp"][0])
         self.assertEqual(len(payload["wta"]), 1)
         self.assertEqual(payload["wta"][0]["surface"], "Gazon")
         self.assertEqual(payload["wta"][0]["favori"], "Grass Player B")
@@ -300,6 +305,29 @@ class TennisServiceTests(unittest.TestCase):
         for scores in report["markets"].values():
             self.assertLess(scores["brier"], scores["baseline_brier"])
 
+    def test_player_props_are_surface_specific_and_validated_out_of_sample(self):
+        props = tennis._coach().props.predict("ATP", "clay", "Alejandro Tabilo", "Andrey Rublev")
+        self.assertEqual(props["surface"], "clay")
+        self.assertEqual(len(props["players"]), 2)
+        self.assertGreater(props["players"][0]["sample_surface"], 20)
+        self.assertGreater(props["players"][0]["aces_expected"], 0)
+        self.assertGreater(props["players"][0]["hold_probability"], 50)
+        self.assertGreater(props["players"][0]["break_probability"], 0)
+        for scores in props["validation"].values():
+            self.assertTrue(scores["validated"])
+            self.assertGreater(scores["sample"], 4000)
+            self.assertLess(scores["brier"], scores["baseline_brier"])
+
+    def test_concordance_flags_market_elo_conflict(self):
+        coach = tennis._coach()
+        conflict = coach._concordance(
+            0.68, {"elo_gap_favorite": -0.2}, {"score": -0.1}, {"score": 0.1}, 0.9,
+        )
+        aligned = coach._concordance(
+            0.62, {"elo_gap_favorite": 0.02}, {"score": 0.1}, {"score": -0.1}, 0.9,
+        )
+        self.assertEqual(conflict["level"], "conflict")
+        self.assertEqual(aligned["level"], "aligned")
     def test_completed_scoreboard_match_feeds_fatigue_context(self):
         competition = {
             "competitors": [

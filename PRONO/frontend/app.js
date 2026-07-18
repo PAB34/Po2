@@ -140,6 +140,7 @@ let _selectedBracket = 0;
 let _bracketTourFilter = "all";
 let _tennisSort = { key: "kickoff", dir: "asc" };
 let _tennisQuery = "";
+let _expandedTennisMatch = null;
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
   $("#app").classList.toggle("tennis-wide", tab === "tennis");
@@ -409,7 +410,7 @@ function tennisMarkets(markets) {
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"],
-  ["forme", "Forme"], ["decision", "Lecture"], ["proba_marche", "Marche", "n"],
+  ["forme", "Forme"], ["decision", "Lecture"], ["concordance", "Concordance"], ["proba_marche", "Marche", "n"],
   ["proba_elo_surface", "Elo surface", "n"], ["proba_elo_global", "Elo global", "n"],
   ["ecart_elo", "Lecture Elo"], ["impact_contexte", "Contexte"], ["cote", "Cote", "n"],
   ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
@@ -419,6 +420,7 @@ const TENNIS_HEADER_HELP = {
   proba_elo_surface: "Probabilite Elo calculee uniquement avec les matchs sur la surface du jour.",
   proba_elo_global: "Probabilite Elo calculee sur l'ensemble des surfaces.",
   ecart_elo: "Difference entre l'Elo de reference et le consensus du marche pour le favori.",
+  concordance: "Accord qualitatif entre marche, Elo, forme recente et qualite des donnees. Ce signal ne modifie aucune probabilite.",
 };
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
@@ -440,6 +442,7 @@ function tennisSortValue(row, key) {
   if (["proba_marche", "proba_elo_surface", "proba_elo_global", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
   const decisionOrder = { strong: 4, watch: 3, insufficient: 2, favorable: 1, neutral: 0 };
   if (key === "decision") return decisionOrder[row.decision_level] ?? -1;
+  if (key === "concordance") return ({ aligned: 5, strong: 4, mixed: 3, watch: 2, partial: 1, conflict: 0, insufficient: -1 })[row.concordance_level] ?? -1;
   return String(row[key] || "").toLowerCase();
 }
 function sortedTennisRows(rows) {
@@ -489,17 +492,91 @@ function tennisGap(row) {
     <b>${label}</b><span>${source} ${signedTennis(gap)} pts</span><i><em style="left:${position}%"></em></i>
   </div>`;
 }
-function tennisTable(rows) {
+function tennisConcordance(row) {
+  const level = row.concordance_level || "insufficient";
+  return `<div class="tconcord ${esc(level)}" title="${esc(row.concordance_detail || "Donnees insuffisantes")}">
+    <b>${esc(row.concordance || "Donnees faibles")}</b>
+    <span>${esc(row.concordance_detail || "Accord non mesurable")}</span>
+  </div>`;
+}
+function tennisRowKey(row) {
+  const value = `${row.tour || ""}|${row.kickoff || row.heure || ""}|${row.match || ""}`;
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  return `tp${Math.abs(hash)}`;
+}
+function toggleTennisProps(key) {
+  const previous = _expandedTennisMatch;
+  if (previous && previous !== key) {
+    const previousRow = document.getElementById(`props-${previous}`);
+    const previousButton = document.getElementById(`props-btn-${previous}`);
+    if (previousRow) previousRow.classList.add("hidden");
+    if (previousButton) { previousButton.setAttribute("aria-expanded", "false"); previousButton.querySelector("span").textContent = "+"; }
+  }
+  const detail = document.getElementById(`props-${key}`);
+  const button = document.getElementById(`props-btn-${key}`);
+  if (!detail || !button) return;
+  const opening = detail.classList.contains("hidden");
+  detail.classList.toggle("hidden", !opening);
+  button.setAttribute("aria-expanded", String(opening));
+  button.querySelector("span").textContent = opening ? "-" : "+";
+  _expandedTennisMatch = opening ? key : null;
+}
+function tennisThresholds(items) {
+  if (!items || !items.length) return `<span class="tmissing">Indispo</span>`;
+  return `<div class="prop-thresholds">${items.map(item => `<span>Plus de ${esc(item.line)} <b>${pctTennis(item.over)}</b></span>`).join("")}</div>`;
+}
+function tennisPropMetric(label, value, suffix = "", note = "") {
+  return `<div class="prop-metric"><span>${esc(label)}</span><b>${value == null ? "-" : esc(value) + suffix}</b>${note ? `<small>${esc(note)}</small>` : ""}</div>`;
+}
+function tennisPropsPlayer(player) {
+  if (!player) return `<section class="tprop-player unavailable"><h5>Profil indisponible</h5></section>`;
+  const aceRange = player.aces_interval || [];
+  const dfRange = player.double_faults_interval || [];
+  return `<section class="tprop-player">
+    <div class="prop-player-head"><h5>${esc(player.player || "Joueur")}</h5><span>${esc(player.confidence || "faible")} | ${esc(player.sample_surface || 0)} surface, ${esc(player.sample_total || 0)} total</span></div>
+    <div class="prop-metrics">
+      ${tennisPropMetric("Aces attendus", numTennis(player.aces_expected, 1), "", aceRange.length ? `Intervalle 80%: ${aceRange[0]}-${aceRange[1]}` : "")}
+      ${tennisPropMetric("Doubles fautes", numTennis(player.double_faults_expected, 1), "", dfRange.length ? `Intervalle 80%: ${dfRange[0]}-${dfRange[1]}` : "")}
+      ${tennisPropMetric("Tenue de service", pctTennis(player.hold_probability))}
+      ${tennisPropMetric("Risque d'etre breake", pctTennis(player.broken_probability))}
+      ${tennisPropMetric("Breaks attendus", numTennis(player.breaks_expected, 1), "", `Au moins un: ${pctTennis(player.break_probability)}`)}
+    </div>
+    <div class="prop-lines"><div><b>Aces</b>${tennisThresholds(player.aces_thresholds)}</div><div><b>Doubles fautes</b>${tennisThresholds(player.double_faults_thresholds)}</div></div>
+  </section>`;
+}
+function tennisValidation(props) {
+  const labels = {
+    aces_reference: "Aces", double_faults_3_plus: "Doubles fautes",
+    broken: "Service breake", break_1_plus: "Break realise", tiebreak: "Tie-break",
+  };
+  const entries = Object.entries((props && props.validation) || {});
+  if (!entries.length) return "";
+  return `<div class="prop-validation"><b>Validation hors echantillon 2025</b>${entries.map(([key, item]) => `<span class="${item.validated ? "ok" : "ko"}" title="Brier ${esc(item.brier)} contre reference ${esc(item.baseline_brier)}">${esc(labels[key] || key)}: ${item.validated ? "valide" : "non valide"} | n=${esc(item.sample)}</span>`).join("")}</div>`;
+}
+function tennisPropsPanel(row) {
+  const props = row.props;
+  if (!props || !props.players || !props.players.length) return `<div class="tprop-panel unavailable"><b>Statistiques joueurs indisponibles</b><span>L'historique est insuffisant pour construire ce profil.</span></div>`;
+  return `<div class="tprop-panel">
+    <div class="prop-panel-head"><div><b>Profil service et retour</b><span>${esc(row.surface || props.surface || "Surface inconnue")} | modele joueur + adversaire + surface</span></div><div><b>${pctTennis(props.tiebreak_probability)}</b><span>Au moins un tie-break</span></div></div>
+    <div class="prop-players">${props.players.map(tennisPropsPlayer).join("")}</div>
+    ${tennisValidation(props)}
+    <p>Seuils statistiques issus de l'historique match par match. Ils ne representent pas les lignes actuellement proposees par un bookmaker.</p>
+  </div>`;
+}function tennisTable(rows) {
   if (!rows || !rows.length) return `<div class="note">${_tennisQuery ? "Aucun match ne correspond a la recherche." : "Aucun match a venir pour le moment."}</div>`;
   const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
+    const key = tennisRowKey(row);
+    const expanded = _expandedTennisMatch === key;
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
-      <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
+      <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}</td>
       <td>${tennisForm(row)}</td>
       <td>${tennisDecision(row)}</td>
+      <td>${tennisConcordance(row)}</td>
       <td class="n probten">${pctTennis(row.proba_marche)}<span style="width:${Math.max(8, Number(row.proba_marche || 0) * 0.46)}px"></span></td>
       <td class="n">${tennisElo(row, "proba_elo_surface")}</td>
       <td class="n">${tennisElo(row, "proba_elo_global")}</td>
@@ -510,7 +587,7 @@ function tennisTable(rows) {
       <td class="n">${pctTennis(row.p20)}</td>
       <td class="n">${pctTennis(row.p21)}</td>
       <td class="n">${pctTennis(row.p3)}</td>
-    </tr>`;
+    </tr><tr id="props-${key}" class="tprop-row ${expanded ? "" : "hidden"}"><td colspan="17">${tennisPropsPanel(row)}</td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 function tennisModeBar() {
@@ -543,7 +620,7 @@ function filteredTennisRows(rows) {
   return rows.filter(row => {
     const haystack = tennisSearchText([
       row.tour, row.tournoi, row.match, row.joueur1, row.joueur2, row.favori,
-      row.surface, row.cycle1, row.cycle2, row.decision, row.impact_contexte,
+      row.surface, row.cycle1, row.cycle2, row.decision, row.impact_contexte, row.concordance, row.concordance_detail,
     ].join(" "));
     return words.every(word => haystack.includes(word));
   });
