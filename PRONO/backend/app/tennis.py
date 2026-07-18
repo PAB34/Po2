@@ -127,14 +127,14 @@ def _match_timing(raw: dict, feed_updated: datetime, now: datetime) -> dict:
     kickoff = _infer_kickoff(raw, feed_updated)
     if not kickoff:
         return {"kickoff": None, "past": False, "too_far": False, "display": raw.get("time", ""), "label": ""}
-    past = kickoff < now - PAST_MATCH_GRACE
+    past = not raw.get("live") and kickoff < now - PAST_MATCH_GRACE
     too_far = kickoff > now + FUTURE_MATCH_HORIZON
     label = _date_label(kickoff, now)
     return {
         "kickoff": kickoff,
         "past": past,
         "too_far": too_far,
-        "display": f"{label} {kickoff.strftime('%H:%M')}",
+        "display": f"En cours - {kickoff.strftime('%H:%M')}" if raw.get("live") else f"{label} {kickoff.strftime('%H:%M')}",
         "label": label,
     }
 
@@ -478,13 +478,14 @@ def fetch_scoreboard_snapshot(now: datetime | None = None) -> tuple[list[dict], 
                         continue
                     status = ((competition.get("status") or {}).get("type") or {})
                     is_completed = status.get("state") == "post" or status.get("completed")
+                    is_live = status.get("state") == "in" or status.get("name") == "STATUS_IN_PROGRESS"
                     if is_completed:
                         if kickoff >= now - timedelta(days=14):
                             row = _completed_scoreboard_row(competition, tour, tournament, kickoff)
                             if row:
                                 completed.append(row)
                         continue
-                    if kickoff < now - PAST_MATCH_GRACE or kickoff > now + FUTURE_MATCH_HORIZON:
+                    if (not is_live and kickoff < now - PAST_MATCH_GRACE) or kickoff > now + FUTURE_MATCH_HORIZON:
                         continue
                     names = [_competitor_name(entry) for entry in competition.get("competitors", [])]
                     names = [name for name in names if name]
@@ -498,6 +499,9 @@ def fetch_scoreboard_snapshot(now: datetime | None = None) -> tuple[list[dict], 
                         "player1": names[0],
                         "player2": names[1],
                         "source": "ESPN",
+                        "live": is_live,
+                        "status": status.get("description") or status.get("detail"),
+                        "round": ((competition.get("round") or {}).get("displayName") or "").strip(),
                     })
     seen, unique = set(), []
     for row in sorted(upcoming, key=lambda item: (item["kickoff"], item["tour"], item["tournament"], item["player1"], item["player2"])):
@@ -553,6 +557,8 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             "heure": match["time"],
             "kickoff": timing["kickoff"].isoformat() if timing["kickoff"] else None,
             "date_label": timing["label"],
+            "live": bool(raw.get("live")),
+            "round": raw.get("round") or "",
             "surface": match["surface"],
             "match": f"{match['player1']} vs {match['player2']}",
             "joueur1": match["player1"],
@@ -577,6 +583,41 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
         rows.append(row)
     rows.sort(key=lambda row: (row.get("kickoff") or "9999", row["tournoi"], -row["proba"]))
     return rows, filtered_past, filtered_unpriced
+
+
+def _pending_final_rows(matches: list[dict], feed_updated: datetime, now: datetime) -> list[dict]:
+    rows = []
+    for raw in matches:
+        if str(raw.get("round") or "").strip().lower() != "final":
+            continue
+        odds1, odds2 = _valid_odds(raw.get("odds1"), raw.get("odds2"))
+        if odds1 and odds2:
+            continue
+        timing = _match_timing(raw, feed_updated, now)
+        if timing["past"] or timing["too_far"]:
+            continue
+        tour = str(raw.get("tour") or "").upper()
+        player1, player2 = _seedless(raw.get("player1")), _seedless(raw.get("player2"))
+        if tour not in {"ATP", "WTA"} or not player1 or not player2:
+            continue
+        surface = _surface(raw.get("tournament", ""))
+        rows.append({
+            "tour": tour,
+            "tournoi": raw.get("tournament", ""),
+            "heure": timing["display"],
+            "kickoff": timing["kickoff"].isoformat() if timing["kickoff"] else None,
+            "surface": surface,
+            "round": raw.get("round") or "Final",
+            "live": bool(raw.get("live")),
+            "match": f"{player1} vs {player2}",
+            "joueur1": player1,
+            "joueur2": player2,
+            "match_source": raw.get("source") or "ESPN",
+            "odds_status": "en_attente",
+            "props": _coach().props.predict(tour, surface, player1, player2),
+        })
+    rows.sort(key=lambda row: (row.get("kickoff") or "9999", row["tournoi"], row["match"]))
+    return rows
 
 
 def _upcoming_matches(matches: list[dict], feed_updated: datetime, now: datetime) -> list[dict]:
@@ -680,6 +721,7 @@ def build_tennis() -> dict:
     matches = _attach_odds(scoreboard_matches, odds_matches) if scoreboard_matches else odds_matches
     atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
+    pending_odds = _pending_final_rows(matches, feed_updated, now)
     external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
     history_recorded = _record_decision_history(atp + wta, completed_results, now)
     return {
@@ -693,7 +735,8 @@ def build_tennis() -> dict:
         "props_validation": _coach().props.validation_report(2025),
         "filtered_past": atp_filtered + wta_filtered,
         "filtered_unpriced": atp_unpriced + wta_unpriced,
-        "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; seuls les matchs avec cote rattachee au meme duo de joueurs sont affiches.",
+        "pending_odds": pending_odds,
+        "time_policy": "Matchs cotes et statuts live: ESPN ATP/WTA. Les finales confirmees sans cote sont signalees separement, sans probabilite de marche.",
         "external_sources": external_sources,
         "decision_history_recorded": history_recorded,
         "atp": atp,

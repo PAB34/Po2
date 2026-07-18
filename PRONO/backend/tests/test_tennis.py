@@ -328,6 +328,34 @@ class TennisServiceTests(unittest.TestCase):
         )
         self.assertEqual(conflict["level"], "conflict")
         self.assertEqual(aligned["level"], "aligned")
+
+    def test_live_match_is_kept_after_kickoff_grace(self):
+        now = datetime(2026, 7, 18, 18, 0, tzinfo=tennis.PARIS_TZ)
+        timing = tennis._match_timing(
+            {"kickoff": "2026-07-18T15:00:00+02:00", "live": True}, now, now,
+        )
+        self.assertFalse(timing["past"])
+        self.assertEqual(timing["display"], "En cours - 15:00")
+
+    def test_unpriced_final_is_exposed_without_fake_market_probability(self):
+        feed = {"last_updated": "2026-07-18T20:00:00+02:00", "matches": []}
+        scoreboard = [{
+            "tour": "ATP", "tournament": "EFG Swiss Open Gstaad",
+            "player1": "Raphael Collignon", "player2": "Stefanos Tsitsipas",
+            "kickoff": "2026-07-19T11:30:00+02:00", "source": "ESPN", "round": "Final",
+        }]
+        now = datetime(2026, 7, 18, 20, 30, tzinfo=tennis.PARIS_TZ)
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now):
+            payload = tennis.build_tennis()
+
+        self.assertEqual(payload["atp"], [])
+        self.assertEqual(len(payload["pending_odds"]), 1)
+        final = payload["pending_odds"][0]
+        self.assertEqual(final["match"], "Raphael Collignon vs Stefanos Tsitsipas")
+        self.assertEqual(final["odds_status"], "en_attente")
+        self.assertNotIn("proba_marche", final)
+        self.assertIn("props", final)
+
     def test_completed_scoreboard_match_feeds_fatigue_context(self):
         competition = {
             "competitors": [

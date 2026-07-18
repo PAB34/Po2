@@ -571,7 +571,7 @@ function tennisPropsPanel(row) {
     const expanded = _expandedTennisMatch === key;
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
-      <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
+      <td><b>${esc(row.heure || "-")}</b>${row.live ? `<span class="livepill">Live</span>` : ""}<div class="tsub">${esc(row.surface || "")}${row.round ? ` | ${esc(row.round)}` : ""}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
       <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}</td>
       <td>${tennisForm(row)}</td>
@@ -625,10 +625,26 @@ function filteredTennisRows(rows) {
     return words.every(word => haystack.includes(word));
   });
 }
+function tennisPendingFinals(rows) {
+  const pending = filteredTennisRows(rows || []);
+  if (!pending.length) return "";
+  return `<section class="pending-finals"><h3>Finales confirmees - cotes en attente <span>${pending.length}</span></h3>
+    <div class="pending-note">Ces confrontations sont confirmees par ESPN. Elles rejoindront automatiquement le tableau decisionnel des que les cotes correspondantes seront publiees.</div>
+    <div class="pending-wrap"><table class="pending-table"><thead><tr><th>Circuit</th><th>Heure</th><th>Tournoi</th><th>Match</th><th>Statut</th></tr></thead><tbody>${pending.map(row => {
+      const key = tennisRowKey(row);
+      const expanded = _expandedTennisMatch === key;
+      return `<tr><td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
+        <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
+        <td><b>${esc(row.tournoi || "-")}</b><div class="tsub">${esc(row.round || "Final")}</div></td>
+        <td><div class="tmatch">${esc(row.match || "-")}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button></td>
+        <td><span class="pending-pill">En attente de cote</span><small>Probabilites marche non calculees</small></td></tr>
+        <tr id="props-${key}" class="tprop-row ${expanded ? "" : "hidden"}"><td colspan="5">${tennisPropsPanel(row)}</td></tr>`;
+    }).join("")}</tbody></table></div></section>`;
+}
 function tennisMatchesResults(allRows) {
   const rows = filteredTennisRows(allRows);
   const count = rows.length === allRows.length ? `${rows.length} matchs` : `${rows.length} sur ${allRows.length} matchs`;
-  return `<h3>Lecture des matchs <span>${count}</span></h3>${tennisTable(rows)}`;
+  return `<h3>Lecture des matchs <span>${count}</span></h3>${tennisTable(rows)}${tennisPendingFinals((_tennisData || {}).pending_odds || [])}`;
 }
 function setTennisSearch(value) {
   _tennisQuery = value;
