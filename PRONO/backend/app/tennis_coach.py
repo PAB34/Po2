@@ -162,6 +162,9 @@ class TennisCoach:
         elo1 = self._surface_elo(stats1, surf)
         elo2 = self._surface_elo(stats2, surf)
         elo_p1 = _elo_probability(elo1, elo2) if elo1 is not None and elo2 is not None else None
+        elo_missing_players = [
+            player for player, elo in ((player1, elo1), (player2, elo2)) if elo is None
+        ]
 
         # Form remains descriptive. Only current load, recovery and data quality
         # feed the contextual decision, avoiding a second count of recent results.
@@ -191,6 +194,10 @@ class TennisCoach:
             "raw_p1": elo_p1 if elo_p1 is not None else market_p1,
             "market_p1": market_p1,
             "elo_p1": elo_p1,
+            "elo_missing_reason": (
+                f"Historique {surf} insuffisant pour " + ", ".join(elo_missing_players)
+                if elo_missing_players else None
+            ),
             "adjustment_pts_p1": 0.0,
             "source": "marche_ancre",
             "quality": quality,
@@ -284,7 +291,7 @@ class TennisCoach:
         favorable_reasons = list(favorite_context_data["positives"])
         favorable_reasons.extend(f"adversaire: {reason}" for reason in opponent_context_data["risks"][:2])
         risk_reasons = list(favorite_context_data["risks"])
-        risk_reasons.extend(f"adversaire en contexte favorable: {reason}" for reason in opponent_context_data["positives"][:2])
+        risk_reasons.extend(f"atout adversaire: {reason}" for reason in opponent_context_data["positives"][:2])
         if elo_gap_favorite is not None and abs(elo_gap_favorite) >= 0.07:
             direction = "superieur" if elo_gap_favorite > 0 else "inferieur"
             risk_reasons.insert(0, f"Elo surface {direction} au marche ({elo_gap_favorite * 100:+.1f} pts)")
@@ -311,7 +318,7 @@ class TennisCoach:
         return {
             "label": label,
             "level": level,
-            "context_label": "favorable" if favorite_context >= 0.05 else "defavorable" if favorite_context <= -0.05 else "neutre",
+            "context_label": "avantage relatif" if favorite_context >= 0.05 else "desavantage relatif" if favorite_context <= -0.05 else "neutre",
             "context_score": round(favorite_context, 3),
             "elo_gap_favorite": round(elo_gap_favorite, 4) if elo_gap_favorite is not None else None,
             "range_p1": [low_p1, high_p1],

@@ -52,6 +52,7 @@ class TennisServiceTests(unittest.TestCase):
         self.assertIn("preuves", payload["atp"][0])
         self.assertIn("markets", payload["atp"][0])
         self.assertIn("qualite", payload["atp"][0])
+        self.assertIn("elo_detail", payload["atp"][0])
         self.assertEqual("historique calibre", payload["atp"][0]["markets"][0]["source"])
         self.assertEqual({"total_games", "handicap_games", "aces", "tiebreak"}, {m["key"] for m in payload["atp"][0]["markets"]})
         self.assertEqual(len(payload["wta"]), 1)
@@ -240,6 +241,13 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(decision["label"], "Vigilance forte")
         self.assertAlmostEqual(sum(decision["range_p1"]) / 2, 0.60)
         self.assertGreater(decision["range_p1"][1] - decision["range_p1"][0], aligned["range_p1"][1] - aligned["range_p1"][0])
+
+    def test_context_label_is_explicitly_relative(self):
+        favorite = {"score": -0.06, "label": "defavorable", "positives": [], "risks": ["charge lourde"]}
+        opponent = {"score": -0.14, "label": "defavorable", "positives": ["trois tours franchis"], "risks": ["charge tres lourde"]}
+        decision = tennis._coach()._decision(0.67, 0.55, favorite, opponent, 0.90)
+        self.assertEqual(decision["label"], "Vigilance forte")
+        self.assertEqual(decision["context_label"], "avantage relatif")
 
     def test_decision_history_is_persisted_and_reconciled(self):
         row = {

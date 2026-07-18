@@ -257,6 +257,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "proba": _round_pct(favorite_probability),
         "proba_marche": _round_pct(favorite_probability),
         "proba_elo": _round_pct(elo_favorite) if elo_favorite is not None else None,
+        "elo_detail": intel.get("elo_missing_reason"),
         "proba_brute": _round_pct(elo_favorite) if elo_favorite is not None else None,
         "ecart_elo": round((elo_favorite - favorite_probability) * 100, 1) if elo_favorite is not None else None,
         "ajustement": None,

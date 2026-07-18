@@ -392,8 +392,8 @@ function signedTennis(value) {
 }
 function tennisSignals(row) {
   const chips = [
-    `${esc(row.joueur1 || "J1")}: ${esc(row.cycle1 || "-")} / ${esc(row.fatigue1 || "-")}`,
-    `${esc(row.joueur2 || "J2")}: ${esc(row.cycle2 || "-")} / ${esc(row.fatigue2 || "-")}`,
+    `${esc(row.joueur1 || "J1")}: charge ${esc(row.fatigue1 || "inconnue")}`,
+    `${esc(row.joueur2 || "J2")}: charge ${esc(row.fatigue2 || "inconnue")}`,
     `H2H ${esc(row.h2h || "0-0")}`,
     row.match_source ? `Source ${esc(row.match_source)}` : "",
     row.odds_status && row.odds_status !== "ok" ? "Cotes indisponibles" : "",
@@ -408,7 +408,7 @@ function tennisMarkets(markets) {
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"],
-  ["decision", "Lecture"], ["proba_marche", "Marche", "n"], ["proba_elo", "Elo surface", "n"],
+  ["forme", "Forme"], ["decision", "Lecture"], ["proba_marche", "Marche", "n"], ["proba_elo", "Elo surface", "n"],
   ["ecart_elo", "Ecart", "n"], ["impact_contexte", "Contexte"], ["cote", "Cote", "n"],
   ["markets", "Stats marches"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
@@ -426,6 +426,7 @@ function setTennisSort(key) {
 function tennisSortValue(row, key) {
   if (key === "kickoff") return row.kickoff || row.heure || "9999";
   if (key === "markets") return Math.max(...(row.markets || []).map(m => Number(m.prob || 0)), 0);
+  if (key === "forme") return `${row.cycle1 || ""} ${row.cycle2 || ""}`.toLowerCase();
   if (["proba_marche", "proba_elo", "ecart_elo", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
   const decisionOrder = { strong: 4, watch: 3, insufficient: 2, favorable: 1, neutral: 0 };
   if (key === "decision") return decisionOrder[row.decision_level] ?? -1;
@@ -449,10 +450,21 @@ function tennisDecision(row) {
   </div>`;
 }
 function tennisContext(row) {
-  return `<div class="tcontext ${esc(row.impact_contexte || "neutre")}">
+  const contextClass = row.impact_contexte === "avantage relatif" ? "favorable" : row.impact_contexte === "desavantage relatif" ? "defavorable" : "neutre";
+  return `<div class="tcontext ${contextClass}">
     <b>${esc(row.impact_contexte || "neutre")}</b>
     <span>${esc(row.decision_detail || "aucun facteur discriminant")}</span>
   </div>`;
+}
+function tennisForm(row) {
+  return `<div class="tform">
+    <span><b>${esc(row.joueur1 || "J1")}</b>${esc(row.cycle1 || "inconnue")}</span>
+    <span><b>${esc(row.joueur2 || "J2")}</b>${esc(row.cycle2 || "inconnue")}</span>
+  </div>`;
+}
+function tennisElo(row) {
+  if (row.proba_elo != null) return pctTennis(row.proba_elo);
+  return `<span class="tmissing" title="${esc(row.elo_detail || "Historique de surface insuffisant pour au moins un joueur")}">Indispo</span>`;
 }
 function tennisTable(rows) {
   if (!rows || !rows.length) return `<div class="note">Aucun match a venir pour le moment.</div>`;
@@ -465,9 +477,10 @@ function tennisTable(rows) {
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
       <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
+      <td>${tennisForm(row)}</td>
       <td>${tennisDecision(row)}</td>
       <td class="n probten">${pctTennis(row.proba_marche)}<span style="width:${Math.max(8, Number(row.proba_marche || 0) * 0.46)}px"></span></td>
-      <td class="n">${row.proba_elo == null ? "-" : pctTennis(row.proba_elo)}</td>
+      <td class="n">${tennisElo(row)}</td>
       <td class="n tadj ${gapCls}">${row.ecart_elo == null ? "-" : signedTennis(row.ecart_elo)}</td>
       <td>${tennisContext(row)}</td>
       <td class="n">${numTennis(row.cote)}</td>
