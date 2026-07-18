@@ -215,6 +215,8 @@ def _secondary_markets(match: dict, intel: dict, favorite_probability: float, se
     ace1, ace2 = _profile_number(serve1, "ace_pct"), _profile_number(serve2, "ace_pct")
     return1, return2 = _profile_number(serve1, "return_won_pct"), _profile_number(serve2, "return_won_pct")
     first1, first2 = _profile_number(serve1, "first_won_pct"), _profile_number(serve2, "first_won_pct")
+    sample1, sample2 = _profile_number(serve1, "sample"), _profile_number(serve2, "sample")
+    sample_label = f", echantillon {int(sample1 or 0)}+{int(sample2 or 0)} matchs" if sample1 or sample2 else ""
     markets = [
         _market_item("total_games", "Total jeux", total_pick, total_prob, f"3 sets {round(p3 * 100)}%, match serre {round(tightness * 100)}%"),
         _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"favori coach {round(favorite_probability * 100)}%, 3 sets {round(p3 * 100)}%"),
@@ -236,7 +238,7 @@ def _secondary_markets(match: dict, intel: dict, favorite_probability: float, se
             ace_pick, ace_display = "Under aces", 1 - ace_prob
         else:
             ace_pick, ace_display = "Aces neutre", 0.5
-        markets.append(_market_item("aces", "Aces", ace_pick, ace_display, f"ace% cumule {ace_total:.1f}"))
+        markets.append(_market_item("aces", "Aces", ace_pick, ace_display, f"ace% cumule {ace_total:.1f}{sample_label}"))
 
         ret_values = [value for value in (return1, return2) if value is not None]
         first_values = [value for value in (first1, first2) if value is not None]
@@ -256,7 +258,7 @@ def _secondary_markets(match: dict, intel: dict, favorite_probability: float, se
             tb_pick, tb_display = "Tie-break a surveiller", tb_prob
         else:
             tb_pick, tb_display = "Tie-break bas", 1 - tb_prob
-        markets.append(_market_item("tiebreak", "Tie-break", tb_pick, tb_display, f"ace% {ace_total:.1f}, retour gagne {avg_return:.1f}%"))
+        markets.append(_market_item("tiebreak", "Tie-break", tb_pick, tb_display, f"ace% {ace_total:.1f}, retour gagne {avg_return:.1f}%{sample_label}"))
     else:
         markets.extend([
             _market_item("aces", "Aces", "Stats service insuff.", None, "ace% joueur manquant"),
