@@ -392,7 +392,9 @@ function tennisSignals(row) {
     `${esc(row.joueur1 || "J1")}: ${esc(row.cycle1 || "-")} / ${esc(row.fatigue1 || "-")}`,
     `${esc(row.joueur2 || "J2")}: ${esc(row.cycle2 || "-")} / ${esc(row.fatigue2 || "-")}`,
     `H2H ${esc(row.h2h || "0-0")}`,
-  ].map(t => `<span>${t}</span>`).join("");
+    row.match_source ? `Source ${esc(row.match_source)}` : "",
+    row.odds_status && row.odds_status !== "ok" ? "Cotes indisponibles" : "",
+  ].filter(Boolean).map(t => `<span>${t}</span>`).join("");
   const alert = row.alerte ? `<div class="talert">${esc(row.alerte)}</div>` : "";
   const proofs = row.preuves ? `<div class="tproof">${esc(row.preuves)}</div>` : "";
   return `<div class="tchips">${chips}</div>${alert}${proofs}`;
@@ -427,17 +429,18 @@ function sortedTennisRows(rows) {
   });
 }
 function tennisTable(rows) {
-  if (!rows || !rows.length) return `<div class="note">Aucun match cote pour le moment.</div>`;
+  if (!rows || !rows.length) return `<div class="note">Aucun match a venir pour le moment.</div>`;
   const header = TENNIS_SORT_COLUMNS.map(([key, label, cls]) => tennisHeader(key, label, cls || "")).join("");
   return `<div class="tenwrap"><table class="tentable"><thead><tr>${header}</tr></thead><tbody>${sortedTennisRows(rows).map(row => {
     const adj = Number(row.ajustement || 0);
     const adjCls = adj <= -5 ? "neg" : adj >= 5 ? "pos" : "flat";
+    const modelLabel = row.odds_status === "ok" ? (row.modele === "elo_surface" ? "Elo surface + coach" : "Marche + coach") : (row.modele === "elo_surface" ? "Elo surface + coach" : "Coach sans cote");
     return `<tr>
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b><div class="tsub">${esc(row.surface || "")}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
       <td><div class="tmatch">${esc(row.match)}</div>${tennisSignals(row)}</td>
-      <td class="favn">${esc(row.favori)}<div class="tsub">${esc(row.modele === "elo_surface" ? "Elo surface + coach" : "Marche + coach")}</div></td>
+      <td class="favn">${esc(row.favori)}<div class="tsub">${esc(modelLabel)}</div></td>
       <td class="n probten">${pctTennis(row.proba)}<span style="width:${Math.max(8, Number(row.proba || 0) * 0.46)}px"></span></td>
       <td class="n">${pctTennis(row.proba_brute)}</td>
       <td class="n">${pctTennis(row.proba_marche)}</td>
@@ -553,7 +556,8 @@ async function loadTennis(force) {
     const age = Number(_tennisData.feed_age_hours);
     const usesSportScore = (_tennisData.external_sources || []).includes("SportScore");
     const sportScoreCredit = usesSportScore ? `<span><a href="https://sportscore.com/" rel="dofollow">Powered by SportScore</a></span>` : "";
-    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${_tennisData.feed_updated ? `<span>Flux : ${esc(_tennisData.feed_updated)}</span>` : ""}${Number.isFinite(age) ? `<span>Age flux : ${esc(age)}h</span>` : ""}${masked ? `<span>${esc(masked)} passes masques</span>` : ""}${sportScoreCredit}`;
+    const scoreboard = _tennisData.scoreboard_source ? `<span>Confrontations : ${esc(_tennisData.scoreboard_source)}${_tennisData.scoreboard_count ? ` (${esc(_tennisData.scoreboard_count)})` : ""}</span>` : "";
+    $("#tennisMeta").innerHTML = `<span>Mis a jour : <b>${esc(_tennisData.updated || "-")}</b></span>${scoreboard}${_tennisData.feed_updated ? `<span>Flux cotes : ${esc(_tennisData.feed_updated)}</span>` : ""}${Number.isFinite(age) ? `<span>Age cotes : ${esc(age)}h</span>` : ""}${masked ? `<span>${esc(masked)} passes masques</span>` : ""}${sportScoreCredit}`;
     renderTennis();
     _tennisLoaded = true;
     if (_tennisMode === "brackets") loadTennisBrackets(force);

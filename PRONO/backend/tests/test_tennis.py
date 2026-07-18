@@ -135,6 +135,44 @@ class TennisServiceTests(unittest.TestCase):
         self.assertLess(row["proba"], row["proba_marche"])
         self.assertEqual(row["cycle2"], "sous-rythme")
 
+    def test_scoreboard_matchups_override_stale_market_pairs(self):
+        feed = {
+            "last_updated": "2026-07-18T09:00:00Z",
+            "matches": [
+                {
+                    "tour": "ATP",
+                    "tournament": "Bastad",
+                    "player1": "Darderi L. (2)",
+                    "player2": "Borges N. (5)",
+                    "time": "13:00",
+                    "odds1": 1.66,
+                    "odds2": 2.19,
+                }
+            ],
+        }
+        scoreboard = [
+            {
+                "tour": "ATP",
+                "tournament": "Nordea Open",
+                "player1": "Luciano Darderi",
+                "player2": "Adolfo Daniel Vallejo",
+                "kickoff": "2026-07-18T13:00:00+02:00",
+                "source": "ESPN",
+            }
+        ]
+        now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
+
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_matches", return_value=scoreboard), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+            payload = tennis.build_tennis()
+
+        self.assertEqual(payload["scoreboard_source"], "ESPN")
+        self.assertEqual(payload["scoreboard_count"], 1)
+        self.assertEqual(len(payload["atp"]), 1)
+        row = payload["atp"][0]
+        self.assertEqual(row["match"], "Luciano Darderi vs Adolfo Daniel Vallejo")
+        self.assertEqual(row["match_source"], "ESPN")
+        self.assertEqual(row["odds_status"], "indisponibles")
+        self.assertIsNone(row["cote"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,8 +1,8 @@
 """Donnees tennis pour PRONO.
 
-Recupere un flux de matchs cotes, calcule une probabilite brute (Elo surface si
-connu, sinon marche), puis applique la lentille coach: forme, H2H et fatigue
-intra-tournoi. Les probabilites de sets sont derivees de la proba coach.
+Le scoreboard ATP/WTA est la source de verite des confrontations a venir. Le
+flux de cotes reste utile seulement s'il porte exactement les deux memes joueurs;
+sinon le match est affiche sans cote pour eviter les affiches de tour precedent.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from app.tennis_coach import TennisCoach
 
 
 FEED = "https://raw.githubusercontent.com/Mriganka-codes/tennis_data/main/matches.json"
+ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/tennis/{league}/scoreboard?region=us&lang=en&dates={dates}&limit=1000"
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures|davis cup|billie jean king", re.I)
 CLAY = (
     "gstaad", "bastad", "kitzbuhel", "kitzbuehel", "hamburg", "umag", "cordenons",
@@ -50,6 +51,10 @@ def _strip(value: str) -> str:
         .decode()
         .lower()
     )
+
+
+def _norm_words(value: str) -> list[str]:
+    return re.sub(r"[^a-z0-9]+", " ", _strip(_seedless(value))).split()
 
 
 def _seedless(value: str) -> str:
@@ -91,6 +96,9 @@ def _parse_match_clock(value: str | None) -> time | None:
 
 
 def _infer_kickoff(raw: dict, feed_updated: datetime) -> datetime | None:
+    if raw.get("kickoff"):
+        parsed = _parse_feed_updated(raw.get("kickoff"))
+        return parsed
     clock = _parse_match_clock(raw.get("time"))
     if not clock:
         return None
@@ -147,7 +155,17 @@ def _round_pct(value: float) -> float:
     return round(value * 100, 1)
 
 
-def _favorite_fields(match: dict, odds1: float, odds2: float, intel: dict) -> dict:
+def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
+    try:
+        left, right = float(odds1), float(odds2)
+    except (TypeError, ValueError):
+        return None, None
+    if left <= 1 or right <= 1:
+        return None, None
+    return left, right
+
+
+def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, intel: dict) -> dict:
     p1 = intel["p1"]
     fav1 = p1 >= 0.5
     favorite_probability = p1 if fav1 else 1 - p1
@@ -164,7 +182,7 @@ def _favorite_fields(match: dict, odds1: float, odds2: float, intel: dict) -> di
         "proba_brute": _round_pct(raw_fav),
         "proba_marche": _round_pct(market_fav),
         "ajustement": round((favorite_probability - raw_fav) * 100, 1),
-        "cote": round(favorite_odds, 2),
+        "cote": round(favorite_odds, 2) if favorite_odds else None,
         "p20": round(set_probability * set_probability * 100),
         "p21": round(2 * set_probability * set_probability * (1 - set_probability) * 100),
         "p3": round(2 * set_probability * (1 - set_probability) * 100),
@@ -175,12 +193,129 @@ def _favorite_fields(match: dict, odds1: float, odds2: float, intel: dict) -> di
     }
 
 
+def _player_signature(name: str) -> str:
+    words = _norm_words(name)
+    if not words:
+        return ""
+    if len(words) == 1:
+        return words[0]
+    return f"{words[-1]}:{words[0][0]}"
+
+
+def _player_pair_key(player1: str, player2: str) -> frozenset[str]:
+    return frozenset(sig for sig in (_player_signature(player1), _player_signature(player2)) if sig)
+
+
+def _odds_index(matches: list[dict]) -> dict[tuple[str, frozenset[str]], list[dict]]:
+    index: dict[tuple[str, frozenset[str]], list[dict]] = {}
+    for raw in matches:
+        odds1, odds2 = _valid_odds(raw.get("odds1"), raw.get("odds2"))
+        if not odds1 or not odds2:
+            continue
+        key = (str(raw.get("tour") or "").upper(), _player_pair_key(raw.get("player1", ""), raw.get("player2", "")))
+        if len(key[1]) != 2:
+            continue
+        index.setdefault(key, []).append(raw)
+    return index
+
+
+def _attach_odds(scoreboard: list[dict], odds_matches: list[dict]) -> list[dict]:
+    indexed = _odds_index(odds_matches)
+    out = []
+    for match in scoreboard:
+        item = dict(match)
+        key = (str(item.get("tour") or "").upper(), _player_pair_key(item.get("player1", ""), item.get("player2", "")))
+        candidates = indexed.get(key) or []
+        if candidates:
+            candidate = candidates[0]
+            odds1, odds2 = _valid_odds(candidate.get("odds1"), candidate.get("odds2"))
+            c1 = _player_signature(candidate.get("player1", ""))
+            s1 = _player_signature(item.get("player1", ""))
+            if c1 == s1:
+                item.update({"odds1": odds1, "odds2": odds2, "odds_source": "market-feed"})
+            else:
+                item.update({"odds1": odds2, "odds2": odds1, "odds_source": "market-feed"})
+        out.append(item)
+    return out
+
+
+def _competitor_name(competitor: dict) -> str:
+    athlete = competitor.get("athlete") or {}
+    return str(athlete.get("displayName") or athlete.get("name") or competitor.get("displayName") or "").strip()
+
+
+def _parse_espn_date(value: str | None) -> datetime | None:
+    text = str(value or "").replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=PARIS_TZ)
+    return parsed.astimezone(PARIS_TZ)
+
+
+def _fetch_espn_scoreboard(league: str, dates: str) -> dict:
+    url = ESPN_SCOREBOARD.format(league=league, dates=dates)
+    request = urllib.request.Request(url, headers={"User-Agent": "prono-tennis"})
+    with urllib.request.urlopen(request, timeout=35) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
+    now = now or _now_paris()
+    start = now.strftime("%Y%m%d")
+    end = (now + FUTURE_MATCH_HORIZON).strftime("%Y%m%d")
+    dates = f"{start}-{end}"
+    rows = []
+    wanted = {"ATP": "Men's Singles", "WTA": "Women's Singles"}
+    for league, tour in (("atp", "ATP"), ("wta", "WTA")):
+        data = _fetch_espn_scoreboard(league, dates)
+        for event in data.get("events", []):
+            tournament = event.get("name") or event.get("shortName") or ""
+            if LOW_LEVEL.search(tournament):
+                continue
+            for grouping in event.get("groupings", []):
+                grouping_name = ((grouping.get("grouping") or {}).get("displayName") or "").strip()
+                if grouping_name != wanted[tour]:
+                    continue
+                for competition in grouping.get("competitions", []):
+                    status = ((competition.get("status") or {}).get("type") or {})
+                    if status.get("state") == "post" or status.get("completed"):
+                        continue
+                    kickoff = _parse_espn_date(competition.get("startDate") or competition.get("date"))
+                    if not kickoff or kickoff < now - PAST_MATCH_GRACE or kickoff > now + FUTURE_MATCH_HORIZON:
+                        continue
+                    names = [_competitor_name(c) for c in competition.get("competitors", [])]
+                    names = [name for name in names if name]
+                    if len(names) != 2 or any(_strip(name) in {"tbd", "bye"} for name in names):
+                        continue
+                    rows.append({
+                        "tour": tour,
+                        "tournament": tournament,
+                        "time": kickoff.isoformat(),
+                        "kickoff": kickoff.isoformat(),
+                        "player1": names[0],
+                        "player2": names[1],
+                        "source": "ESPN",
+                    })
+    seen = set()
+    unique = []
+    for row in sorted(rows, key=lambda r: (r["kickoff"], r["tour"], r["tournament"], r["player1"], r["player2"])):
+        key = (row["tour"], row["kickoff"], _player_pair_key(row["player1"], row["player2"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
+
+
 def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime) -> tuple[list[dict], int]:
     rows = []
     filtered_past = 0
     coach = _coach()
     for raw in matches:
-        if raw.get("tour") != tour or not raw.get("odds1") or not raw.get("odds2"):
+        if raw.get("tour") != tour:
             continue
         if LOW_LEVEL.search(raw.get("tournament", "")):
             continue
@@ -188,12 +323,7 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
         if timing["past"] or timing["too_far"]:
             filtered_past += 1
             continue
-        try:
-            odds1, odds2 = float(raw["odds1"]), float(raw["odds2"])
-        except (TypeError, ValueError):
-            continue
-        if odds1 <= 1 or odds2 <= 1:
-            continue
+        odds1, odds2 = _valid_odds(raw.get("odds1"), raw.get("odds2"))
 
         match = {
             "tournament": raw.get("tournament", ""),
@@ -203,7 +333,7 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             "tour": tour,
             "surface": _surface(raw.get("tournament", "")),
         }
-        market_p1 = _market_probability(odds1, odds2)
+        market_p1 = _market_probability(odds1, odds2) if odds1 and odds2 else 0.5
         intel = coach.enrich(match, market_p1)
         h2h = intel.get("h2h") or {}
         row = {
@@ -224,6 +354,9 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             "alerte": h2h.get("alert"),
             "preuves": intel.get("proofs"),
             "external_sources": intel.get("external_sources", []),
+            "match_source": raw.get("source") or "market-feed",
+            "odds_source": raw.get("odds_source") or None,
+            "odds_status": "ok" if odds1 and odds2 else "indisponibles",
         }
         row.update(_favorite_fields(match, odds1, odds2, intel))
         rows.append(row)
@@ -249,9 +382,14 @@ def fetch_feed() -> dict:
 
 def build_tennis() -> dict:
     data = fetch_feed()
-    matches = data.get("matches", [])
+    odds_matches = data.get("matches", [])
     now = _now_paris()
     feed_updated = _parse_feed_updated(data.get("last_updated"))
+    try:
+        scoreboard_matches = fetch_scoreboard_matches(now)
+    except Exception:
+        scoreboard_matches = []
+    matches = _attach_odds(scoreboard_matches, odds_matches) if scoreboard_matches else odds_matches
     atp, atp_filtered = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered = _rows(matches, "WTA", feed_updated, now)
     external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
@@ -259,8 +397,10 @@ def build_tennis() -> dict:
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
         "feed_age_hours": round((now - feed_updated).total_seconds() / 3600, 1),
+        "scoreboard_source": "ESPN" if scoreboard_matches else "market-feed-fallback",
+        "scoreboard_count": len(scoreboard_matches),
         "filtered_past": atp_filtered + wta_filtered,
-        "time_policy": "Matchs passes masques: horaire infere depuis last_updated + time, marge 30 min.",
+        "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; cotes rattachees seulement sur le meme duo de joueurs.",
         "external_sources": external_sources,
         "atp": atp,
         "wta": wta,
@@ -271,4 +411,8 @@ def build_tennis_brackets() -> dict:
     data = fetch_feed()
     now = _now_paris()
     feed_updated = _parse_feed_updated(data.get("last_updated"))
-    return build_brackets_from_matches(_upcoming_matches(data.get("matches", []), feed_updated, now))
+    try:
+        matches = fetch_scoreboard_matches(now)
+    except Exception:
+        matches = _upcoming_matches(data.get("matches", []), feed_updated, now)
+    return build_brackets_from_matches(matches)
