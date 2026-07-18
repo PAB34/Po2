@@ -342,6 +342,18 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(level["sample"], 10)
         self.assertIsNotNone(props["players"][0])
         self.assertIsNone(props["players"][1])
+
+    def test_full_wta_name_keeps_elo_when_advanced_stats_use_another_spelling(self):
+        coach = tennis.TennisCoach()
+
+        krejcikova = coach.player_stats("Barbora Krejcikova", "WTA")
+        tauson = coach.player_stats("Clara Tauson", "WTA")
+
+        self.assertEqual(krejcikova["elo_global"], 1554)
+        self.assertEqual(krejcikova["matchs_chartes"], 28)
+        self.assertEqual(tauson["elo_global"], 1477)
+        self.assertEqual(tauson["matchs_chartes"], 41)
+
     def test_live_match_is_kept_after_kickoff_grace(self):
         now = datetime(2026, 7, 18, 18, 0, tzinfo=tennis.PARIS_TZ)
         timing = tennis._match_timing(

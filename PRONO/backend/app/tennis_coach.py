@@ -152,6 +152,8 @@ def _same_tournament(left: Any, right: Any) -> bool:
 class TennisCoach:
     def __init__(self, dataset_dir: Path = DATASET_DIR):
         self.dataset_dir = Path(dataset_dir)
+        self._stats_exact: dict[str, dict[str, dict[str, Any]]] = {"ATP": {}, "WTA": {}}
+        self._ambiguous_stats_keys: dict[str, set[str]] = {"ATP": set(), "WTA": set()}
         self.stats = self._load_stats()
         self.history = self._load_history()
         self.calibration = HistoricalCalibration(self.history)
@@ -474,8 +476,28 @@ class TennisCoach:
         return result
 
     def player_stats(self, name: str, circ: str) -> dict[str, Any] | None:
-        bucket = self.stats.get(str(circ).upper(), {})
-        return next((bucket[key] for key in stats_keys(name) if key in bucket), None)
+        tour = str(circ).upper()
+        bucket = self.stats.get(tour, {})
+        candidates = []
+        exact = self._stats_exact.get(tour, {}).get(norm(name))
+        if exact is not None:
+            candidates.append(exact)
+        for key in stats_keys(name):
+            if key in self._ambiguous_stats_keys.get(tour, set()):
+                continue
+            if key in bucket and all(bucket[key] is not item for item in candidates):
+                candidates.append(bucket[key])
+        if not candidates:
+            return None
+
+        # A full-name advanced-stat row can coexist with an abbreviated Elo row.
+        # Prefer the combined historical profile instead of letting exact spelling
+        # hide Elo data that was successfully matched through a safe alias.
+        return max(candidates, key=lambda row: (
+            _float(row.get("elo_global")) is not None,
+            _int(row.get("n_matchs_total")),
+            _int(row.get("matchs_chartes")),
+        ))
 
     def level_profile(self, name: str, circ: str, surface: str) -> dict[str, Any]:
         stats = self.player_stats(name, circ)
@@ -711,7 +733,14 @@ class TennisCoach:
             df = pd.read_csv(path)
             for row in df.to_dict("records"):
                 player = row.get("player")
+                player_key = norm(player)
+                if player_key:
+                    self._stats_exact[circ][player_key] = row
                 for key in stats_keys(player):
+                    existing = out[circ].get(key)
+                    if existing is not None and norm(existing.get("player")) != player_key:
+                        self._ambiguous_stats_keys[circ].add(key)
+                        continue
                     out[circ][key] = row
         advanced_files = {"ATP": "stats_avancees_atp.csv", "WTA": "stats_avancees_wta.csv"}
         for circ, filename in advanced_files.items():
@@ -722,6 +751,8 @@ class TennisCoach:
             for row in df.to_dict("records"):
                 player = row.get("player")
                 for key in stats_keys(player):
+                    if key in self._ambiguous_stats_keys[circ]:
+                        continue
                     out[circ].setdefault(key, {"player": player}).update(row)
         return out
 
