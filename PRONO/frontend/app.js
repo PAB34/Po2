@@ -375,10 +375,12 @@ async function runValueCheck(kind) {
 
 /* ---------- Tennis ---------- */
 function pctTennis(value) {
+  if (value === null || value === undefined || value === "") return "-";
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) + "%" : "-";
 }
 function numTennis(value, digits = 2) {
+  if (value === null || value === undefined || value === "") return "-";
   const n = Number(value);
   return Number.isFinite(n) ? n.toFixed(digits) : "-";
 }
@@ -401,7 +403,7 @@ function tennisSignals(row) {
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"], ["favori", "Favori"],
-  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["p3", "3 sets", "n"],
+  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
@@ -416,7 +418,7 @@ function setTennisSort(key) {
 }
 function tennisSortValue(row, key) {
   if (key === "kickoff") return row.kickoff || row.heure || "9999";
-  if (["proba", "proba_brute", "proba_marche", "ajustement", "cote", "p3"].includes(key)) return Number(row[key] ?? -9999);
+  if (["proba", "proba_brute", "proba_marche", "ajustement", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
   return String(row[key] || "").toLowerCase();
 }
 function sortedTennisRows(rows) {
@@ -443,9 +445,11 @@ function tennisTable(rows) {
       <td class="favn">${esc(row.favori)}<div class="tsub">${esc(modelLabel)}</div></td>
       <td class="n probten">${pctTennis(row.proba)}<span style="width:${Math.max(8, Number(row.proba || 0) * 0.46)}px"></span></td>
       <td class="n">${pctTennis(row.proba_brute)}</td>
-      <td class="n">${pctTennis(row.proba_marche)}</td>
+      <td class="n">${row.odds_status === "ok" ? pctTennis(row.proba_marche) : "-"}</td>
       <td class="n tadj ${adjCls}">${signedTennis(row.ajustement)}</td>
       <td class="n">${numTennis(row.cote)}</td>
+      <td class="n">${pctTennis(row.p20)}</td>
+      <td class="n">${pctTennis(row.p21)}</td>
       <td class="n">${pctTennis(row.p3)}</td>
     </tr>`;
   }).join("")}</tbody></table></div>`;
