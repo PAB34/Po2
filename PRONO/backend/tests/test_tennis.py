@@ -336,7 +336,8 @@ class TennisServiceTests(unittest.TestCase):
         coach = tennis._coach()
         stats = coach.player_stats("Daniel Merida", "ATP")
         level = coach.level_profile("Daniel Merida", "ATP", "Terre")
-        props = coach.props.predict("ATP", "clay", "Damir Dzumhur", "Daniel Merida")
+        with patch.dict(os.environ, {"PRONO_TENNIS_LIVE_STATS": "0"}):
+            props = coach.props.predict("ATP", "clay", "Damir Dzumhur", "Daniel Merida")
 
         self.assertEqual(stats["player"], "Merida Aguilar D.")
         self.assertEqual(level["elo_global"], 1568.0)
