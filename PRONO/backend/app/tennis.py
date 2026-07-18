@@ -155,6 +155,116 @@ def _round_pct(value: float) -> float:
     return round(value * 100, 1)
 
 
+def _clamp(value: float, low: float = 0.05, high: float = 0.95) -> float:
+    return max(low, min(high, value))
+
+
+def _profile_number(profile: dict, key: str) -> float | None:
+    try:
+        value = profile.get(key)
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _signal_strength(probability: float | None) -> str:
+    if probability is None:
+        return "info"
+    edge = abs(probability - 0.5)
+    if edge >= 0.14:
+        return "fort"
+    if edge >= 0.07:
+        return "moyen"
+    return "faible"
+
+
+def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str) -> dict:
+    return {
+        "key": key,
+        "label": label,
+        "pick": pick,
+        "prob": round(probability * 100) if probability is not None else None,
+        "force": _signal_strength(probability),
+        "source": "estime",
+        "detail": detail,
+    }
+
+
+def _secondary_markets(match: dict, intel: dict, favorite_probability: float, set_probability: float) -> list[dict]:
+    p3 = 2 * set_probability * (1 - set_probability)
+    tightness = 1 - abs(favorite_probability - 0.5) * 2
+    surface = str(match.get("surface") or "Dur")
+    surface_total = 0.02 if surface == "Dur" else 0.03 if surface == "Gazon" else 0.01
+    over_games = _clamp(0.33 + p3 * 0.62 + tightness * 0.18 + surface_total, 0.12, 0.88)
+    if over_games >= 0.56:
+        total_pick, total_prob = "Over 22.5 jeux", over_games
+    elif over_games <= 0.44:
+        total_pick, total_prob = "Under 22.5 jeux", 1 - over_games
+    else:
+        total_pick, total_prob = "Total jeux neutre", 0.5
+
+    handicap_cover = _clamp(0.43 + (favorite_probability - 0.5) * 0.82 - p3 * 0.16, 0.15, 0.85)
+    if handicap_cover >= 0.56:
+        handicap_pick, handicap_prob = "Favori -2.5 jeux", handicap_cover
+    elif handicap_cover <= 0.46:
+        handicap_pick, handicap_prob = "Adversaire +2.5 jeux", 1 - handicap_cover
+    else:
+        handicap_pick, handicap_prob = "Handicap neutre", 0.5
+
+    serve1, serve2 = intel.get("serve1") or {}, intel.get("serve2") or {}
+    ace1, ace2 = _profile_number(serve1, "ace_pct"), _profile_number(serve2, "ace_pct")
+    return1, return2 = _profile_number(serve1, "return_won_pct"), _profile_number(serve2, "return_won_pct")
+    first1, first2 = _profile_number(serve1, "first_won_pct"), _profile_number(serve2, "first_won_pct")
+    markets = [
+        _market_item("total_games", "Total jeux", total_pick, total_prob, f"3 sets {round(p3 * 100)}%, match serre {round(tightness * 100)}%"),
+        _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"favori coach {round(favorite_probability * 100)}%, 3 sets {round(p3 * 100)}%"),
+    ]
+
+    if ace1 is not None and ace2 is not None:
+        ace_total = ace1 + ace2
+        ace_base = 0.23 + ace_total / 52
+        if surface == "Gazon":
+            ace_base += 0.08
+        elif surface == "Dur":
+            ace_base += 0.04
+        else:
+            ace_base -= 0.02
+        ace_prob = _clamp(ace_base, 0.12, 0.88)
+        if ace_prob >= 0.56:
+            ace_pick, ace_display = "Over aces", ace_prob
+        elif ace_prob <= 0.42:
+            ace_pick, ace_display = "Under aces", 1 - ace_prob
+        else:
+            ace_pick, ace_display = "Aces neutre", 0.5
+        markets.append(_market_item("aces", "Aces", ace_pick, ace_display, f"ace% cumule {ace_total:.1f}"))
+
+        ret_values = [value for value in (return1, return2) if value is not None]
+        first_values = [value for value in (first1, first2) if value is not None]
+        avg_return = sum(ret_values) / len(ret_values) if ret_values else 39.0
+        avg_first = sum(first_values) / len(first_values) if first_values else 69.0
+        tb_prob = 0.14 + tightness * 0.13 + ace_total / 115 + max(0, avg_first - 68) / 140 + max(0, 40 - avg_return) / 100
+        if surface == "Gazon":
+            tb_prob += 0.07
+        elif surface == "Dur":
+            tb_prob += 0.03
+        else:
+            tb_prob -= 0.03
+        tb_prob = _clamp(tb_prob, 0.08, 0.72)
+        if tb_prob >= 0.45:
+            tb_pick, tb_display = "Tie-break oui", tb_prob
+        elif tb_prob >= 0.30:
+            tb_pick, tb_display = "Tie-break a surveiller", tb_prob
+        else:
+            tb_pick, tb_display = "Tie-break bas", 1 - tb_prob
+        markets.append(_market_item("tiebreak", "Tie-break", tb_pick, tb_display, f"ace% {ace_total:.1f}, retour gagne {avg_return:.1f}%"))
+    else:
+        markets.extend([
+            _market_item("aces", "Aces", "Stats service insuff.", None, "ace% joueur manquant"),
+            _market_item("tiebreak", "Tie-break", "Signal incomplet", None, "stats service/retour manquantes"),
+        ])
+    return markets
+
+
 def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
     try:
         left, right = float(odds1), float(odds2)
@@ -186,6 +296,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "p20": round(set_probability * set_probability * 100),
         "p21": round(2 * set_probability * set_probability * (1 - set_probability) * 100),
         "p3": round(2 * set_probability * (1 - set_probability) * 100),
+        "markets": _secondary_markets(match, intel, favorite_probability, set_probability),
         "cycle_favori": cycle_fav["label"],
         "fatigue_favori": cycle_fav["fatigue"],
         "cycle_adversaire": cycle_opp["label"],

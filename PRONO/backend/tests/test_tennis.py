@@ -47,6 +47,8 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(payload["atp"][0]["match"], "Market Player A vs Market Player B")
         self.assertIn("proba_brute", payload["atp"][0])
         self.assertIn("preuves", payload["atp"][0])
+        self.assertIn("markets", payload["atp"][0])
+        self.assertEqual({"total_games", "handicap_games", "aces", "tiebreak"}, {m["key"] for m in payload["atp"][0]["markets"]})
         self.assertEqual(len(payload["wta"]), 1)
         self.assertEqual(payload["wta"][0]["surface"], "Gazon")
         self.assertEqual(payload["wta"][0]["favori"], "Grass Player B")

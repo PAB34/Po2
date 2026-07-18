@@ -291,6 +291,15 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .tchips span{font-size:10px;font-weight:900;color:#315346;background:#edf7f2;border:1px solid #d5eadf;border-radius:999px;padding:3px 7px;white-space:nowrap}
 .talert{max-width:640px;margin:4px 0 3px;color:#8a4b00;background:#fff7df;border:1px solid #f3d58a;border-radius:8px;padding:5px 7px;font-size:11px;font-weight:900;line-height:1.25;white-space:normal}
 .tproof{max-width:720px;color:#475569;font-size:11px;font-weight:800;line-height:1.35;white-space:normal}
+.tmarkets{display:grid;grid-template-columns:repeat(2,minmax(116px,1fr));gap:5px;min-width:250px;max-width:330px}
+.tmarkets.empty{display:block;min-width:0;color:#64748b;font-weight:900}
+.mkt{display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;padding:5px 7px;font-size:10px;font-weight:900;line-height:1.15;color:#334155}
+.mkt b{grid-column:1/-1;color:#64748b;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+.mkt em{font-style:normal;color:#0f172a;font-variant-numeric:tabular-nums}
+.mkt.fort{border-color:#86efac;background:#ecfdf3;color:#14532d}
+.mkt.moyen{border-color:#fde68a;background:#fffbeb;color:#7c2d12}
+.mkt.faible{border-color:#cbd5e1;background:#f8fafc;color:#475569}
+.mkt.info{border-color:#dbeafe;background:#eff6ff;color:#1e3a8a}
 .tadj{font-weight:950}.tadj.neg{color:#b91c1c}.tadj.pos{color:#15803d}.tadj.flat{color:#64748b}
 .surf{font-size:11px;font-weight:900;color:#475569;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:999px;padding:3px 8px}
 .probten span{display:inline-block;height:7px;border-radius:999px;background:var(--green-2);vertical-align:middle;margin-left:7px;max-width:46px}

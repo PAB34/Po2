@@ -128,6 +128,17 @@ def _estimate_minutes(sets_total: int, games_total: int, tiebreaks: int) -> int:
     return int(round(sets_total * 18 + games_total * 2.6 + tiebreaks * 8))
 
 
+def _fresh_match_label(fresh: dict[str, Any]) -> str:
+    days = fresh.get("days")
+    home = str(fresh.get("home") or "").strip()
+    away = str(fresh.get("away") or "").strip()
+    competition = str(fresh.get("competition") or "").strip()
+    pair = f"{home} vs {away}" if home and away else "match"
+    suffix = f", {competition}" if competition else ""
+    age = f", {days}j" if days is not None else ""
+    return f"{pair}{suffix}{age}"
+
+
 def _same_tournament(left: Any, right: Any) -> bool:
     a, b = norm(left), norm(right)
     return bool(a and b and (a in b or b in a))
@@ -205,9 +216,26 @@ class TennisCoach:
             "source": source,
             "cycle1": cycle1,
             "cycle2": cycle2,
+            "serve1": self._serve_profile(stats1),
+            "serve2": self._serve_profile(stats2),
             "h2h": h2h,
             "proofs": " | ".join(proofs),
             "external_sources": sorted(set(cycle1.get("external_sources", []) + cycle2.get("external_sources", []))),
+        }
+
+    def _serve_profile(self, stats: dict[str, Any] | None) -> dict[str, Any]:
+        if not stats:
+            return {"available": False}
+        return {
+            "available": bool(_float(stats.get("ace_pct")) is not None),
+            "ace_pct": _float(stats.get("ace_pct")),
+            "df_pct": _float(stats.get("df_pct")),
+            "first_in_pct": _float(stats.get("first_in_pct")),
+            "first_won_pct": _float(stats.get("first_won_pct")),
+            "second_won_pct": _float(stats.get("second_won_pct")),
+            "bp_saved_pct": _float(stats.get("bp_saved_pct")),
+            "return_won_pct": _float(stats.get("return_won_pct")),
+            "sample": _int(stats.get("matchs_chartes")),
         }
 
     def _canonical_player_name(self, name: str, stats: dict[str, Any] | None) -> str:
@@ -280,7 +308,7 @@ class TennisCoach:
             fresh = self._sportscore_freshness(name, stats)
             if fresh.get("status") == "confirmed_recent":
                 external_sources.add("SportScore")
-                evidence.append(f"match recent retrouve SportScore ({fresh.get('days')}j)")
+                evidence.append(f"match recent retrouve SportScore: {_fresh_match_label(fresh)}")
             elif fresh.get("status") == "probable_inactive":
                 external_sources.add("SportScore")
                 evidence.append(f"absence recente probable SportScore ({fresh.get('days')}j)")
@@ -295,7 +323,7 @@ class TennisCoach:
 
             if matches_90 <= 4:
                 score -= 0.04
-                evidence.append(f"volume recent faible ({matches_90} matchs/90j)")
+                evidence.append(f"base locale: seulement {matches_90} matchs/90j")
             if last:
                 days = (date.today() - last).days
                 if days >= 30:
@@ -303,7 +331,7 @@ class TennisCoach:
                     if fresh.get("status") == "confirmed_recent":
                         external_sources.add("SportScore")
                         score -= 0.02
-                        evidence.append(f"donnee locale ancienne, match recent retrouve SportScore ({fresh.get('days')}j)")
+                        evidence.append(f"base locale ancienne; match recent retrouve SportScore: {_fresh_match_label(fresh)}")
                     elif fresh.get("status") == "probable_inactive":
                         external_sources.add("SportScore")
                         score -= 0.10
@@ -491,6 +519,17 @@ class TennisCoach:
                 for key in (norm(player), short_key(player)):
                     if key:
                         out[circ][key] = row
+        advanced_files = {"ATP": "stats_avancees_atp.csv", "WTA": "stats_avancees_wta.csv"}
+        for circ, filename in advanced_files.items():
+            path = self.dataset_dir / filename
+            if not path.exists():
+                continue
+            df = pd.read_csv(path)
+            for row in df.to_dict("records"):
+                player = row.get("player")
+                for key in (norm(player), short_key(player)):
+                    if key:
+                        out[circ].setdefault(key, {"player": player}).update(row)
         return out
 
     def _load_history(self) -> pd.DataFrame:

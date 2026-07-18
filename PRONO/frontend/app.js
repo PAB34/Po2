@@ -401,9 +401,13 @@ function tennisSignals(row) {
   const proofs = row.preuves ? `<div class="tproof">${esc(row.preuves)}</div>` : "";
   return `<div class="tchips">${chips}</div>${alert}${proofs}`;
 }
+function tennisMarkets(markets) {
+  if (!markets || !markets.length) return `<div class="tmarkets empty">-</div>`;
+  return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc(m.detail || "Marche estime")}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
+}
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"], ["favori", "Favori"],
-  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
+  ["proba", "Coach", "n"], ["proba_brute", "Brut", "n"], ["proba_marche", "Marche", "n"], ["ajustement", "Ajust.", "n"], ["cote", "Cote", "n"], ["markets", "Marches joues"], ["p20", "Fav 2-0", "n"], ["p21", "Fav 2-1", "n"], ["p3", "3 sets", "n"],
 ];
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
@@ -418,6 +422,7 @@ function setTennisSort(key) {
 }
 function tennisSortValue(row, key) {
   if (key === "kickoff") return row.kickoff || row.heure || "9999";
+  if (key === "markets") return Math.max(...(row.markets || []).map(m => Number(m.prob || 0)), 0);
   if (["proba", "proba_brute", "proba_marche", "ajustement", "cote", "p20", "p21", "p3"].includes(key)) return Number(row[key] ?? -9999);
   return String(row[key] || "").toLowerCase();
 }
@@ -448,6 +453,7 @@ function tennisTable(rows) {
       <td class="n">${row.odds_status === "ok" ? pctTennis(row.proba_marche) : "-"}</td>
       <td class="n tadj ${adjCls}">${signedTennis(row.ajustement)}</td>
       <td class="n">${numTennis(row.cote)}</td>
+      <td>${tennisMarkets(row.markets)}</td>
       <td class="n">${pctTennis(row.p20)}</td>
       <td class="n">${pctTennis(row.p21)}</td>
       <td class="n">${pctTennis(row.p3)}</td>
