@@ -167,12 +167,8 @@ class TennisServiceTests(unittest.TestCase):
 
         self.assertEqual(payload["scoreboard_source"], "ESPN")
         self.assertEqual(payload["scoreboard_count"], 1)
-        self.assertEqual(len(payload["atp"]), 1)
-        row = payload["atp"][0]
-        self.assertEqual(row["match"], "Luciano Darderi vs Adolfo Daniel Vallejo")
-        self.assertEqual(row["match_source"], "ESPN")
-        self.assertEqual(row["odds_status"], "indisponibles")
-        self.assertIsNone(row["cote"])
+        self.assertEqual(payload["filtered_unpriced"], 1)
+        self.assertEqual(len(payload["atp"]), 0)
     def test_scoreboard_tournament_names_keep_clay_surface(self):
         self.assertEqual(tennis._surface("Nordea Open"), "Terre")
         self.assertEqual(tennis._surface("EFG Swiss Open Gstaad"), "Terre")

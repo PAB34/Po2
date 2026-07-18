@@ -338,9 +338,10 @@ def fetch_scoreboard_matches(now: datetime | None = None) -> list[dict]:
     return unique
 
 
-def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime) -> tuple[list[dict], int]:
+def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime) -> tuple[list[dict], int, int]:
     rows = []
     filtered_past = 0
+    filtered_unpriced = 0
     coach = _coach()
     for raw in matches:
         if raw.get("tour") != tour:
@@ -352,6 +353,9 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
             filtered_past += 1
             continue
         odds1, odds2 = _valid_odds(raw.get("odds1"), raw.get("odds2"))
+        if not odds1 or not odds2:
+            filtered_unpriced += 1
+            continue
 
         match = {
             "tournament": raw.get("tournament", ""),
@@ -389,7 +393,7 @@ def _rows(matches: list[dict], tour: str, feed_updated: datetime, now: datetime)
         row.update(_favorite_fields(match, odds1, odds2, intel))
         rows.append(row)
     rows.sort(key=lambda row: (row.get("kickoff") or "9999", row["tournoi"], -row["proba"]))
-    return rows, filtered_past
+    return rows, filtered_past, filtered_unpriced
 
 
 def _upcoming_matches(matches: list[dict], feed_updated: datetime, now: datetime) -> list[dict]:
@@ -418,8 +422,8 @@ def build_tennis() -> dict:
     except Exception:
         scoreboard_matches = []
     matches = _attach_odds(scoreboard_matches, odds_matches) if scoreboard_matches else odds_matches
-    atp, atp_filtered = _rows(matches, "ATP", feed_updated, now)
-    wta, wta_filtered = _rows(matches, "WTA", feed_updated, now)
+    atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
+    wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
     external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
@@ -428,7 +432,8 @@ def build_tennis() -> dict:
         "scoreboard_source": "ESPN" if scoreboard_matches else "market-feed-fallback",
         "scoreboard_count": len(scoreboard_matches),
         "filtered_past": atp_filtered + wta_filtered,
-        "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; cotes rattachees seulement sur le meme duo de joueurs.",
+        "filtered_unpriced": atp_unpriced + wta_unpriced,
+        "time_policy": "Confrontations a venir: scoreboard ESPN ATP/WTA; seuls les matchs avec cote rattachee au meme duo de joueurs sont affiches.",
         "external_sources": external_sources,
         "atp": atp,
         "wta": wta,
