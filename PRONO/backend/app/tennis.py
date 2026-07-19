@@ -17,6 +17,7 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from app import tennis_coherence
 from app.tennis_brackets import build_brackets_from_matches
 from app.tennis_coach import TennisCoach
 from app.tennis_decision_calibration import run_from_sqlite, status_summary_for_row
@@ -916,6 +917,34 @@ def _set_anchor_ref(row: dict, derived: dict, anchor: str) -> None:
             row[key] = value
 
 
+_COHERENCE_PICK_LABELS = {
+    "Over 22.5 jeux": ("over_22_5", "yes"), "Under 22.5 jeux": ("over_22_5", "no"),
+    "Favori -2.5 jeux": ("favorite_cover_2_5", "yes"), "Adversaire +2.5 jeux": ("favorite_cover_2_5", "no"),
+    "Tie-break oui": ("tiebreak", "yes"), "Tie-break non": ("tiebreak", "no"),
+}
+
+
+def _row_active_picks(row: dict) -> list[tuple[str, str]]:
+    """Picks 'actifs' du match: directions choisies (total, handicap, tie-break) + score modal."""
+    picks: list[tuple[str, str]] = []
+    for market in row.get("markets") or []:
+        spec = _COHERENCE_PICK_LABELS.get(market.get("pick"))
+        if spec:
+            picks.append((spec[0], 1 if spec[1] == "yes" else 0))
+    scores = {"favorite_2_0": row.get("p20"), "favorite_2_1": row.get("p21"), "three_sets": row.get("p3")}
+    scores = {market: value for market, value in scores.items() if isinstance(value, (int, float))}
+    if scores:
+        picks.append((max(scores, key=scores.get), 1))
+    return picks
+
+
+def _annotate_coherence(rows: list[dict], matrix: dict | None) -> None:
+    if not matrix:
+        return
+    for row in rows:
+        row["coherence_flags"] = tennis_coherence.coherence_flags(_row_active_picks(row), circuit=row.get("tour", "ATP"), matrix=matrix)
+
+
 def _apply_anchor_recommendations(rows: list[dict], report: dict | None, min_sample: int = 50) -> None:
     """Choisit l'ancre recommandee par match selon le verdict du backtest (bucket decision x concordance).
 
@@ -978,6 +1007,7 @@ def build_tennis() -> dict:
     decision_calibration_report = build_decision_calibration()
     _annotate_decision_calibration(atp + wta, decision_calibration_report)
     _apply_anchor_recommendations(atp + wta, decision_calibration_report, min_sample=int(decision_calibration_report.get("min_sample") or 50))
+    _annotate_coherence(atp + wta, tennis_coherence.load_matrix())
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),

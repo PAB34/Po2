@@ -432,6 +432,15 @@ function tennisSignals(row) {
   const proofs = row.preuves ? `<div class="tproof">${esc(row.preuves)}</div>` : "";
   return `<div class="tchips">${chips}</div>${alert}${proofs}`;
 }
+function tennisCoherence(row) {
+  const flags = row.coherence_flags;
+  if (!flags || !flags.length) return "";
+  return `<div class="tcoherence">${flags.map(f => {
+    const cls = f.relation === "tension" ? "tension" : "redondance";
+    const icon = f.relation === "tension" ? "⚠" : "⇄";
+    return `<span class="cohflag ${cls}${f.strength === "fort" ? " fort" : ""}" title="${esc(f.message || "")}">${icon} ${esc(f.label_a)} / ${esc(f.label_b)}</span>`;
+  }).join("")}</div>`;
+}
 function tennisMarkets(markets) {
   if (!markets || !markets.length) return `<div class="tmarkets empty">-</div>`;
   return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc([m.detail, m.source ? "Source: " + m.source : "", m.confidence ? "Confiance: " + m.confidence : ""].filter(Boolean).join(" | "))}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
@@ -711,7 +720,7 @@ function tennisTable(rows) {
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b>${row.live ? `<span class="livepill">Live</span>` : ""}<div class="tsub">${esc(row.surface || "")}${row.round ? ` | ${esc(row.round)}` : ""}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
-      <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}</td>
+      <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}${tennisCoherence(row)}</td>
       <td>${tennisForm(row)}</td>
       <td>${tennisDecision(row)}</td>
       <td>${tennisConcordance(row)}</td>
@@ -833,6 +842,7 @@ function tennisExportRow(row) {
       opponent_fatigue: row.fatigue_adversaire,
     },
     secondary_markets: row.markets || [],
+    coherence_flags: row.coherence_flags || [],
     advanced_stats: row.props || null,
     raw: row,
   });
