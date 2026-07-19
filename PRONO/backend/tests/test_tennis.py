@@ -273,6 +273,83 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["favori"], "Mariano Navone")
         self.assertEqual(row["cote"], 1.19)
 
+    def test_dual_anchor_range_spread_and_single(self):
+        # Elo indisponible -> ancre marche seule, pas de fausse fourchette
+        no_elo = tennis._dual_anchor(40, None)
+        self.assertEqual(no_elo, {"value_market": 40, "value_elo": None, "value_ref": 40, "range_min": 40, "range_max": 40, "spread": None, "single": True})
+        # ecart < 3 pts -> valeur unique (single True) mais les deux valeurs restent tracees
+        tight = tennis._dual_anchor(40, 41)
+        self.assertEqual(tight["spread"], 1)
+        self.assertTrue(tight["single"])
+        # conflit fort -> fourchette complete, bornes triees min/max
+        wide = tennis._dual_anchor(36, 45)
+        self.assertEqual((wide["range_min"], wide["range_max"], wide["spread"], wide["single"]), (36, 45, 9, False))
+        self.assertEqual((wide["value_market"], wide["value_elo"], wide["value_ref"]), (36, 45, 36))
+        flipped = tennis._dual_anchor(45, 36)
+        self.assertEqual((flipped["range_min"], flipped["range_max"]), (36, 45))
+
+    def test_anchor_values_support_favorite_below_50_and_backcompat(self):
+        calib = {"rates": {"favorite_2_1_share": 0.38, "three_sets": 0.34, "over_22_5": 0.5, "favorite_cover_2_5": 0.4}}
+        # cas conflit d'identite du favori: proba < 0.5 supportee, p20+p21 = proba favori
+        low = tennis._anchor_values(0.45, calib)
+        self.assertEqual(low["p20"] + low["p21"], 45)
+        self.assertEqual(low["p3"], 34)
+        # non-regression: memes formules qu'avant pour une ancre standard
+        std = tennis._anchor_values(0.60, calib)
+        self.assertEqual((std["p20"], std["p21"], std["p3"], std["total_games"], std["handicap"]), (37, 23, 34, 50, 40))
+
+    def _dual_row(self):
+        pairs = {"p20": (38, 30), "p21": (23, 18), "p3": (36, 45), "total_games": (50, 52), "handicap": (40, 38)}
+        derived = {key: tennis._dual_anchor(market, elo) for key, (market, elo) in pairs.items()}
+        derived.update(anchor_recommended="market", calibration_flag="en attente", elo_available=True, favorite_conflict=False)
+        return {"decision": "Vigilance forte", "concordance": "conflict", "p20": 38, "p21": 23, "p3": 36, "derived_anchors": derived}
+
+    def test_apply_anchor_recommendation_picks_elo_when_better_calibrated(self):
+        row = self._dual_row()
+        report = {"min_sample": 50, "primary": [{"bucket": "Vigilance forte x conflict", "n": 120, "conclusion": "favori_surcote_historique", "favorite_win_rate": 55.0, "market_probability": 61.8, "delta_points": -6.8, "brier_market": 0.24, "brier_elo": 0.21}]}
+        tennis._apply_anchor_recommendations([row], report, min_sample=50)
+        self.assertEqual(row["derived_anchors"]["anchor_recommended"], "elo")
+        self.assertEqual(row["derived_anchors"]["p3"]["value_ref"], 45)
+        self.assertEqual(row["p3"], 45)  # scalaire retro-compat bascule aussi
+        self.assertEqual(row["p20"], 30)
+
+    def test_apply_anchor_recommendation_defaults_and_flags(self):
+        # bucket a echantillon trop faible -> marche par defaut + flag
+        weak = self._dual_row()
+        weak_report = {"min_sample": 50, "primary": [{"bucket": "Vigilance forte x conflict", "n": 10, "conclusion": "favori_surcote_historique", "brier_market": 0.24, "brier_elo": 0.21}]}
+        tennis._apply_anchor_recommendations([weak], weak_report, min_sample=50)
+        self.assertEqual(weak["derived_anchors"]["anchor_recommended"], "market")
+        self.assertEqual(weak["derived_anchors"]["calibration_flag"], "calibration insuffisante")
+        self.assertEqual(weak["p3"], 36)  # inchange
+        # delta non significatif -> indetermine
+        noisy = self._dual_row()
+        noisy_report = {"min_sample": 50, "primary": [{"bucket": "Vigilance forte x conflict", "n": 120, "conclusion": "bruit_probable", "favorite_win_rate": 60.0, "market_probability": 61.8, "delta_points": -1.8, "brier_market": 0.24, "brier_elo": 0.21}]}
+        tennis._apply_anchor_recommendations([noisy], noisy_report, min_sample=50)
+        self.assertEqual(noisy["derived_anchors"]["anchor_recommended"], "indetermine")
+        # Elo indisponible -> ancre marche, aucune bascule
+        blind = self._dual_row()
+        blind["derived_anchors"]["elo_available"] = False
+        tennis._apply_anchor_recommendations([blind], {"min_sample": 50, "primary": []}, min_sample=50)
+        self.assertEqual(blind["derived_anchors"]["anchor_recommended"], "market")
+        self.assertEqual(blind["derived_anchors"]["calibration_flag"], "elo indisponible")
+
+    def test_build_tennis_exposes_derived_anchors_without_history(self):
+        feed = {"last_updated": "2026-07-17T12:00:00Z", "matches": [{"tour": "ATP", "tournament": "Gstaad", "player1": "Cerundolo J. (6)", "player2": "Ruud C. (2)", "odds1": 3.43, "odds2": 1.31}]}
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+            payload = tennis.build_tennis()
+        row = payload["atp"][0]
+        da = row["derived_anchors"]
+        for key in tennis.DERIVED_ANCHOR_KEYS:
+            self.assertIn("value_market", da[key])
+            self.assertIn("range_min", da[key])
+        self.assertTrue(da["elo_available"])
+        self.assertIsNotNone(da["p3"]["value_elo"])
+        # sans historique en test -> ancre marche, scalaires retro-compat = value_market (non-regression)
+        self.assertEqual(da["anchor_recommended"], "market")
+        self.assertEqual(row["p3"], da["p3"]["value_market"])
+        self.assertEqual(row["p20"], da["p20"]["value_market"])
+        self.assertEqual(row["p21"], da["p21"]["value_market"])
+
     def test_form_signals_do_not_shift_market_probability(self):
         coach = tennis._coach()
         stats_hot = {

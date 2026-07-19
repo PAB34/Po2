@@ -275,6 +275,58 @@ def _valid_odds(odds1, odds2) -> tuple[float | None, float | None]:
     return left, right
 
 
+DERIVED_ANCHOR_KEYS = ("p20", "p21", "p3", "total_games", "handicap")
+ANCHOR_SPREAD_MIN = 3  # en dessous, fourchette inutile: valeur unique (evite le bruit visuel)
+
+
+def _anchor_values(favorite_probability: float, calibration: dict) -> dict:
+    """Indicateurs derives a partir d'une ancre (proba du favori marche) parametrable.
+
+    Aucune lecture de proba_marche en dur: le modele de distribution est inchange,
+    seule l'ancre passe en argument. Supporte une proba < 0.5 (cas conflit d'identite
+    du favori: l'Elo donne le favori marche perdant). Avec l'ancre = marche, reproduit
+    exactement les formules historiques (non-regression a l'arrondi pres).
+    """
+    rates = calibration["rates"]
+    share = rates["favorite_2_1_share"]
+    return {
+        "p20": round(favorite_probability * (1 - share) * 100),
+        "p21": round(favorite_probability * share * 100),
+        "p3": round(rates["three_sets"] * 100),
+        "total_games": round(rates["over_22_5"] * 100),
+        "handicap": round(rates["favorite_cover_2_5"] * 100),
+    }
+
+
+def _dual_anchor(value_market: int, value_elo: int | None) -> dict:
+    """Restitue un indicateur derive sous forme double ancrage + fourchette."""
+    if value_elo is None:
+        return {
+            "value_market": value_market, "value_elo": None, "value_ref": value_market,
+            "range_min": value_market, "range_max": value_market, "spread": None, "single": True,
+        }
+    low, high = (value_market, value_elo) if value_market <= value_elo else (value_elo, value_market)
+    spread = high - low
+    return {
+        "value_market": value_market, "value_elo": value_elo, "value_ref": value_market,
+        "range_min": low, "range_max": high, "spread": spread, "single": spread < ANCHOR_SPREAD_MIN,
+    }
+
+
+def _build_derived_anchors(tour: str, surface: str, favorite_probability: float, market_calibration: dict, elo_favorite: float | None) -> dict:
+    market_vals = _anchor_values(favorite_probability, market_calibration)
+    if elo_favorite is not None:
+        elo_vals = _anchor_values(elo_favorite, _coach().market_priors(tour, surface, elo_favorite))
+    else:
+        elo_vals = {key: None for key in DERIVED_ANCHOR_KEYS}
+    derived = {key: _dual_anchor(market_vals[key], elo_vals[key]) for key in DERIVED_ANCHOR_KEYS}
+    derived["anchor_recommended"] = "market"
+    derived["calibration_flag"] = "en attente"
+    derived["elo_available"] = elo_favorite is not None
+    derived["favorite_conflict"] = bool(elo_favorite is not None and elo_favorite < 0.5)
+    return derived
+
+
 def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, intel: dict) -> dict:
     market_p1 = intel["market_p1"]
     fav1 = market_p1 >= 0.5
@@ -294,9 +346,13 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     range_favorite = (low_p1, high_p1) if fav1 else (1 - high_p1, 1 - low_p1)
     cycle_fav = intel["cycle1"] if fav1 else intel["cycle2"]
     cycle_opp = intel["cycle2"] if fav1 else intel["cycle1"]
-    calibration = _coach().market_priors(match.get("tour", "ATP"), match.get("surface", "Dur"), favorite_probability)
+    tour = match.get("tour", "ATP")
+    surface = match.get("surface", "Dur")
+    calibration = _coach().market_priors(tour, surface, favorite_probability)
     rates = calibration["rates"]
     p21_share = rates["favorite_2_1_share"]
+    derived_anchors = _build_derived_anchors(tour, surface, favorite_probability, calibration, elo_favorite)
+    market_vals = {key: derived_anchors[key]["value_market"] for key in DERIVED_ANCHOR_KEYS}
     decision_reasons = decision.get("reasons") or []
     return {
         "favori": _seedless(favorite),
@@ -326,9 +382,10 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "fourchette_max": _round_pct(range_favorite[1]),
         "cote": round(favorite_odds, 2) if favorite_odds else None,
         "cote_outsider": round(outsider_odds, 2) if outsider_odds else None,
-        "p20": round(favorite_probability * (1 - p21_share) * 100),
-        "p21": round(favorite_probability * p21_share * 100),
-        "p3": round(rates["three_sets"] * 100),
+        "p20": market_vals["p20"],
+        "p21": market_vals["p21"],
+        "p3": market_vals["p3"],
+        "derived_anchors": derived_anchors,
         "markets": _secondary_markets(match, intel, favorite_probability, calibration),
         "market_calibration": {"sample": calibration["sample"], "confidence": calibration["confidence"], "training": calibration["training"]},
         "cycle_favori": cycle_fav["label"],
@@ -846,6 +903,57 @@ def _annotate_decision_calibration(rows: list[dict], report: dict | None) -> Non
             row["decision_calibration"] = summary
 
 
+def _set_anchor_ref(row: dict, derived: dict, anchor: str) -> None:
+    """Bascule value_ref (et les scalaires retro-compat p20/p21/p3) sur l'ancre choisie."""
+    for key in DERIVED_ANCHOR_KEYS:
+        cell = derived[key]
+        chosen = cell["value_elo"] if anchor == "elo" else cell["value_market"]
+        if chosen is not None:
+            cell["value_ref"] = chosen
+    for key in ("p20", "p21", "p3"):
+        value = derived[key]["value_ref"]
+        if value is not None:
+            row[key] = value
+
+
+def _apply_anchor_recommendations(rows: list[dict], report: dict | None, min_sample: int = 50) -> None:
+    """Choisit l'ancre recommandee par match selon le verdict du backtest (bucket decision x concordance).
+
+    Regle: n >= min_sample et conclusion decisive -> ancre au meilleur Brier (Elo si mieux calibre,
+    sinon marche). 'bruit_probable' (donnees presentes, delta non significatif) -> 'indetermine'.
+    Bucket non concluant / n trop faible / Elo indisponible -> 'market' par defaut + flag.
+    """
+    for row in rows:
+        derived = row.get("derived_anchors")
+        if not derived:
+            continue
+        if not derived.get("elo_available"):
+            derived["anchor_recommended"] = "market"
+            derived["calibration_flag"] = "elo indisponible"
+            continue
+        summary = status_summary_for_row(row, report, min_sample=min_sample)
+        stats = (summary or {}).get("bucket_stats")
+        sample = int((summary or {}).get("n") or 0)
+        conclusion = (summary or {}).get("conclusion")
+        if not stats or sample < min_sample or conclusion in (None, "non_concluant"):
+            derived["anchor_recommended"] = "market"
+            derived["calibration_flag"] = "calibration insuffisante"
+            continue
+        if conclusion == "bruit_probable":
+            derived["anchor_recommended"] = "indetermine"
+            derived["calibration_flag"] = "delta non significatif"
+            continue
+        brier_market = stats.get("brier_market")
+        brier_elo = stats.get("brier_elo")
+        if brier_elo is not None and brier_market is not None and brier_elo < brier_market:
+            derived["anchor_recommended"] = "elo"
+            derived["calibration_flag"] = "ok"
+            _set_anchor_ref(row, derived, "elo")
+        else:
+            derived["anchor_recommended"] = "market"
+            derived["calibration_flag"] = "ok"
+
+
 def build_tennis() -> dict:
     data = fetch_feed()
     odds_matches = data.get("matches", [])
@@ -869,6 +977,7 @@ def build_tennis() -> dict:
     history_recorded = _record_decision_history(atp + wta, completed_results, now)
     decision_calibration_report = build_decision_calibration()
     _annotate_decision_calibration(atp + wta, decision_calibration_report)
+    _apply_anchor_recommendations(atp + wta, decision_calibration_report, min_sample=int(decision_calibration_report.get("min_sample") or 50))
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),

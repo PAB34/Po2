@@ -396,6 +396,20 @@ function pctTennis(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round(n) + "%" : "-";
 }
+function tennisAnchorCell(row, key) {
+  const anchors = row.derived_anchors;
+  const cell = anchors && anchors[key];
+  if (!cell) return pctTennis(row[key]);
+  const eloReco = anchors.anchor_recommended === "elo";
+  let html = `<b>${pctTennis(cell.value_ref)}</b>`;
+  // Fourchette affichee seulement en cas de vrai desaccord (sinon valeur unique, pas de bruit)
+  if (cell.value_elo !== null && cell.value_elo !== undefined && cell.single === false) {
+    const badge = eloReco ? `<span class="anchor-badge">Elo</span>` : "";
+    const tip = `Cotes ${cell.value_market}% | Elo ${cell.value_elo}% | ecart ${cell.spread} pts (${anchors.calibration_flag || "-"})`;
+    html += `<div class="anchor-range${eloReco ? " elo" : ""}" title="${esc(tip)}">${cell.range_min}–${cell.range_max}%${badge}</div>`;
+  }
+  return html;
+}
 function numTennis(value, digits = 2) {
   if (value === null || value === undefined || value === "") return "-";
   const n = Number(value);
@@ -487,9 +501,9 @@ TENNIS_LEXICON_SECTIONS.unshift({ title: "Colonnes du tableau principal", intro:
   { name: "Contexte", provides: "Impact relatif des facteurs non-marche: fatigue, parcours, recuperation, adversaire.", source: "Moteur coach et contexte tournoi courant.", calculation: "Classe en avantage relatif, desavantage relatif ou neutre selon les facteurs accumules autour du favori et de l'adversaire." },
   { name: "Cote", provides: "Cote decimale du favori retenu.", source: "Flux de cotes.", calculation: "Cote brute affichee pour donner le prix du marche associe a la probabilite devigotte." },
   { name: "Stats marches", provides: "Angles secondaires: total jeux, handicap, tie-break, aces ou autres signaux disponibles.", source: "Modeles secondaires calibres et stats joueurs.", calculation: "Chaque pastille affiche un pick, une probabilite et une confiance. Ce ne sont pas forcement les lignes exactes du bookmaker." },
-  { name: "Fav 2-0", provides: "Probabilite que le favori gagne en deux sets en best-of-3.", source: "Modele derive du marche principal et calibration tennis.", calculation: "Transforme la force du favori et le profil match en distribution 2-0 / 2-1 / 3 sets." },
-  { name: "Fav 2-1", provides: "Probabilite que le favori gagne en trois sets.", source: "Modele derive du marche principal et calibration tennis.", calculation: "Complement de lecture du score exact en sets pour les matchs best-of-3." },
-  { name: "3 sets", provides: "Probabilite que le match aille en trois sets.", source: "Modele derive marche + equilibre de niveau.", calculation: "Augmente quand les joueurs sont proches, quand le favori est moins dominant ou quand les profils service/retour rendent le match serre." },
+  { name: "Fav 2-0", provides: "Probabilite que le favori gagne en deux sets en best-of-3.", source: "Double ancrage: cotes devigottees et niveau Elo.", calculation: "Calcule sur les deux ancres (cotes et Elo) et restitue en fourchette. La valeur affichee suit l'ancre la mieux calibree historiquement pour ce type de match; sous-titre viole = avis Elo recommande." },
+  { name: "Fav 2-1", provides: "Probabilite que le favori gagne en trois sets.", source: "Double ancrage: cotes devigottees et niveau Elo.", calculation: "Meme distribution 2-0 / 2-1 / 3 sets, calculee deux fois (cotes et Elo). La fourchette n'apparait qu'en cas de vrai desaccord (>= 3 pts)." },
+  { name: "3 sets", provides: "Probabilite que le match aille en trois sets.", source: "Double ancrage: cotes devigottees et niveau Elo.", calculation: "Augmente quand les joueurs sont proches. Sur un conflit fort (marche vs Elo), l'avis Elo remonte souvent cette probabilite; la valeur de reference suit l'ancre la mieux calibree." },
 ] });
 TENNIS_LEXICON_SECTIONS.push({ title: "Details Stats+", intro: "Ces indicateurs apparaissent dans le panneau detaille ouvert avec le bouton Stats+. Ils expliquent le niveau, la taille d'echantillon et les marches statistiques joueur.", items: [
   { name: "Stats+", provides: "Panneau detaille joueur contre joueur.", source: "Moteur props PRONO, bases Elo et historiques bruts.", calculation: "Combine stats joueur, adversaire et surface. Il affiche les signaux disponibles sans forcer une conclusion si l'echantillon est trop court." },
@@ -708,9 +722,9 @@ function tennisTable(rows) {
       <td>${tennisContext(row)}</td>
       <td class="n">${numTennis(row.cote)}</td>
       <td>${tennisMarkets(row.markets)}</td>
-      <td class="n">${pctTennis(row.p20)}</td>
-      <td class="n">${pctTennis(row.p21)}</td>
-      <td class="n">${pctTennis(row.p3)}</td>
+      <td class="n">${tennisAnchorCell(row, "p20")}</td>
+      <td class="n">${tennisAnchorCell(row, "p21")}</td>
+      <td class="n">${tennisAnchorCell(row, "p3")}</td>
     </tr><tr id="props-${key}" class="tprop-row ${expanded ? "" : "hidden"}"><td colspan="17">${tennisPropsPanel(row)}</td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
@@ -802,6 +816,7 @@ function tennisExportRow(row) {
       favorite_2_0: row.p20,
       favorite_2_1: row.p21,
       three_sets: row.p3,
+      derived_anchors: row.derived_anchors,
       odds: row.cote,
       odds_status: row.odds_status,
     },
