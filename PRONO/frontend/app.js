@@ -443,6 +443,7 @@ const TENNIS_LEXICON_SECTIONS = [
     { name: "Lecture", provides: "Statut qualitatif: favorable, vigilance, neutre ou donnees insuffisantes.", source: "Marche, Elo, forme, fatigue, recuperation et qualite de donnees.", calculation: "Le moteur compare le favori marche aux contrepoints sportifs. Une lecture favorable peut coexister avec une vigilance forte si le marche reste clair mais que plusieurs facteurs de risque augmentent l'incertitude." },
     { name: "Fourchette", provides: "Zone de probabilite raisonnable autour de la lecture, plutot qu'un chiffre unique trop precis.", source: "Probabilite marche, qualite de donnees, coherence Elo/forme et risques contexte.", calculation: "Plus les donnees sont solides et concordantes, plus la fourchette est resserree. Fatigue, H2H sensible, manque d'historique ou conflit Elo/marche l'elargissent." },
     { name: "Concordance", provides: "Accord qualitatif entre marche, Elo, forme recente et qualite des donnees.", source: "Moteur coach PRONO.", calculation: "Le signal ne modifie pas la proba marche. Il classe l'accord: concordance forte, Elo renforce, forme contraire, conflit fort, marche seul ou donnees faibles." },
+    { name: "Calibration historique du statut", provides: "Compare les statuts decision x concordance passes au resultat reel du favori.", source: "Snapshots prematch PRONO stockes dans decision_history.sqlite3, rapproches aux resultats finaux.", calculation: "Pour les statuts identiques, calcule n, taux de victoire favori, proba marche moyenne, delta, IC Wilson 95%, Brier marche/Elo et ROI. Non concluant si n < 50 ou si l'intervalle du delta contient zero." },
   ] },
   { title: "Forme et fatigue", intro: "La forme est volontairement descriptive. Elle aide a comprendre le moment sportif du joueur, mais elle n'est pas une promesse de victoire.", items: [
     { name: "Forme", provides: "Etat du cycle joueur: pic probable, montee, plateau, alerte forme ou sous-rythme.", source: "Historique match par match local, controle de fraicheur SportScore quand la donnee locale est ancienne, contexte du tournoi en cours.", calculation: "Score borne entre -35 et +30 points: activite sur 90 jours, date du dernier match, serie, momentum 90j et taux de victoires. Le label vient du score long: pic probable >= +16, montee >= +7, alerte <= -7, sous-rythme <= -18." },
@@ -554,12 +555,18 @@ function sortedTennisRows(rows) {
     return String(a.match || "").localeCompare(String(b.match || ""));
   });
 }
+function tennisDecisionCalibration(row) {
+  const cal = row.decision_calibration;
+  if (!cal) return "";
+  const cls = cal.conclusion === "favori_surcote_historique" ? "warn" : cal.conclusion === "favori_souscote_historique" ? "ok" : "neutral";
+  return `<small class="tcal ${esc(cls)}" title="${esc(cal.detail || "Calibration historique non disponible")}">${esc(cal.detail || cal.label || "Calibration historique non concluant")}</small>`;
+}
 function tennisDecision(row) {
   const range = row.fourchette_min == null || row.fourchette_max == null ? "-" : `${row.fourchette_min}-${row.fourchette_max}%`;
   return `<div class="tdecision ${esc(row.decision_level || "neutral")}">
     <span>${esc(row.decision || "Neutre")}</span>
     <b>${esc(row.favori || "-")}</b>
-    <small>Fourchette ${esc(range)} | fiabilite ${esc(row.qualite || "faible")}</small>
+    <small>Fourchette ${esc(range)} | fiabilite ${esc(row.qualite || "faible")}</small>${tennisDecisionCalibration(row)}
   </div>`;
 }
 function tennisContext(row) {

@@ -1,4 +1,4 @@
-﻿"""Routes Tennis protegees par l'auth JWT PRONO."""
+"""Routes Tennis protegees par l'auth JWT PRONO."""
 import time
 
 from fastapi import APIRouter, Depends
@@ -34,6 +34,10 @@ def tennis_matches(refresh: int = 0, user=Depends(get_current_user)):
     return _payload(force=bool(refresh))
 
 
+
+@router.get("/decision-calibration")
+def tennis_decision_calibration(min_sample: int = 50, user=Depends(get_current_user)):
+    return tennis.build_decision_calibration(min_sample=max(1, int(min_sample)))
 @router.get("/brackets")
 def tennis_brackets(refresh: int = 0, user=Depends(get_current_user)):
     return _brackets_payload(force=bool(refresh))

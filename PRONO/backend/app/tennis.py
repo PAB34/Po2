@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from app.tennis_brackets import build_brackets_from_matches
 from app.tennis_coach import TennisCoach
+from app.tennis_decision_calibration import run_from_sqlite, status_summary_for_row
 
 
 FEED = "https://raw.githubusercontent.com/Mriganka-codes/tennis_data/main/matches.json"
@@ -270,6 +271,8 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     favorite_probability = market_p1 if fav1 else 1 - market_p1
     favorite = match["player1"] if fav1 else match["player2"]
     favorite_odds = odds1 if fav1 else odds2
+    outsider = match["player2"] if fav1 else match["player1"]
+    outsider_odds = odds2 if fav1 else odds1
     elo_p1 = intel.get("elo_p1")
     surface_elo_p1 = intel.get("surface_elo_p1")
     global_elo_p1 = intel.get("global_elo_p1")
@@ -287,6 +290,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
     decision_reasons = decision.get("reasons") or []
     return {
         "favori": _seedless(favorite),
+        "outsider": _seedless(outsider),
         # Compatibility: proba now explicitly equals the market reference.
         "proba": _round_pct(favorite_probability),
         "proba_marche": _round_pct(favorite_probability),
@@ -311,6 +315,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "fourchette_min": _round_pct(range_favorite[0]),
         "fourchette_max": _round_pct(range_favorite[1]),
         "cote": round(favorite_odds, 2) if favorite_odds else None,
+        "cote_outsider": round(outsider_odds, 2) if outsider_odds else None,
         "p20": round(favorite_probability * (1 - p21_share) * 100),
         "p21": round(favorite_probability * p21_share * 100),
         "p3": round(rates["three_sets"] * 100),
@@ -680,6 +685,19 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
                     UNIQUE(calculated_at, tour, kickoff, pair_key)
                 )
             """)
+            existing = {row[1] for row in db.execute("PRAGMA table_info(tennis_decisions)")}
+            def _ensure_column(name: str, ddl: str) -> None:
+                if name not in existing:
+                    db.execute(f"ALTER TABLE tennis_decisions ADD COLUMN {name} {ddl}")
+                    existing.add(name)
+            _ensure_column("surface", "TEXT")
+            _ensure_column("concordance", "TEXT")
+            _ensure_column("concordance_level", "TEXT")
+            _ensure_column("cycle_favorite", "TEXT")
+            _ensure_column("fatigue_favorite", "TEXT")
+            _ensure_column("cycle_opponent", "TEXT")
+            _ensure_column("fatigue_opponent", "TEXT")
+            _ensure_column("outsider_odds", "REAL")
             stamp = calculated_at.isoformat(timespec="minutes")
             for row in rows:
                 db.execute("""
@@ -687,8 +705,9 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
                         calculated_at, kickoff, tour, tournament, pair_key, player1, player2,
                         favorite, favorite_odds, market_probability, elo_probability, elo_gap,
                         decision, decision_level, context_label, quality, range_min, range_max,
-                        payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        surface, concordance, concordance_level, cycle_favorite, fatigue_favorite,
+                        cycle_opponent, fatigue_opponent, outsider_odds, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     stamp, row.get("kickoff"), row.get("tour"), row.get("tournoi"),
                     _storage_pair(row.get("joueur1", ""), row.get("joueur2", "")),
@@ -696,6 +715,9 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
                     row.get("proba_marche"), row.get("proba_elo"), row.get("ecart_elo"),
                     row.get("decision"), row.get("decision_level"), row.get("impact_contexte"),
                     row.get("qualite"), row.get("fourchette_min"), row.get("fourchette_max"),
+                    row.get("surface"), row.get("concordance"), row.get("concordance_level"),
+                    row.get("cycle_favori"), row.get("fatigue_favori"), row.get("cycle_adversaire"),
+                    row.get("fatigue_adversaire"), row.get("cote_outsider"),
                     json.dumps(row, ensure_ascii=True, separators=(",", ":")),
                 ))
             for result in completed:
@@ -709,6 +731,33 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
         return True
     except (OSError, sqlite3.Error, TypeError, ValueError):
         return False
+
+
+def _decision_history_path() -> Path | None:
+    root = os.environ.get("PRONO_DATA_DIR")
+    if not root:
+        return None
+    return Path(root) / "tennis" / "decision_history.sqlite3"
+
+
+def build_decision_calibration(min_sample: int = 50) -> dict:
+    path = _decision_history_path()
+    if not path or not path.exists():
+        return {"record_count": 0, "bucket_count": 0, "buckets": [], "primary": [], "decisive": [], "min_sample": min_sample, "status": "no_history"}
+    try:
+        report = run_from_sqlite(path, min_sample=min_sample)
+        report["status"] = "ok" if report.get("record_count") else "empty"
+        return report
+    except Exception as exc:
+        return {"record_count": 0, "bucket_count": 0, "buckets": [], "primary": [], "decisive": [], "min_sample": min_sample, "status": "error", "error": str(exc)}
+
+
+def _annotate_decision_calibration(rows: list[dict], report: dict | None) -> None:
+    for row in rows:
+        summary = status_summary_for_row(row, report, min_sample=int((report or {}).get("min_sample") or 50))
+        if summary:
+            row["decision_calibration"] = summary
+
 
 def build_tennis() -> dict:
     data = fetch_feed()
@@ -726,6 +775,8 @@ def build_tennis() -> dict:
     pending_odds = _pending_final_rows(matches, feed_updated, now)
     external_sources = sorted({source for row in atp + wta for source in row.get("external_sources", [])})
     history_recorded = _record_decision_history(atp + wta, completed_results, now)
+    decision_calibration_report = build_decision_calibration()
+    _annotate_decision_calibration(atp + wta, decision_calibration_report)
     return {
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
@@ -741,6 +792,7 @@ def build_tennis() -> dict:
         "time_policy": "Matchs cotes et statuts live: ESPN ATP/WTA. Les finales confirmees sans cote sont signalees separement, sans probabilite de marche.",
         "external_sources": external_sources,
         "decision_history_recorded": history_recorded,
+        "decision_calibration": {"status": decision_calibration_report.get("status"), "record_count": decision_calibration_report.get("record_count"), "min_sample": decision_calibration_report.get("min_sample"), "decisive_count": len(decision_calibration_report.get("decisive", []))},
         "atp": atp,
         "wta": wta,
     }

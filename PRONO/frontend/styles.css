@@ -306,7 +306,7 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .tdecision{display:grid;gap:3px;min-width:190px;max-width:230px}
 .tdecision>span{width:max-content;max-width:100%;padding:4px 7px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;font-size:10px;font-weight:950;text-transform:uppercase}
 .tdecision>b{color:#0f172a;font-size:13px;line-height:1.2}
-.tdecision>small{color:#64748b;font-size:10px;font-weight:850;line-height:1.25}
+.tdecision>small{color:#64748b;font-size:10px;font-weight:850;line-height:1.25}.tcal{display:block;margin-top:2px;border-left:3px solid #cbd5e1;background:#f8fafc;padding:4px 6px}.tcal.warn{border-left-color:#f59e0b;background:#fffbeb;color:#92400e}.tcal.ok{border-left-color:#22c55e;background:#f0fdf4;color:#166534}.tcal.neutral{color:#64748b}
 .tdecision.strong>span{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
 .tdecision.watch>span{border-color:#fcd34d;background:#fffbeb;color:#92400e}
 .tdecision.favorable>span{border-color:#86efac;background:#f0fdf4;color:#166534}
