@@ -42,7 +42,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["feed_updated"], "2026-07-17T12:00:00Z")
@@ -95,7 +95,7 @@ class TennisServiceTests(unittest.TestCase):
         }
 
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["filtered_past"], 1)
@@ -120,7 +120,7 @@ class TennisServiceTests(unittest.TestCase):
         }
         secondary = {"status": "confirmed_recent", "days": 1, "source": "SportScore"}
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value=secondary):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value=secondary):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -142,7 +142,7 @@ class TennisServiceTests(unittest.TestCase):
             ],
         }
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=([], [])), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -182,7 +182,7 @@ class TennisServiceTests(unittest.TestCase):
         ]
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["scoreboard_source"], "ESPN")
@@ -221,7 +221,7 @@ class TennisServiceTests(unittest.TestCase):
         ]
         now = datetime(2026, 7, 18, 10, 0, tzinfo=tennis.PARIS_TZ)
 
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
             payload = tennis.build_tennis()
 
         row = payload["atp"][0]
@@ -230,7 +230,48 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["cote"], 2.82 if row["favori"] == "Alejandro Tabilo" else 1.42)
         self.assertNotEqual(row["proba_marche"], 50.0)
 
+    def test_parse_tennisexplorer_day_extracts_singles_with_odds(self):
+        html = """
+        <table class="result">
+        <tr class="head flags"><td class="t-name" colspan="2"><a href="/estoril/2026/atp-men/">Estoril</a></td></tr>
+        <tr class="bott one"><td class="t-name"><a href="/player/torres-1/">Torres T.</a></td><td class="h2h">1</td><td class="course" rowspan="2">3.45</td><td class="course" rowspan="2">1.30</td></tr>
+        <tr class="one"><td class="t-name"><a href="/player/basila-2/">Basilashvili N.</a></td><td class="h2h">1</td></tr>
+        <tr class="head flags"><td class="t-name" colspan="2"><a href="/iasi-wta/2026/wta-women/">Iasi</a></td></tr>
+        <tr class="bott one"><td class="t-name"><a href="/player/sherif-3/">Sherif M.</a></td><td class="course" rowspan="2">2.53</td><td class="course" rowspan="2">1.51</td></tr>
+        <tr class="one"><td class="t-name"><a href="/player/badosa-4/">Badosa P.</a></td></tr>
+        <tr class="head flags"><td class="t-name" colspan="2"><a href="/prague/2026/wta-women/?type=double">Doubles</a></td></tr>
+        <tr class="bott one"><td class="t-name"><a href="/doubles-team/team-9/">Team A/B</a></td><td class="course" rowspan="2">1.90</td><td class="course" rowspan="2">1.90</td></tr>
+        <tr class="one"><td class="t-name"><a href="/doubles-team/team-10/">Team C/D</a></td></tr>
+        <tr class="head flags"><td class="t-name" colspan="2"><a href="/palermo/2026/wta-women/">Palermo</a></td></tr>
+        <tr class="bott one"><td class="t-name"><a href="/player/noodds-5/">NoOdds A.</a></td><td class="score">&nbsp;</td></tr>
+        <tr class="one"><td class="t-name"><a href="/player/noodds-6/">NoOdds B.</a></td></tr>
+        </table>
+        """
+        parsed = tennis._parse_te_day(html)
+        self.assertEqual(len(parsed), 2)  # doubles et match sans cote ignores
+        self.assertEqual(parsed[0], {"tour": "ATP", "player1": "Torres T.", "player2": "Basilashvili N.", "odds1": 3.45, "odds2": 1.30, "source": "tennisexplorer"})
+        self.assertEqual(parsed[1], {"tour": "WTA", "player1": "Sherif M.", "player2": "Badosa P.", "odds1": 2.53, "odds2": 1.51, "source": "tennisexplorer"})
 
+    def test_tennisexplorer_odds_price_upcoming_scoreboard_match(self):
+        feed = {"last_updated": "2026-07-19T19:00:00Z", "matches": []}
+        scoreboard = [{
+            "tour": "ATP", "tournament": "Generali Open",
+            "player1": "Mariano Navone", "player2": "Alexandre Muller",
+            "kickoff": "2026-07-20T11:00:00+02:00", "source": "ESPN",
+        }]
+        te_odds = [{"tour": "ATP", "player1": "Muller A.", "player2": "Navone M.", "odds1": 4.58, "odds2": 1.19, "source": "tennisexplorer"}]
+        now = datetime(2026, 7, 19, 22, 0, tzinfo=tennis.PARIS_TZ)
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=te_odds), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now), patch.object(tennis.TennisCoach, "_sportscore_freshness", return_value={"status": "unavailable"}):
+            payload = tennis.build_tennis()
+
+        self.assertEqual(payload["te_odds_count"], 1)
+        self.assertEqual(payload["filtered_unpriced"], 0)
+        self.assertEqual(len(payload["atp"]), 1)
+        row = payload["atp"][0]
+        self.assertEqual(row["odds_status"], "ok")
+        self.assertEqual(row["match"], "Mariano Navone vs Alexandre Muller")
+        self.assertEqual(row["favori"], "Mariano Navone")
+        self.assertEqual(row["cote"], 1.19)
 
     def test_form_signals_do_not_shift_market_probability(self):
         coach = tennis._coach()
@@ -410,7 +451,7 @@ class TennisServiceTests(unittest.TestCase):
             "kickoff": "2026-07-19T11:30:00+02:00", "source": "ESPN", "round": "Final",
         }]
         now = datetime(2026, 7, 18, 20, 30, tzinfo=tennis.PARIS_TZ)
-        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now):
+        with patch.object(tennis, "fetch_feed", return_value=feed), patch.object(tennis, "fetch_tennisexplorer_odds", return_value=[]), patch.object(tennis, "fetch_scoreboard_snapshot", return_value=(scoreboard, [])), patch.object(tennis, "_now_paris", return_value=now):
             payload = tennis.build_tennis()
 
         self.assertEqual(payload["atp"], [])

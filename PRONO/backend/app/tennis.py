@@ -24,6 +24,16 @@ from app.tennis_decision_calibration import run_from_sqlite, status_summary_for_
 
 FEED = "https://raw.githubusercontent.com/Mriganka-codes/tennis_data/main/matches.json"
 ESPN_SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/tennis/{league}/scoreboard?region=us&lang=en&dates={dates}&limit=1000"
+# TennisExplorer daily schedule = source de cotes couvrant aussi les tournois 250/Challenger
+# a J+1/J+2 (le flux GitHub ne publie que le jour meme). On l'utilise pour coter les
+# affiches ESPN a venir, faute de quoi elles seraient masquees (filtered_unpriced).
+TE_MATCHES_URL = "https://www.tennisexplorer.com/matches/?type=all&year={year}&month={month:02d}&day={day:02d}"
+TE_TOUR = {"atp-men": "ATP", "wta-women": "WTA"}
+_TE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S)
+_TE_HEAD_RE = re.compile(r'class="head flags"')
+_TE_HEADCAT_RE = re.compile(r'<td class="t-name"[^>]*>\s*<a href="/[^"]*?/\d{4}/([a-z-]+)/', re.S)
+_TE_PLAYER_RE = re.compile(r'<td class="t-name"[^>]*>\s*<a href="/player/[^"]*">([^<]+)</a>', re.S)
+_TE_COURSE_RE = re.compile(r'<td class="course"[^>]*>\s*([0-9]+\.[0-9]+)\s*</td>', re.S)
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures|davis cup|billie jean king", re.I)
 CLAY = (
     "gstaad", "bastad", "nordea", "swedish open", "efg swiss", "kitzbuhel", "kitzbuehel", "generali open", "hamburg", "umag", "plava laguna", "cordenons",
@@ -643,6 +653,83 @@ def fetch_feed() -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _parse_te_day(html: str) -> list[dict]:
+    """Extrait les affiches ATP/WTA simples avec cotes d'une page journaliere TennisExplorer.
+
+    Chaque match occupe deux lignes: la premiere porte le joueur 1 et les deux cotes
+    (`td.course`, rowspan=2), la seconde porte le joueur 2. Les doubles (`/doubles-team/`)
+    et les matchs sans cote sont ignores. Le tour vient de l'en-tete de tournoi.
+    """
+    matches: list[dict] = []
+    current_tour: str | None = None
+    pending: tuple | None = None
+    for row_match in _TE_ROW_RE.finditer(html):
+        inner = row_match.group(1)
+        if _TE_HEAD_RE.search(row_match.group(0)):
+            category = _TE_HEADCAT_RE.search(inner)
+            current_tour = TE_TOUR.get(category.group(1)) if category else None
+            pending = None
+            continue
+        player_match = _TE_PLAYER_RE.search(inner)
+        if not player_match:
+            continue
+        name = player_match.group(1).strip()
+        if pending is None:
+            odds = _TE_COURSE_RE.findall(inner)
+            if current_tour and len(odds) >= 2:
+                pending = (current_tour, name, odds[0], odds[1])
+            else:
+                pending = ("__skip__", None, None, None)
+            continue
+        tour, player1, odds1, odds2 = pending
+        pending = None
+        if tour == "__skip__":
+            continue
+        try:
+            matches.append({
+                "tour": tour,
+                "player1": player1,
+                "player2": name,
+                "odds1": float(odds1),
+                "odds2": float(odds2),
+                "source": "tennisexplorer",
+            })
+        except (TypeError, ValueError):
+            continue
+    return matches
+
+
+def _fetch_te_day(day) -> str:
+    url = TE_MATCHES_URL.format(year=day.year, month=day.month, day=day.day)
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (prono-tennis)"})
+    with urllib.request.urlopen(request, timeout=25) as response:
+        return response.read().decode("utf-8", "ignore")
+
+
+def fetch_tennisexplorer_odds(now: datetime | None = None) -> list[dict]:
+    """Cotes TennisExplorer sur la fenetre [aujourd'hui .. +FUTURE_MATCH_HORIZON].
+
+    Complete le flux GitHub (limite au jour meme) pour coter les affiches futures.
+    Robuste: une journee en echec est ignoree, le reste est conserve.
+    """
+    now = now or _now_paris()
+    out: list[dict] = []
+    seen: set[tuple] = set()
+    for offset in range(0, FUTURE_MATCH_HORIZON.days + 1):
+        day = (now + timedelta(days=offset)).date()
+        try:
+            html = _fetch_te_day(day)
+        except Exception:
+            continue
+        for raw in _parse_te_day(html):
+            key = (raw["tour"], _player_pair_key(raw["player1"], raw["player2"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(raw)
+    return out
+
+
 def _storage_pair(player1: str, player2: str) -> str:
     return "|".join(sorted(_player_pair_key(player1, player2)))
 
@@ -768,8 +855,13 @@ def build_tennis() -> dict:
         scoreboard_matches, completed_results = fetch_scoreboard_snapshot(now)
     except Exception:
         scoreboard_matches, completed_results = [], []
+    try:
+        te_odds = fetch_tennisexplorer_odds(now)
+    except Exception:
+        te_odds = []
     _coach().set_live_results(completed_results)
-    matches = _attach_odds(scoreboard_matches, odds_matches) if scoreboard_matches else odds_matches
+    scoreboard_odds = list(odds_matches) + te_odds
+    matches = _attach_odds(scoreboard_matches, scoreboard_odds) if scoreboard_matches else odds_matches
     atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
     pending_odds = _pending_final_rows(matches, feed_updated, now)
@@ -784,6 +876,7 @@ def build_tennis() -> dict:
         "scoreboard_source": "ESPN" if scoreboard_matches else "market-feed-fallback",
         "scoreboard_count": len(scoreboard_matches),
         "scoreboard_completed_count": len(completed_results),
+        "te_odds_count": len(te_odds),
         "calibration": {"training": "2021-2024", "validation": "2025 hors echantillon", "method": "frequences hierarchiques ATP/WTA par surface et force du favori"},
         "props_validation": _coach().props.validation_report(2025),
         "filtered_past": atp_filtered + wta_filtered,
