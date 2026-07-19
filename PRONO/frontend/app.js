@@ -6,6 +6,20 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => (
 const TOKEN_KEY = "prono_token";
 const token = () => localStorage.getItem(TOKEN_KEY) || "";
 
+function downloadTextFile(filename, content, mime = "text/plain") {
+  const blob = new Blob([content], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function safeFilenamePart(value, fallback = "export") {
+  return String(value || fallback).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || fallback;
+}
 /* Identité visuelle : badge coloré + initiales (pas de vrai logo reproduit,
    juste une couleur d'identification — zéro question de droits/marques). */
 const TEAM_BADGE = {
@@ -422,6 +436,92 @@ const TENNIS_HEADER_HELP = {
   ecart_elo: "Difference entre l'Elo de reference et le consensus du marche pour le favori.",
   concordance: "Accord qualitatif entre marche, Elo, forme recente et qualite des donnees. Ce signal ne modifie aucune probabilite.",
 };
+const TENNIS_LEXICON_SECTIONS = [
+  { title: "Decision et marche", intro: "Ces indicateurs servent a lire le match sans chercher a battre le marche. Le marche devigotte reste le socle; le reste qualifie la prudence, la coherence et les angles a verifier.", items: [
+    { name: "Marche", provides: "Probabilite implicite du favori apres retrait de la marge bookmaker.", source: "Flux de cotes prematch disponibles dans le backend PRONO.", calculation: "Les cotes joueur 1 / joueur 2 sont converties en probabilites implicites, puis normalisees pour retirer l'overround. Si une cote manque, le match ne rentre pas dans le tableau principal cote." },
+    { name: "Favori", provides: "Joueur retenu comme reference de lecture pour la ligne du match.", source: "Consensus du marche et moteur de lecture PRONO.", calculation: "Le favori correspond au cote le plus faible / probabilite marche la plus haute. Les colonnes de probabilite, fourchette et ecart Elo se lisent ensuite par rapport a ce favori." },
+    { name: "Lecture", provides: "Statut qualitatif: favorable, vigilance, neutre ou donnees insuffisantes.", source: "Marche, Elo, forme, fatigue, recuperation et qualite de donnees.", calculation: "Le moteur compare le favori marche aux contrepoints sportifs. Une lecture favorable peut coexister avec une vigilance forte si le marche reste clair mais que plusieurs facteurs de risque augmentent l'incertitude." },
+    { name: "Fourchette", provides: "Zone de probabilite raisonnable autour de la lecture, plutot qu'un chiffre unique trop precis.", source: "Probabilite marche, qualite de donnees, coherence Elo/forme et risques contexte.", calculation: "Plus les donnees sont solides et concordantes, plus la fourchette est resserree. Fatigue, H2H sensible, manque d'historique ou conflit Elo/marche l'elargissent." },
+    { name: "Concordance", provides: "Accord qualitatif entre marche, Elo, forme recente et qualite des donnees.", source: "Moteur coach PRONO.", calculation: "Le signal ne modifie pas la proba marche. Il classe l'accord: concordance forte, Elo renforce, forme contraire, conflit fort, marche seul ou donnees faibles." },
+  ] },
+  { title: "Forme et fatigue", intro: "La forme est volontairement descriptive. Elle aide a comprendre le moment sportif du joueur, mais elle n'est pas une promesse de victoire.", items: [
+    { name: "Forme", provides: "Etat du cycle joueur: pic probable, montee, plateau, alerte forme ou sous-rythme.", source: "Historique match par match local, controle de fraicheur SportScore quand la donnee locale est ancienne, contexte du tournoi en cours.", calculation: "Score borne entre -35 et +30 points: activite sur 90 jours, date du dernier match, serie, momentum 90j et taux de victoires. Le label vient du score long: pic probable >= +16, montee >= +7, alerte <= -7, sous-rythme <= -18." },
+    { name: "Momentum", provides: "Direction recente du niveau de resultats.", source: "Historique local des resultats recents du joueur.", calculation: "Signal positif quand le momentum 90j est >= +8, fort a partir de +25. Signal negatif quand il passe sous -20, ou neutre/negatif sur faible volume." },
+    { name: "Serie", provides: "Enchainement de victoires ou defaites recentes.", source: "Historique local match par match.", calculation: "+2 ou plus ajoute un signal positif; +3 ou plus est fort. -2 ou moins ajoute un risque; -1 est penalise surtout quand le volume 90j est faible." },
+    { name: "Charge tournoi", provides: "Fatigue liee au parcours deja joue dans le tournoi courant.", source: "Tableau et matchs deja termines du tournoi courant.", calculation: "Tours gagnes, sets laches, jeux joues, duree estimee, tie-breaks, matchs decisifs, matchs sur 14 jours et jours de repos. Charge lourde si environ 65 jeux ou 150 minutes, ou plusieurs matchs decisifs." },
+    { name: "Recuperation", provides: "Risque d'enchainement ou de rupture de rythme.", source: "Date du dernier match officiel et contexte du tournoi.", calculation: "Penalite si le joueur enchaine sans repos; penalite aussi si l'inactivite est longue. Une base locale ancienne est verifiee avec SportScore quand disponible." },
+  ] },
+  { title: "Elo et niveau", intro: "L'Elo est un contrepoint de niveau. Il sert surtout a savoir si le marche est aligne avec l'historique sportif.", items: [
+    { name: "Elo surface", provides: "Probabilite calculee avec l'historique sur la surface du jour.", source: "Fichiers Elo locaux ATP/WTA rapproches par nom joueur.", calculation: "Les points Elo surface des deux joueurs sont transformes en probabilite via une courbe logistique. Indisponible si un joueur n'est pas rapproche ou si l'historique est insuffisant." },
+    { name: "Elo global", provides: "Probabilite de niveau general toutes surfaces.", source: "Fichiers Elo locaux ATP/WTA rapproches par nom joueur.", calculation: "Meme transformation que l'Elo surface, mais sur le niveau global. Utile quand la surface manque ou quand le profil surface est trop court." },
+    { name: "Lecture Elo", provides: "Ecart entre le marche et l'Elo de reference pour le favori.", source: "Probabilite marche devigotte + Elo surface si disponible, sinon Elo global.", calculation: "Ecart = proba Elo - proba marche du favori. Negatif: Elo plus prudent que le marche. Positif: Elo plus optimiste. Proche de zero: marche et Elo alignes." },
+  ] },
+  { title: "Stats joueurs et marches secondaires", intro: "Ces chiffres ouvrent des angles de lecture: aces, doubles fautes, breaks, tenue de service, tie-break. Ils ne remplacent pas les lignes reelles du bookmaker.", items: [
+    { name: "Aces joueur", provides: "Projection d'aces attendus et probabilites de depasser certains seuils.", source: "Historique brut match par match: TennisMyLife ATP, archive locale, Jeff Sackmann WTA selon disponibilite.", calculation: "Modele joueur + adversaire + surface. Il utilise les aces, jeux de service et echantillons surface/total. Les bornes [min-max] representent un intervalle probable a 80%." },
+    { name: "Doubles fautes", provides: "Projection de doubles fautes et seuils de depassement.", source: "Memes donnees brutes que les aces quand elles sont fiables.", calculation: "Les lignes aberrantes sont rejetees: valeurs negatives, stats de break impossibles, volumes incoherents. Le moteur ajuste par surface et adversaire." },
+    { name: "Tenue de service", provides: "Probabilite estimee de conserver son service.", source: "Jeux de service, breaks concades, niveau retour adverse et surface.", calculation: "Taux joueur historique pondere par la surface et le profil de retour adverse. Plus l'echantillon est faible, plus la confiance descend." },
+    { name: "Breaks attendus", provides: "Nombre moyen de breaks que le joueur peut realiser et probabilite d'au moins un break.", source: "Jeux de retour, balles de break et tenue de service adverse.", calculation: "Croisement entre capacite de retour du joueur et vulnerabilite au service de l'adversaire, avec correction surface." },
+    { name: "Tie-break", provides: "Probabilite qu'au moins un set aille au tie-break.", source: "Profils de service/retour des deux joueurs et calibration 2021-2025.", calculation: "Plus les deux joueurs tiennent souvent leur service, plus le risque de tie-break monte. Le signal est valide hors echantillon quand la calibration 2025 bat la reference simple." },
+    { name: "Validation 2025", provides: "Controle de robustesse hors echantillon des sous-modeles.", source: "Backtest local sur saison 2025, hors donnees de calibration 2021-2024.", calculation: "Comparaison Brier du modele contre une reference simple. 'Valide' signifie que le modele est meilleur sur l'echantillon teste; sinon le signal reste affiche mais a lire avec prudence." },
+  ] },
+  { title: "Sources et limites", intro: "Le tableau est une aide a la decision. Il doit rendre les angles lisibles, pas donner une certitude artificielle.", items: [
+    { name: "H2H", provides: "Historique des confrontations directes entre les deux joueurs.", source: "Historique local ATP/WTA, enrichi par le contexte tournoi quand disponible.", calculation: "Compte les victoires directes et signale les confrontations pertinentes, notamment meme surface ou meme adversaire la saison precedente." },
+    { name: "Confrontations a venir", provides: "Liste des matchs futurs ou live conserves dans le tableau.", source: "Flux cotes + sources de calendrier/tableaux ESPN ou SportScore selon disponibilite.", calculation: "Les matchs passes sont masques. Les matchs live peuvent rester visibles si le flux les marque encore live; les finales sans cote vont dans la section cotes en attente." },
+    { name: "Qualite", provides: "Fiabilite globale de la lecture.", source: "Couverture des cotes, Elo, historique recent, stats joueurs et contexte tournoi.", calculation: "Qualite elevee si marche, Elo, forme et stats joueurs sont disponibles et coherents. Qualite faible si trop de briques manquent ou si les donnees sont anciennes." },
+    { name: "Limite majeure", provides: "Ce que l'outil ne garantit pas.", source: "Nature des donnees sportives et des marches de paris.", calculation: "Aucun indicateur ne garantit un gain. Une bonne lecture peut perdre; l'objectif est de mieux comprendre le risque et d'eviter les tickets pris a l'aveugle." },
+  ] },
+];
+TENNIS_LEXICON_SECTIONS.unshift({ title: "Colonnes du tableau principal", intro: "Ces entrees correspondent aux colonnes visibles dans Lecture matchs. L'ordre suit le tableau pour faciliter la lecture.", items: [
+  { name: "Circuit", provides: "Indique ATP ou WTA.", source: "Flux de matchs et classement du tournoi.", calculation: "Le circuit est associe a chaque confrontation au moment de la fusion calendrier/cotes." },
+  { name: "Heure", provides: "Horaire lisible du match et statut live si detecte.", source: "Flux calendrier/tableaux et flux cotes.", calculation: "Le backend masque les matchs termines, conserve les futurs et peut garder le live quand la source le signale encore en cours." },
+  { name: "Tournoi", provides: "Nom de l'epreuve concernee.", source: "Calendrier/tableau tournoi et flux cotes.", calculation: "Les noms sont normalises pour rapprocher les confrontations entre sources." },
+  { name: "Match", provides: "Affiche la confrontation, les signaux rapides, H2H, source et preuve textuelle.", source: "Fusion joueur/cotes/calendrier/historique coach.", calculation: "Le moteur agrege les deux joueurs, le H2H, les alertes, la source de confrontation et les preuves de forme/fatigue." },
+  { name: "Forme", provides: "Resume le cycle de chaque joueur.", source: "Moteur coach PRONO.", calculation: "Affiche le label du score de forme long pour joueur 1 et joueur 2: pic probable, montee, plateau, alerte forme ou sous-rythme." },
+  { name: "Lecture", provides: "Decision qualitative et favori retenu, avec fourchette et fiabilite.", source: "Marche, Elo, forme, fatigue, qualite de donnees.", calculation: "Synthese prudente: le statut peut etre favorable tout en gardant une vigilance si les risques contextuels sont lourds." },
+  { name: "Concordance", provides: "Decrit si marche, Elo et forme racontent la meme histoire.", source: "Moteur coach PRONO.", calculation: "Compare le favori du marche aux probabilites Elo et au delta de forme des deux joueurs. Ne modifie pas les probabilites." },
+  { name: "Marche", provides: "Probabilite marche devigotte du favori.", source: "Cotes bookmaker disponibles.", calculation: "Probabilites implicites des deux cotes, renormalisees pour retirer la marge." },
+  { name: "Elo surface", provides: "Probabilite Elo sur la surface du jour.", source: "Base Elo locale par surface.", calculation: "Difference Elo surface convertie en probabilite. Indispo si rapprochement ou echantillon insuffisant." },
+  { name: "Elo global", provides: "Probabilite Elo toutes surfaces.", source: "Base Elo locale globale.", calculation: "Difference Elo globale convertie en probabilite. Sert aussi de secours quand la surface manque." },
+  { name: "Lecture Elo", provides: "Sens et amplitude de l'ecart Elo vs marche.", source: "Marche devigotte + Elo de reference.", calculation: "Proba Elo moins proba marche. Negatif = Elo plus prudent; positif = Elo plus optimiste; proche de zero = aligne." },
+  { name: "Contexte", provides: "Impact relatif des facteurs non-marche: fatigue, parcours, recuperation, adversaire.", source: "Moteur coach et contexte tournoi courant.", calculation: "Classe en avantage relatif, desavantage relatif ou neutre selon les facteurs accumules autour du favori et de l'adversaire." },
+  { name: "Cote", provides: "Cote decimale du favori retenu.", source: "Flux de cotes.", calculation: "Cote brute affichee pour donner le prix du marche associe a la probabilite devigotte." },
+  { name: "Stats marches", provides: "Angles secondaires: total jeux, handicap, tie-break, aces ou autres signaux disponibles.", source: "Modeles secondaires calibres et stats joueurs.", calculation: "Chaque pastille affiche un pick, une probabilite et une confiance. Ce ne sont pas forcement les lignes exactes du bookmaker." },
+  { name: "Fav 2-0", provides: "Probabilite que le favori gagne en deux sets en best-of-3.", source: "Modele derive du marche principal et calibration tennis.", calculation: "Transforme la force du favori et le profil match en distribution 2-0 / 2-1 / 3 sets." },
+  { name: "Fav 2-1", provides: "Probabilite que le favori gagne en trois sets.", source: "Modele derive du marche principal et calibration tennis.", calculation: "Complement de lecture du score exact en sets pour les matchs best-of-3." },
+  { name: "3 sets", provides: "Probabilite que le match aille en trois sets.", source: "Modele derive marche + equilibre de niveau.", calculation: "Augmente quand les joueurs sont proches, quand le favori est moins dominant ou quand les profils service/retour rendent le match serre." },
+] });
+TENNIS_LEXICON_SECTIONS.push({ title: "Details Stats+", intro: "Ces indicateurs apparaissent dans le panneau detaille ouvert avec le bouton Stats+. Ils expliquent le niveau, la taille d'echantillon et les marches statistiques joueur.", items: [
+  { name: "Stats+", provides: "Panneau detaille joueur contre joueur.", source: "Moteur props PRONO, bases Elo et historiques bruts.", calculation: "Combine stats joueur, adversaire et surface. Il affiche les signaux disponibles sans forcer une conclusion si l'echantillon est trop court." },
+  { name: "Echantillon surface", provides: "Nombre de matchs bruts disponibles sur la surface du jour pour le joueur.", source: "Historique match par match enrichi.", calculation: "Plus il est eleve, plus les projections aces/service/breaks sont stables." },
+  { name: "Echantillon total", provides: "Nombre total de matchs bruts disponibles pour le joueur.", source: "Historique match par match enrichi.", calculation: "Sert de secours quand la surface du jour est courte et pour estimer la confiance globale." },
+  { name: "Confiance stats", provides: "Qualite de l'echantillon des statistiques joueur.", source: "Moteur props PRONO.", calculation: "Elevee, moyenne ou faible selon volume surface, volume total, fraicheur et coherence des lignes brutes." },
+  { name: "Source stats joueur", provides: "Origine des stats brutes utilisees.", source: "TennisMyLife live + archives, archives locales, Jeff Sackmann WTA selon cas.", calculation: "Le backend privilegie l'archive locale; pour certains ATP peu couverts, il complete via TennisMyLife live avec cache serveur." },
+  { name: "Elo joueur Stats+", provides: "Points Elo globaux et surface de chaque joueur.", source: "Base Elo locale.", calculation: "Affiche le niveau absolu, pas seulement la probabilite du favori. Utile pour voir l'ecart de classe entre joueurs." },
+  { name: "Statut Elo", provides: "Indique si le profil Elo est etabli ou exploratoire.", source: "Base Elo et nombre de matchs rapproches.", calculation: "Exploratoire quand l'historique est court ou incertain; etabli quand le volume rend le niveau plus fiable." },
+  { name: "Aces attendus", provides: "Nombre moyen d'aces projetes pour le joueur.", source: "Aces historiques, jeux de service, surface et retour adverse.", calculation: "Moyenne ajustee par surface et adversaire. A lire comme centre de gravite, pas comme prediction exacte." },
+  { name: "Intervalle 80%", provides: "Zone probable basse-haute autour de la projection.", source: "Distribution historique joueur ajustee.", calculation: "Environ 80% des scenarios modelises tombent dans cette plage; plus elle est large, plus le marche est volatil." },
+  { name: "Plus de X", provides: "Probabilite de depasser un seuil statistique donne.", source: "Distribution joueur issue du modele props.", calculation: "Exemple: O4.5 44% signifie que le modele donne 44% de chances de finir a 5 aces ou plus." },
+  { name: "Doubles fautes attendues", provides: "Nombre moyen de doubles fautes projetees.", source: "Doubles fautes historiques et pression retour adverse.", calculation: "Ajuste par surface, niveau de retour et profil joueur. Les lignes aberrantes sont rejetees avant calcul." },
+  { name: "Risque d'etre breake", provides: "Probabilite que le joueur perde au moins un jeu de service.", source: "Tenue de service du joueur + capacite de retour adverse.", calculation: "Plus la tenue de service est basse et l'adversaire fort en retour, plus le risque monte." },
+  { name: "Au moins un break", provides: "Probabilite que le joueur realise au moins un break.", source: "Profil retour joueur + vulnerabilite service adverse.", calculation: "Associe a Breaks attendus pour lire a la fois la moyenne et la chance minimale de break." },
+] });
+function tennisLexiconMarkdown() {
+  const lines = ["# Lexique Tennis PRONO", "", "Export genere le " + new Date().toISOString(), "", "Le marche devigotte reste la reference. Les indicateurs sportifs servent a qualifier la decision, la vigilance et les angles a verifier.", ""];
+  TENNIS_LEXICON_SECTIONS.forEach(section => {
+    lines.push("## " + section.title, "", section.intro, "");
+    section.items.forEach(item => {
+      lines.push("### " + item.name, "", "- Ce que ca fournit : " + item.provides, "- Source : " + item.source, "- Calcul : " + item.calculation, "");
+    });
+  });
+  return lines.join("\n");
+}
+function exportTennisLexiconMarkdown() {
+  downloadTextFile("lexique-tennis-prono.md", tennisLexiconMarkdown(), "text/markdown");
+}
+function renderTennisLexicon() {
+  const sections = TENNIS_LEXICON_SECTIONS.map(section => `<section class="lex-section"><div><h3>${esc(section.title)}</h3><p>${esc(section.intro)}</p></div><div class="lex-grid">${section.items.map(item => `<article class="lex-card"><h4>${esc(item.name)}</h4><dl><dt>Ce que ca fournit</dt><dd>${esc(item.provides)}</dd><dt>Source</dt><dd>${esc(item.source)}</dd><dt>Calcul</dt><dd>${esc(item.calculation)}</dd></dl></article>`).join("")}</div></section>`).join("");
+  return `<div class="tensection lex-page"><div class="lex-top"><div><h3>Lexique des indicateurs <span>${TENNIS_LEXICON_SECTIONS.reduce((n, s) => n + s.items.length, 0)} definitions</span></h3><p>Une page de reference pour comprendre ce que chaque signal apporte, d'ou vient l'information et comment elle est transformee.</p></div><button class="tenexport" onclick="exportTennisLexiconMarkdown()">Exporter MD</button></div>${sections}</div>`;
+}
 function tennisSortIcon(key) {
   if (_tennisSort.key !== key) return "";
   return _tennisSort.dir === "asc" ? " ^" : " v";
@@ -611,6 +711,7 @@ function tennisModeBar() {
   return `<div class="tenmode">
     <button class="${_tennisMode === "matches" ? "active" : ""}" onclick="setTennisMode('matches')">Lecture matchs</button>
     <button class="${_tennisMode === "brackets" ? "active" : ""}" onclick="setTennisMode('brackets')">Tableaux</button>
+    <button class="${_tennisMode === "lexicon" ? "active" : ""}" onclick="setTennisMode('lexicon')">Lexique</button>
   </div>`;
 }
 function setTennisMode(mode) {
@@ -621,7 +722,7 @@ function setTennisMode(mode) {
 function renderTennis() {
   const box = $("#tennisContent");
   if (!_tennisData) return;
-  const body = _tennisMode === "brackets" ? renderTennisBrackets() : renderTennisMatches();
+  const body = _tennisMode === "brackets" ? renderTennisBrackets() : _tennisMode === "lexicon" ? renderTennisLexicon() : renderTennisMatches();
   box.innerHTML = tennisModeBar() + body;
 }
 function tennisAllRows() {
@@ -641,6 +742,102 @@ function filteredTennisRows(rows) {
     ].join(" "));
     return words.every(word => haystack.includes(word));
   });
+}
+function cleanTennisExportValue(value) {
+  if (value === undefined || typeof value === "function") return undefined;
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(cleanTennisExportValue).filter(v => v !== undefined);
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cleanTennisExportValue(item)]).filter(([, item]) => item !== undefined));
+}
+function tennisExportPlayer(row, index) {
+  const props = row.props && row.props.players ? row.props.players[index] : null;
+  const level = row.levels && row.levels[index] ? row.levels[index] : null;
+  return cleanTennisExportValue({
+    name: index === 0 ? row.joueur1 : row.joueur2,
+    form_label: index === 0 ? row.cycle1 : row.cycle2,
+    fatigue: index === 0 ? row.fatigue1 : row.fatigue2,
+    elo: level,
+    advanced_stats: props,
+  });
+}
+function tennisExportRow(row) {
+  return cleanTennisExportValue({
+    identity: {
+      circuit: row.tour,
+      kickoff: row.heure || row.kickoff,
+      kickoff_raw: row.kickoff,
+      tournament: row.tournoi,
+      round: row.round,
+      surface: row.surface,
+      match: row.match,
+      source: row.match_source,
+      live: Boolean(row.live),
+    },
+    players: [tennisExportPlayer(row, 0), tennisExportPlayer(row, 1)],
+    h2h: { summary: row.h2h, alert: row.alerte },
+    lecture: {
+      favorite: row.favori,
+      decision: row.decision,
+      decision_level: row.decision_level,
+      decision_detail: row.decision_detail,
+      quality: row.qualite,
+      range_min: row.fourchette_min,
+      range_max: row.fourchette_max,
+      concordance: row.concordance,
+      concordance_level: row.concordance_level,
+      concordance_detail: row.concordance_detail,
+      evidence: row.preuves,
+    },
+    probabilities: {
+      market: row.proba_marche,
+      elo_surface: row.proba_elo_surface,
+      elo_global: row.proba_elo_global,
+      favorite_2_0: row.p20,
+      favorite_2_1: row.p21,
+      three_sets: row.p3,
+      odds: row.cote,
+      odds_status: row.odds_status,
+    },
+    elo: {
+      reference: row.elo_reference,
+      gap_vs_market_points: row.ecart_elo,
+      detail: row.elo_detail,
+    },
+    context: {
+      impact: row.impact_contexte,
+      favorite_cycle: row.cycle_favori,
+      favorite_fatigue: row.fatigue_favori,
+      opponent_cycle: row.cycle_adversaire,
+      opponent_fatigue: row.fatigue_adversaire,
+    },
+    secondary_markets: row.markets || [],
+    advanced_stats: row.props || null,
+    raw: row,
+  });
+}
+function currentTennisExportRows() {
+  return sortedTennisRows(filteredTennisRows(tennisAllRows()));
+}
+function currentTennisPendingRows() {
+  return sortedTennisRows(filteredTennisRows((_tennisData || {}).pending_odds || []));
+}
+function exportTennisMatchesJson() {
+  const rows = currentTennisExportRows();
+  const pending = currentTennisPendingRows();
+  const filenameSuffix = _tennisQuery ? safeFilenamePart(_tennisQuery, "filtre") : "tous-matchs";
+  const payload = {
+    export_type: "tennis_matches_reading",
+    exported_at: new Date().toISOString(),
+    app_source: "PRONO Tennis",
+    filter: _tennisQuery || null,
+    sort: _tennisSort,
+    columns: TENNIS_SORT_COLUMNS.map(([key, label]) => ({ key, label })),
+    counts: { matches: rows.length, pending_odds: pending.length },
+    matches: rows.map(tennisExportRow),
+    pending_odds: pending.map(tennisExportRow),
+    note: "Export base sur les lignes actuellement visibles apres recherche et tri. Outil de lecture, pas de garantie de gain.",
+  };
+  downloadTextFile(`lecture-tennis-${filenameSuffix}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 2), "application/json");
 }
 function tennisPendingFinals(rows) {
   const pending = filteredTennisRows(rows || []);
@@ -669,6 +866,8 @@ function setTennisSearch(value) {
   if (results) results.innerHTML = tennisMatchesResults(tennisAllRows());
   const clear = $("#tennisSearchClear");
   if (clear) clear.classList.toggle("hidden", !_tennisQuery);
+  const exportBtn = $("#tennisExportJsonBtn");
+  if (exportBtn) exportBtn.textContent = `Exporter JSON (${currentTennisExportRows().length + currentTennisPendingRows().length})`;
 }
 function clearTennisSearch() {
   _tennisQuery = "";
@@ -678,11 +877,13 @@ function clearTennisSearch() {
 }
 function renderTennisMatches() {
   const rows = tennisAllRows();
+  const visible = filteredTennisRows(rows).length;
+  const pending = currentTennisPendingRows().length;
   return `<div class="tensection">
     <div class="tencontrols"><div class="tensearch">
       <input id="tennisSearch" type="search" value="${esc(_tennisQuery)}" placeholder="Joueur, tournoi, circuit, surface..." aria-label="Rechercher dans les matchs" oninput="setTennisSearch(this.value)">
       <button id="tennisSearchClear" class="${_tennisQuery ? "" : "hidden"}" onclick="clearTennisSearch()" title="Effacer la recherche" aria-label="Effacer la recherche">x</button>
-    </div></div>
+    </div><button id="tennisExportJsonBtn" class="tenexport" onclick="exportTennisMatchesJson()" title="Exporter les lignes visibles apres recherche et tri">Exporter JSON (${esc(visible + pending)})</button></div>
     <div id="tennisMatchesResults">${tennisMatchesResults(rows)}</div>
   </div>`;
 }
