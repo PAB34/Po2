@@ -3,7 +3,8 @@ import { AppShellV1 } from "../app/AppShellV1";
 import type { AppProfileV1 } from "../app/navigationV1";
 import { FluidsPortfolioPageV1 } from "../features/fluids/FluidsPortfolioPageV1";
 import { FluidWaterComingSoonV1 } from "../features/fluids/FluidWaterComingSoonV1";
-import { EnergiePage, EnergieDataOpsPage } from "./EnergiePage";
+import { FluidsElecDetailV1 } from "../features/fluids/FluidsElecDetailV1";
+import { EnergieDataOpsPage } from "./EnergiePage";
 import { EnergieGazPage } from "./EnergieGazPage";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -22,9 +23,10 @@ export function RefonteV1FluidsPage() {
   return <FluidShell><FluidsPortfolioPageV1 /></FluidShell>;
 }
 
-// Sous-routes « détail par distributeur » : on embarque les pages legacy réelles (Option A, pas de réécriture).
+// Détail Électricité : page refonte allégée (KPI, performance climat, dérives, calibrage, top conso).
+// La vue legacy complète reste accessible via /energie (lien « Vue complète »).
 export function RefonteV1FluidElectricitePage() {
-  return <FluidShell><EnergiePage /></FluidShell>;
+  return <FluidShell><FluidsElecDetailV1 /></FluidShell>;
 }
 
 // Fenêtre de collecte ENEDIS (acquisition) ré-hébergée dans le shell refonte.
