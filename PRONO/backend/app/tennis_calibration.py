@@ -130,7 +130,7 @@ class HistoricalCalibration:
     def report(self, test_year: int = 2025) -> dict[str, Any]:
         rows = [row for row in self.records if row["year"] == test_year]
         report: dict[str, Any] = {"year": test_year, "count": len(rows), "markets": {}}
-        for outcome in ("over_22_5", "favorite_cover_2_5", "three_sets", "tiebreak"):
+        for outcome in ("over_22_5", "favorite_cover_2_5", "three_sets", "tiebreak", "favorite_2_0"):
             model_errors, baseline_errors = [], []
             for row in rows:
                 prediction = self.estimate(row["tour"], row["surface"], row["probability"])["rates"][outcome]
