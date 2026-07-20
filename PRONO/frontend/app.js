@@ -403,12 +403,20 @@ function tennisAnchorCell(row, key) {
   const eloReco = anchors.anchor_recommended === "elo";
   let html = `<b>${pctTennis(cell.value_ref)}</b>`;
   // Fourchette affichee seulement en cas de vrai desaccord (sinon valeur unique, pas de bruit)
-  if (cell.value_elo !== null && cell.value_elo !== undefined && cell.single === false) {
+  if (cell.range_max - cell.range_min >= 3) {
     const badge = eloReco ? `<span class="anchor-badge">Elo</span>` : "";
-    const tip = `Cotes ${cell.value_market}% | Elo ${cell.value_elo}% | ecart ${cell.spread} pts (${anchors.calibration_flag || "-"})`;
-    html += `<div class="anchor-range${eloReco ? " elo" : ""}" title="${esc(tip)}">${cell.range_min}–${cell.range_max}%${badge}</div>`;
+    const bits = [];
+    if (cell.value_elo !== null && cell.value_elo !== undefined) bits.push(`Cotes ${cell.value_market}% | Elo ${cell.value_elo}% | ecart ${cell.spread} pts`);
+    if (cell.uncertainty_pts) bits.push(`incertitude echantillon ±${cell.uncertainty_pts} pts`);
+    if (anchors.split_confidence) bits.push(`fiabilite split: ${anchors.split_confidence}`);
+    html += `<div class="anchor-range${eloReco ? " elo" : ""}" title="${esc(bits.join(" | "))}">${cell.range_min}–${cell.range_max}%${badge}</div>`;
   }
   return html;
+}
+function tennisReliability(row) {
+  const note = row.derived_anchors && row.derived_anchors.reliability_note;
+  if (!note) return "";
+  return `<div class="treliability" title="${esc(note)}">ⓘ ${esc(note)}</div>`;
 }
 function numTennis(value, digits = 2) {
   if (value === null || value === undefined || value === "") return "-";
@@ -720,7 +728,7 @@ function tennisTable(rows) {
       <td><span class="tourpill ${esc(row.tour || "")}">${esc(row.tour || "-")}</span></td>
       <td><b>${esc(row.heure || "-")}</b>${row.live ? `<span class="livepill">Live</span>` : ""}<div class="tsub">${esc(row.surface || "")}${row.round ? ` | ${esc(row.round)}` : ""}</div></td>
       <td><b>${esc(row.tournoi)}</b></td>
-      <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}${tennisCoherence(row)}</td>
+      <td><div class="tmatch">${esc(row.match)}</div><button id="props-btn-${key}" class="prop-toggle" onclick="toggleTennisProps('${key}')" aria-expanded="${expanded}" aria-controls="props-${key}" title="Afficher les statistiques detaillees"><span aria-hidden="true">${expanded ? "-" : "+"}</span><b>Stats</b></button>${tennisSignals(row)}${tennisCoherence(row)}${tennisReliability(row)}</td>
       <td>${tennisForm(row)}</td>
       <td>${tennisDecision(row)}</td>
       <td>${tennisConcordance(row)}</td>

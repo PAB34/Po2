@@ -7,6 +7,7 @@ sinon le match est affiche sans cote pour eviter les affiches de tour precedent.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sqlite3
@@ -314,6 +315,27 @@ def _dual_anchor(value_market: int, value_elo: int | None) -> dict:
     }
 
 
+def _strength_bin(favorite_probability: float) -> int:
+    return sum(favorite_probability >= threshold for threshold in (0.60, 0.70, 0.80, 0.90))
+
+
+def _apply_sampling_uncertainty(derived: dict, sample: int) -> None:
+    """Elargit la fourchette de chaque indicateur par une bande binomiale ~80% liee a
+    l'echantillon du bin de force. Concentre naturellement l'incertitude sur les bins
+    peu peuples (gros favoris), sans valeur arbitraire. Non-regression: sur les bins
+    denses (n de milliers) la marge est < 1 pt, la fourchette reste quasi inchangee.
+    """
+    n_eff = max(int(sample or 0), 25)
+    for key in DERIVED_ANCHOR_KEYS:
+        cell = derived[key]
+        p = max(min((cell["value_market"] or 0) / 100.0, 0.99), 0.01)
+        half = round(1.28 * math.sqrt(p * (1 - p) / n_eff) * 100)  # bande ~80%
+        cell["uncertainty_pts"] = half
+        cell["range_min"] = max(0, min(cell["range_min"], cell["value_market"] - half))
+        cell["range_max"] = min(100, max(cell["range_max"], cell["value_market"] + half))
+        cell["single"] = (cell["range_max"] - cell["range_min"]) < ANCHOR_SPREAD_MIN
+
+
 def _build_derived_anchors(tour: str, surface: str, favorite_probability: float, market_calibration: dict, elo_favorite: float | None) -> dict:
     market_vals = _anchor_values(favorite_probability, market_calibration)
     if elo_favorite is not None:
@@ -321,10 +343,28 @@ def _build_derived_anchors(tour: str, surface: str, favorite_probability: float,
     else:
         elo_vals = {key: None for key in DERIVED_ANCHOR_KEYS}
     derived = {key: _dual_anchor(market_vals[key], elo_vals[key]) for key in DERIVED_ANCHOR_KEYS}
+    sample = int(market_calibration.get("sample") or 0)
+    _apply_sampling_uncertainty(derived, sample)
     derived["anchor_recommended"] = "market"
     derived["calibration_flag"] = "en attente"
     derived["elo_available"] = elo_favorite is not None
     derived["favorite_conflict"] = bool(elo_favorite is not None and elo_favorite < 0.5)
+    derived["split_sample"] = sample
+    strength_bin = _strength_bin(favorite_probability)
+    derived["strength_bin"] = strength_bin
+    # Confiance pilotee par l'echantillon PUIS bridee aux bins de force extreme:
+    # meme avec n correct, le split 2-0 des tres gros favoris est biaise (mesure OOS).
+    split_confidence = market_calibration.get("confidence") or "faible"
+    if strength_bin >= 4 or sample < 100:
+        split_confidence = "faible"
+    elif strength_bin >= 3 and split_confidence == "elevee":
+        split_confidence = "moyenne"
+    derived["split_confidence"] = split_confidence
+    if strength_bin >= 3:
+        note = "Favori tres fort : split 2-0 moins fiable (echantillon limite), fourchette elargie"
+        if str(tour).upper() == "WTA":
+            note += " ; la domination des gros favoris WTA est historiquement sous-estimee"
+        derived["reliability_note"] = note
     return derived
 
 

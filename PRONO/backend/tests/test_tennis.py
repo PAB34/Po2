@@ -350,6 +350,28 @@ class TennisServiceTests(unittest.TestCase):
         self.assertEqual(row["p20"], da["p20"]["value_market"])
         self.assertEqual(row["p21"], da["p21"]["value_market"])
 
+    def test_sampling_uncertainty_widens_sparse_extreme_bins(self):
+        coach = tennis._coach()
+        # Favori moyen (bin1, gros echantillon) -> fourchette serree, confiance haute, pas de note
+        mid = tennis._build_derived_anchors("ATP", "Dur", 0.65, coach.market_priors("ATP", "Dur", 0.65), 0.63)
+        # Gros favori (bin3) -> incertitude plus large, confiance bridee, note directionnelle
+        strong = tennis._build_derived_anchors("WTA", "Dur", 0.85, coach.market_priors("WTA", "Dur", 0.85), 0.82)
+        # Favori extreme (bin4, echantillon faible) -> plus large encore, confiance faible
+        extreme = tennis._build_derived_anchors("WTA", "Dur", 0.95, coach.market_priors("WTA", "Dur", 0.95), 0.9)
+
+        self.assertLessEqual(mid["p20"]["uncertainty_pts"], strong["p20"]["uncertainty_pts"])
+        self.assertLess(strong["p20"]["uncertainty_pts"], extreme["p20"]["uncertainty_pts"])
+        self.assertEqual(mid["strength_bin"], 1)
+        self.assertIsNone(mid.get("reliability_note"))
+        self.assertEqual(mid["split_confidence"], "elevee")
+        self.assertGreaterEqual(strong["strength_bin"], 3)
+        self.assertNotEqual(strong["split_confidence"], "elevee")  # bridee malgre un n correct
+        self.assertIn("WTA", strong["reliability_note"])
+        self.assertEqual(extreme["split_confidence"], "faible")
+        # la fourchette elargie contient bien la valeur marche
+        self.assertLessEqual(extreme["p20"]["range_min"], extreme["p20"]["value_market"])
+        self.assertGreaterEqual(extreme["p20"]["range_max"], extreme["p20"]["value_market"])
+
     def test_form_signals_do_not_shift_market_probability(self):
         coach = tennis._coach()
         stats_hot = {
