@@ -1227,6 +1227,161 @@ def _consumption_by_month() -> dict[str, dict[str, float]]:
     return result
 
 
+def _parc_elec_by_month() -> dict[str, float]:
+    """Aggregated electricity kWh across the whole parc, by month {YYYY-MM: kWh}."""
+    agg: dict[str, float] = {}
+    for months in _consumption_by_month().values():
+        for ym, kwh in months.items():
+            agg[ym] = agg.get(ym, 0.0) + kwh
+    return agg
+
+
+def _linreg(xs: list[float], ys: list[float]) -> tuple[float, float, float | None] | None:
+    """Ordinary least squares. Returns (slope, intercept, r2) or None."""
+    n = len(xs)
+    if n < 3:
+        return None
+    sx = sum(xs)
+    sy = sum(ys)
+    sxx = sum(x * x for x in xs)
+    sxy = sum(x * y for x, y in zip(xs, ys))
+    denom = n * sxx - sx * sx
+    if denom == 0:
+        return None
+    slope = (n * sxy - sx * sy) / denom
+    intercept = (sy - slope * sx) / n
+    mean_y = sy / n
+    ss_tot = sum((y - mean_y) ** 2 for y in ys)
+    ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys))
+    r2 = (1 - ss_res / ss_tot) if ss_tot > 0 else None
+    return slope, intercept, r2
+
+
+def _fluids_climate_series(dju_idx: dict[str, dict[str, float]], key: str, current: int, previous: int, prior_years: list[int]) -> dict[str, Any]:
+    def val(year: int, month: int) -> float | None:
+        entry = dju_idx.get(f"{year}-{month:02d}")
+        return entry[key] if entry else None
+
+    monthly: list[dict[str, Any]] = []
+    for m in range(1, 13):
+        cur = val(current, m)
+        prev = val(previous, m)
+        avals = [a for a in (val(y, m) for y in prior_years) if a is not None]
+        avg = round(sum(avals) / len(avals), 1) if avals else None
+        monthly.append({"month": m, "current": cur, "previous": prev, "average": avg})
+
+    present = {p["month"] for p in monthly if p["current"] is not None}
+    cur_tot = round(sum(p["current"] for p in monthly if p["current"] is not None), 0) if present else None
+    prev_tot = round(sum(p["previous"] for p in monthly if p["month"] in present and p["previous"] is not None), 0) if present else None
+    avg_tot = round(sum(p["average"] for p in monthly if p["month"] in present and p["average"] is not None), 0) if present else None
+
+    def pct(a: float | None, b: float | None) -> float | None:
+        return round((a - b) / b * 100, 1) if (a is not None and b) else None
+
+    return {
+        "monthly": monthly,
+        "current_total": cur_tot,
+        "previous_total": prev_tot,
+        "average_total": avg_tot,
+        "delta_previous_pct": pct(cur_tot, prev_tot),
+        "delta_average_pct": pct(cur_tot, avg_tot),
+    }
+
+
+def _month_label(ym: str) -> str:
+    return f"{ym[5:7]}/{ym[0:4]}"
+
+
+def _fluids_thermal(dju_idx: dict[str, dict[str, float]], conso: dict[str, float], window: int = 12) -> dict[str, Any]:
+    """Signature énergétique sur FENÊTRE GLISSANTE : régression conso parc ~ DJU chauffage
+    sur les `window` derniers mois vs les `window` mois précédents. La fenêtre de 12 mois
+    garantit une saisonnalité complète (hiver + été) → pente stable et comparaison robuste,
+    contrairement à une comparaison d'années civiles partielles."""
+    keys = sorted(ym for ym in conso if ym in dju_idx and conso.get(ym) is not None)
+
+    empty = {
+        "scope": "électricité",
+        "sensitivity_kwh_per_dju": None,
+        "sensitivity_previous": None,
+        "sensitivity_delta_pct": None,
+        "base_load_kwh_per_month": None,
+        "thermosensitive_share_pct": None,
+        "base_load_share_pct": None,
+        "r2": None,
+        "months_used": len(keys),
+        "window_months": window,
+        "current_period": None,
+        "previous_period": None,
+        "reliable": False,
+    }
+    if len(keys) < 4:
+        return empty
+
+    def reg(kk: list[str]) -> tuple[tuple[float, float, float | None] | None, float, float]:
+        xs = [dju_idx[k]["dju_chauffe"] for k in kk]
+        ys = [conso[k] for k in kk]
+        return _linreg(xs, ys), sum(xs), sum(ys)
+
+    cur_keys = keys[-window:]
+    prev_keys = keys[-2 * window:-window]
+
+    cur_reg, sum_x, sum_y = reg(cur_keys)
+    if not cur_reg:
+        return {**empty, "months_used": len(cur_keys)}
+    slope, intercept, r2 = cur_reg
+    share = round(slope * sum_x / sum_y * 100, 1) if sum_y > 0 else None
+    base_share = round(intercept * len(cur_keys) / sum_y * 100, 1) if sum_y > 0 else None
+
+    prev_slope = None
+    if len(prev_keys) >= 4:
+        prev_reg, _, _ = reg(prev_keys)
+        prev_slope = prev_reg[0] if prev_reg else None
+    delta = round((slope - prev_slope) / prev_slope * 100, 1) if prev_slope else None
+
+    def period(kk: list[str]) -> str | None:
+        return f"{_month_label(kk[0])} – {_month_label(kk[-1])}" if kk else None
+
+    return {
+        "scope": "électricité",
+        "sensitivity_kwh_per_dju": round(slope, 1),
+        "sensitivity_previous": round(prev_slope, 1) if prev_slope is not None else None,
+        "sensitivity_delta_pct": delta,
+        "base_load_kwh_per_month": round(intercept, 0),
+        "thermosensitive_share_pct": share,
+        "base_load_share_pct": base_share,
+        "r2": round(r2, 2) if r2 is not None else None,
+        "months_used": len(cur_keys),
+        "window_months": window,
+        "current_period": period(cur_keys),
+        "previous_period": period(prev_keys) if len(prev_keys) >= 4 else None,
+        "reliable": len(cur_keys) >= 8 and (r2 is None or r2 >= 0.5),
+    }
+
+
+def get_fluids_climate() -> dict[str, Any]:
+    """Portfolio climate reading: heating/cooling DJU trajectory (current/N-1/average) and
+    thermal signature (thermosensitivity + evolution vs N-1). No financial projection."""
+    dju_idx = _dju_monthly_index()
+    years = sorted({int(ym[:4]) for ym in dju_idx if ym[:4].isdigit()})
+    if not years:
+        empty_series = {"base_c": 0.0, "monthly": [], "current_total": None, "previous_total": None, "average_total": None, "delta_previous_pct": None, "delta_average_pct": None}
+        return {"current_year": 0, "previous_year": 0, "years_in_average": 0, "heating": empty_series, "cooling": {**empty_series}, "thermal": _fluids_thermal({}, {})}
+
+    current = years[-1]
+    previous = current - 1
+    prior_years = [y for y in years if y < current]
+    conso = _parc_elec_by_month()
+
+    return {
+        "current_year": current,
+        "previous_year": previous,
+        "years_in_average": len(prior_years),
+        "heating": {"base_c": 18.0, **_fluids_climate_series(dju_idx, "dju_chauffe", current, previous, prior_years)},
+        "cooling": {"base_c": 22.0, **_fluids_climate_series(dju_idx, "dju_froid", current, previous, prior_years)},
+        "thermal": _fluids_thermal(dju_idx, conso),
+    }
+
+
 _DJU_HEATING_MIN = 10.0
 _DJU_COOLING_MIN = 5.0
 _DJU_SEASONAL_HEATING_MIN = 20.0

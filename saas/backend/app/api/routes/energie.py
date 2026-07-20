@@ -7,6 +7,7 @@ from app.schemas.energie import (
     DjuMonthPoint,
     EnergieOverview,
     EnergyDataAudit,
+    FluidsClimateOverview,
     PowerRecommendationOverview,
     PrmAnnualProfile,
     PrmDailyConsumption,
@@ -22,6 +23,7 @@ from app.services.energie import (
     get_data_audit,
     get_dju_monthly,
     get_energie_overview,
+    get_fluids_climate,
     get_prm_annual_profile,
     get_prm_daily_consumption,
     get_prm_detail,
@@ -59,6 +61,14 @@ def get_dju(
     current_user: User = Depends(get_current_user),
 ) -> list[DjuMonthPoint]:
     return [DjuMonthPoint.model_validate(r) for r in get_dju_monthly()]
+
+
+@router.get("/fluids/climate", response_model=FluidsClimateOverview)
+def get_fluids_climate_route(
+    current_user: User = Depends(get_current_user),
+) -> FluidsClimateOverview:
+    """Vue globale Fluides : trajectoire DJU chauffage/froid (N/N-1/moyenne) et signature thermique."""
+    return FluidsClimateOverview.model_validate(get_fluids_climate())
 
 
 @router.get("/preconisations", response_model=PowerRecommendationOverview)

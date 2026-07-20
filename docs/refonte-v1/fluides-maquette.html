@@ -1,0 +1,638 @@
+<title>Fluides V1 — maquette vue globale (climat/performance) + fenêtres distributeurs</title>
+<style>
+:root{
+  --ink:#1D3150;--muted:#667382;--soft:#8A8F98;--canvas:#F4F6F7;--paper:#FFFFFF;--line:#DCE1E5;
+  --nav:#1D3150;--mint:#74B44A;--mint-soft:#EEF5E9;--blue:#3e6ea8;--blue-soft:#E9EDF2;
+  --amber:#e39a2c;--amber-soft:#fff0d9;--coral:#e56b62;--coral-soft:#fce8e5;
+  --radius:18px;--shadow:0 12px 35px rgba(25,45,50,.07);--sidebar:240px;
+  --display:"Montserrat","Segoe UI Variable Display",system-ui,sans-serif;
+  --body:"Source Sans Pro","Inter","Segoe UI Variable Text",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ink:#EDF3FA;--muted:#A9B5C3;--soft:#8492A3;--canvas:#0B121C;--paper:#141F2D;--line:#2A394A;
+  --nav:#101D2F;--mint:#7CBD50;--mint-soft:#243523;--blue:#5b93d0;--blue-soft:#223247;
+  --amber:#e0a740;--amber-soft:#3D311D;--coral-soft:#3E2627;--shadow:0 14px 38px rgba(0,0,0,.24);color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ink:#EDF3FA;--muted:#A9B5C3;--soft:#8492A3;--canvas:#0B121C;--paper:#141F2D;--line:#2A394A;
+  --nav:#101D2F;--mint:#7CBD50;--mint-soft:#243523;--blue:#5b93d0;--blue-soft:#223247;
+  --amber:#e0a740;--amber-soft:#3D311D;--coral-soft:#3E2627;--shadow:0 14px 38px rgba(0,0,0,.24);color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --ink:#1D3150;--muted:#667382;--soft:#8A8F98;--canvas:#F4F6F7;--paper:#FFFFFF;--line:#DCE1E5;
+  --nav:#1D3150;--mint:#74B44A;--mint-soft:#EEF5E9;--blue:#3e6ea8;--blue-soft:#E9EDF2;
+  --amber:#e39a2c;--amber-soft:#fff0d9;--coral-soft:#fce8e5;--shadow:0 12px 35px rgba(25,45,50,.07);color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;color:var(--ink);background:var(--canvas);font:14px/1.45 var(--body);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+h1,h2,h3{font-family:var(--display)}
+.app-shell{min-height:100vh;display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr)}
+.sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:22px 16px 16px;color:#eaf5f2;background:radial-gradient(circle at 5% 5%,#304B6B 0,transparent 32%),linear-gradient(180deg,#1D3150,#14263F)}
+.brand{display:flex;align-items:baseline;gap:5px;padding:2px 8px;margin-bottom:20px;font-family:var(--display);font-size:18px;font-weight:800}
+.brand b{color:var(--mint)}
+.nav-label{display:block;padding:0 12px;margin:14px 0 6px;color:#78969c;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.14em}
+.nav-item{position:relative;width:100%;display:flex;align-items:center;gap:11px;padding:9px 12px;margin:2px 0;border:0;border-radius:11px;color:#b9ced1;background:transparent;text-align:left;transition:.18s}
+.nav-item:hover{color:#fff;background:#ffffff0b}
+.nav-item.active{color:#fff;background:#ffffff14}
+.nav-item.active:before{content:"";position:absolute;left:-16px;width:3px;height:22px;border-radius:0 4px 4px 0;background:var(--mint)}
+.nav-icon{width:18px;text-align:center;font-size:15px}
+.nav-item span:nth-child(2){flex:1;font-size:12.5px;font-weight:600}
+.nav-count{min-width:22px;padding:2px 6px;border-radius:99px;color:#1D3150;background:var(--mint);font-size:9px;font-weight:800;text-align:center}
+.side-note{margin-top:auto;padding:12px;border:1px solid #ffffff17;border-radius:13px;color:#c9dbdb;background:#ffffff08;font-size:9px;line-height:1.5}
+.side-note b{color:#fff}
+.app-main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:0;height:66px;display:flex;align-items:center;gap:16px;padding:0 28px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(15px);z-index:20}
+.crumb{color:var(--muted);font-size:11px}.crumb b{color:var(--ink)}
+.top-actions{display:flex;align-items:center;gap:9px;margin-left:auto}
+.pill{display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:11px;font-weight:700}
+.pill .dot{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#425164;color:#fff;font-size:10px;font-weight:800}
+#content{max-width:1500px;width:100%;margin:0 auto;padding:26px 30px 50px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:22px;margin-bottom:18px;flex-wrap:wrap}
+.eyebrow{display:inline-flex;align-items:center;gap:6px;margin-bottom:7px;color:#678079;font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.13em}
+.eyebrow:before{content:"";width:16px;height:2px;background:var(--mint)}
+.page-head h1{margin:0;font-size:29px;line-height:1.08;letter-spacing:-.035em;text-wrap:balance}
+.page-head p{max-width:660px;margin:7px 0 0;color:var(--muted);font-size:12px}
+.page-actions{display:flex;align-items:center;gap:8px}
+.segment{display:flex;padding:4px;border:1px solid var(--line);border-radius:11px;background:var(--paper)}
+.segment button{padding:6px 11px;border:0;border-radius:8px;color:var(--muted);background:transparent;font-size:10px}
+.segment button.active{color:var(--ink);background:color-mix(in srgb,var(--mint) 16%,var(--paper));font-weight:750}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border:0;border-radius:11px;color:#fff;background:var(--nav);font-size:11px;font-weight:750;box-shadow:0 7px 18px rgba(16,44,54,.15)}
+.btn.ghost{border:1px solid var(--line);color:var(--ink);background:var(--paper);box-shadow:none}
+.btn.mint{color:#12331f;background:var(--mint);box-shadow:none}
+.source-strip{display:flex;align-items:center;gap:8px;padding:9px 13px;margin-bottom:16px;border:1px solid var(--line);border-radius:12px;color:var(--muted);background:color-mix(in srgb,var(--mint) 5%,var(--paper));font-size:10px;flex-wrap:wrap}
+.source-strip b{color:var(--ink)}.source-strip .cov{margin-left:auto;color:#2d765e;font-weight:750}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 4px color-mix(in srgb,var(--mint) 18%,transparent)}
+/* Panels */
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:var(--paper);box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:17px 18px 6px}
+.panel-head h2{margin:0;font-size:14px;letter-spacing:-.015em}
+.panel-head p{margin:3px 0 0;color:var(--muted);font-size:10px}
+.panel-action{border:0;color:#3f6d5c;background:transparent;font-size:10px;font-weight:750}
+.panel-body{padding:10px 18px 18px}
+.main-grid{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(300px,.72fr);gap:14px;margin-bottom:18px}
+/* Climate trajectory chart */
+.dju-ind{display:flex;gap:10px;margin:0 0 10px;flex-wrap:wrap}
+.ind{flex:1;min-width:150px;display:flex;align-items:baseline;gap:8px;padding:9px 12px;border:1px solid var(--line);border-left-width:3px;border-radius:10px;background:color-mix(in srgb,var(--ink) 3%,var(--paper))}
+.ind.heat{border-left-color:var(--blue)}.ind.cool{border-left-color:var(--amber)}
+.ind span{color:var(--muted);font-size:8px;font-weight:750;text-transform:uppercase;letter-spacing:.06em}
+.ind b{font:750 15px var(--display)}
+.ind em{font-style:normal;font-size:8px;font-weight:750;padding:2px 5px;border-radius:5px;margin-left:auto}
+.ind em+em{margin-left:4px}
+.ind em.down{color:#2c755e;background:var(--mint-soft)}.ind em.up{color:#8c5e18;background:var(--amber-soft)}
+.chart-wrap{height:250px;margin-top:4px}.chart-wrap svg{width:100%;height:100%;overflow:visible}
+.c-grid{stroke:var(--line)}.c-lab{fill:var(--muted);font-size:9px}
+.h-cur{stroke:var(--blue);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.h-prev{stroke:var(--blue);stroke-width:2;fill:none;stroke-dasharray:6 5;opacity:.5}
+.h-avg{stroke:var(--blue);stroke-width:2;fill:none;stroke-dasharray:1 6;opacity:.5;stroke-linecap:round}
+.k-cur{stroke:var(--amber);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.k-prev{stroke:var(--amber);stroke-width:2;fill:none;stroke-dasharray:6 5;opacity:.55}
+.k-avg{stroke:var(--amber);stroke-width:2;fill:none;stroke-dasharray:1 6;opacity:.55;stroke-linecap:round}
+.hd{fill:var(--paper);stroke:var(--blue);stroke-width:2.5}.kd{fill:var(--paper);stroke:var(--amber);stroke-width:2.5}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--muted);font-size:9px;margin-top:6px}
+.legend span{display:flex;align-items:center;gap:5px}.legend i{width:16px;height:0;display:block}
+.legend .lh{border-top:3px solid var(--blue)}.legend .lk{border-top:3px solid var(--amber)}
+.legend .lp{border-top:2px dashed var(--soft)}.legend .lm{border-top:2px dotted var(--soft)}
+/* Performance card */
+.perf{padding:17px;border-radius:var(--radius);background:linear-gradient(150deg,#1D3150,#2f4969);color:#fff}
+.perf-head{display:flex;align-items:center;gap:11px;padding-bottom:12px;border-bottom:1px solid #ffffff18}
+.perf-head .ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#1D3150;background:var(--mint);font-size:19px}
+.perf-head small{display:block;color:#b5c5d5;font-size:8px;text-transform:uppercase;letter-spacing:.09em}
+.perf-head strong{display:block;margin-top:2px;font:750 22px var(--display)}
+.perf-evo{display:flex;align-items:center;gap:9px;margin:12px 0;padding:11px 13px;border-radius:12px;background:#ffffff10}
+.perf-evo .ev{font:750 20px var(--display)}
+.perf-evo.bad .ev{color:#f4a99f}.perf-evo.good .ev{color:#bfe6a8}
+.perf-evo div small{display:block;color:#b5c5d5;font-size:8px;text-transform:uppercase;letter-spacing:.06em}
+.perf-evo div b{display:block;font-size:9px;color:#e6edf5}
+.sig{margin:6px 0 12px;padding:11px;border:1px solid #ffffff16;border-radius:12px;background:#ffffff08}
+.sig .cap{display:flex;justify-content:space-between;color:#b5c5d5;font-size:8px;margin-bottom:6px}
+.sig svg{width:100%;height:auto;display:block}
+.sg-prev{stroke:var(--mint);stroke-width:2.5;fill:none}.sg-cur{stroke:#fff;stroke-width:2.5;fill:none}
+.sg-dotp{fill:var(--mint)}.sg-dotc{fill:#fff}.sg-ax{stroke:#ffffff30;stroke-width:1}.sg-lab{fill:#9fb0c4;font-size:8px}
+.perf-split{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.perf-split div{padding:10px;border:1px solid #ffffff16;border-radius:11px;background:#ffffff08}
+.perf-split b{display:block;font:750 15px var(--display)}.perf-split span{display:block;color:#aebed0;font-size:8px;margin-top:2px}
+.perf-split em{font-style:normal;font-size:8px;font-weight:750}.perf-split em.up{color:#f4a99f}.perf-split em.down{color:#bfe6a8}
+.perf-note{margin:0;padding:10px;border-radius:11px;background:#ffffff0d;color:#dfe7f2;font-size:9px;line-height:1.5}.perf-note b{color:var(--mint)}
+/* Access */
+.section-lead{display:flex;align-items:baseline;gap:10px;margin:6px 0 12px;flex-wrap:wrap}
+.section-lead h2{margin:0;font-size:16px;letter-spacing:-.02em}.section-lead span{color:var(--muted);font-size:10px}
+.access-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.access{position:relative;overflow:hidden;display:flex;flex-direction:column;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--paper);box-shadow:var(--shadow);text-align:left;transition:.18s}
+.access:not(.soon):hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--mint) 55%,var(--line))}
+.access .a-top{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.access .a-ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:22px;color:#fff}
+.a-elec .a-ic{background:linear-gradient(140deg,#2a6fb0,#1D3150)}.a-gaz .a-ic{background:linear-gradient(140deg,#e78d37,#c25f1c)}.a-eau .a-ic{background:linear-gradient(140deg,#5b93b8,#37627e)}
+.access .a-top b{display:block;font-size:15px}.access .a-top small{display:block;color:var(--muted);font-size:9px;margin-top:2px}
+.a-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.a-metric{padding:10px;border:1px solid var(--line);border-radius:11px;background:color-mix(in srgb,var(--ink) 3%,var(--paper))}
+.a-metric span{display:block;color:var(--muted);font-size:8px}.a-metric strong{display:block;margin-top:4px;font:750 15px var(--display)}
+.a-sub{display:flex;align-items:center;gap:6px;margin-bottom:12px;color:var(--muted);font-size:8px}.a-sub:before{content:"◉";color:var(--mint)}
+.a-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto}
+.a-open{display:inline-flex;align-items:center;gap:6px;color:#2a7765;font-size:11px;font-weight:800}
+.access.soon .a-metrics{filter:grayscale(.4);opacity:.7}
+.badge-soon{padding:4px 8px;border-radius:99px;color:#845c16;background:var(--amber-soft);font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.embed-note{position:absolute;right:14px;top:16px;color:var(--muted);font-size:8px}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.kpi{position:relative;min-height:120px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--paper);box-shadow:var(--shadow)}
+.kpi .ico{position:absolute;right:13px;top:13px;width:29px;height:29px;border-radius:9px;display:grid;place-items:center;color:var(--ink);background:var(--blue-soft);font-weight:800}
+.kpi .lab{color:var(--muted);font-size:8px;font-weight:750;text-transform:uppercase;letter-spacing:.06em}
+.kpi .val{display:block;margin-top:12px;font:750 23px/1 var(--display);letter-spacing:-.035em}
+.kpi .sub{display:block;margin:7px 0;color:var(--muted);font-size:9px}
+.tag{width:max-content;padding:3px 6px;border-radius:6px;font-size:8px;font-weight:750;color:#44596b;background:var(--blue-soft)}
+.tag.good{color:#2c755e;background:var(--mint-soft)}.tag.warn{color:#895e18;background:var(--amber-soft)}
+/* Seasons */
+.season-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.season{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:13px;padding:15px 17px}
+.season .ic{width:45px;height:45px;border-radius:14px;display:grid;place-items:center;font-size:21px}
+.season.winter .ic{background:var(--blue-soft)}.season.summer .ic{background:var(--amber-soft)}
+.season h3{margin:0;font-size:13px}.season p{margin:4px 0 0;color:var(--muted);font-size:8px}
+.season .score{text-align:right}.season .score b{display:block;font:750 20px var(--display)}.season .score small{color:var(--muted);font-size:8px}
+/* Detail */
+.back{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:11px;font-weight:700;margin-bottom:16px}
+.dist-hero{display:flex;align-items:center;gap:15px;padding:17px 19px;margin-bottom:16px;border:1px solid var(--line);border-radius:16px;background:var(--paper);box-shadow:var(--shadow)}
+.dist-hero .lg{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:24px;color:#fff;flex-shrink:0}
+.d-elec .lg{background:linear-gradient(140deg,#2a6fb0,#1D3150)}.d-gaz .lg{background:linear-gradient(140deg,#e78d37,#c25f1c)}.d-eau .lg{background:linear-gradient(140deg,#5b93b8,#37627e)}
+.dist-hero h1{margin:0;font-size:22px}.dist-hero .sub{margin:3px 0 0;color:var(--muted);font-size:11px}
+.dist-hero .fresh{margin-left:auto;text-align:right;font-size:9px;color:var(--muted)}
+.dist-hero .fresh b{display:block;color:var(--ink);font-size:11px}
+.dash-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.dash-kpi{padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--paper);box-shadow:var(--shadow)}
+.dash-kpi span{display:block;color:var(--muted);font-size:9px}.dash-kpi strong{display:block;margin-top:8px;font:750 20px var(--display)}.dash-kpi small{display:block;margin-top:6px;color:var(--muted);font-size:8px}
+.dash-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-bottom:14px}
+.bars{display:flex;align-items:flex-end;gap:9px;height:180px;padding:12px 4px 0}
+.bars .bar{flex:1;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--mint),color-mix(in srgb,var(--mint) 55%,var(--paper)))}
+.bars .bar.alt{background:linear-gradient(180deg,#4d8fc9,#2a6fb0)}
+.info-list{display:grid;gap:9px}.info-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.info-row span{color:var(--muted);font-size:9px}.info-row strong{font-size:9px;text-align:right}
+.subhead{display:flex;align-items:center;gap:9px;margin:20px 0 12px}
+.subhead .ic{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--blue-soft);font-size:14px}
+.subhead h2{margin:0;font-size:15px}.subhead p{margin:2px 0 0;color:var(--muted);font-size:9px}
+.alert{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;padding:10px 0;border-bottom:1px solid var(--line)}
+.alert:last-child{border-bottom:0}
+.alert b{display:block;font-size:9px}.alert small{display:block;margin-top:2px;color:var(--muted);font-size:8px}.alert>strong{font-size:9px}
+.rank{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:9px;font-weight:800}
+.rank.bad{color:#9c3a35;background:var(--coral-soft)}.rank.warn{color:#8c5e18;background:var(--amber-soft)}.rank.info{color:#3d5e88;background:var(--blue-soft)}
+.subs{overflow:hidden}
+.subs-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:7px 18px 13px;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--line)}
+.subs-summary div{padding:12px 14px;background:var(--paper)}
+.subs-summary strong{display:block;font:750 17px var(--display)}.subs-summary span{display:block;margin-top:3px;color:var(--muted);font-size:8px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:10px}
+th{color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.08em;background:color-mix(in srgb,var(--ink) 3%,var(--paper))}
+tr:last-child td{border-bottom:0}
+td small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.amount{font-weight:800;font-variant-numeric:tabular-nums}
+.status{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border-radius:99px;font-size:8px;font-weight:800}
+.status:before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.status.ok{color:#247a60;background:var(--mint-soft)}.status.warn{color:#91631b;background:var(--amber-soft)}.status.info{color:#3f67a2;background:var(--blue-soft)}
+.mini-link{border:0;color:#3b617e;background:transparent;font-size:8px;font-weight:800}
+.subs-note{margin:0;padding:10px 18px 13px;border-top:1px solid var(--line);color:var(--muted);background:color-mix(in srgb,var(--ink) 3%,var(--paper));font-size:8px}
+.subs-note b{color:var(--ink)}
+/* signature scatter (detail) */
+.sig2{height:230px}.sig2 svg{width:100%;height:100%}
+.sig2 .pt{fill:var(--soft)}.sig2 .ptn{fill:var(--blue)}
+.sig2 .ln-prev{stroke:var(--soft);stroke-width:2;stroke-dasharray:5 4;fill:none}.sig2 .ln-cur{stroke:var(--blue);stroke-width:2.5;fill:none}
+.sig2 .ax{stroke:var(--line)}.sig2 .axlab{fill:var(--muted);font-size:8px}
+/* Drawer */
+.drawer-back{position:fixed;inset:0;background:#0a202666;opacity:0;pointer-events:none;transition:.2s;z-index:50}
+.drawer-back.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;right:0;top:0;width:min(560px,95vw);height:100vh;overflow:auto;background:var(--paper);box-shadow:-20px 0 50px rgba(12,35,42,.25);transform:translateX(105%);transition:.25s ease;z-index:60}
+.drawer.open{transform:translateX(0)}
+.drawer-top{padding:20px 22px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--mint) 5%,var(--paper))}
+.drawer-close{float:right;width:31px;height:31px;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+.drawer-top h2{margin:8px 0 3px;font-size:19px}.drawer-top p{margin:0;color:var(--muted);font-size:10px}
+.drawer-body{padding:18px 22px}
+.verdict{display:grid;grid-template-columns:38px 1fr auto;gap:12px;align-items:center;margin-bottom:15px;padding:14px;border:1px solid color-mix(in srgb,var(--mint) 35%,var(--line));border-radius:14px;background:var(--mint-soft)}
+.verdict .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--paper);font-size:17px}
+.verdict small{display:block;color:var(--muted);font-size:8px}.verdict strong{display:block;margin:2px 0;font:750 14px var(--display)}.verdict p{margin:0;color:var(--muted);font-size:8px}.verdict>b{font:750 13px var(--display);white-space:nowrap}
+.dk{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:15px}
+.dk div{padding:11px;border:1px solid var(--line);border-radius:11px}.dk span{display:block;color:var(--muted);font-size:8px}.dk b{display:block;margin-top:3px;font-size:12px}
+.calib{margin-bottom:15px;padding:13px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--ink) 3%,var(--paper))}
+.calib h3{margin:0 0 4px;font-size:10px}.calib p{margin:0 0 10px;color:var(--muted);font-size:8px}
+.calib svg{width:100%;height:auto;display:block;border-radius:9px;background:var(--paper)}
+.calib .load{fill:none;stroke:#294f70;stroke-width:4;stroke-linecap:round}
+:root[data-theme="dark"] .calib .load{stroke:#5b93d0}
+.calib .cur{stroke:var(--coral);stroke-width:2;stroke-dasharray:7 5}.calib .tgt{stroke:var(--mint);stroke-width:2;stroke-dasharray:4 4}.calib .g{stroke:var(--line)}
+.calib-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;color:var(--muted);font-size:8px}.calib-legend span{display:flex;align-items:center;gap:5px}.calib-legend i{width:16px;height:0;display:block}
+.calib-legend .l1{border-top:3px solid #294f70}.calib-legend .l2{border-top:2px dashed var(--coral)}.calib-legend .l3{border-top:2px dashed var(--mint)}
+.steps{display:grid;gap:7px;margin:12px 0}.step{display:grid;grid-template-columns:23px 1fr;gap:8px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:11px}
+.step .ck{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;color:#23745c;background:var(--mint-soft);font-weight:900;font-size:11px}
+.step strong{display:block;font-size:9px}.step small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.drawer-actions{position:sticky;bottom:0;display:flex;gap:8px;padding:14px 22px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--paper) 95%,transparent);backdrop-filter:blur(10px)}
+/* Water future window */
+.water-hero{position:relative;overflow:hidden;display:grid;grid-template-columns:170px minmax(0,1fr);align-items:center;gap:28px;padding:30px;margin-bottom:16px;border-radius:var(--radius);border:1px solid var(--line);background:linear-gradient(140deg,color-mix(in srgb,var(--ink) 3%,var(--paper)),color-mix(in srgb,var(--ink) 8%,var(--paper)))}
+.orbit{position:relative;display:grid;place-items:center;width:160px;height:160px;border:1px solid color-mix(in srgb,var(--ink) 15%,transparent);border-radius:50%}
+.orbit:before,.orbit:after{content:"";position:absolute;border:1px solid color-mix(in srgb,var(--ink) 10%,transparent);border-radius:50%}.orbit:before{inset:22px}.orbit:after{inset:46px}
+.orbit span{width:64px;height:64px;border-radius:20px;display:grid;place-items:center;color:#fff;background:linear-gradient(140deg,#5b93b8,#1D3150);font-size:30px;box-shadow:0 20px 45px rgba(29,49,80,.3)}
+.water-hero h2{margin:4px 0 8px;font-size:21px;letter-spacing:-.03em}.water-hero p{margin:0;color:var(--muted);font-size:11px;max-width:640px}
+.reqs{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.reqs span{padding:5px 9px;border:1px solid var(--line);border-radius:99px;color:var(--muted);background:var(--paper);font-size:8px;font-weight:700}
+.ghosted{opacity:.55;filter:grayscale(.5)}
+.ghost-kpi span:after{content:" · à venir";color:var(--soft)}
+.plan{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.plan-item{display:flex;gap:10px;padding:13px;border:1px dashed var(--line);border-radius:13px}
+.plan-item .n{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:var(--blue-soft);font-size:11px;font-weight:800;flex-shrink:0}
+.plan-item b{display:block;font-size:10px}.plan-item small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+/* Acquisition */
+.src-manage{margin-left:12px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font-size:9px;font-weight:750}
+.src-manage:hover{border-color:var(--mint)}
+.acq-item{display:grid;grid-template-columns:40px 1fr auto;align-items:center;gap:12px;padding:13px;margin-bottom:10px;border:1px solid var(--line);border-radius:14px}
+.acq-item .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#fff;font-size:17px}
+.acq-item.elec .ic{background:linear-gradient(140deg,#2a6fb0,#1d3150)}
+.acq-item.gaz .ic{background:linear-gradient(140deg,#e78d37,#c25f1c)}
+.acq-item.eau .ic{background:linear-gradient(140deg,#5b93b8,#37627e)}
+.acq-item b{display:block;font-size:12px}
+.acq-item small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.acq-gap{display:inline-block;margin-top:5px;padding:2px 6px;border-radius:6px;font-size:8px;font-weight:750}
+.acq-gap.bad{color:#9c3a35;background:var(--coral-soft)}
+.acq-gap.warn{color:#8c5e18;background:var(--amber-soft)}
+.acq-open{border:0;background:transparent;color:#2a7765;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.acq-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+.acq-row:last-child{border-bottom:0}
+.acq-row b{display:block;font-size:10px}
+.acq-row small{display:block;margin-top:2px;color:var(--muted);font-size:8px}
+.acq-row .btn{padding:6px 10px}
+.view{display:none}.view.active{display:block;animation:fade .2s ease}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.view.active{animation:none}.drawer{transition:none}}
+@media(max-width:1080px){.main-grid,.dash-grid,.plan{grid-template-columns:1fr}.kpis,.dash-kpis{grid-template-columns:repeat(2,1fr)}.access-grid{grid-template-columns:1fr}}
+@media(max-width:820px){.app-shell{grid-template-columns:1fr}.sidebar{display:none}.season-grid{grid-template-columns:1fr}.subs-summary{grid-template-columns:1fr 1fr}.water-hero{grid-template-columns:1fr}.orbit{display:none}.dash-kpis{grid-template-columns:1fr}#content{padding:20px 16px 40px}.dist-hero .fresh{display:none}}
+</style>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">patrimoine<b>aucarré</b></div>
+    <span class="nav-label">Pilotage</span>
+    <button class="nav-item"><span class="nav-icon">◫</span><span>Cockpit</span></button>
+    <button class="nav-item"><span class="nav-icon">▤</span><span>Factures &amp; décisions</span><b class="nav-count">12</b></button>
+    <span class="nav-label">Patrimoine</span>
+    <button class="nav-item"><span class="nav-icon">⌂</span><span>Sites 360°</span></button>
+    <span class="nav-label">Moteurs métiers</span>
+    <button class="nav-item active"><span class="nav-icon">⌁</span><span>Énergie / Fluides</span></button>
+    <button class="nav-item"><span class="nav-icon">⌘</span><span>Marchés &amp; contrats</span></button>
+    <div class="side-note"><b>Maquette V1 · v5</b> — climat chaud+froid + performance ; fenêtres distributeurs ; <b>acquisition</b> (bande Sources → tiroir → collecte par distributeur). Données illustratives.</div>
+  </aside>
+
+  <main class="app-main">
+    <header class="topbar">
+      <span class="crumb" id="crumb"><b>Fluides</b></span>
+      <div class="top-actions">
+        <button class="pill" id="theme">◐ Thème</button>
+        <div class="pill"><span class="dot">PB</span>P. Borja</div>
+      </div>
+    </header>
+
+    <div id="content">
+
+      <!-- ============ VUE GLOBALE ============ -->
+      <section class="view active" id="v-global">
+        <div class="page-head">
+          <div>
+            <span class="eyebrow">Lecture climatique &amp; performance</span>
+            <h1>Fluides &amp; consommations</h1>
+            <p>Le climat (DJU) explique l'essentiel des consommations. On lit d'abord le contexte climatique et la performance intrinsèque du parc, puis on entre dans le détail d'un distributeur. Sans projection financière.</p>
+          </div>
+          <div class="page-actions">
+            <div class="segment"><button class="active">2026</button><button>2025</button></div>
+            <button class="btn ghost">↗ Exporter la synthèse</button>
+          </div>
+        </div>
+
+        <div class="source-strip">
+          <span class="live-dot"></span><b>Sources</b>
+          <span>ENEDIS au 9 juin · GRDF non chargé · SUEZ non raccordé · DJU Météo-France au 6 juil</span>
+          <span class="cov">Couverture élec 92 %</span>
+          <button class="src-manage" data-acq>⟳ Gérer la collecte</button>
+        </div>
+
+        <!-- ====== Trajectoire climatique (chaud+froid) + Performance — EN TÊTE ====== -->
+        <div class="main-grid">
+          <section class="panel">
+            <div class="panel-head"><div><span class="eyebrow">Trajectoire climatique 2026</span><h2>Degrés-jours chauffage &amp; froid</h2><p>Année en cours vs N-1 vs moyenne pluriannuelle observée · base 18 °C</p></div></div>
+            <div class="panel-body">
+              <div class="dju-ind">
+                <div class="ind heat"><span>Chauffage</span><b>1 842 DJU</b><em class="down">↓ 7 % N-1</em><em class="down">↓ 3 % moy</em></div>
+                <div class="ind cool"><span>Froid / clim.</span><b>268 DJU</b><em class="up">↑ 14 % N-1</em><em class="up">↑ 6 % moy</em></div>
+              </div>
+              <div class="chart-wrap">
+                <svg viewBox="0 0 820 300" role="img" aria-label="DJU chauffage et froid mensuels : 2026, N-1 et moyenne">
+                  <line x1="44" x2="792" y1="48" y2="48" class="c-grid"/><line x1="44" x2="792" y1="100" y2="100" class="c-grid"/><line x1="44" x2="792" y1="152" y2="152" class="c-grid"/><line x1="44" x2="792" y1="204" y2="204" class="c-grid"/><line x1="44" x2="792" y1="256" y2="256" class="c-grid"/>
+                  <!-- chauffage (bleu) -->
+                  <polyline class="h-avg" points="44,66 111,82 178,126 245,173 312,218 379,249 446,254 513,251 580,223 647,160 714,96 780,72"/>
+                  <polyline class="h-prev" points="44,60 111,75 178,120 245,170 312,215 379,248 446,254 513,250 580,220 647,155 714,90 780,68"/>
+                  <polyline class="h-cur" points="44,70 111,85 178,130 245,175 312,220 379,250 446,255 513,252 580,225 647,165 714,100 780,75"/>
+                  <!-- froid (ambre) -->
+                  <polyline class="k-avg" points="44,251 111,252 178,241 245,213 312,164 379,106 446,66 513,60 580,125 647,203 714,246 780,252"/>
+                  <polyline class="k-prev" points="44,252 111,253 178,242 245,215 312,168 379,112 446,72 513,66 580,130 647,206 714,247 780,253"/>
+                  <polyline class="k-cur" points="44,250 111,252 178,240 245,210 312,160 379,100 446,60 513,55 580,120 647,200 714,245 780,252"/>
+                  <circle cx="44" cy="70" r="3.4" class="hd"/><circle cx="379" cy="250" r="3.4" class="hd"/><circle cx="780" cy="75" r="3.4" class="hd"/>
+                  <circle cx="446" cy="60" r="3.4" class="kd"/><circle cx="513" cy="55" r="3.4" class="kd"/>
+                  <text x="44" y="292" class="c-lab">Jan</text><text x="111" y="292" class="c-lab">Fév</text><text x="178" y="292" class="c-lab">Mar</text><text x="245" y="292" class="c-lab">Avr</text><text x="312" y="292" class="c-lab">Mai</text><text x="379" y="292" class="c-lab">Juin</text><text x="446" y="292" class="c-lab">Juil</text><text x="513" y="292" class="c-lab">Aoû</text><text x="580" y="292" class="c-lab">Sep</text><text x="647" y="292" class="c-lab">Oct</text><text x="714" y="292" class="c-lab">Nov</text><text x="780" y="292" class="c-lab">Déc</text>
+                </svg>
+              </div>
+              <div class="legend">
+                <span><i class="lh"></i>Chauffage</span><span><i class="lk"></i>Froid / clim.</span>
+                <span style="margin-left:6px"><i class="lh" style="border-top-style:solid"></i>trait plein = 2026</span><span><i class="lp"></i>tirets = N-1</span><span><i class="lm"></i>pointillés = moyenne</span>
+              </div>
+            </div>
+          </section>
+
+          <aside class="perf">
+            <div class="perf-head"><span class="ic">∿</span><div><small>Performance énergétique · corrigée du climat</small><strong>312 kWh/DJU</strong></div></div>
+            <div class="perf-evo bad"><span class="ev">+ 4,2 %</span><div><small>Thermosensibilité vs N-1</small><b>⚠ le parc consomme plus par degré — performance qui se dégrade</b></div></div>
+            <div class="sig">
+              <div class="cap"><span>Signature énergétique (conso / DJU)</span><span>N-1 → 2026</span></div>
+              <svg viewBox="0 0 300 96" role="img" aria-label="Signature énergétique : pente 2026 plus forte que N-1">
+                <line x1="26" y1="82" x2="290" y2="82" class="sg-ax"/><line x1="26" y1="10" x2="26" y2="82" class="sg-ax"/>
+                <line x1="26" y1="70" x2="284" y2="34" class="sg-prev"/>
+                <line x1="26" y1="70" x2="284" y2="20" class="sg-cur"/>
+                <circle cx="26" cy="70" r="3" class="sg-dotp"/><circle cx="284" cy="34" r="3" class="sg-dotp"/><circle cx="284" cy="20" r="3" class="sg-dotc"/>
+                <text x="30" y="93" class="sg-lab">talon</text><text x="250" y="93" class="sg-lab">DJU →</text>
+              </svg>
+            </div>
+            <div class="perf-split">
+              <div><b>68 %</b><span>part thermosensible</span></div>
+              <div><b>32 %</b><span>talon non climatique <em class="up">↑ 2 pts</em></span></div>
+            </div>
+            <div class="perf-split" style="margin-bottom:10px">
+              <div><b>295</b><span>pente chauffage kWh/DJU</span></div>
+              <div><b>17</b><span>pente clim. kWh/DJU froid</span></div>
+            </div>
+            <p class="perf-note">À climat égal, le parc consomme <b>+4,2 % par degré</b> vs N-1 : le signal se lit indépendamment de la météo (réglages, enveloppe, équipements). Le <b>talon</b> qui monte (+2 pts) oriente vers des veilles / usages hors chauffage à instruire. <b>C'est l'indicateur de pilotage n°1.</b></p>
+          </aside>
+        </div>
+
+        <!-- ====== Accès détail par fluide ====== -->
+        <div class="section-lead"><h2>Entrer dans le détail par distributeur</h2><span>Donnée réelle, dérives et surveillance des contrats propres à chaque fluide.</span></div>
+        <div class="access-grid">
+          <button class="access a-elec" data-goto="elec">
+            <span class="embed-note">ENEDIS</span>
+            <div class="a-top"><div class="a-ic">ϟ</div><div><b>Électricité</b><small>Distributeur ENEDIS · EDF / ENGIE</small></div></div>
+            <div class="a-metrics"><div class="a-metric"><span>Observé</span><strong>11,8 GWh</strong></div><div class="a-metric"><span>Évol. DJU</span><strong>– 4,2 %</strong></div><div class="a-metric"><span>Couverture</span><strong>97,8 %</strong></div></div>
+            <div class="a-sub">14 dérives · 48 abonnements à recalibrer</div>
+            <div class="a-foot"><span class="a-open">Ouvrir le détail →</span><span class="status ok">436 PRM</span></div>
+          </button>
+          <button class="access a-gaz" data-goto="gaz">
+            <span class="embed-note">GRDF</span>
+            <div class="a-top"><div class="a-ic">♨</div><div><b>Gaz</b><small>Distributeur GRDF · TotalEnergies</small></div></div>
+            <div class="a-metrics"><div class="a-metric"><span>Observé</span><strong>6,2 GWh</strong></div><div class="a-metric"><span>Évol. DJU</span><strong>– 8,7 %</strong></div><div class="a-metric"><span>Couverture</span><strong>94,1 %</strong></div></div>
+            <div class="a-sub">3 PCE à rattacher · profils CAR à revoir</div>
+            <div class="a-foot"><span class="a-open">Ouvrir le détail →</span><span class="status warn">48 / 51 PCE</span></div>
+          </button>
+          <button class="access a-eau soon" data-goto="eau">
+            <div class="a-top"><div class="a-ic">◌</div><div><b>Eau</b><small>Distributeur SUEZ · titulaire à référencer</small></div></div>
+            <div class="a-metrics"><div class="a-metric"><span>Observé</span><strong>—</strong></div><div class="a-metric"><span>Évolution</span><strong>—</strong></div><div class="a-metric"><span>Couverture</span><strong>—</strong></div></div>
+            <div class="a-sub" style="visibility:hidden">.</div>
+            <div class="a-foot"><span class="a-open">Voir le chantier →</span><span class="badge-soon">À construire</span></div>
+          </button>
+        </div>
+
+        <!-- ====== KPI conso (sans €) ====== -->
+        <div class="kpis">
+          <article class="kpi"><span class="ico">⌁</span><span class="lab">Consommation observée</span><b class="val">18,4 GWh</b><span class="sub">brute · électricité + gaz</span><span class="tag">487 compteurs</span></article>
+          <article class="kpi"><span class="ico">◎</span><span class="lab">Corrigée du climat</span><b class="val">– 6,8 %</b><span class="sub">vs N-1 à DJU comparable</span><span class="tag good">évolution réelle</span></article>
+          <article class="kpi"><span class="ico">▁</span><span class="lab">Talon non climatique</span><b class="val">5,9 GWh</b><span class="sub">32 % de la conso · nuit/week-end</span><span class="tag warn">+ 2 pts vs N-1</span></article>
+          <article class="kpi"><span class="ico">◉</span><span class="lab">Couverture données</span><b class="val">96,8 %</b><span class="sub">484 / 497 compteurs suivis</span><span class="tag">16 à rattacher</span></article>
+        </div>
+
+        <div class="season-grid">
+          <section class="panel season winter"><div class="ic">❄</div><div><span class="eyebrow">Hiver · chauffage</span><h3>– 9,4 % à climat comparable</h3><p>Gaz &amp; électricité thermosensible · oct. à avr.</p></div><div class="score"><b>86</b><small>kWh / DJU</small></div></section>
+          <section class="panel season summer"><div class="ic">☀</div><div><span class="eyebrow">Été · froid</span><h3>+ 3,8 % de besoin électrique</h3><p>Climatisation · mai à sept. · DJU froid</p></div><div class="score"><b>12</b><small>sites à suivre</small></div></section>
+        </div>
+      </section>
+
+      <!-- ============ FENÊTRE ENEDIS ============ -->
+      <section class="view" id="v-elec">
+        <button class="back" data-goto="global">← Retour vue globale</button>
+        <div class="dist-hero d-elec"><div class="lg">ϟ</div><div><h1>Électricité — ENEDIS</h1><p class="sub">Distributeur de mesure ENEDIS · fournisseurs EDF / ENGIE · /refonte-v1/fluides/electricite</p></div><div class="fresh"><span>Dernière donnée</span><b>23 juin 2026</b><span>446 PRM contractuels</span></div></div>
+        <div class="dash-kpis">
+          <div class="dash-kpi"><span>PRM contractuels</span><strong>446</strong><small>412 communicants ouverts</small></div>
+          <div class="dash-kpi"><span>Puissance souscrite</span><strong>18 240 kVA</strong><small>7 fournisseurs</small></div>
+          <div class="dash-kpi"><span>Conso annuelle</span><strong>11,8 GWh</strong><small>436 PRM couverts</small></div>
+          <div class="dash-kpi"><span>Thermosensibilité</span><strong>168 kWh/DJU</strong><small>+ 5,1 % vs N-1</small></div>
+          <div class="dash-kpi"><span>À surveiller</span><strong>23</strong><small>sous-dim. ou proches seuil</small></div>
+        </div>
+        <div class="dash-grid">
+          <section class="panel"><div class="panel-head"><div><h2>Signature énergétique du parc</h2><p>Consommation mensuelle vs DJU · pente = thermosensibilité, ordonnée = talon</p></div></div><div class="panel-body sig2">
+            <svg viewBox="0 0 560 220" role="img" aria-label="Nuage conso vs DJU avec régressions N-1 et 2026">
+              <line x1="40" y1="188" x2="540" y2="188" class="ax"/><line x1="40" y1="20" x2="40" y2="188" class="ax"/>
+              <line x1="40" y1="150" x2="530" y2="60" class="ln-prev"/>
+              <line x1="40" y1="150" x2="530" y2="38" class="ln-cur"/>
+              <circle cx="70" cy="150" r="3.5" class="pt"/><circle cx="130" cy="138" r="3.5" class="pt"/><circle cx="210" cy="120" r="3.5" class="pt"/><circle cx="300" cy="96" r="3.5" class="pt"/><circle cx="400" cy="70" r="3.5" class="pt"/>
+              <circle cx="95" cy="150" r="3.5" class="ptn"/><circle cx="180" cy="128" r="3.5" class="ptn"/><circle cx="270" cy="98" r="3.5" class="ptn"/><circle cx="360" cy="72" r="3.5" class="ptn"/><circle cx="470" cy="46" r="3.5" class="ptn"/>
+              <text x="46" y="182" class="axlab">talon</text><text x="500" y="205" class="axlab">DJU →</text>
+            </svg>
+            <div class="calib-legend" style="padding:0 8px 6px"><span><i class="l1" style="border-top-color:var(--blue)"></i>2026</span><span><i class="l2" style="border-top-color:var(--soft);border-top-style:dashed"></i>N-1</span></div>
+          </div></section>
+          <section class="panel"><div class="panel-head"><div><h2>Calibrage des abonnements</h2><p>Sous-dim. · proche seuil · bien calibré · sur-souscrit</p></div></div><div class="panel-body"><div class="info-list"><div class="info-row"><span>Sous-dimensionnés</span><strong>9</strong></div><div class="info-row"><span>Proches du seuil</span><strong>14</strong></div><div class="info-row"><span>Bien calibrés</span><strong>301</strong></div><div class="info-row"><span>Sur-souscrits</span><strong>122</strong></div></div></div></section>
+        </div>
+
+        <div class="subhead"><span class="ic">⌁</span><div><h2>Dérives prioritaires</h2><p>Consommations journalières et courbes de charge 30 min (spécifique ENEDIS)</p></div></div>
+        <section class="panel"><div class="panel-body">
+          <div class="alert"><span class="rank bad">1</span><div><b>Talon nocturne persistant</b><small>Centre sportif Fonquerne · PRM 300024… · depuis 21 jours</small></div><strong>+ 42 MWh/an</strong></div>
+          <div class="alert"><span class="rank warn">2</span><div><b>Consommation le week-end</b><small>Hôtel de Ville · profil samedi supérieur de 34 %</small></div><strong>+ 11 MWh/an</strong></div>
+        </div></section>
+
+        <div class="subhead"><span class="ic">◉</span><div><h2>Surveillance des contrats</h2><p>Abonnements ENEDIS à recalibrer · mesure → paramètre contractuel → recommandation</p></div></div>
+        <section class="panel subs">
+          <div class="subs-summary"><div><strong>48</strong><span>abonnements à étudier</span></div><div><strong>6</strong><span>risques de dépassement</span></div><div><strong>58 k€</strong><span>économie estimée</span></div><div><strong>30 min</strong><span>pas des courbes</span></div></div>
+          <div style="overflow:auto"><table>
+            <thead><tr><th>Site / abonnement</th><th>Contrat</th><th>Actuel</th><th>Recommandation</th><th>Impact</th><th>Confiance</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><b>Centre sportif Fonquerne</b><small>PRM 30002411873001</small></td><td>ENGIE</td><td>250 kVA</td><td><b>210 kVA</b><small>– 40 kVA</small></td><td class="amount">3 840 €/an</td><td><span class="status ok">Haute</span></td><td><button class="mini-link" data-drawer="fonquerne">Voir le calcul →</button></td></tr>
+              <tr><td><b>Hôtel de Ville</b><small>PRM 30002411928412</small></td><td>EDF</td><td>160 kVA</td><td><b>190 kVA</b><small>+ 30 kVA</small></td><td class="amount">+ 920 €/an</td><td><span class="status ok">Haute</span></td><td><button class="mini-link" data-drawer="hotel">Voir le calcul →</button></td></tr>
+            </tbody>
+          </table></div>
+          <p class="subs-note"><b>Méthode :</b> courbes de charge 30 min, puissance souscrite, percentiles et marge de sécurité par segment tarifaire.</p>
+        </section>
+
+        <div class="subhead" id="collecte-elec"><span class="ic">⟳</span><div><h2>Collecte &amp; qualité des données</h2><p>Sync ENEDIS ré-hébergée dans la fenêtre (remplace la page /energie/donnees isolée)</p></div></div>
+        <section class="panel"><div class="panel-body">
+          <div class="acq-row"><div><b>Référentiel contractuel</b><small>PRM, puissances souscrites, raccordements</small></div><span class="status ok">à jour · 23 juin</span><button class="btn ghost">Mettre à jour</button></div>
+          <div class="acq-row"><div><b>DJU météo</b><small>degrés-jours chaud &amp; froid · Météo-France</small></div><span class="status ok">au 6 juil</span><button class="btn ghost">Synchroniser</button></div>
+          <div class="acq-row"><div><b>Consommations journalières</b><small>422 700 relevés</small></div><span class="status ok">au 9 juin</span><button class="btn ghost">Incrémentale</button></div>
+          <div class="acq-row"><div><b>Puissance max</b><small>indispensable au calibrage des abonnements</small></div><span class="status bad">absente</span><button class="btn mint">Collecter (chemin léger)</button></div>
+          <div class="acq-row"><div><b>Courbe de charge 30 min</b><small>profils fins &amp; dérives</small></div><span class="status bad">absente</span><button class="btn ghost">Collecter</button></div>
+        </div></section>
+      </section>
+
+      <!-- ============ FENÊTRE GRDF ============ -->
+      <section class="view" id="v-gaz">
+        <button class="back" data-goto="global">← Retour vue globale</button>
+        <div class="dist-hero d-gaz"><div class="lg">♨</div><div><h1>Gaz — GRDF</h1><p class="sub">Distributeur de mesure GRDF · fournisseur TotalEnergies · /refonte-v1/fluides/gaz</p></div><div class="fresh"><span>Dernière donnée</span><b>21 juin 2026</b><span>51 PCE suivis</span></div></div>
+        <div class="dash-kpis" style="grid-template-columns:repeat(5,1fr)">
+          <div class="dash-kpi"><span>PCE suivis</span><strong>51</strong><small>48 avec conso</small></div>
+          <div class="dash-kpi"><span>Conso annuelle</span><strong>6,2 GWh</strong><small>corrigée DJU</small></div>
+          <div class="dash-kpi"><span>Thermosensibilité</span><strong>144 kWh/DJU</strong><small>+ 1,8 % vs N-1</small></div>
+          <div class="dash-kpi"><span>Part chauffage</span><strong>92 %</strong><small>talon 8 %</small></div>
+          <div class="dash-kpi"><span>Couverture</span><strong>94,1 %</strong><small>3 PCE à rattacher</small></div>
+        </div>
+        <div class="dash-grid">
+          <section class="panel"><div class="panel-head"><div><h2>Consommation mensuelle &amp; DJU</h2><p>Tous PCE agrégés · barres = MWh, courbe = DJU chauffage</p></div></div><div class="panel-body">
+            <div style="position:relative">
+              <div class="bars"><div class="bar" style="height:95%"></div><div class="bar" style="height:88%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:28%"></div><div class="bar" style="height:16%"></div><div class="bar" style="height:14%"></div><div class="bar" style="height:18%"></div><div class="bar" style="height:32%"></div><div class="bar" style="height:58%"></div><div class="bar" style="height:80%"></div><div class="bar" style="height:92%"></div></div>
+              <svg viewBox="0 0 560 180" preserveAspectRatio="none" style="position:absolute;inset:12px 4px 0;width:calc(100% - 8px);height:168px;pointer-events:none"><polyline points="23,20 70,30 116,58 163,92 209,128 256,150 302,154 349,148 395,120 442,80 488,38 535,22" style="fill:none;stroke:var(--blue);stroke-width:2.5;stroke-dasharray:5 4"/></svg>
+            </div>
+            <div class="axis" style="display:flex;justify-content:space-between;margin-top:6px;color:var(--muted);font-size:8px"><span>Jan</span><span>Fév</span><span>Mar</span><span>Avr</span><span>Mai</span><span>Juin</span><span>Juil</span><span>Aoû</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Déc</span></div>
+            <div class="calib-legend" style="margin-top:8px"><span><i style="width:16px;height:8px;border-radius:2px;background:var(--mint);display:block"></i>Conso MWh</span><span><i class="l2" style="border-top-color:var(--blue);border-top-style:dashed"></i>DJU chauffage</span></div>
+          </div></section>
+          <section class="panel"><div class="panel-head"><div><h2>Rapprochement P1 DALKIA</h2><p>Conso GRDF réelle vs quantité P1 gaz du CPE</p></div></div><div class="panel-body"><div class="info-list"><div class="info-row"><span>Conso GRDF 2026</span><strong>6,20 GWh</strong></div><div class="info-row"><span>Quantité P1 DALKIA</span><strong>5,84 GWh</strong></div><div class="info-row"><span>Écart</span><strong class="amount" style="color:#8c5e18">+ 6,2 %</strong></div><div class="info-row"><span>PCE rapprochés</span><strong>44 / 51</strong></div></div><p style="margin:12px 0 0;color:var(--muted);font-size:9px">La cotation OS3 du P1 reste analysée dans le domaine Marchés/CPE ; ici la conso GRDF sert de référence contradictoire.</p></div></section>
+        </div>
+
+        <div class="subhead"><span class="ic">◉</span><div><h2>Surveillance des contrats</h2><p>Profils GRDF vs CAR et composantes contractuelles TotalEnergies</p></div></div>
+        <section class="panel subs">
+          <div style="overflow:auto"><table>
+            <thead><tr><th>Site / PCE</th><th>Fournisseur</th><th>CAR actuelle</th><th>Observé corrigé</th><th>Diagnostic</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><b>École Michelet</b><small>PCE GI077812</small></td><td>TotalEnergies</td><td>1,20 GWh</td><td>1,34 GWh</td><td><span class="status warn">Écart CAR +11,7 %</span></td><td><button class="mini-link" data-drawer="michelet">Voir le calcul →</button></td></tr>
+            </tbody>
+          </table></div>
+          <p class="subs-note"><b>Méthode :</b> profil hiver GRDF, CAR, tarif d'acheminement et composantes fixes du contrat — recommandation seulement si les données permettent la comparaison.</p>
+        </section>
+
+        <div class="subhead" id="collecte-gaz"><span class="ic">⟳</span><div><h2>Collecte &amp; qualité des données</h2><p>Sync GRDF ADICT</p></div></div>
+        <section class="panel"><div class="panel-body">
+          <div class="acq-row"><div><b>Référentiel PCE</b><small>10 PCE · 0 rattaché à un bâtiment</small></div><span class="status warn">à compléter</span><button class="btn ghost">Synchroniser PCE</button></div>
+          <div class="acq-row"><div><b>Consommation mensuelle</b><small>relevés distributeur GRDF</small></div><span class="status bad">non chargée</span><button class="btn mint">Lancer la collecte</button></div>
+          <p style="margin:10px 0 0;color:var(--muted);font-size:9px">Prérequis : credentials GRDF ADICT configurés. Une fois la conso chargée → thermosensibilité gaz + graphe + rapprochement P1 réels.</p>
+        </div></section>
+      </section>
+
+      <!-- ============ FENÊTRE SUEZ (eau) ============ -->
+      <section class="view" id="v-eau">
+        <button class="back" data-goto="global">← Retour vue globale</button>
+        <div class="dist-hero d-eau"><div class="lg">◌</div><div><h1>Eau — SUEZ</h1><p class="sub">Distributeur SUEZ · titulaire à référencer · /refonte-v1/fluides/eau</p></div><div class="fresh"><span>État</span><b style="color:#845c16">À construire</b><span>aucune collecte</span></div></div>
+        <div class="water-hero">
+          <div class="orbit"><span>◌</span></div>
+          <div>
+            <span class="eyebrow">Prochain fluide</span>
+            <h2>La fenêtre eau est prévue, sans données fictives.</h2>
+            <p>Même trame que les autres distributeurs : consommations en m³, couverture, dérives (fuites, talon permanent) et surveillance des contrats. Elle s'activera dès qu'un export ou un connecteur SUEZ réel sera disponible.</p>
+            <div class="reqs"><span>Référentiel compteurs</span><span>Historique distributeur</span><span>Rattachement aux sites</span><span>Tarifs contractuels</span><span>Télérelève</span></div>
+          </div>
+        </div>
+        <div class="dash-kpis ghosted" style="grid-template-columns:repeat(4,1fr)">
+          <div class="dash-kpi ghost-kpi"><span>Compteurs eau</span><strong>—</strong><small>référentiel à charger</small></div>
+          <div class="dash-kpi ghost-kpi"><span>Volume annuel</span><strong>—</strong><small>m³</small></div>
+          <div class="dash-kpi ghost-kpi"><span>Couverture</span><strong>—</strong><small>télérelève requise</small></div>
+          <div class="dash-kpi ghost-kpi"><span>Fuites détectées</span><strong>—</strong><small>talon permanent</small></div>
+        </div>
+        <div class="subhead"><span class="ic">▱</span><div><h2>Sections prévues à l'activation</h2><p>La fenêtre reprendra la trame ENEDIS / GRDF</p></div></div>
+        <div class="plan">
+          <div class="plan-item"><span class="n">1</span><div><b>Volumes m³ &amp; saisonnalité</b><small>consommation mensuelle par compteur et par site</small></div></div>
+          <div class="plan-item"><span class="n">2</span><div><b>Détection de fuites</b><small>talon permanent, débits de nuit, ruptures de profil</small></div></div>
+          <div class="plan-item"><span class="n">3</span><div><b>Couverture &amp; rattachement</b><small>compteurs ↔ sites, qualité et fraîcheur des index</small></div></div>
+          <div class="plan-item"><span class="n">4</span><div><b>Surveillance des contrats</b><small>diamètre, abonnement, débits de pointe vs tarif SUEZ</small></div></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- Drawer acquisition des données -->
+<aside class="drawer" id="acqDrawer" aria-hidden="true">
+  <div class="drawer-top">
+    <button class="drawer-close" data-close-drawer>×</button>
+    <span class="eyebrow">Acquisition des données</span>
+    <h2>Collecte par distributeur</h2>
+    <p>Choisir un distributeur pour ouvrir sa fenêtre de collecte. L'état ci-dessous vient des sources réelles.</p>
+  </div>
+  <div class="drawer-body">
+    <div class="acq-item elec">
+      <div class="ic">ϟ</div>
+      <div><b>Électricité — ENEDIS</b><small>Conso au 9 juin · 422 700 relevés · 446 PRM</small><span class="acq-gap bad">⚠ Puissance max &amp; courbe de charge absentes</span></div>
+      <button class="acq-open" data-collecte="elec">Ouvrir la collecte →</button>
+    </div>
+    <div class="acq-item gaz">
+      <div class="ic">♨</div>
+      <div><b>Gaz — GRDF</b><small>10 PCE référencés · 0 conso</small><span class="acq-gap bad">⚠ Consommation non chargée</span></div>
+      <button class="acq-open" data-collecte="gaz">Ouvrir la collecte →</button>
+    </div>
+    <div class="acq-item eau">
+      <div class="ic">◌</div>
+      <div><b>Eau — SUEZ</b><small>aucune source</small><span class="acq-gap warn">À raccorder</span></div>
+      <button class="acq-open" data-collecte="eau">Voir le chantier →</button>
+    </div>
+  </div>
+</aside>
+
+<!-- Drawer calibration (Q7) -->
+<div class="drawer-back" id="drawerBack"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-top">
+    <button class="drawer-close" data-close-drawer>×</button>
+    <span class="eyebrow">Calibrage d'abonnement</span>
+    <h2 id="dwTitle">Centre sportif Fonquerne</h2>
+    <p id="dwMeter">Électricité · PRM 30002411873001</p>
+  </div>
+  <div class="drawer-body">
+    <div class="verdict"><span class="ic" id="dwVIc">↘</span><div><small>Diagnostic</small><strong id="dwVerdict">Surdimensionné</strong><p id="dwVsub">250 kVA actuellement → 210 kVA recommandés</p></div><b id="dwGain">3 840 €/an</b></div>
+    <div class="dk"><div><span>Abonnement actuel</span><b id="dwCur">250 kVA</b></div><div><span>Mesure de référence</span><b id="dwRef">184 kW</b></div><div><span>Recommandation</span><b id="dwReco">210 kVA</b></div></div>
+    <div class="calib">
+      <h3>Courbe de charge utilisée</h3><p>Source ENEDIS · 12 mois · pas 30 min · fraîcheur 23 juin</p>
+      <svg viewBox="0 0 600 190" role="img" aria-label="Courbe de charge et niveaux de puissance">
+        <line x1="30" x2="570" y1="45" y2="45" class="g"/><line x1="30" x2="570" y1="95" y2="95" class="g"/><line x1="30" x2="570" y1="145" y2="145" class="g"/>
+        <path d="M30 150 C70 142 92 108 126 120 S178 78 210 98 S264 132 302 108 S350 54 392 76 S448 138 486 114 S532 84 566 96" class="load"/>
+        <line x1="30" x2="570" y1="62" y2="62" class="cur"/><line x1="30" x2="570" y1="82" y2="82" class="tgt"/>
+      </svg>
+      <div class="calib-legend"><span><i class="l1"></i>Mesure ENEDIS</span><span><i class="l2"></i>Contrat actuel</span><span><i class="l3"></i>Recommandation</span></div>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="ck">✓</span><div><strong>Couverture des données</strong><small>99,2 % des pas de 30 min disponibles sur 12 mois</small></div></div>
+      <div class="step"><span class="ck">✓</span><div><strong>Pointe observée</strong><small>184 kW · le 17 janvier à 08:30</small></div></div>
+      <div class="step"><span class="ck">✓</span><div><strong>Percentile P99 + marge</strong><small>171 kW · marge +20 % activité sportive / saison froide</small></div></div>
+      <div class="step"><span class="ck">✓</span><div><strong>Puissance cible</strong><small>210 kVA · palier contractuel proposé</small></div></div>
+    </div>
+  </div>
+  <div class="drawer-actions">
+    <button class="btn ghost" style="flex:1" data-close-drawer>Marquer à instruire</button>
+    <button class="btn mint" style="flex:1">Préparer la demande fournisseur</button>
+  </div>
+</aside>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var crumb=document.getElementById('crumb');
+  var titles={global:'<b>Fluides</b>',elec:'Fluides › <b>Électricité (ENEDIS)</b>',gaz:'Fluides › <b>Gaz (GRDF)</b>',eau:'Fluides › <b>Eau (SUEZ)</b>'};
+  function goto(id){
+    document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});
+    (document.getElementById('v-'+id)||document.getElementById('v-global')).classList.add('active');
+    crumb.innerHTML=titles[id]||titles.global;
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  var drawer=document.getElementById('drawer'),acq=document.getElementById('acqDrawer'),dback=document.getElementById('drawerBack');
+  var DATA={
+    fonquerne:{t:'Centre sportif Fonquerne',m:'Électricité · PRM 30002411873001',vic:'↘',v:'Surdimensionné',vs:'250 kVA actuellement → 210 kVA recommandés',g:'3 840 €/an',cur:'250 kVA',ref:'184 kW',reco:'210 kVA'},
+    hotel:{t:'Hôtel de Ville',m:'Électricité · PRM 30002411928412',vic:'!',v:'À sécuriser',vs:'160 kVA → 190 kVA (6 dépassements récents)',g:'+ 920 €/an',cur:'160 kVA',ref:'174 kW',reco:'190 kVA'},
+    michelet:{t:'École Michelet',m:'Gaz · PCE GI077812',vic:'!',v:'Écart contractuel',vs:'CAR 1,20 GWh vs 1,34 GWh observé (+11,7 %)',g:'à chiffrer',cur:'CAR 1,20 GWh',ref:'1,34 GWh',reco:'Profil à revoir'}
+  };
+  function openDrawer(id){
+    var d=DATA[id];if(!d)return;
+    document.getElementById('dwTitle').textContent=d.t;document.getElementById('dwMeter').textContent=d.m;
+    document.getElementById('dwVIc').textContent=d.vic;document.getElementById('dwVerdict').textContent=d.v;
+    document.getElementById('dwVsub').textContent=d.vs;document.getElementById('dwGain').textContent=d.g;
+    document.getElementById('dwCur').textContent=d.cur;document.getElementById('dwRef').textContent=d.ref;document.getElementById('dwReco').textContent=d.reco;
+    drawer.classList.add('open');dback.classList.add('open');drawer.setAttribute('aria-hidden','false');
+  }
+  function openAcq(){acq.classList.add('open');dback.classList.add('open');acq.setAttribute('aria-hidden','false');}
+  function openCollecte(dist){closeDrawer();goto(dist);setTimeout(function(){var el=document.getElementById('collecte-'+dist);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},280);}
+  function closeDrawer(){[drawer,acq].forEach(function(d){d.classList.remove('open');d.setAttribute('aria-hidden','true');});dback.classList.remove('open');}
+  document.addEventListener('click',function(e){
+    var g=e.target.closest('[data-goto]');if(g){goto(g.getAttribute('data-goto'));return;}
+    if(e.target.closest('[data-acq]')){openAcq();return;}
+    var col=e.target.closest('[data-collecte]');if(col){openCollecte(col.getAttribute('data-collecte'));return;}
+    var dr=e.target.closest('[data-drawer]');if(dr){openDrawer(dr.getAttribute('data-drawer'));return;}
+    if(e.target.closest('[data-close-drawer]')||e.target===dback){closeDrawer();return;}
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
+  var modes=['auto','dark','light'],icons={auto:'◐',dark:'☾',light:'☀'},i=0;
+  document.getElementById('theme').addEventListener('click',function(){
+    i=(i+1)%3;var m=modes[i];
+    if(m==='auto')root.removeAttribute('data-theme');else root.setAttribute('data-theme',m);
+    this.textContent=icons[m]+' Thème';
+  });
+})();
+</script>
