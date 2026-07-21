@@ -53,7 +53,7 @@ function amendmentLabel(d: BpuDocumentSummary) {
 }
 
 export function BpuReferentielV1() {
-  const { token } = useAuth();
+  const { token, user, isLoading } = useAuth();
   const [view, setView] = useState<View>("consultation");
   const [manage, setManage] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -67,10 +67,11 @@ export function BpuReferentielV1() {
   // Filtres évolution
   const [chart, setChart] = useState<BpuTimelineFilters>({ segment_code: "C4", period_code: "HPH" });
 
-  const formulaQ = useQuery<BpuFormula>({ queryKey: ["bpu", "formula"], enabled: !!token, queryFn: () => fetchBpuFormula(token ?? "") });
+  const authReady = !!token && !!user;
+  const formulaQ = useQuery<BpuFormula>({ queryKey: ["bpu", "formula"], enabled: authReady, queryFn: () => fetchBpuFormula(token ?? "") });
   const docsQ = useQuery<BpuDocumentSummary[]>({
     queryKey: ["bpu", "documents", fSupplier, fYear, fLot, fStatus],
-    enabled: !!token,
+    enabled: authReady,
     queryFn: () => fetchBpuDocuments(token ?? "", {
       supplier: fSupplier || undefined,
       valid_year: fYear ? Number(fYear) : undefined,
@@ -78,14 +79,15 @@ export function BpuReferentielV1() {
       extraction_status: fStatus || undefined,
     }),
   });
-  const timelineQ = useQuery<BpuTimelinePoint[]>({ queryKey: ["bpu", "timeline", chart], enabled: !!token && view === "evolution", queryFn: () => fetchBpuTimeline(token ?? "", chart) });
+  const timelineQ = useQuery<BpuTimelinePoint[]>({ queryKey: ["bpu", "timeline", chart], enabled: authReady && view === "evolution", queryFn: () => fetchBpuTimeline(token ?? "", chart) });
 
   const supplierOpts = useMemo(() => Array.from(new Set((docsQ.data ?? []).map((d) => d.supplier))).sort(), [docsQ.data]);
   const yearOpts = useMemo(() => Array.from(new Set((docsQ.data ?? []).map((d) => d.valid_year))).sort(), [docsQ.data]);
   const segChoices = formulaQ.data?.segments ?? [];
   const perChoices = formulaQ.data?.periods ?? [];
 
-  if (!token) return <p className="po2-muted-line">Connecte-toi pour accéder aux BPU.</p>;
+  if (isLoading) return <p className="po2-muted-line">Validation de la session...</p>;
+  if (!authReady) return <p className="po2-muted-line">Connecte-toi pour acceder aux BPU.</p>;
 
   return (
     <div className="po2-page-v1">
@@ -184,8 +186,8 @@ export function BpuReferentielV1() {
         </Card>
       )}
 
-      <BpuDetailDrawer token={token} documentId={selectedId} onClose={() => setSelectedId(null)} />
-      <BpuManageDrawer token={token} open={manage} onClose={() => setManage(false)} />
+      <BpuDetailDrawer token={token!} documentId={selectedId} onClose={() => setSelectedId(null)} />
+      <BpuManageDrawer token={token!} open={manage} onClose={() => setManage(false)} />
     </div>
   );
 }
