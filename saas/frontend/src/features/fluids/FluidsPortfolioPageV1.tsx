@@ -3,7 +3,14 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SegmentControl } from "../../design-system";
-import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly, fetchFluidsElecObservedPrice } from "../../lib/api";
+import {
+  fetchEnergieOverview,
+  fetchFluidsClimate,
+  fetchDjuMonthly,
+  fetchFluidsElecObservedPrice,
+  fetchGasPortfolio,
+  fetchGasBudgetRevise,
+} from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
 import { FluidsAcquisitionDrawerV1 } from "./FluidsAcquisitionDrawerV1";
@@ -58,6 +65,21 @@ export function FluidsPortfolioPageV1() {
     queryFn: () => fetchFluidsElecObservedPrice(token!),
     enabled: !!token,
     staleTime: 300_000,
+  });
+
+  const { data: gasPortfolio } = useQuery({
+    queryKey: ["gas-portfolio"],
+    queryFn: () => fetchGasPortfolio(token!),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+
+  const gasBudgetYear = Number(period);
+  const { data: gasBudget } = useQuery({
+    queryKey: ["gas-budget-revise", gasBudgetYear],
+    queryFn: () => fetchGasBudgetRevise(token!, gasBudgetYear),
+    enabled: !!token,
+    staleTime: 60_000,
   });
 
   const djuOutlook = useMemo(() => {
@@ -137,6 +159,14 @@ export function FluidsPortfolioPageV1() {
     ? Math.round((elecCoveredPrms / elecPrms) * 100)
     : null;
   const elecSurveiller = overview ? overview.kpis.sous_dimensionnes + overview.kpis.proche_seuil : null;
+  const gasPceCount = gasPortfolio?.by_site.length ?? null;
+  const gasLinkedCount = gasPortfolio?.by_site.filter((s) => s.linked).length ?? null;
+  const gasCoverage = gasPceCount != null && gasLinkedCount != null && gasPceCount > 0
+    ? Math.round((gasLinkedCount / gasPceCount) * 100)
+    : null;
+  const gasDerives = gasPortfolio
+    ? (gasPortfolio.by_control.review ?? 0) + (gasPortfolio.by_control.invalid ?? 0)
+    : null;
 
   return (
     <div className="po2-page-v1">
@@ -182,13 +212,16 @@ export function FluidsPortfolioPageV1() {
         </Link>
 
         <Link to="/refonte-v1/fluides/gaz" className="po2-fluid-access po2-fluid-access--gaz">
-          <div className="po2-fluid-access__top"><div className="po2-fluid-access__ic">♨</div><div><b>Gaz</b><small>Distributeur GRDF · TotalEnergies</small></div></div>
+          <div className="po2-fluid-access__top"><div className="po2-fluid-access__ic">G</div><div><b>Gaz</b><small>Distributeur GRDF - TotalEnergies</small></div></div>
           <div className="po2-fluid-access__metrics">
-            <div className="po2-fluid-access__metric"><span>Distributeur</span><strong>GRDF</strong></div>
-            <div className="po2-fluid-access__metric"><span>PCE</span><strong>51</strong></div>
-            <div className="po2-fluid-access__metric"><span>Couverture</span><strong>—</strong></div>
+            <div className="po2-fluid-access__metric"><span>Observe</span><strong>{formatKwh(gasPortfolio?.total_kwh)}</strong></div>
+            <div className="po2-fluid-access__metric"><span>PCE</span><strong>{gasPceCount != null ? gasPceCount.toLocaleString("fr-FR") : "-"}</strong></div>
+            <div className="po2-fluid-access__metric"><span>Couverture</span><strong title="Part des PCE factures deja rattaches a un batiment">{gasCoverage != null ? `${gasCoverage}%` : "-"}</strong></div>
           </div>
-          <div className="po2-fluid-access__foot"><span className="po2-fluid-access__open">Ouvrir le détail →</span></div>
+          <div className="po2-fluid-access__foot">
+            <span style={{ fontSize: 11, opacity: 0.85 }}>{gasDerives != null ? `${gasDerives.toLocaleString("fr-FR")} derive(s)` : "derives -"} - {gasLinkedCount != null && gasPceCount != null ? `${gasLinkedCount}/${gasPceCount} rattaches` : "calibrage a consolider"}</span>
+            <span className="po2-fluid-access__open">Ouvrir le detail -></span>
+          </div>
         </Link>
 
         <Link to="/refonte-v1/fluides/eau" className="po2-fluid-access po2-fluid-access--eau po2-fluid-access--soon">
@@ -250,31 +283,57 @@ export function FluidsPortfolioPageV1() {
       ) : null}
 
       <section className="po2-card">
-        <header className="po2-card__header"><div><span className="po2-eyebrow">Impact financier · électricité</span><h2>Estimation sur factures observées</h2></div></header>
+        <header className="po2-card__header"><div><span className="po2-eyebrow">Impact financier - fluides</span><h2>Electricite observee - gaz atterrissage</h2></div></header>
         <div className="po2-card__body">
-          {finance ? (
+          {finance || gasBudget ? (
             <>
-              <div style={{ display: "grid", gap: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span className="po2-muted-line">Base observée</span>
-                  <strong style={{ fontSize: 22 }}>{formatEur(finance.now)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+              <div style={{ display: "grid", gap: 14 }}>
+                <div>
+                  <b style={{ display: "block", marginBottom: 8 }}>Electricite</b>
+                  {finance ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Base observee</span>
+                        <strong style={{ fontSize: 20 }}>{formatEur(finance.now)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Projection +5 ans</span>
+                        <strong style={{ fontSize: 20, color: "#c2410c" }}>{formatEur(finance.y5)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Projection +10 ans</span>
+                        <strong style={{ fontSize: 20, color: "#b91c1c" }}>{formatEur(finance.y10)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                      </div>
+                    </div>
+                  ) : <p className="po2-muted-line">Necessite des factures electricite avec TTC + kWh factures.</p>}
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span className="po2-muted-line">Projection +5 ans</span>
-                  <strong style={{ fontSize: 22, color: "#c2410c" }}>{formatEur(finance.y5)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span className="po2-muted-line">Projection +10 ans</span>
-                  <strong style={{ fontSize: 22, color: "#b91c1c" }}>{formatEur(finance.y10)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                <div style={{ borderTop: "1px solid rgba(148,163,184,0.24)", paddingTop: 12 }}>
+                  <b style={{ display: "block", marginBottom: 8 }}>Gaz TotalEnergies</b>
+                  {gasBudget ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Atterrissage {gasBudgetYear}</span>
+                        <strong style={{ fontSize: 20 }}>{formatEur(gasBudget.totals.atterrissage)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Realise a date</span>
+                        <strong style={{ fontSize: 18 }}>{formatEur(gasBudget.totals.realise)}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Ecart / reference</span>
+                        <strong style={{ fontSize: 18, color: gasBudget.totals.ecart_atterrissage_vs_prevision > 0 ? "#b91c1c" : "#15803d" }}>{formatEur(gasBudget.totals.ecart_atterrissage_vs_prevision)}</strong>
+                      </div>
+                    </div>
+                  ) : <p className="po2-muted-line">Necessite les factures gaz TotalEnergies pour calculer l'atterrissage.</p>}
                 </div>
               </div>
               <p className="po2-muted-line" style={{ marginTop: 12, fontSize: 12 }}>
-                Prix observé = total TTC facturé / kWh facturés sur les factures électricité importées ({finance.invoiceCount} facture(s) en {finance.currentYear ?? "année courante"}). Il inclut toutes les composantes présentes : fourniture, capacité, CEE/GO, acheminement/TURPE, taxes et lignes fixes.
-                <br />Projection indicative : conso élec projetée par DJU × tendance du prix TTC observé. Gaz non inclus.
+                Electricite : prix observe = total TTC facture / kWh factures, toutes composantes incluses. Gaz : atterrissage annuel issu des factures TotalEnergies, avec reste projete par DJU quand disponible.
+                <br />Prochaine etape : brancher la projection gaz +5/+10 ans sur une tendance prix gaz TTC ou sur la perspective BPU gaz.
               </p>
             </>
           ) : (
-            <p className="po2-muted-line">Nécessite la conso élec, la projection climatique et des factures électricité avec TTC + kWh facturés.</p>
+            <p className="po2-muted-line">Necessite des factures electricite ou gaz importees pour afficher l'impact financier.</p>
           )}
         </div>
       </section>
