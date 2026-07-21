@@ -120,7 +120,7 @@ export function BpuReferentielV1() {
             </label>
             <label><span>Lot</span>
               <select value={fLot} onChange={(e) => setFLot(e.currentTarget.value)}>
-                <option value="">Tous</option><option value="1">Lot 1</option><option value="2">Lot 2</option><option value="3">Lot 3</option>
+                <option value="">Tous</option><option value="1">Lot 1</option><option value="2">Lot 2</option><option value="3">Lot 3</option><option value="7">Lot 7</option>
               </select>
             </label>
             <label><span>Statut</span>
@@ -173,7 +173,7 @@ export function BpuReferentielV1() {
             </label>
             <label><span>Lot</span>
               <select value={chart.lot_number?.toString() ?? ""} onChange={(e) => setChart((f) => ({ ...f, lot_number: e.currentTarget.value ? Number(e.currentTarget.value) : undefined }))}>
-                <option value="">Tous</option><option value="1">Lot 1</option><option value="2">Lot 2</option><option value="3">Lot 3</option>
+                <option value="">Tous</option><option value="1">Lot 1</option><option value="2">Lot 2</option><option value="3">Lot 3</option><option value="7">Lot 7</option>
               </select>
             </label>
           </div>
