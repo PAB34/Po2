@@ -46,11 +46,12 @@ function uniq<T extends string | number>(values: (T | null | undefined)[]): T[] 
   return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-type TabKey = "timeline" | "turpe" | "documents" | "edition";
+type TabKey = "timeline" | "turpe" | "perspective" | "documents" | "edition";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "timeline",  label: "Timeline" },
   { key: "turpe",     label: "TURPE" },
+  { key: "perspective", label: "Perspective" },
   { key: "documents", label: "Documents & Import" },
   { key: "edition",   label: "Édition tableau" },
 ];
@@ -273,6 +274,13 @@ export default function EnergieBpuPage() {
       )}
 
       {/* ════════════════════════════════════════════════════════════════
+          Onglet PERSPECTIVE (projection tarifaire)
+      ════════════════════════════════════════════════════════════════ */}
+      {activeTab === "perspective" && (
+        <PerspectiveSection points={timelineQuery.data ?? []} segment={chartFilters.segment_code} period={chartFilters.period_code} />
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════
           Onglet DOCUMENTS & IMPORT
       ════════════════════════════════════════════════════════════════ */}
       {activeTab === "documents" && (
@@ -466,6 +474,130 @@ export default function EnergieBpuPage() {
           <BpuEditableTable />
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Sous-composant PERSPECTIVE (projection tarifaire fourniture) ───────────
+
+function PerspectiveSection({ points, segment, period }: { points: BpuTimelinePoint[]; segment?: string; period?: string }) {
+  const model = useMemo(() => {
+    const byYear = new Map<number, Map<string, { sum: number; n: number }>>();
+    for (const p of points) {
+      if (p.price_value_eur_per_mwh == null || p.valid_year == null) continue;
+      if (!byYear.has(p.valid_year)) byYear.set(p.valid_year, new Map());
+      const comps = byYear.get(p.valid_year)!;
+      const cur = comps.get(p.component_type) ?? { sum: 0, n: 0 };
+      cur.sum += Number(p.price_value_eur_per_mwh);
+      cur.n += 1;
+      comps.set(p.component_type, cur);
+    }
+    const hist = Array.from(byYear.entries())
+      .map(([year, comps]) => {
+        let total = 0;
+        comps.forEach((v) => { total += v.n ? v.sum / v.n : 0; });
+        return { year, total };
+      })
+      .filter((r) => r.total > 0)
+      .sort((a, b) => a.year - b.year);
+    if (hist.length < 2) return null;
+    const xs = hist.map((r) => r.year);
+    const ys = hist.map((r) => r.total);
+    const n = xs.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+    const slope = den ? num / den : 0;
+    const intercept = my - slope * mx;
+    const f = (y: number) => Math.max(0, intercept + slope * y);
+    const lastYear = hist[hist.length - 1].year;
+    const projYears = Array.from({ length: 10 }, (_u, i) => lastYear + i + 1);
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+    const rows = [
+      ...hist.map((r) => ({ label: String(r.year), hist: round1(r.total) as number | null, proj: (r.year === lastYear ? round1(r.total) : null) as number | null })),
+      ...projYears.map((y) => ({ label: String(y), hist: null as number | null, proj: round1(f(y)) as number | null })),
+    ];
+    const table = [
+      ...hist.map((r) => ({ year: r.year, mwh: r.total, proj: false })),
+      ...projYears.map((y) => ({ year: y, mwh: f(y), proj: true })),
+    ];
+    const g = (dy: number) => (f(lastYear) > 0 ? ((f(lastYear + dy) - f(lastYear)) / f(lastYear)) * 100 : null);
+    return { rows, table, lastYear, histFrom: hist[0].year, cur: f(lastYear), p5: f(lastYear + 5), p10: f(lastYear + 10), g5: g(5), g10: g(10) };
+  }, [points]);
+
+  if (!model) {
+    return <div style={{ padding: 24, color: "#94a3b8" }}>Pas assez d'historique BPU pour projeter (changez le segment/poste dans l'onglet Timeline).</div>;
+  }
+  const pctTxt = (v: number | null) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)} %`);
+  const eurKwh = (mwh: number) => (mwh / 1000).toFixed(3);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ fontSize: "0.83rem", color: "#64748b" }}>
+        Projection tendancielle du <b style={{ color: "#e2e8f0" }}>prix de fourniture (HTT)</b> = fourniture + capacité + CEE + GO,
+        régression linéaire sur l'historique {model.histFrom}–{model.lastYear}
+        {segment ? ` · segment ${segment}${period ? ` / ${period}` : ""}` : ""}.
+        <br />⚠️ Hors réseau (TURPE, cf. onglet dédié) et hors taxes — l'assemblage TTC est l'étape suivante.
+      </div>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {[
+          { k: `Actuel (${model.lastYear})`, v: `${model.cur.toFixed(1)} €/MWh`, s: `${eurKwh(model.cur)} €/kWh HTT` },
+          { k: "Projection +5 ans", v: `${model.p5.toFixed(1)} €/MWh`, s: `${pctTxt(model.g5)} · ${eurKwh(model.p5)} €/kWh` },
+          { k: "Projection +10 ans", v: `${model.p10.toFixed(1)} €/MWh`, s: `${pctTxt(model.g10)} · ${eurKwh(model.p10)} €/kWh` },
+        ].map((c) => (
+          <div key={c.k} style={{ flex: "1 1 180px", padding: "12px 16px", background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10 }}>
+            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{c.k}</div>
+            <div style={{ fontSize: "1.2rem", fontWeight: 700, color: "#e2e8f0" }}>{c.v}</div>
+            <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{c.s}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ height: 300, background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.15)", borderRadius: 10, padding: "12px 8px 4px" }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={model.rows} margin={{ top: 8, right: 16, left: -6, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+            <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} width={64} unit=" €/MWh" domain={["auto", "auto"]} />
+            <Tooltip formatter={(v: number) => [`${v.toLocaleString("fr-FR")} €/MWh`, ""]} labelFormatter={(l) => `Année ${l}`} contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8 }} />
+            <ReferenceLine x={String(model.lastYear)} stroke="#475569" strokeDasharray="4 4" />
+            <Line dataKey="hist" name="Historique" stroke="#60a5fa" strokeWidth={3} dot connectNulls={false} />
+            <Line dataKey="proj" name="Projection" stroke="#a78bfa" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.25)", color: "#94a3b8" }}>
+              <th style={{ textAlign: "left", padding: "7px 10px" }}>Année</th>
+              <th style={{ textAlign: "right", padding: "7px 10px" }}>€/MWh HTT</th>
+              <th style={{ textAlign: "right", padding: "7px 10px" }}>€/kWh HTT</th>
+              <th style={{ textAlign: "right", padding: "7px 10px" }}>Évolution</th>
+              <th style={{ textAlign: "left", padding: "7px 10px" }}>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {model.table.map((r, i) => {
+              const prev = i > 0 ? model.table[i - 1].mwh : null;
+              const evo = prev && prev > 0 ? ((r.mwh - prev) / prev) * 100 : null;
+              return (
+                <tr key={r.year} style={{ borderBottom: "1px solid rgba(148,163,184,0.1)", color: r.proj ? "#a78bfa" : "#e2e8f0" }}>
+                  <td style={{ padding: "6px 10px" }}>{r.year}</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{r.mwh.toFixed(1)}</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right" }}>{eurKwh(r.mwh)}</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: evo == null ? "#64748b" : evo >= 0 ? "#f87171" : "#4ade80" }}>{evo == null ? "—" : `${evo >= 0 ? "+" : ""}${evo.toFixed(1)} %`}</td>
+                  <td style={{ padding: "6px 10px" }}>{r.proj ? "Projeté" : "Réel"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
