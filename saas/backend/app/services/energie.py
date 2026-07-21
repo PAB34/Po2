@@ -1236,6 +1236,27 @@ def _parc_elec_by_month() -> dict[str, float]:
     return agg
 
 
+def get_fluids_elec_series() -> dict[str, Any]:
+    """Séries élec pour la vue Fluides : conso mensuelle du parc (multi-années)
+    + consommation annuelle glissante par fournisseur (pour la part de conso)."""
+    monthly = [
+        {"month": ym, "kwh": round(value, 1)}
+        for ym, value in sorted(_parc_elec_by_month().items())
+    ]
+    supplier_kwh: dict[str, float] = {}
+    for uid, contract in _contracts().items():
+        annual_kwh, _start, _end, _days = _rolling_annual_kwh(uid)
+        if annual_kwh is None or annual_kwh <= 0:
+            continue
+        supplier = contract.get("0_contractor") or "Inconnu"
+        supplier_kwh[supplier] = supplier_kwh.get(supplier, 0.0) + annual_kwh
+    suppliers = [
+        {"supplier": supplier, "annual_kwh": round(value, 1)}
+        for supplier, value in sorted(supplier_kwh.items(), key=lambda item: -item[1])
+    ]
+    return {"monthly": monthly, "suppliers": suppliers}
+
+
 def _linreg(xs: list[float], ys: list[float]) -> tuple[float, float, float | None] | None:
     """Ordinary least squares. Returns (slope, intercept, r2) or None."""
     n = len(xs)

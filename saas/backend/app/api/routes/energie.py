@@ -8,6 +8,7 @@ from app.schemas.energie import (
     EnergieOverview,
     EnergyDataAudit,
     FluidsClimateOverview,
+    FluidsElecSeries,
     PowerRecommendationOverview,
     PrmAnnualProfile,
     PrmDailyConsumption,
@@ -24,6 +25,7 @@ from app.services.energie import (
     get_dju_monthly,
     get_energie_overview,
     get_fluids_climate,
+    get_fluids_elec_series,
     get_prm_annual_profile,
     get_prm_daily_consumption,
     get_prm_detail,
@@ -69,6 +71,14 @@ def get_fluids_climate_route(
 ) -> FluidsClimateOverview:
     """Vue globale Fluides : trajectoire DJU chauffage/froid (N/N-1/moyenne) et signature thermique."""
     return FluidsClimateOverview.model_validate(get_fluids_climate())
+
+
+@router.get("/fluids/elec-series", response_model=FluidsElecSeries)
+def get_fluids_elec_series_route(
+    current_user: User = Depends(get_current_user),
+) -> FluidsElecSeries:
+    """Détail Électricité : conso mensuelle du parc (multi-années) + conso annuelle par fournisseur."""
+    return FluidsElecSeries.model_validate(get_fluids_elec_series())
 
 
 @router.get("/preconisations", response_model=PowerRecommendationOverview)

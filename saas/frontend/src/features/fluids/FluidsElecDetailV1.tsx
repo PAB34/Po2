@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, StatusBadge } from "../../design-system";
-import { fetchEnergieOverview, type PrmListItem } from "../../lib/api";
+import { fetchEnergieOverview, fetchDjuMonthly, fetchFluidsElecSeries, type PrmListItem } from "../../lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -40,6 +41,32 @@ const CALIB_TONE: Record<string, "ok" | "warn" | "bad" | "info" | "neutral"> = {
   sur_souscrit: "info",
 };
 const CALIB_ORDER = ["sous_dimensionne", "proche_seuil", "bien_calibre", "sur_souscrit"];
+const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+
+function monthlyCurVsAvg(monthly: { month: string; kwh: number }[] | undefined, transform: (kwh: number, ym: string) => number | null): { rows: { label: string; cur: number | null; avg: number | null }[]; current: string; prevCount: number } {
+  const byYear: Record<string, (number | null)[]> = {};
+  for (const p of monthly ?? []) {
+    const ym = p.month.slice(0, 7);
+    const y = ym.slice(0, 4);
+    const m = parseInt(ym.slice(5, 7), 10) - 1;
+    if (!/^\d{4}$/.test(y) || m < 0 || m > 11) continue;
+    const val = transform(p.kwh, ym);
+    if (val == null) continue;
+    if (!byYear[y]) byYear[y] = Array(12).fill(null);
+    byYear[y][m] = val;
+  }
+  const years = Object.keys(byYear).sort();
+  if (years.length === 0) return { rows: [], current: "", prevCount: 0 };
+  const cy = years[years.length - 1];
+  const prev = years.slice(0, -1);
+  const rows = MONTHS.map((label, i) => {
+    const cur = byYear[cy]?.[i] ?? null;
+    const pv = prev.map((y) => byYear[y][i]).filter((v): v is number => v != null);
+    const avg = pv.length ? pv.reduce((a, b) => a + b, 0) / pv.length : null;
+    return { label, cur, avg };
+  });
+  return { rows, current: cy, prevCount: prev.length };
+}
 
 function etatTone(s: string | null | undefined): "ok" | "warn" | "bad" | "neutral" {
   if (!s) return "neutral";
@@ -182,6 +209,32 @@ export function FluidsElecDetailV1() {
     enabled: !!token,
     staleTime: 60_000,
   });
+  const { data: series } = useQuery({
+    queryKey: ["fluids-elec-series"],
+    queryFn: () => fetchFluidsElecSeries(token!),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+  const { data: djuMonthly } = useQuery({
+    queryKey: ["dju-monthly"],
+    queryFn: () => fetchDjuMonthly(token!),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+
+  const djuMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const d of djuMonthly ?? []) m[d.month.slice(0, 7)] = (d.dju_chauffe ?? 0) + (d.dju_froid ?? 0);
+    return m;
+  }, [djuMonthly]);
+  const consoChart = useMemo(() => monthlyCurVsAvg(series?.monthly, (kwh) => Math.round(kwh / 1000)), [series]);
+  const perfChart = useMemo(() => monthlyCurVsAvg(series?.monthly, (kwh, ym) => { const d = djuMap[ym]; return d && d > 0 ? Math.round(kwh / d) : null; }), [series, djuMap]);
+  const supplierConso = useMemo(() => {
+    const map: Record<string, number> = {};
+    let total = 0;
+    for (const s of series?.suppliers ?? []) { const key = shortSupplier(s.supplier); map[key] = (map[key] ?? 0) + s.annual_kwh; total += s.annual_kwh; }
+    return { map, total };
+  }, [series]);
 
   const k = overview?.kpis;
   const coverage = k && k.total_prms > 0 ? Math.round((k.annual_consumption_prms / k.total_prms) * 100) : null;
@@ -238,21 +291,51 @@ export function FluidsElecDetailV1() {
         <KpiCard label="À surveiller" value={surveiller != null ? surveiller.toLocaleString("fr-FR") : "—"} detail="Sous-dimensionnés ou proches du seuil" tone={surveiller && surveiller > 0 ? "warning" : "neutral"} />
       </div>
 
-      {/* Graphiques (à l'image de Trajectoire climatique) — branchement en cours */}
+      {/* Graphiques (style Trajectoire climatique) */}
       <div className="po2-two-columns">
         <section className="po2-card">
-          <header className="po2-card__header">
-            <div><span className="po2-eyebrow">Consommations</span><h2>Suivi vs moyenne des années précédentes</h2></div>
-            <StatusBadge tone="info">à venir</StatusBadge>
-          </header>
-          <div className="po2-card__body"><p className="po2-muted-line">Graphique mensuel (année en cours vs moyenne N-1…N-3), dans le style « Trajectoire climatique ». Nécessite l'endpoint conso mensuelle multi-années — branchement au prochain incrément.</p></div>
+          <header className="po2-card__header"><div><span className="po2-eyebrow">Consommations</span><h2>Suivi vs moyenne des années précédentes</h2></div></header>
+          <div className="po2-card__body">
+            {consoChart.rows.length === 0 ? <p className="po2-muted-line">Données mensuelles indisponibles.</p> : (
+              <>
+                <div style={{ height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={consoChart.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} width={46} unit=" MWh" />
+                      <Tooltip formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} MWh`, n === "cur" ? `Année ${consoChart.current}` : "Moyenne années préc."]} labelFormatter={(l) => `Mois : ${l}`} />
+                      <Line dataKey="avg" name="avg" stroke="#94a3b8" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
+                      <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={false} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="po2-muted-line" style={{ fontSize: 12 }}>Conso mensuelle du parc — {consoChart.current} (trait plein) vs moyenne des {consoChart.prevCount} années précédentes (tirets).</p>
+              </>
+            )}
+          </div>
         </section>
         <section className="po2-card">
-          <header className="po2-card__header">
-            <div><span className="po2-eyebrow">Performance</span><h2>Ratio kWh/DJU du parc</h2></div>
-            <StatusBadge tone="info">à venir</StatusBadge>
-          </header>
-          <div className="po2-card__body"><p className="po2-muted-line">Ratios kWh/DJU mensuels + cible historique (ligne verte), restylés « Trajectoire climatique ». Données présentes (dju_seasonal) — restyle au prochain incrément.</p></div>
+          <header className="po2-card__header"><div><span className="po2-eyebrow">Performance</span><h2>Ratio kWh/DJU du parc</h2></div></header>
+          <div className="po2-card__body">
+            {perfChart.rows.length === 0 ? <p className="po2-muted-line">Données kWh/DJU indisponibles.</p> : (
+              <>
+                <div style={{ height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={perfChart.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} width={54} unit=" kWh/DJU" />
+                      <Tooltip formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} kWh/DJU`, n === "cur" ? `Année ${perfChart.current}` : "Cible (moyenne)"]} labelFormatter={(l) => `Mois : ${l}`} />
+                      <Line dataKey="avg" name="avg" stroke="#16a34a" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
+                      <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={false} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="po2-muted-line" style={{ fontSize: 12 }}>Ratio kWh/DJU mensuel — {perfChart.current} (bleu) vs cible historique = moyenne des années précédentes (vert).</p>
+              </>
+            )}
+          </div>
         </section>
       </div>
 
@@ -306,20 +389,29 @@ export function FluidsElecDetailV1() {
 
         {/* Fournisseurs (puissance) */}
         <section className="po2-card">
-          <header className="po2-card__header"><div><span className="po2-eyebrow">Marché</span><h2>Fournisseurs (puissance)</h2></div></header>
+          <header className="po2-card__header"><div><span className="po2-eyebrow">Marché</span><h2>Fournisseurs — puissance &amp; consommation</h2></div></header>
           <div className="po2-card__body">
-            {suppliers.length === 0 ? <p className="po2-muted-line">—</p> : suppliers.map((s) => (
-              <div key={s.supplier} style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span>{shortSupplier(s.supplier)}</span>
-                  <b>{formatKva(s.total_kva)} · {s.prm_count.toLocaleString("fr-FR")} PRM</b>
+            {suppliers.length === 0 ? <p className="po2-muted-line">—</p> : suppliers.map((s) => {
+              const name = shortSupplier(s.supplier);
+              const conso = supplierConso.map[name] ?? 0;
+              const consoPct = supplierConso.total > 0 ? Math.round((conso / supplierConso.total) * 100) : 0;
+              const kvaPct = Math.round((s.total_kva / maxSupplierKva) * 100);
+              return (
+                <div key={s.supplier} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span><b>{name}</b> · {s.prm_count.toLocaleString("fr-FR")} PRM</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }} className="po2-muted-line"><span>Puissance</span><span>{formatKva(s.total_kva)}</span></div>
+                  <div style={{ height: 6, background: "rgba(148,163,184,0.18)", borderRadius: 4, overflow: "hidden", margin: "2px 0 5px" }}>
+                    <div style={{ width: `${kvaPct}%`, height: "100%", background: "#6366f1" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }} className="po2-muted-line"><span>Consommation</span><span>{formatKwh(conso)} · {consoPct}%</span></div>
+                  <div style={{ height: 6, background: "rgba(148,163,184,0.18)", borderRadius: 4, overflow: "hidden", marginTop: 2 }}>
+                    <div style={{ width: `${consoPct}%`, height: "100%", background: "#3e6ea8" }} />
+                  </div>
                 </div>
-                <div style={{ height: 6, background: "rgba(148,163,184,0.18)", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ width: `${Math.round((s.total_kva / maxSupplierKva) * 100)}%`, height: "100%", background: "#6366f1" }} />
-                </div>
-              </div>
-            ))}
-            <p className="po2-muted-line" style={{ marginTop: 8, fontSize: 12 }}>Part de consommation par fournisseur : au prochain incrément (agrégat conso/fournisseur).</p>
+              );
+            })}
           </div>
         </section>
       </div>

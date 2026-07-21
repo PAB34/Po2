@@ -1226,6 +1226,18 @@ export async function fetchDjuMonthly(token: string): Promise<DjuMonthPoint[]> {
   return parseResponse<DjuMonthPoint[]>(response);
 }
 
+export type FluidsElecSeries = {
+  monthly: { month: string; kwh: number }[];
+  suppliers: { supplier: string; annual_kwh: number }[];
+};
+
+export async function fetchFluidsElecSeries(token: string): Promise<FluidsElecSeries> {
+  const response = await fetch(`${apiBaseUrl}/energie/fluids/elec-series`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<FluidsElecSeries>(response);
+}
+
 export type DjuPerfPoint = {
   month: string;
   kwh: number;

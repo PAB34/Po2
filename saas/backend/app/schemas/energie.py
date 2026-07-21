@@ -331,6 +331,21 @@ class FluidsClimateOverview(BaseModel):
     thermal: FluidsThermal
 
 
+class FluidsElecMonthPoint(BaseModel):
+    month: str
+    kwh: float
+
+
+class FluidsElecSupplierPoint(BaseModel):
+    supplier: str
+    annual_kwh: float
+
+
+class FluidsElecSeries(BaseModel):
+    monthly: list[FluidsElecMonthPoint]
+    suppliers: list[FluidsElecSupplierPoint]
+
+
 class DjuPerfPoint(BaseModel):
     month: str
     kwh: float
