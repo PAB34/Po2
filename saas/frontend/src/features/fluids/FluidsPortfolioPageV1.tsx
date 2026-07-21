@@ -62,7 +62,7 @@ export function FluidsPortfolioPageV1() {
       .map(([y, v]) => ({ y, chauffe: v.chauffe, froid: v.froid }))
       .sort((a, b) => a.y - b.y);
     if (complete.length < 2) return null;
-    const hist = complete.slice(-10); // 10 dernières années complètes
+    const hist = complete; // tout l'historique (années complètes)
     const histMap = new Map(hist.map((r) => [r.y, r]));
     const fit = (get: (r: { y: number; chauffe: number; froid: number }) => number) => {
       const xs = hist.map((r) => r.y);
@@ -80,7 +80,7 @@ export function FluidsPortfolioPageV1() {
     const fH = fit((r) => r.chauffe);
     const fC = fit((r) => r.froid);
     const lastHistYear = hist[hist.length - 1].y;
-    const years = [...hist.map((r) => r.y), lastHistYear + 1, lastHistYear + 2, lastHistYear + 3, lastHistYear + 4, lastHistYear + 5];
+    const years = [...hist.map((r) => r.y), ...Array.from({ length: 10 }, (_u, i) => lastHistYear + i + 1)];
     const rows = years.map((yr) => {
       const h = histMap.get(yr);
       return {
@@ -91,8 +91,8 @@ export function FluidsPortfolioPageV1() {
         froidProj: yr > lastHistYear ? Math.round(fC(yr)) : yr === lastHistYear && h ? Math.round(h.froid) : null,
       };
     });
-    const pct = (f: (y: number) => number) => { const a = f(lastHistYear); const b = f(lastHistYear + 5); return a > 0 ? ((b - a) / a) * 100 : null; };
-    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), histFrom: hist[0].y, histTo: lastHistYear, projTo: lastHistYear + 5, histCount: hist.length };
+    const pct = (f: (y: number) => number) => { const a = f(lastHistYear); const b = f(lastHistYear + 10); return a > 0 ? ((b - a) / a) * 100 : null; };
+    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), histFrom: hist[0].y, histTo: lastHistYear, projTo: lastHistYear + 10, histCount: hist.length };
   }, [djuMonthly]);
 
   const elecKwh = overview?.kpis.annual_consumption_kwh ?? null;
@@ -101,6 +101,7 @@ export function FluidsPortfolioPageV1() {
   const elecCoverage = elecPrms != null && elecCoveredPrms != null && elecPrms > 0
     ? Math.round((elecCoveredPrms / elecPrms) * 100)
     : null;
+  const elecSurveiller = overview ? overview.kpis.sous_dimensionnes + overview.kpis.proche_seuil : null;
 
   return (
     <div className="po2-page-v1">
@@ -137,9 +138,12 @@ export function FluidsPortfolioPageV1() {
           <div className="po2-fluid-access__metrics">
             <div className="po2-fluid-access__metric"><span>Observé</span><strong>{formatKwh(elecKwh)}</strong></div>
             <div className="po2-fluid-access__metric"><span>PRM</span><strong>{elecPrms != null ? elecPrms.toLocaleString("fr-FR") : "—"}</strong></div>
-            <div className="po2-fluid-access__metric"><span>Couverture</span><strong>{elecCoverage != null ? `${elecCoverage}%` : "—"}</strong></div>
+            <div className="po2-fluid-access__metric"><span>Couverture</span><strong title="Part des PRM contractuels dont la consommation a effectivement été collectée">{elecCoverage != null ? `${elecCoverage}%` : "—"}</strong></div>
           </div>
-          <div className="po2-fluid-access__foot"><span className="po2-fluid-access__open">Ouvrir le détail →</span></div>
+          <div className="po2-fluid-access__foot">
+            <span style={{ fontSize: 11, opacity: 0.85 }}>{elecSurveiller != null ? `${elecSurveiller.toLocaleString("fr-FR")} à recalibrer` : "— à recalibrer"} · dérives —</span>
+            <span className="po2-fluid-access__open">Ouvrir le détail →</span>
+          </div>
         </Link>
 
         <Link to="/refonte-v1/fluides/gaz" className="po2-fluid-access po2-fluid-access--gaz">
@@ -170,7 +174,7 @@ export function FluidsPortfolioPageV1() {
           <header className="po2-card__header">
             <div>
               <span className="po2-eyebrow">Perspective climatique</span>
-              <h2>Degrés-jours — {djuOutlook.histFrom}–{djuOutlook.histTo} &amp; projection +5 ans</h2>
+              <h2>Degrés-jours — {djuOutlook.histFrom}–{djuOutlook.histTo} &amp; projection +10 ans</h2>
             </div>
           </header>
           <div className="po2-card__body">
@@ -178,12 +182,12 @@ export function FluidsPortfolioPageV1() {
               <div className="po2-fluid-chip po2-fluid-chip--heat">
                 <span>Chauffage</span>
                 <b>{pctLabel(djuOutlook.heatingPct)}</b>
-                <em>tendance projetée +5 ans</em>
+                <em>tendance projetée +10 ans</em>
               </div>
               <div className="po2-fluid-chip po2-fluid-chip--cool">
                 <span>Froid / clim.</span>
                 <b>{pctLabel(djuOutlook.coolingPct)}</b>
-                <em>tendance projetée +5 ans</em>
+                <em>tendance projetée +10 ans</em>
               </div>
             </div>
             <div style={{ height: 280 }}>
@@ -191,7 +195,7 @@ export function FluidsPortfolioPageV1() {
                 <LineChart data={djuOutlook.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={46} unit=" DJU" />
+                  <YAxis tick={{ fontSize: 11 }} width={46} unit=" DJU" domain={["auto", "auto"]} allowDecimals={false} />
                   <Tooltip
                     formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} DJU`, n.startsWith("chauffe") ? "Chauffage" : "Froid / clim."]}
                     labelFormatter={(l) => `Année ${l}`}
@@ -204,7 +208,7 @@ export function FluidsPortfolioPageV1() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Historique réel des {djuOutlook.histCount} dernières années complètes (trait plein) et projection tendancielle +5 ans (tirets, régression linéaire sur ces mêmes années, base Météo-France) — repère indicatif, pas une prévision météo.</p>
+            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Historique réel sur tout l'historique ({djuOutlook.histCount} années complètes, trait plein) et projection tendancielle +10 ans (tirets, régression linéaire sur l'ensemble de l'historique, base Météo-France) — repère indicatif, pas une prévision météo.</p>
           </div>
         </section>
       ) : null}
