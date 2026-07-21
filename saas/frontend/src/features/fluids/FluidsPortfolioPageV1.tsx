@@ -220,7 +220,7 @@ export function FluidsPortfolioPageV1() {
           </div>
           <div className="po2-fluid-access__foot">
             <span style={{ fontSize: 11, opacity: 0.85 }}>{gasDerives != null ? `${gasDerives.toLocaleString("fr-FR")} derive(s)` : "derives -"} - {gasLinkedCount != null && gasPceCount != null ? `${gasLinkedCount}/${gasPceCount} rattaches` : "calibrage a consolider"}</span>
-            <span className="po2-fluid-access__open">Ouvrir le detail -></span>
+            <span className="po2-fluid-access__open">Ouvrir le detail -&gt;</span>
           </div>
         </Link>
 
