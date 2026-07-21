@@ -126,7 +126,7 @@ export function FluidsElecDetailV1() {
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                   <strong style={{ fontSize: 26 }}>{th.sensitivity_kwh_per_dju.toLocaleString("fr-FR")} kWh/DJU</strong>
                   <StatusBadge tone={th.sensitivity_delta_pct != null && th.sensitivity_delta_pct > 0 ? "bad" : "ok"}>
-                    {pct(th.sensitivity_delta_pct)} vs 12 mois préc.
+                    {`${pct(th.sensitivity_delta_pct)} vs 12 mois préc.`}
                   </StatusBadge>
                 </div>
                 <p className="po2-muted-line" style={{ marginTop: 6 }}>
