@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, SegmentControl } from "../../design-system";
-import { fetchEnergieOverview, fetchFluidsClimate } from "../../lib/api";
+import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
 import { FluidsAcquisitionDrawerV1 } from "./FluidsAcquisitionDrawerV1";
@@ -37,6 +38,29 @@ export function FluidsPortfolioPageV1() {
     enabled: !!token,
     staleTime: 60_000,
   });
+
+  const { data: djuMonthly } = useQuery({
+    queryKey: ["dju-monthly"],
+    queryFn: () => fetchDjuMonthly(token!),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+
+  const djuYears = useMemo(() => {
+    const byYear = new Map<string, { chauffe: number; froid: number }>();
+    for (const p of djuMonthly ?? []) {
+      const y = (p.month ?? "").slice(0, 4);
+      if (!/^\d{4}$/.test(y)) continue;
+      const cur = byYear.get(y) ?? { chauffe: 0, froid: 0 };
+      cur.chauffe += p.dju_chauffe ?? 0;
+      cur.froid += p.dju_froid ?? 0;
+      byYear.set(y, cur);
+    }
+    return Array.from(byYear.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-6)
+      .map(([year, v]) => ({ year, chauffe: Math.round(v.chauffe), froid: Math.round(v.froid) }));
+  }, [djuMonthly]);
 
   const elecKwh = overview?.kpis.annual_consumption_kwh ?? null;
   const elecPrms = overview?.kpis.total_prms ?? null;
@@ -107,6 +131,36 @@ export function FluidsPortfolioPageV1() {
       </div>
 
       <FluidsClimateSectionV1 climate={climate} />
+
+      {djuYears.length > 0 ? (
+        <section className="po2-card">
+          <header className="po2-card__header">
+            <div>
+              <span className="po2-eyebrow">Historique climatique</span>
+              <h2>Degrés-jours annuels — perspective 5 ans+</h2>
+            </div>
+          </header>
+          <div className="po2-card__body">
+            <div style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={djuYears} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
+                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={48} />
+                  <Tooltip
+                    formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} DJU`, n === "chauffe" ? "Chauffage" : "Froid / clim."]}
+                    labelFormatter={(l) => `Année ${l}`}
+                  />
+                  <Legend formatter={(v) => (v === "chauffe" ? "Chauffage" : "Froid / clim.")} />
+                  <Bar dataKey="chauffe" fill="#3e6ea8" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="froid" fill="#e39a2c" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Cumul annuel des degrés-jours (base historique Météo-France) — rigueur climatique d'une année sur l'autre.</p>
+          </div>
+        </section>
+      ) : null}
 
       <div className="po2-kpi-grid">
         <KpiCard label="Consommation électricité" value={formatKwh(elecKwh)} detail="ENEDIS · année glissante" trend={elecCoveredPrms != null ? `${elecCoveredPrms.toLocaleString("fr-FR")} PRM couverts` : undefined} tone="neutral" />

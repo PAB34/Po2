@@ -72,7 +72,14 @@ function MetersTable({ prms }: { prms: PrmListItem[] }) {
     let out = prms.filter((p) => {
       if (calib !== "all" && (p.calibration_status ?? "") !== calib) return false;
       if (!q) return true;
-      return [p.name, p.usage_point_id, p.address].some((v) => (v ?? "").toLowerCase().includes(q));
+      const hay = [
+        p.name, p.usage_point_id, p.address, shortSupplier(p.contractor),
+        p.subscribed_power_kva != null ? `${p.subscribed_power_kva} kva` : "",
+        p.peak_kva_3y != null ? `${p.peak_kva_3y} kva` : "",
+        p.calibration_status ? CALIB_LABEL[p.calibration_status] ?? p.calibration_status : "",
+        p.connection_state, p.services_level,
+      ].join(" ").toLowerCase();
+      return hay.includes(q);
     });
     const dir = sortDir === "asc" ? 1 : -1;
     out = [...out].sort((a, b) => {
@@ -117,22 +124,22 @@ function MetersTable({ prms }: { prms: PrmListItem[] }) {
         </div>
       </header>
       <div className="po2-card__body">
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 10, width: "100%" }}>
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Rechercher par nom, PRM, adresse…"
-            style={{ flex: "1 1 260px", padding: "7px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
+            placeholder="Rechercher (toutes colonnes)…"
+            style={{ flex: "0 1 340px", minWidth: 200, padding: "7px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-          <select value={calib} onChange={(e) => setCalib(e.target.value)} style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}>
+          <select value={calib} onChange={(e) => setCalib(e.target.value)} style={{ flex: "0 0 auto", padding: "7px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}>
             <option value="all">Tous calibrages</option>
             <option value="sous_dimensionne">Sous-dimensionnés</option>
             <option value="proche_seuil">Proches du seuil</option>
             <option value="bien_calibre">Bien calibrés</option>
             <option value="sur_souscrit">Sur-souscrits</option>
           </select>
-          <span className="po2-muted-line">{rows.length.toLocaleString("fr-FR")} résultats</span>
+          <span className="po2-muted-line" style={{ marginLeft: "auto" }}>{rows.length.toLocaleString("fr-FR")} résultats</span>
         </div>
         <div style={{ overflowX: "auto", maxHeight: 560, overflowY: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
