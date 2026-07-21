@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, SegmentControl } from "../../design-system";
 import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
@@ -46,20 +46,44 @@ export function FluidsPortfolioPageV1() {
     staleTime: 60_000,
   });
 
-  const djuYears = useMemo(() => {
-    const byYear = new Map<string, { chauffe: number; froid: number }>();
+  const djuOutlook = useMemo(() => {
+    const byYear = new Map<number, { chauffe: number; froid: number; months: number }>();
     for (const p of djuMonthly ?? []) {
-      const y = (p.month ?? "").slice(0, 4);
-      if (!/^\d{4}$/.test(y)) continue;
-      const cur = byYear.get(y) ?? { chauffe: 0, froid: 0 };
+      const y = parseInt((p.month ?? "").slice(0, 4), 10);
+      if (!Number.isFinite(y)) continue;
+      const cur = byYear.get(y) ?? { chauffe: 0, froid: 0, months: 0 };
       cur.chauffe += p.dju_chauffe ?? 0;
       cur.froid += p.dju_froid ?? 0;
+      cur.months += 1;
       byYear.set(y, cur);
     }
-    return Array.from(byYear.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-6)
-      .map(([year, v]) => ({ year, chauffe: Math.round(v.chauffe), froid: Math.round(v.froid) }));
+    const complete = Array.from(byYear.entries())
+      .filter(([, v]) => v.months >= 12)
+      .map(([y, v]) => ({ y, chauffe: v.chauffe, froid: v.froid }))
+      .sort((a, b) => a.y - b.y);
+    if (complete.length < 2) return null;
+    const currentYear = new Date().getFullYear();
+    const fit = (get: (r: { y: number; chauffe: number; froid: number }) => number) => {
+      const xs = complete.map((r) => r.y);
+      const ys = complete.map(get);
+      const n = xs.length;
+      const mx = xs.reduce((a, b) => a + b, 0) / n;
+      const my = ys.reduce((a, b) => a + b, 0) / n;
+      let num = 0;
+      let den = 0;
+      for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+      const slope = den ? num / den : 0;
+      const intercept = my - slope * mx;
+      return (year: number) => Math.max(0, intercept + slope * year);
+    };
+    const fH = fit((r) => r.chauffe);
+    const fC = fit((r) => r.froid);
+    const rows = Array.from({ length: 6 }, (_unused, i) => {
+      const yr = currentYear + i;
+      return { label: String(yr), chauffe: Math.round(fH(yr)), froid: Math.round(fC(yr)) };
+    });
+    const pct = (f: (y: number) => number) => { const a = f(currentYear); const b = f(currentYear + 5); return a > 0 ? ((b - a) / a) * 100 : null; };
+    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), from: currentYear, to: currentYear + 5 };
   }, [djuMonthly]);
 
   const elecKwh = overview?.kpis.annual_consumption_kwh ?? null;
@@ -132,32 +156,44 @@ export function FluidsPortfolioPageV1() {
 
       <FluidsClimateSectionV1 climate={climate} />
 
-      {djuYears.length > 0 ? (
+      {djuOutlook ? (
         <section className="po2-card">
           <header className="po2-card__header">
             <div>
-              <span className="po2-eyebrow">Historique climatique</span>
-              <h2>Degrés-jours annuels — perspective 5 ans+</h2>
+              <span className="po2-eyebrow">Perspective climatique</span>
+              <h2>Degrés-jours — projection {djuOutlook.from}–{djuOutlook.to}</h2>
             </div>
           </header>
           <div className="po2-card__body">
+            <div className="po2-fluid-chips">
+              <div className="po2-fluid-chip po2-fluid-chip--heat">
+                <span>Chauffage</span>
+                <b>{pctLabel(djuOutlook.heatingPct)}</b>
+                <em>tendance sur 5 ans</em>
+              </div>
+              <div className="po2-fluid-chip po2-fluid-chip--cool">
+                <span>Froid / clim.</span>
+                <b>{pctLabel(djuOutlook.coolingPct)}</b>
+                <em>tendance sur 5 ans</em>
+              </div>
+            </div>
             <div style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={djuYears} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                <LineChart data={djuOutlook.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                  <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} width={48} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} width={46} unit=" DJU" />
                   <Tooltip
                     formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} DJU`, n === "chauffe" ? "Chauffage" : "Froid / clim."]}
                     labelFormatter={(l) => `Année ${l}`}
                   />
                   <Legend formatter={(v) => (v === "chauffe" ? "Chauffage" : "Froid / clim.")} />
-                  <Bar dataKey="chauffe" fill="#3e6ea8" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="froid" fill="#e39a2c" radius={[3, 3, 0, 0]} />
-                </BarChart>
+                  <Line dataKey="chauffe" name="chauffe" stroke="#3e6ea8" strokeWidth={3} dot />
+                  <Line dataKey="froid" name="froid" stroke="#e39a2c" strokeWidth={3} dot />
+                </LineChart>
               </ResponsiveContainer>
             </div>
-            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Cumul annuel des degrés-jours (base historique Météo-France) — rigueur climatique d'une année sur l'autre.</p>
+            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Projection tendancielle (régression linéaire sur les années complètes d'historique Météo-France) — repère indicatif, pas une prévision météo.</p>
           </div>
         </section>
       ) : null}
