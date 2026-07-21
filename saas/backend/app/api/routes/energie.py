@@ -8,6 +8,7 @@ from app.schemas.energie import (
     EnergieOverview,
     EnergyDataAudit,
     FluidsClimateOverview,
+    FluidsElecObservedPrice,
     FluidsElecSeries,
     PowerRecommendationOverview,
     PrmAnnualProfile,
@@ -25,6 +26,7 @@ from app.services.energie import (
     get_dju_monthly,
     get_energie_overview,
     get_fluids_climate,
+    get_fluids_elec_observed_price,
     get_fluids_elec_series,
     get_prm_annual_profile,
     get_prm_daily_consumption,
@@ -81,6 +83,14 @@ def get_fluids_elec_series_route(
     return FluidsElecSeries.model_validate(get_fluids_elec_series())
 
 
+
+@router.get("/fluids/elec-observed-price", response_model=FluidsElecObservedPrice)
+def get_fluids_elec_observed_price_route(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FluidsElecObservedPrice:
+    """Prix moyen observe des factures electricite, toutes composantes facture incluses."""
+    return FluidsElecObservedPrice.model_validate(get_fluids_elec_observed_price(db, current_user.city_id))
 @router.get("/preconisations", response_model=PowerRecommendationOverview)
 def get_preconisations(
     current_user: User = Depends(get_current_user),

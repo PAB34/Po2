@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SegmentControl } from "../../design-system";
-import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly } from "../../lib/api";
+import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly, fetchFluidsElecObservedPrice } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
 import { FluidsAcquisitionDrawerV1 } from "./FluidsAcquisitionDrawerV1";
@@ -19,6 +19,14 @@ function formatKwh(value: number | null | undefined): string {
   if (value >= 1_000) return `${(value / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} MWh`;
   return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kWh`;
 }
+
+function formatEur(value: number | null | undefined): string {
+  if (value == null) return "—";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} M€`;
+  if (value >= 1_000) return `${(value / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} k€`;
+  return `${value.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €`;
+}
+
 
 export function FluidsPortfolioPageV1() {
   const { token } = useAuth();
@@ -44,6 +52,12 @@ export function FluidsPortfolioPageV1() {
     queryFn: () => fetchDjuMonthly(token!),
     enabled: !!token,
     staleTime: 60_000,
+  });
+  const { data: observedElecPrice } = useQuery({
+    queryKey: ["fluids-elec-observed-price"],
+    queryFn: () => fetchFluidsElecObservedPrice(token!),
+    enabled: !!token,
+    staleTime: 300_000,
   });
 
   const djuOutlook = useMemo(() => {
@@ -92,8 +106,29 @@ export function FluidsPortfolioPageV1() {
       };
     });
     const pct = (f: (y: number) => number) => { const a = f(lastHistYear); const b = f(lastHistYear + 10); return a > 0 ? ((b - a) / a) * 100 : null; };
-    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), histFrom: hist[0].y, histTo: lastHistYear, projTo: lastHistYear + 10, histCount: hist.length };
+    const total = (y: number) => fH(y) + fC(y);
+    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), histFrom: hist[0].y, histTo: lastHistYear, projTo: lastHistYear + 10, histCount: hist.length, totalNow: total(lastHistYear), total5: total(lastHistYear + 5), total10: total(lastHistYear + 10) };
   }, [djuMonthly]);
+
+  const finance = useMemo(() => {
+    const conso = overview?.kpis.annual_consumption_kwh ?? null;
+    const priceNow = observedElecPrice?.current_eur_per_kwh_ttc ?? null;
+    if (!conso || !djuOutlook || priceNow == null) return null;
+    const thermoShare = climate?.thermal.thermosensitive_share_pct != null ? climate.thermal.thermosensitive_share_pct / 100 : 0.25;
+    const ratio5 = djuOutlook.totalNow > 0 ? djuOutlook.total5 / djuOutlook.totalNow : 1;
+    const ratio10 = djuOutlook.totalNow > 0 ? djuOutlook.total10 / djuOutlook.totalNow : 1;
+    const consoAt = (ratio: number) => conso * (1 + thermoShare * (ratio - 1));
+    const price5 = observedElecPrice?.projected_5y_eur_per_kwh_ttc ?? null;
+    const price10 = observedElecPrice?.projected_10y_eur_per_kwh_ttc ?? null;
+    return {
+      now: conso * priceNow,
+      y5: price5 == null ? null : consoAt(ratio5) * price5,
+      y10: price10 == null ? null : consoAt(ratio10) * price10,
+      priceNow, price5, price10,
+      currentYear: observedElecPrice?.current_year ?? null,
+      invoiceCount: observedElecPrice?.points.at(-1)?.invoice_count ?? 0,
+    };
+  }, [overview, djuOutlook, observedElecPrice, climate]);
 
   const elecKwh = overview?.kpis.annual_consumption_kwh ?? null;
   const elecPrms = overview?.kpis.total_prms ?? null;
@@ -109,7 +144,7 @@ export function FluidsPortfolioPageV1() {
         <div>
           <span className="po2-eyebrow">Lecture climatique &amp; performance</span>
           <h1>Fluides &amp; consommations</h1>
-          <p>Le climat (DJU) explique l'essentiel des consommations. On lit d'abord le contexte, puis on entre dans le détail d'un distributeur. Cette page ne projette pas d'impact financier.</p>
+          <p>Le climat (DJU) explique l'essentiel des consommations. On lit d'abord le contexte, puis on estime l'effet financier à partir du prix TTC observé sur les factures électricité.</p>
         </div>
         <SegmentControl
           value={period}
@@ -169,6 +204,7 @@ export function FluidsPortfolioPageV1() {
 
       <FluidsClimateSectionV1 climate={climate} />
 
+      <div className="po2-two-columns">
       {djuOutlook ? (
         <section className="po2-card">
           <header className="po2-card__header">
@@ -212,6 +248,37 @@ export function FluidsPortfolioPageV1() {
           </div>
         </section>
       ) : null}
+
+      <section className="po2-card">
+        <header className="po2-card__header"><div><span className="po2-eyebrow">Impact financier · électricité</span><h2>Estimation sur factures observées</h2></div></header>
+        <div className="po2-card__body">
+          {finance ? (
+            <>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span className="po2-muted-line">Base observée</span>
+                  <strong style={{ fontSize: 22 }}>{formatEur(finance.now)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span className="po2-muted-line">Projection +5 ans</span>
+                  <strong style={{ fontSize: 22, color: "#c2410c" }}>{formatEur(finance.y5)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span className="po2-muted-line">Projection +10 ans</span>
+                  <strong style={{ fontSize: 22, color: "#b91c1c" }}>{formatEur(finance.y10)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                </div>
+              </div>
+              <p className="po2-muted-line" style={{ marginTop: 12, fontSize: 12 }}>
+                Prix observé = total TTC facturé / kWh facturés sur les factures électricité importées ({finance.invoiceCount} facture(s) en {finance.currentYear ?? "année courante"}). Il inclut toutes les composantes présentes : fourniture, capacité, CEE/GO, acheminement/TURPE, taxes et lignes fixes.
+                <br />Projection indicative : conso élec projetée par DJU × tendance du prix TTC observé. Gaz non inclus.
+              </p>
+            </>
+          ) : (
+            <p className="po2-muted-line">Nécessite la conso élec, la projection climatique et des factures électricité avec TTC + kWh facturés.</p>
+          )}
+        </div>
+      </section>
+      </div>
 
     </div>
   );

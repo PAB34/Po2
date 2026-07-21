@@ -1231,11 +1231,37 @@ export type FluidsElecSeries = {
   suppliers: { supplier: string; annual_kwh: number }[];
 };
 
+export type FluidsElecObservedPricePoint = {
+  year: number;
+  invoice_count: number;
+  total_ttc: number;
+  total_ht: number | null;
+  total_kwh: number;
+  eur_per_kwh_ttc: number;
+  eur_per_kwh_ht: number | null;
+};
+
+export type FluidsElecObservedPrice = {
+  points: FluidsElecObservedPricePoint[];
+  current_year: number | null;
+  current_eur_per_kwh_ttc: number | null;
+  projected_5y_eur_per_kwh_ttc: number | null;
+  projected_10y_eur_per_kwh_ttc: number | null;
+  method: string;
+};
+
 export async function fetchFluidsElecSeries(token: string): Promise<FluidsElecSeries> {
   const response = await fetch(`${apiBaseUrl}/energie/fluids/elec-series`, {
     headers: buildHeaders(token),
   });
   return parseResponse<FluidsElecSeries>(response);
+}
+
+export async function fetchFluidsElecObservedPrice(token: string): Promise<FluidsElecObservedPrice> {
+  const response = await fetch(`${apiBaseUrl}/energie/fluids/elec-observed-price`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<FluidsElecObservedPrice>(response);
 }
 
 export type DjuPerfPoint = {

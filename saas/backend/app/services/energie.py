@@ -5,6 +5,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.invoice import EnergyInvoiceImport
+
 from app.core.config import settings
 from app.services import load_curve_store
 
@@ -1255,6 +1260,90 @@ def get_fluids_elec_series() -> dict[str, Any]:
         for supplier, value in sorted(supplier_kwh.items(), key=lambda item: -item[1])
     ]
     return {"monthly": monthly, "suppliers": suppliers}
+
+
+
+def _invoice_year(invoice: EnergyInvoiceImport) -> int | None:
+    ref = invoice.period_end or invoice.invoice_date or invoice.period_start
+    return ref.year if ref else None
+
+
+def _project_price(points: list[dict[str, Any]], years_ahead: int) -> float | None:
+    if len(points) < 2:
+        return None
+    xs = [float(point["year"]) for point in points]
+    ys = [float(point["eur_per_kwh_ttc"]) for point in points]
+    n = len(xs)
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    den = sum((x - mx) ** 2 for x in xs)
+    if den == 0:
+        return None
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / den
+    intercept = my - slope * mx
+    target_year = int(points[-1]["year"]) + years_ahead
+    return round(max(0.0, intercept + slope * target_year), 6)
+
+
+def get_fluids_elec_observed_price(db: Session, city_id: int | None) -> dict[str, Any]:
+    """Prix moyen observe des factures electricite, toutes composantes incluses.
+
+    L'agregat part des totaux facture (TTC / HT) et des kWh factures, plutot que
+    d'un profil BPU theorique. Il embarque donc fourniture, capacite, CEE/GO,
+    acheminement/TURPE, taxes et autres lignes presentes dans les factures.
+    """
+    stmt = select(EnergyInvoiceImport).where(
+        EnergyInvoiceImport.energy_type == "electricity",
+        EnergyInvoiceImport.total_ttc.is_not(None),
+        EnergyInvoiceImport.total_consumption_kwh.is_not(None),
+        EnergyInvoiceImport.total_consumption_kwh > 0,
+    )
+    if city_id is not None:
+        stmt = stmt.where(EnergyInvoiceImport.city_id == city_id)
+    invoices = db.execute(stmt).scalars().all()
+
+    by_year: dict[int, dict[str, float | int]] = {}
+    for invoice in invoices:
+        year = _invoice_year(invoice)
+        if year is None:
+            continue
+        total_ttc = float(invoice.total_ttc or 0.0)
+        total_ht = float(invoice.total_ht or 0.0)
+        kwh = float(invoice.total_consumption_kwh or 0.0)
+        if total_ttc <= 0 or kwh <= 0:
+            continue
+        bucket = by_year.setdefault(year, {"year": year, "invoice_count": 0, "total_ttc": 0.0, "total_ht": 0.0, "total_kwh": 0.0})
+        bucket["invoice_count"] = int(bucket["invoice_count"]) + 1
+        bucket["total_ttc"] = float(bucket["total_ttc"]) + total_ttc
+        bucket["total_ht"] = float(bucket["total_ht"]) + total_ht
+        bucket["total_kwh"] = float(bucket["total_kwh"]) + kwh
+
+    points: list[dict[str, Any]] = []
+    for year, bucket in sorted(by_year.items()):
+        total_kwh = float(bucket["total_kwh"])
+        if total_kwh <= 0:
+            continue
+        total_ttc = float(bucket["total_ttc"])
+        total_ht = float(bucket["total_ht"])
+        points.append({
+            "year": year,
+            "invoice_count": int(bucket["invoice_count"]),
+            "total_ttc": round(total_ttc, 2),
+            "total_ht": round(total_ht, 2) if total_ht else None,
+            "total_kwh": round(total_kwh, 1),
+            "eur_per_kwh_ttc": round(total_ttc / total_kwh, 6),
+            "eur_per_kwh_ht": round(total_ht / total_kwh, 6) if total_ht else None,
+        })
+
+    latest = points[-1] if points else None
+    return {
+        "points": points,
+        "current_year": latest["year"] if latest else None,
+        "current_eur_per_kwh_ttc": latest["eur_per_kwh_ttc"] if latest else None,
+        "projected_5y_eur_per_kwh_ttc": _project_price(points, 5),
+        "projected_10y_eur_per_kwh_ttc": _project_price(points, 10),
+        "method": "total_ttc / total_consumption_kwh sur factures electricite importees, toutes composantes facture incluses",
+    }
 
 
 def _linreg(xs: list[float], ys: list[float]) -> tuple[float, float, float | None] | None:

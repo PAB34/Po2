@@ -346,6 +346,25 @@ class FluidsElecSeries(BaseModel):
     suppliers: list[FluidsElecSupplierPoint]
 
 
+
+class FluidsElecObservedPricePoint(BaseModel):
+    year: int
+    invoice_count: int
+    total_ttc: float
+    total_ht: float | None = None
+    total_kwh: float
+    eur_per_kwh_ttc: float
+    eur_per_kwh_ht: float | None = None
+
+
+class FluidsElecObservedPrice(BaseModel):
+    points: list[FluidsElecObservedPricePoint]
+    current_year: int | None = None
+    current_eur_per_kwh_ttc: float | None = None
+    projected_5y_eur_per_kwh_ttc: float | None = None
+    projected_10y_eur_per_kwh_ttc: float | None = None
+    method: str
+
 class DjuPerfPoint(BaseModel):
     month: str
     kwh: float
