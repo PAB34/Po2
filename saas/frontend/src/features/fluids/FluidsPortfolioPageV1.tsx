@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { KpiCard, SegmentControl } from "../../design-system";
+import { SegmentControl } from "../../design-system";
 import { fetchEnergieOverview, fetchFluidsClimate, fetchDjuMonthly } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { FluidsClimateSectionV1 } from "./FluidsClimateSectionV1";
@@ -62,10 +62,11 @@ export function FluidsPortfolioPageV1() {
       .map(([y, v]) => ({ y, chauffe: v.chauffe, froid: v.froid }))
       .sort((a, b) => a.y - b.y);
     if (complete.length < 2) return null;
-    const currentYear = new Date().getFullYear();
+    const hist = complete.slice(-10); // 10 dernières années complètes
+    const histMap = new Map(hist.map((r) => [r.y, r]));
     const fit = (get: (r: { y: number; chauffe: number; froid: number }) => number) => {
-      const xs = complete.map((r) => r.y);
-      const ys = complete.map(get);
+      const xs = hist.map((r) => r.y);
+      const ys = hist.map(get);
       const n = xs.length;
       const mx = xs.reduce((a, b) => a + b, 0) / n;
       const my = ys.reduce((a, b) => a + b, 0) / n;
@@ -78,12 +79,20 @@ export function FluidsPortfolioPageV1() {
     };
     const fH = fit((r) => r.chauffe);
     const fC = fit((r) => r.froid);
-    const rows = Array.from({ length: 6 }, (_unused, i) => {
-      const yr = currentYear + i;
-      return { label: String(yr), chauffe: Math.round(fH(yr)), froid: Math.round(fC(yr)) };
+    const lastHistYear = hist[hist.length - 1].y;
+    const years = [...hist.map((r) => r.y), lastHistYear + 1, lastHistYear + 2, lastHistYear + 3, lastHistYear + 4, lastHistYear + 5];
+    const rows = years.map((yr) => {
+      const h = histMap.get(yr);
+      return {
+        label: String(yr),
+        chauffeHist: h ? Math.round(h.chauffe) : null,
+        froidHist: h ? Math.round(h.froid) : null,
+        chauffeProj: yr > lastHistYear ? Math.round(fH(yr)) : yr === lastHistYear && h ? Math.round(h.chauffe) : null,
+        froidProj: yr > lastHistYear ? Math.round(fC(yr)) : yr === lastHistYear && h ? Math.round(h.froid) : null,
+      };
     });
-    const pct = (f: (y: number) => number) => { const a = f(currentYear); const b = f(currentYear + 5); return a > 0 ? ((b - a) / a) * 100 : null; };
-    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), from: currentYear, to: currentYear + 5 };
+    const pct = (f: (y: number) => number) => { const a = f(lastHistYear); const b = f(lastHistYear + 5); return a > 0 ? ((b - a) / a) * 100 : null; };
+    return { rows, heatingPct: pct(fH), coolingPct: pct(fC), histFrom: hist[0].y, histTo: lastHistYear, projTo: lastHistYear + 5, histCount: hist.length };
   }, [djuMonthly]);
 
   const elecKwh = overview?.kpis.annual_consumption_kwh ?? null;
@@ -161,7 +170,7 @@ export function FluidsPortfolioPageV1() {
           <header className="po2-card__header">
             <div>
               <span className="po2-eyebrow">Perspective climatique</span>
-              <h2>Degrés-jours — projection {djuOutlook.from}–{djuOutlook.to}</h2>
+              <h2>Degrés-jours — {djuOutlook.histFrom}–{djuOutlook.histTo} &amp; projection +5 ans</h2>
             </div>
           </header>
           <div className="po2-card__body">
@@ -169,51 +178,37 @@ export function FluidsPortfolioPageV1() {
               <div className="po2-fluid-chip po2-fluid-chip--heat">
                 <span>Chauffage</span>
                 <b>{pctLabel(djuOutlook.heatingPct)}</b>
-                <em>tendance sur 5 ans</em>
+                <em>tendance projetée +5 ans</em>
               </div>
               <div className="po2-fluid-chip po2-fluid-chip--cool">
                 <span>Froid / clim.</span>
                 <b>{pctLabel(djuOutlook.coolingPct)}</b>
-                <em>tendance sur 5 ans</em>
+                <em>tendance projetée +5 ans</em>
               </div>
             </div>
-            <div style={{ height: 260 }}>
+            <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={djuOutlook.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} width={46} unit=" DJU" />
                   <Tooltip
-                    formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} DJU`, n === "chauffe" ? "Chauffage" : "Froid / clim."]}
+                    formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} DJU`, n.startsWith("chauffe") ? "Chauffage" : "Froid / clim."]}
                     labelFormatter={(l) => `Année ${l}`}
                   />
-                  <Legend formatter={(v) => (v === "chauffe" ? "Chauffage" : "Froid / clim.")} />
-                  <Line dataKey="chauffe" name="chauffe" stroke="#3e6ea8" strokeWidth={3} dot />
-                  <Line dataKey="froid" name="froid" stroke="#e39a2c" strokeWidth={3} dot />
+                  <Legend />
+                  <Line dataKey="chauffeHist" name="Chauffage" stroke="#3e6ea8" strokeWidth={3} dot connectNulls={false} />
+                  <Line dataKey="chauffeProj" stroke="#3e6ea8" strokeWidth={2} strokeDasharray="6 5" dot={false} legendType="none" connectNulls />
+                  <Line dataKey="froidHist" name="Froid / clim." stroke="#e39a2c" strokeWidth={3} dot connectNulls={false} />
+                  <Line dataKey="froidProj" stroke="#e39a2c" strokeWidth={2} strokeDasharray="6 5" dot={false} legendType="none" connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Projection tendancielle (régression linéaire sur les années complètes d'historique Météo-France) — repère indicatif, pas une prévision météo.</p>
+            <p className="po2-muted-line" style={{ marginTop: 6, fontSize: 12 }}>Historique réel des {djuOutlook.histCount} dernières années complètes (trait plein) et projection tendancielle +5 ans (tirets, régression linéaire sur ces mêmes années, base Météo-France) — repère indicatif, pas une prévision météo.</p>
           </div>
         </section>
       ) : null}
 
-      <div className="po2-kpi-grid">
-        <KpiCard label="Consommation électricité" value={formatKwh(elecKwh)} detail="ENEDIS · année glissante" trend={elecCoveredPrms != null ? `${elecCoveredPrms.toLocaleString("fr-FR")} PRM couverts` : undefined} tone="neutral" />
-        <KpiCard label="Couverture données élec" value={elecCoverage != null ? `${elecCoverage}%` : "—"} detail="PRM avec consommation collectée" tone="neutral" />
-        <KpiCard
-          label="Rigueur climatique"
-          value={climate ? pctLabel(climate.heating.delta_previous_pct) : "—"}
-          detail={climate ? `DJU chauffage vs ${climate.previous_year}` : "DJU chauffage vs N-1"}
-          tone={climate && climate.heating.delta_previous_pct != null && climate.heating.delta_previous_pct < 0 ? "good" : "neutral"}
-        />
-        <KpiCard
-          label="Thermosensibilité"
-          value={climate?.thermal.sensitivity_kwh_per_dju != null ? `${climate.thermal.sensitivity_kwh_per_dju.toLocaleString("fr-FR")} kWh/DJU` : "—"}
-          detail={climate?.thermal.sensitivity_delta_pct != null ? `${pctLabel(climate.thermal.sensitivity_delta_pct)} vs 12 mois préc.` : "élec · pente conso/DJU (12 mois)"}
-          tone={climate && climate.thermal.sensitivity_delta_pct != null && climate.thermal.sensitivity_delta_pct > 0 ? "warning" : "neutral"}
-        />
-      </div>
     </div>
   );
 }
