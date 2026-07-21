@@ -41,6 +41,18 @@ _TOL_PU_MWH = 1.0  # tolérance prix unitaire en €/MWh
 _TVA_NORMAL = 0.20
 _TVA_REDUIT = 0.055
 
+_DEFAULT_GAS_BPU_LOT7_2026 = {
+    profil: {
+        "fourniture_ht_mwh": 35.23,
+        "cee_ht_mwh": 3.89,
+        "cee_precarite_ht_mwh": 3.06,
+        "cpb_ht_mwh": 0.41,
+        "go_ht_mwh": 16.25,
+        "source": "BPU_2026_Lots_1_2_et_7.xlsx",
+    }
+    for profil in ("T1", "T2", "T3", "T4")
+}
+
 # Mapping colonne source -> attribut modèle.
 _COLMAP_STR = {
     "NUM FACTURE": "num_facture",
@@ -168,7 +180,32 @@ def _issue(code: str, family: str, message: str, severity: str) -> dict[str, str
     return {"code": code, "family": family, "message": message, "severity": severity}
 
 
+def _ensure_default_gas_bpu_prices(db: Session, *, commit: bool = False) -> None:
+    """Garantit la presence du BPU gaz Lot 7 2026 partage."""
+    changed = False
+    for profil, values in _DEFAULT_GAS_BPU_LOT7_2026.items():
+        row = db.execute(
+            select(GasBpuPrice).where(
+                GasBpuPrice.city_id.is_(None),
+                GasBpuPrice.annee == 2026,
+                GasBpuPrice.profil == profil,
+            )
+        ).scalars().first()
+        if row is None:
+            row = GasBpuPrice(city_id=None, annee=2026, profil=profil)
+            db.add(row)
+            changed = True
+        for key, value in values.items():
+            if getattr(row, key) != value:
+                setattr(row, key, value)
+                changed = True
+    if changed:
+        db.flush()
+        if commit:
+            db.commit()
+
 def load_gas_bpu(db: Session, city_id: int | None, annee: int) -> GasBpuPrice | None:
+    _ensure_default_gas_bpu_prices(db)
     """Référence BPU gaz pour l'année (prix identiques sur T1-T4 en 2026).
     Préfère la ligne de la ville, sinon la ligne générique (city_id NULL)."""
     rows = list(db.execute(
@@ -766,13 +803,18 @@ def portfolio(db: Session, city_id: int | None) -> dict[str, Any]:
 
 
 def list_bpu(db: Session, city_id: int | None) -> list[GasBpuPrice]:
+    _ensure_default_gas_bpu_prices(db, commit=True)
     rows = list(db.execute(
         select(GasBpuPrice).where(
             (GasBpuPrice.city_id == city_id) | (GasBpuPrice.city_id.is_(None))
         )
     ).scalars())
-    rows.sort(key=lambda r: (-r.annee, r.profil))
-    return rows
+    selected: dict[tuple[int, str], GasBpuPrice] = {}
+    for row in sorted(rows, key=lambda r: (0 if r.city_id == city_id else 1, -r.annee, r.profil)):
+        selected.setdefault((row.annee, row.profil), row)
+    out = list(selected.values())
+    out.sort(key=lambda r: (-r.annee, r.profil))
+    return out
 
 
 def update_bpu(db: Session, row_id: int, fields: dict[str, Any]) -> GasBpuPrice:

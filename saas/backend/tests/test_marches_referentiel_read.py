@@ -99,7 +99,10 @@ def test_gas_bpu_scope_city_and_shared(db_session):
 
     rows = list_bpu(db_session, city_id=1)
     profils = {r.profil for r in rows}
-    assert profils == {"T1", "T2"}  # propre + partagée, jamais l'autre ville
+    assert profils == {"T1", "T2", "T3", "T4"}  # propre + BPU gaz partage, jamais l'autre ville
+    assert all(r.city_id != 2 for r in rows)
+    assert next(r for r in rows if r.profil == "T1").fourniture_ht_mwh == 30.0
+    assert next(r for r in rows if r.profil == "T3").fourniture_ht_mwh == 35.23
 
 
 def test_gas_bpu_sort_year_desc_then_profil(db_session):
@@ -114,4 +117,10 @@ def test_gas_bpu_sort_year_desc_then_profil(db_session):
     db_session.commit()
 
     rows = list_bpu(db_session, city_id=1)
-    assert [(r.annee, r.profil) for r in rows] == [(2026, "T1"), (2026, "T3"), (2025, "T2")]
+    assert [(r.annee, r.profil) for r in rows] == [
+        (2026, "T1"),
+        (2026, "T2"),
+        (2026, "T3"),
+        (2026, "T4"),
+        (2025, "T2"),
+    ]
