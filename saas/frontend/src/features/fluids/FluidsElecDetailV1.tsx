@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, StatusBadge } from "../../design-system";
 import { fetchEnergieOverview, fetchFluidsElecSeries, type DjuSeasonData, type PrmListItem } from "../../lib/api";
@@ -89,6 +89,13 @@ function SeasonalDjuChart({ season, title, helper }: { season: DjuSeasonData | u
   const completeness = season.current_is_complete
     ? "saison complete"
     : `${season.current_months_count}/${season.expected_months_count} mois exploitables`;
+  const curPointCount = rows.filter((row) => row.cur != null).length;
+  // Mois de la saison en cours ecartes par le filtre DJU : sans cette mention, un
+  // graphique quasi vide n'a aucune explication visible.
+  const filteredLabels = (season.month_diagnostics ?? [])
+    .filter((diag) => diag.season_label === season.current_label && diag.status !== "displayed")
+    .map((diag) => (diag.status === "low_dju" ? `${diag.month_label} (DJU insuffisants)` : diag.month_label))
+    .join(", ");
 
   return (
     <section className="po2-card">
@@ -107,14 +114,26 @@ function SeasonalDjuChart({ season, title, helper }: { season: DjuSeasonData | u
                 ]}
                 labelFormatter={(label) => `Mois : ${label}`}
               />
-              <Line dataKey="avg" name="avg" stroke="#16a34a" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
-              <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={false} connectNulls />
+              {/* dot actif : en debut de saison la serie courante peut se reduire a un seul
+                  mois exploitable, et une ligne d'un point isole ne dessine rien. */}
+              <Line dataKey="avg" name="avg" stroke="#16a34a" strokeWidth={2} strokeDasharray="6 5" dot={{ r: 3 }} connectNulls />
+              <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={{ r: 4 }} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <p className="po2-muted-line" style={{ fontSize: 12 }}>
           Saison {current.label} ({completeness}) - {helper} Cible = moyenne des {prevCount} saisons precedentes.
         </p>
+        {curPointCount === 0 ? (
+          <p className="po2-muted-line" style={{ fontSize: 12, color: "#c2410c" }}>
+            Aucun mois de la saison en cours n'est encore exploitable : seule la cible historique est tracee.
+          </p>
+        ) : curPointCount === 1 ? (
+          <p className="po2-muted-line" style={{ fontSize: 12, color: "#c2410c" }}>
+            Un seul mois exploitable a ce stade de la saison : le point est affiche, mais la tendance n'est pas
+            encore lisible.{filteredLabels ? ` Mois non retenus : ${filteredLabels}.` : ""}
+          </p>
+        ) : null}
       </div>
     </section>
   );
@@ -140,6 +159,7 @@ type SortKey = "name" | "usage_point_id" | "address" | "contractor" | "subscribe
 // Tableau complet des compteurs (tri + recherche + filtre calibrage)
 // ---------------------------------------------------------------------------
 function MetersTable({ prms }: { prms: PrmListItem[] }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [calib, setCalib] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -232,8 +252,23 @@ function MetersTable({ prms }: { prms: PrmListItem[] }) {
             </thead>
             <tbody>
               {rows.map((p) => (
-                <tr key={p.usage_point_id}>
-                  <td style={{ ...td, fontWeight: 600 }}>{p.name || "—"}</td>
+                <tr
+                  key={p.usage_point_id}
+                  onClick={() => navigate(`/energie/${p.usage_point_id}`)}
+                  style={{ cursor: "pointer" }}
+                  title="Ouvrir la fiche du compteur"
+                >
+                  {/* Le lien porte l'accessibilite clavier et l'ouverture en nouvel onglet ;
+                      le onClick de la ligne rend toute la surface cliquable a la souris. */}
+                  <td style={{ ...td, fontWeight: 600 }}>
+                    <Link
+                      to={`/energie/${p.usage_point_id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                    >
+                      {p.name || "—"}
+                    </Link>
+                  </td>
                   <td style={{ ...td, fontFamily: "monospace" }}>{p.usage_point_id}</td>
                   <td style={td}>{p.address || "—"}</td>
                   <td style={td}>{shortSupplier(p.contractor)}</td>

@@ -147,6 +147,7 @@ export function FluidsPortfolioPageV1() {
       y5: price5 == null ? null : consoAt(ratio5) * price5,
       y10: price10 == null ? null : consoAt(ratio10) * price10,
       priceNow, price5, price10,
+      priceYearCount: observedElecPrice?.points.length ?? 0,
       currentYear: observedElecPrice?.current_year ?? null,
       invoiceCount: observedElecPrice?.points.at(-1)?.invoice_count ?? 0,
     };
@@ -304,6 +305,13 @@ export function FluidsPortfolioPageV1() {
                         <span className="po2-muted-line">Projection +10 ans</span>
                         <strong style={{ fontSize: 20, color: "#b91c1c" }}>{formatEur(finance.y10)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
                       </div>
+                      {/* Un tiret sans explication laisse croire a un bug : on dit pourquoi. */}
+                      {finance.price5 == null || finance.price10 == null ? (
+                        <p className="po2-muted-line" style={{ fontSize: 12, color: "#c2410c", margin: 0 }}>
+                          Projection indisponible : la tendance prix demande au moins deux annees de factures
+                          electricite ({finance.priceYearCount} annee disponible a ce jour).
+                        </p>
+                      ) : null}
                     </div>
                   ) : <p className="po2-muted-line">Necessite des factures electricite avec TTC + kWh factures.</p>}
                 </div>
@@ -322,6 +330,16 @@ export function FluidsPortfolioPageV1() {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                         <span className="po2-muted-line">Ecart / reference</span>
                         <strong style={{ fontSize: 18, color: gasBudget.totals.ecart_atterrissage_vs_prevision > 0 ? "#b91c1c" : "#15803d" }}>{formatEur(gasBudget.totals.ecart_atterrissage_vs_prevision)}</strong>
+                      </div>
+                      {/* Memes lignes que l'electricite, volontairement vides : le moteur de
+                          projection prix gaz n'existe pas encore (cf. note en pied de carte). */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Projection +5 ans</span>
+                        <strong style={{ fontSize: 20, color: "#c2410c" }}>{formatEur(null)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span className="po2-muted-line">Projection +10 ans</span>
+                        <strong style={{ fontSize: 20, color: "#b91c1c" }}>{formatEur(null)}<small style={{ fontSize: 12, fontWeight: 400 }}> /an</small></strong>
                       </div>
                     </div>
                   ) : <p className="po2-muted-line">Necessite les factures gaz TotalEnergies pour calculer l'atterrissage.</p>}
