@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, StatusBadge } from "../../design-system";
 import { fetchEnergieOverview, fetchFluidsElecSeries, type DjuSeasonData, type PrmListItem } from "../../lib/api";
 import { useQuery } from "@tanstack/react-query";
@@ -42,7 +42,6 @@ const CALIB_TONE: Record<string, "ok" | "warn" | "bad" | "info" | "neutral"> = {
 };
 const CALIB_ORDER = ["sous_dimensionne", "proche_seuil", "bien_calibre", "sur_souscrit"];
 const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
-const DJU_YEAR_COLORS = ["#38bdf8", "#f97316", "#22c55e", "#a855f7", "#facc15"];
 
 function monthlyCurVsAvg(monthly: { month: string; kwh: number }[] | undefined, transform: (kwh: number, ym: string) => number | null): { rows: { label: string; cur: number | null; avg: number | null }[]; current: string; prevCount: number } {
   const byYear: Record<string, (number | null)[]> = {};
@@ -79,62 +78,43 @@ function SeasonalDjuChart({ season, title, helper }: { season: DjuSeasonData | u
     );
   }
 
-  const years = season.years.map((year) => year.label);
-  const byMonth: Record<string, Record<string, number>> = {};
-  for (const year of season.years) {
-    for (const point of year.months) {
-      if (!byMonth[point.month_num]) byMonth[point.month_num] = {};
-      byMonth[point.month_num][year.label] = point.ratio;
-    }
-  }
-  const chartData = season.months_order.map((monthNum, index) => ({
-    month: season.months_labels[index],
-    month_num: monthNum,
-    cible: season.cible_by_month[monthNum] ?? undefined,
-    ...byMonth[monthNum],
+  const current = season.years.find((year) => year.label === season.current_label) ?? season.years[season.years.length - 1];
+  const currentByMonth = new Map(current.months.map((point) => [point.month_num, point.ratio]));
+  const rows = season.months_order.map((monthNum, index) => ({
+    label: season.months_labels[index],
+    cur: currentByMonth.get(monthNum) ?? null,
+    avg: season.cible_by_month[monthNum] ?? null,
   }));
-  const ecart = season.current_ecart_percent;
-  const ecartPositive = ecart != null && ecart > 0;
+  const prevCount = Math.max(0, season.years.length - 1);
   const completeness = season.current_is_complete
     ? "saison complete"
     : `${season.current_months_count}/${season.expected_months_count} mois exploitables`;
 
   return (
     <section className="po2-card">
-      <header className="po2-card__header">
-        <div><span className="po2-eyebrow">Performance</span><h2>{title}</h2></div>
-        {ecart != null ? (
-          <StatusBadge tone={ecartPositive ? "warn" : "ok"}>{`${ecartPositive ? "+" : ""}${ecart}%`}</StatusBadge>
-        ) : (
-          <StatusBadge tone="neutral">en cours</StatusBadge>
-        )}
-      </header>
+      <header className="po2-card__header"><div><span className="po2-eyebrow">Performance</span><h2>{title}</h2></div></header>
       <div className="po2-card__body">
-        <div className="po2-muted-line" style={{ fontSize: 12, marginBottom: 10 }}>
-          Saison {season.current_label ?? "en cours"} - {completeness}. {helper}
-        </div>
-        <div style={{ height: 260 }}>
+        <div style={{ height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+            <LineChart data={rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={62} unit=" kWh/DJU" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={54} unit=" kWh/DJU" />
               <Tooltip
-                formatter={(value: number, name: string) =>
-                  name === "cible"
-                    ? [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Cible tendance"]
-                    : [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, `Saison ${name}`]
-                }
+                formatter={(value: number, name: string) => [
+                  `${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`,
+                  name === "cur" ? `Saison ${current.label}` : "Cible historique",
+                ]}
                 labelFormatter={(label) => `Mois : ${label}`}
               />
-              <Legend formatter={(value) => value === "cible" ? "Cible tendance" : `Saison ${value}`} />
-              {years.map((year, index) => (
-                <Bar key={year} dataKey={year} fill={DJU_YEAR_COLORS[index % DJU_YEAR_COLORS.length]} maxBarSize={16} />
-              ))}
-              <Line type="monotone" dataKey="cible" stroke="#22c55e" strokeDasharray="6 4" strokeWidth={2} dot={{ r: 3, fill: "#22c55e" }} connectNulls={false} />
-            </ComposedChart>
+              <Line dataKey="avg" name="avg" stroke="#16a34a" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
+              <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={false} connectNulls />
+            </LineChart>
           </ResponsiveContainer>
         </div>
+        <p className="po2-muted-line" style={{ fontSize: 12 }}>
+          Saison {current.label} ({completeness}) - {helper} Cible = moyenne des {prevCount} saisons precedentes.
+        </p>
       </div>
     </section>
   );
@@ -351,7 +331,7 @@ export function FluidsElecDetailV1() {
 
       {/* Graphiques (style Trajectoire climatique) */}
       <div className="po2-two-columns">
-        <section className="po2-card">
+        <section className="po2-card" style={{ gridColumn: "1 / -1" }}>
           <header className="po2-card__header"><div><span className="po2-eyebrow">Consommations</span><h2>Suivi vs moyenne des années précédentes</h2></div></header>
           <div className="po2-card__body">
             {consoChart.rows.length === 0 ? <p className="po2-muted-line">Données mensuelles indisponibles.</p> : (
