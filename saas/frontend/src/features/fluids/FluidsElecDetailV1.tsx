@@ -1,8 +1,8 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KpiCard, StatusBadge } from "../../design-system";
-import { fetchEnergieOverview, fetchDjuMonthly, fetchFluidsElecSeries, type PrmListItem } from "../../lib/api";
+import { fetchEnergieOverview, fetchFluidsElecSeries, type DjuSeasonData, type PrmListItem } from "../../lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../providers/AuthProvider";
 
@@ -42,6 +42,7 @@ const CALIB_TONE: Record<string, "ok" | "warn" | "bad" | "info" | "neutral"> = {
 };
 const CALIB_ORDER = ["sous_dimensionne", "proche_seuil", "bien_calibre", "sur_souscrit"];
 const MONTHS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+const DJU_YEAR_COLORS = ["#38bdf8", "#f97316", "#22c55e", "#a855f7", "#facc15"];
 
 function monthlyCurVsAvg(monthly: { month: string; kwh: number }[] | undefined, transform: (kwh: number, ym: string) => number | null): { rows: { label: string; cur: number | null; avg: number | null }[]; current: string; prevCount: number } {
   const byYear: Record<string, (number | null)[]> = {};
@@ -68,6 +69,76 @@ function monthlyCurVsAvg(monthly: { month: string; kwh: number }[] | undefined, 
   return { rows, current: cy, prevCount: prev.length };
 }
 
+function SeasonalDjuChart({ season, title, helper }: { season: DjuSeasonData | undefined; title: string; helper: string }) {
+  if (!season || !season.has_data) {
+    return (
+      <section className="po2-card">
+        <header className="po2-card__header"><div><span className="po2-eyebrow">Performance</span><h2>{title}</h2></div></header>
+        <div className="po2-card__body"><p className="po2-muted-line">Donnees kWh/DJU saisonnieres indisponibles.</p></div>
+      </section>
+    );
+  }
+
+  const years = season.years.map((year) => year.label);
+  const byMonth: Record<string, Record<string, number>> = {};
+  for (const year of season.years) {
+    for (const point of year.months) {
+      if (!byMonth[point.month_num]) byMonth[point.month_num] = {};
+      byMonth[point.month_num][year.label] = point.ratio;
+    }
+  }
+  const chartData = season.months_order.map((monthNum, index) => ({
+    month: season.months_labels[index],
+    month_num: monthNum,
+    cible: season.cible_by_month[monthNum] ?? undefined,
+    ...byMonth[monthNum],
+  }));
+  const ecart = season.current_ecart_percent;
+  const ecartPositive = ecart != null && ecart > 0;
+  const completeness = season.current_is_complete
+    ? "saison complete"
+    : `${season.current_months_count}/${season.expected_months_count} mois exploitables`;
+
+  return (
+    <section className="po2-card">
+      <header className="po2-card__header">
+        <div><span className="po2-eyebrow">Performance</span><h2>{title}</h2></div>
+        {ecart != null ? (
+          <StatusBadge tone={ecartPositive ? "warn" : "ok"}>{`${ecartPositive ? "+" : ""}${ecart}%`}</StatusBadge>
+        ) : (
+          <StatusBadge tone="neutral">en cours</StatusBadge>
+        )}
+      </header>
+      <div className="po2-card__body">
+        <div className="po2-muted-line" style={{ fontSize: 12, marginBottom: 10 }}>
+          Saison {season.current_label ?? "en cours"} - {completeness}. {helper}
+        </div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
+              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={62} unit=" kWh/DJU" />
+              <Tooltip
+                formatter={(value: number, name: string) =>
+                  name === "cible"
+                    ? [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, "Cible tendance"]
+                    : [`${value.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kWh/DJU`, `Saison ${name}`]
+                }
+                labelFormatter={(label) => `Mois : ${label}`}
+              />
+              <Legend formatter={(value) => value === "cible" ? "Cible tendance" : `Saison ${value}`} />
+              {years.map((year, index) => (
+                <Bar key={year} dataKey={year} fill={DJU_YEAR_COLORS[index % DJU_YEAR_COLORS.length]} maxBarSize={16} />
+              ))}
+              <Line type="monotone" dataKey="cible" stroke="#22c55e" strokeDasharray="6 4" strokeWidth={2} dot={{ r: 3, fill: "#22c55e" }} connectNulls={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </section>
+  );
+}
 function etatTone(s: string | null | undefined): "ok" | "warn" | "bad" | "neutral" {
   if (!s) return "neutral";
   const l = s.toLowerCase();
@@ -215,20 +286,7 @@ export function FluidsElecDetailV1() {
     enabled: !!token,
     staleTime: 60_000,
   });
-  const { data: djuMonthly } = useQuery({
-    queryKey: ["dju-monthly"],
-    queryFn: () => fetchDjuMonthly(token!),
-    enabled: !!token,
-    staleTime: 60_000,
-  });
-
-  const djuMap = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const d of djuMonthly ?? []) m[d.month.slice(0, 7)] = (d.dju_chauffe ?? 0) + (d.dju_froid ?? 0);
-    return m;
-  }, [djuMonthly]);
   const consoChart = useMemo(() => monthlyCurVsAvg(series?.monthly, (kwh) => Math.round(kwh / 1000)), [series]);
-  const perfChart = useMemo(() => monthlyCurVsAvg(series?.monthly, (kwh, ym) => { const d = djuMap[ym]; return d && d > 0 ? Math.round(kwh / d) : null; }), [series, djuMap]);
   const supplierConso = useMemo(() => {
     const map: Record<string, number> = {};
     let total = 0;
@@ -315,28 +373,16 @@ export function FluidsElecDetailV1() {
             )}
           </div>
         </section>
-        <section className="po2-card">
-          <header className="po2-card__header"><div><span className="po2-eyebrow">Performance</span><h2>Ratio kWh/DJU du parc</h2></div></header>
-          <div className="po2-card__body">
-            {perfChart.rows.length === 0 ? <p className="po2-muted-line">Données kWh/DJU indisponibles.</p> : (
-              <>
-                <div style={{ height: 240 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={perfChart.rows} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} width={54} unit=" kWh/DJU" />
-                      <Tooltip formatter={(v: number, n: string) => [`${v.toLocaleString("fr-FR")} kWh/DJU`, n === "cur" ? `Année ${perfChart.current}` : "Cible (moyenne)"]} labelFormatter={(l) => `Mois : ${l}`} />
-                      <Line dataKey="avg" name="avg" stroke="#16a34a" strokeWidth={2} strokeDasharray="6 5" dot={false} connectNulls />
-                      <Line dataKey="cur" name="cur" stroke="#3e6ea8" strokeWidth={3} dot={false} connectNulls />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-                <p className="po2-muted-line" style={{ fontSize: 12 }}>Ratio kWh/DJU mensuel — {perfChart.current} (bleu) vs cible historique = moyenne des années précédentes (vert).</p>
-              </>
-            )}
-          </div>
-        </section>
+        <SeasonalDjuChart
+          season={overview?.dju_seasonal?.winter}
+          title="Performance chauffage - kWh/DJU chaud"
+          helper="Hiver oct. a avr. - DJU chauffage uniquement."
+        />
+        <SeasonalDjuChart
+          season={overview?.dju_seasonal?.summer}
+          title="Performance froid/clim - kWh/DJU froid"
+          helper="Ete mai a sep. - DJU froid uniquement."
+        />
       </div>
 
       {/* Dérives */}
