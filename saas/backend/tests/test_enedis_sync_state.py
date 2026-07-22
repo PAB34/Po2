@@ -207,3 +207,39 @@ def test_missing_subscription_stays_access_not_subscribed() -> None:
 def test_other_400_remains_invalid_request() -> None:
     resp = _FakeResponse(400, {"code": "ADAM-ERR9999", "message": "Paramètre inattendu."})
     assert enedis_sync._classify_metering_error(resp) == "invalid_request"
+
+
+# ---------------------------------------------------------------------------
+# Verrou inter-processus (uvicorn tourne avec plusieurs workers)
+# ---------------------------------------------------------------------------
+
+
+def test_run_lock_is_exclusive(energie_dir) -> None:
+    first = enedis_sync._acquire_run_lock("demo")
+    assert first is not None
+    assert enedis_sync._acquire_run_lock("demo") is None, "un 2e processus ne doit pas passer"
+
+    enedis_sync._release_run_lock(first)
+    assert enedis_sync._acquire_run_lock("demo") is not None
+
+
+def test_stale_run_lock_is_reclaimed(energie_dir, monkeypatch) -> None:
+    """Un worker tué ne doit pas bloquer la sync indéfiniment."""
+    held = enedis_sync._acquire_run_lock("demo")
+    assert held is not None
+
+    monkeypatch.setattr(
+        enedis_sync._time, "time", lambda: held.stat().st_mtime + enedis_sync._RUN_LOCK_STALE_SECONDS + 60
+    )
+    assert enedis_sync._acquire_run_lock("demo") is not None
+
+
+def test_sync_releases_lock_even_when_already_up_to_date(monkeypatch, energie_dir) -> None:
+    """La sortie anticipée « déjà à jour » doit rendre le verrou."""
+    today = date.today()
+    _run_sync_with(monkeypatch, energie_dir, [(today - timedelta(days=2)).isoformat()])
+    assert not (energie_dir / ".enedis_daily_sync.lock").exists()
+
+    # Deuxième passage : rien de neuf, sortie anticipée.
+    _run_sync_with(monkeypatch, energie_dir, [], history_days=None)
+    assert not (energie_dir / ".enedis_daily_sync.lock").exists()

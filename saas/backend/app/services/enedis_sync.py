@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import os
 import threading
 import time as _time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -365,6 +366,58 @@ def _fetch_one_prm(
 
 
 # ---------------------------------------------------------------------------
+# Verrou inter-processus
+# ---------------------------------------------------------------------------
+
+_RUN_LOCK_STALE_SECONDS = 6 * 3600
+
+
+def _acquire_run_lock(name: str) -> Path | None:
+    """Verrou exclusif entre processus. Retourne None si déjà tenu.
+
+    uvicorn tourne avec plusieurs workers, chacun démarrant son propre scheduler :
+    `_SYNC_LOCK` ne protège que le processus courant. Comme `_upsert_csv` réécrit
+    intégralement enedis_data.csv, deux exécutions concurrentes (job planifié d'un
+    worker + déclenchement manuel sur l'autre) pourraient le corrompre.
+
+    Un verrou plus vieux que `_RUN_LOCK_STALE_SECONDS` est considéré comme abandonné
+    par un processus tué, et repris.
+    """
+    path = Path(settings.energie_dir) / f".{name}.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        fd = os.open(path, flags)
+    except FileExistsError:
+        try:
+            age = _time.time() - path.stat().st_mtime
+        except OSError:
+            return None
+        if age < _RUN_LOCK_STALE_SECONDS:
+            return None
+        LOG.warning("Verrou %s périmé (%.0f s) — reprise.", path.name, age)
+        try:
+            path.unlink()
+            fd = os.open(path, flags)
+        except OSError:
+            return None
+    try:
+        os.write(fd, f"{os.getpid()} {datetime.utcnow().isoformat()}Z".encode())
+    finally:
+        os.close(fd)
+    return path
+
+
+def _release_run_lock(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        LOG.warning("Libération du verrou %s impossible : %s", path, exc)
+
+
+# ---------------------------------------------------------------------------
 # Main sync orchestration
 # ---------------------------------------------------------------------------
 
@@ -387,6 +440,13 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
             "prms_done": 0,
             "rows_added": 0,
         })
+
+    run_lock = _acquire_run_lock("enedis_daily_sync")
+    if run_lock is None:
+        _log("Sync déjà en cours dans un autre processus — exécution ignorée.")
+        with _SYNC_LOCK:
+            _SYNC_STATE.update({"status": "idle", "finished_at": datetime.utcnow().isoformat()})
+        return
 
     try:
         _log("Démarrage de la synchronisation ENEDIS — consommation journalière")
@@ -553,6 +613,9 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
                 "finished_at": datetime.utcnow().isoformat(),
                 "error": msg,
             })
+    finally:
+        # Couvre aussi la sortie anticipée « déjà à jour ».
+        _release_run_lock(run_lock)
 
 
 def _invalidate_energie_caches() -> None:
