@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=20260706-prono-tests-2">
+  <link rel="stylesheet" href="/styles-20260719-decision1.css">
 </head>
 <body>
 
@@ -64,6 +64,7 @@
     <button class="tab active" data-tab="matchs" onclick="switchTab('matchs')">⚽ Matchs</button>
     <button class="tab" data-tab="actu" onclick="switchTab('actu')">📰 Actualité</button>
     <button class="tab" data-tab="tests" onclick="switchTab('tests')">Tests</button>
+    <button class="tab" data-tab="tennis" onclick="switchTab('tennis')">TENNIS</button>
   </div>
 
   <!-- Vue Matchs (tableau) -->
@@ -93,6 +94,20 @@
     <div id="testsPanel" class="testgrid"></div>
   </section>
 
+  <!-- Vue Tennis -->
+  <section id="view-tennis" class="hidden">
+    <div class="tennis-head">
+      <div>
+        <div class="kicker">TENNIS</div>
+        <h2>Lecture tennis</h2>
+      </div>
+      <div id="tennisMeta" class="metaline"></div>
+    </div>
+    <div id="tennisContent"><div class="loading"><div class="spin"></div>Chargement des matchs...</div></div>
+    <div class="note">
+      Le marche devigotte est la reference. Les Elo surface et global restent des contrepoints independants; forme et H2H sont descriptifs, tandis que fatigue, recuperation et qualite des donnees determinent la vigilance et la largeur de la fourchette. Les marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
+    </div>
+  </section>
 </div>
 
 <!-- Instructions d'installation (iOS / repli sans prompt natif) -->
@@ -122,7 +137,14 @@
   </div>
 </div>
 
-<script src="/app.js?v=20260706-prono-tests-2"></script>
+<script src="/app-20260719-decision1.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => setTimeout(() => {
+      navigator.serviceWorker.register("/sw-20260718-level2.js", { updateViaCache: "none" }).then(reg => reg.update()).catch(() => {});
+    }, 0));
+  }
+</script>
 </body>
 </html>
 
