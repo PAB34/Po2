@@ -99,12 +99,60 @@ aucun appel API.
 Combiné à D1, le passage quotidien redemande automatiquement les jours qu'ENEDIS
 n'avait pas encore publiés la veille : le décalage de publication ne crée plus de trou.
 
-## 5. Reste à faire
+## 5. Rattrapage du 2026-06-10 — fait
 
-1. **Rattrapage du 2026-06-10** *(arbitré : à faire)* — D1 ne répare que les trous
-   en bord de fenêtre. Le 2026-06-10 est intérieur à la plage : il faut un backfill
-   ciblé, à lancer une fois le correctif déployé.
-2. **138 PRM en `invalid_request`** *(arbitré : à diagnostiquer)* — un quart du parc
-   (138 sur 549) ne remonte rien. Sujet distinct de la fiabilité de la sync, mais qui
-   pèse bien plus lourd sur la qualité des données que le trou d'un jour. Piste
-   probable : PRM résiliés, ou dates de contrat hors période demandée.
+Backfill de 45 jours lancé en prod le 2026-07-22 (fenêtre 2026-06-07 → 2026-07-21).
+
+Résultat vérifié après exécution :
+
+```
+data_min_date : 2023-05-01
+data_max_date : 2026-07-20
+missing_days  : 0
+```
+
+La série est désormais **continue, sans aucun trou**, du 2023-05-01 au 2026-07-20.
+
+Ce run a aussi validé D1 en conditions réelles : la fenêtre demandait jusqu'au
+2026-07-21, ENEDIS n'a publié que jusqu'au 2026-07-20, et l'état persistant s'est
+bien arrêté à **2026-07-20**. Avec l'ancien code il aurait enregistré 2026-07-21 et
+créé un nouveau trou.
+
+## 6. PRM muets — diagnostic
+
+Sur 549 PRM du référentiel contractuel, **179 ne renvoient jamais rien** :
+
+| Outcome | Nombre | Message ENEDIS |
+|---|---|---|
+| `ok_data` | 370 | — |
+| `invalid_request` | 138 | `ADAM-ERR0155` — *Demande non recevable : point inexistant.* |
+| `access_not_subscribed` | 40 | `ADAM-ERR0191` — *aucun service souscrit ACCES à la donnée pour la période demandée.* |
+| `not_found` | 1 | — |
+
+Constat déterminant : **aucun de ces 138 PRM n'a jamais produit la moindre ligne**
+dans `enedis_data.csv`. Ce ne sont pas des points qui auraient cessé d'émettre —
+ils n'ont jamais fonctionné.
+
+Il ne s'agit donc pas d'un incident technique ni d'une régression, mais de
+**deux problèmes de référentiel distincts** :
+
+1. **138 points inconnus d'ENEDIS** (`ADAM-ERR0155`). Le référentiel contractuel
+   contient des identifiants qu'ENEDIS ne reconnaît pas. À rapprocher de la source
+   qui alimente `enedis_contracts.csv`.
+2. **40 points sans droit d'accès** (`ADAM-ERR0191`). Le consentement / la
+   souscription au service ACCES ne couvre pas ces points sur la période. Relève
+   d'une démarche contractuelle auprès d'ENEDIS, pas du code.
+
+Piste écartée : la corrélation avec le préfixe du PRM n'est pas concluante. Les
+points en échec sont majoritairement en `50…` (79 sur 138) mais 11 PRM en `50…`
+remontent normalement — le préfixe n'est donc pas un critère fiable.
+
+Le classement a été affiné (`unknown_usage_point` distinct de `invalid_request`)
+pour que le prochain diagnostic sépare directement les deux causes.
+
+## 7. Reste à faire
+
+1. **Origine des 138 points inconnus** — remonter à la source qui alimente
+   `enedis_contracts.csv` et comprendre d'où viennent ces identifiants. C'est le
+   sujet à plus fort impact sur la qualité des données (un quart du parc).
+2. **40 points sans droit d'accès** — démarche contractuelle ENEDIS à instruire.
