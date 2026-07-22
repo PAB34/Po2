@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     enedis_history_days: int = 1095  # 3 ans — limite API 36 mois
     enedis_customer_sync_enabled: bool = True
     enedis_customer_sync_interval_hours: int = 168  # hebdomadaire
+    enedis_daily_sync_enabled: bool = True
+    enedis_daily_sync_interval_hours: int = 24
 
     # ENEDIS Async (commanderPublicationPonctuelle)
     enedis_async_url: str = (

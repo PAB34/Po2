@@ -77,6 +77,32 @@ def _enedis_customer_sync_job() -> None:
         LOG.exception("ENEDIS customer sync job failed")
 
 
+def _enedis_daily_sync_job() -> None:
+    """Job périodique : collecte de la consommation journalière ENEDIS.
+
+    La sync était jusqu'ici purement manuelle, ce qui laissait les données
+    vieillir sans signal. La fenêtre étant incrémentale et bornée à la donnée
+    réellement reçue, un passage quotidien redemande aussi les jours qu'ENEDIS
+    n'avait pas encore publiés au run précédent.
+    """
+    if not settings.enedis_daily_sync_enabled:
+        return
+    if not settings.enedis_client_id or not settings.enedis_client_secret:
+        return
+    try:
+        from app.services.enedis_sync import (  # noqa: PLC0415
+            is_sync_running,
+            run_daily_consumption_sync,
+        )
+
+        if is_sync_running():
+            LOG.info("Sync conso journalière ENEDIS déjà en cours, job périodique ignoré.")
+            return
+        run_daily_consumption_sync()
+    except Exception:
+        LOG.exception("ENEDIS daily consumption sync job failed")
+
+
 def _grdf_conso_sync_job() -> None:
     """Job périodique : synchro des consommations publiées GRDF.
 
@@ -175,6 +201,17 @@ def start_scheduler() -> None:
             trigger="interval",
             hours=customer_interval,
             id="enedis_customer_sync",
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    if settings.enedis_daily_sync_enabled:
+        daily_interval = max(int(settings.enedis_daily_sync_interval_hours), 1)
+        _SCHEDULER.add_job(
+            _enedis_daily_sync_job,
+            trigger="interval",
+            hours=daily_interval,
+            id="enedis_daily_sync",
             max_instances=1,
             coalesce=True,
             replace_existing=True,

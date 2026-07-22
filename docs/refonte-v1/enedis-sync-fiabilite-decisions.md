@@ -86,21 +86,25 @@ D1 ne répare que le futur. Le trou `2026-06-10` est *intérieur* à la plage : 
 sera jamais redemandé par une sync incrémentale. Un rattrapage ciblé est nécessaire
 (voir §5).
 
-### D4 — Planification quotidienne *(à confirmer)*
+### D4 — Planification quotidienne *(retenu, arbitré le 2026-07-22)*
 
-Ajouter un job APScheduler quotidien sur `run_daily_consumption_sync`, désactivable
-par réglage (`enedis_daily_sync_enabled`, défaut à confirmer).
+Job APScheduler quotidien sur `run_daily_consumption_sync`, piloté par
+`enedis_daily_sync_enabled` (défaut `True`) et `enedis_daily_sync_interval_hours`
+(défaut 24).
 
-**Question ouverte 1** : activer par défaut en prod, ou laisser manuel et se
-contenter de l'alerte de fraîcheur ? Une sync quotidienne consomme du quota ENEDIS
-(≈ 550 appels/jour sur un plafond de 950/h — acceptable) mais tourne sans surveillance.
+Coût quota : ≈ 550 appels/jour pour un plafond de 950/h — large marge. La garde
+`is_sync_running()` évite le recouvrement, et une fenêtre déjà à jour sort sans
+aucun appel API.
 
-## 5. Questions ouvertes
+Combiné à D1, le passage quotidien redemande automatiquement les jours qu'ENEDIS
+n'avait pas encore publiés la veille : le décalage de publication ne crée plus de trou.
 
-1. **Planification** — voir D4 : sync quotidienne automatique, oui ou non ?
-2. **Rattrapage du 2026-06-10** — relance ciblée d'un backfill court une fois D1
-   déployé. À lancer manuellement après validation, ou automatiquement au premier run ?
-3. **138 PRM en `invalid_request`** — un tiers du parc ne remonte rien. Sujet distinct
-   de la fiabilité de la sync, mais qui pèse plus lourd sur la qualité des données que
-   le trou d'un jour. À diagnostiquer séparément (probablement des PRM résiliés ou des
-   dates de contrat hors période demandée).
+## 5. Reste à faire
+
+1. **Rattrapage du 2026-06-10** *(arbitré : à faire)* — D1 ne répare que les trous
+   en bord de fenêtre. Le 2026-06-10 est intérieur à la plage : il faut un backfill
+   ciblé, à lancer une fois le correctif déployé.
+2. **138 PRM en `invalid_request`** *(arbitré : à diagnostiquer)* — un quart du parc
+   (138 sur 549) ne remonte rien. Sujet distinct de la fiabilité de la sync, mais qui
+   pèse bien plus lourd sur la qualité des données que le trou d'un jour. Piste
+   probable : PRM résiliés, ou dates de contrat hors période demandée.
