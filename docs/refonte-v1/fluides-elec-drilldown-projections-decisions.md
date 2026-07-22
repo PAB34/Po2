@@ -52,7 +52,28 @@ Mécanisme : le ratio kWh/DJU rapporte *toute* la consommation du parc (dont un 
 thermosensible important — éclairage public, bâtiments) à un DJU froid faible. Quand le
 DJU tend vers zéro, le ratio diverge. Le seuil de 20 est trop bas pour l'empêcher.
 
-**Non corrigé — arbitrage nécessaire** (voir §4, question 1).
+**Corrigé (arbitrage du 2026-07-22 : retirer le talon).** Le talon est estimé par moindres
+carrés sur `kwh = base + a·DJU_chaud + b·DJU_froid`, et le ratio ne porte plus que sur
+`kwh − talon`. Repli sur l'ancien comportement si l'historique fait moins de 12 mois ou si
+le système est mal conditionné.
+
+Résultat constaté en prod après déploiement — **talon = 413 659 kWh/mois** :
+
+| Saison | Avant | Après |
+|---|---|---|
+| Été, mois à DJU significatifs | 3 933 → 8 581 | **537 → 983** |
+| Cible juin / juillet / août | ~5 000-6 000 | **654 / 731 / 699** |
+| Septembre 2023 (20,1 DJU) | 25 066 | **4 486** |
+
+L'échelle Y passe de 26 000 à ~4 500 : les valeurs utiles, jusqu'ici écrasées en bas du
+graphique, sont enfin lisibles.
+
+**Limite résiduelle assumée** : septembre reste un point haut (4 486 contre ~700). Le
+retrait du talon suppose une base constante sur l'année, alors qu'une partie de la
+consommation non thermosensible est elle-même saisonnière (l'éclairage public remonte en
+septembre quand les jours raccourcissent). Même constat, atténué, sur octobre côté hiver
+(2 719 et 2 467 les deux premières saisons, contre ~1 150 la dernière). Traiter cette
+part demanderait d'ajouter une variable de durée du jour au modèle.
 
 ## 2. Fiche compteur au clic — fait
 
@@ -90,13 +111,43 @@ Les lignes « Projection +5 ans » et « Projection +10 ans » ont été ajouté
 au même format que l'électricité, et affichent « — » : le moteur de projection prix gaz
 n'existe pas encore. Demande explicite du 2026-07-22.
 
-## 4. Arbitrages ouverts
+## 4. Projection prix électricité via le BPU — **bloqué, ne pas livrer en l'état**
 
-1. **Seuil DJU froid** — comment neutraliser les mois à faible DJU qui font diverger le
-   ratio ? Options : relever le seuil (à 50, on perd tout septembre) ; retirer le talon
-   non thermosensible avant de diviser (plus juste, plus lourd) ; borner/écarter les
-   valeurs aberrantes. Impact : la cible septembre et l'échelle du graphique.
-2. **Projection prix électricité** — trois voies : importer les factures 2024/2025 pour
-   obtenir une vraie tendance observée ; brancher sur la trajectoire BPU (un moteur de
-   projection +5/+10 ans existe déjà dans `EnergieBpuPage`) ; ou retenir une hypothèse
-   d'évolution explicite et paramétrable (% par an).
+Arbitrage du 2026-07-22 : brancher la projection sur la trajectoire BPU. Vérification
+faite avant implémentation, **le résultat est inexploitable**.
+
+Historique BPU disponible (moyenne toutes composantes, €/MWh) :
+
+| 2021 | 2022 | 2023 | 2024 | 2025 | 2026 |
+|---|---|---|---|---|---|
+| 63,5 | 184,6 | 290,4 | 133,6 | 97,9 | 87,1 |
+
+Cette série est dominée par la crise énergétique 2022-2023 : elle monte à 290 puis
+redescend à 87. Une régression linéaire dessus donne :
+
+| Fenêtre | Pente | +5 ans | +10 ans |
+|---|---|---|---|
+| 2021-2026 (tout) | −8,5 €/MWh/an | 78,8 (**−35 %**) | 36,1 (**−70 %**) |
+| 2024-2026 (post-crise) | −23,2 €/MWh/an | **−33,3 €/MWh** | **−149,6 €/MWh** |
+
+Sur l'historique complet, on annoncerait une **baisse de 70 % de la facture d'électricité
+à 10 ans**. Sur la seule période post-crise, on obtient un **prix négatif dès +5 ans**.
+
+Le modèle existant de `EnergieBpuPage` masque le problème avec un `Math.max(0, …)` : il
+affiche 0 au lieu d'un prix négatif — le chiffre reste faux, il est seulement moins visible.
+
+Une extrapolation linéaire ne convient pas à une série qui contient un choc de marché.
+Le brancher tel quel produirait un chiffre faux dans un document destiné aux finances.
+
+**Reste à arbitrer** — trois voies possibles :
+1. importer les factures 2024/2025 pour obtenir une vraie tendance de prix observé ;
+2. retenir une hypothèse d'évolution explicite et paramétrable (% par an), assumée comme
+   hypothèse et non présentée comme une prévision ;
+3. conserver le BPU mais en écartant la période de crise et en bornant la projection —
+   suppose de décider ce qui est « atypique », donc un choix de méthode à documenter.
+
+## 5. Suite
+
+- **Éclairage public / saisonnalité du talon** : ajouter une variable de durée du jour
+  pour lisser septembre et octobre (voir limite résiduelle §1).
+- **Projection prix électricité** : voir §4.
