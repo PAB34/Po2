@@ -14,7 +14,10 @@ TRAIN_END = 2024
 SMOOTHING_MATCHES = 100
 BAD_SCORE = re.compile(r"RET|W/O|WO\b|DEF|ABD", re.I)
 SET_SCORE = re.compile(r"^(\d+)-(\d+)")
-OUTCOMES = ("over_22_5", "favorite_cover_2_5", "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1")
+OUTCOMES = (
+    "over_18_5", "over_19_5", "over_22_5",
+    "favorite_cover_2_5", "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1",
+)
 
 
 def _surface(value: Any) -> str:
@@ -63,8 +66,14 @@ def _score_outcomes(score: Any, favorite_won: bool) -> dict[str, float] | None:
     winner_games = sum(left for left, _ in sets)
     loser_games = sum(right for _, right in sets)
     favorite_margin = (winner_games - loser_games) if favorite_won else (loser_games - winner_games)
+    total_games = winner_games + loser_games
     return {
-        "over_22_5": float(winner_games + loser_games > 22.5),
+        # Trois seuils de total jeux : 22.5 est le marche bookmaker usuel ; 18.5 et 19.5
+        # sont les seuils reellement joues sur les tickets "prend un set + over", qui
+        # etaient jusqu'ici evalues sans jamais etre mesures.
+        "over_18_5": float(total_games > 18.5),
+        "over_19_5": float(total_games > 19.5),
+        "over_22_5": float(total_games > 22.5),
         "favorite_cover_2_5": float(favorite_margin > 2.5),
         "three_sets": float(len(sets) == 3),
         "tiebreak": float(any({left, right} == {6, 7} for left, right in sets)),
