@@ -330,7 +330,7 @@ export function FluidsElecDetailV1() {
       </div>
 
       {/* Graphiques (style Trajectoire climatique) */}
-      <div className="po2-two-columns">
+      <div className="po2-two-columns" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         <section className="po2-card" style={{ gridColumn: "1 / -1" }}>
           <header className="po2-card__header"><div><span className="po2-eyebrow">Consommations</span><h2>Suivi vs moyenne des années précédentes</h2></div></header>
           <div className="po2-card__body">
