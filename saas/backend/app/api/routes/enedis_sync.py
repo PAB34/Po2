@@ -38,6 +38,11 @@ class SyncStatus(BaseModel):
     date_from: str | None = None
     date_to: str | None = None
     last_sync_date: str | None = None
+    # Couverture réelle du CSV : ce qui a été reçu, pas ce qui a été demandé.
+    data_min_date: str | None = None
+    data_max_date: str | None = None
+    missing_days: int = 0
+    missing_days_sample: list[str] = []
     error: str | None = None
     log: list[str] = []
 

@@ -86,6 +86,73 @@ def _save_persistent_state(last_sync_date: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Couverture réelle du CSV — la seule source de vérité sur ce qui est collecté
+# ---------------------------------------------------------------------------
+
+_COVERAGE_MEMO: dict[str, Any] = {"signature": None, "value": None}
+_MISSING_SAMPLE_MAX = 10
+
+
+def _data_csv_path() -> Path:
+    return Path(settings.energie_dir) / "enedis_data.csv"
+
+
+def _csv_coverage() -> dict[str, Any]:
+    """Dates réellement présentes dans enedis_data.csv.
+
+    L'état persistant enregistre ce qui a été *demandé* ; ce lecteur dit ce qui a
+    été *reçu*. Mémoïsé sur (mtime, taille) : le CSV fait plusieurs centaines de
+    milliers de lignes et /status est interrogé en boucle pendant une sync.
+    """
+    empty = {"data_max_date": None, "data_min_date": None, "missing_days": 0, "missing_days_sample": []}
+    path = _data_csv_path()
+    if not path.exists() or path.stat().st_size == 0:
+        return empty
+
+    stat = path.stat()
+    signature = f"{stat.st_mtime_ns}:{stat.st_size}"
+    if _COVERAGE_MEMO["signature"] == signature and _COVERAGE_MEMO["value"] is not None:
+        return dict(_COVERAGE_MEMO["value"])
+
+    seen: set[str] = set()
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                day = (row.get("date") or "")[:10]
+                if len(day) == 10:
+                    seen.add(day)
+    except Exception as exc:
+        LOG.warning("Lecture de la couverture enedis_data.csv impossible : %s", exc)
+        return empty
+
+    if not seen:
+        return empty
+
+    lo, hi = min(seen), max(seen)
+    missing: list[str] = []
+    try:
+        cursor = date.fromisoformat(lo)
+        last = date.fromisoformat(hi)
+        while cursor <= last:
+            iso = cursor.isoformat()
+            if iso not in seen:
+                missing.append(iso)
+            cursor += timedelta(days=1)
+    except ValueError:
+        pass
+
+    value = {
+        "data_min_date": lo,
+        "data_max_date": hi,
+        "missing_days": len(missing),
+        "missing_days_sample": missing[:_MISSING_SAMPLE_MAX],
+    }
+    _COVERAGE_MEMO["signature"] = signature
+    _COVERAGE_MEMO["value"] = value
+    return dict(value)
+
+
+# ---------------------------------------------------------------------------
 # Public status accessor
 # ---------------------------------------------------------------------------
 
@@ -96,6 +163,7 @@ def get_sync_status() -> dict[str, Any]:
     # Merge persistent last_sync_date if richer
     if not snap["last_sync_date"] and persistent.get("last_sync_date"):
         snap["last_sync_date"] = persistent["last_sync_date"]
+    snap.update(_csv_coverage())
     return snap
 
 
@@ -333,8 +401,22 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
         today = date.today()
 
         if last_sync and history_days is None:
-            # Sync incrémentale : reprend au lendemain de la dernière sync
+            # Sync incrémentale : reprend au lendemain de la dernière sync.
             start_d = date.fromisoformat(last_sync) + timedelta(days=1)
+            # Auto-réparation d'un état hérité qui aurait dépassé la donnée réelle
+            # (bug corrigé le 2026-07-22) : on repart de la donnée, pas de l'état.
+            data_max = _csv_coverage().get("data_max_date")
+            if data_max:
+                try:
+                    resume_d = date.fromisoformat(data_max) + timedelta(days=1)
+                except ValueError:
+                    resume_d = start_d
+                if resume_d < start_d:
+                    _log(
+                        f"État ({last_sync}) en avance sur la donnée réelle ({data_max}) — "
+                        f"reprise corrigée au {resume_d}."
+                    )
+                    start_d = resume_d
         else:
             # Backfill explicite : ignore last_sync, force le recalcul complet
             start_d = today - timedelta(days=effective_history)
@@ -362,10 +444,12 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
         ingested_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
         # 4. Collecter en parallèle par chunks d'un an (pour afficher la progression)
-        csv_path = Path(settings.energie_dir) / "enedis_data.csv"
+        csv_path = _data_csv_path()
         total_new = 0
         chunk_start = start_d
         prm_outcomes: dict[str, str] = {prm: "error_technical" for prm in prms}
+        # Date la plus récente réellement renvoyée par ENEDIS (≠ date demandée).
+        max_data_date: str | None = None
 
         while chunk_start <= end_d:
             chunk_end = min(chunk_start + timedelta(days=_CHUNK_DAYS - 1), end_d)
@@ -394,6 +478,10 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
                     if done_count % 50 == 0 or done_count == len(prms):
                         _log(f"  {done_count}/{len(prms)} PRMs traités — {len(all_rows)} lignes collectées")
 
+            chunk_max = max((str(r.get("date") or "") for r in all_rows), default="")
+            if len(chunk_max) == 10 and (max_data_date is None or chunk_max > max_data_date):
+                max_data_date = chunk_max
+
             new_rows = _upsert_csv(all_rows, csv_path)
             total_new += new_rows
             _log(f"  Chunk upsert OK — {new_rows} nouvelles lignes ({total_new} total)")
@@ -407,10 +495,25 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
                     pass  # Keep existing token
 
         # 5. Persister l'état + diagnostic + invalider les caches
-        if prm_limit is None:
-            _save_persistent_state(end_str)
-        else:
+        #
+        # L'état ne doit JAMAIS dépasser la donnée réellement reçue : ENEDIS publie
+        # avec un décalage variable (une requête jusqu'à J-1 renvoie souvent J-2).
+        # Enregistrer la date demandée faisait sauter définitivement le dernier jour
+        # de chaque fenêtre, puisque la sync incrémentale suivante repart de
+        # last_sync + 1. En bornant à la donnée reçue, les jours restés vides sont
+        # redemandés au run suivant jusqu'à ce qu'ENEDIS les publie.
+        effective_last = min(end_str, max_data_date) if max_data_date else None
+        if prm_limit is not None:
             _log("Mode test : état global non avancé, seules les lignes collectées sont upsertées.")
+        elif effective_last is None:
+            _log("Aucune donnée reçue sur la fenêtre — état non avancé, la période sera redemandée.")
+        else:
+            _save_persistent_state(effective_last)
+            if effective_last < end_str:
+                _log(
+                    f"État borné à {effective_last} (demandé jusqu'au {end_str}) — "
+                    "les jours sans donnée seront redemandés au prochain run."
+                )
         try:
             diag_path = Path(settings.energie_dir) / "enedis_data_diagnostic.json"
             diag_path.write_text(
@@ -423,13 +526,16 @@ def run_daily_consumption_sync(history_days: int | None = None, prm_limit: int |
             LOG.warning("Impossible d'écrire enedis_data_diagnostic.json : %s", exc)
         _invalidate_energie_caches()
 
-        _log(f"Synchronisation terminée — {total_new} nouvelles lignes, date max : {end_str}")
+        _log(
+            f"Synchronisation terminée — {total_new} nouvelles lignes, "
+            f"date max reçue : {max_data_date or 'aucune'}"
+        )
         with _SYNC_LOCK:
             _SYNC_STATE.update({
                 "status": "success",
                 "finished_at": datetime.utcnow().isoformat(),
                 "rows_added": total_new,
-                "last_sync_date": end_str,
+                "last_sync_date": effective_last or last_sync,
             })
 
     except Exception as exc:
