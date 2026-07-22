@@ -124,6 +124,12 @@ function SeasonalDjuChart({ season, title, helper }: { season: DjuSeasonData | u
         <p className="po2-muted-line" style={{ fontSize: 12 }}>
           Saison {current.label} ({completeness}) - {helper} Cible = moyenne des {prevCount} saisons precedentes.
         </p>
+        {season.baseload_kwh_per_month != null ? (
+          <p className="po2-muted-line" style={{ fontSize: 12 }}>
+            Ratio calcule hors talon non thermosensible ({formatKwh(season.baseload_kwh_per_month)}/mois, estime sur
+            l'historique) : sans ce retrait, les mois a faibles DJU produisaient des ratios hors echelle.
+          </p>
+        ) : null}
         {curPointCount === 0 ? (
           <p className="po2-muted-line" style={{ fontSize: 12, color: "#c2410c" }}>
             Aucun mois de la saison en cours n'est encore exploitable : seule la cible historique est tracee.
@@ -391,12 +397,12 @@ export function FluidsElecDetailV1() {
         <SeasonalDjuChart
           season={overview?.dju_seasonal?.winter}
           title="Performance chauffage - kWh/DJU chaud"
-          helper="Hiver oct. a avr. - DJU chauffage uniquement."
+          helper="Hiver oct. a avr. - DJU chauffage uniquement, sur la part thermosensible."
         />
         <SeasonalDjuChart
           season={overview?.dju_seasonal?.summer}
           title="Performance froid/clim - kWh/DJU froid"
-          helper="Ete mai a sep. - DJU froid uniquement."
+          helper="Ete mai a sep. - DJU froid uniquement, sur la part thermosensible."
         />
       </div>
 

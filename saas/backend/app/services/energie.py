@@ -1609,6 +1609,64 @@ def _summer_label(year: int) -> str:
     return str(year)
 
 
+def _estimate_baseload(
+    dju_idx: dict[str, dict[str, float]], conso_idx: dict[str, float]
+) -> tuple[float, float, float] | None:
+    """Talon non thermosensible, par moindres carres sur kwh = base + a*DJU_chaud + b*DJU_froid.
+
+    Le ratio kWh/DJU rapportait toute la consommation aux DJU, talon compris (eclairage
+    public, bureautique, process). Quand les DJU tendent vers zero en demi-saison, ce
+    talon divise par un tres petit nombre fait diverger le ratio : septembre 2023 sortait
+    a 25 066 kWh/DJU contre 3 900-8 600 les autres mois, ecrasant toute l'echelle.
+    En isolant le talon, le ratio ne porte plus que sur la part reellement thermosensible.
+
+    Retourne (base, sensibilite_chaud, sensibilite_froid), ou None si l'historique est
+    trop court ou le systeme mal conditionne.
+    """
+    keys = sorted(ym for ym in conso_idx if ym in dju_idx and conso_idx.get(ym) is not None)
+    if len(keys) < 12:
+        return None
+
+    xs1 = [dju_idx[k].get("dju_chauffe", 0.0) for k in keys]
+    xs2 = [dju_idx[k].get("dju_froid", 0.0) for k in keys]
+    ys = [float(conso_idx[k]) for k in keys]
+    n = float(len(keys))
+
+    s1, s2, sy = sum(xs1), sum(xs2), sum(ys)
+    s11 = sum(x * x for x in xs1)
+    s22 = sum(x * x for x in xs2)
+    s12 = sum(a * b for a, b in zip(xs1, xs2))
+    s1y = sum(a * y for a, y in zip(xs1, ys))
+    s2y = sum(b * y for b, y in zip(xs2, ys))
+
+    # Equations normales 3x3 resolues par Cramer (evite une dependance numerique).
+    m = [[n, s1, s2], [s1, s11, s12], [s2, s12, s22]]
+    rhs = [sy, s1y, s2y]
+
+    def det3(a: list[list[float]]) -> float:
+        return (
+            a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
+            - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+            + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0])
+        )
+
+    det = det3(m)
+    if abs(det) < 1e-9:
+        return None
+
+    def solved(col: int) -> float:
+        mc = [row[:] for row in m]
+        for i in range(3):
+            mc[i][col] = rhs[i]
+        return det3(mc) / det
+
+    base = solved(0)
+    # Un talon negatif ou superieur a la conso moyenne signale un modele non exploitable.
+    if base <= 0 or base >= sy / n:
+        return None
+    return base, solved(1), solved(2)
+
+
 def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[str, float]) -> dict[str, Any]:
     """
     Performance kWh/DJU par saison (Hiver Oct→Avr, Été Mai→Sep), multi-années.
@@ -1617,6 +1675,11 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
     dju_idx = _dju_monthly_index()
     current_ym = date.today().strftime("%Y-%m")
     today = date.today()
+
+    # Talon estime une fois pour tout le perimetre : les ratios portent ensuite sur la
+    # seule part thermosensible (kwh - talon), pas sur la consommation totale.
+    baseload_fit = _estimate_baseload(dju_idx, conso_idx)
+    baseload = baseload_fit[0] if baseload_fit else None
 
     current_winter_label = _winter_label(today.year, today.month)
     current_summer_label = _summer_label(today.year)
@@ -1681,7 +1744,11 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
                 kwh=kwh,
                 threshold=_DJU_SEASONAL_HEATING_MIN,
             ):
-                winter_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
+                winter_by_season.setdefault(lbl, {})[mn] = {
+                    "dju": round(dju, 1),
+                    "kwh": round(kwh, 1),
+                    "kwh_thermo": round(max(kwh - baseload, 0.0), 1) if baseload is not None else round(kwh, 1),
+                }
 
         if mn in _SUMMER_MONTHS:
             dju = dju_vals.get("dju_froid", 0.0)
@@ -1695,7 +1762,11 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
                 kwh=kwh,
                 threshold=_DJU_SEASONAL_COOLING_MIN,
             ):
-                summer_by_season.setdefault(lbl, {})[mn] = {"dju": round(dju, 1), "kwh": round(kwh, 1)}
+                summer_by_season.setdefault(lbl, {})[mn] = {
+                    "dju": round(dju, 1),
+                    "kwh": round(kwh, 1),
+                    "kwh_thermo": round(max(kwh - baseload, 0.0), 1) if baseload is not None else round(kwh, 1),
+                }
 
     def _build_season(
         by_season: dict[str, dict[str, dict[str, float]]],
@@ -1714,9 +1785,12 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
                 if d is None:
                     continue
                 dju, kwh = d["dju"], d["kwh"]
-                ratio = round(kwh / dju, 4)
+                kwh_thermo = d.get("kwh_thermo", kwh)
+                ratio = round(kwh_thermo / dju, 4)
                 ratio_history[mn].append((float(lbl[:4]), ratio))
-                season_months.append({"month_num": mn, "dju": dju, "kwh": kwh, "ratio": ratio})
+                season_months.append(
+                    {"month_num": mn, "dju": dju, "kwh": kwh, "kwh_thermo": kwh_thermo, "ratio": ratio}
+                )
             if season_months:
                 years_data.append({"label": lbl, "months": season_months})
 
@@ -1741,7 +1815,9 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
             for mn, d in current_data.items():
                 cible = cible_by_month.get(mn)
                 if cible is not None and cible > 0:
-                    sum_kwh_actual += d["kwh"]
+                    # La cible est un ratio thermosensible : l'ecart doit comparer des
+                    # grandeurs de meme nature, donc hors talon des deux cotes.
+                    sum_kwh_actual += d.get("kwh_thermo", d["kwh"])
                     sum_kwh_cible += cible * d["dju"]
             if sum_kwh_cible > 0:
                 current_ecart = round((sum_kwh_actual / sum_kwh_cible - 1) * 100, 1)
@@ -1758,6 +1834,7 @@ def _build_dju_seasonal_from_consumption(usage_point_id: str, conso_idx: dict[st
             "current_is_complete": len(current_data) == len(months_order),
             "month_diagnostics": month_diagnostics,
             "has_data": len(years_data) > 0,
+            "baseload_kwh_per_month": round(baseload, 0) if baseload is not None else None,
         }
 
     return {

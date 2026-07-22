@@ -1313,6 +1313,8 @@ export type DjuSeasonMonthPoint = {
   month_num: string;
   dju: number;
   kwh: number;
+  /** Consommation hors talon : c'est elle qui alimente le ratio. */
+  kwh_thermo: number | null;
   ratio: number;
 };
 
@@ -1343,6 +1345,8 @@ export type DjuSeasonData = {
   current_is_complete: boolean;
   month_diagnostics: DjuSeasonMonthDiagnostic[];
   has_data: boolean;
+  /** Talon mensuel retire avant calcul du ratio (null = ratio sur conso totale). */
+  baseload_kwh_per_month: number | null;
 };
 
 export type PrmDjuSeasonal = {

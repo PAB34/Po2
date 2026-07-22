@@ -52,6 +52,8 @@ class DjuSeasonMonthPoint(BaseModel):
     month_num: str
     dju: float
     kwh: float
+    # Consommation hors talon non thermosensible : c'est elle qui alimente le ratio.
+    kwh_thermo: float | None = None
     ratio: float
 
 
@@ -82,6 +84,9 @@ class DjuSeasonData(BaseModel):
     current_is_complete: bool = False
     month_diagnostics: list[DjuSeasonMonthDiagnostic] = []
     has_data: bool
+    # Talon mensuel retire avant calcul du ratio (None = modele non exploitable,
+    # le ratio porte alors sur la consommation totale comme auparavant).
+    baseload_kwh_per_month: float | None = None
 
 
 class PrmDjuSeasonal(BaseModel):
