@@ -285,6 +285,11 @@ def _classify_metering_error(resp: requests.Response, fallback: str = "error_tec
     if resp.status_code == 429:
         return "quota_exceeded"
     if resp.status_code == 400:
+        # ENEDIS répond 400 pour des causes très différentes. « invalid_request »
+        # les confondait, ce qui masquait le fait qu'un quart du parc est simplement
+        # inconnu d'ENEDIS — un problème de référentiel, pas un incident technique.
+        if code == "ADAM-ERR0155" or "point inexistant" in msg_lower:
+            return "unknown_usage_point"
         return "invalid_request"
     return fallback
 
@@ -634,6 +639,7 @@ _OUTCOME_RANK: dict[str, int] = {
     "ok_data": 0,
     "ok_empty": 1,
     "access_not_subscribed": 2,
+    "unknown_usage_point": 3,
     "not_found": 3,
     "forbidden": 4,
     "invalid_request": 5,

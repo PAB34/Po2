@@ -11,11 +11,24 @@ Pour exécuter :
 """
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
 import pytest
 
 from app.services import enedis_sync
+
+
+class _FakeResponse:
+    """Réponse ENEDIS minimale pour tester la classification des erreurs."""
+
+    def __init__(self, status_code: int, payload: dict) -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.text = json.dumps(payload)
+
+    def json(self) -> dict:
+        return self._payload
 
 
 @pytest.fixture()
@@ -167,3 +180,30 @@ def test_inherited_ahead_state_is_repaired(monkeypatch, energie_dir) -> None:
     cov = enedis_sync._csv_coverage()
     assert cov["data_max_date"] == day_j2
     assert cov["missing_days"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Classification des erreurs ENEDIS (400 recouvre des causes très différentes)
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_usage_point_is_not_lumped_into_invalid_request() -> None:
+    """ADAM-ERR0155 = PRM inconnu d'ENEDIS : problème de référentiel, pas technique."""
+    resp = _FakeResponse(400, {"code": "ADAM-ERR0155", "message": "Demande non recevable : point inexistant."})
+    assert enedis_sync._classify_metering_error(resp) == "unknown_usage_point"
+
+
+def test_missing_subscription_stays_access_not_subscribed() -> None:
+    resp = _FakeResponse(
+        400,
+        {
+            "code": "ADAM-ERR0191",
+            "message": "La demande ne peut aboutir : aucun service souscrit ACCES à la donnée pour la période demandée.",
+        },
+    )
+    assert enedis_sync._classify_metering_error(resp) == "access_not_subscribed"
+
+
+def test_other_400_remains_invalid_request() -> None:
+    resp = _FakeResponse(400, {"code": "ADAM-ERR9999", "message": "Paramètre inattendu."})
+    assert enedis_sync._classify_metering_error(resp) == "invalid_request"
