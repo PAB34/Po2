@@ -120,6 +120,13 @@ créé un nouveau trou.
 
 ## 6. PRM muets — diagnostic
 
+> ⚠️ **Section périmée (2026-07-23).** Le comptage des outcomes ci-dessous reste
+> exact, mais l'interprétation qui suit — « 138 identifiants inconnus d'ENEDIS » — est
+> **fausse**. Vérification faite : ENEDIS renvoie une fiche contractuelle complète pour
+> ces 138 points, et le référentiel local est un sous-ensemble strict du périmètre de
+> consentement déclaré par ENEDIS. Diagnostic corrigé et causes réelles :
+> `enedis-referentiel-prm-qualite-decisions.md`.
+
 Sur 549 PRM du référentiel contractuel, **179 ne renvoient jamais rien** :
 
 | Outcome | Nombre | Message ENEDIS |
@@ -152,7 +159,13 @@ pour que le prochain diagnostic sépare directement les deux causes.
 
 ## 7. Reste à faire
 
-1. **Origine des 138 points inconnus** — remonter à la source qui alimente
-   `enedis_contracts.csv` et comprendre d'où viennent ces identifiants. C'est le
-   sujet à plus fort impact sur la qualité des données (un quart du parc).
+> Repris et remplacé le 2026-07-23 — voir `enedis-referentiel-prm-qualite-decisions.md`.
+> En résumé : il n'y a pas de source amont à corriger (le référentiel vient d'ENEDIS) ;
+> 126 des 179 muets sont des points coupés ou des compteurs non communicants, donc
+> normaux ; et le vrai gisement est à l'inverse **60 PRM facturés (464 829 € TTC, 40 %
+> de la dépense) absents du référentiel**.
+
+1. ~~**Origine des 138 points inconnus**~~ — sans objet : ces identifiants viennent
+   du périmètre de consentement ENEDIS et sont valides.
 2. **40 points sans droit d'accès** — démarche contractuelle ENEDIS à instruire.
+   Toujours valable (groupe C du diagnostic corrigé, 42 881 € facturés).

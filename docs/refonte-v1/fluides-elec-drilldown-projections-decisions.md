@@ -139,8 +139,28 @@ affiche 0 au lieu d'un prix négatif — le chiffre reste faux, il est seulement
 Une extrapolation linéaire ne convient pas à une série qui contient un choc de marché.
 Le brancher tel quel produirait un chiffre faux dans un document destiné aux finances.
 
+### Profondeur d'historique réellement disponible (mesuré le 2026-07-23)
+
+La voie 1 ci-dessous suppose qu'un historique 2024/2025 existe quelque part. Relevé en
+base de prod (`energy_invoice_sites`, € TTC par mois de début de période) :
+
+| 2024-04 | 2024-07 | 2025-08 | 2025-09 | 2025-10 | 2025-11 | 2025-12 | 2026-01 → 06 |
+|---|---|---|---|---|---|---|---|
+| 6 027 | −173 | −18 | 244 | 5 590 | **72 962** | **70 072** | **999 791** |
+
+La facturation ne devient significative qu'à partir de **novembre 2025** : avant, il
+s'agit de quelques lignes isolées (1 à 2 PRM), pas d'un historique. La base couvre donc
+**8 mois**, pas deux années. Les rares lignes 2024 ne constituent pas un point de
+comparaison exploitable.
+
+Conséquence : la voie 1 ne consiste pas à « importer » un historique déjà là, mais à
+**l'obtenir du fournisseur** (factures 2024 et 2025 complètes) — c'est une demande
+externe, pas une tâche technique. Tant qu'elle n'a pas abouti, aucune tendance de prix
+observé n'est calculable, quelle que soit la méthode.
+
 **Reste à arbitrer** — trois voies possibles :
-1. importer les factures 2024/2025 pour obtenir une vraie tendance de prix observé ;
+1. importer les factures 2024/2025 pour obtenir une vraie tendance de prix observé
+   (suppose de les obtenir d'abord du fournisseur, voir ci-dessus) ;
 2. retenir une hypothèse d'évolution explicite et paramétrable (% par an), assumée comme
    hypothèse et non présentée comme une prévision ;
 3. conserver le BPU mais en écartant la période de crise et en bornant la projection —
