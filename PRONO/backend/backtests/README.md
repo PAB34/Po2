@@ -71,6 +71,43 @@ Combiner « prend un set » avec un over fait tomber l'information de +9,5 à +6
 l'over est probable mais pas discriminant. Les marchés portant sur le joueur captent
 trois à quatre fois plus.
 
+## 4. `backtest_segments_divergence.py` — le ROI nul cache-t-il un segment gagnant ?
+
+```bash
+cd saas/pronostics/Pronos && python <chemin>/backtest_segments_divergence.py
+```
+
+Le n°2 conclut à un ROI de −0,0 % sur le marché vainqueur. Restait une possibilité :
+que cette moyenne soit la somme d'un segment perdant et d'un segment rentable. On
+découpe donc les 7 000 paris « Elo contre le marché » par écart Elo, cote de
+l'outsider, surface, et par croisement des deux premiers.
+
+**Protocole anti-illusion** — sans lui, ce test ne vaudrait rien : à force de découper,
+un segment rentable finit toujours par apparaître.
+
+1. exploration sur **2001-2018**, où l'on regarde tout ;
+2. validation sur **2019-2025**, jamais consultée pour choisir les segments ;
+3. intervalle de confiance à 95 % sur chaque ROI, et nombre de segments testés affiché.
+
+**Résultat : 26 segments testés, 7 positifs en exploration, 0 confirmé en validation.**
+
+| Segment retenu en exploration | n (validation) | ROI validation | IC 95 % |
+|---|---:|---:|---|
+| Écart Elo 100-200 pts | 363 | +2,4 % | [−10,3 ; +15,2] |
+| Cote outsider 2-3 | 1 633 | +2,8 % | [−2,9 ; +8,5] |
+| Écart Elo 100-200 @ cote 2-3 | 314 | +5,2 % | [−7,9 ; +18,4] |
+| Surface dure | 1 063 | +1,4 % | [−5,8 ; +8,6] |
+| Surface terre | 666 | −3,7 % | [−13,3 ; +5,8] |
+
+Tous les intervalles englobent zéro. **Conclusion** : le −0,0 % global n'est pas une
+moyenne trompeuse, c'est un zéro à peu près partout. Le bookmaker price l'Elo dans tous
+les segments testés, y compris là où la divergence est la plus violente.
+
+C'est un résultat négatif, et c'est le plus utile de la série : il ferme le marché
+vainqueur. L'effort doit porter sur les marchés secondaires — non parce qu'ils sont
+prometteurs en soi, mais parce qu'ils sont les seuls dont le prix ne soit pas déjà
+mesurable, donc les seuls où le book peut encore avoir tort sans qu'on le sache.
+
 ## Limite commune, et pourquoi le journal existe
 
 Les seules cotes archivées portent sur le **vainqueur**. Aucun historique de prix
