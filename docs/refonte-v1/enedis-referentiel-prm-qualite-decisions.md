@@ -107,6 +107,12 @@ Croisement `energy_invoice_sites` × référentiel ENEDIS :
 | Facturés et **absents du référentiel** | **60** | **464 829** | **40 %** |
 | Total facturé | 497 | 1 155 855 | 100 % |
 
+⚠️ Ces montants sont ceux **facturés sur la fenêtre couverte en base** (majoritairement
+janvier→juin 2026), **pas des montants annuels** : la base ne contient que 8 mois de
+factures (voir `fluides-elec-drilldown-projections-decisions.md` §4). Ne pas les
+présenter comme des chiffres annuels dans un courrier externe. La part de 40 % est en
+revanche valide, les deux termes du ratio portant sur la même fenêtre.
+
 **40 % de la dépense d'électricité porte sur des compteurs totalement invisibles du
 module Énergie** : pas de consommation, pas de courbe de charge, pas de performance
 DJU, pas d'atterrissage. Les plus gros du parc sont dedans (69 558 €, 53 544 €,
@@ -150,7 +156,8 @@ remplacer par les causes A/B/C/D du §3, calculées à partir des deux champs EN
 
 ### D3 — Deux demandes à adresser à ENEDIS, chiffrées *(à porter par la Ville)*
 
-1. **Extension du consentement à 59 PRM représentant 464 824 € TTC/an** — c'est la
+1. **Extension du consentement à 59 PRM représentant 464 824 € TTC facturés sur la
+   fenêtre couverte** (cf. avertissement §4) — c'est la
    demande à plus fort impact, et de loin. Liste : `prm_factures_hors_referentiel.csv`.
 2. **Ouverture du service ACCES sur les 40 PRM du groupe C** (42 881 € facturés).
 
