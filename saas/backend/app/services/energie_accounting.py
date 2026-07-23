@@ -188,6 +188,11 @@ def import_codification_workbook(
                 )
             ).first()
             if existing:
+                # Le classeur porte la codification, pas le périmètre. Un PRM mis hors
+                # périmètre (cf. `prm_scope`) doit le rester après un ré-import, sinon
+                # la mise à l'écart serait annulée silencieusement à chaque mise à jour
+                # de la matrice. Seules les créations démarrent actives.
+                payload.pop("active", None)
                 for key, value in payload.items():
                     setattr(existing, key, value)
                 result.site_mappings_updated += 1

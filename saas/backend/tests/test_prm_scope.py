@@ -9,8 +9,10 @@ même référence client). La mise à l'écart passe donc par
 Voir docs/refonte-v1/enedis-referentiel-prm-qualite-decisions.md (décision D5).
 """
 
+import io
 from datetime import date
 
+import openpyxl
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -130,6 +132,49 @@ def test_fiche_de_liaison_ignore_le_prm_desactive(db):
     _deactivate(db, PRM_AGGLO)
     rows = energie_accounting.resolve_invoice_codification(db, imp)
     assert {r.prm_id for r in rows} == {PRM_VILLE}
+
+
+def test_la_mise_a_l_ecart_survit_a_un_nouvel_import_de_factures(db):
+    """Le masquage est durable : réimporter des factures ne ramène pas le PRM.
+
+    C'est le cas d'usage normal — de nouvelles factures arrivent chaque mois et
+    portent les mêmes PRM. Le pré-remplissage de la matrice ne doit pas réactiver un
+    point déjà mis hors périmètre.
+    """
+    _invoice_with_sites(db, [PRM_VILLE, PRM_AGGLO])
+    _deactivate(db, PRM_AGGLO)
+
+    # Nouvel import : mêmes PRM, nouvelle facture.
+    _invoice_with_sites(db, [PRM_VILLE, PRM_AGGLO])
+    energie_accounting.bootstrap_site_mappings_from_invoices(db, city_id=1)
+
+    assert inactive_prm_ids(db, 1) == {PRM_AGGLO}
+    assert set(power_real_costs.get_real_power_costs_by_prm(db, city_id=1)) == {PRM_VILLE}
+
+
+def test_la_mise_a_l_ecart_survit_a_un_reimport_de_codification(db):
+    """Le classeur de codification ne doit pas réactiver un PRM hors périmètre.
+
+    Le classeur porte les axes comptables, pas le périmètre : il ne doit jamais
+    remettre dans les calculs un point qui en a été sorti.
+    """
+    _invoice_with_sites(db, [PRM_VILLE, PRM_AGGLO])
+    _deactivate(db, PRM_AGGLO)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sites vers codes"
+    ws.append(["PRM", "Nom du site", "Service", "Libellé service", "Fonction", "Antenne"])
+    ws.append([PRM_AGGLO, "STEP Mèze", "S100", "Bâtiments", "F20", "ANT-A"])
+    buf = io.BytesIO()
+    wb.save(buf)
+
+    res = energie_accounting.import_codification_workbook(
+        db, buf.getvalue(), filename="codif.xlsx", city_id=1
+    )
+    assert res.site_mappings_updated == 1
+
+    assert inactive_prm_ids(db, 1) == {PRM_AGGLO}
 
 
 def test_les_donnees_restent_en_base(db):
