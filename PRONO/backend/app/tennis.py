@@ -18,7 +18,7 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app import tennis_coherence
+from app import tennis_coherence, tennis_journal
 from app.tennis_brackets import build_brackets_from_matches
 from app.tennis_coach import TennisCoach
 from app.tennis_decision_calibration import run_from_sqlite, status_summary_for_row
@@ -614,6 +614,9 @@ def _completed_scoreboard_row(competition: dict, tour: str, tournament: str, kic
         "tournament": tournament,
         "winner": winner_name,
         "loser": loser_name,
+        # Detail manche par manche, vu du vainqueur. Les agregats ci-dessous ne
+        # permettent pas de trancher "gagne le set 1" : il faut la premiere paire.
+        "sets": [list(pair) for pair in pairs],
         "sets_w": sum(left > right for left, right in pairs),
         "sets_l": sum(right > left for left, right in pairs),
         "games_w": sum(left for left, _ in pairs),
@@ -967,9 +970,18 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
                     WHERE pair_key = ? AND result_winner IS NULL
                 """, (result.get("winner"), stamp, pair_key))
         db.close()
-        return True
     except (OSError, sqlite3.Error, TypeError, ValueError):
         return False
+
+    # Registre des marches secondaires, dans la meme base. Il vit a part parce qu'il a une
+    # autre maille : une ligne par marche et par match, la ou tennis_decisions en a une par
+    # match. Un echec ici ne doit pas invalider l'enregistrement des decisions ci-dessus.
+    try:
+        tennis_journal.record_market_picks(rows, stamp, _storage_pair)
+        tennis_journal.settle_from_results(completed, _storage_pair, stamp)
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        pass
+    return True
 
 
 def _decision_history_path() -> Path | None:
