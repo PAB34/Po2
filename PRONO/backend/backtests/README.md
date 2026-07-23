@@ -108,15 +108,28 @@ vainqueur. L'effort doit porter sur les marchés secondaires — non parce qu'il
 prometteurs en soi, mais parce qu'ils sont les seuls dont le prix ne soit pas déjà
 mesurable, donc les seuls où le book peut encore avoir tort sans qu'on le sache.
 
-## Limite commune, et pourquoi le journal existe
+## Limite commune, et ce que le registre permet vraiment
 
 Les seules cotes archivées portent sur le **vainqueur**. Aucun historique de prix
-n'existe pour « prend un set », le handicap jeux ou les totaux. Ces trois backtests
-mesurent donc des **fréquences**, pas des gains — sauf le n°2, seul à conclure en ROI.
+n'existe pour « prend un set », le handicap jeux ou les totaux. Ces backtests mesurent
+donc des **fréquences**, pas des gains — sauf les n° 2 et 4, seuls à conclure en ROI.
 
 Un écart de fréquence est une condition nécessaire à une opportunité, jamais une
 preuve : le backtest `hangover` montrait un effet net entièrement absorbé par les cotes.
 
-C'est exactement ce trou que comble `app/tennis_journal.py` : en enregistrant le prix
-réellement pris sur chaque marché, il rend mesurable ce qu'aucun historique ne permet
-de trancher aujourd'hui.
+`app/tennis_journal.py` enregistre désormais, **automatiquement et à chaque construction
+de la page**, les trois marchés à signal de chaque match — probabilité annoncée et cote
+juste — puis les règle seul dès que le score ESPN arrive.
+
+Ce que cela donne, et ce que cela ne donne pas :
+
+- ✅ **la calibration** de ces marchés : taux réalisé contre probabilité annoncée, avec
+  intervalle de Wilson. C'est ce qu'aucun backtest ne peut produire ici, et c'est
+  obtenu sans saisie, donc sans oubli ni sélection inconsciente des paris qu'on note.
+- ❌ **pas un ROI**. Il faudrait la cote réellement obtenue chez un bookmaker : elle
+  n'est archivée nulle part et aucune source automatique ne la fournit. La saisie
+  manuelle qui l'aurait permise a été écartée le 23/07/2026.
+
+Autrement dit : on saura si le modèle **annonce juste**. On ne saura pas s'il **bat le
+book** — pour ces marchés, la question reste ouverte, et elle le restera tant que le
+prix pris ne sera pas renseigné.

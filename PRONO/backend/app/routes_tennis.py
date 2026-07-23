@@ -1,8 +1,7 @@
 """Routes Tennis protegees par l'auth JWT PRONO."""
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends
 
 from app import tennis, tennis_journal
 from app.auth import get_current_user
@@ -45,63 +44,23 @@ def tennis_brackets(refresh: int = 0, user=Depends(get_current_user)):
 
 
 # ---------------------------------------------------------------------------
-# Journal des decisions : ce qui a ete joue, a quel prix, et le resultat.
-# Sans ce journal, la calibration des decisions n'a aucune donnee a lire, et les
-# marches secondaires (prend un set, handicap) restent non mesurables faute de
-# cotes archivees.
+# Registre des marches secondaires. Alimente et regle AUTOMATIQUEMENT par
+# tennis.build_tennis() a chaque construction de la page : ces routes ne font que
+# lire. Aucune route d'ecriture n'est exposee, et c'est deliberé -- la saisie
+# manuelle a ete abandonnee le 23/07/2026, avec la seconde base qui allait avec.
+#
+# Ce qui est mesure ici est une CALIBRATION (taux realise contre probabilite
+# annoncee), pas un rendement : la cote reellement obtenue chez un bookmaker
+# n'est archivee nulle part. Voir l'en-tete de app/tennis_journal.py.
 # ---------------------------------------------------------------------------
-class JournalEntry(BaseModel):
-    match_id: str
-    favorite: str
-    market_probability: float
-    opponent: str | None = None
-    kickoff: str | None = None
-    tour: str = "ATP"
-    tournament: str | None = None
-    surface: str | None = None
-    favorite_odds: float | None = None
-    outsider_odds: float | None = None
-    elo_probability: float | None = None
-    elo_gap: float | None = None
-    decision: str | None = None
-    decision_level: str | None = None
-    concordance: str | None = None
-    context_label: str | None = None
-    quality: str | None = None
-    # pari reellement pris ; laisser vide journalise un "aucun pari"
-    market: str | None = None
-    selection: str | None = None
-    taken_odds: float | None = None
-    stake: float | None = None
-
-
-class JournalSettlement(BaseModel):
-    winner: str
-    score: str | None = None
-    bet_won: bool | None = None
-
-
-@router.post("/journal", status_code=status.HTTP_201_CREATED)
-def journal_record(entry: JournalEntry, user=Depends(get_current_user)):
-    tennis_journal.record_decision(**entry.model_dump())
-    return {"match_id": entry.match_id, "recorded": True}
-
-
-@router.post("/journal/{match_id}/settle")
-def journal_settle(match_id: str, payload: JournalSettlement, user=Depends(get_current_user)):
-    if not tennis_journal.settle(match_id, **payload.model_dump()):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decision inconnue au journal.")
-    return {"match_id": match_id, "settled": True}
-
-
 @router.get("/journal/pending")
 def journal_pending(user=Depends(get_current_user)):
     return {"pending": tennis_journal.pending()}
 
 
-@router.get("/journal/roi")
-def journal_roi(min_sample: int = 1, user=Depends(get_current_user)):
-    return {"markets": tennis_journal.roi_by_market(min_sample=max(1, int(min_sample)))}
+@router.get("/journal/markets")
+def journal_markets(min_sample: int = 20, user=Depends(get_current_user)):
+    return {"markets": tennis_journal.calibration_by_market(min_sample=max(1, int(min_sample)))}
 
 
 @router.get("/journal/calibration")

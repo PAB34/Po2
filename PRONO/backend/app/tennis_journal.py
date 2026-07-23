@@ -1,229 +1,263 @@
-"""Journal des decisions tennis : ce qui a ete joue, a quel prix, et ce que ca a donne.
+"""Registre des marches secondaires : ce que le modele annoncait, ce qui est arrive.
 
-Le module de calibration (app.tennis_decision_calibration) sait deja LIRE une table
-`tennis_decisions` et en tirer taux de reussite, ROI et intervalles de Wilson par
-bucket. Il n'avait aucune donnee a lire : rien n'ecrivait ces lignes. C'est ce trou
-que ce module comble.
+Une seule base fait foi : `<PRONO_DATA_DIR>/tennis/decision_history.sqlite3`, celle que
+`tennis._record_decision_history()` alimente automatiquement a chaque construction de la
+page. Il a existe jusqu'au 23/07/2026 une seconde base alimentee a la main
+(`tennis_decisions.db`) : elle est abandonnee. Deux registres pour la meme mesure, c'est
+la garantie de calibrer un jour sur la moitie des donnees sans s'en apercevoir.
 
-Pourquoi c'est le maillon manquant : les backtests historiques ne portent que sur le
-marche vainqueur, seul marche dont les cotes sont archivees. Les marches reellement
-joues -- "prend au moins un set", handicap jeux -- n'ont aucune cote historique. Le
-seul moyen de savoir s'ils battent le marche est donc d'enregistrer les prix pris au
-fil de l'eau.
+Ce que ce module ajoute a l'enregistrement des matchs : les marches secondaires. La table
+`tennis_decisions` retient la lecture du match (favori, probabilites, decision) ; celle-ci
+retient les paris qui en decoulent -- "outsider prend un set", "+3.5 jeux", "gagne le set
+1" -- avec la probabilite annoncee et la cote juste, puis leur issue reelle.
 
-Schema aligne sur ce que records_from_sqlite() attend, plus les colonnes du pari lui
-meme (marche, cote prise, mise, issue) que la calibration vainqueur n'utilise pas mais
-qui permettent le ROI par marche.
+CE QUE CA MESURE, ET CE QUE CA NE MESURE PAS. Le reglement est automatique, donc sans
+oubli ni saisie : on obtient le taux de reussite reel contre la probabilite annoncee,
+soit la CALIBRATION du modele sur ces marches -- ce qu'aucun backtest historique ne
+donne, faute de cotes archivees sur ces lignes.
 
-Convention des probabilites : on stocke des fractions (0.62). La calibration accepte
-les deux ecritures et expose des pourcentages (62.0) -- ne pas s'etonner de l'ecart
-entre ce qui est ecrit ici et ce qu'elle renvoie.
+En revanche ce n'est PAS un ROI, et le mot est evite partout dans ce module. Un ROI
+suppose la cote reellement obtenue chez un bookmaker : elle n'est archivee nulle part et
+aucune source automatique ne la fournit. Mesurer un gain demanderait de saisir le prix
+pris a la main, ce qui a ete ecarte. On sait donc dire si le modele annonce juste ; on ne
+sait pas dire si le book se trompe.
 """
 from __future__ import annotations
 
-import json
+import math
+import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.ligue1.config import DATA_DIR
-
-JOURNAL_PATH = Path(DATA_DIR) / "tennis_decisions.db"
+# Les trois marches mesures comme porteurs de signal par backtest_marches_outsider.py.
+# Cles alignees sur celles de tennis._outsider_markets() : la meme chaine va de
+# l'affichage jusqu'a la calibration, sans table de correspondance a maintenir.
+TRACKED_MARKETS = ("outsider_takes_a_set", "outsider_games_3_5", "outsider_set_1")
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS tennis_decisions (
-    id                  TEXT PRIMARY KEY,
-    created_at          TEXT NOT NULL,
-    kickoff             TEXT,
-    tour                TEXT,
-    tournament          TEXT,
-    surface             TEXT,
-    favorite            TEXT NOT NULL,
-    opponent            TEXT,
-    favorite_odds       REAL,
-    outsider_odds       REAL,
-    market_probability  REAL NOT NULL,
-    elo_probability     REAL,
-    elo_gap             REAL,
-    decision            TEXT,
-    decision_level      TEXT,
-    concordance         TEXT,
-    context_label       TEXT,
-    quality             TEXT,
-    -- le pari reellement pris (peut rester vide : on journalise aussi les non-paris)
-    market              TEXT,
-    selection           TEXT,
-    taken_odds          REAL,
-    stake               REAL,
-    -- renseigne apres le match
-    result_winner       TEXT,
-    result_score        TEXT,
-    bet_won             INTEGER,
-    settled_at          TEXT,
-    payload_json        TEXT
+CREATE TABLE IF NOT EXISTS tennis_market_picks (
+    id                INTEGER PRIMARY KEY,
+    calculated_at     TEXT NOT NULL,
+    kickoff           TEXT,
+    tour              TEXT,
+    tournament        TEXT,
+    surface           TEXT,
+    pair_key          TEXT NOT NULL,
+    favorite          TEXT,
+    outsider          TEXT,
+    market            TEXT NOT NULL,
+    selection         TEXT,
+    probability       REAL,
+    fair_odds         REAL,
+    decision_level    TEXT,
+    concordance       TEXT,
+    won               INTEGER,
+    settled_at        TEXT,
+    UNIQUE(calculated_at, pair_key, market)
 );
-CREATE INDEX IF NOT EXISTS idx_tennis_decisions_settled ON tennis_decisions(result_winner);
-CREATE INDEX IF NOT EXISTS idx_tennis_decisions_market ON tennis_decisions(market);
+CREATE INDEX IF NOT EXISTS idx_market_picks_market ON tennis_market_picks(market);
+CREATE INDEX IF NOT EXISTS idx_market_picks_pair ON tennis_market_picks(pair_key);
 """
 
 
-def _connect(path: str | Path | None = None) -> sqlite3.Connection:
-    db_path = Path(path) if path else JOURNAL_PATH
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(db_path)
+def journal_path() -> Path | None:
+    """Base unique. Absente hors conteneur (PRONO_DATA_DIR non defini) : on ne devine pas."""
+    root = os.environ.get("PRONO_DATA_DIR")
+    return Path(root) / "tennis" / "decision_history.sqlite3" if root else None
+
+
+def _connect(path: str | Path | None = None) -> sqlite3.Connection | None:
+    target = Path(path) if path else journal_path()
+    if target is None:
+        return None
+    target.parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(target, timeout=10)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
     return db
 
 
-def record_decision(
-    *,
-    match_id: str,
-    favorite: str,
-    market_probability: float,
-    opponent: str | None = None,
-    kickoff: str | None = None,
-    tour: str = "ATP",
-    tournament: str | None = None,
-    surface: str | None = None,
-    favorite_odds: float | None = None,
-    outsider_odds: float | None = None,
-    elo_probability: float | None = None,
-    elo_gap: float | None = None,
-    decision: str | None = None,
-    decision_level: str | None = None,
-    concordance: str | None = None,
-    context_label: str | None = None,
-    quality: str | None = None,
-    market: str | None = None,
-    selection: str | None = None,
-    taken_odds: float | None = None,
-    stake: float | None = None,
-    extra: dict[str, Any] | None = None,
-    path: str | Path | None = None,
-) -> str:
-    """Enregistre une lecture d'avant-match, avec ou sans pari.
+# ---------------------------------------------------------------------------
+# Ecriture : appelee par tennis.build_tennis(), jamais a la main.
+# ---------------------------------------------------------------------------
+def record_market_picks(rows: list[dict], calculated_at: str, pair_key_of, path=None) -> int:
+    """Archive les marches suivis de chaque match a l'affiche.
 
-    Journaliser aussi les matchs non joues est volontaire : sans eux on ne mesure
-    que les paris pris, ce qui empeche de savoir si le filtre ecarte les bons ou
-    les mauvais.
+    On enregistre les trois marches pour TOUS les matchs, pas seulement ceux ou l'Elo
+    contredit le marche : sans les matchs ecartes, on ne mesure que ce qu'on a retenu et
+    on ne peut plus dire si le filtre elimine les bons ou les mauvais.
     """
-    payload = dict(extra or {})
-    payload.update({
-        "favori": favorite,
-        "adversaire": opponent,
-        "proba_marche": market_probability,
-        "proba_elo": elo_probability,
-        "ecart_elo": elo_gap,
-        "decision": decision,
-        "concordance": concordance,
-        "cote": favorite_odds,
-        "cote_outsider": outsider_odds,
-        "surface": surface,
-        "tour": tour,
-        "marche": market,
-        "selection": selection,
-        "cote_prise": taken_odds,
-    })
-    with closing(_connect(path)) as db, db:
-        db.execute(
-            """INSERT OR REPLACE INTO tennis_decisions
-               (id, created_at, kickoff, tour, tournament, surface, favorite, opponent,
-                favorite_odds, outsider_odds, market_probability, elo_probability, elo_gap,
-                decision, decision_level, concordance, context_label, quality,
-                market, selection, taken_odds, stake, payload_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                match_id, datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                kickoff, tour, tournament, surface, favorite, opponent,
-                favorite_odds, outsider_odds, market_probability, elo_probability, elo_gap,
-                decision, decision_level, concordance, context_label, quality,
-                market, selection, taken_odds, stake,
-                json.dumps(payload, ensure_ascii=False),
-            ),
-        )
-    return match_id
+    db = _connect(path)
+    if db is None:
+        return 0
+    written = 0
+    with closing(db), db:
+        for row in rows:
+            pair_key = pair_key_of(row.get("joueur1", ""), row.get("joueur2", ""))
+            for market in row.get("markets") or []:
+                key = market.get("key")
+                if key not in TRACKED_MARKETS or market.get("prob") is None:
+                    continue
+                cursor = db.execute(
+                    """INSERT OR IGNORE INTO tennis_market_picks (
+                           calculated_at, kickoff, tour, tournament, surface, pair_key,
+                           favorite, outsider, market, selection, probability, fair_odds,
+                           decision_level, concordance
+                       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        calculated_at, row.get("kickoff"), row.get("tour"), row.get("tournoi"),
+                        row.get("surface"), pair_key, row.get("favori"), row.get("outsider"),
+                        key, market.get("pick"), (market.get("prob") or 0) / 100.0,
+                        market.get("fair_odds"), row.get("decision_level"), row.get("concordance"),
+                    ),
+                )
+                written += cursor.rowcount
+    return written
 
 
-def settle(
-    match_id: str,
-    *,
-    winner: str,
-    score: str | None = None,
-    bet_won: bool | None = None,
-    path: str | Path | None = None,
-) -> bool:
-    """Renseigne le resultat. `bet_won` reste libre : sur un marche secondaire,
-    l'issue du pari ne se deduit pas du seul vainqueur."""
-    with closing(_connect(path)) as db, db:
-        cur = db.execute(
-            """UPDATE tennis_decisions
-               SET result_winner = ?, result_score = ?, bet_won = ?, settled_at = ?
-               WHERE id = ?""",
-            (
-                winner, score,
-                None if bet_won is None else int(bet_won),
-                datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                match_id,
-            ),
-        )
-    return cur.rowcount > 0
+def _same_player(left: Any, right: Any) -> bool:
+    return str(left or "").strip().casefold() == str(right or "").strip().casefold()
 
 
-def roi_by_market(path: str | Path | None = None, min_sample: int = 1) -> list[dict[str, Any]]:
-    """ROI par marche joue, sur les paris regles.
+def market_outcomes(result: dict, outsider: str) -> dict[str, bool]:
+    """Issue reelle de chaque marche suivi, depuis le score ESPN.
 
-    C'est le tableau que les backtests historiques ne peuvent pas produire, faute de
-    cotes archivees sur les marches secondaires.
+    `result` vient de tennis._completed_scoreboard_row() : les scores y sont ecrits du
+    point de vue du VAINQUEUR du match. On repasse systematiquement du cote de
+    l'outsider, seul referentiel de ces marches. C'est l'inversion la plus facile a
+    rater, et elle fausserait la mesure en silence.
     """
-    with closing(_connect(path)) as db:
+    outsider_won = _same_player(result.get("winner"), outsider)
+    sets = [tuple(pair) for pair in (result.get("sets") or [])]
+    if outsider_won:
+        o_sets = list(sets)
+        o_games, f_games = result.get("games_w"), result.get("games_l")
+        o_set_wins = result.get("sets_w")
+    else:
+        o_sets = [(right, left) for left, right in sets]
+        o_games, f_games = result.get("games_l"), result.get("games_w")
+        o_set_wins = result.get("sets_l")
+
+    outcomes: dict[str, bool] = {}
+    if o_set_wins is not None:
+        outcomes["outsider_takes_a_set"] = o_set_wins >= 1
+    if o_games is not None and f_games is not None:
+        # "+3.5" : l'outsider couvre s'il perd de 3 jeux au plus, ou s'il gagne.
+        outcomes["outsider_games_3_5"] = (o_games - f_games) > -3.5
+    if o_sets:
+        outcomes["outsider_set_1"] = o_sets[0][0] > o_sets[0][1]
+    return outcomes
+
+
+def settle_from_results(completed: list[dict], pair_key_of, stamp: str, path=None) -> int:
+    """Regle les marches des matchs termines. Automatique, donc sans oubli ni biais."""
+    db = _connect(path)
+    if db is None:
+        return 0
+    settled = 0
+    with closing(db), db:
+        for result in completed:
+            pair_key = pair_key_of(result.get("winner", ""), result.get("loser", ""))
+            outsiders = db.execute(
+                """SELECT DISTINCT outsider FROM tennis_market_picks
+                   WHERE pair_key = ? AND won IS NULL""", (pair_key,),
+            ).fetchall()
+            for entry in outsiders:
+                for market, won in market_outcomes(result, entry["outsider"]).items():
+                    cursor = db.execute(
+                        """UPDATE tennis_market_picks SET won = ?, settled_at = ?
+                           WHERE pair_key = ? AND market = ? AND won IS NULL
+                             AND outsider IS ?""",
+                        (int(won), stamp, pair_key, market, entry["outsider"]),
+                    )
+                    settled += cursor.rowcount
+    return settled
+
+
+# ---------------------------------------------------------------------------
+# Lecture
+# ---------------------------------------------------------------------------
+def _wilson(wins: int, n: int) -> tuple[float, float]:
+    """Intervalle de Wilson a 95 %. Sur quelques dizaines de matchs presque tout ecart
+    reste du bruit : l'intervalle est la pour empecher de conclure trop tot."""
+    if not n:
+        return 0.0, 0.0
+    z = 1.96
+    p = wins / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def calibration_by_market(path=None, min_sample: int = 20) -> list[dict[str, Any]]:
+    """Taux de reussite reel contre probabilite annoncee, marche par marche.
+
+    C'est la mesure que ce registre rend possible -- une calibration, pas un rendement.
+    """
+    db = _connect(path)
+    if db is None:
+        return []
+    with closing(db):
         rows = db.execute(
-            """SELECT market, taken_odds, stake, bet_won
-               FROM tennis_decisions
-               WHERE market IS NOT NULL AND taken_odds IS NOT NULL AND bet_won IS NOT NULL"""
+            """SELECT market, probability, fair_odds, won FROM tennis_market_picks
+               WHERE won IS NOT NULL AND probability IS NOT NULL"""
         ).fetchall()
 
     grouped: dict[str, list[sqlite3.Row]] = {}
     for row in rows:
         grouped.setdefault(row["market"], []).append(row)
 
-    out: list[dict[str, Any]] = []
+    out = []
     for market, items in sorted(grouped.items()):
-        if len(items) < min_sample:
-            continue
-        staked = sum((r["stake"] or 1.0) for r in items)
-        returned = sum((r["stake"] or 1.0) * r["taken_odds"] for r in items if r["bet_won"])
-        wins = sum(1 for r in items if r["bet_won"])
+        n = len(items)
+        wins = sum(1 for r in items if r["won"])
+        expected = sum(r["probability"] for r in items) / n
+        realised = wins / n
+        low, high = _wilson(wins, n)
+        # Ecart concluant = la probabilite annoncee tombe HORS de l'intervalle observe.
+        conclusive = n >= min_sample and not (low <= expected <= high)
+        odds = [r["fair_odds"] for r in items if r["fair_odds"]]
         out.append({
             "market": market,
-            "n": len(items),
+            "n": n,
             "wins": wins,
-            "win_rate": round(wins / len(items), 4),
-            "staked": round(staked, 2),
-            "returned": round(returned, 2),
-            "profit": round(returned - staked, 2),
-            "roi": round((returned - staked) / staked, 4) if staked else None,
-            "average_odds": round(sum(r["taken_odds"] for r in items) / len(items), 3),
+            "realised": round(realised * 100, 1),
+            "expected": round(expected * 100, 1),
+            "delta_points": round((realised - expected) * 100, 1),
+            "ci95": [round(low * 100, 1), round(high * 100, 1)],
+            "average_fair_odds": round(sum(odds) / len(odds), 2) if odds else None,
+            "verdict": (
+                "echantillon insuffisant" if n < min_sample
+                else "modele trop optimiste" if conclusive and realised < expected
+                else "modele trop prudent" if conclusive
+                else "conforme a l'annonce"
+            ),
         })
     return out
 
 
-def pending(path: str | Path | None = None) -> list[dict[str, Any]]:
-    """Decisions enregistrees dont le resultat manque encore."""
-    with closing(_connect(path)) as db:
+def pending(path=None) -> list[dict[str, Any]]:
+    """Marches enregistres dont le match n'a pas encore de resultat."""
+    db = _connect(path)
+    if db is None:
+        return []
+    with closing(db):
         rows = db.execute(
-            """SELECT id, kickoff, tour, tournament, favorite, opponent, market, selection,
-                      taken_odds, stake
-               FROM tennis_decisions WHERE result_winner IS NULL ORDER BY kickoff"""
+            """SELECT kickoff, tour, tournament, favorite, outsider, market, selection,
+                      probability, fair_odds
+               FROM tennis_market_picks WHERE won IS NULL ORDER BY kickoff"""
         ).fetchall()
     return [dict(row) for row in rows]
 
 
-def calibration(path: str | Path | None = None, min_sample: int = 50) -> dict[str, Any]:
-    """Branche le journal sur le moteur de calibration deja ecrit."""
+def calibration(path=None, min_sample: int = 50) -> dict[str, Any]:
+    """Calibration des DECISIONS (marche vainqueur), lue sur la meme base unique."""
     from app.tennis_decision_calibration import records_from_sqlite, run_decision_calibration
 
-    records = records_from_sqlite(Path(path) if path else JOURNAL_PATH)
-    return run_decision_calibration(records, min_sample=min_sample)
+    target = Path(path) if path else journal_path()
+    if target is None or not target.exists():
+        return {"record_count": 0, "buckets": [], "status": "no_history"}
+    return run_decision_calibration(records_from_sqlite(target), min_sample=min_sample)
