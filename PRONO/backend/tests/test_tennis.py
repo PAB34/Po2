@@ -57,9 +57,13 @@ class TennisServiceTests(unittest.TestCase):
         self.assertIn("elo_detail", payload["atp"][0])
         self.assertIn("proba_elo_surface", payload["atp"][0])
         self.assertIn("proba_elo_global", payload["atp"][0])
-        self.assertEqual("historique calibre", payload["atp"][0]["markets"][0]["source"])
+        # Les marches a signal ouvrent la liste : l'ordre est l'ordre d'affichage, et les
+        # totaux de jeux ne doivent plus occuper la premiere place.
+        self.assertEqual("outsider_takes_a_set", payload["atp"][0]["markets"][0]["key"])
+        self.assertEqual("ancrage marche", payload["atp"][0]["markets"][0]["source"])
         self.assertEqual(
-            {"total_games", "handicap_games", "aces", "double_faults", "hold", "breaks", "tiebreak"},
+            {"outsider_takes_a_set", "outsider_games_3_5", "outsider_set_1",
+             "total_games", "handicap_games", "aces", "double_faults", "hold", "breaks", "tiebreak"},
             {m["key"] for m in payload["atp"][0]["markets"]},
         )
         self.assertIn("props", payload["atp"][0])

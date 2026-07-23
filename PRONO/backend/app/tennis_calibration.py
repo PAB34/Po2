@@ -16,7 +16,8 @@ BAD_SCORE = re.compile(r"RET|W/O|WO\b|DEF|ABD", re.I)
 SET_SCORE = re.compile(r"^(\d+)-(\d+)")
 OUTCOMES = (
     "over_18_5", "over_19_5", "over_22_5",
-    "favorite_cover_2_5", "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1",
+    "favorite_cover_2_5", "favorite_cover_3_5", "favorite_wins_set_1",
+    "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1",
 )
 
 
@@ -67,6 +68,11 @@ def _score_outcomes(score: Any, favorite_won: bool) -> dict[str, float] | None:
     loser_games = sum(right for _, right in sets)
     favorite_margin = (winner_games - loser_games) if favorite_won else (loser_games - winner_games)
     total_games = winner_games + loser_games
+    # Le score est toujours ecrit du point de vue du vainqueur du match : sets[0][0] sont
+    # ses jeux dans la manche d'ouverture. On repasse ensuite du cote du favori, seul
+    # referentiel utilise par le reste du module.
+    winner_won_set_1 = sets[0][0] > sets[0][1]
+    favorite_won_set_1 = winner_won_set_1 if favorite_won else not winner_won_set_1
     return {
         # Trois seuils de total jeux : 22.5 est le marche bookmaker usuel ; 18.5 et 19.5
         # sont les seuils reellement joues sur les tickets "prend un set + over", qui
@@ -75,6 +81,11 @@ def _score_outcomes(score: Any, favorite_won: bool) -> dict[str, float] | None:
         "over_19_5": float(total_games > 19.5),
         "over_22_5": float(total_games > 22.5),
         "favorite_cover_2_5": float(favorite_margin > 2.5),
+        # 3.5 est le pendant de "outsider +3.5 jeux", le marche que les backtests placent
+        # juste derriere le vainqueur en signal capte (+10.5 pt) -- trois fois plus que
+        # n'importe quel total de jeux.
+        "favorite_cover_3_5": float(favorite_margin > 3.5),
+        "favorite_wins_set_1": float(favorite_won_set_1),
         "three_sets": float(len(sets) == 3),
         "tiebreak": float(any({left, right} == {6, 7} for left, right in sets)),
         "favorite_2_0": float(favorite_won and loser_sets == 0),
