@@ -449,9 +449,18 @@ function tennisCoherence(row) {
     return `<span class="cohflag ${cls}${f.strength === "fort" ? " fort" : ""}" title="${esc(f.message || "")}">${icon} ${esc(f.label_a)} / ${esc(f.label_b)}</span>`;
   }).join("")}</div>`;
 }
+// Les marches porteurs de signal sont ceux que backtest_marches_outsider.py mesure le plus
+// haut. Ils sont marques pour ne pas se noyer visuellement dans les totaux de jeux, qui ne
+// captent presque rien mais occupaient jusqu'ici la premiere place.
+const TENNIS_SIGNAL_MARKETS = new Set(["outsider_takes_a_set", "outsider_games_3_5", "outsider_set_1"]);
 function tennisMarkets(markets) {
   if (!markets || !markets.length) return `<div class="tmarkets empty">-</div>`;
-  return `<div class="tmarkets">${markets.map(m => `<span class="mkt ${esc(m.force || "info")}" title="${esc([m.detail, m.source ? "Source: " + m.source : "", m.confidence ? "Confiance: " + m.confidence : ""].filter(Boolean).join(" | "))}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}</span>`).join("")}</div>`;
+  return `<div class="tmarkets">${markets.map(m => {
+    const tip = [m.detail, m.signal ? "Signal mesure: " + m.signal : "", m.source ? "Source: " + m.source : "", m.confidence ? "Confiance: " + m.confidence : ""].filter(Boolean).join(" | ");
+    // La cote juste est le seuil de jouabilite : sans elle, un pourcentage ne se compare a rien.
+    const odds = m.fair_odds == null ? "" : `<i class="fair" title="Cote juste : jouable au-dessus de ${esc(m.fair_odds)}">@${esc(m.fair_odds)}</i>`;
+    return `<span class="mkt ${esc(m.force || "info")}${TENNIS_SIGNAL_MARKETS.has(m.key) ? " signal" : ""}" title="${esc(tip)}"><b>${esc(m.label || "Marche")}</b>${esc(m.pick || "-")}${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}${odds}</span>`;
+  }).join("")}</div>`;
 }
 const TENNIS_SORT_COLUMNS = [
   ["tour", "Circuit"], ["kickoff", "Heure"], ["tournoi", "Tournoi"], ["match", "Match"],

@@ -180,17 +180,24 @@ def _signal_strength(probability: float | None) -> str:
     return "faible"
 
 
-def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str, source: str, confidence: str, sample: int) -> dict:
+def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str, source: str, confidence: str, sample: int, signal: str | None = None) -> dict:
     return {
         "key": key,
         "label": label,
         "pick": pick,
         "prob": round(probability * 100) if probability is not None else None,
+        # Cote juste = 1/p : c'est le seuil au-dessus duquel le prix du book devient
+        # jouable. Sans elle, une probabilite affichee ne se compare a rien.
+        "fair_odds": round(1 / probability, 2) if probability else None,
         "force": _signal_strength(probability),
         "source": source,
         "confidence": confidence,
         "sample": sample,
         "detail": detail,
+        # Ecart de frequence mesure par backtests/backtest_marches_outsider.py entre
+        # divergence et concordance Elo/marche. Renseigne uniquement sur les marches
+        # reellement mesures : ailleurs il resterait une impression, pas un chiffre.
+        "signal": signal,
     }
 
 
@@ -219,7 +226,52 @@ def _props_confidence(players: list[dict]) -> str:
     return min((player.get("confidence", "faible") for player in players), key=lambda value: levels.get(value, 0), default="faible")
 
 
-def _secondary_markets(match: dict, intel: dict, favorite_probability: float, calibration: dict) -> list[dict]:
+def _outsider_markets(outsider: str | None, favorite_probability: float, calibration: dict) -> list[dict]:
+    """Les trois marches que le backtest place loin devant, tous portes par l'outsider.
+
+    Pourquoi ceux-la et pas les totaux : backtest_marches_outsider.py mesure, sur 33 119
+    matchs, l'ecart de frequence entre divergence et concordance Elo/marche. Les marches
+    joueur captent +8.0 a +10.5 pt, les totaux de jeux +2.5 a +3.3 pt seulement. La page
+    mettait jusqu'ici en avant les seconds.
+
+    Piege mesure, a ne pas "optimiser" : combiner "prend un set" avec un over fait TOMBER
+    le signal de +9.5 a +6.9 pt. L'over est probable mais pas discriminant -- il dilue.
+    Ces trois marches restent donc secs.
+
+    Aucune cote historique n'existe sur eux : ce sont des frequences, pas un ROI. La cote
+    juste dit a partir de quel prix le pari devient jouable ; seul le journal des decisions
+    dira si le book se trompe vraiment.
+    """
+    rates = calibration["rates"]
+    sample = calibration["sample"]
+    confidence = calibration["confidence"]
+    name = outsider or "Outsider"
+    # Ancrage marche pour le 2-0, coherent avec la colonne "Fav 2-0" de la table : prendre
+    # le taux brut du bin ignorerait la cote du jour.
+    favorite_2_0 = favorite_probability * (1 - rates["favorite_2_1_share"])
+    return [
+        _market_item(
+            "outsider_takes_a_set", "Outsider prend un set", f"{name} >= 1 set",
+            1 - favorite_2_0,
+            f"= 1 - P(favori 2-0) {favorite_2_0:.0%}, ancree sur la cote du jour",
+            "ancrage marche", confidence, sample, signal="+9.5 pt en divergence Elo",
+        ),
+        _market_item(
+            "outsider_games_3_5", "Outsider +3.5 jeux", f"{name} +3.5",
+            1 - rates["favorite_cover_3_5"],
+            f"= 1 - P(favori l'emporte de 4 jeux ou plus) {rates['favorite_cover_3_5']:.0%}",
+            "historique calibre", confidence, sample, signal="+10.5 pt en divergence Elo",
+        ),
+        _market_item(
+            "outsider_set_1", "Outsider gagne le set 1", f"{name} set 1",
+            1 - rates["favorite_wins_set_1"],
+            f"= 1 - P(favori gagne la manche d'ouverture) {rates['favorite_wins_set_1']:.0%}",
+            "historique calibre", confidence, sample, signal="+8.0 pt en divergence Elo",
+        ),
+    ]
+
+
+def _secondary_markets(match: dict, intel: dict, favorite_probability: float, calibration: dict, outsider: str | None = None) -> list[dict]:
     rates = calibration["rates"]
     sample = calibration["sample"]
     confidence = calibration["confidence"]
@@ -229,8 +281,10 @@ def _secondary_markets(match: dict, intel: dict, favorite_probability: float, ca
 
     total_pick, total_prob = _calibrated_pick(rates["over_22_5"], "Over 22.5 jeux", "Under 22.5 jeux")
     handicap_pick, handicap_prob = _calibrated_pick(rates["favorite_cover_2_5"], "Favori -2.5 jeux", "Adversaire +2.5 jeux")
-    markets = [
-        _market_item("total_games", "Total jeux", total_pick, total_prob, f"P(Over) {rates['over_22_5']:.0%}; {suffix}", source, confidence, sample),
+    # Les marches a signal passent en tete : l'ordre de la liste est l'ordre d'affichage.
+    markets = _outsider_markets(outsider, favorite_probability, calibration)
+    markets += [
+        _market_item("total_games", "Total jeux", total_pick, total_prob, f"P(Over) {rates['over_22_5']:.0%}; {suffix}", source, confidence, sample, signal="+2.5 pt seulement"),
         _market_item("handicap_games", "Handicap", handicap_pick, handicap_prob, f"P(favori -2.5) {rates['favorite_cover_2_5']:.0%}; {suffix}", source, confidence, sample),
     ]
 
@@ -427,7 +481,7 @@ def _favorite_fields(match: dict, odds1: float | None, odds2: float | None, inte
         "p21": market_vals["p21"],
         "p3": market_vals["p3"],
         "derived_anchors": derived_anchors,
-        "markets": _secondary_markets(match, intel, favorite_probability, calibration),
+        "markets": _secondary_markets(match, intel, favorite_probability, calibration, _seedless(outsider)),
         "market_calibration": {"sample": calibration["sample"], "confidence": calibration["confidence"], "training": calibration["training"]},
         "cycle_favori": cycle_fav["label"],
         "fatigue_favori": cycle_fav["fatigue"],

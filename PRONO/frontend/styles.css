@@ -305,13 +305,20 @@ button{cursor:pointer;border:0;font:inherit;color:inherit}
 .tproof{max-width:720px;color:#475569;font-size:11px;font-weight:800;line-height:1.35;white-space:normal}
 .tmarkets{display:grid;grid-template-columns:repeat(2,minmax(116px,1fr));gap:5px;min-width:250px;max-width:330px}
 .tmarkets.empty{display:block;min-width:0;color:#64748b;font-weight:900}
-.mkt{display:grid;grid-template-columns:1fr auto;gap:2px 6px;align-items:center;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;padding:5px 7px;font-size:10px;font-weight:900;line-height:1.15;color:#334155}
+/* 3e colonne = cote juste, affichee a cote de la probabilite. */
+.mkt{display:grid;grid-template-columns:1fr auto auto;gap:2px 6px;align-items:center;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;padding:5px 7px;font-size:10px;font-weight:900;line-height:1.15;color:#334155}
 .mkt b{grid-column:1/-1;color:#64748b;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
 .mkt em{font-style:normal;color:#0f172a;font-variant-numeric:tabular-nums}
 .mkt.fort{border-color:#86efac;background:#ecfdf3;color:#14532d}
 .mkt.moyen{border-color:#fde68a;background:#fffbeb;color:#7c2d12}
 .mkt.faible{border-color:#cbd5e1;background:#f8fafc;color:#475569}
 .mkt.info{border-color:#dbeafe;background:#eff6ff;color:#1e3a8a}
+/* Cote juste : lisible mais discrete, elle complete la proba sans la concurrencer. */
+.mkt i.fair{font-style:normal;font-weight:800;font-size:9px;color:#64748b;font-variant-numeric:tabular-nums}
+/* Marches mesures comme porteurs de signal : liseret gauche, pour les distinguer des
+   totaux de jeux sans changer leur code couleur force/faible. */
+.mkt.signal{border-left:3px solid #6366f1}
+.mkt.signal b{color:#4338ca}
 .tdecision{display:grid;gap:3px;min-width:190px;max-width:230px}
 .tdecision>span{width:max-content;max-width:100%;padding:4px 7px;border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#475569;font-size:10px;font-weight:950;text-transform:uppercase}
 .tdecision>b{color:#0f172a;font-size:13px;line-height:1.2}
