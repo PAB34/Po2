@@ -225,10 +225,12 @@ sont des données hors périmètre. Les indicateurs Ville (€/kWh, atterrissage
 fournisseur) cessent d'être calculés sur une assiette dont 40 % n'a aucune consommation
 en face.
 
-**Conséquence de conception** : l'Agglo aura son propre compte, et la plateforme est
-**déjà multi-entités** (`energy_invoices.city_id`, aujourd'hui `303` pour tout le monde).
-L'exclusion doit donc être un **marquage réversible**, pas une suppression : ces
-98 factures ont vocation à être rattachées au futur compte Agglo, pas à être perdues.
+**Pas de marquage : exclusion pure** *(précisé le 2026-07-23)*. Le module n'exploite que
+la donnée Ville. Pas de double affichage, pas de filtre à basculer, pas de « vue Agglo »
+en sommeil : les points Agglo ne doivent tout simplement pas entrer dans le module.
+L'Agglo sera traitée le moment venu **sous un compte distinct**, à partir de ses propres
+sources — la plateforme est déjà multi-comptes (`energy_invoices.city_id`), c'est ce
+mécanisme-là qui la portera, pas un attribut posé sur les données de la Ville.
 
 Ce que dit la donnée sur la faisabilité du découpage :
 
@@ -238,29 +240,50 @@ Ce que dit la donnée sur la faisabilité du découpage :
 | 100 % Agglo | 98 | 464 658 |
 | **Mixte Ville + Agglo** | **1** | **12 113** |
 
-La séparation est quasi parfaite **au niveau de la facture** — une seule est mixte.
-Malgré cela, le filtre doit se poser au niveau du **site** (`prm_id`), pas de la
-facture : sinon cette facture-là bascule entière du mauvais côté. Filtrer par site
-traite les 312 cas d'un coup, sans exception à gérer à la main.
+L'exclusion doit se poser au niveau du **site** (`prm_id`), pas de la facture : une
+facture EDF (n° 10248629137 du 2026-03-25, 12 113 €) porte 97 sites Ville et 2 sites
+hors périmètre. L'écarter en entier ferait perdre 12 113 € de dépense Ville réelle.
 
-Reste à définir le **critère** de rattachement. Le SIRET n'est pas exploitable ici : les
-factures des deux périmètres portent le même titulaire de paiement (`SERVICE DE GESTION
-COMPTABLE LITTORAL`) et le même marché (`2024-FCS-03`). Deux options :
+### Affinage du périmètre à exclure : 56 points, pas 60
 
-1. **Liste explicite des 60 PRM Agglo** (`prm_factures_hors_referentiel.csv`), figée et
-   révisable. Simple, exacte aujourd'hui, mais à maintenir quand le parc bouge.
-2. **Règle « présent dans le périmètre de consentement ENEDIS »** — ce périmètre porte
-   le SIRET de la Ville, il fait donc autorité sur ce qui est à la Ville. Auto-entretenu,
-   mais dépend d'une source externe et exclut par construction tout point Ville qui ne
-   serait pas consenti.
+Les 60 PRM hors référentiel ne sont pas tous des points Agglo. Le croisement par
+fournisseur et par regroupement de facturation le montre :
 
-L'option 2 est plus robuste sur la durée, l'option 1 plus sûre à court terme. Le plus
-prudent est de démarrer sur la 1 et de vérifier qu'elle coïncide avec la 2 avant de
-basculer.
+| | PRM | € TTC | Nature |
+|---|---|---|---|
+| ENGIE | 56 | 461 474 | Agglo — regroupements `STEP - ASSAINISSEMENT`, `DECHETTERIES COLLECTE`, `MEDIATHEQUES`, `GENS DU VOYAGE`, `EAU POTABLE`, `PLUVIAL`… |
+| EDF | 4 | 3 451 | **Ville** — voir ci-dessous |
+
+Les 4 points EDF sont des points **de la Ville simplement absents du consentement
+ENEDIS**, et non des points Agglo :
+
+| PRM | Site | Regroupement | € TTC |
+|---|---|---|---|
+| 50029745372410 | BP-AO-2023-MARCHE MERCREDI | (vide) | 3 179 |
+| 50019899302212 | FEUX TRICOLORES | `020-SERVICES GENERAUX, FESTIVI` | 86 |
+| 50071997711227 | FEUX TRICOLORES | `020-SERVICES GENERAUX, FESTIVI` | 85 |
+| 24313458566734 | BP 2019 ZAC SALINS DE VILLEROY | `52933:Culture/Social/Loisirs` | 5 |
+
+Deux sont des branchements provisoires (`BP`), deux sont de la signalisation tricolore
+sous un regroupement Ville. **Ils restent dans le périmètre Ville.**
+
+C'est la démonstration concrète que le critère « absent du périmètre de consentement
+ENEDIS » ne peut pas servir de règle d'exclusion automatique : il produit ici 4 faux
+positifs sur 60. **L'exclusion se fonde sur la liste nominative des 56 PRM ENGIE**
+(`courriers/annexe_pdl_agglo.csv`), pas sur une règle dérivée du consentement.
+
+### Demande au fournisseur
+
+Un courrier est prêt : `courriers/mail-engie-retrait-pdl-agglo.md`, demandant à ENGIE de
+sortir ces 56 points du périmètre de facturation de la Ville. **Aucune démarche EDF** :
+les 4 points EDF sont bien à la Ville.
 
 ## 6. Reste à faire
 
-- **Mettre en œuvre D5** (marquage par site, réversible) — préalable aux restitutions.
+- **Mettre en œuvre D5** — exclusion des 56 PRM ENGIE au niveau du site, à l'import et
+  sur l'existant. Préalable aux restitutions.
+- **Envoyer le courrier ENGIE** (`courriers/mail-engie-retrait-pdl-agglo.md`) après
+  avoir prévenu l'Agglo.
 - Arbitrer D1 et D2 (code, périmètre limité à `enedis_sync.py` + `enedis_customer_sync.py`).
 - Confirmer la composition du groupement de commandes `2024-FCS-03` (pièce
   contractuelle), pour asseoir le §4 sur autre chose qu'une déduction par libellé.
