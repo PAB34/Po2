@@ -31,6 +31,7 @@ from app.models.invoice import (
     EnergyInvoiceImport,
 )
 from app.services import supplier_registry
+from app.services.prm_scope import inactive_prm_ids, is_in_scope
 
 
 def _supplier_candidate(invoice_import: EnergyInvoiceImport) -> str | None:
@@ -442,12 +443,15 @@ def resolve_invoice_codification(db: Session, invoice_import: EnergyInvoiceImpor
     city_id = invoice_import.city_id
     sites_index = _index_site_mappings(db, city_id)
     rules_index = _index_nature_rules(db, city_id)
+    inactive = inactive_prm_ids(db, city_id)
     rows: list[LiaisonRow] = []
 
     invoice = invoice_import.normalized_invoice
     if invoice is None:
         return rows
     for site in invoice.sites:
+        if not is_in_scope(site.prm_id, inactive):
+            continue
         mapping = sites_index.get(_clean(site.prm_id) or "")
         for period in site.periods:
             for line in period.lines:
