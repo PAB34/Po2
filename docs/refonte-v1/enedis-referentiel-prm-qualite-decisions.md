@@ -97,7 +97,7 @@ renvoyer. Ils consomment ~126 appels API par jour pour rien et polluent le diagn
 Le seul groupe qui justifie un ticket technique est **D, 13 PRM**, et son enjeu
 financier est marginal (347 €).
 
-## 4. Le vrai trou est dans l'autre sens : 60 PRM facturés, absents du référentiel
+## 4. 60 PRM facturés absents du référentiel — et ce ne sont pas les nôtres
 
 Croisement `energy_invoice_sites` × référentiel ENEDIS :
 
@@ -121,9 +121,51 @@ sites de forte puissance.
 
 Ventilation par rapport au consentement ENEDIS :
 
-- **59 PRM / 464 824 € sont hors du périmètre de consentement** → une extension du
-  consentement ACCES auprès d'ENEDIS est nécessaire. C'est une démarche, pas du code.
+- **59 PRM / 464 824 € sont hors du périmètre de consentement.**
 - **1 PRM / 5 €** est dans le périmètre mais absent du CSV → simple retard de sync.
+
+### Ce ne sont pas nos compteurs : ce sont ceux de l'Agglo
+
+Première lecture (2026-07-23, matin) : « demander à ENEDIS d'étendre le consentement
+à ces 59 points ». **Cette demande aurait été rejetée, et à juste titre.**
+
+Les 549 PRM du périmètre de consentement portent tous **un seul et même SIRET** :
+
+```
+549 / 549  ->  21340301700014   (Commune de Sète)
+```
+
+Les 60 PRM absents du référentiel sont, eux, des équipements de **Sète Agglopôle
+Méditerranée** — personne morale distincte. Leur nature ne laisse pas de doute, elle
+recoupe exactement les compétences intercommunales :
+
+| Compétence agglo | Sites concernés parmi les 60 |
+|---|---|
+| Assainissement / eau | STEP Mèze, Villeveyrac, Mireval, Montbazin ; lagunages Vic-la-Gardiole, Onglous, Pradels ; PR pluviaux ; pôle cycle de l'eau |
+| Déchets | déchetteries de Mèze, Balaruc, Marseillan, Montbazin, Frontignan, Sète ; pôle déchets Marseillan ; plate-forme déchets verts |
+| Culture intercommunale | conservatoire intercommunal, médiathèques (Mitterrand, Malraux, Olympe de Gouges, intercommunale), Théâtre Molière |
+| Gens du voyage | aires de Marseillan, Frontignan, Mèze |
+| Développement éco / tourisme | Écosite, complexe Oikos, pépinière Flexys, musée de l'étang de Thau, villa gallo-romaine |
+
+Un site s'appelle littéralement **« CA DU BASSIN DE THAU »** — l'ancien nom de l'agglo.
+À l'inverse, les regroupements du groupe couvert sont sans ambiguïté ceux de la Ville :
+`212-ENSEIGNEMENT`, `BUREAU DES FESTIVALS`, `RH - SYNDICATS`, `CIRC - VOIRIE`,
+`COMPLEXE FUNERAIRE`, `PORT DES QUILLES`.
+
+**Il n'y a donc aucun défaut de référentiel ici non plus.** Le module ingère les
+factures d'un **groupement de commandes** (marché ENGIE `2024-FCS-03`) qui couvre Ville
+**et** Agglo, alors que le consentement ENEDIS ne couvre — et ne peut couvrir — que la
+Ville. `ADAM-ERR0191` est exactement le mécanisme qui protège ça : une collectivité ne
+peut pas consommer la donnée de comptage d'une autre personne morale.
+
+Les « 40 % de la dépense invisible » ne sont pas un trou de données mais un **écart de
+périmètre juridique entre deux sources**. Le chiffre est réel, sa lecture change
+complètement : il ne mesure pas ce qu'on a perdu, il mesure ce qui ne nous appartient pas.
+
+Réserve de méthode : la propriété des sites est déduite de leur nature et de leur
+libellé, pas d'une pièce contractuelle. Le SIRET unique côté ENEDIS est en revanche un
+fait. Une confirmation propre passerait par la liste des membres du groupement de
+commandes `2024-FCS-03`.
 
 À l'inverse, **112 PRM du référentiel n'ont jamais été facturés** : à instruire côté
 fournisseur (points suivis pour rien, ou facturation rattachée ailleurs).
@@ -154,21 +196,46 @@ partie est facturée — les perdre créerait un angle mort supplémentaire.
 d'exploitable — c'est ce qui a conduit à la mauvaise conclusion du 22/07. Le
 remplacer par les causes A/B/C/D du §3, calculées à partir des deux champs ENEDIS.
 
-### D3 — Deux demandes à adresser à ENEDIS, chiffrées *(à porter par la Ville)*
+### D3 — Une seule demande à ENEDIS, et elle est petite *(à porter par la Ville)*
 
-1. **Extension du consentement à 59 PRM représentant 464 824 € TTC facturés sur la
-   fenêtre couverte** (cf. avertissement §4) — c'est la
-   demande à plus fort impact, et de loin. Liste : `prm_factures_hors_referentiel.csv`.
-2. **Ouverture du service ACCES sur les 40 PRM du groupe C** (42 881 € facturés).
+**Ouverture du service ACCES sur les 40 PRM du groupe C** (42 881 € facturés sur la
+fenêtre couverte). Ces points portent le SIRET de la Ville : la demande est recevable.
+Liste : colonne `cause = C` de `prm_referentiel_qualite.csv`.
+
+~~Extension du consentement aux 59 PRM hors référentiel~~ — **abandonné** : ces points
+appartiennent à Sète Agglopôle Méditerranée (§4). La Ville n'a aucun titre à demander
+leur donnée de comptage ; seule l'Agglo, en tant que titulaire, peut consentir pour
+eux. Ce n'est pas une démarche ENEDIS, c'est une question de gouvernance (D5).
 
 ### D4 — Relancer la sync contractuelle *(sans risque, à faire)*
 
 Récupère les 18 PRM du périmètre absents du CSV et rafraîchit `connection_state` /
 `services_level`, prérequis de D1.
 
+### D5 — Trancher le périmètre du module : Ville seule, ou Ville + Agglo ? *(bloquant, décision non technique)*
+
+C'est la question de fond que le §4 met au jour. Aujourd'hui le module est incohérent :
+il ingère les factures de deux personnes morales et ne collecte la donnée ENEDIS que
+pour une seule. Deux issues, exclusives :
+
+- **Ville seule.** Les 60 PRM Agglo sortent du périmètre de facturation. Les « 40 % de
+  dépense invisible » disparaissent — c'était un artefact d'import. Le module redevient
+  cohérent, et les indicateurs (€/kWh, atterrissage, part fournisseur) cessent d'être
+  calculés sur une assiette dont 40 % n'a pas de consommation en face. Coût : un filtre
+  par entité à l'import des factures.
+- **Ville + Agglo.** Il faut alors que l'Agglo accorde son propre consentement ENEDIS,
+  et que la plateforme porte une notion d'**entité juridique** de bout en bout
+  (référentiels, factures, patrimoine, restitutions). Ce n'est pas un réglage, c'est
+  une dimension structurante à ajouter au modèle de données.
+
+Tant que ce choix n'est pas fait, tout indicateur électricité agrégé mélange deux
+périmètres et n'est pas défendable devant les finances. À arbitrer avant d'investir
+ailleurs sur le module.
+
 ## 6. Reste à faire
 
+- **Arbitrer D5** — préalable à tout le reste.
 - Arbitrer D1 et D2 (code, périmètre limité à `enedis_sync.py` + `enedis_customer_sync.py`).
-- Instruire l'origine des 60 PRM facturés hors périmètre : ce sont des points bien
-  réels et payés — comprendre pourquoi le consentement ne les couvre pas.
+- Confirmer la composition du groupement de commandes `2024-FCS-03` (pièce
+  contractuelle), pour asseoir le §4 sur autre chose qu'une déduction par libellé.
 - Instruire les 112 PRM suivis mais jamais facturés.
