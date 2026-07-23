@@ -50,25 +50,41 @@ python -m uvicorn app.main:app --port 5000 --app-dir .
    `saas` (`saas/infra/caddy/Caddyfile`), puis recharger Caddy
    (`docker compose -f saas/infra/docker-compose.prod.yml restart caddy`).
    > Le réseau partagé `po2-edge` existe déjà (utilisé par le staging).
-4. **Lancer PRONO** :
-   ```bash
-   cd PRONO/infra
-   docker compose up -d --build
-   ```
+4. **Lancer PRONO** : rien à lancer à la main. Les services `prono-backend` et
+   `prono-frontend` font partie du compose `saas/infra/docker-compose.prod.yml`
+   (projet Docker `infra`), déployé par le workflow `Deploy`.
+
+   > ⚠️ Ne **jamais** faire `docker compose up` depuis `PRONO/infra/` sur le VPS.
+   > Cela crée un second projet Docker (`prono`) dont les conteneurs portent les
+   > mêmes alias réseau (`prono-backend`, `prono-frontend`) que ceux du projet
+   > `infra`. Caddy continue de router vers `infra` : la seconde pile ne reçoit
+   > aucun trafic, mais donne l'illusion d'un déploiement réussi. C'est ainsi que
+   > la section tennis a semblé « disparaître » du site le 20/07/2026 — le code
+   > était déployé, sur la pile que personne n'interrogeait.
+   > Le doublon a été supprimé le 23/07/2026.
+
 5. Ouvrir `https://ligue1.patrimoineaucarre.com` → écran de connexion → tes identifiants.
    (HTTPS émis automatiquement par Caddy dès que le DNS est en place.)
 
 
 ## Workflow GitHub Actions
 
-Le workflow `.github/workflows/deploy-prono.yml` déploie uniquement PRONO sur le VPS.
-Il se déclenche manuellement ou sur push `main`/`master` touchant `PRONO/**`.
+PRONO est déployé par `.github/workflows/deploy.yml` (workflow `Deploy`), qui couvre
+déjà `PRONO/**` dans ses `paths` : tout push sur `main` touchant `PRONO/` reconstruit
+et redémarre les conteneurs prono du projet `infra`.
+
+Il n'existe **pas** de workflow dédié à PRONO. `deploy-prono.yml` a existé jusqu'au
+23/07/2026 : il déployait un projet Docker séparé qui ne recevait aucune requête, et
+faisait donc croire à un déploiement alors que le site restait inchangé.
 
 Pré-requis côté VPS :
 
-- `PRONO/infra/.env` existe et contient `PRONO_SECRET_KEY`, `PRONO_ADMIN_EMAIL`, `PRONO_ADMIN_PASSWORD` ;
+- `saas/infra/.env` contient `PRONO_SECRET_KEY`, `PRONO_ADMIN_EMAIL`, `PRONO_ADMIN_PASSWORD` ;
 - le bloc Caddy `ligue1.patrimoineaucarre.com` est présent dans `saas/infra/caddy/Caddyfile` ;
 - le DNS `ligue1.patrimoineaucarre.com` pointe vers le VPS.
+
+Les données persistantes (historique des décisions, caches) vivent dans le volume
+Docker `infra_prono_data`, monté sur `/data`.
 
 ## Accès privé
 

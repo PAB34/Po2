@@ -1,4 +1,13 @@
-# PRONO — Ligue 1 (app privée). Déploiement sur le VPS existant.
+# PRONO — Ligue 1 (app privée). USAGE LOCAL / DEV UNIQUEMENT.
+#
+# ⚠️ NE PAS lancer ce fichier sur le VPS. En production, prono-backend et
+# prono-frontend sont définis dans saas/infra/docker-compose.prod.yml (projet
+# Docker `infra`) et déployés par le workflow `Deploy`. Lancer celui-ci sur le
+# VPS crée un projet Docker `prono` parallèle : mêmes alias réseau, mais Caddy
+# route vers `infra`. La pile ainsi créée ne reçoit aucun trafic tout en
+# paraissant saine — c'est exactement ce qui a fait croire, le 20/07/2026, que
+# la section tennis avait disparu du site. Doublon supprimé le 23/07/2026.
+#
 # Les services rejoignent le réseau partagé `po2-edge` pour que le Caddy déjà en
 # place (projet saas) puisse les router vers ligue1.patrimoineaucarre.com.
 # Aucun port n'est exposé directement : tout passe par le Caddy existant.
