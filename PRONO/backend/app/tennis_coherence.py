@@ -10,8 +10,9 @@ Deux usages:
   - check_ticket(selections): analyse d'un ticket (intra-match correle, inter-match
     traite comme independant, proba jointe corrigee par frequence historique du bin).
 
-Matrice v1 = 6 marches "match" issus de app.tennis_calibration (favori = mieux classe):
-  over_22_5, three_sets, tiebreak, favorite_2_0, favorite_2_1, favorite_cover_2_5.
+Matrice v2 = 8 marches "match" issus de app.tennis_calibration (favori = mieux classe):
+  over_18_5, over_19_5, over_22_5, three_sets, tiebreak, favorite_2_0, favorite_2_1,
+  favorite_cover_2_5. Les seuils 18.5/19.5 servent aux tickets "prend un set + over".
 Les paires props joueur x match sont volontairement HORS v1 (echantillons trop minces).
 """
 from __future__ import annotations
@@ -24,7 +25,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-MARKETS = ("over_22_5", "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1", "favorite_cover_2_5")
+MARKETS = (
+    "over_18_5", "over_19_5", "over_22_5",
+    "three_sets", "tiebreak", "favorite_2_0", "favorite_2_1", "favorite_cover_2_5",
+)
 
 # Seuils sur phi (correlation de deux binaires, attenuee vs continue). Ajustables ici.
 # Justification: |phi|>=0.20 = co-occurrence deja nette; >=0.35 = forte (flag prioritaire);
@@ -38,6 +42,10 @@ MATRIX_PATH = Path(__file__).resolve().parent / "tennis_data" / "coherence_matri
 
 # Un pick = un marche + un cote (outcome vise, 1 ou 0). side "yes"->1, "no"->0.
 MARKET_LABELS = {
+    ("over_18_5", 1): "Over 18.5 jeux",
+    ("over_18_5", 0): "Under 18.5 jeux",
+    ("over_19_5", 1): "Over 19.5 jeux",
+    ("over_19_5", 0): "Under 19.5 jeux",
     ("over_22_5", 1): "Over 22.5 jeux",
     ("over_22_5", 0): "Under 22.5 jeux",
     ("three_sets", 1): "Match en 3 sets",
@@ -95,7 +103,7 @@ def build_matrix_from_records(records: list[dict], min_sample: int = MIN_SAMPLE)
                 by_bin[str(bin_index)] = _scope_stats(bin_recs)
         scopes[scope] = by_bin
     return {
-        "version": 1,
+        "version": 2,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "min_sample": min_sample,
         "markets": list(MARKETS),
