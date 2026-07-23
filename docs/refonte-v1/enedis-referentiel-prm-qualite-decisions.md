@@ -212,29 +212,55 @@ eux. Ce n'est pas une démarche ENEDIS, c'est une question de gouvernance (D5).
 Récupère les 18 PRM du périmètre absents du CSV et rafraîchit `connection_state` /
 `services_level`, prérequis de D1.
 
-### D5 — Trancher le périmètre du module : Ville seule, ou Ville + Agglo ? *(bloquant, décision non technique)*
+### D5 — Périmètre du module : **Ville seule** *(arbitré le 2026-07-23)*
 
-C'est la question de fond que le §4 met au jour. Aujourd'hui le module est incohérent :
-il ingère les factures de deux personnes morales et ne collecte la donnée ENEDIS que
-pour une seule. Deux issues, exclusives :
+C'est la question de fond que le §4 met au jour : le module ingérait les factures de
+deux personnes morales et ne collectait la donnée ENEDIS que pour une seule.
 
-- **Ville seule.** Les 60 PRM Agglo sortent du périmètre de facturation. Les « 40 % de
-  dépense invisible » disparaissent — c'était un artefact d'import. Le module redevient
-  cohérent, et les indicateurs (€/kWh, atterrissage, part fournisseur) cessent d'être
-  calculés sur une assiette dont 40 % n'a pas de consommation en face. Coût : un filtre
-  par entité à l'import des factures.
-- **Ville + Agglo.** Il faut alors que l'Agglo accorde son propre consentement ENEDIS,
-  et que la plateforme porte une notion d'**entité juridique** de bout en bout
-  (référentiels, factures, patrimoine, restitutions). Ce n'est pas un réglage, c'est
-  une dimension structurante à ajouter au modèle de données.
+**Décision : on traite la Ville seule. L'Agglo sera traitée dans plusieurs semaines ou
+mois, sous un compte distinct.**
 
-Tant que ce choix n'est pas fait, tout indicateur électricité agrégé mélange deux
-périmètres et n'est pas défendable devant les finances. À arbitrer avant d'investir
-ailleurs sur le module.
+Conséquence immédiate : les « 40 % de dépense invisible » ne sont pas un chantier, ce
+sont des données hors périmètre. Les indicateurs Ville (€/kWh, atterrissage, part
+fournisseur) cessent d'être calculés sur une assiette dont 40 % n'a aucune consommation
+en face.
+
+**Conséquence de conception** : l'Agglo aura son propre compte, et la plateforme est
+**déjà multi-entités** (`energy_invoices.city_id`, aujourd'hui `303` pour tout le monde).
+L'exclusion doit donc être un **marquage réversible**, pas une suppression : ces
+98 factures ont vocation à être rattachées au futur compte Agglo, pas à être perdues.
+
+Ce que dit la donnée sur la faisabilité du découpage :
+
+| Type de facture | Factures | € TTC |
+|---|---|---|
+| 100 % Ville | 213 | 679 084 |
+| 100 % Agglo | 98 | 464 658 |
+| **Mixte Ville + Agglo** | **1** | **12 113** |
+
+La séparation est quasi parfaite **au niveau de la facture** — une seule est mixte.
+Malgré cela, le filtre doit se poser au niveau du **site** (`prm_id`), pas de la
+facture : sinon cette facture-là bascule entière du mauvais côté. Filtrer par site
+traite les 312 cas d'un coup, sans exception à gérer à la main.
+
+Reste à définir le **critère** de rattachement. Le SIRET n'est pas exploitable ici : les
+factures des deux périmètres portent le même titulaire de paiement (`SERVICE DE GESTION
+COMPTABLE LITTORAL`) et le même marché (`2024-FCS-03`). Deux options :
+
+1. **Liste explicite des 60 PRM Agglo** (`prm_factures_hors_referentiel.csv`), figée et
+   révisable. Simple, exacte aujourd'hui, mais à maintenir quand le parc bouge.
+2. **Règle « présent dans le périmètre de consentement ENEDIS »** — ce périmètre porte
+   le SIRET de la Ville, il fait donc autorité sur ce qui est à la Ville. Auto-entretenu,
+   mais dépend d'une source externe et exclut par construction tout point Ville qui ne
+   serait pas consenti.
+
+L'option 2 est plus robuste sur la durée, l'option 1 plus sûre à court terme. Le plus
+prudent est de démarrer sur la 1 et de vérifier qu'elle coïncide avec la 2 avant de
+basculer.
 
 ## 6. Reste à faire
 
-- **Arbitrer D5** — préalable à tout le reste.
+- **Mettre en œuvre D5** (marquage par site, réversible) — préalable aux restitutions.
 - Arbitrer D1 et D2 (code, périmètre limité à `enedis_sync.py` + `enedis_customer_sync.py`).
 - Confirmer la composition du groupement de commandes `2024-FCS-03` (pièce
   contractuelle), pour asseoir le §4 sur autre chose qu'une déduction par libellé.
