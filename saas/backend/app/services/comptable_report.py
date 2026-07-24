@@ -645,19 +645,18 @@ def _write_dalkia_comptable_sheet(
     for line in lines:
         lines_by_invoice.setdefault(line.invoice_id, []).append(line)
 
-    # Tout en TTC (retour comptable) : plus aucune colonne HT. On garde le montant
-    # facture TTC, le prix revise du trimestre TTC, et la part de revision comprise
-    # dans le montant facture (dont revision) en TTC. Suppression de VALEUR DE BASE
-    # et de la revision en HT.
+    # Tout en TTC (retour comptable), au niveau de la ligne et additif :
+    # MONTANT BASE TTC + MONTANT REVISION TTC = MONTANT TTC (facturé au prix revise).
+    # Plus aucune colonne HT ni forfait trimestriel (maille differente, source de confusion).
     headers = [
         "CODE CONTRAT",
         "NUMERO DE FACTURE",
         "DATE D'EDITION",
         "POSTE FACTURE",
         "TAUX DE TVA",
-        "MONTANT TTC",
-        "PRIX REVISE TTC",
+        "MONTANT BASE TTC",
         "MONTANT REVISION TTC",
+        "MONTANT TTC",
         "LIEU OU DETAIL DE LA PRESTATION",
         "LC",
         "NUMERO COMPTA",
@@ -680,9 +679,9 @@ def _write_dalkia_comptable_sheet(
                 item.invoice_date,
                 None,
                 None,
+                None,
+                None,
                 item.total_ttc,
-                None,
-                None,
                 item.label,
                 None,
                 item.accounting_number,
@@ -698,15 +697,24 @@ def _write_dalkia_comptable_sheet(
             base_price, revised_price = _cpe_report_prices(line)
             nature, _label, operation = _cpe_report_accounting(line, site)
             observation = _dalkia_line_observation(status, delta, current, item, line, site, nature, operation)
+            # Montant facture (= au prix revise) et sa decomposition additive.
+            montant_ttc = _line_ttc(line.amount_ht, line.vat_rate)
+            revision_ttc = _line_ttc(
+                _cpe_dont_revision_ht(line.amount_ht, base_price, revised_price), line.vat_rate
+            )
+            # Base = montant - revision (calcul par difference pour garantir l'egalite au centime).
+            base_ttc = (
+                round(montant_ttc - (revision_ttc or 0.0), 2) if montant_ttc is not None else None
+            )
             values = [
                 line.contract_code or getattr(current.raw, "contract_code", None),
                 item.supplier_invoice_number,
                 getattr(current.raw, "invoice_date", None) or item.invoice_date,
                 _cpe_report_poste(line),
                 line.vat_rate,
-                _line_ttc(line.amount_ht, line.vat_rate),
-                _line_ttc(revised_price, line.vat_rate),
-                _line_ttc(_cpe_dont_revision_ht(line.amount_ht, base_price, revised_price), line.vat_rate),
+                base_ttc,
+                revision_ttc,
+                montant_ttc,
                 _cpe_report_detail(line, site),
                 _cpe_report_lc(line, site, nature, operation),
                 item.accounting_number,
