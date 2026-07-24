@@ -40,6 +40,14 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - Chantier ultérieur (hors périmètre immédiat) : basculer **toutes** les données
   plateforme en TTC (demande explicite de l'utilisateur, étape séparée).
 
+### 6 — ENGIE / EDF : une ligne comptable par site/point (FAIT)
+- Une facture énergie explose en dizaines de lignes (PRM × période × poste) = trop
+  pour la comptable. **Décision** : **une seule ligne comptable par SITE/POINT (PRM)**,
+  comme DALKIA. Agrégation `_aggregate_energy_lines` (groupe par PRM) : `MONTANT TTC` =
+  somme des postes du PRM, imputation commune (service/fonction/nature/antenne via
+  join_unique), colonnes `POSTES REGROUPES` + `NB LIGNES` (remplacent POSTE/LIBELLE).
+  Si un PRM mélange plusieurs natures, elles apparaissent jointes (flag).
+
 ### 5 — Matrice `MATRICE_DALKIA-COMPATBILITE V2.xlsx` + page `/refonte-v1/matrices`
 
 **Diagnostic (2026-07-24) :**

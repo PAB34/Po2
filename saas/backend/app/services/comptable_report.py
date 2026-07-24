@@ -359,6 +359,75 @@ def _write_market_sheet(
 
 
 
+@dataclass(frozen=True)
+class _EnergyAggRow:
+    """Une ligne comptable agregee par site/point (PRM) : la comptable veut une
+    seule ligne par point, pas la decomposition par poste/periode."""
+    prm_id: str | None
+    site_name: str | None
+    postes: str | None
+    n_lines: int
+    amount_ht: float | None
+    service_code: str | None
+    function_code: str | None
+    accounting_nature: str | None
+    antenna_code: str | None
+    lc: str | None
+    blocked: bool
+
+
+def _aggregate_energy_lines(lines: list[energie_accounting.LiaisonRow]) -> list[_EnergyAggRow]:
+    """Regroupe les lignes de codification d'une facture par site/point (PRM) :
+    somme des montants HT, imputation commune (service/fonction/nature/antenne)."""
+    groups: dict[str, dict] = {}
+    order: list[str] = []
+    for line in lines:
+        key = _text(line.prm_id) or _text(line.site_name) or "?"
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "prm_id": line.prm_id, "site_name": line.site_name,
+                "postes": [], "amount_ht": 0.0, "n_lines": 0,
+                "service": [], "function": [], "nature": [], "antenna": [],
+                "lcs": [], "blocked": False,
+            }
+            groups[key] = group
+            order.append(key)
+        group["n_lines"] += 1
+        if line.amount_ht is not None:
+            group["amount_ht"] += float(line.amount_ht)
+        for field, value in (
+            ("postes", line.poste), ("service", line.service_code),
+            ("function", line.function_code), ("nature", line.accounting_nature),
+            ("antenna", line.antenna_code),
+        ):
+            if _text(value):
+                group[field].append(value)
+        lc = _energy_report_lc(line)
+        if lc:
+            group["lcs"].append(lc)
+        if line.status != "ok":
+            group["blocked"] = True
+
+    result: list[_EnergyAggRow] = []
+    for key in order:
+        g = groups[key]
+        result.append(_EnergyAggRow(
+            prm_id=g["prm_id"],
+            site_name=g["site_name"],
+            postes=_join_unique(g["postes"], limit=5),
+            n_lines=g["n_lines"],
+            amount_ht=round(g["amount_ht"], 2) if g["amount_ht"] else g["amount_ht"],
+            service_code=_join_unique(g["service"]),
+            function_code=_join_unique(g["function"]),
+            accounting_nature=_join_unique(g["nature"]),
+            antenna_code=_join_unique(g["antenna"]),
+            lc=_join_unique(g["lcs"]),
+            blocked=g["blocked"],
+        ))
+    return result
+
+
 def _write_energy_comptable_sheet(
     db: Session,
     city_id: int,
@@ -379,8 +448,9 @@ def _write_energy_comptable_sheet(
     ]
     enrichments = _market_line_enrichments(db, city_id, config, matched)
 
-    # Retour comptable : MONTANT en TTC (HT ligne x ratio TVA facture), pas de
-    # colonne HT, et pas de colonne OPERATION (operation reservee DALKIA P3/P3.4).
+    # Retour comptable : UNE ligne comptable par SITE/POINT (PRM) — pas la
+    # decomposition par poste/periode. MONTANT en TTC (HT x ratio TVA facture),
+    # pas de colonne HT ni OPERATION (reservee DALKIA P3/P3.4).
     headers = [
         "FOURNISSEUR",
         "NUMERO DE FACTURE",
@@ -388,8 +458,8 @@ def _write_energy_comptable_sheet(
         "DATE FACTURE",
         "SITE / POINT",
         "PRM",
-        "POSTE FACTURE",
-        "LIBELLE",
+        "POSTES REGROUPES",
+        "NB LIGNES",
         "MONTANT TTC",
         "TTC COMPTA",
         "TTC PO2",
@@ -426,8 +496,8 @@ def _write_energy_comptable_sheet(
                 None,
                 None,
                 None,
-                item.label,
                 None,
+                item.total_ttc,
                 item.total_ttc,
                 current.total_ttc if current else None,
                 delta,
@@ -444,38 +514,42 @@ def _write_energy_comptable_sheet(
             row_cursor += 1
             continue
 
-        for line in lines:
+        for agg in _aggregate_energy_lines(lines):
             montant_ttc = (
-                round(float(line.amount_ht) * ratio, 2)
-                if ratio is not None and line.amount_ht is not None
-                else line.amount_ht
+                round(float(agg.amount_ht) * ratio, 2)
+                if ratio is not None and agg.amount_ht is not None
+                else agg.amount_ht
             )
+            observation = _join_unique([
+                _row_problem_summary(status, delta, current, item),
+                "Codification comptable a verifier." if agg.blocked else None,
+            ], limit=2)
             values = [
                 config.title,
                 item.supplier_invoice_number,
                 item.accounting_number,
                 item.invoice_date,
-                line.site_name,
-                line.prm_id,
-                line.poste,
-                line.label,
+                agg.site_name,
+                agg.prm_id,
+                agg.postes,
+                agg.n_lines,
                 montant_ttc,
                 item.total_ttc,
                 current.total_ttc if current else None,
                 delta,
-                line.service_code,
-                line.function_code,
-                line.accounting_nature,
-                line.antenna_code,
-                _energy_report_lc(line),
+                agg.service_code,
+                agg.function_code,
+                agg.accounting_nature,
+                agg.antenna_code,
+                agg.lc,
                 enrichment.get("revision_control"),
                 _report_control_label(status, config, current),
-                _energy_line_observation(status, delta, current, item, line, enrichment),
+                observation,
             ]
             _write_energy_values(ws, row_cursor, values)
             row_cursor += 1
 
-    _set_widths(ws, [16, 22, 16, 14, 32, 18, 16, 40, 14, 14, 14, 14, 12, 12, 12, 12, 42, 32, 18, 58])
+    _set_widths(ws, [16, 22, 16, 14, 32, 18, 22, 10, 14, 14, 14, 14, 12, 12, 12, 12, 42, 32, 18, 58])
     ws.freeze_panes = f"A{header_row + 1}"
     ws.auto_filter.ref = f"A{header_row}:T{max(header_row + 1, row_cursor - 1)}"
 
@@ -502,28 +576,6 @@ def _energy_report_lc(line: energie_accounting.LiaisonRow) -> str | None:
         line.antenna_code,
     ]
     return "-".join(str(part).strip() for part in parts if _text(part))
-
-
-def _energy_line_observation(
-    status: str,
-    delta: float | None,
-    current: PlatformInvoice,
-    item: WorklistInvoice,
-    line: energie_accounting.LiaisonRow,
-    enrichment: dict[str, object | None],
-) -> str | None:
-    issues = [_row_problem_summary(status, delta, current, item)]
-    if line.status != "ok":
-        missing = []
-        if not line.service_code or not line.function_code:
-            missing.append("site/PRM")
-        if not line.accounting_nature:
-            missing.append("nature")
-        if missing:
-            issues.append(f"Codification comptable incomplete ({', '.join(missing)}).")
-        else:
-            issues.append("Codification comptable a verifier.")
-    return _join_unique(issues, limit=3)
 
 
 def _write_gas_comptable_sheet(

@@ -494,6 +494,51 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
     assert ws.cell(row=8, column=1).value is None
 
 
+def test_energy_lines_aggregated_one_row_per_site(monkeypatch) -> None:
+    """La comptable veut UNE ligne comptable par site/point : plusieurs postes
+    d'un meme PRM doivent etre regroupes (montant somme, imputation commune)."""
+    monkeypatch.setattr(comptable_report, "_market_line_enrichments", lambda *args: {})
+
+    def liaison(poste, amount):
+        return comptable_report.energie_accounting.LiaisonRow(
+            prm_id="PRM-1", site_name="Hotel de ville", poste=poste, label=poste,
+            quantity=1, unit_price_ht=amount, amount_ht=amount,
+            service_code="ELEC", function_code="020", antenna_code="ANT",
+            operation_code=None, accounting_nature="60612", accounting_label="Electricite",
+            status="ok",
+        )
+
+    lines = [liaison("ABONNEMENT", 100.0), liaison("CONSOMMATION", 50.0), liaison("ACHEMINEMENT", 30.0)]
+    monkeypatch.setattr(comptable_report.energie_accounting, "resolve_invoice_codification", lambda *_a: lines)
+    ws = openpyxl.Workbook().active
+    parsed = comptable_report.WorklistParseResult(
+        sheet_name="_ShowList-001",
+        rows=[WorklistInvoice(
+            row_number=2, accounting_number="202600001", supplier_invoice_number="F-ENGIE-1",
+            label="FAC. F-ENGIE-1 DU 01/07/2026", total_ttc=216.0, invoice_date="01/07/2026",
+            arrival_date=None, supplier_code=None, supplier_name="ENGIE",
+            invoice_status=None, liquidation_status=None, market_code=None, raw={},
+        )],
+    )
+    platform = {
+        "F-ENGIE-1": PlatformInvoice(
+            id=1, invoice_number="F-ENGIE-1", total_ttc=216.0, control_status="valid",
+            decision_status="approved", problem_summary=None, raw=EnergyInvoiceImport(invoice_number="F-ENGIE-1"),
+        )
+    }
+
+    comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
+
+    assert ws.cell(row=4, column=7).value == "POSTES REGROUPES"
+    assert ws.cell(row=4, column=8).value == "NB LIGNES"
+    # Une seule ligne pour PRM-1 (3 postes regroupes), pas 3.
+    assert ws.cell(row=5, column=6).value == "PRM-1"
+    assert ws.cell(row=5, column=8).value == 3
+    assert ws.cell(row=5, column=9).value == 180.0  # 100 + 50 + 30 (ratio TVA indispo -> HT)
+    assert ws.cell(row=5, column=17).value == "60612-ELEC-ANT"
+    assert ws.cell(row=6, column=1).value is None  # pas de 2e ligne
+
+
 def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) -> None:
     monkeypatch.setattr(comptable_report, "_market_line_enrichments", lambda *args: {})
     monkeypatch.setattr(comptable_report.energie_accounting, "resolve_invoice_codification", lambda *_args: [])
