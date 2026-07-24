@@ -326,7 +326,8 @@ def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
     assert ws.cell(row=5, column=7).value == 16.93   # revision
     assert ws.cell(row=5, column=8).value == 549.43  # montant = base + revision
     assert round(ws.cell(row=5, column=6).value + ws.cell(row=5, column=7).value, 2) == ws.cell(row=5, column=8).value
-    assert ws.cell(row=5, column=10).value == "BATI-331-21351-98003-XSCO-ALSH"
+    # LC sans fonction (331) : gestionnaire-nature-operation(P3)-service-antenne.
+    assert ws.cell(row=5, column=10).value == "BATI-21351-98003-XSCO-ALSH"
     assert ws.cell(row=5, column=13).value is None
 
 
@@ -384,8 +385,10 @@ def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
     lc = ws.cell(row=5, column=10).value
-    assert lc == "BATI-28-6156-ATBA-CTM"
+    # Sans fonction (28) ni operation (98004) : gestionnaire-nature-service-antenne.
+    assert lc == "BATI-6156-ATBA-CTM"
     assert "98004" not in lc
+    assert "-28-" not in lc
 
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
@@ -481,13 +484,13 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
     assert ws.cell(row=5, column=9).value == 100.0
     # LC energie : jamais d'operation d'investissement (reserve DALKIA P3/P3.4),
     # meme si le site porte un operation_code (ici OP1 est volontairement ignore).
-    assert ws.cell(row=5, column=17).value == "020-60612-ELEC-ANT"
+    assert ws.cell(row=5, column=17).value == "60612-ELEC-ANT"
     assert ws.cell(row=5, column=18).value == "PRM-1: BPU 1.0 / TURPE 1.0"
     assert ws.cell(row=5, column=19).value == "Conforme (0 erreur(s), 1 alerte(s))"
     assert ws.cell(row=5, column=20).value == "Ecart prix BPU"
     assert ws.cell(row=6, column=2).value == "F-ENGIE-1"
     assert ws.cell(row=6, column=5).value == "Gymnase"
-    assert ws.cell(row=6, column=17).value == "411-60612-SPORT-GYMN"
+    assert ws.cell(row=6, column=17).value == "60612-SPORT-GYMN"
     assert ws.cell(row=8, column=1).value is None
 
 

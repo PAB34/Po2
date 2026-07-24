@@ -494,10 +494,9 @@ def _energy_report_lines(db: Session, current: PlatformInvoice | None) -> list[e
 
 
 def _energy_report_lc(line: energie_accounting.LiaisonRow) -> str | None:
-    # Cote energie (ENGIE / EDF), aucune operation d'investissement : la LC ne
-    # contient jamais de numero d'operation (reserve a DALKIA P3 / P3.4).
+    # La LC ne contient ni fonction (retour comptable : la fonction issue de la
+    # matrice ne doit pas figurer dans la ligne comptable) ni operation cote energie.
     parts = [
-        line.function_code,
         line.accounting_nature,
         line.service_code,
         line.antenna_code,
@@ -800,7 +799,8 @@ def _cpe_report_lc(
         return None
     parts = [
         site.manager if site else None,
-        site.function_code if site else None,
+        # La fonction (issue de la matrice) ne doit PAS figurer dans la LC
+        # (retour comptable). On garde gestionnaire, nature, [operation P3], service, antenne.
         nature,
         # L'operation (investissement) n'appartient a la LC que pour un poste
         # P3 / P3.4 DALKIA. Sur une ligne P2 (ex. maintenance 6156) elle ne doit

@@ -19,6 +19,10 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - Fait : `_cpe_report_lc` gate l'opération sur `_is_cpe_p3_line` ;
   `_energy_report_lc` ne contient plus d'opération. Test : `test_dalkia_p2_line_excludes_operation_from_lc`.
 - Reste (sujet 2/3) : retirer la colonne `OPERATION` explicite des feuilles ENGIE/EDF.
+- **Composition de la LC** (retour comptable 2026-07-24) : la LC ne contient **pas la
+  fonction** (issue de la matrice). Format = `gestionnaire-nature-[operation si P3]-service-antenne`
+  (DALKIA) et `nature-service-antenne` (énergie). Ex : `BATI-020-6156-MABA-LOCAUX` →
+  `BATI-6156-MABA-LOCAUX`.
 
 ### 2 + 3 — Tout en TTC, suppression du HT (EN COURS)
 - **Décision** : la comptable travaille en **TTC**. Aucune colonne HT visible.
