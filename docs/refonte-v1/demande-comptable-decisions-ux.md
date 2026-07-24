@@ -26,8 +26,10 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - **TTC ligne = HT ligne × (1 + TVA facture)** (taux global de la facture appliqué
   à chaque ligne ; énergie : `total_ttc/total_ht`).
 - Colonnes supprimées dans chaque feuille tiers :
-  - DALKIA : `MONTANT HT`, `DONT REVISION HT`, `VALEUR DE BASE`, `REVISION HT`.
-    On garde uniquement **le révisé du trimestre**, en TTC (`PRIX REVISE TTC`) + `MONTANT TTC`.
+  - DALKIA : suppression `MONTANT HT`, `VALEUR DE BASE`, `REVISION HT`. Colonnes TTC
+    retenues : `MONTANT TTC`, `PRIX REVISE TTC` (forfait révisé du trimestre) et
+    `MONTANT REVISION TTC` = **part de révision comprise dans le facturé** (dont
+    révision = montant × (révisé − base) / révisé, puis TTC).
   - ENGIE / EDF : `MONTANT HT` → `MONTANT TTC` ; suppression `OPERATION`.
   - TotalEnergies gaz : `MONTANT HT`, `TVA` supprimées (TTC déjà présent).
 - Chantier ultérieur (hors périmètre immédiat) : basculer **toutes** les données

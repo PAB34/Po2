@@ -311,18 +311,21 @@ def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
 
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
-    # Layout TTC : MONTANT TTC = HT x (1+TVA), PRIX REVISE TTC idem, LC en col 9,
-    # plus de colonnes HT / valeur de base / revision HT.
+    # Layout TTC : MONTANT TTC, PRIX REVISE TTC, MONTANT REVISION TTC (dont revision),
+    # LC en col 10, plus de colonnes HT / valeur de base / revision HT.
     assert ws.cell(row=4, column=1).value == "CODE CONTRAT"
     assert ws.cell(row=4, column=6).value == "MONTANT TTC"
     assert ws.cell(row=4, column=7).value == "PRIX REVISE TTC"
-    assert ws.cell(row=4, column=9).value == "LC"
+    assert ws.cell(row=4, column=8).value == "MONTANT REVISION TTC"
+    assert ws.cell(row=4, column=10).value == "LC"
     assert ws.cell(row=5, column=4).value == "P3"
     assert ws.cell(row=5, column=5).value == 20
     assert ws.cell(row=5, column=6).value == 549.43  # 457.86 x 1.20
     assert ws.cell(row=5, column=7).value == 2197.7  # 1831.42 x 1.20
-    assert ws.cell(row=5, column=9).value == "BATI-331-21351-98003-XSCO-ALSH"
-    assert ws.cell(row=5, column=12).value is None
+    # dont revision = 457.86 x (1831.42-1775)/1831.42 = 14.11 HT -> 16.93 TTC
+    assert ws.cell(row=5, column=8).value == 16.93
+    assert ws.cell(row=5, column=10).value == "BATI-331-21351-98003-XSCO-ALSH"
+    assert ws.cell(row=5, column=13).value is None
 
 
 def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
@@ -378,7 +381,7 @@ def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
 
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
-    lc = ws.cell(row=5, column=9).value
+    lc = ws.cell(row=5, column=10).value
     assert lc == "BATI-28-6156-ATBA-CTM"
     assert "98004" not in lc
 

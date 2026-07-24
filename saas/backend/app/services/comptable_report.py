@@ -645,9 +645,10 @@ def _write_dalkia_comptable_sheet(
     for line in lines:
         lines_by_invoice.setdefault(line.invoice_id, []).append(line)
 
-    # Tout en TTC (retour comptable) : plus aucune colonne HT. On ne garde que le
-    # montant facture TTC et le prix revise du trimestre en TTC (suppression de
-    # DONT REVISION HT / VALEUR DE BASE / REVISION HT).
+    # Tout en TTC (retour comptable) : plus aucune colonne HT. On garde le montant
+    # facture TTC, le prix revise du trimestre TTC, et la part de revision comprise
+    # dans le montant facture (dont revision) en TTC. Suppression de VALEUR DE BASE
+    # et de la revision en HT.
     headers = [
         "CODE CONTRAT",
         "NUMERO DE FACTURE",
@@ -656,6 +657,7 @@ def _write_dalkia_comptable_sheet(
         "TAUX DE TVA",
         "MONTANT TTC",
         "PRIX REVISE TTC",
+        "MONTANT REVISION TTC",
         "LIEU OU DETAIL DE LA PRESTATION",
         "LC",
         "NUMERO COMPTA",
@@ -680,6 +682,7 @@ def _write_dalkia_comptable_sheet(
                 None,
                 item.total_ttc,
                 None,
+                None,
                 item.label,
                 None,
                 item.accounting_number,
@@ -703,6 +706,7 @@ def _write_dalkia_comptable_sheet(
                 line.vat_rate,
                 _line_ttc(line.amount_ht, line.vat_rate),
                 _line_ttc(revised_price, line.vat_rate),
+                _line_ttc(_cpe_dont_revision_ht(line.amount_ht, base_price, revised_price), line.vat_rate),
                 _cpe_report_detail(line, site),
                 _cpe_report_lc(line, site, nature, operation),
                 item.accounting_number,
@@ -715,22 +719,22 @@ def _write_dalkia_comptable_sheet(
     if row_cursor > first_data_row:
         total_row = row_cursor
         ws.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True)
-        for col in (6, 7):
+        for col in (6, 7, 8):
             letter = get_column_letter(col)
             ws.cell(row=total_row, column=col, value=f"=SUM({letter}{first_data_row}:{letter}{row_cursor - 1})")
             ws.cell(row=total_row, column=col).font = Font(bold=True)
             ws.cell(row=total_row, column=col).number_format = '#,##0.00 "EUR"'
         row_cursor += 1
 
-    _set_widths(ws, [16, 22, 14, 16, 10, 16, 16, 48, 42, 16, 18, 58])
+    _set_widths(ws, [16, 22, 14, 16, 10, 16, 16, 18, 48, 42, 16, 18, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:L{max(header_row + 1, row_cursor - 1)}"
+    ws.auto_filter.ref = f"A{header_row}:M{max(header_row + 1, row_cursor - 1)}"
 
 
 def _write_dalkia_values(ws, row: int, values: list[object | None]) -> None:
     for col, value in enumerate(values, start=1):
         ws.cell(row=row, column=col, value=value)
-    for col in (6, 7):
+    for col in (6, 7, 8):
         ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
     ws.cell(row=row, column=5).number_format = '0.00'
 
@@ -739,6 +743,19 @@ def _cpe_report_prices(line: CpeFinanceLine) -> tuple[float | None, float | None
     base = line.base_price if line.base_price is not None else _cpe_line_raw_float(line, "prix_de_base")
     revised = line.revised_price if line.revised_price is not None else _cpe_line_raw_float(line, "prix_ou_forfait_revise")
     return base, revised
+
+
+def _cpe_dont_revision_ht(
+    amount_ht: float | None,
+    base_price: float | None,
+    revised_price: float | None,
+) -> float | None:
+    """Part de revision comprise dans le montant facture HT d'une ligne : le
+    facturé est etabli sur le prix revise, donc dont-revision = montant x
+    (revise - base) / revise. None si la revision n'est pas chiffrable."""
+    if amount_ht is None or base_price is None or not revised_price:
+        return None
+    return float(amount_ht) * (float(revised_price) - float(base_price)) / float(revised_price)
 
 
 def _cpe_line_raw_float(line: CpeFinanceLine, key: str) -> float | None:
