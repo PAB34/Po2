@@ -14,7 +14,6 @@ from datetime import date
 from pathlib import Path
 from typing import BinaryIO, Literal
 
-import openpyxl
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -24,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
 from app.models.gas_invoice import GasInvoice
 from app.models.invoice import EnergyInvoiceImport
-from app.services import cpe_accounting, energie_accounting
+from app.services import energie_accounting
 from app.services import accounting_contract_budget, engie_elec_budget_revise, gas_budget_revise
 
 MarketKey = Literal["dalkia", "engie", "edf", "totalenergies"]
@@ -289,72 +288,6 @@ def _write_market_sheet(
     if config.family == "gas":
         _write_gas_comptable_sheet(ws, config, parsed, platform)
         return
-
-    ws["A1"] = f"Rapport de controle comptable - {config.title}"
-    ws["A1"].font = Font(bold=True, size=14)
-    ws["A2"] = f"Source : feuille {parsed.sheet_name}"
-    ws["A2"].font = Font(italic=True)
-
-    matched: list[tuple[WorklistInvoice, PlatformInvoice]] = []
-    for item in parsed.rows:
-        current = platform.get(item.supplier_invoice_number or "")
-        if current is not None:
-            matched.append((item, current))
-    enrichments = _market_line_enrichments(db, city_id, config, matched)
-
-    headers = [
-        "Rapprochement",
-        "Numero fournisseur",
-        "Numero compta",
-        "Fournisseur",
-        "TTC Chorus / compta",
-        "TTC Po2 reconstruit",
-        "Ecart TTC Po2 - Chorus",
-        "Date facture",
-        "Controle",
-        "Decision",
-        "Prix base",
-        "Prix revise",
-        "Revision appliquee",
-        "Ecart revision",
-        "Controle indices / ratios",
-        "Ecriture comptable",
-        "Point a corriger",
-    ]
-    header_row = 4
-    _write_header(ws, header_row, headers)
-
-    for row_index, item in enumerate(parsed.rows, start=header_row + 1):
-        current = platform.get(item.supplier_invoice_number or "")
-        status, delta = _reconciliation_status(item, current)
-        enrichment = enrichments.get(current.id if current else -1, {})
-        values = [
-            status,
-            item.supplier_invoice_number,
-            item.accounting_number,
-            item.supplier_name,
-            item.total_ttc,
-            current.total_ttc if current else None,
-            delta,
-            item.invoice_date,
-            _report_control_label(status, config, current),
-            _report_decision_label(status, config, current),
-            enrichment.get("base_price"),
-            enrichment.get("revised_price"),
-            enrichment.get("revision_amount"),
-            enrichment.get("revision_delta"),
-            enrichment.get("revision_control"),
-            enrichment.get("accounting"),
-            _join_unique([_row_problem_summary(status, delta, current, item), enrichment.get("issue")], limit=2),
-        ]
-        for col, value in enumerate(values, start=1):
-            ws.cell(row=row_index, column=col, value=value)
-        for col in (5, 6, 7, 11, 12, 13, 14):
-            ws.cell(row=row_index, column=col).number_format = '#,##0.00 "EUR"'
-
-    _set_widths(ws, [18, 22, 16, 18, 18, 18, 18, 14, 20, 18, 14, 14, 16, 26, 42, 58, 58])
-    ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:Q{max(header_row + 1, header_row + len(parsed.rows))}"
 
 
 
@@ -1076,166 +1009,6 @@ def _gas_line_enrichments(matched: list[tuple[WorklistInvoice, PlatformInvoice]]
         }
     return out
 
-def _write_revision_section(
-    db: Session,
-    city_id: int,
-    ws,
-    start_row: int,
-    config: MarketConfig,
-    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
-) -> int:
-    ws.cell(row=start_row, column=1, value="Révision de prix").font = Font(bold=True, size=12)
-    if not matched:
-        ws.cell(row=start_row + 1, column=1, value="Aucune facture rapprochée.")
-        return start_row + 2
-    if config.family == "cpe":
-        return _write_cpe_revision_section(db, ws, start_row + 1, matched)
-    if config.family == "energy":
-        return _write_energy_revision_section(db, city_id, ws, start_row + 1, config, matched)
-    return _write_gas_revision_section(db, city_id, ws, start_row + 1, matched)
-
-
-def _write_cpe_revision_section(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
-    headers = [
-        "Numero fournisseur", "Controle", "Statut", "Indice annee", "Indice trimestre",
-        "ICHT-IME", "BT40", "FSD2", "Facteur", "Prix base", "Prix revise attendu",
-        "Prix revise facture", "Ecart", "Message",
-    ]
-    _write_header(ws, start_row, headers)
-    row_cursor = start_row + 1
-    invoice_ids = [current.id for _worklist, current in matched]
-    controls = db.scalars(
-        select(CpeFinanceControl)
-        .where(CpeFinanceControl.invoice_id.in_(invoice_ids))
-        .where(CpeFinanceControl.control_type.in_(("revision_p2", "revision_p3", "p1_gaz_pu_os3", "p1_gaz_acompte_dpgf")))
-        .order_by(CpeFinanceControl.invoice_id, CpeFinanceControl.control_type)
-    ).all() if invoice_ids else []
-    by_invoice: dict[int, list[CpeFinanceControl]] = {}
-    for control in controls:
-        by_invoice.setdefault(control.invoice_id, []).append(control)
-    for worklist_row, current in matched:
-        invoice_controls = by_invoice.get(current.id, [])
-        if not invoice_controls:
-            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
-            ws.cell(row=row_cursor, column=2, value="Pas de révision applicable ou contrôle non disponible")
-            row_cursor += 1
-            continue
-        for control in invoice_controls:
-            values = [
-                worklist_row.supplier_invoice_number,
-                control.control_type,
-                control.status,
-                control.index_year,
-                control.index_quarter,
-                control.icht_ime_value,
-                control.bt40_value,
-                control.fsd2_value,
-                control.expected_factor,
-                control.base_price,
-                control.expected_revised_price,
-                control.actual_revised_price,
-                control.delta_abs,
-                control.message,
-            ]
-            for col, value in enumerate(values, start=1):
-                ws.cell(row=row_cursor, column=col, value=value)
-            for col in (10, 11, 12, 13):
-                ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
-            row_cursor += 1
-    return row_cursor
-
-
-def _write_energy_revision_section(
-    db: Session,
-    city_id: int,
-    ws,
-    start_row: int,
-    config: MarketConfig,
-    matched: list[tuple[WorklistInvoice, PlatformInvoice]],
-) -> int:
-    headers = [
-        "Numero fournisseur", "PRM", "Annee", "Ratio BPU", "Ratio TURPE", "BPU disponible",
-        "Source reference", "Realise", "Atterrissage", "Note",
-    ]
-    _write_header(ws, start_row, headers)
-    row_cursor = start_row + 1
-    budget_cache: dict[int, dict] = {}
-    for worklist_row, current in matched:
-        invoice = current.raw
-        if not isinstance(invoice, EnergyInvoiceImport):
-            continue
-        year = _invoice_year_for_revision(invoice, worklist_row)
-        budget = budget_cache.get(year)
-        if budget is None:
-            budget = _safe_energy_budget_revise(db, city_id, config.key, year)
-            budget_cache[year] = budget
-        point_by_prm = {str(point.get("prm")): point for point in budget.get("points", []) if point.get("prm")}
-        prms = _invoice_prms(invoice)
-        if not prms:
-            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
-            ws.cell(row=row_cursor, column=10, value="Aucun PRM normalisé disponible pour rattacher la révision.")
-            row_cursor += 1
-            continue
-        for prm in prms:
-            point = point_by_prm.get(prm)
-            values = [
-                worklist_row.supplier_invoice_number,
-                prm,
-                year,
-                point.get("bpu_ratio") if point else None,
-                point.get("turpe_ratio") if point else None,
-                point.get("bpu_available") if point else None,
-                point.get("reference_source") if point else None,
-                point.get("realise") if point else None,
-                point.get("atterrissage") if point else None,
-                "BPU/TURPE appliqués au point de livraison" if point else "Point absent du moteur budget révisé",
-            ]
-            for col, value in enumerate(values, start=1):
-                ws.cell(row=row_cursor, column=col, value=value)
-            for col in (8, 9):
-                ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
-            row_cursor += 1
-    return row_cursor
-
-
-def _write_gas_revision_section(db: Session, city_id: int, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> int:
-    headers = [
-        "Numero fournisseur", "PCE", "Annee", "Ratio PEG", "Ratio climat", "PEG disponible",
-        "Realise", "Atterrissage", "Note",
-    ]
-    _write_header(ws, start_row, headers)
-    row_cursor = start_row + 1
-    budget_cache: dict[int, dict] = {}
-    for worklist_row, current in matched:
-        invoice = current.raw
-        if not isinstance(invoice, GasInvoice):
-            continue
-        year = _date_year(invoice.fin_conso) or _date_year(invoice.debut_conso) or _date_year(invoice.date_comptable) or _date_year(worklist_row.invoice_date) or date.today().year
-        budget = budget_cache.get(year)
-        if budget is None:
-            budget = _safe_gas_budget_revise(db, city_id, year)
-            budget_cache[year] = budget
-        point_by_pce = {str(point.get("pce")): point for point in budget.get("points", []) if point.get("pce")}
-        point = point_by_pce.get(invoice.pce)
-        values = [
-            worklist_row.supplier_invoice_number,
-            invoice.pce,
-            year,
-            point.get("peg_ratio") if point else None,
-            point.get("climate_ratio") if point else None,
-            budget.get("peg_available"),
-            point.get("realise") if point else None,
-            point.get("atterrissage") if point else None,
-            "PEG + climat appliqués au PCE" if point else "PCE absent du moteur budget révisé gaz",
-        ]
-        for col, value in enumerate(values, start=1):
-            ws.cell(row=row_cursor, column=col, value=value)
-        for col in (7, 8):
-            ws.cell(row=row_cursor, column=col).number_format = '#,##0.00 "EUR"'
-        row_cursor += 1
-    return row_cursor
-
-
 def _safe_energy_budget_revise(db: Session, city_id: int, market: MarketKey, year: int) -> dict:
     try:
         if market == "edf":
@@ -1243,106 +1016,6 @@ def _safe_energy_budget_revise(db: Session, city_id: int, market: MarketKey, yea
         return engie_elec_budget_revise.build_engie_elec_budget_revise(db, city_id, year=year)
     except Exception as exc:  # pragma: no cover - rapport robuste si reference incomplete
         return {"points": [], "totals": {}, "error": str(exc)}
-
-
-def _safe_gas_budget_revise(db: Session, city_id: int, year: int) -> dict:
-    try:
-        return gas_budget_revise.build_gas_budget_revise(db, city_id, year=year)
-    except Exception as exc:  # pragma: no cover
-        return {"points": [], "totals": {}, "error": str(exc)}
-def _write_cpe_decomposition(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
-    headers_written = False
-    row_cursor = start_row
-    for worklist_row, current in matched:
-        invoice = current.raw
-        if not isinstance(invoice, CpeFinanceInvoice):
-            continue
-        try:
-            content = cpe_accounting.build_detailed_finance_liaison_workbook(db, invoice)
-            liaison_wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-            detail = liaison_wb["Lignes finance"]
-        except Exception as exc:  # pragma: no cover - garde-fou rapport operateur
-            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
-            ws.cell(row=row_cursor, column=2, value=f"Décomposition DALKIA indisponible : {exc}")
-            row_cursor += 1
-            continue
-        detail_rows = detail.iter_rows(values_only=True)
-        try:
-            liaison_headers = list(next(detail_rows))
-        except StopIteration:
-            continue
-        if not headers_written:
-            _write_header(ws, row_cursor, ["Numero fournisseur", *liaison_headers])
-            headers_written = True
-            row_cursor += 1
-        for values in detail_rows:
-            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
-            for col, value in enumerate(values, start=2):
-                ws.cell(row=row_cursor, column=col, value=value)
-            row_cursor += 1
-
-
-def _write_energy_decomposition(db: Session, ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
-    headers = [
-        "Numero fournisseur", "PRM", "Nom site", "Poste", "Libelle", "Montant HT",
-        "Service", "Fonction", "Antenne", "Operation", "Nature", "Libelle nature", "Codification",
-    ]
-    _write_header(ws, start_row, headers)
-    row_cursor = start_row + 1
-    for worklist_row, current in matched:
-        invoice = current.raw
-        if not isinstance(invoice, EnergyInvoiceImport):
-            continue
-        rows = energie_accounting.resolve_invoice_codification(db, invoice)
-        if not rows:
-            ws.cell(row=row_cursor, column=1, value=worklist_row.supplier_invoice_number)
-            ws.cell(row=row_cursor, column=4, value="Aucune ligne de codification disponible")
-            row_cursor += 1
-            continue
-        for line in rows:
-            values = [
-                worklist_row.supplier_invoice_number,
-                line.prm_id,
-                line.site_name,
-                line.poste,
-                line.label,
-                line.amount_ht,
-                line.service_code,
-                line.function_code,
-                line.antenna_code,
-                line.operation_code,
-                line.accounting_nature,
-                line.accounting_label,
-                "OK" if line.status == "ok" else "A CODIFIER",
-            ]
-            for col, value in enumerate(values, start=1):
-                ws.cell(row=row_cursor, column=col, value=value)
-            ws.cell(row=row_cursor, column=6).number_format = '#,##0.00 "EUR"'
-            row_cursor += 1
-
-
-def _write_gas_decomposition(ws, start_row: int, matched: list[tuple[WorklistInvoice, PlatformInvoice]]) -> None:
-    headers = ["Numero fournisseur", "PCE", "Site", "Total HT", "Total TTC", "Controle", "Note"]
-    _write_header(ws, start_row, headers)
-    row_cursor = start_row + 1
-    for worklist_row, current in matched:
-        invoice = current.raw
-        if not isinstance(invoice, GasInvoice):
-            continue
-        values = [
-            worklist_row.supplier_invoice_number,
-            invoice.pce,
-            invoice.nom_site,
-            invoice.total_hors_tva,
-            invoice.total_ttc,
-            invoice.control_status,
-            "Décomposition comptable gaz non disponible dans l'incrément 2.",
-        ]
-        for col, value in enumerate(values, start=1):
-            ws.cell(row=row_cursor, column=col, value=value)
-        ws.cell(row=row_cursor, column=4).number_format = '#,##0.00 "EUR"'
-        ws.cell(row=row_cursor, column=5).number_format = '#,##0.00 "EUR"'
-        row_cursor += 1
 
 
 def _platform_index(
@@ -1425,11 +1098,6 @@ def _report_control_label(reconciliation_status: str, config: MarketConfig, curr
         return reconciliation_status
     return _control_label(config.family, current.control_status if current else None)
 
-
-def _report_decision_label(reconciliation_status: str, config: MarketConfig, current: PlatformInvoice | None) -> str | None:
-    if reconciliation_status in {"Écart TTC", "Absente plateforme", "Numero fournisseur introuvable"}:
-        return "À contrôler"
-    return _decision_label(config.family, current.decision_status if current else None)
 
 def _control_label(family: str, status: str | None) -> str | None:
     if not status:
