@@ -35,11 +35,30 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - Chantier ultérieur (hors périmètre immédiat) : basculer **toutes** les données
   plateforme en TTC (demande explicite de l'utilisateur, étape séparée).
 
-### 5 — Matrice `MATRICE_DALKIA-COMPATBILITE V2.xlsx` + page `/refonte-v1/matrices` (À CADRER)
-- La matrice doit constituer l'écriture comptable de la ville en reprenant tous les
-  axes (service, fonction, nature, opération si investissement, **antenne** = colonne J
-  « Antenne » de la feuille « Sites vers codes »).
-- Suspicion de parsing / de désalignement de la page `/refonte-v1/matrices` avec le
-  besoin (relier élément facturé ↔ écriture comptable ville). À auditer séparément.
-- Question ouverte : la donnée d'antenne vue en prod (« ATBAT ») provient probablement
-  d'un import antérieur ≠ V2 ; vérifier le réimport V2 en prod.
+### 5 — Matrice `MATRICE_DALKIA-COMPATBILITE V2.xlsx` + page `/refonte-v1/matrices`
+
+**Diagnostic (2026-07-24) :**
+
+a) **Le parsing V2 est correct.** Simulation sur le vrai fichier : 75 sites,
+   en-têtes bien normalisés, `operation_code = None` pour les 75 sites (la feuille
+   « Sites vers codes » du V2 n'a aucune colonne opération). Donc le `98004` vu par
+   la comptable **ne vient pas du V2**.
+
+b) **La donnée prod est périmée.** Exemple `VDS-BAM 08` (Centre Technique Municipal) :
+   - V2 (correct) : service **MABA**, fonction **020**, antenne **CTM**, pas d'opération.
+   - Prod (faux) : service **ATBA**, fonction **28**, opération **98004**.
+   Le site est dans le V2 (rapproché par `code_site`), donc **un réimport V2 corrige
+   tout** — le rapport lit ces axes en direct depuis `CpeAccountingSiteMapping`.
+   - **Décision** : réimporter le V2 en prod. Voie auditée = page `/cpe`, bouton
+     d'import codification (`POST /cpe/accounting/import-codification`, upsert par
+     `code_site`, aucune suppression). Vérifier ensuite le rapport (ligne CTM).
+   - Réserve : upsert sans purge → si la ligne facture pointe vers un mapping résiduel
+     sous un autre `code_site`, re-vérifier le lien `CpeFinanceLine.accounting_site_id`.
+
+c) **Deux systèmes de matrice déconnectés** (à cadrer séparément) :
+   - Système A = `AccountingMatrixRule`/`Version` + snapshots → c'est ce que montre
+     `/refonte-v1/matrices` (`MatrixAdminPageV1`), éditeur générique versionné.
+   - Système B = `CpeAccountingSiteMapping` + `CpeAccountingNatureRule` (issu du V2)
+     → **seul** à alimenter le rapport comptable (LC, antenne, nature).
+   - A ne pilote pas le rapport. La page « plus cohérente » attendue = le référentiel
+     DALKIA legacy (système B). Chantier : rebrancher `/refonte-v1/matrices` sur B.
