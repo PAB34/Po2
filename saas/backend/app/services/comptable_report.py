@@ -379,6 +379,8 @@ def _write_energy_comptable_sheet(
     ]
     enrichments = _market_line_enrichments(db, city_id, config, matched)
 
+    # Retour comptable : MONTANT en TTC (HT ligne x ratio TVA facture), pas de
+    # colonne HT, et pas de colonne OPERATION (operation reservee DALKIA P3/P3.4).
     headers = [
         "FOURNISSEUR",
         "NUMERO DE FACTURE",
@@ -388,14 +390,13 @@ def _write_energy_comptable_sheet(
         "PRM",
         "POSTE FACTURE",
         "LIBELLE",
-        "MONTANT HT",
+        "MONTANT TTC",
         "TTC COMPTA",
         "TTC PO2",
         "ECART TTC",
         "SERVICE",
         "FONCTION",
         "NATURE",
-        "OPERATION",
         "ANTENNE",
         "LC",
         "REVISION / INDICES",
@@ -411,6 +412,10 @@ def _write_energy_comptable_sheet(
         status, delta = _reconciliation_status(item, current)
         enrichment = enrichments.get(current.id if current else -1, {})
         lines = _energy_report_lines(db, current)
+        ratio = _invoice_ttc_ratio(
+            current.total_ttc if current else None,
+            getattr(current.raw, "total_ht", None) if current else None,
+        )
 
         if not lines:
             values = [
@@ -430,7 +435,6 @@ def _write_energy_comptable_sheet(
                 None,
                 None,
                 None,
-                None,
                 enrichment.get("accounting"),
                 enrichment.get("revision_control"),
                 _report_control_label(status, config, current),
@@ -441,6 +445,11 @@ def _write_energy_comptable_sheet(
             continue
 
         for line in lines:
+            montant_ttc = (
+                round(float(line.amount_ht) * ratio, 2)
+                if ratio is not None and line.amount_ht is not None
+                else line.amount_ht
+            )
             values = [
                 config.title,
                 item.supplier_invoice_number,
@@ -450,14 +459,13 @@ def _write_energy_comptable_sheet(
                 line.prm_id,
                 line.poste,
                 line.label,
-                line.amount_ht,
+                montant_ttc,
                 item.total_ttc,
                 current.total_ttc if current else None,
                 delta,
                 line.service_code,
                 line.function_code,
                 line.accounting_nature,
-                line.operation_code,
                 line.antenna_code,
                 _energy_report_lc(line),
                 enrichment.get("revision_control"),
@@ -467,9 +475,9 @@ def _write_energy_comptable_sheet(
             _write_energy_values(ws, row_cursor, values)
             row_cursor += 1
 
-    _set_widths(ws, [16, 22, 16, 14, 32, 18, 16, 40, 14, 14, 14, 14, 12, 12, 12, 14, 12, 42, 32, 18, 58])
+    _set_widths(ws, [16, 22, 16, 14, 32, 18, 16, 40, 14, 14, 14, 14, 12, 12, 12, 12, 42, 32, 18, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:U{max(header_row + 1, row_cursor - 1)}"
+    ws.auto_filter.ref = f"A{header_row}:T{max(header_row + 1, row_cursor - 1)}"
 
 
 def _write_energy_values(ws, row: int, values: list[object | None]) -> None:
@@ -486,10 +494,11 @@ def _energy_report_lines(db: Session, current: PlatformInvoice | None) -> list[e
 
 
 def _energy_report_lc(line: energie_accounting.LiaisonRow) -> str | None:
+    # Cote energie (ENGIE / EDF), aucune operation d'investissement : la LC ne
+    # contient jamais de numero d'operation (reserve a DALKIA P3 / P3.4).
     parts = [
         line.function_code,
         line.accounting_nature,
-        line.operation_code,
         line.service_code,
         line.antenna_code,
     ]
@@ -529,6 +538,8 @@ def _write_gas_comptable_sheet(
     ws["A2"] = f"Source : feuille {parsed.sheet_name}"
     ws["A2"].font = Font(italic=True)
 
+    # Retour comptable : uniquement du TTC (suppression MONTANT HT et TVA ; le TTC
+    # est deja porte par la facture gaz).
     headers = [
         "FOURNISSEUR",
         "NUMERO DE FACTURE",
@@ -537,8 +548,6 @@ def _write_gas_comptable_sheet(
         "SITE / POINT",
         "PCE",
         "POSTE FACTURE",
-        "MONTANT HT",
-        "TVA",
         "TTC COMPTA",
         "TTC PO2",
         "ECART TTC",
@@ -562,8 +571,6 @@ def _write_gas_comptable_sheet(
             _join_unique([getattr(invoice, "nom_site", None), getattr(invoice, "lib_regroupement", None)]),
             getattr(invoice, "pce", None),
             getattr(invoice, "type_detail", None),
-            getattr(invoice, "total_hors_tva", None),
-            _gas_vat_total(invoice),
             item.total_ttc,
             current.total_ttc if current else None,
             delta,
@@ -574,25 +581,36 @@ def _write_gas_comptable_sheet(
         _write_gas_values(ws, row_cursor, values)
         row_cursor += 1
 
-    _set_widths(ws, [16, 22, 16, 14, 34, 18, 16, 14, 12, 14, 14, 14, 42, 18, 58])
+    _set_widths(ws, [16, 22, 16, 14, 34, 18, 16, 14, 14, 14, 42, 18, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:O{max(header_row + 1, row_cursor - 1)}"
+    ws.auto_filter.ref = f"A{header_row}:M{max(header_row + 1, row_cursor - 1)}"
 
 
 def _write_gas_values(ws, row: int, values: list[object | None]) -> None:
     for col, value in enumerate(values, start=1):
         ws.cell(row=row, column=col, value=value)
-    for col in (8, 9, 10, 11, 12):
+    for col in (8, 9, 10):
         ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
 
 
-def _gas_vat_total(invoice: GasInvoice | None) -> float | None:
-    if invoice is None:
+def _line_ttc(amount_ht: float | None, vat_rate: float | None) -> float | None:
+    """Convertit un montant HT en TTC via le taux de TVA (en %). Retourne None si
+    le HT est absent ; si le taux est absent, on suppose 0 % (montant inchange)."""
+    if amount_ht is None:
         return None
-    values = [invoice.tva_tn, invoice.tva_tr]
-    if all(value is None for value in values):
+    rate = (vat_rate or 0.0) / 100.0
+    return round(float(amount_ht) * (1.0 + rate), 2)
+
+
+def _invoice_ttc_ratio(total_ttc: float | None, total_ht: float | None) -> float | None:
+    """Ratio TTC/HT au niveau facture (= 1 + TVA facture), pour appliquer la TVA
+    globale a chaque ligne (retour comptable : TTC ligne = HT ligne x ratio)."""
+    if not total_ht or total_ttc is None:
         return None
-    return round(sum(value or 0 for value in values), 2)
+    try:
+        return float(total_ttc) / float(total_ht)
+    except ZeroDivisionError:
+        return None
 
 
 def _write_dalkia_comptable_sheet(
@@ -627,20 +645,19 @@ def _write_dalkia_comptable_sheet(
     for line in lines:
         lines_by_invoice.setdefault(line.invoice_id, []).append(line)
 
+    # Tout en TTC (retour comptable) : plus aucune colonne HT. On ne garde que le
+    # montant facture TTC et le prix revise du trimestre en TTC (suppression de
+    # DONT REVISION HT / VALEUR DE BASE / REVISION HT).
     headers = [
         "CODE CONTRAT",
         "NUMERO DE FACTURE",
         "DATE D'EDITION",
         "POSTE FACTURE",
         "TAUX DE TVA",
-        "MONTANT HT",
-        "DONT REVISION HT",
-        "PRIX REVISE",
-        "VALEUR DE BASE",
-        "REVISION HT",
+        "MONTANT TTC",
+        "PRIX REVISE TTC",
         "LIEU OU DETAIL DE LA PRESTATION",
         "LC",
-        "VIREMENT OK",
         "NUMERO COMPTA",
         "CONTROLE PO2",
         "POINT A CORRIGER",
@@ -661,14 +678,10 @@ def _write_dalkia_comptable_sheet(
                 item.invoice_date,
                 None,
                 None,
-                None,
-                None,
-                None,
-                None,
+                item.total_ttc,
                 None,
                 item.label,
                 None,
-                item.total_ttc,
                 item.accounting_number,
                 _report_control_label(status, MARKETS[0], current),
                 _row_problem_summary(status, delta, current, item),
@@ -688,46 +701,36 @@ def _write_dalkia_comptable_sheet(
                 getattr(current.raw, "invoice_date", None) or item.invoice_date,
                 _cpe_report_poste(line),
                 line.vat_rate,
-                line.amount_ht,
-                None,
-                revised_price,
-                base_price,
-                None,
+                _line_ttc(line.amount_ht, line.vat_rate),
+                _line_ttc(revised_price, line.vat_rate),
                 _cpe_report_detail(line, site),
                 _cpe_report_lc(line, site, nature, operation),
-                None,
                 item.accounting_number,
                 _report_control_label(status, MARKETS[0], current),
                 observation,
             ]
             _write_dalkia_values(ws, row_cursor, values)
-            if line.amount_ht is not None and revised_price:
-                ws.cell(row=row_cursor, column=7, value=f'=IFERROR(+J{row_cursor}*F{row_cursor}/H{row_cursor},"")')
-            if base_price is not None and revised_price is not None:
-                ws.cell(row=row_cursor, column=10, value=f"=+H{row_cursor}-I{row_cursor}")
-            if line.amount_ht is not None and line.vat_rate is not None:
-                ws.cell(row=row_cursor, column=13, value=f'=IFERROR(+F{row_cursor}*(1+E{row_cursor}/100),"")')
             row_cursor += 1
 
     if row_cursor > first_data_row:
         total_row = row_cursor
         ws.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True)
-        for col in (6, 7, 10, 13):
+        for col in (6, 7):
             letter = get_column_letter(col)
             ws.cell(row=total_row, column=col, value=f"=SUM({letter}{first_data_row}:{letter}{row_cursor - 1})")
             ws.cell(row=total_row, column=col).font = Font(bold=True)
             ws.cell(row=total_row, column=col).number_format = '#,##0.00 "EUR"'
         row_cursor += 1
 
-    _set_widths(ws, [16, 22, 14, 16, 10, 14, 18, 14, 14, 14, 48, 42, 14, 16, 18, 58])
+    _set_widths(ws, [16, 22, 14, 16, 10, 16, 16, 48, 42, 16, 18, 58])
     ws.freeze_panes = f"A{header_row + 1}"
-    ws.auto_filter.ref = f"A{header_row}:P{max(header_row + 1, row_cursor - 1)}"
+    ws.auto_filter.ref = f"A{header_row}:L{max(header_row + 1, row_cursor - 1)}"
 
 
 def _write_dalkia_values(ws, row: int, values: list[object | None]) -> None:
     for col, value in enumerate(values, start=1):
         ws.cell(row=row, column=col, value=value)
-    for col in (6, 7, 8, 9, 10, 13):
+    for col in (6, 7):
         ws.cell(row=row, column=col).number_format = '#,##0.00 "EUR"'
     ws.cell(row=row, column=5).number_format = '0.00'
 
@@ -774,7 +777,10 @@ def _cpe_report_lc(
         site.manager if site else None,
         site.function_code if site else None,
         nature,
-        operation,
+        # L'operation (investissement) n'appartient a la LC que pour un poste
+        # P3 / P3.4 DALKIA. Sur une ligne P2 (ex. maintenance 6156) elle ne doit
+        # pas apparaitre, meme si le site porte un operation_code.
+        operation if _is_cpe_p3_line(line) else None,
         site.service_code if site else None,
         site.antenna_code if site else None,
     ]
@@ -941,13 +947,13 @@ def _energy_line_enrichments(
         if not isinstance(invoice, EnergyInvoiceImport):
             continue
         accounting_rows = energie_accounting.resolve_invoice_codification(db, invoice)
+        # Cote energie : pas d'operation (reservee DALKIA P3/P3.4).
         accounting = _join_unique(
             _prefixed_join(label, values)
             for label, values in [
                 ("service", [row.service_code for row in accounting_rows if row.service_code]),
                 ("fonction", [row.function_code for row in accounting_rows if row.function_code]),
                 ("antenne", [row.antenna_code for row in accounting_rows if row.antenna_code]),
-                ("operation", [row.operation_code for row in accounting_rows if row.operation_code]),
                 ("nature", [row.accounting_nature for row in accounting_rows if row.accounting_nature]),
             ]
         )

@@ -20,6 +20,19 @@ from app.services.comptable_report import (
 COMPTA_DIR = Path(__file__).resolve().parents[2] / "energie" / "COMPTA"
 
 
+def test_line_ttc_applies_vat_rate() -> None:
+    assert comptable_report._line_ttc(100.0, 20.0) == 120.0
+    assert comptable_report._line_ttc(100.0, None) == 100.0  # taux absent -> 0 %
+    assert comptable_report._line_ttc(None, 20.0) is None
+
+
+def test_invoice_ttc_ratio_from_totals() -> None:
+    assert comptable_report._invoice_ttc_ratio(120.0, 100.0) == 1.2
+    assert comptable_report._invoice_ttc_ratio(120.0, None) is None
+    assert comptable_report._invoice_ttc_ratio(None, 100.0) is None
+    assert comptable_report._invoice_ttc_ratio(120.0, 0) is None
+
+
 @pytest.mark.parametrize(
     ("filename", "expected_count", "first_number"),
     [
@@ -298,17 +311,76 @@ def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
 
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
+    # Layout TTC : MONTANT TTC = HT x (1+TVA), PRIX REVISE TTC idem, LC en col 9,
+    # plus de colonnes HT / valeur de base / revision HT.
     assert ws.cell(row=4, column=1).value == "CODE CONTRAT"
-    assert ws.cell(row=4, column=13).value == "VIREMENT OK"
+    assert ws.cell(row=4, column=6).value == "MONTANT TTC"
+    assert ws.cell(row=4, column=7).value == "PRIX REVISE TTC"
+    assert ws.cell(row=4, column=9).value == "LC"
     assert ws.cell(row=5, column=4).value == "P3"
-    assert ws.cell(row=5, column=6).value == 457.86
-    assert ws.cell(row=5, column=7).value == '=IFERROR(+J5*F5/H5,"")'
-    assert ws.cell(row=5, column=8).value == 1831.42
-    assert ws.cell(row=5, column=9).value == 1775.0
-    assert ws.cell(row=5, column=10).value == "=+H5-I5"
-    assert ws.cell(row=5, column=12).value == "BATI-331-21351-98003-XSCO-ALSH"
-    assert ws.cell(row=5, column=13).value == '=IFERROR(+F5*(1+E5/100),"")'
-    assert ws.cell(row=5, column=16).value is None
+    assert ws.cell(row=5, column=5).value == 20
+    assert ws.cell(row=5, column=6).value == 549.43  # 457.86 x 1.20
+    assert ws.cell(row=5, column=7).value == 2197.7  # 1831.42 x 1.20
+    assert ws.cell(row=5, column=9).value == "BATI-331-21351-98003-XSCO-ALSH"
+    assert ws.cell(row=5, column=12).value is None
+
+
+def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
+    """Sur une ligne P2 (maintenance 6156), le numero d'operation ne doit pas
+    fuir dans la LC, meme si le site porte un operation_code. Reproduit le cas
+    remonte par la comptable : `BATI-28-6156-98004-ATBA-CTM` -> sans 98004."""
+
+    class FakeScalarResult:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def all(self):
+            return self.rows
+
+    class FakeScalarDb:
+        def __init__(self, sequences):
+            self.sequences = list(sequences)
+
+        def scalars(self, _stmt):
+            return FakeScalarResult(self.sequences.pop(0))
+
+    invoice = CpeFinanceInvoice(
+        id=11, invoice_number="INV-P2", contract_code="C00025812G",
+        invoice_date=date(2026, 6, 30), total_ht=100.0, status="valide",
+    )
+    worklist = WorklistInvoice(
+        row_number=2, accounting_number="202605400", supplier_invoice_number="INV-P2",
+        label="FAC. INV-P2 DU 30/06/2026", total_ttc=120.0, invoice_date=date(2026, 6, 30),
+        arrival_date=None, supplier_code=None, supplier_name="DALKIA",
+        invoice_status=None, liquidation_status=None, market_code=None, raw={},
+    )
+    platform = {
+        "INV-P2": PlatformInvoice(
+            id=11, invoice_number="INV-P2", total_ttc=120.0, control_status="valid",
+            decision_status="valide", problem_summary=None, raw=invoice,
+        )
+    }
+    line = CpeFinanceLine(
+        id=1, invoice_id=11, row_number=1, contract_code="C00025812G",
+        market="P2", billed_item="P2-11", service_sold="Maintenance",
+        vat_rate=20, amount_ht=100.0, base_price=None, revised_price=None,
+        detail="ENTRETIEN CTM", accounting_site_id=101, site_code_detected="VDS-STE 01",
+        accounting_nature="6156", accounting_label="Maintenance",
+    )
+    site = CpeAccountingSiteMapping(
+        id=101, code_site="VDS-STE 01", site_name="Centre technique municipal",
+        manager="BATI", service_code="ATBA", function_code="28",
+        antenna_code="CTM", operation_code="98004",
+    )
+    db = FakeScalarDb([[line], [site]])
+    ws = openpyxl.Workbook().active
+    parsed = comptable_report.WorklistParseResult(sheet_name="_ShowList-001", rows=[worklist])
+
+    comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
+
+    lc = ws.cell(row=5, column=9).value
+    assert lc == "BATI-28-6156-ATBA-CTM"
+    assert "98004" not in lc
 
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
@@ -388,24 +460,29 @@ def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> 
 
     comptable_report._write_market_sheet(None, 303, ws, comptable_report.MARKETS[1], parsed, platform)
 
+    # Layout TTC (retour comptable) : plus de MONTANT HT ni de colonne OPERATION.
     assert ws.cell(row=4, column=1).value == "FOURNISSEUR"
     assert ws.cell(row=4, column=5).value == "SITE / POINT"
-    assert ws.cell(row=4, column=9).value == "MONTANT HT"
-    assert ws.cell(row=4, column=18).value == "LC"
-    assert ws.cell(row=4, column=19).value == "REVISION / INDICES"
-    assert ws.cell(row=4, column=21).value == "POINT A CORRIGER"
+    assert ws.cell(row=4, column=9).value == "MONTANT TTC"
+    assert ws.cell(row=4, column=16).value == "ANTENNE"
+    assert ws.cell(row=4, column=17).value == "LC"
+    assert ws.cell(row=4, column=18).value == "REVISION / INDICES"
+    assert ws.cell(row=4, column=20).value == "POINT A CORRIGER"
     assert ws.cell(row=5, column=1).value == "ENGIE"
     assert ws.cell(row=5, column=2).value == "F-ENGIE-1"
     assert ws.cell(row=5, column=5).value == "Hotel de ville"
     assert ws.cell(row=5, column=6).value == "PRM-1"
+    # Ratio TTC facture indisponible ici (facture sans total_ht) -> HT passthrough.
     assert ws.cell(row=5, column=9).value == 100.0
-    assert ws.cell(row=5, column=18).value == "020-60612-OP1-ELEC-ANT"
-    assert ws.cell(row=5, column=19).value == "PRM-1: BPU 1.0 / TURPE 1.0"
-    assert ws.cell(row=5, column=20).value == "Conforme (0 erreur(s), 1 alerte(s))"
-    assert ws.cell(row=5, column=21).value == "Ecart prix BPU"
+    # LC energie : jamais d'operation d'investissement (reserve DALKIA P3/P3.4),
+    # meme si le site porte un operation_code (ici OP1 est volontairement ignore).
+    assert ws.cell(row=5, column=17).value == "020-60612-ELEC-ANT"
+    assert ws.cell(row=5, column=18).value == "PRM-1: BPU 1.0 / TURPE 1.0"
+    assert ws.cell(row=5, column=19).value == "Conforme (0 erreur(s), 1 alerte(s))"
+    assert ws.cell(row=5, column=20).value == "Ecart prix BPU"
     assert ws.cell(row=6, column=2).value == "F-ENGIE-1"
     assert ws.cell(row=6, column=5).value == "Gymnase"
-    assert ws.cell(row=6, column=18).value == "411-60612-SPORT-GYMN"
+    assert ws.cell(row=6, column=17).value == "411-60612-SPORT-GYMN"
     assert ws.cell(row=8, column=1).value is None
 
 
@@ -454,8 +531,8 @@ def test_report_forces_review_when_chorus_total_differs_from_po2(monkeypatch) ->
 
     assert ws.cell(row=5, column=1).value == "ENGIE"
     assert ws.cell(row=5, column=12).value == -3274.43
-    assert ws.cell(row=5, column=20).value == "\u00c9cart TTC"
-    assert ws.cell(row=5, column=21).value == (
+    assert ws.cell(row=5, column=19).value == "\u00c9cart TTC"
+    assert ws.cell(row=5, column=20).value == (
         "\u00c9cart TTC Po2 - Chorus : -3274.43 EUR. "
         "Po2 contient 5 site(s) ; 5 PRM ; 2084.66 EUR TTC import\u00e9s ; "
         "Chorus/compta attend 5359.09 EUR TTC. "
