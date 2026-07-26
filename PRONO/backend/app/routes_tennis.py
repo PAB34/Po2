@@ -3,7 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app import tennis, tennis_journal
+from app import tennis, tennis_journal, tennis_outsider_radar
 from app.auth import get_current_user
 
 
@@ -34,19 +34,30 @@ def tennis_matches(refresh: int = 0, user=Depends(get_current_user)):
     return _payload(force=bool(refresh))
 
 
-
 @router.get("/decision-calibration")
 def tennis_decision_calibration(min_sample: int = 50, user=Depends(get_current_user)):
     return tennis.build_decision_calibration(min_sample=max(1, int(min_sample)))
+
+
 @router.get("/brackets")
 def tennis_brackets(refresh: int = 0, user=Depends(get_current_user)):
     return _brackets_payload(force=bool(refresh))
 
 
+@router.get("/outsiders/recent")
+def tennis_recent_outsiders(days: int = 7, user=Depends(get_current_user)):
+    return tennis_outsider_radar.recent_outsiders(days=days)
+
+
+@router.get("/outsiders/radar")
+def tennis_outsider_radar_view(days: int = 7, refresh: int = 0, user=Depends(get_current_user)):
+    return tennis_outsider_radar.build_radar(_payload(force=bool(refresh)), days=days)
+
+
 # ---------------------------------------------------------------------------
 # Registre des marches secondaires. Alimente et regle AUTOMATIQUEMENT par
 # tennis.build_tennis() a chaque construction de la page : ces routes ne font que
-# lire. Aucune route d'ecriture n'est exposee, et c'est deliberé -- la saisie
+# lire. Aucune route d'ecriture n'est exposee, et c'est delibere -- la saisie
 # manuelle a ete abandonnee le 23/07/2026, avec la seconde base qui allait avec.
 #
 # Ce qui est mesure ici est une CALIBRATION (taux realise contre probabilite
