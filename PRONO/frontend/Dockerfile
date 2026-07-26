@@ -5,6 +5,10 @@ COPY styles.css /usr/share/nginx/html/styles.css
 COPY styles.css /usr/share/nginx/html/styles-20260719-decision1.css
 COPY app.js /usr/share/nginx/html/app.js
 COPY app.js /usr/share/nginx/html/app-20260719-decision1.js
+COPY tennis-outsider-radar.css /usr/share/nginx/html/tennis-outsider-radar.css
+COPY tennis-outsider-radar.css /usr/share/nginx/html/tennis-outsider-radar-20260726.css
+COPY tennis-outsider-radar.js /usr/share/nginx/html/tennis-outsider-radar.js
+COPY tennis-outsider-radar.js /usr/share/nginx/html/tennis-outsider-radar-20260726.js
 COPY sw.js /usr/share/nginx/html/sw.js
 COPY sw.js /usr/share/nginx/html/sw-20260718-level2.js
 COPY manifest.json /usr/share/nginx/html/manifest.json
