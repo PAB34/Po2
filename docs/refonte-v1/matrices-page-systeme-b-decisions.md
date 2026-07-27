@@ -153,6 +153,29 @@ Décisions : **nouveau gabarit finance-friendly** (import accepte nouveau + V2) 
 - **Tests** : `tests/test_codification_finance_roundtrip.py` (aller-retour + upsert) verts ;
   import V2 inchangé (75 sites / 43 natures / 0 erreur) ; suite CPE + app boot verts.
 
+### 5cinq. Gabarit finance COMBINÉ DALKIA + ENGIE/EDF (2026-07-27, commit 86dcb90, staging)
+
+Retour utilisateur : l'export/import du service finance doit traiter **DALKIA ET
+ENGIE/EDF** (un seul fichier). Le gabarit DALKIA-seul précédent est superseded.
+- Nouveau service `app/services/codification_finance.py` : `build_finance_codification_
+  workbook` + `import_finance_codification_workbook`. Classeur = 4 feuilles
+  « DALKIA - Sites », « DALKIA - Postes » (marché Ville en cours), « ENGIE-EDF - Points »
+  (PRM), « ENGIE-EDF - Postes » + « Mode d'emploi ». Dispatch import par **nom exact de
+  feuille** (évite la collision avec la détection énergie legacy).
+- Endpoints : `GET /cpe/accounting/codification/export.xlsx` (combiné) +
+  `POST /cpe/accounting/codification/import` (combiné, schéma `FinanceCodificationImport
+  Result`). Rétro-compat : un classeur DALKIA hérité (V2 / gabarit « Sites »/« Postes »)
+  est délégué à `cpe_accounting.import_codification_workbook`.
+- Upserts énergie autonomes dans le module combiné (préservent `active`/`notes` et le
+  **fournisseur** ENGIE vs **EDF**) — le `_upsert_nature_rule` énergie legacy est inchangé.
+- Front : barre unique « Échange avec le service finance » (export + import combinés)
+  au-dessus des onglets ; suppression des boutons par-section ; journal d'import combiné.
+- Retiré : `build_codification_finance_workbook` (DALKIA-only) devenu mort + hook
+  `useImportCpeCodification`.
+- Tests : `test_codification_finance_roundtrip.py` réécrit (aller-retour combiné,
+  fournisseur EDF préservé, export DALKIA scopé, upsert) ; 36 tests verts sur les zones
+  touchées ; import V2 réel inchangé.
+
 ### 5quater. Périmètre marché Ville EN COURS (2026-07-27)
 
 Retour utilisateur : dans le V2, plusieurs codes contrats existent (feuille « Codes
