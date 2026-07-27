@@ -170,6 +170,100 @@ function setOutsiderSort(key) {
   }
   renderOutsiderDynamicSections();
 }
+function outsiderExportPayload() {
+  const radar = _outsiderRadarData || {};
+  const recent = _outsiderRecentData || { winners: [], losses: [] };
+  const visibleCandidates = outsiderVisibleCandidates();
+  const visibleWinners = outsiderVisibleRecent(recent.winners);
+  const visibleLosses = outsiderVisibleRecent(recent.losses);
+  return {
+    schema: "prono.tennis.outsider-radar.export",
+    schema_version: 1,
+    exported_at: new Date().toISOString(),
+    disclaimer: "Le score radar est un indice de priorisation, pas une probabilite de victoire ni une mesure de ROI.",
+    source: {
+      site: "ligue1.patrimoineaucarre.com",
+      radar_updated_at: radar.updated || null,
+      recent_results_source: recent.source || (radar.recent_summary || {}).source || null,
+      method: radar.method || null,
+      endpoints: {
+        radar: `/api/tennis/outsiders/radar?days=${_outsiderDays}`,
+        recent: `/api/tennis/outsiders/recent?days=${_outsiderDays}`,
+      },
+    },
+    view: {
+      days: _outsiderDays,
+      player_query: _outsiderQuery || null,
+      sort: { key: _outsiderSort.key, direction: _outsiderSort.direction },
+      scope: "current_filtered_view_and_complete_dataset",
+    },
+    summary: {
+      radar: {
+        candidate_count: radar.candidate_count || 0,
+        priority_count: radar.priority_count || 0,
+        recent: radar.recent_summary || {},
+      },
+      complete_dataset: {
+        candidates: (radar.candidates || []).length,
+        recent_winners: (recent.winners || []).length,
+        recent_losses: (recent.losses || []).length,
+      },
+      current_view: {
+        candidates: visibleCandidates.length,
+        recent_winners: visibleWinners.length,
+        recent_losses: visibleLosses.length,
+      },
+    },
+    current_view: {
+      candidates: visibleCandidates,
+      recent_results: {
+        winners: visibleWinners,
+        losses: visibleLosses,
+      },
+    },
+    complete_dataset: {
+      candidates: radar.candidates || [],
+      recent_results: {
+        days: recent.days || _outsiderDays,
+        canonical_match_count: recent.canonical_match_count || 0,
+        upset_count: recent.upset_count || 0,
+        favorite_win_count: recent.favorite_win_count || 0,
+        upset_rate: recent.upset_rate == null ? null : recent.upset_rate,
+        average_winning_outsider_odds: recent.average_winning_outsider_odds == null ? null : recent.average_winning_outsider_odds,
+        winners: recent.winners || [],
+        losses: recent.losses || [],
+      },
+    },
+  };
+}
+function exportOutsiderRadarJson() {
+  if (!_outsiderRadarData) return;
+  const payload = outsiderExportPayload();
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const querySlug = outsiderNorm(_outsiderQuery).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const filename = `radar-outsiders-${new Date().toISOString().slice(0, 10)}-${_outsiderDays}j${querySlug ? `-${querySlug}` : ""}.json`;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+  const button = document.getElementById("orExportJson");
+  if (button) {
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "JSON exporte";
+    setTimeout(() => {
+      button.disabled = false;
+      button.textContent = original;
+    }, 1600);
+  }
+}
 function renderOutsiderRadar() {
   if (_outsiderLoading && !_outsiderRadarData) return `<div class="loading"><div class="spin"></div>Construction du radar outsiders...</div>`;
   if (!_outsiderRadarData) return `<div class="note">Radar indisponible. Recharge la vue.</div>`;
@@ -181,7 +275,7 @@ function renderOutsiderRadar() {
   const losses = outsiderVisibleRecent(recent.losses);
   return `<div class="tensection outsider-radar">
     <div class="or-head"><div><h3>Radar outsiders <span>${esc(radar.candidate_count || 0)} candidats</span></h3><p>Indice de priorisation explicable. Ce score n'est ni une probabilite de victoire ni un ROI.</p></div>
-      <div class="or-days">${[7, 14, 30].map(days => `<button class="${_outsiderDays === days ? "active" : ""}" onclick="setOutsiderDays(${days})">${days} jours</button>`).join("")}<button onclick="loadOutsiderRadar(true)">Actualiser</button></div></div>
+      <div class="or-days">${[7, 14, 30].map(days => `<button class="${_outsiderDays === days ? "active" : ""}" onclick="setOutsiderDays(${days})">${days} jours</button>`).join("")}<button onclick="loadOutsiderRadar(true)">Actualiser</button><button id="orExportJson" class="or-export" onclick="exportOutsiderRadarJson()">Exporter JSON</button></div></div>
     ${outsiderSearchPanel()}
     <div class="or-summary">
       <span><b>${esc(radar.priority_count || 0)}</b> prioritaires</span><span><b>${esc(summary.upset_count || 0)}</b> upsets recents</span><span><b>${summary.upset_rate == null ? "-" : esc(summary.upset_rate) + "%"}</b> taux upset</span><span><b>${outsiderOdds(summary.average_winning_outsider_odds)}</b> cote moyenne gagnante</span><span><b>${esc(summary.canonical_match_count || 0)}</b> matchs uniques</span>
