@@ -271,7 +271,12 @@ def _parse_actif(value: Any, *, default: bool = True) -> bool:
     return default
 
 
-def list_accounting_nature_rules(db: Session, city_id: int | None = None) -> list[CpeAccountingNatureRule]:
+def list_accounting_nature_rules(
+    db: Session,
+    city_id: int | None = None,
+    *,
+    only_current_scope: bool = False,
+) -> list[CpeAccountingNatureRule]:
     query = select(CpeAccountingNatureRule)
     if city_id is not None:
         query = query.where(CpeAccountingNatureRule.city_id == city_id)
@@ -281,7 +286,15 @@ def list_accounting_nature_rules(db: Session, city_id: int | None = None) -> lis
         CpeAccountingNatureRule.service_sold,
         CpeAccountingNatureRule.billed_item,
     )
-    return list(db.scalars(query).all())
+    rules = list(db.scalars(query).all())
+    if only_current_scope:
+        # Marche Ville EN COURS uniquement (ex. C00190116O / C00190155J), lu depuis
+        # le referentiel cpe_contract_scope. Si le perimetre n'est pas renseigne, on
+        # ne filtre pas (securite : ne pas vider la matrice).
+        scope = get_current_cpe_contract_codes(db, city_id=city_id)
+        if scope:
+            rules = [r for r in rules if (r.contract_code or "").strip().upper() in scope]
+    return rules
 
 
 def create_accounting_nature_rule(db: Session, payload: CpeAccountingNatureRuleCreate) -> CpeAccountingNatureRule:
@@ -3068,7 +3081,7 @@ def build_codification_finance_workbook(db: Session, city_id: int | None) -> byt
     remplacer à terme le fichier `MATRICE_DALKIA-COMPATBILITE V2.xlsx`.
     """
     sites = list_accounting_site_mappings(db, city_id)
-    rules = list_accounting_nature_rules(db, city_id)
+    rules = list_accounting_nature_rules(db, city_id, only_current_scope=True)
 
     def _actif(value: bool) -> str:
         return "Oui" if value else "Non"

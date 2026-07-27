@@ -239,10 +239,13 @@ def export_accounting_codification(
 
 @router.get("/accounting/nature-rules", response_model=list[CpeAccountingNatureRuleOut])
 def list_accounting_nature_rules(
+    only_current_scope: bool = Query(False, description="Restreindre au marché Ville en cours (cpe_contract_scope)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CpeAccountingNatureRuleOut]:
-    rules = accounting_svc.list_accounting_nature_rules(db, current_user.city_id)
+    rules = accounting_svc.list_accounting_nature_rules(
+        db, current_user.city_id, only_current_scope=only_current_scope
+    )
     return [CpeAccountingNatureRuleOut.model_validate(item) for item in rules]
 
 

@@ -360,7 +360,7 @@ export function MatrixCodificationPageV1() {
       {tier === "dalkia" && view === "postes" ? (
         <CodifSection<CpeAccountingNatureRule, Partial<CpeAccountingNatureRule> & { id?: number; market: string; billed_item: string; accounting_nature: string }>
           eyebrow="DALKIA — Poste facturé vers nature"
-          description="Chaque poste facturé (P1/P2/P3…) est rattaché à une nature comptable, éventuellement par contrat."
+          description="Marché Ville EN COURS uniquement (contrats C00190116O / C00190155J). Chaque poste facturé (P1/P2/P3…) est rattaché à une nature comptable."
           rows={cpeNatures.data ?? []}
           isFetching={cpeNatures.isFetching}
           isError={cpeNatures.isError}

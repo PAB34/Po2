@@ -4287,8 +4287,12 @@ export async function exportCpeAccountingCodification(token: string): Promise<vo
   URL.revokeObjectURL(url);
 }
 
-export async function fetchCpeAccountingNatureRules(token: string): Promise<CpeAccountingNatureRule[]> {
-  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules`, { headers: buildHeaders(token) });
+export async function fetchCpeAccountingNatureRules(
+  token: string,
+  onlyCurrentScope = false,
+): Promise<CpeAccountingNatureRule[]> {
+  const q = onlyCurrentScope ? "?only_current_scope=true" : "";
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules${q}`, { headers: buildHeaders(token) });
   return parseResponse<CpeAccountingNatureRule[]>(response);
 }
 

@@ -9,9 +9,13 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+import io
+
+import openpyxl
+
 from app.core.db import Base
 from app.models.city import City
-from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping
+from app.models.cpe import CpeAccountingNatureRule, CpeAccountingSiteMapping, CpeContractReference
 from app.services.cpe_accounting import (
     build_codification_finance_workbook,
     import_codification_workbook,
@@ -88,6 +92,53 @@ def test_export_then_import_roundtrip(db_session: Session) -> None:
         assert rules[("C00190116O", "P3.4")].accounting_nature == "21351"
         assert rules[("C00190116O", "P3.4")].market == "P3"
         assert rules[("C00190116O", "P2")].active is False
+
+
+def _seed_scope(db: Session) -> None:
+    for code, lot in (("C00190116O", "1"), ("C00190155J", "2")):
+        db.add(
+            CpeContractReference(
+                city_id=1, contract_code=code, reference_kind="cpe_contract_scope",
+                year=2026, market="SCOPE", billed_item=f"CPE_VILLE_LOT_{lot}", active=True,
+            )
+        )
+    db.commit()
+
+
+def _seed_mixed_rules(db: Session) -> None:
+    for code in ("C00190116O", "C00025811F", "C00032657J"):  # 1 en périmètre, 2 hors
+        db.add(
+            CpeAccountingNatureRule(
+                city_id=1, contract_code=code, market="P2", billed_item="P2",
+                accounting_nature="6156", active=True,
+            )
+        )
+    db.commit()
+
+
+def test_only_current_scope_filters_display(db_session: Session) -> None:
+    _seed_scope(db_session)
+    _seed_mixed_rules(db_session)
+    # Sans filtre : tout ; avec filtre : uniquement le marché Ville en cours.
+    assert len(list_accounting_nature_rules(db_session, 1)) == 3
+    scoped = list_accounting_nature_rules(db_session, 1, only_current_scope=True)
+    assert {r.contract_code for r in scoped} == {"C00190116O"}
+
+
+def test_export_contains_only_current_scope(db_session: Session) -> None:
+    _seed_scope(db_session)
+    _seed_mixed_rules(db_session)
+    content = build_codification_finance_workbook(db_session, city_id=1)
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    contrats = {row[0] for row in wb["Postes"].iter_rows(min_row=2, values_only=True) if row[0]}
+    assert contrats == {"C00190116O"}
+
+
+def test_no_scope_reference_shows_everything(db_session: Session) -> None:
+    # Sans référentiel cpe_contract_scope : pas de filtrage (sécurité).
+    _seed_mixed_rules(db_session)
+    scoped = list_accounting_nature_rules(db_session, 1, only_current_scope=True)
+    assert len(scoped) == 3
 
 
 def test_reimport_is_upsert_not_duplicate(db_session: Session) -> None:

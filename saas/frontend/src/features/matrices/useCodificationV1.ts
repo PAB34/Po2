@@ -46,9 +46,10 @@ export function useCpeSiteMappings() {
 export function useCpeNatureRules() {
   const { token } = useAuth();
   return useQuery({
-    queryKey: CPE_NATURES_KEY,
+    // Marché Ville EN COURS uniquement (C00190116O / C00190155J).
+    queryKey: [...CPE_NATURES_KEY, "current-scope"],
     enabled: Boolean(token),
-    queryFn: () => fetchCpeAccountingNatureRules(token!),
+    queryFn: () => fetchCpeAccountingNatureRules(token!, true),
   });
 }
 

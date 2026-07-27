@@ -153,6 +153,42 @@ Décisions : **nouveau gabarit finance-friendly** (import accepte nouveau + V2) 
 - **Tests** : `tests/test_codification_finance_roundtrip.py` (aller-retour + upsert) verts ;
   import V2 inchangé (75 sites / 43 natures / 0 erreur) ; suite CPE + app boot verts.
 
+### 5quater. Périmètre marché Ville EN COURS (2026-07-27)
+
+Retour utilisateur : dans le V2, plusieurs codes contrats existent (feuille « Codes
+contrat - marchés »), mais **on ne doit garder que le marché Ville en cours =
+`C00190116O` (Lot 1) + `C00190155J` (Lot 2)**. Les autres (ancien marché
+`C00025811F`/`C00025812G`, Agglo CREM `C00032657J`, réseaux thalasso
+`C00107051V`/`C00157795L`) sont hors périmètre.
+
+Mécanisme retenu = le **même que le rapport / budget / suivi** :
+`get_current_cpe_contract_codes` (référentiel éditable `cpe_contract_scope`). Pas de
+codes en dur.
+
+**Où appliquer le filtre — décision : au NIVEAU AFFICHAGE + EXPORT uniquement**, pas à
+l'import.
+- `list_accounting_nature_rules(..., only_current_scope=True)` filtre par périmètre.
+- Page `/refonte-v1/matrices` (onglet Postes DALKIA) : `useCpeNatureRules` appelle
+  l'endpoint avec `?only_current_scope=true`.
+- Export gabarit finance : ne contient que les contrats en cours.
+- **Import inchangé** : la base garde toutes les règles (l'import et le rapprochement
+  finance `import_finance_workbook` reposent dessus — filtrer à l'import cassait le
+  matching, 2047→1259, et les tests). Les règles hors périmètre restent en base mais
+  **n'apparaissent plus** dans la matrice finance ni l'export. Sécurité : si
+  `cpe_contract_scope` est vide, aucun filtrage (on ne vide pas la matrice).
+- Sites NON filtrés (les 75 sites = bâtiments Ville, sans code contrat).
+- Option non retenue pour l'instant : purger les règles hors périmètre de la base
+  (destructif) — à décider séparément si besoin.
+
+Règles du rapport réutilisées / vérifiées : LC = `gestionnaire-nature-[opération P3]-
+service-antenne` (sans fonction) ; opération d'investissement calculée **depuis le site**
+(`_cpe_p3_operation_fallback` : P3.4→98023, sinon par fonction/service) → l'opération du
+V2 (niveau poste) n'a pas besoin d'être persistée dans la matrice.
+
+Tests : `test_only_current_scope_filters_display`, `test_export_contains_only_current_scope`,
+`test_no_scope_reference_shows_everything` (+ round-trip + upsert). Import V2 réel
+inchangé (75 sites / 43 natures).
+
 ### 5ter. Audit de fidélité V2 (2026-07-27)
 Voir `docs/refonte-v1/matrices-audit-fidelite-v2.md`. La matrice produite correspond au
 V2. Le `98004`/`ATBA` vus autrefois = donnée prod périmée (le V2 n'a pas de colonne
