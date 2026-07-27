@@ -18,7 +18,7 @@ import {
   useEnergyNatureRules,
   useEnergySiteMappings,
   useExportCpeCodification,
-  useImportCpeCodification,
+  useImportFinanceCodification,
   useSaveCpeNatureRule,
   useSaveCpeSiteMapping,
   useSaveEnergyNatureRule,
@@ -244,7 +244,7 @@ export function MatrixCodificationPageV1() {
   const saveEnergyNature = useSaveEnergyNatureRule();
   const deleteEnergyNature = useDeleteEnergyNatureRule();
 
-  const importCpe = useImportCpeCodification();
+  const importFinance = useImportFinanceCodification();
   const exportCpe = useExportCpeCodification();
   const bootstrapEnergy = useBootstrapEnergySites();
 
@@ -268,6 +268,33 @@ export function MatrixCodificationPageV1() {
         <KpiCard label="Points ENGIE/EDF" value={String(energySites.data?.length ?? 0)} detail="PRM → codes" />
         <KpiCard label="Postes ENGIE/EDF" value={String(energyNatures.data?.length ?? 0)} detail="Poste → nature" />
       </div>
+
+      <Card
+        title="Échange avec le service finance"
+        eyebrow="aller-retour Excel — DALKIA + ENGIE/EDF"
+        action={
+          <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+            <Button variant="ghost" disabled={exportCpe.isPending} onClick={() => exportCpe.mutate()}>
+              {exportCpe.isPending ? "Export…" : "Exporter le classeur finance"}
+            </Button>
+            {canWrite ? (
+              <ImportButton
+                label="Importer le classeur finance"
+                accept=".xlsx"
+                pending={importFinance.isPending}
+                onFile={(f) => importFinance.mutate(f)}
+              />
+            ) : null}
+          </div>
+        }
+      >
+        <p className="po2-muted-line">
+          Un seul fichier couvre <strong>DALKIA</strong> (Sites + Postes, marché Ville en cours) et
+          {" "}<strong>ENGIE/EDF</strong> (Points PRM + Postes). Exportez, transmettez au service finance,
+          puis réimportez le fichier modifié. L'import est une mise à jour : une ligne retirée de l'Excel
+          n'est pas supprimée ici.
+        </p>
+      </Card>
 
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
         <SegmentControl
@@ -298,14 +325,6 @@ export function MatrixCodificationPageV1() {
           isError={cpeSites.isError}
           canWrite={canWrite}
           newLabel="Nouveau site"
-          headerAction={
-            <>
-              <Button variant="ghost" disabled={exportCpe.isPending} onClick={() => exportCpe.mutate()}>
-                {exportCpe.isPending ? "Export…" : "Exporter (gabarit finance)"}
-              </Button>
-              {canWrite ? <ImportButton label="Importer (V2 ou gabarit finance)" accept=".xlsx" pending={importCpe.isPending} onFile={(f) => importCpe.mutate(f)} /> : null}
-            </>
-          }
           searchText={(r) => `${r.code_site} ${r.site_name} ${r.service_code ?? ""} ${r.antenna_code ?? ""} ${r.function_code ?? ""}`}
           columns={[
             { key: "code_site", header: "Code site", render: (r) => <strong>{r.code_site}</strong>, sortValue: (r) => r.code_site },
@@ -366,14 +385,6 @@ export function MatrixCodificationPageV1() {
           isError={cpeNatures.isError}
           canWrite={canWrite}
           newLabel="Nouvelle règle"
-          headerAction={
-            <>
-              <Button variant="ghost" disabled={exportCpe.isPending} onClick={() => exportCpe.mutate()}>
-                {exportCpe.isPending ? "Export…" : "Exporter (gabarit finance)"}
-              </Button>
-              {canWrite ? <ImportButton label="Importer (V2 ou gabarit finance)" accept=".xlsx" pending={importCpe.isPending} onFile={(f) => importCpe.mutate(f)} /> : null}
-            </>
-          }
           searchText={(r) => `${r.contract_code ?? ""} ${r.market} ${r.service_sold ?? ""} ${r.billed_item} ${r.accounting_nature}`}
           columns={[
             { key: "contract", header: "Contrat", render: (r) => r.contract_code ?? "—", sortValue: (r) => r.contract_code },
@@ -517,15 +528,18 @@ export function MatrixCodificationPageV1() {
         />
       ) : null}
 
-      {(importCpe.isSuccess || importCpe.isError || bootstrapEnergy.isSuccess) ? (
+      {(importFinance.isSuccess || importFinance.isError || bootstrapEnergy.isSuccess) ? (
         <Card title="Dernière opération d'import" eyebrow="journal">
-          {importCpe.isSuccess ? (
+          {importFinance.isSuccess ? (
             <p className="po2-muted-line">
-              Classeur DALKIA importé : {importCpe.data.site_mappings_created} site(s) créé(s), {importCpe.data.site_mappings_updated} mis à jour ;
-              {" "}{importCpe.data.nature_rules_created} règle(s) créée(s), {importCpe.data.nature_rules_updated} mise(s) à jour.
+              Classeur finance importé — DALKIA : {importFinance.data.dalkia_sites_created + importFinance.data.dalkia_sites_updated} site(s),
+              {" "}{importFinance.data.dalkia_rules_created + importFinance.data.dalkia_rules_updated} poste(s) ;
+              {" "}ENGIE/EDF : {importFinance.data.energy_points_created + importFinance.data.energy_points_updated} point(s),
+              {" "}{importFinance.data.energy_rules_created + importFinance.data.energy_rules_updated} poste(s).
+              {importFinance.data.errors.length ? ` Avertissements : ${importFinance.data.errors.join(" ; ")}` : ""}
             </p>
           ) : null}
-          {importCpe.isError ? <p className="po2-muted-line">Import DALKIA impossible : {errorMessage(importCpe.error)}</p> : null}
+          {importFinance.isError ? <p className="po2-muted-line">Import impossible : {errorMessage(importFinance.error)}</p> : null}
           {bootstrapEnergy.isSuccess ? (
             <p className="po2-muted-line">PRM générés : {bootstrapEnergy.data.created} créé(s), {bootstrapEnergy.data.existing} déjà présent(s).</p>
           ) : null}

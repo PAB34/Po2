@@ -4269,6 +4269,19 @@ export async function importCpeAccountingCodification(token: string, file: File)
   return parseResponse<CpeAccountingImportResult>(response);
 }
 
+export type FinanceCodificationImportResult = {
+  filename: string | null;
+  dalkia_sites_created: number;
+  dalkia_sites_updated: number;
+  dalkia_rules_created: number;
+  dalkia_rules_updated: number;
+  energy_points_created: number;
+  energy_points_updated: number;
+  energy_rules_created: number;
+  energy_rules_updated: number;
+  errors: string[];
+};
+
 export async function exportCpeAccountingCodification(token: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/cpe/accounting/codification/export.xlsx`, { headers: buildHeaders(token) });
   if (!response.ok) {
@@ -4280,11 +4293,22 @@ export async function exportCpeAccountingCodification(token: string): Promise<vo
   const a = document.createElement("a");
   a.href = url;
   const stamp = new Date().toISOString().slice(0, 10);
-  a.download = `codification-dalkia-${stamp}.xlsx`;
+  a.download = `codification-finance-${stamp}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+export async function importFinanceCodification(token: string, file: File): Promise<FinanceCodificationImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/codification/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<FinanceCodificationImportResult>(response);
 }
 
 export async function fetchCpeAccountingNatureRules(

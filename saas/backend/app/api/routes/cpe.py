@@ -27,6 +27,7 @@ from app.schemas.cpe import (
     CpeFinanceControlOut,
     CpeFinanceControlReportOut,
     CpeFinanceImportResult,
+    FinanceCodificationImportResult,
     CpeFinanceInvoiceOut,
     CpeFinanceInvoiceUpdate,
     CpeFinanceLineOut,
@@ -56,6 +57,7 @@ from app.schemas.cpe import (
 )
 from app.services import cpe as svc
 from app.services import cpe_accounting as accounting_svc
+from app.services import codification_finance as codification_finance_svc
 from app.services import cpe_atterrissage as atterrissage_svc
 from app.services import cpe_market_tracking as market_svc
 from app.services import accounting_contract_budget as contract_budget_svc
@@ -227,14 +229,30 @@ def export_accounting_codification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Exporte la codification DALKIA au gabarit finance (aller-retour export/import)."""
-    content = accounting_svc.build_codification_finance_workbook(db, current_user.city_id)
-    filename = f"codification-dalkia-{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+    """Exporte le gabarit finance COMBINE (DALKIA + ENGIE/EDF) pour aller-retour."""
+    content = codification_finance_svc.build_finance_codification_workbook(db, current_user.city_id)
+    filename = f"codification-finance-{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/accounting/codification/import", response_model=FinanceCodificationImportResult)
+async def import_finance_codification(
+    file: UploadFile = File(..., description="Gabarit finance combiné DALKIA + ENGIE/EDF"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FinanceCodificationImportResult:
+    """Importe le gabarit finance combiné (DALKIA + ENGIE/EDF), upsert."""
+    try:
+        result = codification_finance_svc.import_finance_codification_workbook(
+            db, await file.read(), filename=file.filename, city_id=current_user.city_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return FinanceCodificationImportResult(**result.__dict__)
 
 
 @router.get("/accounting/nature-rules", response_model=list[CpeAccountingNatureRuleOut])

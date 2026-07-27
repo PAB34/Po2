@@ -9,11 +9,11 @@ import {
   deleteEnergyNatureRule,
   deleteEnergySiteMapping,
   exportCpeAccountingCodification,
+  importFinanceCodification,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
   fetchEnergyNatureRules,
   fetchEnergySiteMappings,
-  importCpeAccountingCodification,
   updateCpeAccountingNatureRule,
   updateCpeAccountingSiteMapping,
   updateEnergyNatureRule,
@@ -95,22 +95,25 @@ export function useDeleteCpeNatureRule() {
   });
 }
 
-export function useImportCpeCodification() {
-  const { token } = useAuth();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (file: File) => importCpeAccountingCodification(token!, file),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CPE_SITES_KEY });
-      qc.invalidateQueries({ queryKey: CPE_NATURES_KEY });
-    },
-  });
-}
-
 export function useExportCpeCodification() {
   const { token } = useAuth();
   return useMutation({
     mutationFn: () => exportCpeAccountingCodification(token!),
+  });
+}
+
+// Import du gabarit finance COMBINE (DALKIA + ENGIE/EDF) : rafraîchit les 4 jeux.
+export function useImportFinanceCodification() {
+  const { token } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => importFinanceCodification(token!, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: CPE_SITES_KEY });
+      qc.invalidateQueries({ queryKey: CPE_NATURES_KEY });
+      qc.invalidateQueries({ queryKey: ENERGY_SITES_KEY });
+      qc.invalidateQueries({ queryKey: ENERGY_NATURES_KEY });
+    },
   });
 }
 

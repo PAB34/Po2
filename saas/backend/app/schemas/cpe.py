@@ -347,6 +347,21 @@ class CpeAccountingImportResult(BaseModel):
     errors: list[str]
 
 
+class FinanceCodificationImportResult(BaseModel):
+    """Résultat de l'import du gabarit finance COMBINE (DALKIA + ENGIE/EDF)."""
+
+    filename: str | None = None
+    dalkia_sites_created: int = 0
+    dalkia_sites_updated: int = 0
+    dalkia_rules_created: int = 0
+    dalkia_rules_updated: int = 0
+    energy_points_created: int = 0
+    energy_points_updated: int = 0
+    energy_rules_created: int = 0
+    energy_rules_updated: int = 0
+    errors: list[str] = []
+
+
 class CpeContractReferenceBase(BaseModel):
     contract_code: str
     contract_label: str | None = None
