@@ -117,7 +117,19 @@ deny FLUIDES) sur la nouvelle page ?
 
 ---
 
-## 5. Prochaine étape
+## 5. Réalisation (2026-07-27) — DÉPLOYÉ STAGING
 
-Attendre les réponses Q1–Q6, puis plan court + implémentation (front majoritaire),
-tests ciblés, déploiement staging pour validation comptable avant toute prod.
+Branche `feat/matrices-systeme-b` (depuis `origin/main`). Commit `12da7b1`.
+- **Front** : `features/matrices/MatrixCodificationPageV1.tsx` (page unifiée, onglets
+  tiers DALKIA / ENGIE-EDF × vues Sites→codes / Poste→nature, édition en `Drawer`,
+  import classeur V2 DALKIA, bootstrap PRM énergie) + hooks `useCodificationV1.ts`.
+- **Route** : `RefonteV1MatricesPage` rend désormais la nouvelle page. Système A
+  (`MatrixAdminPageV1`) laissé dormant (plus référencé).
+- **API** : ajout des 3 fonctions énergie manquantes dans `lib/api.ts`
+  (`createEnergySiteMapping`, `deleteEnergySiteMapping`, `deleteEnergyNatureRule`).
+  Aucun backend nouveau (endpoints B déjà présents).
+- ⚠️ **PATCH énergie = remplacement complet** (schéma `In` entier) → le drawer envoie
+  toujours l'objet complet.
+- **Typecheck** : validé par le build Docker `tsc -b && vite build` du déploiement
+  staging (run OK). Déployé sur **staging** pour validation comptable.
+- **Reste** : validation comptable sur staging, puis merge prod (accord utilisateur).
