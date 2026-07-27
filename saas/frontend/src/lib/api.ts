@@ -1823,6 +1823,29 @@ export async function createEnergyNatureRule(
   return parseResponse<EnergyAccountingNatureRule>(r);
 }
 
+export async function deleteEnergyNatureRule(token: string, id: number): Promise<void> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/nature-rules/${id}`, {
+    method: "DELETE", headers: buildHeaders(token),
+  });
+  return parseResponse<void>(r);
+}
+
+export async function createEnergySiteMapping(
+  token: string, payload: Partial<EnergyAccountingSiteMapping> & { prm_id: string },
+): Promise<EnergyAccountingSiteMapping> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/site-mappings`, {
+    method: "POST", headers: buildHeaders(token), body: JSON.stringify(payload),
+  });
+  return parseResponse<EnergyAccountingSiteMapping>(r);
+}
+
+export async function deleteEnergySiteMapping(token: string, id: number): Promise<void> {
+  const r = await fetch(`${apiBaseUrl}/billing/accounting/site-mappings/${id}`, {
+    method: "DELETE", headers: buildHeaders(token),
+  });
+  return parseResponse<void>(r);
+}
+
 export async function importEnergyCodification(token: string, file: File): Promise<EnergyCodificationImportResult> {
   const form = new FormData();
   form.append("file", file);
