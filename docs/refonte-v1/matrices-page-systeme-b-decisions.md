@@ -133,3 +133,28 @@ Branche `feat/matrices-systeme-b` (depuis `origin/main`). Commit `12da7b1`.
 - **Typecheck** : validé par le build Docker `tsc -b && vite build` du déploiement
   staging (run OK). Déployé sur **staging** pour validation comptable.
 - **Reste** : validation comptable sur staging, puis merge prod (accord utilisateur).
+
+### 5bis. Export / import gabarit finance (2026-07-27, commit `3f67bef`, staging)
+
+Besoin : aller-retour pour le service finance (export → il modifie → réimport), dans
+un **gabarit dédié plus lisible** que le V2, vocation à **remplacer** le V2 à terme.
+Décisions : **nouveau gabarit finance-friendly** (import accepte nouveau + V2) ;
+**DALKIA seulement** (périmètre du V2).
+- **Export** : `GET /cpe/accounting/codification/export.xlsx` →
+  `build_codification_finance_workbook` (feuilles « Sites », « Postes », « Mode d'emploi »,
+  colonnes lisibles + Actif/Opération/Notes, reflet de la matrice en base).
+- **Import** : `import_codification_workbook` étendu — détecte les feuilles « Sites » /
+  « Postes » du nouveau gabarit **en plus** du V2. `_upsert_nature_rule` prend un
+  paramètre `active`. Round-trip complet (Actif/Opération/Notes).
+- **Front** : boutons « Exporter (gabarit finance) » + « Importer (V2 ou gabarit finance) »
+  sur les onglets DALKIA.
+- ⚠️ **Upsert only** : une ligne retirée du fichier Excel n'est PAS supprimée en base
+  (suppression via l'interface). Documenté dans la feuille « Mode d'emploi ».
+- **Tests** : `tests/test_codification_finance_roundtrip.py` (aller-retour + upsert) verts ;
+  import V2 inchangé (75 sites / 43 natures / 0 erreur) ; suite CPE + app boot verts.
+
+### 5ter. Audit de fidélité V2 (2026-07-27)
+Voir `docs/refonte-v1/matrices-audit-fidelite-v2.md`. La matrice produite correspond au
+V2. Le `98004`/`ATBA` vus autrefois = donnée prod périmée (le V2 n'a pas de colonne
+opération sur les sites). Nuances : marché déduit du poste ; opération P3 non persistée
+dans la matrice (le rapport la calcule à part) ; coquilles source à nettoyer.
