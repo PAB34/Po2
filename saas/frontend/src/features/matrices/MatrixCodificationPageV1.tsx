@@ -17,6 +17,7 @@ import {
   useDeleteEnergySiteMapping,
   useEnergyNatureRules,
   useEnergySiteMappings,
+  useExportCpeCodification,
   useImportCpeCodification,
   useSaveCpeNatureRule,
   useSaveCpeSiteMapping,
@@ -244,6 +245,7 @@ export function MatrixCodificationPageV1() {
   const deleteEnergyNature = useDeleteEnergyNatureRule();
 
   const importCpe = useImportCpeCodification();
+  const exportCpe = useExportCpeCodification();
   const bootstrapEnergy = useBootstrapEnergySites();
 
   const activeTone = (active: boolean) => (active ? <StatusBadge tone="ok">actif</StatusBadge> : <StatusBadge tone="neutral">inactif</StatusBadge>);
@@ -296,7 +298,14 @@ export function MatrixCodificationPageV1() {
           isError={cpeSites.isError}
           canWrite={canWrite}
           newLabel="Nouveau site"
-          headerAction={canWrite ? <ImportButton label="Importer le classeur V2" accept=".xlsx" pending={importCpe.isPending} onFile={(f) => importCpe.mutate(f)} /> : undefined}
+          headerAction={
+            <>
+              <Button variant="ghost" disabled={exportCpe.isPending} onClick={() => exportCpe.mutate()}>
+                {exportCpe.isPending ? "Export…" : "Exporter (gabarit finance)"}
+              </Button>
+              {canWrite ? <ImportButton label="Importer (V2 ou gabarit finance)" accept=".xlsx" pending={importCpe.isPending} onFile={(f) => importCpe.mutate(f)} /> : null}
+            </>
+          }
           searchText={(r) => `${r.code_site} ${r.site_name} ${r.service_code ?? ""} ${r.antenna_code ?? ""} ${r.function_code ?? ""}`}
           columns={[
             { key: "code_site", header: "Code site", render: (r) => <strong>{r.code_site}</strong>, sortValue: (r) => r.code_site },
@@ -357,6 +366,14 @@ export function MatrixCodificationPageV1() {
           isError={cpeNatures.isError}
           canWrite={canWrite}
           newLabel="Nouvelle règle"
+          headerAction={
+            <>
+              <Button variant="ghost" disabled={exportCpe.isPending} onClick={() => exportCpe.mutate()}>
+                {exportCpe.isPending ? "Export…" : "Exporter (gabarit finance)"}
+              </Button>
+              {canWrite ? <ImportButton label="Importer (V2 ou gabarit finance)" accept=".xlsx" pending={importCpe.isPending} onFile={(f) => importCpe.mutate(f)} /> : null}
+            </>
+          }
           searchText={(r) => `${r.contract_code ?? ""} ${r.market} ${r.service_sold ?? ""} ${r.billed_item} ${r.accounting_nature}`}
           columns={[
             { key: "contract", header: "Contrat", render: (r) => r.contract_code ?? "—", sortValue: (r) => r.contract_code },

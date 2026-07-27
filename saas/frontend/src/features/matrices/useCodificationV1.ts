@@ -8,6 +8,7 @@ import {
   deleteCpeAccountingSiteMapping,
   deleteEnergyNatureRule,
   deleteEnergySiteMapping,
+  exportCpeAccountingCodification,
   fetchCpeAccountingNatureRules,
   fetchCpeAccountingSiteMappings,
   fetchEnergyNatureRules,
@@ -102,6 +103,13 @@ export function useImportCpeCodification() {
       qc.invalidateQueries({ queryKey: CPE_SITES_KEY });
       qc.invalidateQueries({ queryKey: CPE_NATURES_KEY });
     },
+  });
+}
+
+export function useExportCpeCodification() {
+  const { token } = useAuth();
+  return useMutation({
+    mutationFn: () => exportCpeAccountingCodification(token!),
   });
 }
 

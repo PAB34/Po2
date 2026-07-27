@@ -222,6 +222,21 @@ async def import_accounting_codification(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
+@router.get("/accounting/codification/export.xlsx")
+def export_accounting_codification(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Exporte la codification DALKIA au gabarit finance (aller-retour export/import)."""
+    content = accounting_svc.build_codification_finance_workbook(db, current_user.city_id)
+    filename = f"codification-dalkia-{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/accounting/nature-rules", response_model=list[CpeAccountingNatureRuleOut])
 def list_accounting_nature_rules(
     current_user: User = Depends(get_current_user),

@@ -258,6 +258,19 @@ def _detect_header_row(ws, required_keys: set[str], *, scan_rows: int = 6) -> in
     return None
 
 
+def _parse_actif(value: Any, *, default: bool = True) -> bool:
+    """Interprète une cellule « Actif » du gabarit finance (Oui/Non, True/False, 1/0)."""
+    text = _clean(value)
+    if text is None:
+        return default
+    lowered = text.strip().lower()
+    if lowered in {"non", "no", "false", "faux", "0", "inactif", "n"}:
+        return False
+    if lowered in {"oui", "yes", "true", "vrai", "1", "actif", "o", "x"}:
+        return True
+    return default
+
+
 def list_accounting_nature_rules(db: Session, city_id: int | None = None) -> list[CpeAccountingNatureRule]:
     query = select(CpeAccountingNatureRule)
     if city_id is not None:
@@ -478,6 +491,7 @@ def _upsert_nature_rule(
     accounting_nature: str,
     accounting_label: str | None,
     notes: str | None,
+    active: bool = True,
 ) -> bool:
     existing = db.scalars(
         select(CpeAccountingNatureRule).where(
@@ -498,7 +512,7 @@ def _upsert_nature_rule(
         "frequency": frequency,
         "accounting_nature": accounting_nature,
         "accounting_label": accounting_label,
-        "active": True,
+        "active": active,
         "notes": notes,
     }
     if existing:
@@ -587,8 +601,38 @@ def import_codification_workbook(
                     created_rules += 1
                 else:
                     updated_rules += 1
+    elif "Postes" in wb.sheetnames:
+        # Gabarit finance (aller-retour export/import) : une feuille « Postes »
+        # avec en-têtes lisibles. Le marché est lu directement (pas re-dérivé).
+        ws = wb["Postes"]
+        header_row = _detect_header_row(ws, {"poste_facture", "nature_comptable"})
+        if header_row is None:
+            errors.append("Feuille « Postes » : en-tête (poste facturé / nature comptable) introuvable")
+        else:
+            for row in _rows_from_sheet(ws, header_row):
+                billed_item = _upper(row.get("poste_facture"))
+                nature = _clean(row.get("nature_comptable"))
+                if not billed_item or not nature:
+                    continue
+                market = _upper(row.get("marche")) or _market_from_billed_item(billed_item)
+                if _upsert_nature_rule(
+                    db,
+                    city_id=city_id,
+                    contract_code=_upper(row.get("code_contrat")),
+                    market=market,
+                    service_sold=_upper(row.get("service_vendu")),
+                    billed_item=billed_item,
+                    frequency=_clean(row.get("frequence")),
+                    accounting_nature=nature,
+                    accounting_label=_clean(row.get("libelle_nature")),
+                    notes=_clean(row.get("notes")),
+                    active=_parse_actif(row.get("actif")),
+                ):
+                    created_rules += 1
+                else:
+                    updated_rules += 1
     else:
-        errors.append("Feuille absente : Postes x contrat x nature ou Poste facturé vers Nature ctpab")
+        errors.append("Feuille absente : Postes x contrat x nature, Poste facturé vers Nature ctpab ou Postes")
 
     if "Sites vers codes" in wb.sheetnames:
         ws = wb["Sites vers codes"]
@@ -627,8 +671,52 @@ def import_codification_workbook(
             else:
                 db.add(CpeAccountingSiteMapping(**payload))
                 created_sites += 1
+    elif "Sites" in wb.sheetnames:
+        # Gabarit finance (aller-retour export/import) : feuille « Sites » avec
+        # en-têtes lisibles + colonnes opération / actif / notes (round-trip complet).
+        ws = wb["Sites"]
+        header_row = _detect_header_row(ws, {"code_site", "designation"})
+        if header_row is None:
+            errors.append("Feuille « Sites » : en-tête (code site / désignation) introuvable")
+        else:
+            for row in _rows_from_sheet(ws, header_row):
+                code_site = _upper(row.get("code_site"))
+                site_name = _clean(row.get("designation"))
+                if not code_site or not site_name:
+                    continue
+                existing = db.scalars(
+                    select(CpeAccountingSiteMapping).where(
+                        CpeAccountingSiteMapping.city_id == city_id,
+                        CpeAccountingSiteMapping.code_site == code_site,
+                    )
+                ).first()
+                payload = {
+                    "city_id": city_id,
+                    "code_site": code_site,
+                    "site_name": site_name,
+                    "family": _clean(row.get("famille")),
+                    "manager": _clean(row.get("gestionnaire")),
+                    "alternate_manager": _clean(row.get("gestionnaire_suppleant")),
+                    "service_code": _clean(row.get("service_code")),
+                    "service_label": _clean(row.get("service_libelle")),
+                    "function_code": _clean(row.get("fonction_code")),
+                    "function_label": _clean(row.get("fonction_libelle")),
+                    "antenna_code": _clean(row.get("antenne_code")),
+                    "antenna_label": _clean(row.get("antenne_libelle")),
+                    "operation_code": _clean(row.get("operation_code")),
+                    "operation_label": _clean(row.get("operation_libelle")),
+                    "active": _parse_actif(row.get("actif")),
+                    "notes": _clean(row.get("notes")),
+                }
+                if existing:
+                    for key, value in payload.items():
+                        setattr(existing, key, value)
+                    updated_sites += 1
+                else:
+                    db.add(CpeAccountingSiteMapping(**payload))
+                    created_sites += 1
     else:
-        errors.append("Feuille absente : Sites vers codes")
+        errors.append("Feuille absente : Sites vers codes ou Sites")
 
     db.commit()
     return CpeAccountingImportResult(
@@ -2958,6 +3046,83 @@ def _style_header(cells: Any, fill: str = "1F4E78") -> None:
 def _set_widths(ws: Any, widths: list[float]) -> None:
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(index)].width = width
+
+
+_CODIF_SITE_HEADERS = [
+    "Code site", "Désignation", "Famille", "Gestionnaire", "Gestionnaire suppléant",
+    "Service (code)", "Service (libellé)", "Fonction (code)", "Fonction (libellé)",
+    "Antenne (code)", "Antenne (libellé)", "Opération (code)", "Opération (libellé)",
+    "Actif", "Notes",
+]
+_CODIF_POSTE_HEADERS = [
+    "Code contrat", "Marché", "Poste facturé", "Service vendu", "Fréquence",
+    "Nature comptable", "Libellé nature", "Actif", "Notes",
+]
+
+
+def build_codification_finance_workbook(db: Session, city_id: int | None) -> bytes:
+    """Gabarit finance de la codification DALKIA (aller-retour export/import).
+
+    Produit un classeur lisible (feuilles « Sites » et « Postes ») que le service
+    finance peut modifier puis réimporter via `import_codification_workbook`. Vocation :
+    remplacer à terme le fichier `MATRICE_DALKIA-COMPATBILITE V2.xlsx`.
+    """
+    sites = list_accounting_site_mappings(db, city_id)
+    rules = list_accounting_nature_rules(db, city_id)
+
+    def _actif(value: bool) -> str:
+        return "Oui" if value else "Non"
+
+    wb = openpyxl.Workbook()
+
+    ws = wb.active
+    ws.title = "Sites"
+    ws.append(_CODIF_SITE_HEADERS)
+    _style_header(ws[1])
+    for s in sites:
+        ws.append([
+            s.code_site, s.site_name, s.family, s.manager, s.alternate_manager,
+            s.service_code, s.service_label, s.function_code, s.function_label,
+            s.antenna_code, s.antenna_label, s.operation_code, s.operation_label,
+            _actif(s.active), s.notes,
+        ])
+    _set_widths(ws, [16, 42, 14, 16, 18, 12, 22, 12, 22, 14, 20, 14, 22, 8, 30])
+    ws.freeze_panes = "A2"
+
+    ws2 = wb.create_sheet("Postes")
+    ws2.append(_CODIF_POSTE_HEADERS)
+    _style_header(ws2[1])
+    for r in rules:
+        ws2.append([
+            r.contract_code, r.market, r.billed_item, r.service_sold, r.frequency,
+            r.accounting_nature, r.accounting_label, _actif(r.active), r.notes,
+        ])
+    _set_widths(ws2, [16, 14, 16, 18, 14, 16, 40, 8, 30])
+    ws2.freeze_panes = "A2"
+
+    ws3 = wb.create_sheet("Mode d'emploi")
+    guide = [
+        ["Codification comptable DALKIA — gabarit d'échange service finance"],
+        [""],
+        ["Ce classeur reflète la matrice en vigueur dans la plateforme."],
+        ["Modifiez les valeurs puis renvoyez-le pour réimport (menu Importer sur /refonte-v1/matrices)."],
+        [""],
+        ["Règles :"],
+        ["• Ne pas renommer les feuilles « Sites » et « Postes » ni la ligne d'en-tête."],
+        ["• Feuille « Sites » : clé = « Code site » (un site par ligne)."],
+        ["• Feuille « Postes » : clé = Code contrat + Marché + Service vendu + Poste facturé + Fréquence."],
+        ["• Colonne « Actif » : Oui / Non."],
+        ["• L'import fonctionne en MISE À JOUR (upsert) : une ligne supprimée dans Excel"],
+        ["  n'est PAS supprimée dans la plateforme (à retirer via l'interface)."],
+        ["• L'opération d'investissement (98xxx) ne s'applique qu'aux postes P3 / P3.4."],
+    ]
+    for line in guide:
+        ws3.append(line)
+    ws3.column_dimensions["A"].width = 90
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
 
 
 def build_finance_liaison_workbook(db: Session, invoice: CpeFinanceInvoice) -> bytes:

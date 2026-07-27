@@ -4269,6 +4269,24 @@ export async function importCpeAccountingCodification(token: string, file: File)
   return parseResponse<CpeAccountingImportResult>(response);
 }
 
+export async function exportCpeAccountingCodification(token: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/cpe/accounting/codification/export.xlsx`, { headers: buildHeaders(token) });
+  if (!response.ok) {
+    await parseResponse(response);
+    return;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.download = `codification-dalkia-${stamp}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function fetchCpeAccountingNatureRules(token: string): Promise<CpeAccountingNatureRule[]> {
   const response = await fetch(`${apiBaseUrl}/cpe/accounting/nature-rules`, { headers: buildHeaders(token) });
   return parseResponse<CpeAccountingNatureRule[]>(response);
