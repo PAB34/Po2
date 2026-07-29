@@ -19,10 +19,10 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - Fait : `_cpe_report_lc` gate l'opération sur `_is_cpe_p3_line` ;
   `_energy_report_lc` ne contient plus d'opération. Test : `test_dalkia_p2_line_excludes_operation_from_lc`.
 - Reste (sujet 2/3) : retirer la colonne `OPERATION` explicite des feuilles ENGIE/EDF.
-- **Composition de la LC** (retour comptable 2026-07-24) : la LC ne contient **pas la
-  fonction** (issue de la matrice). Format = `gestionnaire-nature-[operation si P3]-service-antenne`
-  (DALKIA) et `nature-service-antenne` (énergie). Ex : `BATI-020-6156-MABA-LOCAUX` →
-  `BATI-6156-MABA-LOCAUX`.
+- **Composition de la LC DALKIA** (retour confirmé 2026-07-29, remplace celui du
+  2026-07-24) : la fonction issue de la matrice figure immédiatement après le
+  gestionnaire. Format = `gestionnaire-fonction-nature-[operation si P3]-service-antenne`.
+  Les LC énergie restent inchangées.
 
 ### 2 + 3 — Tout en TTC, suppression du HT (EN COURS)
 - **Décision** : la comptable travaille en **TTC**. Aucune colonne HT visible.
@@ -32,9 +32,14 @@ Cas remonté : LC `BATI-28-6156-98004-ATBA-CTM` sur une ligne **maintenance (nat
 - Colonnes supprimées dans chaque feuille tiers :
   - DALKIA : suppression `MONTANT HT`, `VALEUR DE BASE`, `REVISION HT`. **3 colonnes
     additives au niveau ligne** : `MONTANT BASE TTC` + `MONTANT REVISION TTC` =
-    `MONTANT TTC`. Révision = dont-révision = montant × (révisé − base) / révisé (TTC) ;
-    base = montant − révision (calcul par différence → égalité au centime). Le forfait
-    révisé trimestriel a été retiré (maille différente = source de confusion).
+    `MONTANT TTC`. Pour P2/P3 : révision = montant × (révisé − base) / révisé,
+    puis base = montant − révision. Pour P1 gaz : base annuelle effective OS3
+    (`prix de base facture × quantité contractuelle + part fixe OS3`) proratisée
+    au montant facturé, puis révision = montant − base (une révision négative
+    est autorisée). Pour P1.EL : base = montant et révision = 0. Si une composante
+    de la référence P1 gaz OS3 est absente, base/révision restent vides avec un point
+    à corriger. Le forfait révisé trimestriel a été retiré (maille différente =
+    source de confusion).
   - ENGIE / EDF : `MONTANT HT` → `MONTANT TTC` ; suppression `OPERATION`.
   - TotalEnergies gaz : `MONTANT HT`, `TVA` supprimées (TTC déjà présent).
 - Chantier ultérieur (hors périmètre immédiat) : basculer **toutes** les données
