@@ -98,3 +98,41 @@ doit servir de base pour P1 ; cette précision remplace la base du marché initi
   à P3/P3.4.
 - Non-régression P2/P3 et génération complète du rapport.
 - Résultat : `17 passed` sur `tests/test_comptable_report.py` le 2026-07-29.
+
+## 5. Correction P1 gaz (2026-07-29, après contrôle sur facture client)
+
+La facture client `0001E2607QSB3` (P1 GAZ - GYMNASES) explicite la vraie logique
+par site :
+
+- `Valeur de base = Pu_base × Q` (ex. NAKACHE : `74,17 × 126,43 = 9 377,31 €`) ;
+- `Prix révisé = Valeur de base × coeff` (`× 1,052609 = 9 870,64 €`) ;
+- `Montant redevance = Prix révisé × prorata` (`× 25/100 = 2 467,66 € HT`).
+
+Deux erreurs de D2 sont ainsi établies :
+
+1. **Part fixe ajoutée à tort.** La part fixe P1 (abonnement / terme fixe /
+   stockage / CTA / location compteur) est facturée sur des **lignes REFAC
+   distinctes**, jamais dans le combustible. L'ajouter à la base (`+ part_fixe_OS3`)
+   gonfle la base au-dessus du prix révisé et fabrique une **révision négative**
+   fausse (coefficient > 1 ⇒ révision toujours positive).
+2. **Mauvaise quantité.** La quantité utilisée doit être celle réellement
+   facturée (part variable OS3 du DPGF, ex. Vallon `p10_var_ht = 3 174,23` =
+   `74,17 × 42,8`), et non `qt_mwhpcs` du référentiel maître (`38`), incohérente
+   avec le prix révisé de la ligne.
+
+**Formule corrigée** (D2 remplacée) : la « valeur de base » annuelle du
+combustible = part variable OS3 du DPGF actif (`p10_var_ht`) ; base proratisée
+`= montant_ht × p10_var_ht / prix_révisé` ; révision `= montant − base`. La part
+fixe n'entre plus dans le calcul. `_cpe_p1_gaz_os3_bases` n'interroge plus le
+référentiel `CpeDalkiaRefP1Gaz`.
+
+Contrôle sur cas réels (le total TTC reste inchangé, seule la décomposition est
+corrigée) :
+
+| Site | Rapport erroné (base / rév.) | Corrigé (base / rév.) | Total TTC |
+|------|------------------------------|-----------------------|-----------|
+| NAKACHE | 3 460,83 / **-499,64** | 2 813,19 / **+148,00** | 2 961,19 |
+| LIDO    | 3 359,40 / +272,12     | 3 450,02 / **+181,50** | 3 631,52 |
+| Vallon  | 1 045,97 / **-43,53**  | 952,27 / **+50,17**    | 1 002,44 |
+
+Test mis à jour : `test_dalkia_p1_gaz_uses_os3_variable_base_and_positive_revision`.
