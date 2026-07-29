@@ -6,7 +6,6 @@ import openpyxl
 import pytest
 
 from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
-from app.models.cpe_dalkia import CpeDalkiaRefP1Gaz
 from app.models.cpe_dpgf_p1 import CpeDpgfP1Line
 from app.models.invoice import EnergyInvoice, EnergyInvoiceImport, EnergyInvoiceSite
 from app.services import comptable_report
@@ -279,7 +278,7 @@ def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
     assert ws.cell(row=5, column=13).value is None
 
 
-def test_dalkia_p1_gaz_uses_os3_base_and_allows_negative_revision() -> None:
+def test_dalkia_p1_gaz_uses_os3_variable_base_and_positive_revision() -> None:
     class FakeScalarResult:
         def __init__(self, rows):
             self.rows = rows
@@ -357,17 +356,6 @@ def test_dalkia_p1_gaz_uses_os3_base_and_allows_negative_revision() -> None:
         function_code="331",
         antenna_code="ALSH",
     )
-    reference = CpeDalkiaRefP1Gaz(
-        id=1,
-        import_id=1,
-        city_id=303,
-        code_site="VDS-ENS 19",
-        period_idx=1,
-        period_label="2026",
-        period_year=2026,
-        p10_total_ht=4036.07,
-        qt_mwhpcs=38.0,
-    )
     os3_reference = CpeDpgfP1Line(
         id=2,
         import_id=2,
@@ -383,16 +371,18 @@ def test_dalkia_p1_gaz_uses_os3_base_and_allows_negative_revision() -> None:
         p10_var_ht=3174.23,
         p10_total_ht=3842.34,
     )
-    db = FakeScalarDb([[line], [site], [reference], [os3_reference]])
+    db = FakeScalarDb([[line], [site], [os3_reference]])
     ws = openpyxl.Workbook().active
     parsed = comptable_report.WorklistParseResult(sheet_name="_ShowList-001", rows=[worklist])
 
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
     assert ws.cell(row=5, column=4).value == "P1"
-    # Base OS3 annuelle = 74.17 x 38 + (3842.34 - 3174.23) = 3486.57 EUR HT.
-    assert ws.cell(row=5, column=6).value == 1045.97
-    assert ws.cell(row=5, column=7).value == -43.53
+    # Valeur de base annuelle combustible = part variable OS3 (p10_var_ht) = 3174.23 EUR HT
+    # (la part fixe 3842.34 - 3174.23 est facturee sur des lignes REFAC distinctes).
+    # Base TTC proratisee = 835.37 x 3174.23 / 3341.49 x 1.20 = 952.27 EUR.
+    assert ws.cell(row=5, column=6).value == 952.27
+    assert ws.cell(row=5, column=7).value == 50.17
     assert ws.cell(row=5, column=8).value == 1002.44
     assert round(ws.cell(row=5, column=6).value + ws.cell(row=5, column=7).value, 2) == 1002.44
     assert ws.cell(row=5, column=10).value == "BATI-331-60621-XSCO-ALSH"

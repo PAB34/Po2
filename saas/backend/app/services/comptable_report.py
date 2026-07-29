@@ -21,7 +21,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
-from app.models.cpe_dalkia import CpeDalkiaRefImport, CpeDalkiaRefP1Gaz
 from app.models.cpe_dpgf_p1 import CpeDpgfP1Import, CpeDpgfP1Line
 from app.models.gas_invoice import GasInvoice
 from app.models.invoice import EnergyInvoiceImport
@@ -33,12 +32,6 @@ MarketKey = Literal["dalkia", "engie", "edf", "totalenergies"]
 _SUPPLIER_INVOICE_RE = re.compile(r"^FAC\.\s*(\S+)\s+DU", re.IGNORECASE)
 _TTC_TOLERANCE = 0.01
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-
-@dataclass(frozen=True)
-class _P1GazOs3Base:
-    quantity_mwhpcs: float
-    fixed_ht: float
 
 
 @dataclass(frozen=True)
@@ -750,14 +743,16 @@ def _cpe_p1_gaz_os3_bases(
     city_id: int,
     lines: list[CpeFinanceLine],
     sites: dict[int, CpeAccountingSiteMapping],
-) -> dict[tuple[str, int], _P1GazOs3Base]:
-    """Composants de la base P1 gaz OS n°3 par site/année.
+) -> dict[tuple[str, int], float]:
+    """Base annuelle combustible P1 (« valeur de base » OS n°3) par site/année.
 
-    Le prix de base OS3 est porté par la facture. La quantité contractuelle
-    vient du référentiel maître ; la part fixe OS3 vient du DPGF P1 actif
-    (niveau ``rev_temp_prix``), où elle vaut total - variable. La base annuelle
-    comparable au forfait révisé est donc :
-    ``prix_base_facture × quantité_contractuelle + part_fixe_OS3``.
+    La ligne P1 combustible facture ``valeur_de_base × coeff_révision × prorata``,
+    où ``valeur_de_base = Pu_base × quantité contractuelle`` — la part VARIABLE
+    seule. La part fixe (abonnement / terme fixe / stockage / CTA / location) est
+    facturée sur des lignes REFAC distinctes, jamais dans le combustible : elle
+    ne doit donc pas entrer dans cette base. Cette valeur de base annuelle est
+    portée par le DPGF P1 actif au niveau ``rev_temp_prix`` (champ ``p10_var_ht``),
+    cohérente avec le ``prix révisé`` de la facture (``revised_price``).
     """
     keys = {
         key
@@ -770,23 +765,6 @@ def _cpe_p1_gaz_os3_bases(
 
     site_codes = sorted({site_code for site_code, _year in keys})
     years = sorted({year for _site_code, year in keys})
-    quantity_stmt = (
-        select(CpeDalkiaRefP1Gaz)
-        .join(CpeDalkiaRefImport, CpeDalkiaRefImport.id == CpeDalkiaRefP1Gaz.import_id)
-        .where(
-            CpeDalkiaRefImport.city_id == city_id,
-            CpeDalkiaRefImport.is_active.is_(True),
-            CpeDalkiaRefP1Gaz.code_site.in_(site_codes),
-            CpeDalkiaRefP1Gaz.period_year.in_(years),
-            CpeDalkiaRefP1Gaz.qt_mwhpcs.is_not(None),
-        )
-        .order_by(CpeDalkiaRefImport.import_date.asc())
-    )
-    quantity_by_key = {
-        (str(row.code_site).strip().upper(), int(row.period_year)): float(row.qt_mwhpcs)
-        for row in db.scalars(quantity_stmt).all()
-        if row.qt_mwhpcs is not None
-    }
     os3_stmt = (
         select(CpeDpgfP1Line)
         .join(CpeDpgfP1Import, CpeDpgfP1Import.id == CpeDpgfP1Line.import_id)
@@ -797,25 +775,15 @@ def _cpe_p1_gaz_os3_bases(
             CpeDpgfP1Line.code_site.in_(site_codes),
             CpeDpgfP1Line.period_year.in_(years),
             CpeDpgfP1Line.p10_var_ht.is_not(None),
-            CpeDpgfP1Line.p10_total_ht.is_not(None),
         )
         .order_by(CpeDpgfP1Import.import_date.asc())
     )
-    fixed_by_key = {
-        (str(row.code_site).strip().upper(), int(row.period_year)): round(
-            float(row.p10_total_ht) - float(row.p10_var_ht), 2
-        )
+    base_by_key = {
+        (str(row.code_site).strip().upper(), int(row.period_year)): float(row.p10_var_ht)
         for row in db.scalars(os3_stmt).all()
-        if row.p10_total_ht is not None and row.p10_var_ht is not None
+        if row.p10_var_ht is not None
     }
-    return {
-        key: _P1GazOs3Base(
-            quantity_mwhpcs=quantity_by_key[key],
-            fixed_ht=fixed_by_key[key],
-        )
-        for key in keys
-        if key in quantity_by_key and key in fixed_by_key
-    }
+    return {key: base_by_key[key] for key in keys if key in base_by_key}
 
 
 def _cpe_p1_reference_key(
@@ -843,13 +811,16 @@ def _is_cpe_p1_elec_line(line: CpeFinanceLine) -> bool:
 def _cpe_report_amounts_ttc(
     line: CpeFinanceLine,
     *,
-    p1_os3_base: _P1GazOs3Base | None = None,
+    p1_os3_base: float | None = None,
 ) -> tuple[float | None, float | None, float | None, str | None]:
     """Décompose une ligne en base TTC + révision TTC = montant TTC.
 
-    P2/P3 comparent deux forfaits annuels portés par la ligne. P1 gaz utilise
-    la base annuelle effective OS3, car ``base_price`` y porte un prix unitaire
-    et ``revised_price`` un forfait annuel. P1 électricité n'est pas révisé.
+    P2/P3 comparent deux forfaits annuels portés par la ligne. P1 gaz combustible
+    facture ``valeur_de_base × coeff_révision × prorata`` : la part au prix de
+    base est ``montant × valeur_de_base / prix_révisé`` (``revised_price`` = prix
+    révisé annuel), le reste étant la révision. ``p1_os3_base`` porte cette valeur
+    de base annuelle (part variable OS3, hors part fixe facturée à part). P1
+    électricité n'est pas révisé.
     """
     montant_ttc = _line_ttc(line.amount_ht, line.vat_rate)
     if _is_cpe_p1_elec_line(line):
@@ -857,11 +828,10 @@ def _cpe_report_amounts_ttc(
         return montant_ttc, revision_ttc, montant_ttc, None
 
     if _is_cpe_p1_gaz_line(line):
-        base_price, revised_price = _cpe_report_prices(line)
+        _base_price, revised_price = _cpe_report_prices(line)
         if (
             montant_ttc is None
             or line.amount_ht is None
-            or base_price is None
             or p1_os3_base is None
             or not revised_price
         ):
@@ -871,13 +841,10 @@ def _cpe_report_amounts_ttc(
                 montant_ttc,
                 "Référence P1 gaz OS n°3 absente : base et révision non calculables.",
             )
-        base_annual_ht = float(base_price) * p1_os3_base.quantity_mwhpcs + p1_os3_base.fixed_ht
-        base_share_ht = float(line.amount_ht) * base_annual_ht / float(revised_price)
+        base_share_ht = float(line.amount_ht) * float(p1_os3_base) / float(revised_price)
         base_ttc = _line_ttc(base_share_ht, line.vat_rate)
         revision_ttc = (
-            round(montant_ttc - base_ttc, 2)
-            if montant_ttc is not None and base_ttc is not None
-            else None
+            round(montant_ttc - base_ttc, 2) if base_ttc is not None else None
         )
         return base_ttc, revision_ttc, montant_ttc, None
 
