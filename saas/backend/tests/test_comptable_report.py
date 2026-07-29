@@ -6,6 +6,8 @@ import openpyxl
 import pytest
 
 from app.models.cpe import CpeAccountingSiteMapping, CpeFinanceControl, CpeFinanceInvoice, CpeFinanceLine
+from app.models.cpe_dalkia import CpeDalkiaRefP1Gaz
+from app.models.cpe_dpgf_p1 import CpeDpgfP1Line
 from app.models.invoice import EnergyInvoice, EnergyInvoiceImport, EnergyInvoiceSite
 from app.services import comptable_report
 from app.services.comptable_report import (
@@ -272,9 +274,149 @@ def test_dalkia_sheet_matches_accountant_model_for_p3_invoice() -> None:
     assert ws.cell(row=5, column=7).value == 16.93   # revision
     assert ws.cell(row=5, column=8).value == 549.43  # montant = base + revision
     assert round(ws.cell(row=5, column=6).value + ws.cell(row=5, column=7).value, 2) == ws.cell(row=5, column=8).value
-    # LC sans fonction (331) : gestionnaire-nature-operation(P3)-service-antenne.
-    assert ws.cell(row=5, column=10).value == "BATI-21351-98003-XSCO-ALSH"
+    # LC avec fonction (331) : gestionnaire-fonction-nature-operation(P3)-service-antenne.
+    assert ws.cell(row=5, column=10).value == "BATI-331-21351-98003-XSCO-ALSH"
     assert ws.cell(row=5, column=13).value is None
+
+
+def test_dalkia_p1_gaz_uses_os3_base_and_allows_negative_revision() -> None:
+    class FakeScalarResult:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def all(self):
+            return self.rows
+
+    class FakeScalarDb:
+        def __init__(self, sequences):
+            self.sequences = list(sequences)
+
+        def scalars(self, _stmt):
+            return FakeScalarResult(self.sequences.pop(0))
+
+    invoice = CpeFinanceInvoice(
+        id=12,
+        invoice_number="0001E2607QRY6",
+        contract_code="C00190116O",
+        invoice_date=date(2026, 6, 30),
+        total_ht=835.37,
+        status="valide",
+    )
+    worklist = WorklistInvoice(
+        row_number=2,
+        accounting_number="202605378",
+        supplier_invoice_number="0001E2607QRY6",
+        label="FAC. 0001E2607QRY6 DU 30/06/2026",
+        total_ttc=1002.44,
+        invoice_date=date(2026, 6, 30),
+        arrival_date=None,
+        supplier_code=None,
+        supplier_name="DALKIA",
+        invoice_status=None,
+        liquidation_status=None,
+        market_code=None,
+        raw={},
+    )
+    platform = {
+        "0001E2607QRY6": PlatformInvoice(
+            id=12,
+            invoice_number="0001E2607QRY6",
+            total_ttc=1002.44,
+            control_status="valid",
+            decision_status="valide",
+            problem_summary=None,
+            raw=invoice,
+        )
+    }
+    line = CpeFinanceLine(
+        id=12,
+        invoice_id=12,
+        row_number=1,
+        contract_code="C00190116O",
+        market="P1",
+        billed_item="P1",
+        service_sold="CHAUFFAGE",
+        vat_rate=20,
+        amount_ht=835.37,
+        base_price=74.17,
+        revised_price=3341.49,
+        detail="VDS-ENS 19 - CENTRE DE LOISIR LE VALLON",
+        accounting_site_id=102,
+        site_code_detected="VDS-ENS 19",
+        period_start=date(2026, 4, 1),
+        period_end=date(2026, 6, 30),
+        accounting_nature="60621",
+        accounting_label="Chauffage",
+    )
+    site = CpeAccountingSiteMapping(
+        id=102,
+        code_site="VDS-ENS 19",
+        site_name="Centre de loisir Le Vallon",
+        manager="BATI",
+        service_code="XSCO",
+        function_code="331",
+        antenna_code="ALSH",
+    )
+    reference = CpeDalkiaRefP1Gaz(
+        id=1,
+        import_id=1,
+        city_id=303,
+        code_site="VDS-ENS 19",
+        period_idx=1,
+        period_label="2026",
+        period_year=2026,
+        p10_total_ht=4036.07,
+        qt_mwhpcs=38.0,
+    )
+    os3_reference = CpeDpgfP1Line(
+        id=2,
+        import_id=2,
+        city_id=303,
+        lot=1,
+        level="rev_temp_prix",
+        code_site="VDS-ENS 19",
+        period_idx=2,
+        period_label="2026",
+        period_year=2026,
+        prix_unitaire_ht=74.17,
+        qt_mwhpcs=42.8,
+        p10_var_ht=3174.23,
+        p10_total_ht=3842.34,
+    )
+    db = FakeScalarDb([[line], [site], [reference], [os3_reference]])
+    ws = openpyxl.Workbook().active
+    parsed = comptable_report.WorklistParseResult(sheet_name="_ShowList-001", rows=[worklist])
+
+    comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
+
+    assert ws.cell(row=5, column=4).value == "P1"
+    # Base OS3 annuelle = 74.17 x 38 + (3842.34 - 3174.23) = 3486.57 EUR HT.
+    assert ws.cell(row=5, column=6).value == 1045.97
+    assert ws.cell(row=5, column=7).value == -43.53
+    assert ws.cell(row=5, column=8).value == 1002.44
+    assert round(ws.cell(row=5, column=6).value + ws.cell(row=5, column=7).value, 2) == 1002.44
+    assert ws.cell(row=5, column=10).value == "BATI-331-60621-XSCO-ALSH"
+    assert ws.cell(row=5, column=13).value is None
+
+
+def test_dalkia_p1_electricity_is_not_revised() -> None:
+    line = CpeFinanceLine(
+        billed_item="P1.EL", service_sold="ELECTRICITE", amount_ht=2718.36, vat_rate=20
+    )
+
+    assert comptable_report._cpe_report_amounts_ttc(line) == (3262.03, 0.0, 3262.03, None)
+
+
+def test_dalkia_p1_gaz_without_contractual_reference_is_not_invented() -> None:
+    line = CpeFinanceLine(
+        billed_item="P1", service_sold="CHAUFFAGE", amount_ht=835.37,
+        vat_rate=20, base_price=74.17, revised_price=3341.49,
+    )
+
+    base, revision, total, issue = comptable_report._cpe_report_amounts_ttc(line)
+
+    assert (base, revision, total) == (None, None, 1002.44)
+    assert issue and "Référence P1 gaz OS n°3 absente" in issue
 
 
 def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
@@ -331,10 +473,10 @@ def test_dalkia_p2_line_excludes_operation_from_lc() -> None:
     comptable_report._write_market_sheet(db, 303, ws, comptable_report.MARKETS[0], parsed, platform)
 
     lc = ws.cell(row=5, column=10).value
-    # Sans fonction (28) ni operation (98004) : gestionnaire-nature-service-antenne.
-    assert lc == "BATI-6156-ATBA-CTM"
+    # Avec fonction (28), sans operation (98004) : gestionnaire-fonction-nature-service-antenne.
+    assert lc == "BATI-28-6156-ATBA-CTM"
     assert "98004" not in lc
-    assert "-28-" not in lc
+    assert "-28-" in lc
 
 
 def test_report_translates_decisions_and_writes_problem_summary(monkeypatch) -> None:
