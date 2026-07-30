@@ -155,16 +155,19 @@ let _bracketTourFilter = "all";
 let _tennisSort = { key: "kickoff", dir: "asc" };
 let _tennisQuery = "";
 let _expandedTennisMatch = null;
+let _bilanLoaded = false;
 function switchTab(tab) {
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-  $("#app").classList.toggle("tennis-wide", tab === "tennis");
+  $("#app").classList.toggle("tennis-wide", tab === "tennis" || tab === "bilan");
   $("#view-matchs").classList.toggle("hidden", tab !== "matchs");
   $("#view-actu").classList.toggle("hidden", tab !== "actu");
   $("#view-tests").classList.toggle("hidden", tab !== "tests");
   $("#view-tennis").classList.toggle("hidden", tab !== "tennis");
+  $("#view-bilan").classList.toggle("hidden", tab !== "bilan");
   if (tab === "actu" && !_actuLoaded) loadActu();
   if (tab === "tests" && !_testsLoaded) loadDiagnostics(false);
   if (tab === "tennis" && !_tennisLoaded) loadTennis(false);
+  if (tab === "bilan" && !_bilanLoaded) loadBilan();
 }
 function refreshAll() {
   _actuLoaded = false;
@@ -172,6 +175,98 @@ function refreshAll() {
   if (!$("#view-actu").classList.contains("hidden")) loadActu();
   if (!$("#view-tests").classList.contains("hidden")) loadDiagnostics(true);
   if (!$("#view-tennis").classList.contains("hidden")) loadTennis(true);
+  if (!$("#view-bilan").classList.contains("hidden")) { _bilanLoaded = false; loadBilan(); }
+}
+
+/* ---------- Bilan hebdomadaire (calibration marches + mouvement de cote) ---------- */
+const BILAN_MARKET_LABELS = {
+  outsider_takes_a_set: "Prend un set",
+  outsider_games_3_5: "+3,5 jeux",
+  outsider_set_1: "Gagne le set 1",
+};
+function bilanMarketLabel(key){ return BILAN_MARKET_LABELS[key] || key; }
+function bilanNum(v, suffix=""){ return (v===null||v===undefined||Number.isNaN(v)) ? "-" : `${v}${suffix}`; }
+function bilanSigned(v){ if(v===null||v===undefined||Number.isNaN(v)) return "-"; return `${v>0?"+":""}${v}`; }
+
+async function loadBilan(){
+  _bilanLoaded = true;
+  const box = $("#bilanContent");
+  box.innerHTML = `<div class="loading"><div class="spin"></div>Chargement du bilan...</div>`;
+  try {
+    const d = await api("/api/tennis/outsiders/scorecard");
+    box.innerHTML = renderBilan(d);
+  } catch (e) {
+    _bilanLoaded = false;
+    box.innerHTML = `<div class="alert">Bilan indisponible : ${esc(e.message)}</div>`;
+  }
+}
+
+function renderBilan(d){
+  const cov = d.coverage || {};
+  const mk = (d.markets || {});
+  const od = (d.odds_movement || {});
+  const odc = od.cumulative || {};
+
+  // 1) Calibration des marches secondaires (cumule) : realise vs annonce.
+  const cumRows = (mk.cumulative || []).map(m => {
+    const enough = m.n >= 50;
+    return `<tr>
+      <td>${esc(bilanMarketLabel(m.market))}</td>
+      <td class="n">${m.n}</td>
+      <td class="n">${bilanNum(m.realised,"%")}</td>
+      <td class="n">${bilanNum(m.expected,"%")}</td>
+      <td class="n ${m.delta_points>0?"pos":m.delta_points<0?"neg":""}">${bilanSigned(m.delta_points)}</td>
+      <td>${enough ? esc(m.verdict||"") : `<span class="muted">n trop faible</span>`}</td>
+    </tr>`;
+  }).join("");
+  const cumTable = cumRows
+    ? `<table class="ptable bilan"><thead><tr><th>Marche</th><th>n</th><th>Realise</th><th>Annonce</th><th>Ecart</th><th>Lecture</th></tr></thead><tbody>${cumRows}</tbody></table>`
+    : `<div class="muted">Aucun marche encore regle. Le bilan se remplit au fil des matchs joues.</div>`;
+
+  // Detail par semaine (pente d'accumulation).
+  const weekRows = (mk.by_week || []).map(w => {
+    const cells = (w.markets || []).map(m =>
+      `${bilanMarketLabel(m.market)} <b>${m.wins}/${m.n}</b> (${bilanNum(m.realised,"%")})`
+    ).join(" &nbsp;·&nbsp; ");
+    return `<tr><td>${esc(w.week)}</td><td>${cells || "-"}</td></tr>`;
+  }).join("");
+  const weekTable = weekRows
+    ? `<table class="ptable bilan"><thead><tr><th>Semaine</th><th>Marches regles</th></tr></thead><tbody>${weekRows}</tbody></table>`
+    : "";
+
+  // 2) Mouvement de cote / CLV.
+  const oddsCum = `<div class="bilan-cards">
+    <div class="bilan-card"><span>Matchs suivis</span><b>${bilanNum(odc.tracked_matches)}</b></div>
+    <div class="bilan-card"><span>Cote qui se resserre</span><b>${bilanNum(odc.shortened_rate,"%")}</b><small>${bilanNum(odc.shortened_count)} / ${bilanNum(odc.tracked_matches)}</small></div>
+    <div class="bilan-card"><span>Derive moyenne (proba implicite)</span><b class="${odc.average_implied_move_points<0?"neg":"pos"}">${bilanSigned(odc.average_implied_move_points)} pts</b></div>
+  </div>`;
+  const oddsWeekRows = (od.by_week || []).map(w =>
+    `<tr><td>${esc(w.week)}</td><td class="n">${w.tracked}</td><td class="n">${bilanNum(w.shortened_rate,"%")}</td><td class="n ${w.average_implied_move_points<0?"neg":"pos"}">${bilanSigned(w.average_implied_move_points)}</td></tr>`
+  ).join("");
+  const oddsWeekTable = oddsWeekRows
+    ? `<table class="ptable bilan"><thead><tr><th>Semaine</th><th>Suivis</th><th>Resserre</th><th>Derive moy.</th></tr></thead><tbody>${oddsWeekRows}</tbody></table>`
+    : "";
+
+  const ready = cov.enough_to_read_markets;
+  return `
+    <div class="bilan-cov ${ready?"ok":"wait"}">
+      <b>${cov.settled_market_picks||0}</b> paris de marche regles &nbsp;·&nbsp;
+      <b>${odc.tracked_matches||0}</b> matchs avec suivi de cote.
+      ${ready ? "Echantillon suffisant pour commencer a lire les marches." : "Echantillon encore mince : "+esc(cov.hint||"")}
+    </div>
+
+    <h3 class="bilan-h">Marches secondaires — le modele annonce-t-il juste ?</h3>
+    <p class="bilan-p">Taux <b>realise</b> contre <b>annonce</b>, cumule. Un ecart n'est lisible qu'a partir de ~50 reglages ; avant, c'est la colonne <b>n</b> qu'on regarde grandir.</p>
+    ${cumTable}
+    ${weekTable ? `<details class="bilan-det"><summary>Detail par semaine</summary>${weekTable}</details>` : ""}
+
+    <h3 class="bilan-h">Mouvement de cote — le marche se rapproche-t-il des outsiders suivis ?</h3>
+    <p class="bilan-p">Entre le premier repere et la cloture. <b>Se resserre</b> = le marche va vers l'outsider (signal favorable) ; <b>derive</b> = il s'en eloigne. Ce n'est pas un ROI : la cote reellement prise chez un book n'est pas connue.</p>
+    ${oddsCum}
+    ${oddsWeekTable ? `<details class="bilan-det"><summary>Detail par semaine</summary>${oddsWeekTable}</details>` : ""}
+
+    <div class="note">Ces deux mesures remplaceront a terme le score du radar, qui n'a pas de pouvoir predictif demontre. Elles s'accumulent automatiquement ; rien a saisir. Genere le ${esc((d.generated_at||"").slice(0,16).replace("T"," "))} UTC.</div>
+  `;
 }
 
 /* ---------- Helpers rendu ---------- */
