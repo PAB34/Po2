@@ -4,7 +4,7 @@ COPY index.html /usr/share/nginx/html/index.html
 COPY styles.css /usr/share/nginx/html/styles.css
 COPY styles.css /usr/share/nginx/html/styles-20260719-decision1.css
 COPY app.js /usr/share/nginx/html/app.js
-COPY app.js /usr/share/nginx/html/app-20260719-decision1.js
+COPY app.js /usr/share/nginx/html/app-20260730-bilan.js
 COPY tennis-outsider-radar.css /usr/share/nginx/html/tennis-outsider-radar.css
 COPY tennis-outsider-radar.css /usr/share/nginx/html/tennis-outsider-radar-20260726.css
 COPY tennis-outsider-radar.js /usr/share/nginx/html/tennis-outsider-radar.js

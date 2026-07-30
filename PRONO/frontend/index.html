@@ -20,6 +20,28 @@
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles-20260719-decision1.css">
   <link rel="stylesheet" href="/tennis-outsider-radar-20260726.css">
+  <style>
+    /* Bilan hebdomadaire — reprend le vocabulaire visuel du reste (cartes + tables). */
+    #view-bilan .bilan-cov{margin:6px 0 16px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.5;font-weight:600}
+    #view-bilan .bilan-cov.ok{background:#dcfce7;color:#14532d}
+    #view-bilan .bilan-cov.wait{background:#fef3c7;color:#92400e}
+    #view-bilan .bilan-h{font-family:var(--font-display,inherit);font-weight:400;text-transform:uppercase;font-size:17px;margin:22px 0 4px}
+    #view-bilan .bilan-p{color:#64748b;font-size:12.5px;line-height:1.5;margin:0 0 10px}
+    #view-bilan table.bilan{width:100%;border-collapse:collapse;font-size:13px}
+    #view-bilan table.bilan th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#64748b;padding:6px 8px;border-bottom:2px solid #e2e8f0}
+    #view-bilan table.bilan td{padding:7px 8px;border-bottom:1px solid #eef2f6}
+    #view-bilan table.bilan td.n{text-align:right;font-variant-numeric:tabular-nums}
+    #view-bilan .pos{color:#15803d;font-weight:800}
+    #view-bilan .neg{color:#b91c1c;font-weight:800}
+    #view-bilan .muted{color:#94a3b8}
+    #view-bilan .bilan-cards{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 6px}
+    #view-bilan .bilan-card{flex:1 1 150px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:2px}
+    #view-bilan .bilan-card span{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#64748b;font-weight:700}
+    #view-bilan .bilan-card b{font-size:22px;font-variant-numeric:tabular-nums}
+    #view-bilan .bilan-card small{color:#94a3b8;font-size:11px}
+    #view-bilan .bilan-det{margin-top:8px}
+    #view-bilan .bilan-det summary{cursor:pointer;font-size:12px;font-weight:700;color:#475569;padding:4px 0}
+  </style>
 </head>
 <body>
 
@@ -66,6 +88,7 @@
     <button class="tab" data-tab="actu" onclick="switchTab('actu')">📰 Actualité</button>
     <button class="tab" data-tab="tests" onclick="switchTab('tests')">Tests</button>
     <button class="tab" data-tab="tennis" onclick="switchTab('tennis')">TENNIS</button>
+    <button class="tab" data-tab="bilan" onclick="switchTab('bilan')">📊 Bilan</button>
   </div>
 
   <!-- Vue Matchs (tableau) -->
@@ -109,6 +132,17 @@
       Le marche devigotte est la reference. Les Elo surface et global restent des contrepoints independants; forme et H2H sont descriptifs, tandis que fatigue, recuperation et qualite des donnees determinent la vigilance et la largeur de la fourchette. Les marches secondaires sont calibres sur 2021-2024 et controles hors echantillon sur 2025. Historique: TennisMyLife (ATP) et archive Jeff Sackmann (WTA, CC BY-NC-SA 4.0). Outil de lecture, pas de garantie de gain.
     </div>
   </section>
+
+  <!-- Vue Bilan hebdomadaire -->
+  <section id="view-bilan" class="hidden">
+    <div class="tennis-head">
+      <div>
+        <div class="kicker">SUIVI</div>
+        <h2>Bilan hebdomadaire</h2>
+      </div>
+    </div>
+    <div id="bilanContent"><div class="loading"><div class="spin"></div>Chargement du bilan...</div></div>
+  </section>
 </div>
 
 <!-- Instructions d'installation (iOS / repli sans prompt natif) -->
@@ -138,7 +172,7 @@
   </div>
 </div>
 
-<script src="/app-20260719-decision1.js"></script>
+<script src="/app-20260730-bilan.js"></script>
 <script src="/tennis-outsider-radar-20260726.js"></script>
 <script>
   if ("serviceWorker" in navigator) {
