@@ -313,12 +313,49 @@ def _score_row(row: dict[str, Any], recent_by_player: dict[str, list[dict[str, A
     }
 
 
+def _attach_odds_movement(candidate: dict[str, Any], source_row: dict[str, Any], snapshots: dict[str, list[dict[str, Any]]]) -> None:
+    """Colle a chaque candidat l'evolution de sa cote outsider depuis le premier snapshot.
+
+    C'est la reponse a "suivre l'evolution de la cote" : la serie est deja en base (un
+    snapshot par construction de page), on la resume ici en open/close/direction.
+    """
+    from app import tennis
+    from app.tennis_odds_movement import _movement
+
+    pair_key = tennis._storage_pair(source_row.get("joueur1", ""), source_row.get("joueur2", ""))
+    match_id = tennis._match_identity(source_row.get("tour"), source_row.get("tournoi"), pair_key)
+    move = _movement(snapshots.get(match_id, []))
+    candidate["odds_movement"] = None if move is None else {
+        "snapshots": move["snapshots"],
+        "opening_outsider_odds": move["opening_outsider_odds"],
+        "latest_outsider_odds": move["closing_outsider_odds"],
+        "delta_odds": move["delta_odds"],
+        "implied_move_points": move["implied_move_points"],
+        "direction": move["direction"],
+    }
+
+
 def build_radar(payload: dict[str, Any], days: int = DEFAULT_DAYS, path: str | Path | None = None) -> dict[str, Any]:
     recent = recent_outsiders(days=days, path=path)
     recent_by_player: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in recent.get("winners", []):
         recent_by_player[_norm(item.get("outsider"))].append(item)
-    candidates = [_score_row(row, recent_by_player) for row in list(payload.get("atp") or []) + list(payload.get("wta") or [])]
+    source_rows = list(payload.get("atp") or []) + list(payload.get("wta") or [])
+    try:
+        from app.tennis_odds_movement import _snapshots
+        snapshots = _snapshots(path)
+    except Exception:
+        snapshots = {}
+    candidates = []
+    for row in source_rows:
+        candidate = _score_row(row, recent_by_player)
+        candidate["odds_movement"] = None  # cle toujours presente, meme sans historique
+        if snapshots:
+            try:
+                _attach_odds_movement(candidate, row, snapshots)
+            except Exception:
+                pass
+        candidates.append(candidate)
     candidates.sort(key=lambda item: (-item["score"], item.get("kickoff") or "9999", item.get("outsider") or ""))
     return {
         "updated": payload.get("updated"),

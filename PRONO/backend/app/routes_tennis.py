@@ -3,7 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app import tennis, tennis_journal, tennis_outsider_radar
+from app import tennis, tennis_journal, tennis_odds_movement, tennis_outsider_radar
 from app.auth import get_current_user
 
 
@@ -52,6 +52,12 @@ def tennis_recent_outsiders(days: int = 7, user=Depends(get_current_user)):
 @router.get("/outsiders/radar")
 def tennis_outsider_radar_view(days: int = 7, refresh: int = 0, user=Depends(get_current_user)):
     return tennis_outsider_radar.build_radar(_payload(force=bool(refresh)), days=days)
+
+
+@router.get("/outsiders/odds-movement")
+def tennis_odds_movement_view(days: int = 14, user=Depends(get_current_user)):
+    """Evolution de la cote outsider (open -> close) et agregat CLV sur la fenetre."""
+    return tennis_odds_movement.recent_movements(days=days)
 
 
 # ---------------------------------------------------------------------------
