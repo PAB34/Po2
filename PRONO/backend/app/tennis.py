@@ -889,6 +889,21 @@ def _storage_pair(player1: str, player2: str) -> str:
     return "|".join(sorted(_player_pair_key(player1, player2)))
 
 
+def _match_identity(tour: Any, tournament: Any, pair_key: str) -> str:
+    """Identifiant stable d'un match, INDEPENDANT de l'horaire.
+
+    Le bug corrige ici : l'ancienne cle de dedup incluait le kickoff a la minute, or
+    l'horaire estime derive d'un snapshot a l'autre (un match reste "a venir" plusieurs
+    jours, avec une estimation qui bouge). Chaque derive creait une nouvelle cle, donc le
+    meme match etait recompte -- jusqu'a 5 fois observe en prod. On identifie desormais un
+    match par (circuit, tournoi, paire de joueurs) : en simple a elimination directe, deux
+    joueurs ne se rencontrent qu'une fois par tournoi, ces trois champs sont stables entre
+    snapshots, et la paire est deja normalisee et triee.
+    """
+    normalized_tournament = " ".join(str(tournament or "").lower().split())
+    return "|".join((str(tour or "").upper(), normalized_tournament, str(pair_key or "")))
+
+
 def _record_decision_history(rows: list[dict], completed: list[dict], calculated_at: datetime) -> bool:
     root = os.environ.get("PRONO_DATA_DIR")
     if not root:
@@ -940,19 +955,34 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
             _ensure_column("cycle_opponent", "TEXT")
             _ensure_column("fatigue_opponent", "TEXT")
             _ensure_column("outsider_odds", "REAL")
+            _ensure_column("match_id", "TEXT")
+
+            # Retro-remplissage des lignes ecrites avant l'introduction du match_id, pour
+            # que la dedup fonctionne aussi sur l'historique existant. Ne touche que les
+            # lignes NULL : apres le premier passage, c'est un COUNT a vide.
+            legacy = db.execute(
+                "SELECT id, tour, tournament, pair_key FROM tennis_decisions WHERE match_id IS NULL"
+            ).fetchall()
+            for legacy_id, legacy_tour, legacy_tournament, legacy_pair in legacy:
+                db.execute(
+                    "UPDATE tennis_decisions SET match_id = ? WHERE id = ?",
+                    (_match_identity(legacy_tour, legacy_tournament, legacy_pair), legacy_id),
+                )
+
             stamp = calculated_at.isoformat(timespec="minutes")
             for row in rows:
+                pair_key = _storage_pair(row.get("joueur1", ""), row.get("joueur2", ""))
                 db.execute("""
                     INSERT OR IGNORE INTO tennis_decisions (
                         calculated_at, kickoff, tour, tournament, pair_key, player1, player2,
                         favorite, favorite_odds, market_probability, elo_probability, elo_gap,
                         decision, decision_level, context_label, quality, range_min, range_max,
                         surface, concordance, concordance_level, cycle_favorite, fatigue_favorite,
-                        cycle_opponent, fatigue_opponent, outsider_odds, payload_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cycle_opponent, fatigue_opponent, outsider_odds, match_id, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     stamp, row.get("kickoff"), row.get("tour"), row.get("tournoi"),
-                    _storage_pair(row.get("joueur1", ""), row.get("joueur2", "")),
+                    pair_key,
                     row.get("joueur1"), row.get("joueur2"), row.get("favori"), row.get("cote"),
                     row.get("proba_marche"), row.get("proba_elo"), row.get("ecart_elo"),
                     row.get("decision"), row.get("decision_level"), row.get("impact_contexte"),
@@ -960,10 +990,15 @@ def _record_decision_history(rows: list[dict], completed: list[dict], calculated
                     row.get("surface"), row.get("concordance"), row.get("concordance_level"),
                     row.get("cycle_favori"), row.get("fatigue_favori"), row.get("cycle_adversaire"),
                     row.get("fatigue_adversaire"), row.get("cote_outsider"),
+                    _match_identity(row.get("tour"), row.get("tournoi"), pair_key),
                     json.dumps(row, ensure_ascii=True, separators=(",", ":")),
                 ))
             for result in completed:
                 pair_key = _storage_pair(result.get("winner", ""), result.get("loser", ""))
+                # Reglage garde la cle pair_key : le nom de tournoi peut differer entre le
+                # scoreboard ESPN et le flux de cotes de secours, si bien qu'un scope par
+                # match_id risquerait de ne rien regler. Le rare recouvrement entre deux
+                # tournois d'une meme paire dans la fenetre reste un defaut mineur separe.
                 db.execute("""
                     UPDATE tennis_decisions
                     SET result_winner = ?, result_recorded_at = ?
