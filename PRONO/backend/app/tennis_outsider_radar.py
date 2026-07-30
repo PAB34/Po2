@@ -67,11 +67,20 @@ def _history_path() -> Path | None:
 
 
 def _match_key(row: dict[str, Any]) -> str:
-    kickoff = str(row.get("kickoff") or "")[:16]
+    """Cle de dedup d'un match. INDEPENDANTE de l'horaire (voir tennis._match_identity).
+
+    Priorite au match_id ecrit en base ; a defaut (lignes anterieures a son introduction),
+    reconstruction a partir de (circuit, tournoi, paire) -- jamais du kickoff, qui derive
+    entre snapshots et faisait recompter le meme match plusieurs fois.
+    """
+    match_id = str(row.get("match_id") or "").strip()
+    if match_id:
+        return match_id
     pair = str(row.get("pair_key") or "")
     if not pair:
         pair = "|".join(sorted((_norm(row.get("player1")), _norm(row.get("player2")))))
-    return "|".join((str(row.get("tour") or ""), str(row.get("tournament") or ""), kickoff, pair))
+    tournament = " ".join(str(row.get("tournament") or "").lower().split())
+    return "|".join((str(row.get("tour") or "").upper(), tournament, pair))
 
 
 def _canonical_history(path: str | Path | None = None) -> list[dict[str, Any]]:
