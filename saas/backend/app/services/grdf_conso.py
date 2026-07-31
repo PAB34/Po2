@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.models.gas import GasConsumption, GasPce
 from app.services.grdf_auth import GrdfQuotaExceeded
-from app.services.grdf_client import GrdfApiError, get_json
+from app.services.grdf_client import GrdfApiError, get_ndjson
 
 LOG = logging.getLogger(__name__)
 
@@ -104,7 +104,10 @@ def _iter_entries(payload: Any) -> Iterable[dict]:
 
 
 def _parse_entry(entry: dict, default_type: str) -> dict | None:
-    conso = entry.get("consommation") or {}
+    conso = entry.get("consommation")
+    if not conso:
+        # Période sans donnée publiée (statut_restitution 1000008) → ignorée.
+        return None
     periode = entry.get("periode") or {}
     coeff = conso.get("coeff_calcul") or {}
     date_debut = (
@@ -138,20 +141,20 @@ def _parse_entry(entry: dict, default_type: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def fetch_consos_publiees(id_pce: str, date_debut: date, date_fin: date) -> list[dict]:
-    payload = get_json(
+    entries = get_ndjson(
         f"/pce/{id_pce}/donnees_consos_publiees",
         params={"date_debut": date_debut.isoformat(), "date_fin": date_fin.isoformat()},
     )
-    rows = [_parse_entry(e, "Publiée") for e in _iter_entries(payload)]
+    rows = [_parse_entry(e, "Publiée") for e in entries]
     return [r for r in rows if r]
 
 
 def fetch_consos_informatives(id_pce: str, date_debut: date, date_fin: date) -> list[dict]:
-    payload = get_json(
+    entries = get_ndjson(
         f"/pce/{id_pce}/donnees_consos_informatives",
         params={"date_debut": date_debut.isoformat(), "date_fin": date_fin.isoformat()},
     )
-    rows = [_parse_entry(e, "Informative Journalier") for e in _iter_entries(payload)]
+    rows = [_parse_entry(e, "Informative Journalier") for e in entries]
     return [r for r in rows if r]
 
 
@@ -160,6 +163,17 @@ def fetch_consos_informatives(id_pce: str, date_debut: date, date_fin: date) -> 
 # ---------------------------------------------------------------------------
 
 def _upsert_rows(db: Session, pce_id: int, rows: list[dict]) -> int:
+    # Dédup intra-réponse : le flux GRDF peut livrer plusieurs entrées partageant
+    # la même date_debut (ex. « Absence de Données » d'un jour + période mesurée du
+    # mois) ; la contrainte unique (pce_id, date_debut, type_conso) n'en garde qu'une.
+    # On conserve la période la plus longue (date_fin la plus tardive = la vraie mesure).
+    deduped: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r["date_debut"], r["type_conso"])
+        prev = deduped.get(key)
+        if prev is None or (r["date_fin"] or date.min) >= (prev["date_fin"] or date.min):
+            deduped[key] = r
+    rows = list(deduped.values())
     n = 0
     for r in rows:
         existing = (
