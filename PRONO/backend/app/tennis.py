@@ -181,6 +181,7 @@ def _signal_strength(probability: float | None) -> str:
 
 
 def _market_item(key: str, label: str, pick: str, probability: float | None, detail: str, source: str, confidence: str, sample: int, signal: str | None = None) -> dict:
+    fair_odds = round(1 / probability, 2) if probability else None
     return {
         "key": key,
         "label": label,
@@ -188,7 +189,13 @@ def _market_item(key: str, label: str, pick: str, probability: float | None, det
         "prob": round(probability * 100) if probability is not None else None,
         # Cote juste = 1/p : c'est le seuil au-dessus duquel le prix du book devient
         # jouable. Sans elle, une probabilite affichee ne se compare a rien.
-        "fair_odds": round(1 / probability, 2) if probability else None,
+        "fair_odds": fair_odds,
+        # Feu tricolore sur le prix : la cote juste est SANS marge, donc un book de detail
+        # (Winamax ~6% de vig) la depasse rarement. On tolere la marge normale au lieu d'un
+        # couperet cote >= juste, qui interdirait quasiment tout pari. Vert = a la juste ou
+        # 5% dessous ; orange = jusqu'a 10% dessous (marge ordinaire) ; rouge = on surpaie.
+        "green_min": round(fair_odds * 0.95, 2) if fair_odds else None,
+        "orange_min": round(fair_odds * 0.90, 2) if fair_odds else None,
         "force": _signal_strength(probability),
         "source": source,
         "confidence": confidence,

@@ -156,19 +156,36 @@
 .or-reasons { margin: 0; padding-left: 17px; min-width: 215px; color: #0f172a; }
 .or-reasons li { margin-bottom: 4px; }
 .or-reasons li.warn { color: #92400e; }
-.or-markets { display: grid; gap: 5px; min-width: 220px; color: #0f172a; }
-.or-markets span {
+.or-markets { display: grid; gap: 6px; min-width: 260px; color: #0f172a; }
+.or-mkt {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 5px;
-  padding: 6px 8px;
+  gap: 3px;
+  padding: 7px 9px;
   background: #eef2f7;
   color: #0f172a;
   border-radius: 8px;
 }
-.or-markets b { grid-column: 1 / -1; }
-.or-markets em { font-style: normal; font-weight: 800; color: #166534; }
-.or-markets i { font-style: normal; color: #6d28d9; }
+.or-mkt b { font-size: .82rem; }
+.or-mkt-pick { font-size: .8rem; }
+.or-mkt em { font-style: normal; font-weight: 800; color: #166534; }
+.or-mkt-pick u { text-decoration: none; font-size: .72rem; text-transform: uppercase; letter-spacing: .02em; color: #6d28d9; }
+.or-mkt-ref { font-size: .72rem; color: #475569; }
+.or-mkt-calc { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.or-odds-input {
+  width: 78px;
+  padding: 4px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+.or-odds-input:focus { outline: 2px solid rgba(109, 40, 217, .35); outline-offset: 1px; }
+.or-verdict { font-size: .74rem; font-weight: 700; line-height: 1.25; }
+.or-verdict.green { color: #166534; }
+.or-verdict.orange { color: #b45309; }
+.or-verdict.red { color: #b91c1c; }
+.or-value-legend { margin: 0 0 10px; font-size: .82rem; color: #475569; line-height: 1.4; }
+.or-value-legend b { color: #0f172a; }
 .or-empty {
   padding: 16px;
   border: 1px dashed #94a3b8;
