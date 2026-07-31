@@ -71,8 +71,12 @@ class Settings(BaseSettings):
 
     # GRDF ADICT API (gaz — distributeur)
     # Auth client_credentials (token API valide ~4h) ; scope /adict/v2.
+    # NB : l'endpoint SOFIT « recommandé » (sofit-sso-oidc.grdf.fr) est injoignable
+    # depuis nos réseaux (handshake TLS abandonné, poste ET VPS prod) ; on utilise
+    # l'endpoint OKTA « alternatif » de la doc, qui répond en client_credentials
+    # (testé OK 2026-07-31, token 4h reçu). Voir docs/Modules/GRDF-API.md §2.
     grdf_auth_url: str = (
-        "https://sofit-sso-oidc.grdf.fr/openam/oauth2/realms/externeGrdf/access_token"
+        "https://adict-connexion.grdf.fr/oauth2/aus5y2ta2uEHjCWIR417/v1/token"
     )
     grdf_base_url: str = "https://api.grdf.fr/adict/v2"
     grdf_scope: str = "/adict/v2"
