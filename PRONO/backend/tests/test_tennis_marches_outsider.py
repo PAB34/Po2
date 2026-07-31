@@ -100,6 +100,16 @@ class OutsiderMarketsTests(unittest.TestCase):
         markets = tennis._outsider_markets("Dupont", 0.70, _calibration())
         self.assertTrue(all(m["signal"] for m in markets))
 
+    def test_price_thresholds_tolerate_the_bookmaker_margin(self):
+        # Cote juste sans marge : un book de detail la depasse rarement. Vert = 5% dessous,
+        # orange = 10% dessous. Sur set_1 a 25% (juste 4.0) : vert 3.8, orange 3.6.
+        markets = tennis._outsider_markets("Dupont", 0.70, _calibration(favorite_wins_set_1=0.75))
+        set_1 = next(m for m in markets if m["key"] == "outsider_set_1")
+        self.assertEqual(4.0, set_1["fair_odds"])
+        self.assertEqual(3.8, set_1["green_min"])
+        self.assertEqual(3.6, set_1["orange_min"])
+        self.assertLess(set_1["orange_min"], set_1["green_min"])
+
 
 if __name__ == "__main__":
     unittest.main()

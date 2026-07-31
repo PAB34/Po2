@@ -80,15 +80,75 @@ function outsiderReasons(item) {
   const warnings = (item.warnings || []).map(reason => `<li class="warn">${esc(reason)}</li>`).join("");
   return `<ul class="or-reasons">${positives}${warnings}</ul>`;
 }
-function outsiderMarkets(markets) {
+// Seuils de prix : la cote juste est sans marge, donc un book de detail la depasse
+// rarement. On tolere la marge (vert < 5% dessous, orange < 10%, rouge au-dela).
+function outsiderThresholds(m) {
+  const fair = Number(m.fair_odds);
+  if (!Number.isFinite(fair) || fair <= 1) return null;
+  const green = Number.isFinite(Number(m.green_min)) ? Number(m.green_min) : Math.round(fair * 95) / 100;
+  const orange = Number.isFinite(Number(m.orange_min)) ? Number(m.orange_min) : Math.round(fair * 90) / 100;
+  return { fair, green, orange };
+}
+// Unite de base = confiance (label radar x force du marche), AVANT prix. On ne pretend
+// pas battre la vig par un Kelly : l'unite dit "combien si le prix est correct".
+function outsiderBaseUnits(label, force) {
+  const l = outsiderNorm(label);
+  if (l.includes("ecart") || l.includes("secondaire")) return 0;
+  const tier = { fort: 2, moyen: 1.5, faible: 1, info: 0.5 };
+  let units = tier[force] == null ? 1 : tier[force];
+  if (l.includes("etudier")) units = Math.min(units, 0.5); // signal faible => prudence
+  return units;
+}
+function outsiderPriceZone(odds, t) {
+  if (!t || !Number.isFinite(odds) || odds <= 1) return null;
+  if (odds >= t.green) return "green";
+  if (odds >= t.orange) return "orange";
+  return "red";
+}
+// Le feu module l'unite : vert bonifie (plafond 3), orange neutre, rouge divise par deux
+// (mini 0.5 pour ceux qui prennent quand meme le ticket afin de tester le modele).
+function outsiderAdjustUnits(base, zone) {
+  if (!base) return 0;
+  if (zone === "green") return Math.min(3, Math.round(base * 1.25 * 2) / 2);
+  if (zone === "red") return Math.max(0.5, Math.round(base * 0.5 * 2) / 2);
+  return Math.round(base * 2) / 2;
+}
+const OR_ZONE = {
+  green: { dot: "🟢", text: "prix juste ou mieux" },
+  orange: { dot: "🟠", text: "marge normale, jouable" },
+  red: { dot: "🔴", text: "tu surpaies" },
+};
+function evalOutsiderValue(input) {
+  const box = input.closest(".or-mkt");
+  const out = box && box.querySelector(".or-verdict");
+  if (!out) return;
+  const odds = Number(String(input.value).replace(",", "."));
+  const t = { green: Number(input.dataset.green), orange: Number(input.dataset.orange) };
+  const base = Number(input.dataset.base);
+  if (!Number.isFinite(odds) || odds <= 1) { out.className = "or-verdict"; out.textContent = ""; return; }
+  const zone = outsiderPriceZone(odds, t) || "red";
+  const info = OR_ZONE[zone];
+  const units = outsiderAdjustUnits(base, zone);
+  const stake = units ? `${units} unite${units > 1 ? "s" : ""}` : "on passe";
+  out.className = `or-verdict ${zone}`;
+  out.textContent = `${info.dot} ${info.text} · ${stake}`;
+}
+function outsiderMarkets(markets, item) {
   const usable = (markets || []).slice(0, 3);
   if (!usable.length) return `<span class="tmissing">Indispo</span>`;
-  return `<div class="or-markets">${usable.map(m => `<span><b>${esc(m.label || m.key || "Marche")}</b>${esc(m.pick || "-")} ${m.prob == null ? "" : `<em>${esc(m.prob)}%</em>`}${m.fair_odds == null ? "" : `<i>@${esc(m.fair_odds)}</i>`}</span>`).join("")}</div>`;
+  const label = (item || {}).label;
+  return `<div class="or-markets">${usable.map(m => {
+    const t = outsiderThresholds(m);
+    const base = outsiderBaseUnits(label, m.force);
+    const ref = t ? `<span class="or-mkt-ref">juste ${outsiderOdds(t.fair)} · 🟢≥${outsiderOdds(t.green)} · 🟠≥${outsiderOdds(t.orange)}</span>` : "";
+    const calc = t ? `<div class="or-mkt-calc"><input type="text" inputmode="decimal" class="or-odds-input" placeholder="cote prise" aria-label="Cote prise sur ${esc(m.label || "ce marche")}" data-green="${esc(t.green)}" data-orange="${esc(t.orange)}" data-base="${esc(base)}" oninput="evalOutsiderValue(this)"><span class="or-verdict"></span></div>` : "";
+    return `<div class="or-mkt"><b>${esc(m.label || m.key || "Marche")}</b><span class="or-mkt-pick">${esc(m.pick || "-")}${m.prob == null ? "" : ` <em>${esc(m.prob)}%</em>`}${m.force ? ` <u>${esc(m.force)}</u>` : ""}</span>${ref}${calc}</div>`;
+  }).join("")}</div>`;
 }
 function outsiderRadarTable(items) {
   if (!items || !items.length) return `<div class="or-empty">Aucun joueur ne correspond a cette recherche.</div>`;
   return `<div class="or-table-wrap" role="region" aria-label="Classement des outsiders" tabindex="0"><table class="or-table"><thead><tr>
-    <th>${outsiderSortHeader("Score", "score")}</th><th>${outsiderSortHeader("Match", "outsider")}</th><th>${outsiderSortHeader("Cote", "outsider_odds")}</th><th>${outsiderSortHeader("Marche", "market_outsider_probability")}</th><th>${outsiderSortHeader("Elo", "elo_outsider_probability")}</th><th>${outsiderSortHeader("Ecart", "elo_edge_points")}</th><th>${outsiderSortHeader("Upsets", "recent_upsets")}</th><th>${outsiderSortHeader("Qualite", "quality")}</th><th>Pourquoi</th><th>Marches outsider</th>
+    <th>${outsiderSortHeader("Score", "score")}</th><th>${outsiderSortHeader("Match", "outsider")}</th><th>${outsiderSortHeader("Cote", "outsider_odds")}</th><th>${outsiderSortHeader("Marche", "market_outsider_probability")}</th><th>${outsiderSortHeader("Elo", "elo_outsider_probability")}</th><th>${outsiderSortHeader("Ecart", "elo_edge_points")}</th><th>${outsiderSortHeader("Upsets", "recent_upsets")}</th><th>${outsiderSortHeader("Qualite", "quality")}</th><th>Pourquoi</th><th>Marches &amp; valeur</th>
   </tr></thead><tbody>${items.map(item => `<tr>
     <td><div class="or-score ${outsiderScoreClass(item.score)}"><b>${esc(item.score)}</b><span>${esc(item.label)}</span></div></td>
     <td><b>${esc(item.outsider || "-")}</b><span class="or-vs">vs ${esc(item.favorite || "-")}</span><small>${esc(item.tour || "")} · ${esc(item.tournament || "")} · ${esc(item.surface || "")}<br>${esc(item.time || "")}</small></td>
@@ -99,7 +159,7 @@ function outsiderRadarTable(items) {
     <td class="n">${esc(item.recent_upsets || 0)}</td>
     <td>${esc(item.quality || "faible")}</td>
     <td>${outsiderReasons(item)}</td>
-    <td>${outsiderMarkets(item.markets)}</td>
+    <td>${outsiderMarkets(item.markets, item)}</td>
   </tr>`).join("")}</tbody></table></div>`;
 }
 function recentOutsiderTable(items, empty) {
@@ -280,7 +340,7 @@ function renderOutsiderRadar() {
     <div class="or-summary">
       <span><b>${esc(radar.priority_count || 0)}</b> prioritaires</span><span><b>${esc(summary.upset_count || 0)}</b> upsets recents</span><span><b>${summary.upset_rate == null ? "-" : esc(summary.upset_rate) + "%"}</b> taux upset</span><span><b>${outsiderOdds(summary.average_winning_outsider_odds)}</b> cote moyenne gagnante</span><span><b>${esc(summary.canonical_match_count || 0)}</b> matchs uniques</span>
     </div>
-    <section class="or-section"><h4>Prochains matchs classes</h4><div id="orRadarTable">${outsiderRadarTable(candidates)}</div></section>
+    <section class="or-section"><h4>Prochains matchs classes</h4><p class="or-value-legend">Colonne <b>Marches &amp; valeur</b> : saisis la cote vue sur ton book pour lire le feu (🟢 prix juste ou mieux · 🟠 marge normale · 🔴 tu surpaies) et l'unite conseillee. 1 unite = 1% de bankroll.</p><div id="orRadarTable">${outsiderRadarTable(candidates)}</div></section>
     <section class="or-section"><h4 id="orWinnersTitle">Outsiders gagnants sur ${esc(_outsiderDays)} jours (${winners.length})</h4><div id="orWinnersTable">${recentOutsiderTable(winners, "Aucun outsider gagnant ne correspond a cette recherche.")}</div></section>
     <details class="or-losses"><summary id="orLossesSummary">Voir aussi les outsiders perdants (${losses.length})</summary><div id="orLossesTable">${recentOutsiderTable(losses, "Aucun outsider perdant ne correspond a cette recherche.")}</div></details>
   </div>`;
