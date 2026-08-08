@@ -3,7 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends
 
-from app import tennis, tennis_journal, tennis_odds_movement, tennis_outsider_radar, tennis_scorecard
+from app import tennis, tennis_atp_elo, tennis_journal, tennis_odds_movement, tennis_outsider_radar, tennis_scorecard
 from app.auth import get_current_user
 
 
@@ -17,7 +17,14 @@ BRACKET_CACHE_TTL = 3600
 
 def _payload(force: bool = False) -> dict:
     if force or _CACHE["data"] is None or (time.time() - _CACHE["ts"]) > CACHE_TTL:
-        _CACHE["data"] = tennis.build_tennis()
+        try:
+            elo_refresh = tennis_atp_elo.refresh_coach_if_needed(tennis._coach(), force=force)
+        except Exception as exc:
+            # L'actualisation externe ne doit jamais rendre la page tennis indisponible.
+            elo_refresh = {"status": "error", "source": "donnees ATP embarquees", "error": type(exc).__name__}
+        payload = tennis.build_tennis()
+        payload["atp_elo_refresh"] = elo_refresh
+        _CACHE["data"] = payload
         _CACHE["ts"] = time.time()
     return _CACHE["data"]
 
