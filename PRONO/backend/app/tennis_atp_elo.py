@@ -190,21 +190,21 @@ def rebuild_atp_elo(coach: Any, paths: Iterable[Path], source: str = "TennisMyLi
     latest: defaultdict[str, int] = defaultdict(int)
     names: dict[str, str] = {}
 
-    for record in matches.itertuples(index=False):
-        winner = str(getattr(record, "winner_name", "") or "").strip()
-        loser = str(getattr(record, "loser_name", "") or "").strip()
+    for record in matches.to_dict("records"):
+        winner = str(record.get("winner_name") or "").strip()
+        loser = str(record.get("loser_name") or "").strip()
         wk, lk = norm(winner), norm(loser)
         if not wk or not lk or wk == lk:
             continue
         names[wk], names[lk] = winner, loser
-        played_on = int(getattr(record, "_date", 0) or 0)
+        played_on = int(record.get("_date") or 0)
 
         win_expectation = _expected(global_elo[wk], global_elo[lk])
         delta = ELO_K * (1.0 - win_expectation)
         global_elo[wk] += delta
         global_elo[lk] -= delta
 
-        surface = _surface(getattr(record, "surface", None))
+        surface = _surface(record.get("surface"))
         if surface:
             ratings = surface_elo[surface]
             surface_expectation = _expected(ratings[wk], ratings[lk])
