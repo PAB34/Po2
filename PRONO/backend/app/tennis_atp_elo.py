@@ -157,13 +157,9 @@ def _find_or_create_row(coach: Any, player: str) -> dict[str, Any]:
 
     row = exact.get(player_key)
     if row is None:
-        for alias in stats_keys(player):
-            if alias in ambiguous:
-                continue
-            candidate = bucket.get(alias)
-            if candidate is not None:
-                row = candidate
-                break
+        candidate = bucket.get(player_key)
+        if candidate is not None and norm(candidate.get("player")) == player_key:
+            row = candidate
     if row is None:
         row = {"player": player}
     row.setdefault("player", player)
