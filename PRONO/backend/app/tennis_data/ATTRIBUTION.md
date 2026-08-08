@@ -8,11 +8,17 @@ They are used for non-commercial statistical calibration and H2H context.
 - Mirror: https://huggingface.co/datasets/Aneeshers/tennis-sackmann-archive
 - License: CC BY-NC-SA 4.0
 
-The files in `tml/` come from the TennisMyLife database:
+The historical files in `tml/` come from the TennisMyLife database:
 https://github.com/Tennismylife/TML-Database
 
-ATP players with sparse local coverage may be supplemented at runtime from the
-public TennisMyLife player pages and `api/players/allmatches` feed. Responses
-are cached for 24 hours, validated before use, and are not redistributed.
+TennisMyLife now keeps that GitHub repository for historical/technical reference
+and publishes the live ATP database on:
+https://stats.tennismylife.org/tennis-match-database
+
+In production, PRONO retrieves only the current-year ATP CSV from
+`https://stats.tennismylife.org/data/{year}.csv`. It is cached for 24 hours in
+the private runtime volume, validated before use, and is not committed or
+redistributed. If the live source is unavailable, the last valid runtime cache
+is used, then the packaged historical file as a final fallback.
 
 All TennisMyLife data is used only for this private, non-commercial dashboard.
