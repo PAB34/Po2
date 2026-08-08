@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app import tennis_atp_elo
-from app.tennis_coach import norm
+from app.tennis_coach import norm, short_key
 
 
 class FakeCoach:
@@ -51,6 +51,25 @@ class TennisAtpEloTests(unittest.TestCase):
             self.assertGreater(alice["elo_clay"], carla["elo_clay"])
             self.assertEqual(alice["elo_source"], "test")
             self.assertIs(coach.stats["ATP"][norm("Alice Alpha")], alice)
+
+    def test_homonymous_short_aliases_never_merge_players(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            history = self._csv(
+                root / "tml" / "2026.csv",
+                [
+                    "20260101,1,John Smith,Player One,Hard",
+                    "20260102,2,James Smith,Player Two,Hard",
+                ],
+            )
+            coach = FakeCoach(root)
+
+            tennis_atp_elo.rebuild_atp_elo(coach, [history], source="test")
+
+            john = coach._stats_exact["ATP"][norm("John Smith")]
+            james = coach._stats_exact["ATP"][norm("James Smith")]
+            self.assertIsNot(john, james)
+            self.assertIn(short_key("John Smith"), coach._ambiguous_stats_keys["ATP"])
 
     def test_history_paths_replaces_packaged_current_year(self):
         with tempfile.TemporaryDirectory() as tmp:
