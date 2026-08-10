@@ -6,8 +6,19 @@ joignable depuis le VPS) et son parseur capte desormais le nom du tournoi -- san
 filtre LOW_LEVEL ne s'appliquerait plus et l'UI se noierait sous les UTR/ITF.
 """
 import unittest
+from datetime import date
 
 from app import tennis
+
+
+# La 1re ligne du match porte l'heure (`td.first.time`) + les cotes (rowspan=2).
+TE_FIXTURE_TIME = """
+<table>
+<tr class="head flags"><td class="t-name" colspan="2"><a href="/montreal/2026/atp-men/"><span class="fl fl-ca">&nbsp;</span><span class="type-men2">&nbsp;</span>Montreal</a></td></tr>
+<tr id="r1" class="one fRow bott"><td class="first time" rowspan="2">22:10<br /><img src="/res/img/icon-tv.gif"/></td><td class="t-name"><a href="/player/jodar/">Jodar R.</a></td><td class="course">1.77</td><td class="course">2.04</td></tr>
+<tr id="r2" class="two bott"><td class="t-name"><a href="/player/fils/">Fils A.</a></td></tr>
+</table>
+"""
 
 
 TE_FIXTURE = """
@@ -33,6 +44,18 @@ class ParseTennisExplorerTests(unittest.TestCase):
         self.assertEqual("Fils A.", first["player2"])
         self.assertEqual(1.77, first["odds1"])
         self.assertEqual(2.04, first["odds2"])
+
+    def test_captures_match_time_and_dates_kickoff_on_the_page_day(self):
+        matches = tennis._parse_te_day(TE_FIXTURE_TIME, date(2026, 8, 11))
+        self.assertEqual(1, len(matches))
+        self.assertEqual("22:10", matches[0]["time"])
+        self.assertTrue(matches[0]["kickoff"].startswith("2026-08-11T22:10"))
+
+    def test_time_without_page_day_yields_no_kickoff(self):
+        # Sans jour (usage direct/tests), on garde l'heure affichee mais pas de kickoff date.
+        matches = tennis._parse_te_day(TE_FIXTURE_TIME)
+        self.assertEqual("22:10", matches[0]["time"])
+        self.assertIsNone(matches[0]["kickoff"])
 
     def test_low_level_tournament_name_is_captured_so_it_can_be_filtered(self):
         # Le parseur ne filtre pas, mais il doit livrer le nom pour que LOW_LEVEL agisse.

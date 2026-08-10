@@ -14,7 +14,7 @@ import sqlite3
 import unicodedata
 import urllib.request
 from contextlib import closing
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -42,6 +42,10 @@ _TE_HEAD_INFO_RE = re.compile(
 )
 _TE_PLAYER_RE = re.compile(r'<td class="t-name"[^>]*>\s*<a href="/player/[^"]*">([^<]+)</a>', re.S)
 _TE_COURSE_RE = re.compile(r'<td class="course"[^>]*>\s*([0-9]+\.[0-9]+)\s*</td>', re.S)
+# Heure de match TE, portee par la 1re ligne (`<td class="first time">HH:MM<br>...`).
+# Restaure l'ordre chronologique, le masquage des matchs finis et la precision de la
+# closing line quand ESPN (qui donnait l'heure) bloque l'IP du VPS.
+_TE_TIME_RE = re.compile(r'<td class="[^"]*\btime\b[^"]*"[^>]*>\s*(\d{1,2}:\d{2})')
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures|davis cup|billie jean king", re.I)
 CLAY = (
     "gstaad", "bastad", "nordea", "swedish open", "efg swiss", "kitzbuhel", "kitzbuehel", "generali open", "hamburg", "umag", "plava laguna", "cordenons",
@@ -821,12 +825,13 @@ def fetch_feed() -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def _parse_te_day(html: str) -> list[dict]:
+def _parse_te_day(html: str, day: date | None = None) -> list[dict]:
     """Extrait les affiches ATP/WTA simples avec cotes d'une page journaliere TennisExplorer.
 
-    Chaque match occupe deux lignes: la premiere porte le joueur 1 et les deux cotes
-    (`td.course`, rowspan=2), la seconde porte le joueur 2. Les doubles (`/doubles-team/`)
-    et les matchs sans cote sont ignores. Le tour vient de l'en-tete de tournoi.
+    Chaque match occupe deux lignes: la premiere porte le joueur 1, les deux cotes
+    (`td.course`, rowspan=2) et l'heure (`td.first.time`); la seconde porte le joueur 2.
+    Les doubles (`/doubles-team/`) et les matchs sans cote sont ignores. Le tour vient de
+    l'en-tete de tournoi. `day` (le jour de la page) sert a dater le kickoff precisement.
     """
     matches: list[dict] = []
     current_tour: str | None = None
@@ -846,15 +851,18 @@ def _parse_te_day(html: str) -> list[dict]:
         name = player_match.group(1).strip()
         if pending is None:
             odds = _TE_COURSE_RE.findall(inner)
+            time_match = _TE_TIME_RE.search(inner)
+            clock = time_match.group(1) if time_match else ""
             if current_tour and len(odds) >= 2:
-                pending = (current_tour, name, odds[0], odds[1])
+                pending = (current_tour, name, odds[0], odds[1], clock)
             else:
-                pending = ("__skip__", None, None, None)
+                pending = ("__skip__", None, None, None, "")
             continue
-        tour, player1, odds1, odds2 = pending
+        tour, player1, odds1, odds2, clock = pending
         pending = None
         if tour == "__skip__":
             continue
+        kickoff = _combine_te_kickoff(day, clock)
         try:
             matches.append({
                 "tour": tour,
@@ -863,11 +871,21 @@ def _parse_te_day(html: str) -> list[dict]:
                 "player2": name,
                 "odds1": float(odds1),
                 "odds2": float(odds2),
+                "time": clock,
+                "kickoff": kickoff.isoformat() if kickoff else None,
                 "source": "tennisexplorer",
             })
         except (TypeError, ValueError):
             continue
     return matches
+
+
+def _combine_te_kickoff(day: date | None, clock: str) -> datetime | None:
+    """Datetime du coup d'envoi = jour de la page TE + heure locale de la ligne."""
+    if day is None or not clock:
+        return None
+    parsed = _parse_match_clock(clock)
+    return datetime.combine(day, parsed) if parsed else None
 
 
 def _fetch_te_day(day) -> str:
@@ -892,7 +910,7 @@ def fetch_tennisexplorer_odds(now: datetime | None = None) -> list[dict]:
             html = _fetch_te_day(day)
         except Exception:
             continue
-        for raw in _parse_te_day(html):
+        for raw in _parse_te_day(html, day):
             key = (raw["tour"], _player_pair_key(raw["player1"], raw["player2"]))
             if key in seen:
                 continue
