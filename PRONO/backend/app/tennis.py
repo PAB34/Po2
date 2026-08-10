@@ -33,7 +33,13 @@ TE_MATCHES_URL = "https://www.tennisexplorer.com/matches/?type=all&year={year}&m
 TE_TOUR = {"atp-men": "ATP", "wta-women": "WTA"}
 _TE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S)
 _TE_HEAD_RE = re.compile(r'class="head flags"')
-_TE_HEADCAT_RE = re.compile(r'<td class="t-name"[^>]*>\s*<a href="/[^"]*?/\d{4}/([a-z-]+)/', re.S)
+# En-tete de tournoi TE : capture la categorie (atp-men/wta-women) ET le nom affiche
+# (ex. "Montreal", "Toronto WTA"). Le nom est indispensable en repli sans ESPN : sans lui
+# le filtre LOW_LEVEL ne s'applique plus et l'UI se noie sous les UTR/ITF que TE liste.
+_TE_HEAD_INFO_RE = re.compile(
+    r'<td class="t-name"[^>]*>\s*<a href="/[^"]*?/\d{4}/([a-z-]+)/[^"]*">(?:<span[^>]*>.*?</span>\s*)*([^<]+)</a>',
+    re.S,
+)
 _TE_PLAYER_RE = re.compile(r'<td class="t-name"[^>]*>\s*<a href="/player/[^"]*">([^<]+)</a>', re.S)
 _TE_COURSE_RE = re.compile(r'<td class="course"[^>]*>\s*([0-9]+\.[0-9]+)\s*</td>', re.S)
 LOW_LEVEL = re.compile(r"challenger|itf|utr|futures|davis cup|billie jean king", re.I)
@@ -824,12 +830,14 @@ def _parse_te_day(html: str) -> list[dict]:
     """
     matches: list[dict] = []
     current_tour: str | None = None
+    current_tournament: str = ""
     pending: tuple | None = None
     for row_match in _TE_ROW_RE.finditer(html):
         inner = row_match.group(1)
         if _TE_HEAD_RE.search(row_match.group(0)):
-            category = _TE_HEADCAT_RE.search(inner)
-            current_tour = TE_TOUR.get(category.group(1)) if category else None
+            info = _TE_HEAD_INFO_RE.search(inner)
+            current_tour = TE_TOUR.get(info.group(1)) if info else None
+            current_tournament = info.group(2).strip() if info else ""
             pending = None
             continue
         player_match = _TE_PLAYER_RE.search(inner)
@@ -850,6 +858,7 @@ def _parse_te_day(html: str) -> list[dict]:
         try:
             matches.append({
                 "tour": tour,
+                "tournament": current_tournament,
                 "player1": player1,
                 "player2": name,
                 "odds1": float(odds1),
@@ -1131,6 +1140,25 @@ def _apply_anchor_recommendations(rows: list[dict], report: dict | None, min_sam
             derived["calibration_flag"] = "ok"
 
 
+def _select_match_source(
+    scoreboard_matches: list[dict],
+    scoreboard_odds: list[dict],
+    te_odds: list[dict],
+    odds_matches: list[dict],
+) -> tuple[list[dict], str]:
+    """Choisit la source des affiches par ordre de fraicheur.
+
+    ESPN est la verite du tour en cours mais bloque l'IP du VPS (403) : sans lui, on prend
+    tennisexplorer -- joignable depuis le VPS et a jour -- plutot que le flux GitHub, qui
+    reste un tour en retard (il affichait encore les 8es pendant les 1/4).
+    """
+    if scoreboard_matches:
+        return _attach_odds(scoreboard_matches, scoreboard_odds), "ESPN"
+    if te_odds:
+        return list(te_odds), "tennisexplorer-fallback"
+    return odds_matches, "market-feed-fallback"
+
+
 def build_tennis() -> dict:
     data = fetch_feed()
     odds_matches = data.get("matches", [])
@@ -1146,7 +1174,7 @@ def build_tennis() -> dict:
         te_odds = []
     _coach().set_live_results(completed_results)
     scoreboard_odds = list(odds_matches) + te_odds
-    matches = _attach_odds(scoreboard_matches, scoreboard_odds) if scoreboard_matches else odds_matches
+    matches, scoreboard_source = _select_match_source(scoreboard_matches, scoreboard_odds, te_odds, odds_matches)
     atp, atp_filtered, atp_unpriced = _rows(matches, "ATP", feed_updated, now)
     wta, wta_filtered, wta_unpriced = _rows(matches, "WTA", feed_updated, now)
     pending_odds = _pending_final_rows(matches, feed_updated, now)
@@ -1160,7 +1188,7 @@ def build_tennis() -> dict:
         "updated": now.strftime("%d/%m/%Y %H:%M"),
         "feed_updated": data.get("last_updated", ""),
         "feed_age_hours": round((now - feed_updated).total_seconds() / 3600, 1),
-        "scoreboard_source": "ESPN" if scoreboard_matches else "market-feed-fallback",
+        "scoreboard_source": scoreboard_source,
         "scoreboard_count": len(scoreboard_matches),
         "scoreboard_completed_count": len(completed_results),
         "te_odds_count": len(te_odds),
