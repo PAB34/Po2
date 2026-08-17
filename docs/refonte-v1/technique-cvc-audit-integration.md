@@ -210,7 +210,55 @@ Le DALKIA est déjà à 88 %. Restent :
 - **rendre les mappings réutilisables entre imports** (clé `source_site_raw` au niveau ville plutôt
   que par lot), pour ne plus reperdre le travail à chaque réimport.
 
-**Incrément 2 — Moteur « état du parc »**
+**Incrément 1b — Fiabilisation du rapprochement** — ✅ **FAIT le 2026-08-17 (PR #90)**
+
+`_site_similarity` : alias (ST↔SAINT, GS→GROUPE SCOLAIRE…), retrait des préfixes de codification
+(« VDS-ENS 17.03 GS - », « CCAS 10 »), et surtout **garde-fou sémantique** — score forcé à 0 si les
+natures de bâtiment diffèrent (stade ≠ restaurant) ou si aucun token distinctif n'est commun
+(CIMETIERE **MARIN** ≠ CIMETIERE **LE PY**). Score = `max(séquence, 0.4×jaccard + 0.6×couverture)`.
+Branché sur `_suggest_source_building` et `_mapping_suggestions` (noms + adresses).
+**Effet mesuré sur les 37 libellés orphelins : 10 suggestions au lieu de 6, faux positifs éliminés.**
+Les suggestions restent soumises à validation humaine — rien n'est auto-appliqué. 16 tests dédiés.
+
+**Incrément 2 — Moteur « état du parc »** — ✅ **FAIT le 2026-08-17 (PR #91)**
+
+`GET /api/cvc/parc-technique` (filtres `provider`, `building_id`, `famille`) : KPI, pyramide des
+âges, criticité, par famille, par bâtiment (les plus critiques en tête), par prestataire, et
+**complétude de la donnée**. N'agrège que le lot d'import courant de chaque prestataire.
+Aucun recalcul : l'agrégation s'appuie sur `_read_item`/`_compute_lifecycle`. 7 tests dédiés,
+57 tests CVC verts.
+
+### Premier état du parc réel (prod, 2026-08-17)
+
+```
+Équipements            1 422        Âge moyen        9,6 ans
+Rattachés              1 175 (74 bâtiments)
+Durée de vie DÉPASSÉE    210        Fin de vie < 5 ans   219
+```
+
+| Pyramide des âges | | Criticité | |
+|---|---|---|---|
+| 0-5 ans | 289 (20,3 %) | < 50 % | 426 (30,0 %) |
+| 6-10 ans | 312 (21,9 %) | 50-80 % | 228 (16,0 %) |
+| 11-15 ans | 124 (8,7 %) | 80-100 % | 74 (5,2 %) |
+| 16-20 ans | 74 (5,2 %) | **dépassée** | **198 (13,9 %)** |
+| 21-30 ans | 112 (7,9 %) | non calculable | 496 (34,9 %) |
+| 30 ans et + | 15 (1,1 %) | | |
+| **non calculable** | **496 (34,9 %)** | | |
+
+**Bâtiments les plus critiques** : PISCINE BIASCAMANO (104 éq., 24 dépassés, 32 sous 5 ans),
+ÉCOLE ÉLÉMENTAIRE LA RENAISSANCE (35 éq., 16 dépassés), MUSÉE PAUL VALÉRY, CENTRE SPORTIF MAURICE
+CLAVEL, HÔTEL DE VILLE.
+**Familles les plus critiques** : Pompe (61 dépassés / 153), Split system (33 dépassés, 49 sous
+5 ans), Chaudière (19 dépassés / 66, âge moyen 13,9 ans).
+
+> ⚠️ **34,9 % du parc n'est pas calculable** faute de date de mise en service (complétude : date MES
+> 45,1 %, référence SYPEMI 69,3 %). Tout chiffre d'âge ou de criticité doit être lu avec ce taux à
+> côté — c'est pourquoi la complétude est exposée dans le rapport lui-même.
+>
+> Nuance : « dépassés » vaut 210 côté KPI et 198 côté criticité. Les deux ne mesurent pas la même
+> chose : le KPI s'appuie sur la durée de vie restante (qui peut venir du prestataire), la criticité
+> sur le rapport âge/référence SYPEMI (qui exige une date de MES **et** une référence).
 Un endpoint d'agrégation (ex. `GET /api/cvc/parc-technique`) exposant, avec filtres
 (bâtiment / famille / prestataire) : effectifs, **pyramide des âges**, répartition par
 criticité (`< 50 %` / `50-80 %` / `80-100 %` / dépassé), équipements **en fin de vie sous 5 ans**,
