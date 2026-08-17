@@ -265,14 +265,55 @@ criticité (`< 50 %` / `50-80 %` / `80-100 %` / dépassé), équipements **en fi
 taux de complétude de la donnée (date MES, référence SYPEMI). S'appuie sur `_compute_lifecycle`
 existant — pas de recalcul à réinventer.
 
-**Incrément 3 — Page `/refonte-v1/technique`**
-Sur le patron `FluidsElecDetailV1` (design system po2) : KPI parc, pyramide des âges,
-criticité par bâtiment, top équipements à renouveler, complétude de la donnée,
-+ accès aux écrans d'import/mapping/F-Gas existants (pattern « embed » PR #42, sans réécriture).
+**Incrément 3 — Page `/refonte-v1/technique`** — ✅ **FAIT le 2026-08-17 (PR #93)**
+
+`features/technique/TechniqueParcDetailV1.tsx` + `pages/RefonteV1TechniquePage.tsx`, sur le patron
+`FluidsElecDetailV1` (design system po2). **Route déclarée dans `App.tsx` et `comingSoon` retiré de
+la nav** : le lien ne pointe plus dans le vide. Profil « Technicien CVC ».
+
+Contenu : KPI (dont « à traiter sous 5 ans » et sa part du parc) · pyramide des âges · criticité ·
+bloc **« Ce que l'on sait vraiment du parc »** (jauges de complétude) · tableau des bâtiments
+(tri + recherche, plus critiques en tête) · tableau des familles · filtres prestataire/famille ·
+liens vers les écrans legacy d'acquisition (`/buildings/cvc-*`), non réécrits.
+
+Choix de représentation (méthode dataviz) :
+- **pyramide des âges** = série unique → une seule couleur, pas de légende ;
+- **criticité** = encodage d'**état** (sain → dépassé), donc **palette de statut** du design system
+  (`#247a60` / `#91631b` / `#c2410c` / `#a6413b`, gris neutre pour « non calculable »), jamais des
+  couleurs de série ; chaque barre porte son libellé en axe, l'information ne repose donc pas sur
+  la couleur seule ;
+- **complétude** = jauges, pas un graphe (une part n'a pas besoin d'un axe).
+
+Typecheck `tsc -b` + build vite OK. Vérifié en prod : `/refonte-v1/technique` et
+`/api/cvc/parc-technique` répondent (401 = protection par mot de passe, état sain).
 
 **Incrément 4 — Plan de renouvellement (optionnel, à cadrer)**
 Projection pluriannuelle des remplacements ; nécessite un **coût de remplacement** par famille,
 qui n'existe pas aujourd'hui dans le modèle.
+
+---
+
+## 8. Où en est le chantier (2026-08-17)
+
+| Incrément | État |
+|---|---|
+| 0 — purge des doublons d'import | ✅ fait (PR #87) |
+| 1a — libellés multi-bâtiments | ✅ fait (PR #88) |
+| 1b — fiabilisation du rapprochement | ✅ fait (PR #90) |
+| 2 — moteur d'agrégation « état du parc » | ✅ fait (PR #91) |
+| 3 — page `/refonte-v1/technique` | ✅ fait (PR #93) |
+| 4 — plan de renouvellement chiffré | à cadrer |
+
+**Le chemin est complet de l'inventaire à l'écran.** Restent les gisements de qualité de donnée,
+qui pèsent plus que tout raffinement d'algorithme :
+
+1. **Compléter les dates de mise en service** — levier n°1 : 34,9 % du parc est aujourd'hui non
+   calculable, ce qui plafonne mécaniquement la fiabilité de l'état technique.
+2. **Valider les 10 suggestions de rapprochement** produites par le moteur fiabilisé (écran
+   `/buildings/cvc-import/batiments`).
+3. **Créer au patrimoine les bâtiments SPIE absents** (VILLA SALIS, ESPACE VICTOR MEYER, STADE
+   LOUIS MICHEL…) : sans eux, ces équipements ne peuvent être rattachés à rien.
+4. **Arbitrer le sort des ~15 % « Autre à qualifier »** (question 3 restée ouverte).
 
 ---
 
