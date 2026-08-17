@@ -845,13 +845,18 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
     updated = 0
     selected_building_ids = _read_mapping_building_ids(mapping)
     buildings = [building for building_id in selected_building_ids if (building := db.get(Building, building_id))]
-    single_building = buildings[0] if len(buildings) == 1 else None
+    # Un libellé source peut couvrir plusieurs bâtiments (ex. « Élémentaire LA RENAISSANCE
+    # + restaurant scolaire »). Décision 2026-08-17 : on rattache alors au **bâtiment
+    # principal** (le premier déclaré) plutôt que de laisser les équipements orphelins ;
+    # le périmètre complet reste tracé dans `building_ids_json`.
+    primary_building = buildings[0] if buildings else None
+    is_multi_building = len(buildings) > 1
     selected_site_ids = {building.site_id for building in buildings if building.site_id is not None}
     next_site_id = mapping.site_id
     if next_site_id is None and len(selected_site_ids) == 1:
         next_site_id = next(iter(selected_site_ids))
-    if next_site_id is None and single_building is not None:
-        next_site_id = single_building.site_id
+    if next_site_id is None and primary_building is not None:
+        next_site_id = primary_building.site_id
     if mapping.source_type == "inventory":
         rows = list(
             db.scalars(
@@ -863,8 +868,9 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
         )
         for item in rows:
             item.site_id = next_site_id
-            item.building_id = single_building.id if single_building else None
-            if single_building is None:
+            item.building_id = primary_building.id if primary_building else None
+            # Le local ciblé n'a de sens que pour un rattachement à un bâtiment unique.
+            if primary_building is None or is_multi_building:
                 item.local_id = None
             linked_refrigerants = list(
                 db.scalars(select(CvcRefrigerantItem).where(CvcRefrigerantItem.cvc_inventory_item_id == item.id))
@@ -884,9 +890,33 @@ def _apply_source_mapping_to_rows(db: Session, mapping: CvcSourceBuildingMapping
         )
         for item in rows:
             item.site_id = next_site_id
-            item.building_id = single_building.id if single_building else None
+            item.building_id = primary_building.id if primary_building else None
             updated += 1
     return updated
+
+
+def reapply_source_building_mappings(db: Session, city_id: int | None) -> dict:
+    """Re-propage tous les rattachements déjà résolus vers les équipements.
+
+    Utile après une évolution de la règle de propagation (ex. prise en compte du
+    bâtiment principal pour les libellés multi-bâtiments) : les mappings existants
+    sont conservés, seules les lignes d'inventaire/fluides sont remises à jour.
+    """
+    stmt = select(CvcSourceBuildingMapping)
+    if city_id is not None:
+        stmt = stmt.where(
+            (CvcSourceBuildingMapping.city_id == city_id) | (CvcSourceBuildingMapping.city_id.is_(None))
+        )
+    mappings = list(db.scalars(stmt))
+    applied = 0
+    rows = 0
+    for mapping in mappings:
+        if not _read_mapping_building_ids(mapping) and mapping.site_id is None:
+            continue  # rien à propager tant que la cible n'est pas choisie
+        rows += _apply_source_mapping_to_rows(db, mapping)
+        applied += 1
+    db.commit()
+    return {"mappings_total": len(mappings), "mappings_applied": applied, "rows_updated": rows}
 
 
 def list_site_matches_for_import(
