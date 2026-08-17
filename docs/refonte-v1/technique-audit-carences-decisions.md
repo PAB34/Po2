@@ -53,7 +53,38 @@ de la demande.
    pas un remplissage ligne à ligne.
 5. **Le rattachement patrimoine est exclu de la demande titulaire** (cf. §2).
 
-## 4. Questions ouvertes
+## 4. Résultat mesuré en production (2026-08-17, livré PR #95)
+
+### DALKIA — 1 133 équipements, **47,4 % renseigné**, 696 équipements incomplets
+
+| Nature | Champs |
+|---|---|
+| **Non livrés par le format** | Capacité, N° de série, Puissance |
+| **Livrés mais incomplets** | Date de mise en service **598 (52,8 %)** · Modèle 462 (40,8 %) · Marque 310 (27,4 %) |
+
+Niveau et Local sont renseignés à 100 % : la localisation n'est pas un sujet chez DALKIA.
+
+### SPIE — 289 équipements, **31,1 % renseigné**, 289 équipements incomplets (la totalité)
+
+| Nature | Champs |
+|---|---|
+| **Non livrés par le format** | *(aucun — SPIE livre toutes les colonnes attendues)* |
+| **Livrés mais incomplets** | Capacité 285 (98,6 %) · Local 280 (96,9 %) · Niveau 268 (92,7 %) · Puissance 249 (86,2 %) · Date de MES 182 (63,0 %) · N° de série 169 (58,5 %) · Modèle 92 (31,8 %) · Marque 69 (23,9 %) |
+
+### La lecture qui en découle
+
+Les deux titulaires ont des **profils de carence opposés**, et donc des demandes différentes :
+
+- **DALKIA remplit correctement ce qu'il livre, mais ne livre pas tout** → la demande porte
+  d'abord sur une **évolution de son export** (3 colonnes à ajouter), puis sur les dates de MES.
+- **SPIE livre toutes les colonnes mais ne les remplit pas** → la demande porte entièrement sur
+  le **remplissage**, sans évolution de format à négocier.
+
+**À traiter en interne** : 247 équipements sur 1 422 non rattachés au patrimoine (hors demande titulaire).
+
+Exports générés : DALKIA 64 Ko, SPIE 20 Ko.
+
+## 5. Questions ouvertes
 
 - Faut-il **historiser** les demandes de complétude (date d'envoi, taux de retour) pour suivre
   l'engagement du titulaire dans le temps ? (Non traité dans cette itération.)
