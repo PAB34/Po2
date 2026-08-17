@@ -171,7 +171,36 @@ Compteur, Chaudière, Armoire électrique, Vase expansion.
   bug était déjà corrigé, il ne restait que le résidu historique. Couvert par le test
   `test_provider_purge_is_isolated` (30 tests CVC verts).
 
-**Incrément 1 — Rattachement : traiter les vrais gisements**
+**Incrément 1a — Libellés multi-bâtiments** — ✅ **FAIT le 2026-08-17 (PR #88)**
+
+- Règle tranchée : un libellé couvrant plusieurs bâtiments rattache ses équipements au
+  **bâtiment principal** (le premier déclaré), le périmètre complet restant tracé dans
+  `building_ids_json`. Le `local_id` est effacé (il ne fait sens qu'en mono-bâtiment).
+- Ajout de `reapply_source_building_mappings` + route `POST /api/cvc/source-building-mappings/reapply`
+  (re-propage sans toucher aux mappings). 4 tests dédiés, 34 tests CVC verts.
+- **Rattachement en prod : 74,5 % → 82,6 %** (+116 équipements). **DALKIA atteint 98 %.**
+
+### Reste : 37 libellés orphelins (247 équipements, dont 226 SPIE)
+
+⚠️ **Le moteur de similarité automatique n'est pas exploitable tel quel sur ce reliquat** —
+test en lecture seule sur les 37 libellés :
+
+| Cas | Constat |
+|---|---|
+| Faux positifs **au-dessus** du seuil (0,72) | « STADE LOUIS MICHEL » → *RESTAURANT SCOLAIRE LOUISE MICHEL* ❌ · « CIMETIERE MARIN » → *CIMETIERE LE PY* ❌ · « AMITIE DE LA CORNICHE » → *QUAI DE LA CONSIGNE* ❌ (alors que « ESPACE DE L AMITIE DE LA CORNICHE » existe) |
+| Vrais positifs **en dessous** du seuil | « EGLISE SAINT JOSEPH » → *EGLISE CATHOLIQUE ST JOSEPH* (0,70) ✅ · « BAINS DOUCHES » → *LES NOUVEAUX BAINS DOUCHES* (0,67) ✅ · « VDS-ENS 17.03 GS - Élémentaire PAUL LANGEVIN (SUD) » → *Élémentaire PAUL LANGEVIN* (0,67) ✅ |
+
+La similarité pure de chaînes confond des équipements de nature différente sur un patronyme commun
+(stade/restaurant « Louis Michel ») et rate des synonymes évidents (SAINT/ST, préfixes « LES NOUVEAUX »).
+**Conclusion : ne pas auto-appliquer.** Ces 37 libellés doivent passer par une validation humaine
+(l'écran `CvcSiteMappingPage` existe déjà) ; une passe d'alias (SAINT↔ST, retrait des préfixes de
+codification `VDS-ENS nn`) améliorerait le rappel sans lever le risque de faux positifs.
+
+De plus, **certains bâtiments n'existent pas dans le patrimoine** (VILLA SALIS, STADE LOUIS MICHEL,
+ESPACE VICTOR MEYER…) : ce n'est alors pas un problème de rapprochement mais de **complétude du
+référentiel patrimoine**.
+
+**Incrément 1b — Rattachement : traiter les vrais gisements**
 Le DALKIA est déjà à 88 %. Restent :
 - **SPIE (22 %)** : le moteur de suggestion `_resolve_alias_reference` / `_suggest_source_building`
   est calibré sur le vocabulaire DALKIA — à étendre aux libellés SPIE ;
