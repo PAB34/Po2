@@ -215,12 +215,25 @@ function buildDjuRows(
 function pceLabel(p: { nom_site: string | null; complement_adresse: string | null; numero_rue: string | null; nom_rue: string | null }): string {
   if (p.nom_site) return p.nom_site;
   const rue = [p.numero_rue, p.nom_rue].filter(Boolean).join(" ").trim();
-  // Un complément purement technique (« RDC | ETG RC ») n'identifie pas un site :
-  // dans ce cas la rue reste le libellé le plus parlant.
   const comp = p.complement_adresse?.trim();
-  const compIsTechnical = !comp || /^(rdc|etg|etage|bat|sous.?sol|\d)/i.test(comp) || comp.includes("|");
-  if (!compIsTechnical) return comp!;
+  if (comp && !isTechnicalComplement(comp)) return comp;
   return rue || comp || "—";
+}
+
+/**
+ * Le `complement_adresse` GRDF mélange de vrais noms d'usage (« COLLEGE JEAN MOULIN »,
+ * « LOUIS CATANZANO », « C MEDICO SCOLAIRE ») et du repérage technique de branchement
+ * (« RDC | ETG RC », « ARMOIRE », « D48995H 1D48995H001 », « NUMVOIE 359 »). On n'en
+ * fait un libellé de site que dans le premier cas ; sinon la rue reste plus parlante.
+ * Règles calibrées sur les 28 compléments réellement renvoyés pour le parc de Sète.
+ */
+function isTechnicalComplement(comp: string): boolean {
+  if (comp.includes("|")) return true; // « ARMOIRE | ARMOIRE | ATELIERS »
+  if (/^(rdc|etg|etage|bat|sous.?sol|niveau|porte|escalier|numvoie|\d)/i.test(comp)) return true;
+  // Jeton mêlant lettres et chiffres = référence de branchement, pas un nom.
+  if (/\b(?=[a-z]*\d)(?=\d*[a-z])[a-z\d]{4,}\b/i.test(comp)) return true;
+  // Repérage de coffret/armoire isolé.
+  return /^(armoire|coffret|accessible|compteur|gaine)\b/i.test(comp);
 }
 
 function pceAddress(p: { numero_rue: string | null; nom_rue: string | null; code_postal: string | null; commune: string | null }): string {
