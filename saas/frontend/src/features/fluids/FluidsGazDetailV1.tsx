@@ -19,10 +19,8 @@ import {
   fetchGrdfConsoStatus,
   fetchGrdfMonthly,
   fetchGrdfPces,
-  fetchGrdfReconcileP1,
   startGrdfBackfill,
   type GrdfMonthlySeries,
-  type GrdfP1ReconcileItem,
   type GrdfPce,
 } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
@@ -208,19 +206,30 @@ function buildDjuRows(
   return { rows, current: cy, prevCount: prev.length };
 }
 
-function reconcileTone(statut: string): "ok" | "warn" | "bad" | "info" | "neutral" {
-  if (statut === "ok") return "ok";
-  if (statut === "ecart") return "warn";
-  return "neutral";
-}
-function reconcileLabel(statut: string): string {
-  if (statut === "ok") return "Cohérent";
-  if (statut === "ecart") return "Écart";
-  if (statut === "blocked") return "Non rapprochable";
-  return statut;
+/**
+ * Libellé d'un PCE. GRDF ne restitue AUCUN nom de site (cf. swagger v1.9) : la seule
+ * identification disponible est l'adresse du compteur. `complement_adresse` porte
+ * souvent le nom d'usage du bâtiment (ex. « LOUIS CATANZANO »), on le privilégie ;
+ * à défaut on compose « n° rue ».
+ */
+function pceLabel(p: { nom_site: string | null; complement_adresse: string | null; numero_rue: string | null; nom_rue: string | null }): string {
+  if (p.nom_site) return p.nom_site;
+  const rue = [p.numero_rue, p.nom_rue].filter(Boolean).join(" ").trim();
+  // Un complément purement technique (« RDC | ETG RC ») n'identifie pas un site :
+  // dans ce cas la rue reste le libellé le plus parlant.
+  const comp = p.complement_adresse?.trim();
+  const compIsTechnical = !comp || /^(rdc|etg|etage|bat|sous.?sol|\d)/i.test(comp) || comp.includes("|");
+  if (!compIsTechnical) return comp!;
+  return rue || comp || "—";
 }
 
-type PceSortKey = "nom_site" | "id_pce" | "nom_titulaire" | "tarif_acheminement" | "car_actuelle" | "frequence_releve" | "etat_droit_acces" | "conso";
+function pceAddress(p: { numero_rue: string | null; nom_rue: string | null; code_postal: string | null; commune: string | null }): string {
+  const rue = [p.numero_rue, p.nom_rue].filter(Boolean).join(" ").trim();
+  const ville = [p.code_postal, p.commune].filter(Boolean).join(" ").trim();
+  return [rue, ville].filter(Boolean).join(", ") || "—";
+}
+
+type PceSortKey = "nom_site" | "adresse" | "id_pce" | "nom_titulaire" | "tarif_acheminement" | "car_actuelle" | "frequence_releve" | "etat_droit_acces" | "conso";
 
 /** Tableau complet des PCE (parité avec « Tous les compteurs » côté électricité). */
 function PcesTable({ pces, consoByPce }: { pces: GrdfPce[]; consoByPce: Map<string, number> }) {
@@ -235,15 +244,21 @@ function PcesTable({ pces, consoByPce }: { pces: GrdfPce[]; consoByPce: Map<stri
       if (etat === "collectable" && !(p.etat_droit_acces === "Active" && p.perim_publiees)) return false;
       if (etat === "active" && p.etat_droit_acces !== "Active") return false;
       if (!q) return true;
-      return [p.nom_site, p.id_pce, p.nom_titulaire, p.tarif_acheminement, p.frequence_releve, p.etat_droit_acces]
+      return [pceLabel(p), pceAddress(p), p.id_pce, p.nom_titulaire, p.tarif_acheminement, p.frequence_releve, p.etat_droit_acces]
         .join(" ")
         .toLowerCase()
         .includes(q);
     });
     const dir = sortDir === "asc" ? 1 : -1;
     out = [...out].sort((a, b) => {
-      const va = sortKey === "conso" ? (consoByPce.get(a.id_pce) ?? 0) : a[sortKey];
-      const vb = sortKey === "conso" ? (consoByPce.get(b.id_pce) ?? 0) : b[sortKey];
+      const pick = (p: GrdfPce) => {
+        if (sortKey === "conso") return consoByPce.get(p.id_pce) ?? 0;
+        if (sortKey === "nom_site") return pceLabel(p);
+        if (sortKey === "adresse") return pceAddress(p);
+        return p[sortKey];
+      };
+      const va = pick(a);
+      const vb = pick(b);
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
       if (vb == null) return -1;
@@ -264,6 +279,7 @@ function PcesTable({ pces, consoByPce }: { pces: GrdfPce[]; consoByPce: Map<stri
 
   const columns: { key: PceSortKey; label: string; num?: boolean }[] = [
     { key: "nom_site", label: "Site" },
+    { key: "adresse", label: "Adresse" },
     { key: "id_pce", label: "PCE" },
     { key: "nom_titulaire", label: "Titulaire" },
     { key: "tarif_acheminement", label: "Tarif" },
@@ -316,7 +332,8 @@ function PcesTable({ pces, consoByPce }: { pces: GrdfPce[]; consoByPce: Map<stri
                 const conso = consoByPce.get(p.id_pce);
                 return (
                   <tr key={p.id_pce}>
-                    <td style={{ ...td, fontWeight: 600 }}>{p.nom_site || "—"}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{pceLabel(p)}</td>
+                    <td style={{ ...td, whiteSpace: "normal", maxWidth: 260 }}>{pceAddress(p)}</td>
                     <td style={{ ...td, fontFamily: "monospace" }}>{p.id_pce}</td>
                     <td style={td}>{p.nom_titulaire || "—"}</td>
                     <td style={td}>{p.tarif_acheminement || "—"}</td>
@@ -387,14 +404,6 @@ export function FluidsGazDetailV1() {
   }, [series]);
 
   const availableYears = useMemo(() => [...analyse.years].sort((a, b) => b - a), [analyse.years]);
-  const [reconcileYear, setReconcileYear] = useState<number | null>(null);
-  const effectiveYear = reconcileYear ?? availableYears[0] ?? new Date().getFullYear();
-  const { data: reconcile = [] } = useQuery({
-    queryKey: ["grdf-reconcile-p1", effectiveYear],
-    queryFn: () => fetchGrdfReconcileP1(token!, effectiveYear),
-    enabled: !!token && availableYears.length > 0,
-    staleTime: 60_000,
-  });
 
   const isRunning = status?.status === "running";
   const compare = analyse.compare;
@@ -403,7 +412,7 @@ export function FluidsGazDetailV1() {
   const pcesWithData = consoByPce.size;
   const coverage = collectablePces > 0 ? Math.round((pcesWithData / collectablePces) * 100) : null;
   const currentYearTotal = currentYear != null ? analyse.totalsByYear.get(currentYear) ?? 0 : 0;
-  const ecartsP1 = reconcile.filter((r) => r.statut === "ecart").length;
+  const pcesAvecAdresse = pces.filter((p) => !!p.nom_rue).length;
 
   return (
     <div className="po2-page-v1">
@@ -467,10 +476,10 @@ export function FluidsGazDetailV1() {
           tone="info"
         />
         <KpiCard
-          label="Écarts P1 DALKIA"
-          value={reconcile.length > 0 ? ecartsP1.toLocaleString("fr-FR") : "—"}
-          detail={reconcile.length > 0 ? `sur ${reconcile.length} PCE rapprochés (${effectiveYear})` : undefined}
-          tone={ecartsP1 > 0 ? "warning" : "neutral"}
+          label="Sites identifiés"
+          value={pces.length > 0 ? `${pcesAvecAdresse} / ${pces.length}` : "—"}
+          detail="PCE avec adresse compteur GRDF"
+          tone={pcesAvecAdresse < pces.length ? "warning" : "good"}
         />
       </div>
 
@@ -627,64 +636,6 @@ export function FluidsGazDetailV1() {
           </div>
         </section>
       </div>
-
-      {/* Rapprochement P1 DALKIA */}
-      <section className="po2-card">
-        <header className="po2-card__header">
-          <div>
-            <span className="po2-eyebrow">Marché CPE</span>
-            <h2>Rapprochement P1 gaz DALKIA</h2>
-          </div>
-          {availableYears.length > 0 ? (
-            <select
-              value={effectiveYear}
-              onChange={(e) => setReconcileYear(Number(e.target.value))}
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
-            >
-              {availableYears.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          ) : null}
-        </header>
-        <div className="po2-card__body" style={{ overflowX: "auto" }}>
-          {reconcile.length === 0 ? (
-            <p className="po2-muted-line">Aucun rapprochement disponible pour {effectiveYear}.</p>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid rgba(148,163,184,0.2)" }}>
-                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Site / PCE</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px" }}>GRDF</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px" }}>P1 DALKIA</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px" }}>Écart</th>
-                  <th style={{ textAlign: "left", padding: "4px 6px" }}>Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reconcile.map((item: GrdfP1ReconcileItem) => (
-                  <tr key={item.id_pce} style={{ borderBottom: "1px solid rgba(148,163,184,0.12)" }}>
-                    <td style={{ padding: "4px 6px" }}>
-                      <strong>{item.nom_site || item.code_site || "—"}</strong>{" "}
-                      <span className="po2-muted-line" style={{ fontFamily: "monospace", fontSize: 11 }}>{item.id_pce}</span>
-                    </td>
-                    <td style={{ textAlign: "right", padding: "4px 6px" }}>{fmtNum(item.grdf_mwh_pcs)} MWh</td>
-                    <td style={{ textAlign: "right", padding: "4px 6px" }}>
-                      {item.dalkia_p1_qt_mwhpcs != null ? `${fmtNum(item.dalkia_p1_qt_mwhpcs)} MWh` : "—"}
-                    </td>
-                    <td style={{ textAlign: "right", padding: "4px 6px", fontWeight: 600, color: item.ecart_pct != null && Math.abs(item.ecart_pct) > 5 ? "#c2410c" : undefined }}>
-                      {fmtPct(item.ecart_pct)}
-                    </td>
-                    <td style={{ padding: "4px 6px" }}>
-                      <StatusBadge tone={reconcileTone(item.statut)}>{reconcileLabel(item.statut)}</StatusBadge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
 
       <PcesTable pces={pces} consoByPce={consoByPce} />
     </div>

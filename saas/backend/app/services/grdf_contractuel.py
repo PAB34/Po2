@@ -41,13 +41,29 @@ def fetch_donnees_contractuelles(id_pce: str) -> dict:
     }
 
 
+def _clean(value: Any) -> str | None:
+    """Normalise une valeur GRDF : l'API renvoie parfois la chaîne "null"."""
+    if value is None:
+        return None
+    txt = str(value).strip()
+    if not txt or txt.lower() == "null":
+        return None
+    return txt
+
+
 def fetch_donnees_techniques(id_pce: str) -> dict:
     payload = get_json(f"/pce/{id_pce}/donnees_techniques") or {}
     dt = payload.get("donnees_techniques") or {}
     carac = dt.get("caracteristiques_compteur") or {}
+    situation = dt.get("situation_compteur") or {}
     return {
         "frequence_releve": carac.get("frequence"),
         "code_calibre": carac.get("code_calibre"),
+        # Adresse du compteur : seule identification de site fournie par GRDF.
+        "numero_rue": _clean(situation.get("numero_rue")),
+        "nom_rue": _clean(situation.get("nom_rue")),
+        "complement_adresse": _clean(situation.get("complement_adresse")),
+        "commune": _clean(situation.get("commune")),
     }
 
 
