@@ -2494,7 +2494,7 @@ def get_cvc_parc_technique(
 _CHAMPS_EXIGIBLES: tuple[tuple[str, str, str], ...] = (
     ("marque", "Marque", "Identification technique"),
     ("modele", "Modèle", "Identification technique"),
-    ("numero_serie", "N° de série", "Identification technique"),
+    # Le n° de série n'est pas exigé du titulaire (décision 2026-08-17).
     ("date_mis_en_service", "Date de mise en service", "Date de mise en service"),
     ("niveau", "Niveau", "Localisation précise"),
     ("local_name", "Local", "Localisation précise"),
@@ -2508,7 +2508,6 @@ _CHAMPS_LIVRES: dict[str, set[str]] = {
     PROVIDER_SPIE: {
         "marque",
         "modele",
-        "numero_serie",
         "date_mis_en_service",
         "niveau",
         "local_name",
@@ -2599,8 +2598,73 @@ def build_carences_workbook(db: Session, city_id: int | None, provider: str) -> 
             buildings[building.id] = building.nom_batiment
 
     workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.title = "Complétude à fournir"
+
+    # Feuille 1 — synthèse : reprend l'audit affiché à l'écran pour ce titulaire,
+    # pour que le classeur soit auto-portant une fois envoyé.
+    synthese = workbook.active
+    synthese.title = "Synthèse"
+    carences = next(
+        (entry for entry in get_cvc_carences(db, city_id).providers if entry.provider == provider),
+        None,
+    )
+    titre = Font(bold=True, size=13)
+    entete = Font(bold=True)
+
+    synthese["A1"] = f"Demande de complétude d'inventaire — {provider}"
+    synthese["A1"].font = titre
+    synthese["A2"] = f"Édité le {date.today().strftime('%d/%m/%Y')}"
+
+    ligne = 4
+    if carences:
+        for label, valeur in (
+            ("Équipements inventoriés", carences.equipements),
+            ("Équipements incomplets", carences.equipements_incomplets),
+            ("Complétude globale", f"{carences.completude_globale_pct} %"),
+        ):
+            synthese.cell(row=ligne, column=1, value=label).font = entete
+            synthese.cell(row=ligne, column=2, value=valeur)
+            ligne += 1
+
+        if carences.champs_non_livres:
+            ligne += 1
+            synthese.cell(row=ligne, column=1, value="Champs absents de votre export").font = titre
+            ligne += 1
+            synthese.cell(
+                row=ligne,
+                column=1,
+                value="Ces colonnes n'existent pas dans le fichier livré : elles appellent une évolution du format.",
+            )
+            ligne += 1
+            for champ in carences.champs_non_livres:
+                synthese.cell(row=ligne, column=1, value=champ.label)
+                synthese.cell(row=ligne, column=2, value=champ.groupe)
+                ligne += 1
+
+        if carences.champs_incomplets:
+            ligne += 1
+            synthese.cell(row=ligne, column=1, value="Champs livrés mais incomplets").font = titre
+            ligne += 1
+            for col, label in enumerate(("Champ", "Groupe", "Manquants", "Part du parc"), start=1):
+                synthese.cell(row=ligne, column=col, value=label).font = entete
+            ligne += 1
+            for champ in carences.champs_incomplets:
+                synthese.cell(row=ligne, column=1, value=champ.label)
+                synthese.cell(row=ligne, column=2, value=champ.groupe)
+                synthese.cell(row=ligne, column=3, value=champ.manquants)
+                synthese.cell(row=ligne, column=4, value=f"{champ.manquants_pct} %")
+                ligne += 1
+
+    ligne += 1
+    synthese.cell(
+        row=ligne,
+        column=1,
+        value="Le détail équipement par équipement figure dans la feuille « Complétude à fournir ».",
+    )
+    for index, width in enumerate((42, 28, 14, 14), start=1):
+        synthese.column_dimensions[get_column_letter(index)].width = width
+
+    # Feuille 2 — le détail à remplir.
+    sheet = workbook.create_sheet("Complétude à fournir")
 
     identification = ["Site (libellé inventaire)", "Bâtiment", "Désignation", "Famille", "Quantité"]
     exigibles = [label for _, label, _ in _CHAMPS_EXIGIBLES]
