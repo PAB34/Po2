@@ -1,0 +1,212 @@
+# Technique & CVC — audit de l'existant et trajectoire d'intégration
+
+> Rapport d'audit préalable (règle « fil du dev »). Écrit **avant** toute ligne de code.
+> Date : 2026-08-17. Objectif visé : exploiter l'inventaire CVC pour obtenir un
+> **état du patrimoine technique**, intégré à la refonte V1.
+
+---
+
+## 1. Résumé exécutif
+
+Le chantier CVC est **beaucoup plus avancé que prévu côté acquisition** (import, référentiel de
+durées de vie, moteur de cycle de vie par équipement, conformité F-Gas) mais **il n'existe
+aucune vue « état du parc »** et **rien n'est branché dans la refonte V1**.
+
+Trois constats structurants :
+
+| # | Constat | Impact |
+|---|---------|--------|
+| **A** | **La base contient 3 399 équipements fantômes.** L'inventaire DALKIA a été importé **4 fois** les 3-5 juin 2026 (4 lots × 1 133 items, **empreintes de contenu identiques** `edec938b…`). Le parc réel est de **1 422 équipements**, pas 4 821. Une fois les doublons écartés, le rattachement est de **74,5 %** (DALKIA **88 %**, SPIE **22 %**) — et non 29,6 %. | **Prioritaire mais simple** : purge des 3 lots obsolètes. Sans elle, **tout compte est faux d'un facteur 3,4** sur le périmètre DALKIA. |
+| **B** | Le moteur de cycle de vie existe **par équipement** (âge, durée restante, criticité %, référence SYPEMI) mais **n'est jamais agrégé** au niveau du parc. | L'état du patrimoine technique est à **construire**, pas à recoder : la matière est là. |
+| **C** | La nav refonte contient déjà l'entrée **« Technique & CVC » → `/refonte-v1/technique`** marquée *comingSoon*, mais **aucune route n'existe** : le lien pointe dans le vide. Un profil « Technicien CVC » est déjà défini. | L'emplacement d'accueil est décidé, il reste à le remplir. |
+
+⚠️ Point de vocabulaire important : la page existante `/buildings/cvc-rapport-technique`
+(« rapport technique ») est en réalité un **rapport de couverture / qualité de rattachement**
+(ce qui est rattaché ou non, mappings à revoir). **Ce n'est pas** un état du patrimoine technique.
+
+---
+
+## 2. Ce qui existe — backend
+
+### 2.1 Modèle de données (`app/models/cvc.py`, 8 migrations 0014 → 0052)
+
+| Table | Rôle | Volume prod |
+|---|---|---|
+| `cvc_inventory_items` | Inventaire des équipements CVC (multi-prestataires) | **4 821** |
+| `cvc_refrigerant_items` | Volet fluides frigorigènes / F-Gas | **298** |
+| `cvc_source_building_mappings` | Table de correspondance « libellé source → bâtiment » | 426 |
+| `equipment_references` | **Référentiel SYPEMI** : nomenclature 5 niveaux + durées mini/référence/maxi + fiche CEE | **310** |
+| `building_equipments` | Table de la migration 0014 — **vide, jamais utilisée** | **0** |
+
+Champs déjà présents et pertinents pour un état technique : `provider` (DALKIA/SPIE),
+`famille`, `type_equipement`, `marque`, `modele`, `numero_serie`, `puissance`,
+`puissance_frigorifique`, `puissance_calorifique`, `capacite`, `date_mis_en_service`,
+`etat_sante`, `statut`, `duree_vie_restante` (+ `_source`), `quantite_fluide_frigorigene`,
+`equipment_ref_id`, `building_id` / `site_id` / `local_id`.
+
+### 2.2 Moteur de cycle de vie — **la brique clé, déjà écrite**
+
+`_compute_lifecycle()` / `_read_item()` (`services/cvc.py`, ~2 250 lignes) calculent **par équipement** :
+- `lifecycle_age_years` (+ `_source`, `_label` : calculé depuis la date de MES, ou déduit de l'état de santé) ;
+- `duree_vie_restante` — **arbitrage déjà tranché** : valeur calculée SYPEMI si possible, sinon valeur fournie par le prestataire, avec traçabilité de la source ;
+- `criticite_pct` = âge / durée de référence SYPEMI (plafonné à 100) ;
+- `sypemi_reference_annees`.
+
+➡️ **Tout le calcul unitaire d'obsolescence est disponible. Il n'est simplement jamais agrégé.**
+
+### 2.3 API (21 routes, `api/routes/cvc.py`)
+
+- Import : `preview`, `match-buildings`, `import`, `imports`, `imports/{batch}/items`, `recompute-references`
+- Rattachement : `imports/{batch}/site-matches`, `site-mappings`, `source-building-mappings` (GET/PATCH)
+- Consultation : `buildings/{id}`, `items/{id}` (PATCH/DELETE)
+- F-Gas : `refrigerants/import`, `/imports`, `/dashboard`, `/items/{id}`
+- Qualité : `technical-report` (= couverture, cf. §1)
+
+### 2.4 Tests
+`test_cvc_reference_matching.py`, `test_cvc_spie_inventory.py`.
+
+---
+
+## 3. Ce qui existe — frontend
+
+4 pages **legacy** (2 154 lignes), toutes hors refonte, sur `/buildings/*` :
+
+| Page | Route | Rôle |
+|---|---|---|
+| `CvcImportPage` | `/buildings/cvc-import` | Import inventaire (722 l.) |
+| `CvcSiteMappingPage` | `/buildings/cvc-import/batiments` | Rattachement libellés → bâtiments (512 l.) |
+| `CvcRefrigerantsPage` | `/buildings/cvc-fluides` | Tableau de bord F-Gas (578 l.) |
+| `CvcTechnicalReportPage` | `/buildings/cvc-rapport-technique` | Rapport de **couverture** (342 l.) |
+
+**Aucune** n'est accessible depuis le shell refonte V1.
+
+---
+
+## 4. État réel des données (production, 2026-08-17)
+
+### 4.1 ⚠️ D'abord : écarter les doublons d'import
+
+`cvc_inventory_items` contient **4 821 lignes**, mais ce n'est **pas** le parc :
+
+| Lot | Prestataire | Créé le | Items | Rattachés | Statut |
+|---|---|---|---|---|---|
+| `import_a275c544` | DALKIA | 03/06/2026 15:29 | 1 133 | 122 | ❌ doublon |
+| `import_6403248b` | DALKIA | 04/06/2026 06:51 | 1 133 | 122 | ❌ doublon |
+| `import_d0791486` | DALKIA | 05/06/2026 08:33 | 1 133 | 122 | ❌ doublon |
+| **`import_d6887607`** | **DALKIA** | **05/06/2026 11:28** | **1 133** | **996** | ✅ **lot de référence** |
+| **`spie_5e6ae323`** | **SPIE** | **12/06/2026 08:11** | **289** | **63** | ✅ **lot de référence** |
+
+Les 4 lots DALKIA ont la **même empreinte de contenu** (`md5(designation+site_raw)` = `edec938b3e4ed156`) :
+ce sont 4 imports successifs du même fichier lors de la mise au point. Seul le dernier a été
+travaillé (mappings résolus). **3 399 équipements fantômes** à purger.
+
+### 4.2 Le parc réel
+
+```
+Inventaire CVC          1 422 équipements   (DALKIA 1 133 · SPIE 289)
+  rattachés à un bât.   1 059   (74,5 %)    ← DALKIA 88 % · SPIE 22 %
+  avec date de MES        642   (45,1 %)
+  avec réf. SYPEMI        985   (69,3 %)
+  avec durée de vie       573   (40,3 %)
+
+Fluides frigorigènes      298 équipements
+  rattachés à un bât.       42   (14,1 %)
+  avec teqCO2              252   (84,6 %)
+
+Couverture patrimoine      69 bâtiments / 211   (32,7 %)
+  dont DALKIA              60      dont SPIE 9      les deux 0
+```
+
+> Le rattachement DALKIA est donc **déjà bon (88 %)**. Les vrais gisements sont **SPIE (22 %)**,
+> les **fluides frigorigènes (14 %)** et les **mappings multi-bâtiments** (voir §4.3).
+
+### 4.3 Deux limites structurelles identifiées
+
+1. **Mappings multi-bâtiments non propageables.** Un libellé source peut couvrir plusieurs
+   bâtiments (ex. « VDS-ENS 13 Élémentaire LA RENAISSANCE + restaurant scolaire » → `[624, 623]`).
+   Ces mappings stockent leurs cibles dans `building_ids_json` et laissent `building_id` à NULL ;
+   `_apply_source_mapping_to_rows` ne pose alors **aucun** `building_id` sur les équipements
+   (il ne sait pas lequel choisir). 69 mappings sont dans ce cas.
+2. **Les mappings ne sont pas réutilisables d'un import à l'autre.** `_apply_source_mapping_to_rows`
+   filtre sur `import_batch == mapping.import_batch` : le travail de rattachement d'un lot ne
+   bénéficie pas au lot suivant. C'est ce qui a laissé les 3 lots doublons à 122 rattachements.
+
+Top familles (parc réel) : « Autre à qualifier » en tête (~15 %), Split system, Pompe, Ventilation,
+Compteur, Chaudière, Armoire électrique, Vase expansion.
+
+> ⚠️ **~15 % des équipements en « Autre à qualifier »** : famille non exploitable telle quelle
+> pour un état du parc par typologie.
+
+---
+
+## 5. Écart entre l'existant et l'objectif « état du patrimoine technique »
+
+| Besoin | État | Reste à faire |
+|---|---|---|
+| Inventaire multi-prestataires | ✅ fait | — |
+| Référentiel durées de vie (SYPEMI) | ✅ fait (310 réf.) | — |
+| Âge / durée restante / criticité **par équipement** | ✅ fait | — |
+| Conformité F-Gas | ✅ fait | rattachement bâtiment (14 %) |
+| **Hygiène des données (doublons d'import)** | ❌ 3 399 fantômes | **priorité 0** |
+| **Rattachement au patrimoine** | ⚠️ **74,5 %** réel (DALKIA 88 %, SPIE 22 %) | **priorité 1** |
+| **Agrégation parc** (pyramide des âges, criticité par bâtiment/famille, fin de vie) | ❌ inexistant | **priorité 2** |
+| **Page refonte `/refonte-v1/technique`** | ❌ lien mort | **priorité 3** |
+| Valorisation € du renouvellement | ❌ inexistant | coût de remplacement absent du modèle |
+| Normalisation des familles | ⚠️ 708 « à qualifier » | à arbitrer |
+
+---
+
+## 6. Trajectoire proposée (4 incréments)
+
+**Incrément 0 — Hygiène : purger les lots doublons (rapide, fort impact)**
+Supprimer les 3 lots DALKIA obsolètes (**3 399 équipements fantômes**) et introduire une notion de
+**lot courant par prestataire**, pour qu'un réimport remplace le précédent au lieu de s'y ajouter
+(le `_clear_current_cvc_inventory` existant purge tout, donc inutilisable en multi-prestataires :
+à scoper par `provider`). Sans cela, le problème réapparaîtra au prochain import.
+
+**Incrément 1 — Rattachement : traiter les vrais gisements**
+Le DALKIA est déjà à 88 %. Restent :
+- **SPIE (22 %)** : le moteur de suggestion `_resolve_alias_reference` / `_suggest_source_building`
+  est calibré sur le vocabulaire DALKIA — à étendre aux libellés SPIE ;
+- **fluides frigorigènes (14 %)** ;
+- **mappings multi-bâtiments** : décider comment répartir un libellé couvrant 2 bâtiments
+  (rattacher au bâtiment principal ? ventiler ? introduire un rattachement multiple ?) ;
+- **rendre les mappings réutilisables entre imports** (clé `source_site_raw` au niveau ville plutôt
+  que par lot), pour ne plus reperdre le travail à chaque réimport.
+
+**Incrément 2 — Moteur « état du parc »**
+Un endpoint d'agrégation (ex. `GET /api/cvc/parc-technique`) exposant, avec filtres
+(bâtiment / famille / prestataire) : effectifs, **pyramide des âges**, répartition par
+criticité (`< 50 %` / `50-80 %` / `80-100 %` / dépassé), équipements **en fin de vie sous 5 ans**,
+taux de complétude de la donnée (date MES, référence SYPEMI). S'appuie sur `_compute_lifecycle`
+existant — pas de recalcul à réinventer.
+
+**Incrément 3 — Page `/refonte-v1/technique`**
+Sur le patron `FluidsElecDetailV1` (design system po2) : KPI parc, pyramide des âges,
+criticité par bâtiment, top équipements à renouveler, complétude de la donnée,
++ accès aux écrans d'import/mapping/F-Gas existants (pattern « embed » PR #42, sans réécriture).
+
+**Incrément 4 — Plan de renouvellement (optionnel, à cadrer)**
+Projection pluriannuelle des remplacements ; nécessite un **coût de remplacement** par famille,
+qui n'existe pas aujourd'hui dans le modèle.
+
+---
+
+## 7. Arbitrages — tranchés le 2026-08-17
+
+| # | Question | Décision |
+|---|---|---|
+| 1 | Ordre des travaux | ✅ **Rattachement d'abord**, puis agrégation, puis page refonte. Les indicateurs doivent être justes dès leur première version. |
+| 2 | Périmètre | ✅ **CVC uniquement** (chauffage / ventilation / climatisation). Pas de généralisation du modèle à d'autres familles techniques pour l'instant. |
+| 4 | Unité de l'état du parc | ✅ **Nombre d'équipements** (donnée complète à 100 %). La puissance installée n'est pas retenue comme unité de pilotage à ce stade. |
+
+### Restent ouvertes (à trancher au moment de l'incrément 2)
+
+3. **Les 708 « Autre à qualifier »** : les exclure des analyses par typologie, les afficher dans
+   un bac « à qualifier » à traiter, ou tenter une reclassification automatique depuis la désignation ?
+5. **Durée de vie** : on conserve l'arbitrage actuel (SYPEMI calculé prioritaire, valeur prestataire
+   en repli) ? Faut-il pouvoir **corriger manuellement** une date de MES ou un état de santé ?
+6. **F-Gas** : le volet fluides frigorigènes reste-t-il une page à part, ou devient-il un onglet
+   de l'état technique ?
+7. **Renouvellement chiffré** (incrément 4) : le veut-on à terme, et si oui, d'où viendraient les
+   coûts de remplacement (BPU marché, ratio par famille, saisie manuelle) ?
