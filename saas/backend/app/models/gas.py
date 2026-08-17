@@ -75,6 +75,15 @@ class GasPce(Base):
     frequence_releve: Mapped[str | None] = mapped_column(String(4), nullable=True)  # 6M/1M/MM/JJ
     code_calibre: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
+    # Adresse du compteur (donnees_techniques.situation_compteur). GRDF ne fournit
+    # AUCUN nom de site : l'adresse est la seule identification exploitable, et
+    # `complement_adresse` porte souvent le nom d'usage du bâtiment (ex. « LOUIS
+    # CATANZANO »). Sert aussi de clé de rapprochement vers le patrimoine.
+    numero_rue: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    nom_rue: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    complement_adresse: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    commune: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

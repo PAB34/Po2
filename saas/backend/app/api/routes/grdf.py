@@ -37,6 +37,13 @@ class GasPceOut(BaseModel):
     tarif_acheminement: str | None = None
     car_actuelle: int | None = None
     frequence_releve: str | None = None
+    # Adresse du compteur (GRDF ne fournit pas de nom de site) — sert de libellé
+    # de repli et de clé de rapprochement patrimoine.
+    numero_rue: str | None = None
+    nom_rue: str | None = None
+    complement_adresse: str | None = None
+    code_postal: str | None = None
+    commune: str | None = None
 
     model_config = {"from_attributes": True}
 

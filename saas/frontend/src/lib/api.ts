@@ -4856,6 +4856,14 @@ export type GrdfPce = {
   tarif_acheminement: string | null;
   car_actuelle: number | null;
   frequence_releve: string | null;
+  // Adresse du compteur : GRDF ne restitue aucun nom de site, l'adresse est la
+  // seule identification disponible (complement_adresse porte souvent le nom
+  // d'usage du batiment).
+  numero_rue: string | null;
+  nom_rue: string | null;
+  complement_adresse: string | null;
+  code_postal: string | null;
+  commune: string | null;
 };
 
 export type GrdfConsoSyncStatus = {
