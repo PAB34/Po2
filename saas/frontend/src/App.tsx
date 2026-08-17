@@ -33,6 +33,7 @@ import { RefonteV1InvoicesPage } from "./pages/RefonteV1InvoicesPage";
 import { RefonteV1InvoicesPreviewPage } from "./pages/RefonteV1InvoicesPreviewPage";
 import { RefonteV1FluidsPage, RefonteV1FluidElectricitePage, RefonteV1FluidElectriciteCollectePage, RefonteV1FluidGazPage, RefonteV1FluidEauPage } from "./pages/RefonteV1FluidsPage";
 import { RefonteV1SitesPage } from "./pages/RefonteV1SitesPage";
+import { RefonteV1TechniquePage } from "./pages/RefonteV1TechniquePage";
 import { RefonteV1MatricesPage } from "./pages/RefonteV1MatricesPage";
 import { RefonteV1MatricesPreviewPage } from "./pages/RefonteV1MatricesPreviewPage";
 import { RefonteV1MarketsPage } from "./pages/RefonteV1MarketsPage";
@@ -254,6 +255,7 @@ export default function App() {
             <Route path="/refonte-v1/fluides/gaz" element={<RefonteV1FluidGazPage />} />
             <Route path="/refonte-v1/fluides/eau" element={<RefonteV1FluidEauPage />} />
             <Route path="/refonte-v1/sites" element={<RefonteV1SitesPage />} />
+            <Route path="/refonte-v1/technique" element={<RefonteV1TechniquePage />} />
             <Route path="/refonte-v1/matrices" element={<RefonteV1MatricesPage />} />
             <Route path="/refonte-v1/marches" element={<RefonteV1MarketsPage />} />
             <Route path="/refonte-v1/os-avenant" element={<RefonteV1OsAvenantPage />} />
