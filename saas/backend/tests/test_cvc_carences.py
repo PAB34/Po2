@@ -58,7 +58,7 @@ def _champ(entries, nom):
 
 
 def test_champ_absent_du_format_dalkia_est_signale_comme_non_livre(db_session):
-    # Le format DALKIA ne comporte pas de n° de série ni de puissance.
+    # Le format DALKIA ne comporte ni puissance ni capacité.
     _add(db_session, PROVIDER_DALKIA, marque="Viessmann", modele="V200")
     db_session.commit()
 
@@ -66,12 +66,26 @@ def test_champ_absent_du_format_dalkia_est_signale_comme_non_livre(db_session):
     dalkia = report.providers[0]
 
     non_livres = {e.champ for e in dalkia.champs_non_livres}
-    assert "numero_serie" in non_livres
     assert "puissance" in non_livres
+    assert "capacite" in non_livres
     # Un champ non livré manque par construction sur tout le parc du prestataire.
-    assert _champ(dalkia.champs_non_livres, "numero_serie").manquants_pct == 100.0
+    assert _champ(dalkia.champs_non_livres, "puissance").manquants_pct == 100.0
     # ... et il n'est pas compté comme « à compléter ligne à ligne ».
-    assert "numero_serie" not in {e.champ for e in dalkia.champs_incomplets}
+    assert "puissance" not in {e.champ for e in dalkia.champs_incomplets}
+
+
+def test_numero_de_serie_n_est_pas_exige(db_session):
+    """Décision 2026-08-17 : le n° de série sort du périmètre exigible."""
+    _add(db_session, PROVIDER_DALKIA, numero_serie=None)
+    _add(db_session, PROVIDER_SPIE, batch="s1", numero_serie=None)
+    db_session.commit()
+
+    report = get_cvc_carences(db_session, city_id=1)
+
+    tous_les_champs = {
+        e.champ for p in report.providers for e in (p.champs_non_livres + p.champs_incomplets)
+    }
+    assert "numero_serie" not in tous_les_champs
 
 
 def test_champ_livre_mais_vide_est_signale_comme_incomplet(db_session):
@@ -89,16 +103,17 @@ def test_champ_livre_mais_vide_est_signale_comme_incomplet(db_session):
     assert marque.manquants_pct == 50.0
 
 
-def test_spie_livre_le_numero_de_serie_contrairement_a_dalkia(db_session):
-    _add(db_session, PROVIDER_SPIE, batch="s1", numero_serie=None)
+def test_spie_livre_la_puissance_contrairement_a_dalkia(db_session):
+    _add(db_session, PROVIDER_SPIE, batch="s1", puissance=None)
     db_session.commit()
 
     report = get_cvc_carences(db_session, city_id=1)
     spie = next(p for p in report.providers if p.provider == PROVIDER_SPIE)
 
-    # Colonne présente dans l'export SPIE : c'est une carence de remplissage.
-    assert "numero_serie" not in {e.champ for e in spie.champs_non_livres}
-    assert "numero_serie" in {e.champ for e in spie.champs_incomplets}
+    # Colonne présente dans l'export SPIE : c'est une carence de remplissage,
+    # là où le même champ est « non livré » chez DALKIA.
+    assert "puissance" not in {e.champ for e in spie.champs_non_livres}
+    assert "puissance" in {e.champ for e in spie.champs_incomplets}
 
 
 def test_rattachement_est_hors_demande_titulaire(db_session):
@@ -153,15 +168,16 @@ def test_export_liste_uniquement_les_equipements_incomplets(db_session):
     db_session.commit()
 
     content = build_carences_workbook(db_session, city_id=1, provider=PROVIDER_SPIE)
-    sheet = openpyxl.load_workbook(io.BytesIO(content)).active
+    sheet = openpyxl.load_workbook(io.BytesIO(content))["Complétude à fournir"]
     lignes = list(sheet.iter_rows(min_row=2, values_only=True))
 
     assert len(lignes) == 1
     assert "Incomplet" in [str(v) for v in lignes[0]]
     # L'en-tête expose les colonnes exigibles à remplir.
     entetes = [c.value for c in sheet[1]]
-    assert "N° de série" in entetes
     assert "Date de mise en service" in entetes
+    assert "Puissance" in entetes
+    assert "N° de série" not in entetes
 
 
 def test_export_prerenseigne_l_identification(db_session):
@@ -180,10 +196,40 @@ def test_export_prerenseigne_l_identification(db_session):
     db_session.commit()
 
     content = build_carences_workbook(db_session, city_id=1, provider=PROVIDER_SPIE)
-    sheet = openpyxl.load_workbook(io.BytesIO(content)).active
+    sheet = openpyxl.load_workbook(io.BytesIO(content))["Complétude à fournir"]
     ligne = next(sheet.iter_rows(min_row=2, max_row=2, values_only=True))
 
     # Le titulaire doit pouvoir retrouver l'équipement sur le terrain.
     assert ligne[0] == "VILLA SALIS"
     assert ligne[1] == "Ecole Jean Moulin"
     assert ligne[2] == "Split bureau"
+
+
+def test_classeur_commence_par_une_feuille_de_synthese(db_session):
+    """La synthèse reprend l'audit affiché à l'écran, pour un classeur auto-portant."""
+    _add(db_session, PROVIDER_DALKIA, marque="Viessmann", modele=None, date_mis_en_service=None)
+    _add(db_session, PROVIDER_DALKIA, marque=None, modele=None, date_mis_en_service=None)
+    db_session.commit()
+
+    content = build_carences_workbook(db_session, city_id=1, provider=PROVIDER_DALKIA)
+    workbook = openpyxl.load_workbook(io.BytesIO(content))
+
+    # La synthèse est la première feuille.
+    assert workbook.sheetnames[0] == "Synthèse"
+    assert "Complétude à fournir" in workbook.sheetnames
+
+    texte = "\n".join(
+        str(value)
+        for row in workbook["Synthèse"].iter_rows(values_only=True)
+        for value in row
+        if value is not None
+    )
+
+    assert PROVIDER_DALKIA in texte
+    # Les deux natures de carence sont restituées, comme à l'écran.
+    assert "Champs absents de votre export" in texte
+    assert "Champs livrés mais incomplets" in texte
+    # Et les chiffres clés.
+    assert "Équipements inventoriés" in texte
+    assert "Complétude globale" in texte
+    assert "Modèle" in texte  # champ incomplet listé
