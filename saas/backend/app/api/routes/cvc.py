@@ -50,6 +50,7 @@ from app.services.cvc import (
     update_cvc_refrigerant_item,
     update_cvc_source_building_mapping,
     get_cvc_technical_coverage_report,
+    reapply_source_building_mappings,
 )
 
 router = APIRouter(prefix="/cvc", tags=["cvc"])
@@ -274,6 +275,19 @@ def patch_cvc_source_building_mapping(
     if not mapping:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapping introuvable.")
     return mapping
+
+
+@router.post("/source-building-mappings/reapply", status_code=status.HTTP_200_OK)
+def reapply_source_mappings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Re-propage les rattachements déjà résolus vers les équipements.
+
+    À lancer après une évolution de la règle de propagation : les mappings ne sont
+    pas modifiés, seules les lignes d'inventaire et de fluides sont rafraîchies.
+    """
+    return reapply_source_building_mappings(db, current_user.city_id)
 
 
 @router.get("/technical-report", response_model=CvcTechnicalCoverageReport)
