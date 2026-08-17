@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta
 from difflib import SequenceMatcher
 
 import openpyxl
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,6 +25,9 @@ from app.schemas.cvc import (
     CvcImportSiteMatchResponse,
     CvcImportSiteMatchResult,
     CvcBuildingMapping,
+    CvcCarenceChamp,
+    CvcCarenceProvider,
+    CvcCarencesReport,
     CvcEquipmentReferenceRead,
     CvcImportBatchSummary,
     CvcImportResult,
@@ -2469,6 +2474,166 @@ def get_cvc_parc_technique(
         par_batiment=par_batiment,
         completude=completude,
     )
+
+
+# ---------------------------------------------------------------------------
+# Audit des carences d'inventaire — demande de complétude au titulaire
+#
+# Deux natures de carence, à ne surtout pas confondre :
+#   A. le champ n'est PAS LIVRÉ par le format d'export du prestataire (la colonne
+#      n'existe pas) → il faut faire évoluer l'export ;
+#   B. le champ est livré mais NON RENSEIGNÉ sur N équipements → il faut compléter.
+# Les deux appellent des demandes différentes ; les mélanger décrédibiliserait la
+# demande adressée au titulaire.
+#
+# Les listes ci-dessous décrivent ce que chaque format livre réellement : elles
+# doivent rester synchronisées avec `_parse_inventory_rows` (où les champs absents
+# d'un format sont codés en dur à None).
+# ---------------------------------------------------------------------------
+
+_CHAMPS_EXIGIBLES: tuple[tuple[str, str, str], ...] = (
+    ("marque", "Marque", "Identification technique"),
+    ("modele", "Modèle", "Identification technique"),
+    ("numero_serie", "N° de série", "Identification technique"),
+    ("date_mis_en_service", "Date de mise en service", "Date de mise en service"),
+    ("niveau", "Niveau", "Localisation précise"),
+    ("local_name", "Local", "Localisation précise"),
+    ("puissance", "Puissance", "Caractéristiques énergétiques"),
+    ("capacite", "Capacité", "Caractéristiques énergétiques"),
+)
+
+# Champs réellement présents dans l'export de chaque prestataire.
+_CHAMPS_LIVRES: dict[str, set[str]] = {
+    PROVIDER_DALKIA: {"marque", "modele", "date_mis_en_service", "niveau", "local_name"},
+    PROVIDER_SPIE: {
+        "marque",
+        "modele",
+        "numero_serie",
+        "date_mis_en_service",
+        "niveau",
+        "local_name",
+        "puissance",
+        "capacite",
+    },
+}
+
+
+def get_cvc_carences(db: Session, city_id: int | None) -> CvcCarencesReport:
+    """Audit des carences d'inventaire, par prestataire."""
+    stmt = select(CvcInventoryItem)
+    if city_id is not None:
+        stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+    items = _filter_latest_inventory_batch(list(db.scalars(stmt)))
+
+    by_provider: dict[str, list[CvcInventoryItem]] = defaultdict(list)
+    for item in items:
+        by_provider[item.provider or PROVIDER_DALKIA].append(item)
+
+    providers: list[CvcCarenceProvider] = []
+    for name, group in sorted(by_provider.items(), key=lambda kv: -len(kv[1])):
+        total = len(group)
+        livres = _CHAMPS_LIVRES.get(name, set())
+        non_livres: list[CvcCarenceChamp] = []
+        incomplets: list[CvcCarenceChamp] = []
+        incomplets_ids: set[int] = set()
+
+        for champ, label, groupe in _CHAMPS_EXIGIBLES:
+            est_livre = champ in livres
+            manquants = sum(1 for item in group if getattr(item, champ, None) in (None, ""))
+            entry = CvcCarenceChamp(
+                champ=champ,
+                label=label,
+                groupe=groupe,
+                livre_par_format=est_livre,
+                # Un champ non livré est manquant sur la totalité du parc du prestataire.
+                manquants=total if not est_livre else manquants,
+                total=total,
+                manquants_pct=round(100 * (total if not est_livre else manquants) / total, 1) if total else 0.0,
+            )
+            if not est_livre:
+                non_livres.append(entry)
+                continue
+            if manquants:
+                incomplets.append(entry)
+                incomplets_ids.update(item.id for item in group if getattr(item, champ, None) in (None, ""))
+
+        # Complétude globale : part des cases remplies parmi les cases attendues,
+        # en comptant les champs non livrés comme vides (ils le sont).
+        cases_attendues = total * len(_CHAMPS_EXIGIBLES)
+        cases_vides = sum(entry.manquants for entry in non_livres) + sum(entry.manquants for entry in incomplets)
+        providers.append(
+            CvcCarenceProvider(
+                provider=name,
+                equipements=total,
+                champs_non_livres=sorted(non_livres, key=lambda e: e.label),
+                champs_incomplets=sorted(incomplets, key=lambda e: -e.manquants),
+                equipements_incomplets=len(incomplets_ids),
+                completude_globale_pct=(
+                    round(100 * (cases_attendues - cases_vides) / cases_attendues, 1) if cases_attendues else 0.0
+                ),
+            )
+        )
+
+    return CvcCarencesReport(
+        providers=providers,
+        rattachement_manquant=sum(1 for item in items if item.building_id is None),
+        rattachement_total=len(items),
+    )
+
+
+def build_carences_workbook(db: Session, city_id: int | None, provider: str) -> bytes:
+    """Classeur de demande de complétude : un équipement par ligne, colonnes à remplir.
+
+    Les colonnes d'identification sont pré-remplies pour que le titulaire retrouve
+    l'équipement ; les colonnes exigibles manquantes sont laissées vides.
+    """
+    stmt = select(CvcInventoryItem).where(CvcInventoryItem.provider == provider)
+    if city_id is not None:
+        stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+    items = _filter_latest_inventory_batch(list(db.scalars(stmt)))
+
+    buildings: dict[int, str | None] = {}
+    building_ids = {item.building_id for item in items if item.building_id}
+    if building_ids:
+        for building in db.scalars(select(Building).where(Building.id.in_(building_ids))):
+            buildings[building.id] = building.nom_batiment
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Complétude à fournir"
+
+    identification = ["Site (libellé inventaire)", "Bâtiment", "Désignation", "Famille", "Quantité"]
+    exigibles = [label for _, label, _ in _CHAMPS_EXIGIBLES]
+    sheet.append([*identification, *exigibles])
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+
+    lignes = 0
+    for item in items:
+        valeurs = [getattr(item, champ, None) for champ, _, _ in _CHAMPS_EXIGIBLES]
+        # N'inscrire que les équipements auxquels il manque au moins un champ exigible.
+        if all(valeur not in (None, "") for valeur in valeurs):
+            continue
+        sheet.append(
+            [
+                item.site_raw,
+                buildings.get(item.building_id) if item.building_id else None,
+                item.designation,
+                item.famille,
+                item.quantite_relevee,
+                *valeurs,
+            ]
+        )
+        lignes += 1
+
+    widths = [34, 30, 40, 22, 9] + [20] * len(exigibles)
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    sheet.freeze_panes = "A2"
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
 
 
 def list_cvc_items_for_building(db: Session, building_id: int) -> list[CvcInventoryItemRead]:

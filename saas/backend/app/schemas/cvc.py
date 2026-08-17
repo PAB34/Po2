@@ -401,6 +401,37 @@ class CvcParcCompletude(BaseModel):
     duree_vie_pct: float
 
 
+class CvcCarenceChamp(BaseModel):
+    """Carence sur un champ, pour un prestataire donné."""
+
+    champ: str
+    label: str
+    groupe: str
+    # False = la colonne n'existe pas dans l'export du prestataire (→ faire évoluer
+    # le format) ; True = elle existe mais n'est pas remplie (→ compléter les lignes).
+    livre_par_format: bool
+    manquants: int
+    total: int
+    manquants_pct: float
+
+
+class CvcCarenceProvider(BaseModel):
+    provider: str
+    equipements: int
+    champs_non_livres: list[CvcCarenceChamp] = []
+    champs_incomplets: list[CvcCarenceChamp] = []
+    equipements_incomplets: int = 0
+    completude_globale_pct: float = 0.0
+
+
+class CvcCarencesReport(BaseModel):
+    providers: list[CvcCarenceProvider] = []
+    # Le rattachement au patrimoine n'est pas une donnée du titulaire : c'est le
+    # résultat de notre rapprochement. Affiché à part, jamais dans la demande.
+    rattachement_manquant: int = 0
+    rattachement_total: int = 0
+
+
 class CvcParcTechniqueReport(BaseModel):
     equipements_total: int
     equipements_rattaches: int

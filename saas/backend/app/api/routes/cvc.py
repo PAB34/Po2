@@ -24,6 +24,7 @@ from app.schemas.cvc import (
     CvcRefrigerantImportResult,
     CvcRefrigerantItemRead,
     CvcRefrigerantItemUpdate,
+    CvcCarencesReport,
     CvcParcTechniqueReport,
     CvcSourceBuildingMappingRead,
     CvcSourceBuildingMappingUpdate,
@@ -50,6 +51,8 @@ from app.services.cvc import (
     update_cvc_item,
     update_cvc_refrigerant_item,
     update_cvc_source_building_mapping,
+    build_carences_workbook,
+    get_cvc_carences,
     get_cvc_parc_technique,
     get_cvc_technical_coverage_report,
     reapply_source_building_mappings,
@@ -290,6 +293,35 @@ def reapply_source_mappings(
     pas modifiés, seules les lignes d'inventaire et de fluides sont rafraîchies.
     """
     return reapply_source_building_mappings(db, current_user.city_id)
+
+
+@router.get("/carences", response_model=CvcCarencesReport)
+def get_carences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcCarencesReport:
+    """Audit des carences d'inventaire par prestataire.
+
+    Distingue les champs **non livrés par le format** d'export (→ faire évoluer
+    l'export) des champs **livrés mais non renseignés** (→ compléter les lignes).
+    """
+    return get_cvc_carences(db, current_user.city_id)
+
+
+@router.get("/carences/export")
+def export_carences(
+    provider: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """Classeur de demande de complétude à adresser au titulaire."""
+    content = build_carences_workbook(db, current_user.city_id, provider)
+    filename = f"demande-completude-{provider.lower()}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/parc-technique", response_model=CvcParcTechniqueReport)
