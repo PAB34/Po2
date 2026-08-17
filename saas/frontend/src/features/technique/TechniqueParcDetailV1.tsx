@@ -2,9 +2,19 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, Cell, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { KpiCard, StatusBadge } from "../../design-system";
+import { KpiCard, SegmentControl, StatusBadge } from "../../design-system";
 import { fetchCvcParcTechnique, type CvcParcBucket, type CvcParcTechniqueReport } from "../../lib/api";
 import { useAuth } from "../../providers/AuthProvider";
+import { CarencesAuditV1 } from "./CarencesAuditV1";
+import { CvcImportPage } from "../../pages/CvcImportPage";
+
+type TechniqueTab = "parc" | "carences" | "import";
+
+const TABS: { value: TechniqueTab; label: string }[] = [
+  { value: "parc", label: "État du parc" },
+  { value: "carences", label: "Audit des carences" },
+  { value: "import", label: "Import des inventaires" },
+];
 
 // Série unique (un effectif par tranche) → une seule couleur, pas de légende.
 const AGE_COLOR = "#3e6ea8";
@@ -189,6 +199,7 @@ function BatimentsTable({ report }: { report: CvcParcTechniqueReport }) {
 
 export function TechniqueParcDetailV1() {
   const { token } = useAuth();
+  const [tab, setTab] = useState<TechniqueTab>("parc");
   const [provider, setProvider] = useState<string>("");
   const [famille, setFamille] = useState<string>("");
 
@@ -251,9 +262,27 @@ export function TechniqueParcDetailV1() {
         </div>
       </header>
 
-      {isLoading && !report ? <p className="po2-muted-line">Chargement de l'inventaire technique…</p> : null}
+      <div style={{ marginBottom: 16 }}>
+        <SegmentControl value={tab} options={TABS} onChange={setTab} />
+      </div>
 
-      {report ? (
+      {tab === "carences" ? <CarencesAuditV1 /> : null}
+
+      {/* L'écran d'import existant est ré-hébergé tel quel : un flux qui fonctionne
+          n'est pas réécrit pour l'esthétique. */}
+      {tab === "import" ? (
+        <section className="po2-card">
+          <div className="po2-card__body">
+            <CvcImportPage />
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "parc" && isLoading && !report ? (
+        <p className="po2-muted-line">Chargement de l'inventaire technique…</p>
+      ) : null}
+
+      {tab === "parc" && report ? (
         <>
           {/* Filtres — une seule rangée au-dessus des graphes */}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>

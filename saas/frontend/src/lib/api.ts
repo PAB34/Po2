@@ -3479,6 +3479,48 @@ export type CvcParcTechniqueReport = {
   completude: CvcParcCompletude;
 };
 
+export type CvcCarenceChamp = {
+  champ: string;
+  label: string;
+  groupe: string;
+  /** false = la colonne n'existe pas dans l'export du prestataire. */
+  livre_par_format: boolean;
+  manquants: number;
+  total: number;
+  manquants_pct: number;
+};
+
+export type CvcCarenceProvider = {
+  provider: string;
+  equipements: number;
+  champs_non_livres: CvcCarenceChamp[];
+  champs_incomplets: CvcCarenceChamp[];
+  equipements_incomplets: number;
+  completude_globale_pct: number;
+};
+
+export type CvcCarencesReport = {
+  providers: CvcCarenceProvider[];
+  rattachement_manquant: number;
+  rattachement_total: number;
+};
+
+export async function fetchCvcCarences(token: string): Promise<CvcCarencesReport> {
+  const response = await fetch(`${apiBaseUrl}/cvc/carences`, { headers: buildHeaders(token) });
+  return parseResponse<CvcCarencesReport>(response);
+}
+
+/** Télécharge le classeur de demande de complétude d'un prestataire. */
+export async function downloadCvcCarencesWorkbook(token: string, provider: string): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/cvc/carences/export?provider=${encodeURIComponent(provider)}`, {
+    headers: buildHeaders(token),
+  });
+  if (!response.ok) {
+    throw new Error(`Export impossible (${response.status})`);
+  }
+  return response.blob();
+}
+
 export type CvcParcFilters = {
   provider?: string;
   buildingId?: number;
