@@ -158,11 +158,18 @@ Compteur, Chaudière, Armoire électrique, Vase expansion.
 
 ## 6. Trajectoire proposée (4 incréments)
 
-**Incrément 0 — Hygiène : purger les lots doublons (rapide, fort impact)**
-Supprimer les 3 lots DALKIA obsolètes (**3 399 équipements fantômes**) et introduire une notion de
-**lot courant par prestataire**, pour qu'un réimport remplace le précédent au lieu de s'y ajouter
-(le `_clear_current_cvc_inventory` existant purge tout, donc inutilisable en multi-prestataires :
-à scoper par `provider`). Sans cela, le problème réapparaîtra au prochain import.
+**Incrément 0 — Hygiène : purger les lots doublons** — ✅ **FAIT le 2026-08-17**
+
+- 3 lots DALKIA obsolètes supprimés : **3 399 équipements + 213 mappings**, après sauvegarde CSV
+  (`/home/ubuntu/backups/cvc_doublons_20260817/`, 880 Ko) et contrôles de sécurité (0 fluide
+  frigorigène dépendant, lots de référence non vides). Script `cvc_purge_doublons.py` : simulation
+  par défaut, `--apply` pour exécuter, idempotent.
+- **Base après purge : 1 422 équipements, 1 059 rattachés (74,5 %).**
+- **Aucun code n'a été nécessaire.** La protection anti-accumulation existe déjà : le git montre que
+  `_clear_current_cvc_inventory` (purge scopée par `provider`, appelée à chaque import) a été
+  introduite les **10-11 juin 2026**, alors que les 4 imports doublons datent des **3-5 juin** — le
+  bug était déjà corrigé, il ne restait que le résidu historique. Couvert par le test
+  `test_provider_purge_is_isolated` (30 tests CVC verts).
 
 **Incrément 1 — Rattachement : traiter les vrais gisements**
 Le DALKIA est déjà à 88 %. Restent :
