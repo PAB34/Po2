@@ -359,3 +359,58 @@ class CvcTechnicalCoverageReport(BaseModel):
     patrimoine_buildings_without_cvc: list[BuildingMatchSuggestion]
     inventory_unmapped_by_source: list[dict]
     refrigerants_unmapped_by_source: list[dict]
+
+
+# ---------------------------------------------------------------------------
+# État du parc technique — agrégation du cycle de vie des équipements
+# ---------------------------------------------------------------------------
+
+class CvcParcBucket(BaseModel):
+    """Tranche d'un histogramme (âges, criticité, prestataire)."""
+
+    key: str
+    label: str
+    count: int
+    share_pct: float
+
+
+class CvcParcFamille(BaseModel):
+    famille: str
+    count: int
+    age_moyen: float | None = None
+    fin_de_vie_5ans: int = 0
+    depasses: int = 0
+
+
+class CvcParcBatiment(BaseModel):
+    building_id: int
+    nom_batiment: str | None = None
+    count: int
+    age_moyen: float | None = None
+    criticite_moyenne: float | None = None
+    fin_de_vie_5ans: int = 0
+    depasses: int = 0
+
+
+class CvcParcCompletude(BaseModel):
+    """Part des équipements dont la donnée nécessaire au calcul est présente."""
+
+    rattachement_pct: float
+    date_mes_pct: float
+    reference_pct: float
+    duree_vie_pct: float
+
+
+class CvcParcTechniqueReport(BaseModel):
+    equipements_total: int
+    equipements_rattaches: int
+    batiments_couverts: int
+    age_moyen: float | None = None
+    depasses: int = 0
+    fin_de_vie_5ans: int = 0
+    ages: list[CvcParcBucket] = []
+    criticites: list[CvcParcBucket] = []
+    par_provider: list[CvcParcBucket] = []
+    par_famille: list[CvcParcFamille] = []
+    par_batiment: list[CvcParcBatiment] = []
+    completude: CvcParcCompletude
