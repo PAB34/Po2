@@ -3430,6 +3430,76 @@ export async function recomputeCvcImportReferences(
   return parseResponse<CvcRecomputeReferencesResult>(response);
 }
 
+// --- État du parc technique CVC (agrégation du cycle de vie) ---
+
+export type CvcParcBucket = {
+  key: string;
+  label: string;
+  count: number;
+  share_pct: number;
+};
+
+export type CvcParcFamille = {
+  famille: string;
+  count: number;
+  age_moyen: number | null;
+  fin_de_vie_5ans: number;
+  depasses: number;
+};
+
+export type CvcParcBatiment = {
+  building_id: number;
+  nom_batiment: string | null;
+  count: number;
+  age_moyen: number | null;
+  criticite_moyenne: number | null;
+  fin_de_vie_5ans: number;
+  depasses: number;
+};
+
+export type CvcParcCompletude = {
+  rattachement_pct: number;
+  date_mes_pct: number;
+  reference_pct: number;
+  duree_vie_pct: number;
+};
+
+export type CvcParcTechniqueReport = {
+  equipements_total: number;
+  equipements_rattaches: number;
+  batiments_couverts: number;
+  age_moyen: number | null;
+  depasses: number;
+  fin_de_vie_5ans: number;
+  ages: CvcParcBucket[];
+  criticites: CvcParcBucket[];
+  par_provider: CvcParcBucket[];
+  par_famille: CvcParcFamille[];
+  par_batiment: CvcParcBatiment[];
+  completude: CvcParcCompletude;
+};
+
+export type CvcParcFilters = {
+  provider?: string;
+  buildingId?: number;
+  famille?: string;
+};
+
+export async function fetchCvcParcTechnique(
+  token: string,
+  filters: CvcParcFilters = {},
+): Promise<CvcParcTechniqueReport> {
+  const params = new URLSearchParams();
+  if (filters.provider) params.set("provider", filters.provider);
+  if (filters.buildingId != null) params.set("building_id", String(filters.buildingId));
+  if (filters.famille) params.set("famille", filters.famille);
+  const qs = params.toString();
+  const response = await fetch(`${apiBaseUrl}/cvc/parc-technique${qs ? `?${qs}` : ""}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<CvcParcTechniqueReport>(response);
+}
+
 export async function updateCvcItem(
   token: string,
   itemId: number,
