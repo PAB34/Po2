@@ -29,6 +29,11 @@ from app.schemas.cvc import (
     CvcInventoryItemRead,
     CvcInventoryItemUpdate,
     CvcMatchBuildingsResponse,
+    CvcParcBatiment,
+    CvcParcBucket,
+    CvcParcCompletude,
+    CvcParcFamille,
+    CvcParcTechniqueReport,
     CvcRecomputeReferencesResult,
     CvcRefrigerantBatchSummary,
     CvcRefrigerantDashboard,
@@ -2285,6 +2290,185 @@ def _hydrate_items(db: Session, items: list[CvcInventoryItem]) -> list[CvcInvent
         _read_item(item, refs_map.get(item.equipment_ref_id) if item.equipment_ref_id else None)
         for item in items
     ]
+
+
+# ---------------------------------------------------------------------------
+# État du parc technique
+#
+# Le cycle de vie est déjà calculé PAR équipement (`_read_item` : âge, durée de
+# vie restante, criticité % vs référence SYPEMI). Ici on ne recalcule rien : on
+# agrège ces valeurs pour obtenir une lecture du parc.
+# Unité de pilotage retenue (arbitrage 2026-08-17) : le NOMBRE d'équipements.
+# ---------------------------------------------------------------------------
+
+_AGE_BUCKETS: tuple[tuple[str, str, float, float], ...] = (
+    ("0_5", "0-5 ans", 0.0, 5.0),
+    ("6_10", "6-10 ans", 5.0, 10.0),
+    ("11_15", "11-15 ans", 10.0, 15.0),
+    ("16_20", "16-20 ans", 15.0, 20.0),
+    ("21_30", "21-30 ans", 20.0, 30.0),
+    ("30_plus", "Plus de 30 ans", 30.0, float("inf")),
+)
+
+_CRITICITE_BUCKETS: tuple[tuple[str, str, float, float], ...] = (
+    ("faible", "Moins de 50 %", 0.0, 50.0),
+    ("moyenne", "50 à 80 %", 50.0, 80.0),
+    ("elevee", "80 à 100 %", 80.0, 100.0),
+    ("depasse", "Durée de vie dépassée", 100.0, float("inf")),
+)
+
+_UNKNOWN_BUCKET = ("inconnu", "Non calculable")
+
+
+def _bucketize(
+    values: list[float | None],
+    buckets: tuple[tuple[str, str, float, float], ...],
+    total: int,
+) -> list[CvcParcBucket]:
+    counts = {key: 0 for key, _, _, _ in buckets}
+    unknown = 0
+    for value in values:
+        if value is None:
+            unknown += 1
+            continue
+        for key, _, low, high in buckets:
+            # Bornes inclusives à gauche, exclusives à droite (dernière ouverte).
+            if low <= value < high or (high == float("inf") and value >= low):
+                counts[key] += 1
+                break
+    share = lambda n: round(100 * n / total, 1) if total else 0.0  # noqa: E731
+    result = [
+        CvcParcBucket(key=key, label=label, count=counts[key], share_pct=share(counts[key]))
+        for key, label, _, _ in buckets
+    ]
+    if unknown:
+        result.append(
+            CvcParcBucket(key=_UNKNOWN_BUCKET[0], label=_UNKNOWN_BUCKET[1], count=unknown, share_pct=share(unknown))
+        )
+    return result
+
+
+def _mean(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 1) if values else None
+
+
+def get_cvc_parc_technique(
+    db: Session,
+    city_id: int | None,
+    provider: str | None = None,
+    building_id: int | None = None,
+    famille: str | None = None,
+) -> CvcParcTechniqueReport:
+    """État du parc CVC : âges, criticité, fin de vie, complétude de la donnée."""
+    stmt = select(CvcInventoryItem)
+    if city_id is not None:
+        stmt = stmt.where((CvcInventoryItem.city_id == city_id) | (CvcInventoryItem.city_id.is_(None)))
+    if provider:
+        stmt = stmt.where(CvcInventoryItem.provider == provider)
+    if building_id is not None:
+        stmt = stmt.where(CvcInventoryItem.building_id == building_id)
+    if famille:
+        stmt = stmt.where(CvcInventoryItem.famille == famille)
+
+    # Ne compter que le lot courant de chaque prestataire : un réimport ne doit
+    # jamais gonfler l'état du parc (cf. les 4 lots DALKIA doublons de juin 2026).
+    items = _filter_latest_inventory_batch(list(db.scalars(stmt)))
+    reads = _hydrate_items(db, items)
+    total = len(reads)
+
+    ages = [read.lifecycle_age_years for read in reads]
+    criticites = [read.criticite_pct for read in reads]
+    known_ages = [value for value in ages if value is not None]
+
+    def _is_depasse(read: CvcInventoryItemRead) -> bool:
+        return read.duree_vie_restante is not None and read.duree_vie_restante <= 0
+
+    def _is_fin_de_vie(read: CvcInventoryItemRead) -> bool:
+        return read.duree_vie_restante is not None and 0 < read.duree_vie_restante <= 5
+
+    depasses = sum(1 for read in reads if _is_depasse(read))
+    fin_de_vie = sum(1 for read in reads if _is_fin_de_vie(read))
+
+    # Répartition par prestataire
+    provider_counts: dict[str, int] = defaultdict(int)
+    for read in reads:
+        provider_counts[read.provider or PROVIDER_DALKIA] += 1
+    par_provider = [
+        CvcParcBucket(
+            key=name,
+            label=name,
+            count=count,
+            share_pct=round(100 * count / total, 1) if total else 0.0,
+        )
+        for name, count in sorted(provider_counts.items(), key=lambda kv: -kv[1])
+    ]
+
+    # Par famille
+    by_famille: dict[str, list[CvcInventoryItemRead]] = defaultdict(list)
+    for read in reads:
+        by_famille[read.famille or "Non renseignée"].append(read)
+    par_famille = sorted(
+        (
+            CvcParcFamille(
+                famille=name,
+                count=len(group),
+                age_moyen=_mean([r.lifecycle_age_years for r in group if r.lifecycle_age_years is not None]),
+                fin_de_vie_5ans=sum(1 for r in group if _is_fin_de_vie(r)),
+                depasses=sum(1 for r in group if _is_depasse(r)),
+            )
+            for name, group in by_famille.items()
+        ),
+        key=lambda entry: -entry.count,
+    )
+
+    # Par bâtiment (les équipements non rattachés sont exclus : pas de maille)
+    by_building: dict[int, list[CvcInventoryItemRead]] = defaultdict(list)
+    for read in reads:
+        if read.building_id is not None:
+            by_building[read.building_id].append(read)
+    names: dict[int, str | None] = {}
+    if by_building:
+        for building in db.scalars(select(Building).where(Building.id.in_(by_building.keys()))):
+            names[building.id] = building.nom_batiment
+    par_batiment = sorted(
+        (
+            CvcParcBatiment(
+                building_id=bid,
+                nom_batiment=names.get(bid),
+                count=len(group),
+                age_moyen=_mean([r.lifecycle_age_years for r in group if r.lifecycle_age_years is not None]),
+                criticite_moyenne=_mean([r.criticite_pct for r in group if r.criticite_pct is not None]),
+                fin_de_vie_5ans=sum(1 for r in group if _is_fin_de_vie(r)),
+                depasses=sum(1 for r in group if _is_depasse(r)),
+            )
+            for bid, group in by_building.items()
+        ),
+        # Les bâtiments les plus critiques d'abord : c'est la question métier.
+        key=lambda entry: (-(entry.depasses + entry.fin_de_vie_5ans), -entry.count),
+    )
+
+    pct = lambda n: round(100 * n / total, 1) if total else 0.0  # noqa: E731
+    completude = CvcParcCompletude(
+        rattachement_pct=pct(sum(1 for r in reads if r.building_id is not None)),
+        date_mes_pct=pct(sum(1 for r in reads if r.date_mis_en_service is not None)),
+        reference_pct=pct(sum(1 for r in reads if r.equipment_ref_id is not None)),
+        duree_vie_pct=pct(sum(1 for r in reads if r.duree_vie_restante is not None)),
+    )
+
+    return CvcParcTechniqueReport(
+        equipements_total=total,
+        equipements_rattaches=sum(1 for r in reads if r.building_id is not None),
+        batiments_couverts=len(by_building),
+        age_moyen=_mean(known_ages),
+        depasses=depasses,
+        fin_de_vie_5ans=fin_de_vie,
+        ages=_bucketize(ages, _AGE_BUCKETS, total),
+        criticites=_bucketize(criticites, _CRITICITE_BUCKETS, total),
+        par_provider=par_provider,
+        par_famille=par_famille,
+        par_batiment=par_batiment,
+        completude=completude,
+    )
 
 
 def list_cvc_items_for_building(db: Session, building_id: int) -> list[CvcInventoryItemRead]:

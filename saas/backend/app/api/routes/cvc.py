@@ -24,6 +24,7 @@ from app.schemas.cvc import (
     CvcRefrigerantImportResult,
     CvcRefrigerantItemRead,
     CvcRefrigerantItemUpdate,
+    CvcParcTechniqueReport,
     CvcSourceBuildingMappingRead,
     CvcSourceBuildingMappingUpdate,
     CvcTechnicalCoverageReport,
@@ -49,6 +50,7 @@ from app.services.cvc import (
     update_cvc_item,
     update_cvc_refrigerant_item,
     update_cvc_source_building_mapping,
+    get_cvc_parc_technique,
     get_cvc_technical_coverage_report,
     reapply_source_building_mappings,
 )
@@ -288,6 +290,27 @@ def reapply_source_mappings(
     pas modifiés, seules les lignes d'inventaire et de fluides sont rafraîchies.
     """
     return reapply_source_building_mappings(db, current_user.city_id)
+
+
+@router.get("/parc-technique", response_model=CvcParcTechniqueReport)
+def get_parc_technique(
+    provider: str | None = None,
+    building_id: int | None = None,
+    famille: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CvcParcTechniqueReport:
+    """État du parc CVC : pyramide des âges, criticité, fin de vie, complétude.
+
+    N'agrège que le lot d'import courant de chaque prestataire.
+    """
+    return get_cvc_parc_technique(
+        db,
+        current_user.city_id,
+        provider=provider,
+        building_id=building_id,
+        famille=famille,
+    )
 
 
 @router.get("/technical-report", response_model=CvcTechnicalCoverageReport)
