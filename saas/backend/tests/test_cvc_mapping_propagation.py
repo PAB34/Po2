@@ -162,6 +162,10 @@ def test_reapply_skips_unresolved_mappings(db_session):
     mapping.building_ids_json = None
     mapping.building_id = None
     mapping.site_id = None
+    # L'import peut avoir auto-rattaché l'équipement : on repart d'un état orphelin
+    # pour vérifier que la re-propagation, elle, ne décide rien sans cible.
+    item = db_session.scalars(select(CvcInventoryItem)).one()
+    item.building_id = None
     db_session.commit()
 
     result = reapply_source_building_mappings(db_session, city_id=1)

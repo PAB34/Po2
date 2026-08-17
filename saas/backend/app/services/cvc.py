@@ -210,6 +210,110 @@ def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+# ---------------------------------------------------------------------------
+# Rapprochement des libellés de site (inventaire CVC ↔ patrimoine)
+#
+# La similarité de chaîne brute est doublement défaillante sur ce corpus :
+# elle rate des synonymes évidents (« EGLISE SAINT JOSEPH » vs « EGLISE CATHOLIQUE
+# ST JOSEPH ») et rapproche avec assurance des bâtiments de nature différente
+# partageant un patronyme (« STADE LOUIS MICHEL » vs « RESTAURANT SCOLAIRE LOUISE
+# MICHEL »). On normalise donc les alias, et on ajoute un garde-fou sémantique.
+# ---------------------------------------------------------------------------
+
+# Préfixes de codification interne des inventaires (« VDS-ENS 17.03 GS - », « CCAS 10 »).
+_SITE_CODE_PREFIX = re.compile(r"^(?:vds|ccas|lr)[-\s/][a-z]{0,4}\s*\d+(?:\.\d+)?\s*(?:gs|bam|ens)?\s*[-–]?\s*")
+
+_SITE_ALIASES = {
+    "st": "saint",
+    "ste": "sainte",
+    "sts": "saints",
+    "gs": "groupe scolaire",
+    "elem": "elementaire",
+    "elemtaire": "elementaire",
+    "mat": "maternelle",
+    "ec": "ecole",
+    "bat": "batiment",
+    "cplx": "complexe",
+    "mun": "municipal",
+}
+
+# Mots sans valeur discriminante pour l'identification d'un site.
+_SITE_STOPWORDS = {
+    "de", "du", "des", "la", "le", "les", "l", "d", "et", "au", "aux", "a", "en",
+    "nouveau", "nouveaux", "nouvelle", "nouvelles", "ancien", "ancienne", "yc",
+    "municipal", "municipale", "ville", "sete", "mairie",
+}
+
+# Nature du bâtiment : deux natures différentes ⇒ ce n'est pas le même site,
+# même si les noms propres coïncident.
+_SITE_TYPE_WORDS = {
+    "stade", "ecole", "eglise", "cimetiere", "restaurant", "salle", "villa",
+    "chapelle", "theatre", "gymnase", "piscine", "maison", "complexe", "atelier",
+    "musee", "bibliotheque", "mediatheque", "creche", "garderie", "halte",
+    "conservatoire", "cinema", "parking", "tennis", "boulodrome", "dojo", "foyer",
+    "logement", "hotel", "marche", "vestiaire", "tribune", "magasin", "depot",
+    "garage", "chaufferie", "serre", "elementaire", "maternelle", "college",
+    "lycee", "cantine", "presbytere", "camping", "port",
+}
+
+
+def _normalize_site_label(value: str | None) -> str:
+    """Minuscule sans accent, préfixe de codification retiré, alias déployés."""
+    txt = _normalize(value)
+    if not txt:
+        return ""
+    txt = _SITE_CODE_PREFIX.sub("", txt)
+    txt = re.sub(r"[^a-z0-9]+", " ", txt)
+    tokens = [_SITE_ALIASES.get(token, token) for token in txt.split()]
+    return " ".join(" ".join(tokens).split())
+
+
+def _site_tokens(value: str | None) -> set[str]:
+    return {t for t in _normalize_site_label(value).split() if len(t) > 1 and t not in _SITE_STOPWORDS}
+
+
+def _site_type_tokens(value: str | None) -> set[str]:
+    return _site_tokens(value) & _SITE_TYPE_WORDS
+
+
+def _site_key_tokens(value: str | None) -> set[str]:
+    """Tokens distinctifs : ce qui identifie le site, hors nature du bâtiment."""
+    return _site_tokens(value) - _SITE_TYPE_WORDS
+
+
+def _site_labels_compatible(source: str | None, target: str | None) -> bool:
+    """Garde-fou : rejette les rapprochements sémantiquement incohérents."""
+    types_source = _site_type_tokens(source)
+    types_target = _site_type_tokens(target)
+    # « STADE ... » ne peut pas être « RESTAURANT SCOLAIRE ... ».
+    if types_source and types_target and not (types_source & types_target):
+        return False
+    keys_source = _site_key_tokens(source)
+    keys_target = _site_key_tokens(target)
+    # « CIMETIERE MARIN » ne peut pas être « CIMETIERE LE PY ».
+    if keys_source and keys_target and not (keys_source & keys_target):
+        return False
+    return True
+
+
+def _site_similarity(source: str | None, target: str | None) -> float:
+    """Score de rapprochement de deux libellés de site (0 si incompatibles)."""
+    normalized_source = _normalize_site_label(source)
+    normalized_target = _normalize_site_label(target)
+    if not normalized_source or not normalized_target:
+        return 0.0
+    if not _site_labels_compatible(source, target):
+        return 0.0
+    sequence = SequenceMatcher(None, normalized_source, normalized_target).ratio()
+    tokens_source = _site_tokens(source)
+    tokens_target = _site_tokens(target)
+    jaccard = len(tokens_source & tokens_target) / len(tokens_source | tokens_target) if tokens_source and tokens_target else 0.0
+    keys_source = _site_key_tokens(source)
+    # Couverture : part des tokens distinctifs de la source retrouvés dans la cible.
+    coverage = len(keys_source & _site_key_tokens(target)) / len(keys_source) if keys_source else 0.0
+    return max(sequence, 0.4 * jaccard + 0.6 * coverage)
+
+
 def _build_address(b: Building) -> str | None:
     parts = [b.numero_voirie, b.nature_voie, b.nom_voie]
     addr = " ".join(p for p in parts if p)
@@ -708,7 +812,7 @@ def _suggest_source_building(
     buildings: list[Building],
 ) -> tuple[int | None, int | None, float | None, str | None]:
     site_scored = sorted(
-        ((_similarity(source_site_raw, site.nom_site), site) for site in sites),
+        ((_site_similarity(source_site_raw, site.nom_site), site) for site in sites),
         key=lambda item: item[0],
         reverse=True,
     )
@@ -716,8 +820,8 @@ def _suggest_source_building(
         (
             (
                 max(
-                    _similarity(source_site_raw, building.nom_batiment or ""),
-                    _similarity(source_site_raw, building.adresse_reconstituee or ""),
+                    _site_similarity(source_site_raw, building.nom_batiment or ""),
+                    _site_similarity(source_site_raw, building.adresse_reconstituee or ""),
                 ),
                 building,
             )
@@ -741,7 +845,7 @@ def _mapping_suggestions(
     buildings: list[Building],
 ) -> tuple[list[PatrimoineSiteSuggestion], list[BuildingMatchSuggestion]]:
     site_scored = sorted(
-        ((_similarity(source_site_raw, site.nom_site), site) for site in sites),
+        ((_site_similarity(source_site_raw, site.nom_site), site) for site in sites),
         key=lambda item: item[0],
         reverse=True,
     )
@@ -749,8 +853,8 @@ def _mapping_suggestions(
         (
             (
                 max(
-                    _similarity(source_site_raw, building.nom_batiment or ""),
-                    _similarity(source_site_raw, building.adresse_reconstituee or ""),
+                    _site_similarity(source_site_raw, building.nom_batiment or ""),
+                    _site_similarity(source_site_raw, building.adresse_reconstituee or ""),
                 ),
                 building,
             )
