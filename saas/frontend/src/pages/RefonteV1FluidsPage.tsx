@@ -4,8 +4,8 @@ import type { AppProfileV1 } from "../app/navigationV1";
 import { FluidsPortfolioPageV1 } from "../features/fluids/FluidsPortfolioPageV1";
 import { FluidWaterComingSoonV1 } from "../features/fluids/FluidWaterComingSoonV1";
 import { FluidsElecDetailV1 } from "../features/fluids/FluidsElecDetailV1";
+import { FluidsGazDetailV1 } from "../features/fluids/FluidsGazDetailV1";
 import { EnergieDataOpsPage } from "./EnergiePage";
-import { EnergieGazPage } from "./EnergieGazPage";
 import { useAuth } from "../providers/AuthProvider";
 
 function FluidShell({ children }: { children: ReactNode }) {
@@ -34,8 +34,10 @@ export function RefonteV1FluidElectriciteCollectePage() {
   return <FluidShell><EnergieDataOpsPage /></FluidShell>;
 }
 
+// Détail Gaz : même patron que l'électricité (KPI, périmètre de collecte, performance
+// climat MWh/DJU, rapprochement P1, référentiel PCE). La vue legacy reste sur /energie/gaz.
 export function RefonteV1FluidGazPage() {
-  return <FluidShell><EnergieGazPage /></FluidShell>;
+  return <FluidShell><FluidsGazDetailV1 /></FluidShell>;
 }
 
 export function RefonteV1FluidEauPage() {
