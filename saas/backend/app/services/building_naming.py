@@ -1460,3 +1460,62 @@ def find_nearby_dgfip_rows(
             continue
 
     return sorted(results, key=lambda r: r["distance_m"])
+
+
+# Rayon maximal accepté pour une recherche de bâtiments IGN autour d'un point.
+# Au-delà, la requête WFS renvoie des milliers de polygones : la carte devient
+# inutilisable et le plafond `count` tronque le résultat de façon arbitraire.
+IGN_POINT_MAX_RADIUS_M = 1500
+
+
+def lookup_ign_buildings_at_point(lat: float, lon: float, radius_m: int = 300) -> dict[str, Any]:
+    """Bâtiments IGN autour d'un point, sans passer par une adresse.
+
+    L'attachement historique part d'une adresse géocodée. Ici on part directement
+    d'un point posé sur la carte : c'est ce qu'il faut quand le bien n'a pas encore
+    d'adresse exploitable, ce qui est le cas du référentiel patrimoine historique.
+    """
+    latitude = _safe_float(lat)
+    longitude = _safe_float(lon)
+    if latitude is None or longitude is None:
+        raise ValueError("Coordonnées invalides.")
+    effective_radius = max(50, min(int(radius_m), IGN_POINT_MAX_RADIUS_M))
+    feature_collection = _ign_buildings(latitude, longitude, radius_m=effective_radius)
+    parcels = _geopf_parcel_at_point(latitude, longitude)
+    return {
+        "lat": latitude,
+        "lon": longitude,
+        "radius_m": effective_radius,
+        "feature_collection": feature_collection,
+        "parcel_feature_collection": parcels.get("parcel_feature_collection")
+        or {"type": "FeatureCollection", "features": []},
+        "parcel_labels": parcels.get("parcel_labels") or [],
+    }
+
+
+def _geopf_parcel_at_point(lat: float, lon: float) -> dict[str, Any]:
+    """Parcelle cadastrale contenant le point (best effort : jamais bloquant)."""
+    try:
+        bbox = _bbox_around(lat, lon, radius_m=30)
+        data = _wfs_layer_features("CADASTRALPARCELS.PARCELLAIRE_EXPRESS:parcelle", bbox, count=20)
+    except Exception:
+        return {}
+    features: list[dict[str, Any]] = []
+    labels: list[str] = []
+    for feature in data.get("features", []) or []:
+        geometry = feature.get("geometry")
+        if not geometry:
+            continue
+        properties = _attrs_lower_keys(feature.get("properties", {}) or {})
+        section = str(properties.get("section") or "")
+        numero = str(properties.get("numero") or "")
+        label = f"{section}{numero}".strip()
+        built = _geometry_to_feature(geometry, {"label": label, "attributes": properties})
+        if built is not None:
+            features.append(built)
+            if label and label not in labels:
+                labels.append(label)
+    return {
+        "parcel_feature_collection": {"type": "FeatureCollection", "features": features},
+        "parcel_labels": labels,
+    }

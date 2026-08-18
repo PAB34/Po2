@@ -281,6 +281,7 @@ export type CreateBuildingPayload = {
   dgfip_reference_norm?: string;
   nom_batiment?: string;
   nom_commune?: string;
+  code_postal?: string;
   numero_voirie?: string;
   indice_repetition?: string;
   nature_voie?: string;
@@ -6010,4 +6011,31 @@ export async function updateLegacyAsset(
     body: JSON.stringify(payload),
   });
   return parseResponse<LegacyAsset>(response);
+}
+
+export type IgnPointLookup = {
+  lat: number;
+  lon: number;
+  radius_m: number;
+  feature_collection: GeoJsonFeatureCollection;
+  parcel_feature_collection: GeoJsonFeatureCollection;
+  parcel_labels: string[];
+};
+
+/** Bâtiments IGN autour d'un point posé sur la carte, sans adresse préalable. */
+export async function fetchIgnBuildingsAtPoint(
+  token: string,
+  lat: number,
+  lon: number,
+  radiusM = 300,
+): Promise<IgnPointLookup> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+    radius_m: String(radiusM),
+  });
+  const response = await fetch(`${apiBaseUrl}/buildings/lookup/ign-at-point?${params.toString()}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<IgnPointLookup>(response);
 }

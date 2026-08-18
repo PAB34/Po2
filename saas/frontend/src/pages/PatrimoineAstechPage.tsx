@@ -19,7 +19,9 @@ import {
   attachBuildingIgnRequest,
   computeLegacyCandidates,
   fetchBuildings,
+  createBuildingRequest,
   fetchFreeAddressLookup,
+  fetchIgnBuildingsAtPoint,
   fetchLegacyAssets,
   fetchLegacyCounts,
   importLegacyAstechFile,
@@ -45,43 +47,54 @@ const STATUS_ORDER = ["a_traiter", "lie", "hors_perimetre", "ignore"] as const;
 const DEFAULT_LAT = 43.4028;
 const DEFAULT_LON = 3.6928;
 
+// La plateforme est en thème sombre (`:root` : texte #e2e8f0 sur fond #0f172a).
+// Toute couleur de fond posée ici doit donc venir avec sa couleur de texte, sinon
+// le texte hérité (clair) devient invisible.
+const SURFACE = "rgba(30, 41, 59, 0.72)";
+const BORDER = "1px solid rgba(148, 163, 184, 0.2)";
+const TEXT = "#e2e8f0";
+const TEXT_MUTED = "#94a3b8";
+
 const card: CSSProperties = {
-  border: "1px solid #e2e8f0",
-  borderRadius: 8,
+  border: BORDER,
+  borderRadius: 12,
   padding: "10px 12px",
-  background: "#fff",
+  background: SURFACE,
+  color: TEXT,
 };
 const btnPrimary: CSSProperties = {
   border: "1px solid #1d4ed8",
   background: "#2563eb",
   color: "#fff",
-  borderRadius: 6,
+  borderRadius: 7,
   padding: "6px 12px",
   fontSize: 13,
   cursor: "pointer",
 };
 const btnSecondary: CSSProperties = {
-  border: "1px solid #cbd5e1",
-  background: "#fff",
-  color: "#0f172a",
-  borderRadius: 6,
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  background: "transparent",
+  color: TEXT,
+  borderRadius: 7,
   padding: "6px 12px",
   fontSize: 13,
   cursor: "pointer",
 };
 const input: CSSProperties = {
-  border: "1px solid #cbd5e1",
-  borderRadius: 6,
+  border: "1px solid rgba(148, 163, 184, 0.3)",
+  background: "rgba(15, 23, 42, 0.6)",
+  color: TEXT,
+  borderRadius: 7,
   padding: "6px 10px",
   fontSize: 13,
   width: "100%",
 };
 
 function scoreColor(score: number | null): string {
-  if (score === null) return "#64748b";
-  if (score >= 0.9) return "#0f6e56";
-  if (score >= 0.7) return "#854f0b";
-  return "#a32d2d";
+  if (score === null) return TEXT_MUTED;
+  if (score >= 0.9) return "#34d399";
+  if (score >= 0.7) return "#fbbf24";
+  return "#f87171";
 }
 
 function assetLabel(asset: LegacyAsset): string {
@@ -109,6 +122,9 @@ export default function PatrimoineAstechPage() {
   const [flash, setFlash] = useState<string | null>(null);
   const [attachMode, setAttachMode] = useState(false);
   const [attachSelection, setAttachSelection] = useState<GeoJsonFeature[]>([]);
+  // Rayon de recherche IGN autour du point. Plafonné à 1,5 km côté serveur : au-delà,
+  // le WFS renvoie des milliers de polygones et la carte devient inutilisable.
+  const [attachRadius, setAttachRadius] = useState(300);
 
   const countsQuery = useQuery({
     queryKey: ["legacy-counts"],
@@ -199,11 +215,35 @@ export default function PatrimoineAstechPage() {
     return parts ? `${parts}, ${targetBuilding.nom_commune}` : null;
   }, [targetBuilding]);
 
-  const attachLookupQuery = useQuery({
+  // Deux façons de trouver les bâtiments IGN :
+  //  - le bien a un point posé sur la carte -> on cherche AUTOUR DE CE POINT.
+  //    C'est le cas normal ici : le fichier ASTECH n'a pas d'adresse exploitable
+  //    (n° de voirie absent 9 fois sur 10, cadastre vide), donc le géocodage
+  //    d'adresse ne donne rien. L'utilisateur pose le point, on cherche là.
+  //  - sinon, repli sur le géocodage de l'adresse du bâtiment Po2 rattaché.
+  const pointCenter = useMemo(() => {
+    if (selected?.latitude != null && selected?.longitude != null) {
+      return { lat: selected.latitude, lon: selected.longitude };
+    }
+    if (targetBuilding?.latitude != null && targetBuilding?.longitude != null) {
+      return { lat: targetBuilding.latitude, lon: targetBuilding.longitude };
+    }
+    return null;
+  }, [selected, targetBuilding]);
+
+  const pointLookupQuery = useQuery({
+    queryKey: ["legacy-ign-at-point", pointCenter?.lat, pointCenter?.lon, attachRadius],
+    queryFn: () => fetchIgnBuildingsAtPoint(token!, pointCenter!.lat, pointCenter!.lon, attachRadius),
+    enabled: !!token && attachMode && pointCenter !== null,
+  });
+
+  const addressLookupQuery = useQuery({
     queryKey: ["legacy-attach-lookup", targetBuilding?.id, attachAddress],
     queryFn: () => fetchFreeAddressLookup(token!, attachAddress as string),
-    enabled: !!token && attachMode && Boolean(attachAddress),
+    enabled: !!token && attachMode && pointCenter === null && Boolean(attachAddress),
   });
+
+  const attachLookupQuery = pointCenter !== null ? pointLookupQuery : addressLookupQuery;
 
   const attachMutation = useMutation({
     mutationFn: () =>
@@ -222,6 +262,33 @@ export default function PatrimoineAstechPage() {
       invalidate();
     },
     onError: (error) => setFlash(`Erreur d'attribution IGN : ${(error as Error).message}`),
+  });
+
+  // Créer le bâtiment Po2 manquant : sans lui, il n'y a rien à quoi attacher l'IGN.
+  // On part du nom ASTECH et de la position posée sur la carte.
+  const createBuildingMutation = useMutation({
+    mutationFn: async () => {
+      const point = pointCenter ?? { lat: DEFAULT_LAT, lon: DEFAULT_LON };
+      const building = await createBuildingRequest(token!, {
+        nom_batiment: assetLabel(selected!),
+        nom_commune: selected!.source_ville || "SETE",
+        code_postal: selected!.source_codpost || undefined,
+        latitude: point.lat,
+        longitude: point.lon,
+        source_creation: "ASTECH",
+      });
+      await updateLegacyAsset(token!, selected!.id, { building_id: building.id });
+      return building;
+    },
+    onSuccess: (building) => {
+      setFlash(
+        `Bâtiment « ${building.nom_batiment} » créé dans Po2 et rattaché. ` +
+          "Tu peux maintenant lui attribuer un bâtiment IGN.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur de création : ${(error as Error).message}`),
   });
 
   // Quitter le mode attribution dès qu'on change de bien : la sélection de
@@ -311,12 +378,12 @@ export default function PatrimoineAstechPage() {
               ...card,
               textAlign: "left",
               cursor: "pointer",
-              borderColor: statusFilter === status ? "#2563eb" : "#e2e8f0",
-              boxShadow: statusFilter === status ? "0 0 0 1px #2563eb inset" : undefined,
+              border: statusFilter === status ? "1px solid #60a5fa" : BORDER,
+              boxShadow: statusFilter === status ? "0 0 0 1px #60a5fa inset" : undefined,
             }}
           >
-            <div style={{ fontSize: 13, color: "#64748b" }}>{STATUS_LABEL[status]}</div>
-            <div style={{ fontSize: 24, fontWeight: 500 }}>{counts[status] ?? 0}</div>
+            <div style={{ fontSize: 13, color: TEXT_MUTED }}>{STATUS_LABEL[status]}</div>
+            <div style={{ fontSize: 24, fontWeight: 500, color: TEXT }}>{counts[status] ?? 0}</div>
           </button>
         ))}
       </div>
@@ -331,9 +398,9 @@ export default function PatrimoineAstechPage() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          {assetsQuery.isLoading && <p style={{ color: "#64748b" }}>Chargement…</p>}
+          {assetsQuery.isLoading && <p style={{ color: TEXT_MUTED }}>Chargement…</p>}
           {!assetsQuery.isLoading && assets.length === 0 && (
-            <p style={{ color: "#64748b", fontSize: 13 }}>
+            <p style={{ color: TEXT_MUTED, fontSize: 13 }}>
               Aucun bien pour ce filtre. Commence par importer un export ASTECH.
             </p>
           )}
@@ -350,16 +417,16 @@ export default function PatrimoineAstechPage() {
                     textAlign: "left",
                     cursor: "pointer",
                     padding: "8px 10px",
-                    borderColor: isSelected ? "#7c3aed" : "#e2e8f0",
-                    background: isSelected ? "#faf5ff" : "#fff",
+                    border: isSelected ? "1px solid #a855f7" : BORDER,
+                    background: isSelected ? "rgba(124, 58, 237, 0.22)" : SURFACE,
                   }}
                 >
-                  <div style={{ fontSize: 11, color: "#94a3b8", fontFamily: "monospace" }}>
+                  <div style={{ fontSize: 11, color: "#c4b5fd", fontFamily: "monospace" }}>
                     {asset.code_bien}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{assetLabel(asset)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{assetLabel(asset)}</div>
                   {asset.candidate_label && (
-                    <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                    <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>
                       → {asset.candidate_label}{" "}
                       <span style={{ color: scoreColor(asset.candidate_score) }}>
                         {asset.candidate_score != null
@@ -394,8 +461,8 @@ export default function PatrimoineAstechPage() {
               );
             }}
             attachMode={attachMode ? "ign" : "none"}
-            attachLat={attachLookupQuery.data?.lat ?? null}
-            attachLon={attachLookupQuery.data?.lon ?? null}
+            attachLat={attachLookupQuery.data?.lat ?? pointCenter?.lat ?? null}
+            attachLon={attachLookupQuery.data?.lon ?? pointCenter?.lon ?? null}
             attachAddress={attachAddress}
             attachFeatureCollection={
               (attachLookupQuery.data?.feature_collection as GeoJsonFeatureCollection | undefined) ?? null
@@ -416,11 +483,11 @@ export default function PatrimoineAstechPage() {
           />
 
           <div style={card}>
-            {!selected && <p style={{ color: "#64748b", margin: 0 }}>Sélectionne un bien dans la liste.</p>}
+            {!selected && <p style={{ color: TEXT_MUTED, margin: 0 }}>Sélectionne un bien dans la liste.</p>}
             {selected && (
               <>
                 <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>
-                  <span style={{ fontFamily: "monospace", color: "#7c3aed" }}>{selected.code_bien}</span>{" "}
+                  <span style={{ fontFamily: "monospace", color: "#c4b5fd" }}>{selected.code_bien}</span>{" "}
                   — {assetLabel(selected)}
                 </h3>
                 <dl
@@ -438,14 +505,14 @@ export default function PatrimoineAstechPage() {
                     ["Statut", STATUS_LABEL[selected.status] ?? selected.status],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <dt style={{ fontSize: 11, color: "#94a3b8", textTransform: "uppercase" }}>{label}</dt>
+                      <dt style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase" }}>{label}</dt>
                       <dd style={{ margin: 0, fontSize: 13 }}>{value}</dd>
                     </div>
                   ))}
                 </dl>
 
                 {selected.candidate_label && selected.status !== "lie" && (
-                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 10, marginBottom: 10 }}>
+                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
                     <p style={{ margin: "0 0 4px", fontSize: 13 }}>
                       Candidat proposé : <strong>{selected.candidate_label}</strong>{" "}
                       <span style={{ color: scoreColor(selected.candidate_score) }}>
@@ -455,7 +522,7 @@ export default function PatrimoineAstechPage() {
                       </span>
                     </p>
                     {selected.candidate_reason && (
-                      <p style={{ margin: "0 0 8px", fontSize: 12, color: "#64748b" }}>
+                      <p style={{ margin: "0 0 8px", fontSize: 12, color: TEXT_MUTED }}>
                         Motif : {selected.candidate_reason}
                       </p>
                     )}
@@ -486,7 +553,7 @@ export default function PatrimoineAstechPage() {
                 )}
 
                 {selected.status === "lie" && targetBuilding && (
-                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 10, marginBottom: 10 }}>
+                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
                     <p style={{ margin: "0 0 8px", fontSize: 13 }}>
                       Rattaché à <strong>{targetBuilding.nom_batiment}</strong>
                       {selected.link_origin === "auto" ? " (reconnaissance automatique)" : ""}
@@ -512,7 +579,7 @@ export default function PatrimoineAstechPage() {
                     gap: 8,
                     flexWrap: "wrap",
                     alignItems: "center",
-                    borderTop: "1px solid #e2e8f0",
+                    borderTop: BORDER,
                     paddingTop: 10,
                   }}
                 >
@@ -529,7 +596,20 @@ export default function PatrimoineAstechPage() {
                   )}
                   {attachMode && (
                     <>
-                      <span style={{ fontSize: 12, color: "#64748b" }}>
+                      <label style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        Rayon&nbsp;
+                        <select
+                          value={attachRadius}
+                          onChange={(event) => setAttachRadius(Number(event.target.value))}
+                          style={{ ...input, width: "auto", padding: "4px 8px" }}
+                        >
+                          <option value={200}>200 m</option>
+                          <option value={400}>400 m</option>
+                          <option value={800}>800 m</option>
+                          <option value={1500}>1,5 km</option>
+                        </select>
+                      </label>
+                      <span style={{ fontSize: 12, color: TEXT_MUTED }}>
                         Clique les polygones jaunes sur la carte ({attachSelection.length} sélectionné
                         {attachSelection.length > 1 ? "s" : ""}).
                       </span>
@@ -547,10 +627,22 @@ export default function PatrimoineAstechPage() {
                     </>
                   )}
                   {!targetBuilding && (
-                    <span style={{ fontSize: 12, color: "#64748b" }}>
-                      Aucun bâtiment Po2 rattaché : place d'abord le point sur la carte, puis crée
-                      ou rattache le bâtiment.
-                    </span>
+                    <>
+                      <button
+                        type="button"
+                        style={btnSecondary}
+                        disabled={createBuildingMutation.isPending}
+                        onClick={() => createBuildingMutation.mutate()}
+                      >
+                        {createBuildingMutation.isPending
+                          ? "Création…"
+                          : "Créer ce bâtiment dans Po2"}
+                      </button>
+                      <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        Ce bien n'existe pas encore dans Po2. Place le point sur la carte, crée le
+                        bâtiment, puis attribue-lui son bâtiment IGN.
+                      </span>
+                    </>
                   )}
                 </div>
               </>
