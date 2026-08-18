@@ -1,6 +1,6 @@
 ---
 type: decisions
-statut: cadrage — questions ouvertes
+statut: cadrage — decisions Q1-Q8 prises, Q9-Q14 ouvertes
 sujet: Rapprochement du fichier patrimoine historique de la collectivité (CODE_BIEN) avec le référentiel Po2 (/buildings/list)
 créé: 2026-08-18
 related:
@@ -139,97 +139,144 @@ Le chantier n'est donc **pas** « rapprocher deux listes de même taille » : c'
 n'aura pas de contrepartie et devra passer par le parcours carte + attachement IGN.
 C'est exactement ce que l'utilisateur a décrit — le besoin est bien posé.
 
-## 5. Architecture proposée (à valider)
+## 5. Décisions prises (2026-08-18)
 
-Réutilisation maximale, **zéro réécriture** :
-
-```
-Excel historique ──▶ [1] Import & normalisation
-                       (réutilise preview_building_import_file, + colonnes CIRIL)
-                             │
-                             ▼
-                   [2] Table `patrimoine_legacy_assets`
-                       code_bien (clé), designation, nomcourt, genre, categ,
-                       horsparc, voie/ville, code_parent, building_id?, lat/lon?
-                             │
-                             ▼
-                   [3] Moteur de candidats  ── réutilise `_site_similarity`
-                       + départage commune/voie          (cvc.py, déjà en prod)
-                             │
-                             ▼
-                   [4] File de validation ── réutilise le pattern
-                       `PatrimoineMatchItem` (nouvelle source `LEGACY_CODE_BIEN`)
-                       ou une table jumelle de `CvcSourceBuildingMapping`
-                             │
-              ┌──────────────┴───────────────┐
-              ▼                              ▼
-   [5a] « C'est ce bâtiment »       [5b] « Aucun candidat »
-        → code_bien rattaché             → point posé sur la carte (couleur dédiée),
-                                            déplaçable, puis « Attribuer IGN »
-                                            → réutilise POST /ign-attachment
-                                              et /geo-attachment tels quels
-```
-
-Les briques [1], [3], [5b] existent déjà ; l'effort réel porte sur [2], [4] et le
-**marqueur déplaçable** de la carte.
-
-## 6. Questions ouvertes — à trancher avant de coder
-
-**Q1 — Où vit le `CODE_BIEN` une fois validé ?**
-(a) nouvelle colonne `code_bien` sur `buildings` (simple, mais 1 code ↔ 1 bâtiment strict) ;
-(b) table de liaison dédiée `patrimoine_legacy_assets` (permet plusieurs codes bien sur un même
-bâtiment, garde la trace des biens sans contrepartie, et conserve les 317 colonnes d'origine).
-→ **Recommandation : (b)**, cohérent avec `CvcSourceBuildingMapping` et avec la règle
-« aucun objet introuvable ne disparaît » de l'ADR 008.
-
-**Q2 — Quel périmètre importe-t-on ?**
-(a) uniquement `GENRE=BATI` et `HORSPARC=N` (399 lignes) ;
-(b) tous les `BATI` y compris sortis du parc (442), les sortis affichés grisés ;
-(c) tout (866, avec espaces verts, aires de jeux, compteurs).
-→ Les 126 `CPTEL` sont des compteurs électriques **tous sortis du parc** ; Po2 gère déjà les PRM
-par ailleurs — a priori hors sujet. Mais les 285 espaces verts sont peut-être un vrai besoin futur.
-
-**Q3 — La cible d'un rattachement, c'est quoi ?**
-Un `Building`, un `Site`, ou les deux ? Po2 a 151 sites et 212 bâtiments ; la simulation montre
-que certains codes bien collent mieux à un site (`CCAS`) qu'à un bâtiment.
-→ Le moteur `patrimoine_match` sait déjà gérer `target_type = building | site`.
-
-**Q4 — Les 24 biens hors Sète (déchetteries Agglo) : on les importe ?**
-Ils n'auront jamais de contrepartie DGFIP dans le périmètre Ville. Les marquer
-« hors périmètre » plutôt que les laisser en échec de rapprochement ?
-(Rejoint la question ouverte « Ville seule vs Ville + Agglo » du référentiel PRM ENEDIS.)
-
-**Q5 — Seuil d'auto-validation.**
-`patrimoine_match` fait du `bulk-link` à ≥ 90. Ici cela rattacherait 92 lignes d'un coup.
-Veux-tu (a) ce bouton « rattacher les évidences » d'emblée, ou (b) une validation
-100 % manuelle pour le premier passage, quitte à l'activer ensuite ?
-→ **Recommandation : (b) pour le premier passage** — la simulation montre des faux amis à 0,88
-(`DECHETTERIE MEZE` → `DECHETTERIE SETE`), donc un seuil de 0,90 n'est pas sûr **tant que le
-départage par commune n'est pas branché**.
-
-**Q6 — Déplacement du point : quel niveau d'automatisme ?**
-Quand on lâche le marqueur, on (a) recalcule seulement le couple lat/lon, (b) recalcule aussi
-l'adresse par géocodage inverse et on la **propose**, (c) on l'écrase directement.
-→ **Recommandation : (b)** — cohérent avec le reste de la plateforme, qui propose toujours et
-fait valider (`ign_name_proposed`, `validation_message`…).
-
-**Q7 — Où vit l'écran ?**
-(a) nouvel onglet dans `/patrimoine/rapprochements` (l'écran de file existe déjà) ;
-(b) nouvel onglet dans `/buildings/list` (là où vivent la carte et l'attachement IGN) ;
-(c) écran dédié `/patrimoine/import-historique`.
-→ La partie « valider les noms » va naturellement en (a), la partie « poser/déplacer le point +
-attribuer IGN » va naturellement en (b). Un écran unique obligerait à dupliquer la carte.
-
-**Q8 — Le nouvel export avec `CODE_BIEN`.**
-Il est **déjà exploitable en l'état** (§2). Faut-il quand même attendre le nouvel export, ou
-démarre-t-on sur ce fichier ? Autre question : cet export sera-t-il **rejouable
-périodiquement** (donc il faut gérer les mises à jour et les nouveaux biens), ou est-ce
-un **one-shot** de reprise ?
-
-## 7. Décisions prises
-
-*(à compléter au fil des réponses)*
-
-| Date | Question | Décision |
+| # | Question | Décision |
 |---|---|---|
-| — | — | — |
+| Q1 | Où vit le `CODE_BIEN` ? | **Table dédiée** — un bâtiment peut porter plusieurs codes bien (plusieurs locaux dans un même bâtiment). Relation **N codes bien → 1 bâtiment**. |
+| Q2 | Périmètre importé | **En attente** — à valider avec la personne référente du fichier (`Feuil1` contient beaucoup de choses hors bâti). Le socle est conçu pour `GENRE=BATI`, extensible. |
+| Q3 | Cible du rattachement | **`Building` uniquement.** Les `Site` ne sont pas des cibles. ⚠️ Chantier connexe pressenti : **suppression des sites** du listing plateforme (à cadrer séparément, action destructive). |
+| Q4 | Biens hors Sète | **Non traités.** Exclus du périmètre de travail. |
+| Q5 | Auto-rattachement | **Oui, rattachement automatique des évidences**, avec **modification manuelle toujours possible** ensuite. |
+| Q6 | Déplacement du point | **Recalcul + proposition** de l'adresse par géocodage inverse ; l'utilisateur valide. Jamais d'écrasement silencieux. |
+| Q7 | Écran | **Un seul écran** portant tout le parcours (liste + rapprochement + carte + attribution IGN). |
+| Q8 | Nature du flux | **Aller-retour ASTECH.** Export ASTECH → import Po2 → traitement bâtiment par bâtiment → **réexport enrichi** (nom + adresse + cadastre) réinjectable dans ASTECH, **et** mise à jour de la base patrimoniale Po2. |
+
+### Ce que Q8 change dans la conception
+
+Ce n'est **pas un import de reprise** mais un **cycle rejouable**. Conséquences directes :
+
+1. Le `CODE_BIEN` est la **clé pivot permanente** de réinjection — pas un simple attribut de traçabilité.
+2. Il faut **conserver les 317 colonnes d'origine** de chaque ligne pour pouvoir réémettre un
+   fichier au même format (ASTECH doit le relire).
+3. Chaque champ enrichi doit être **écrit dans la colonne ASTECH correspondante**, pas seulement
+   dans le modèle Po2.
+4. Le traitement doit être **idempotent** : réimporter le même export ne doit pas dupliquer les
+   biens ni perdre les rapprochements déjà validés.
+
+### Périmètre effectif après Q4 (mesuré sur les 399 bâtiments actifs)
+
+| Classement | Lignes | Sort |
+|---|---|---|
+| Sète (`COMMUNE=34301` ou `VILLE=SETE`) | **332** | traité |
+| Hors Sète (Frontignan, Mèze, Marseillan, Balaruc, Bouzigues, Villeveyrac, Montbazin) | **26** | exclu (Q4) |
+| Commune absente | **41** | **traité malgré tout** — voir ci-dessous |
+
+⚠️ Les 41 lignes sans commune sont **en très grande majorité sétoises** : `WC PUBLICS SAINT CLAIR`,
+`WC PUBLICS PIERRES BLANCHES`, `RESTAURATION LOUISE MICHEL`, `PARKING SOUS LE CANAL`,
+`MAISON GARDE BARRIERE VILLEROY`… Appliquer Q4 littéralement (« pas de commune ⇒ on écarte »)
+**supprimerait 41 bâtiments légitimes**. Règle retenue : **on n'exclut que les 26 explicitement
+hors Sète** ; les 41 indéterminés entrent dans le flux et leur commune sera tranchée par
+l'attribution IGN. Seules 3 d'entre elles sont douteuses (`OFFICE DU TOURISME DE MEZE`,
+`HOTEL D'AGGLO`, `ISSANKA - ABANDON`) et ressortiront naturellement au traitement.
+
+**Périmètre de travail : 373 bâtiments.**
+
+## 6. Correspondance des colonnes pour le réexport ASTECH
+
+Formats **relevés sur le fichier réel**, pas supposés.
+
+| Colonne ASTECH | Format constaté | Source Po2 | Remarque |
+|---|---|---|---|
+| `CODE_BIEN` / `CODBAR` | `ADMIANMAI02` | *(clé pivot)* | jamais modifié |
+| `DESIGNATION` / `NOMCOURT` | libellé libre | `nom_batiment` | voir **Q11** |
+| `NORUE` | `'20'`, `'81'` (texte) | `numero_voirie` | `0` = non renseigné |
+| `BISTER` | **`RUE`, `BD`, `AVE`, `QUA`, `IMP`, `CHE`** (185 cas) et `BIS` (3 cas) | ? | **piège — voir Q9** |
+| `LIBELVOIE` | tantôt `RUE JEAN VILAR`, tantôt `JEAN JAURES` | `nature_voie` + `nom_voie` | **incohérent — voir Q10** |
+| `CODPOST` | `34200` | `code_postal` | |
+| `VILLE` | `SETE` | `nom_commune` | |
+| `COMMUNE` | **`34301`** (code INSEE) | code INSEE | plus fiable que `VILLE` |
+| `REFCAD` | **`AS023`, `AZ232`** = section (2) + n° plan (3, zéro-comblé) | `section` + `numero_plan` | concaténation directe |
+| `LATITUDE` / `LONGITUDE` | **`'43,436176'` — virgule décimale, texte** | `latitude` / `longitude` | **conversion obligatoire au réexport** |
+| `CADSURF`, `INVARIANT`, `GEOLOC` | vides partout | — | à alimenter ou à ignorer |
+
+> Deux pièges confirmés :
+> **(a)** `BISTER` est **détourné de son usage** : la colonne devrait porter bis/ter, elle porte le
+> **type de voie** dans 185 cas sur 188.
+> **(b)** `LIBELVOIE` contient parfois le type de voie, parfois non — donc le couple
+> `BISTER` + `LIBELVOIE` produit aujourd'hui aussi bien `RUE / RUE LACAN` que `RUE / JEAN JAURES`.
+> Réinjecter sans règle explicite créerait des « RUE RUE LACAN ».
+
+## 7. Architecture cible
+
+```
+   ASTECH ──export──▶ [1] Import + normalisation (GENRE, HORSPARC, commune)
+                            │        réutilise preview_building_import_file
+                            ▼
+                      [2] Table `patrimoine_legacy_assets`
+                          code_bien (clé unique) · payload 317 colonnes conservé
+                          · building_id (N→1) · statut · score · lat/lon proposés
+                            │
+                            ▼
+                      [3] Candidats ── _site_similarity (cvc.py, déjà en prod)
+                          + départage commune / voie (bonus, jamais moyenne)
+                            │
+                            ▼
+                      [4] ÉCRAN UNIQUE  (décision Q7)
+                          liste à gauche · carte à droite · panneau d'action
+                          ├─ évidences déjà rattachées (Q5), modifiables
+                          ├─ candidats à valider / corriger
+                          ├─ point posé, couleur dédiée, déplaçable (Q6)
+                          └─ bouton « Attribuer IGN » → POST /ign-attachment
+                                                       + /geo-attachment  (existants)
+                            │
+                            ▼
+                      [5] Mise à jour base patrimoniale Po2
+                            │
+                            ▼
+   ASTECH ◀──réexport── [6] Réémission du classeur au format d'origine
+                            (nom + adresse + cadastre + lat/lon écrits
+                             dans les colonnes ASTECH, cf. §6)
+```
+
+Briques **déjà existantes** : [1] partiellement, [3], et tout le back de [4] (`ign-attachment`,
+`geo-attachment`, `free-address`, `nearby-dgfip`).
+Briques **à construire** : [2], la table de rapprochement, le **marqueur déplaçable**,
+l'**écran unique**, et **[6] le réexport** (entièrement neuf).
+
+## 8. Questions ouvertes restantes
+
+**Q9 — `BISTER` au réexport : on écrit quoi ?**
+(a) le **type de voie** (`RUE`, `BD`…) pour rester cohérent avec l'usage réel de tes agents ;
+(b) le **bis/ter** (usage théorique de la colonne), au risque de casser leurs habitudes ;
+(c) on n'y touche pas du tout.
+→ **Recommandation : (a)** — le fichier doit rester lisible par ceux qui l'utilisent au quotidien.
+
+**Q10 — `LIBELVOIE` : avec ou sans le type de voie ?**
+Aujourd'hui c'est incohérent (`RUE LACAN` vs `JEAN JAURES`). Si Q9 = (a), alors `LIBELVOIE` doit
+contenir **le nom de voie seul**, sinon on produira « RUE RUE LACAN ». On **normalise donc aussi
+les lignes déjà remplies**, ou on ne réécrit que celles qu'on a enrichies ?
+
+**Q11 — Le nom : ASTECH gagne ou IGN gagne ?**
+Quand l'attribution IGN propose un nom (`EX TRIBUNAL D'INSTANCE`) différent du nom ASTECH
+(`EX TRIBUNAL`), on réexporte lequel dans `DESIGNATION` / `NOMCOURT` ?
+→ **Recommandation : on garde le nom ASTECH** (c'est la clé de reconnaissance de tes agents) et
+on stocke le nom IGN à côté dans Po2. Sinon le prochain import ne reconnaîtra plus rien.
+
+**Q12 — Format du réexport.**
+(a) le **classeur complet 317 colonnes**, colonnes enrichies mises à jour en place (réinjectable
+tel quel dans ASTECH) ;
+(b) une **feuille réduite** `CODE_BIEN + champs modifiés` (plus lisible, mais suppose qu'ASTECH
+sache faire une mise à jour par clé).
+→ **Recommandation : (a)**, sauf si la personne référente ASTECH confirme que (b) est accepté en
+import. **À vérifier avec elle en même temps que Q2.**
+
+**Q13 — Les bâtiments connus de Po2 mais absents d'ASTECH.**
+Po2 a 212 bâtiments, dont certains n'auront aucun code bien. Doivent-ils **remonter dans l'export**
+comme lignes nouvelles (sans `CODE_BIEN`, à créer côté ASTECH), ou l'export ne contient-il que
+les biens déjà connus d'ASTECH ?
+
+**Q14 — Suppression des sites (évoqué en Q3).**
+Chantier séparé et **destructif** : 151 sites en prod, avec des bâtiments rattachés par `site_id`
+et un modèle hiérarchique `SITE → BATIMENT → LOCAL` utilisé par d'autres modules (import CVC,
+rapprochements compteurs). À cadrer dans son propre document avant toute suppression.
