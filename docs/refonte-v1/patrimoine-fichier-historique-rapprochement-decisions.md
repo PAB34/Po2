@@ -1,6 +1,6 @@
 ---
 type: decisions
-statut: cadrage — Q1-Q11 + Q13 tranchees ; restent Q2, Q12 et Q14
+statut: cadrage — Q1-Q13 tranchees ; restent Q2, Q14 et 2 confirmations referente ASTECH
 sujet: Rapprochement du fichier patrimoine historique de la collectivité (CODE_BIEN) avec le référentiel Po2 (/buildings/list)
 créé: 2026-08-18
 related:
@@ -409,9 +409,90 @@ traité passe par l'attribution ; **(i)** sert de rattrapage pour les bâtiments
 (`AI0009`). Pour les parcelles dont le numéro de plan dépasse 999, il faut savoir si ASTECH
 accepte un `REFCAD` plus long. **À confirmer avec la référente.**
 
-## 10. Reste à trancher avant de coder
+## 10. Reste à trancher avant de coder *(mis a jour au §12)*
 
 - **Q2** — périmètre importé (référente ASTECH).
 - **Q12** — format du réexport, complet ou par clé (référente ASTECH) — cf. §9.3.
 - **Largeur de `REFCAD`** (référente ASTECH) — cf. §9.4.
+- **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
+
+## 11. Décisions 3e passe (2026-08-18) — format de sortie et règle d'écriture
+
+| # | Question | Décision |
+|---|---|---|
+| Q12 | Format du réexport | **Feuille réduite** : clé `CODE_BIEN` + les seuls champs que Po2 maîtrise. Option A (classeur complet) conservée en **repli**, cf. §11.3. |
+| Q9 | `BISTER` | **Bis/ter uniquement** — confirmé, et c'est aussi ce que livre nativement le DGFIP (`indice_repetition`). |
+| Q10 | `LIBELVOIE` | **Normalisation complète** vers *type de voie en toutes lettres, en majuscules* + nom. |
+
+**Principe directeur retenu (formulé par l'utilisateur)** : les champs ASTECH se remplissent
+**depuis ce que la plateforme récupère via l'IGN/DGFIP**. C'est donc la structure de la donnée
+DGFIP qui dicte la correspondance, et non les habitudes de saisie du fichier historique.
+
+### 11.1 Pourquoi Q9 + Q10 sont le bon choix : chaque colonne a une source unique
+
+Le DGFIP livre l'adresse **déjà découpée** — c'est précisément la structure du modèle `Building` :
+
+| Colonne ASTECH | Source DGFIP / Po2 | Ambiguïté |
+|---|---|---|
+| `NORUE` | `numero_voirie` (zéros de tête retirés : `0002` → `2`) | aucune |
+| `BISTER` | `indice_repetition` (`BIS`, `TER`) — **le DGFIP a ce champ** | aucune |
+| `LIBELVOIE` | `nature_voie` (développée) + `nom_voie` | aucune |
+
+Chaque colonne ASTECH reçoit **exactement une** source DGFIP, sans arbitrage. C'est ce qui rend
+la décision Q9 structurellement juste : garder le type de voie dans `BISTER` aurait obligé à
+mélanger deux champs DGFIP distincts (`indice_repetition` et `nature_voie`) dans une seule
+colonne, et à décider lequel sacrifier quand les deux existent (« 15 BIS RUE Lucien Salette »).
+
+### 11.2 Constat : la source DGFIP est elle-même incohérente — la normalisation est obligatoire
+
+Relevé en base prod le 2026-08-18 sur les 177 `adresse_reconstituee` (2ᵉ mot = type de voie) :
+
+```
+RUE 67 · BD 16 · AV 11 · QUAI 11 · CHE 7 · Rue 6 · PROM 4 · Quai 3
+IMP 2 · RTE 2 · BOULEVARD 2 · Impasse 2 · PROMENADE 1 · Avenue 1 · Passage 1
+```
+
+Le même type de voie apparaît sous **trois formes** : `BD` / `BOULEVARD`, `AV` / `Avenue`,
+`IMP` / `Impasse`, `RUE` / `Rue`, `PROM` / `PROMENADE`. **Recopier le DGFIP tel quel dans ASTECH
+y importerait ce désordre.** Une table de normalisation n'est donc pas un confort, c'est une
+condition pour ne pas dégrader leur fichier.
+
+**Forme canonique retenue** — type en toutes lettres, majuscules, sans accent : c'est la
+convention majoritaire d'ASTECH (425 lignes sur 615). Table :
+`RUE` · `AVENUE` (`AV`, `AVE`) · `BOULEVARD` (`BD`) · `QUAI` (`QUA`) · `CHEMIN` (`CHE`) ·
+`IMPASSE` (`IMP`) · `PLACE` (`PL`) · `PROMENADE` (`PROM`, `PRO`) · `ROUTE` (`RTE`) ·
+`ALLEE` (`ALL`) · `CORNICHE` · `TRAVERSE` · `PASSAGE` · `MONTEE` · `ESPLANADE`.
+
+⚠️ **Garde-fou obligatoire.** Le relevé contient aussi des valeurs qui ne se découpent pas :
+`4674` (un numéro là où le type devrait être) et `QUAIDU` (mot collé). Règle : **on n'écrit dans
+la feuille de retour que les adresses qu'on a su normaliser proprement.** Une adresse non
+analysable reste **« à vérifier » dans l'écran** et n'est pas exportée. Un aller-retour
+automatisé qui écrit à l'aveugle dans le référentiel métier de la collectivité est le vrai
+risque de ce chantier.
+
+### 11.3 Feuille réduite — colonnes proposées
+
+Feuille 1, **prête à réimporter** (uniquement des colonnes ASTECH, aucune colonne inventée) :
+
+| `CODE_BIEN` | `DESIGNATION` | `NOMCOURT` | `NORUE` | `BISTER` | `LIBELVOIE` | `CODPOST` | `VILLE` | `COMMUNE` | `REFCAD` | `LATITUDE` | `LONGITUDE` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ADMIANMAI02` | `ANNEXE MAIRIE DE LA CORNICHE…` | `ANNEXE MAIRIE CORNICHE` | `20` | | `CORNICHE DE NEUBURG` | `34200` | `SETE` | `34301` | `AS023` | `43,404512` | `3,693845` |
+
+Seules les lignes **effectivement traitées** y figurent. Les biens Po2 sans `CODE_BIEN` (décision
+Q13) apparaissent avec la clé vide, à créer côté ASTECH.
+
+Feuille 2, **traçabilité** (ne sert pas à l'import, sert à la relecture humaine) : `CODE_BIEN`,
+ancienne valeur → nouvelle valeur pour chaque champ modifié, origine (`IGN` / `DGFIP` / manuel),
+score de rapprochement, date. Permet à la référente de contrôler avant de réinjecter.
+
+**Repli technique** : le générateur écrit les mêmes valeurs dans les mêmes colonnes ; produire le
+classeur complet (option A) revient à changer le gabarit de sortie, pas la logique. Si ASTECH ne
+sait pas faire de mise à jour par clé, la bascule coûte quasiment rien. **À confirmer malgré tout
+avec la référente**, car c'est elle qui subira l'échec d'import.
+
+## 12. Reste à trancher
+
+- **Q2** — périmètre importé (référente ASTECH).
+- **Confirmation Q12** — ASTECH accepte-t-il un import de mise à jour par `CODE_BIEN` ? (repli prêt)
+- **Largeur de `REFCAD`** — 5 caractères observés, Po2 stocke le plan sur 4 chiffres (référente).
 - **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
