@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -23,6 +23,7 @@ from app.schemas.building import (
     LocalCreate,
     LocalRead,
     LocalUpdate,
+    IgnPointLookupRead,
     NearbyDgfipResult,
     NearbyDgfipRow,
     PatrimonyReclassifyPayload,
@@ -33,6 +34,7 @@ from app.schemas.building import (
 )
 from app.services.building_naming import (
     find_nearby_dgfip_rows,
+    lookup_ign_buildings_at_point,
     get_building_naming_rows,
     lookup_building_candidates,
     lookup_free_address_candidates,
@@ -132,6 +134,22 @@ def get_building_naming_lookup(
         return BuildingNamingLookupRead.model_validate(lookup_building_candidates(unique_key, city_name=city_name))
     except ValueError as error:
         _raise_naming_http_error(error)
+
+
+@router.get("/lookup/ign-at-point", response_model=IgnPointLookupRead)
+def get_ign_buildings_at_point(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius_m: int = Query(default=300, ge=50, le=1500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> IgnPointLookupRead:
+    """Bâtiments IGN autour d'un point, pour attacher un bien sans adresse connue."""
+    try:
+        result = lookup_ign_buildings_at_point(lat, lon, radius_m)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    return IgnPointLookupRead(**result)
 
 
 @router.post("/lookup/free-address", response_model=FreeAddressLookupRead)

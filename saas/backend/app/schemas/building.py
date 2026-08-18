@@ -176,6 +176,17 @@ class BuildingIgnAttachmentPayload(BaseModel):
     lon: float | None = None
 
 
+class IgnPointLookupRead(BaseModel):
+    """Bâtiments IGN autour d'un point posé sur la carte (sans adresse préalable)."""
+
+    lat: float
+    lon: float
+    radius_m: int
+    feature_collection: dict[str, object]
+    parcel_feature_collection: dict[str, object]
+    parcel_labels: list[str]
+
+
 class NearbyDgfipRow(BaseModel):
     unique_key: str
     address_display: str
