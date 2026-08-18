@@ -490,9 +490,72 @@ classeur complet (option A) revient à changer le gabarit de sortie, pas la logi
 sait pas faire de mise à jour par clé, la bascule coûte quasiment rien. **À confirmer malgré tout
 avec la référente**, car c'est elle qui subira l'échec d'import.
 
-## 12. Reste à trancher
+## 12. Reste à trancher *(mis a jour au §14)*
 
 - **Q2** — périmètre importé (référente ASTECH).
 - **Confirmation Q12** — ASTECH accepte-t-il un import de mise à jour par `CODE_BIEN` ? (repli prêt)
 - **Largeur de `REFCAD`** — 5 caractères observés, Po2 stocke le plan sur 4 chiffres (référente).
+- **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
+
+## 13. Contrainte de réinjection ASTECH (2026-08-18)
+
+> **Règle donnée par l'utilisateur** : ASTECH sait modifier **toutes les valeurs** par import du
+> fichier modifié, **à condition que le `CODE_BIEN` et les en-têtes de colonnes ne soient pas
+> modifiés.**
+
+Conséquences directes sur la conception :
+
+1. **`CODE_BIEN` = clé de mise à jour**, pas seulement clé pivot interne. Il n'est **jamais**
+   réécrit, ni normalisé, ni recalculé. Confirme et renforce Q1.
+2. **Les en-têtes sont recopiés à l'octet près** depuis le fichier importé — **jamais retapés
+   dans le code**. Un `COD_COMPTABLE` devenu `CODE_COMPTABLE`, un `0#SURF` reformaté, et l'import
+   ASTECH échoue. Le gabarit d'export est donc **dérivé du fichier source**, pas une constante.
+3. Le reste des colonnes étant modifiable, la décision Q11 (réécrire `DESIGNATION` / `NOMCOURT`
+   avec le nom IGN) est **techniquement confirmée**.
+
+### 13.1 ⚠️ Les deux feuilles n'ont PAS les mêmes en-têtes
+
+Vérifié sur le fichier réel — c'est le point à ne pas manquer compte tenu de la contrainte :
+
+| | `Feuil1` | `BAT` |
+|---|---|---|
+| Ligne d'en-têtes | **ligne 2** (ligne 1 vide) | **ligne 1** |
+| Nombre de colonnes | **317** | **122** |
+| Nom de la clé | **`CODE_BIEN`** | **`CODEBIEN`** |
+| Clé renseignée | **oui** | non |
+| Contenu | 866 lignes, tous `GENRE` | 444 lignes = les 442 `BATI` + 2 `SITE` |
+| Autre écart d'en-tête | `DAT_FIN_AFFECT` | `COMMENTAIRE` |
+
+Lecture retenue : **`Feuil1` est l'export natif ASTECH** (jeu de colonnes complet, clé
+renseignée) et **`BAT` est une vue de travail dérivée** (filtrée sur le bâti, colonnes réduites,
+clé vidée — d'où le constat initial « le CODE_BIEN est absent »).
+
+→ **Le gabarit de réexport doit donc être construit sur `Feuil1`** : en-têtes en ligne 2, ligne 1
+vide, clé orthographiée `CODE_BIEN`. Réutiliser l'orthographe de `BAT` (`CODEBIEN`) ferait
+échouer l'import.
+
+**À confirmer auprès de la référente** : c'est bien `Feuil1` qu'ASTECH exporte et réimporte ?
+
+### 13.2 Le seul point restant est testable, sans attendre une réunion
+
+La contrainte énoncée interdit de **modifier** les en-têtes ; elle ne dit pas si ASTECH tolère
+un **sous-ensemble** de colonnes — c'est exactement ce que suppose la feuille réduite (Q12).
+
+Plutôt qu'une question ouverte, **un test de 5 minutes tranche** : exporter **2 lignes** au format
+réduit (en-têtes recopiés depuis `Feuil1`, `CODE_BIEN` intact), tenter l'import dans ASTECH, et
+regarder si les deux biens sont mis à jour.
+
+- Import accepté → **feuille réduite** confirmée (décision Q12).
+- Import refusé → bascule sur le **classeur complet**, où seules les cellules enrichies changent
+  et où toutes les autres colonnes sont recopiées telles quelles. Coût de bascule quasi nul :
+  même écriture de valeurs, gabarit de sortie différent.
+
+Ce test est aussi le meilleur moyen de valider la largeur de `REFCAD` et le format décimal à
+virgule des coordonnées, sur des données réelles et sans risque.
+
+## 14. Reste à trancher
+
+- **Q2** — périmètre importé (référente ASTECH).
+- **Test d'import 2 lignes** — tranche Q12, la largeur de `REFCAD` et le format des coordonnées.
+- **Confirmer que `Feuil1` est bien la feuille native ASTECH** (cf. §13.1).
 - **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
