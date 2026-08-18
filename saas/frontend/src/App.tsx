@@ -25,6 +25,7 @@ import { EnergieDataOpsPage, EnergiePage } from "./pages/EnergiePage";
 import { EnergieRecommendationsPage } from "./pages/EnergieRecommendationsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import PatrimoineAstechPage from "./pages/PatrimoineAstechPage";
 import PatrimoineMatchPage from "./pages/PatrimoineMatchPage";
 import { ProductDomainPage } from "./pages/ProductDomainPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -78,6 +79,7 @@ const DOMAINS: NavDomain[] = [
       { to: "/patrimoine", label: "Vue d'ensemble" },
       { to: "/buildings/list", label: "Sites et bâtiments" },
       { to: "/patrimoine/rapprochements", label: "Rapprochements (file)" },
+      { to: "/patrimoine/astech", label: "Référentiel historique (ASTECH)" },
       { to: "/buildings/compteurs", label: "Rapprochement compteurs" },
       { to: "/buildings/create-edit", label: "Import patrimoine" },
     ],
@@ -274,6 +276,7 @@ export default function App() {
             <Route path="/buildings/cvc-import/batiments" element={<CvcSiteMappingPage />} />
             <Route path="/buildings/compteurs" element={<MeterMatchingPage />} />
             <Route path="/patrimoine/rapprochements" element={<PatrimoineMatchPage />} />
+            <Route path="/patrimoine/astech" element={<PatrimoineAstechPage />} />
             <Route path="/buildings/:buildingId" element={<BuildingDetailPage />} />
             <Route path="/energie" element={<EnergiePage />} />
             <Route path="/energie/donnees" element={<EnergieDataOpsPage />} />

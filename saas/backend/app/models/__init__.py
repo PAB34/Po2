@@ -40,6 +40,7 @@ from app.models.invoice import (
 from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.equipment import BuildingEquipment, EquipmentReference
 from app.models.local import Local
+from app.models.patrimoine_legacy import PatrimoineLegacyAsset, PatrimoineLegacyImport
 from app.models.patrimoine_match import PatrimoineMatchItem
 from app.models.site import Site
 from app.models.supplier_contact import SupplierContact

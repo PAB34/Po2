@@ -5886,3 +5886,128 @@ export async function fetchMarketIndicesVariables(token: string, yearFrom: numbe
   const response = await fetch(`${apiBaseUrl}/marches/indices-variables?${params.toString()}`, { headers: buildHeaders(token) });
   return parseResponse<MarketIndicesVariablesV1>(response);
 }
+
+// ---------------------------------------------------------------------------
+// Référentiel patrimoine historique (ASTECH) — aller-retour
+// ---------------------------------------------------------------------------
+
+export type LegacyAsset = {
+  id: number;
+  code_bien: string;
+  designation: string | null;
+  nomcourt: string | null;
+  genre: string | null;
+  categ_des: string | null;
+  souscat_des: string | null;
+  horsparc: string | null;
+  code_parent: string | null;
+  source_norue: string | null;
+  source_bister: string | null;
+  source_libelvoie: string | null;
+  source_codpost: string | null;
+  source_ville: string | null;
+  source_commune: string | null;
+  source_refcad: string | null;
+  building_id: number | null;
+  status: string;
+  link_origin: string | null;
+  candidate_building_id: number | null;
+  candidate_label: string | null;
+  candidate_score: number | null;
+  candidate_reason: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  import_batch: string | null;
+  notes: string | null;
+  updated_at: string | null;
+};
+
+export type LegacyImportResult = {
+  batch: string;
+  sheet_name: string;
+  header_row: number;
+  columns: number;
+  total_rows: number;
+  created: number;
+  updated: number;
+  skipped_scope: number;
+  skipped_no_key: number;
+  out_of_scope_commune: number;
+};
+
+export type LegacyCandidatesResult = {
+  scanned: number;
+  proposed: number;
+  auto_linked: number;
+};
+
+export async function importLegacyAstechFile(
+  token: string,
+  file: File,
+  options?: { genres?: string; includeOutOfPark?: boolean },
+): Promise<LegacyImportResult> {
+  const params = new URLSearchParams();
+  if (options?.genres !== undefined) params.set("genres", options.genres);
+  if (options?.includeOutOfPark) params.set("include_out_of_park", "true");
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/import?${params.toString()}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  return parseResponse<LegacyImportResult>(response);
+}
+
+export async function computeLegacyCandidates(
+  token: string,
+  autoLink = true,
+): Promise<LegacyCandidatesResult> {
+  const response = await fetch(
+    `${apiBaseUrl}/patrimoine/legacy/candidates?auto_link=${autoLink ? "true" : "false"}`,
+    { method: "POST", headers: buildHeaders(token) },
+  );
+  return parseResponse<LegacyCandidatesResult>(response);
+}
+
+export async function fetchLegacyAssets(
+  token: string,
+  options?: { status?: string; genre?: string; search?: string; limit?: number },
+): Promise<LegacyAsset[]> {
+  const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
+  if (options?.genre) params.set("genre", options.genre);
+  if (options?.search) params.set("search", options.search);
+  params.set("limit", String(options?.limit ?? 2000));
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy?${params.toString()}`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyAsset[]>(response);
+}
+
+export async function fetchLegacyCounts(token: string): Promise<Record<string, number>> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/counts`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<Record<string, number>>(response);
+}
+
+export async function updateLegacyAsset(
+  token: string,
+  assetId: number,
+  payload: {
+    status?: string | null;
+    building_id?: number | null;
+    clear_building?: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
+    notes?: string | null;
+  },
+): Promise<LegacyAsset> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/${assetId}`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<LegacyAsset>(response);
+}

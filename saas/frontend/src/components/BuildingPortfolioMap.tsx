@@ -44,14 +44,32 @@ type RuntimeGeoJsonLayer = RuntimeLayer & {
   clearLayers?: () => void;
 };
 
+/** Marqueur déplaçable : `getLatLng` donne la position après un glisser-déposer. */
+type RuntimeMarker = RuntimeLayer & {
+  getLatLng: () => { lat: number; lng: number };
+  setLatLng?: (coords: [number, number]) => RuntimeMarker;
+};
+
 type LeafletRuntime = {
   map: (element: HTMLDivElement, options: Record<string, unknown>) => RuntimeMap;
   tileLayer: ((url: string, options: Record<string, unknown>) => RuntimeLayer) & {
     wms?: (url: string, options: Record<string, unknown>) => RuntimeLayer;
   };
   circleMarker: (coords: [number, number], options: Record<string, unknown>) => RuntimeLayer;
+  marker: (coords: [number, number], options: Record<string, unknown>) => RuntimeMarker;
+  divIcon: (options: Record<string, unknown>) => unknown;
   featureGroup: () => RuntimeFeatureGroup;
   geoJSON: (data?: unknown, options?: Record<string, unknown>) => RuntimeGeoJsonLayer;
+};
+
+/** Un bien du référentiel historique (ASTECH) posé sur la carte. */
+export type LegacyMapPoint = {
+  id: number;
+  label: string;
+  latitude: number;
+  longitude: number;
+  /** `true` quand le point n'a pas encore été confirmé (posé par défaut, à déplacer). */
+  isProvisional?: boolean;
 };
 
 type WindowWithLeaflet = Window & {
@@ -87,6 +105,13 @@ type BuildingPortfolioMapProps = {
   onSelectAttachFeature?: (feature: GeoJsonFeature) => void;
   onDeselectAttachFeatureId?: (featureId: string) => void;
   isAttachLoading?: boolean; // overlay "Chargement..." sur la carte
+  // --- Biens du référentiel historique (ASTECH) ---
+  // Couleur dédiée (violet), distincte des bâtiments du patrimoine. Le marqueur actif
+  // est déplaçable : au lâcher, `onMoveLegacyPoint` reçoit la nouvelle position.
+  legacyPoints?: LegacyMapPoint[];
+  activeLegacyId?: number | null;
+  onSelectLegacyId?: (legacyId: number) => void;
+  onMoveLegacyPoint?: (legacyId: number, lat: number, lon: number) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -229,6 +254,10 @@ export function BuildingPortfolioMap({
   onSelectAttachFeature,
   onDeselectAttachFeatureId,
   isAttachLoading = false,
+  legacyPoints,
+  activeLegacyId = null,
+  onSelectLegacyId,
+  onMoveLegacyPoint,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -238,6 +267,7 @@ export function BuildingPortfolioMap({
   const portfolioIgnLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const attachLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const centerMarkerRef = useRef<RuntimeLayer | null>(null);
+  const legacyLayerRef = useRef<RuntimeFeatureGroup | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   const mappableBuildings = useMemo(
@@ -298,8 +328,62 @@ export function BuildingPortfolioMap({
       portfolioIgnLayerRef.current = null;
       attachLayerRef.current = null;
       centerMarkerRef.current = null;
+      legacyLayerRef.current = null;
     };
   }, []);
+
+  // ------------------------------------------------------------------
+  // Couche « biens historiques ASTECH » — couleur dédiée, marqueur déplaçable
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    const map = mapRef.current;
+    if (!runtime || !map || !mapReady) return;
+
+    legacyLayerRef.current?.remove?.();
+    legacyLayerRef.current = null;
+
+    const points = legacyPoints ?? [];
+    if (points.length === 0) return;
+
+    const layerGroup = runtime.featureGroup();
+    for (const point of points) {
+      const isActive = point.id === activeLegacyId;
+      // Seul le point sélectionné est déplaçable : on évite de bouger un voisin
+      // par mégarde en naviguant sur la carte.
+      const marker = runtime.marker([point.latitude, point.longitude], {
+        draggable: isActive,
+        autoPan: isActive,
+        icon: runtime.divIcon({
+          className: "legacy-marker",
+          html: `<span class="legacy-marker-dot${isActive ? " is-active" : ""}${
+            point.isProvisional ? " is-provisional" : ""
+          }"></span>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        }),
+      });
+      marker.bindPopup?.(
+        `<strong>${point.label}</strong><br/><em>Bien ASTECH${
+          point.isProvisional ? " — position à confirmer" : ""
+        }</em>`,
+      );
+      marker.on?.("click", () => onSelectLegacyId?.(point.id));
+      if (isActive && onMoveLegacyPoint) {
+        marker.on?.("dragend", () => {
+          const position = marker.getLatLng();
+          onMoveLegacyPoint(point.id, position.lat, position.lng);
+        });
+      }
+      layerGroup.addLayer(marker);
+    }
+
+    layerGroup.addTo(map);
+    legacyLayerRef.current = layerGroup;
+    return () => {
+      layerGroup.clearLayers();
+    };
+  }, [activeLegacyId, legacyPoints, mapReady, onMoveLegacyPoint, onSelectLegacyId]);
 
   // ------------------------------------------------------------------
   // Couche bâtiments du patrimoine (markers circulaires)

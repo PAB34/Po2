@@ -23,6 +23,7 @@ from app.api.routes.energie import router as energie_router
 from app.api.routes.enedis_sync import router as enedis_sync_router
 from app.api.routes.health import router as health_router
 from app.api.routes.internal_auth import router as internal_auth_router
+from app.api.routes.patrimoine_legacy import router as patrimoine_legacy_router
 from app.api.routes.patrimoine_match import router as patrimoine_match_router
 from app.api.routes.pronostics import router as pronostics_router
 
@@ -34,6 +35,7 @@ api_router.include_router(billing_router, prefix="/api")
 api_router.include_router(bpu_router, prefix="/api")
 api_router.include_router(buildings_router, prefix="/api")
 api_router.include_router(patrimoine_match_router, prefix="/api")
+api_router.include_router(patrimoine_legacy_router, prefix="/api")
 api_router.include_router(cities_router, prefix="/api")
 api_router.include_router(cvc_router, prefix="/api")
 # enedis_async + enedis_sync must be mounted before energie so /energie/sync/... is not caught by /energie/{prm_id}
