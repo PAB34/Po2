@@ -19,7 +19,32 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-07-07** (session Claude — atterrissage électrique : révision BPU + budget sans N-1).
+> Mise à jour : **2026-08-18** (session Claude — référentiel patrimoine historique ASTECH).
+
+- **✅ EN PROD — Référentiel patrimoine historique (ASTECH)** (PR #98, migration **0070**) :
+  nouvelle page **`/patrimoine/astech`** (menu Patrimoine) pour l'aller-retour avec le fichier
+  patrimoine de la collectivité.
+  - **Import** d'un export ASTECH : détection automatique de la feuille exploitable (`Feuil1`
+    porte la clé `CODE_BIEN` renseignée, `BAT` l'a vidée), **en-têtes conservés à l'octet près**
+    (contrainte de réinjection : ASTECH n'accepte le fichier modifié que si en-têtes et code bien
+    sont inchangés), payload des 317 colonnes conservé pour le futur réexport. Import idempotent.
+  - **Rapprochement** : réutilise `_site_similarity` (cvc.py, déjà en prod). L'adresse ne sert
+    qu'à départager. Deux garde-fous : ambiguïté entre candidats proches (sauf nom identique) et
+    plusieurs biens visant le même bâtiment.
+  - **Écran unique** : file des biens à gauche, carte à droite avec **marqueur violet déplaçable**
+    (seul le point sélectionné), et bouton **« Attribuer IGN »** qui réutilise tel quel
+    `POST /buildings/{id}/ign-attachment`. Aucun moteur dupliqué, `/buildings/list` inchangé.
+  - **Mesuré sur données réelles** : 866 lignes lues → 399 biens importés, 26 hors périmètre,
+    **78 rattachés automatiquement**, 295 à traiter.
+  - **Reste à faire — incrément 3** : le **réexport** ASTECH (feuille réduite, normalisation
+    d'adresse, `REFCAD`, coordonnées à virgule décimale, feuille de traçabilité).
+  - **En attente de la référente ASTECH** : périmètre exact importé (Q2), confirmation qu'ASTECH
+    accepte un import de mise à jour par clé, largeur du champ `REFCAD`. Chacun est un
+    **paramètre**, pas une hypothèse enfouie.
+  - **Doc** : `refonte-v1/patrimoine-fichier-historique-rapprochement-decisions.md` (audit,
+    décisions Q1-Q13, mapping des colonnes, hypothèses de travail).
+
+> Reprise précédente : **2026-07-07** (session Claude — atterrissage électrique : révision BPU + budget sans N-1).
 
 - **✅ EN PROD — Référentiels** : vue **BPU curée** (`BpuReferentielV1`, PR #43 mergée) dans le hub
   `/refonte-v1/referentiels` ; **DPGF DALKIA = pas de cure** (Q7 close, PR #44 : page déjà refondue, seul
@@ -118,7 +143,8 @@ do_not_auto_read:
 
 ## 📦 Migrations alembic
 
-HEAD code constaté : `0066_add_accounting_budget_lines` (budget par marché, maille opération, branche `feat/budget-marches` PR #33 — non encore sur `main`). Dernière migration sur `main` : `0065_add_supplier_contacts`.
+HEAD prod constaté (2026-08-18) : **`0070_add_patrimoine_legacy_assets`** (référentiel patrimoine
+historique ASTECH). Précédent : `0066_add_accounting_budget_lines` (budget par marché, maille opération, branche `feat/budget-marches` PR #33 — non encore sur `main`). Dernière migration sur `main` : `0065_add_supplier_contacts`.
 Jalons : `0017` hiérarchie sites · `0041` seed CPE scope · `0048` CVC F-Gaz · `0056` rapprochements
 patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → journal archivé.
 
