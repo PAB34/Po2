@@ -1,6 +1,6 @@
 ---
 type: decisions
-statut: cadrage — Q1-Q13 tranchees ; restent Q2, Q14 et 2 confirmations referente ASTECH
+statut: en cours — increment 1 (import + rapprochement) livre ; Q2 et confirmations ASTECH en attente
 sujet: Rapprochement du fichier patrimoine historique de la collectivité (CODE_BIEN) avec le référentiel Po2 (/buildings/list)
 créé: 2026-08-18
 related:
@@ -559,3 +559,83 @@ virgule des coordonnées, sur des données réelles et sans risque.
 - **Test d'import 2 lignes** — tranche Q12, la largeur de `REFCAD` et le format des coordonnées.
 - **Confirmer que `Feuil1` est bien la feuille native ASTECH** (cf. §13.1).
 - **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
+
+## 15. Hypothèses de travail — la référente ASTECH est indisponible (2026-08-18)
+
+Le test d'import et la réunion ne peuvent pas avoir lieu maintenant. On avance donc sous
+hypothèses **explicites et paramétrables** : chacune est un réglage, pas une hypothèse
+enfouie dans le code. Si la référente tranche autrement, rien n'est à réécrire.
+
+| Sujet | Hypothèse retenue | Où c'est réglable |
+|---|---|---|
+| **Q2 — périmètre** | `GENRE=BATI` et `HORSPARC=N` → 399 biens | paramètres `genres` et `include_out_of_park` de l'import (API : `?genres=BATI&include_out_of_park=false`) |
+| **Q12 — format de sortie** | feuille réduite (décision utilisateur) | le gabarit d'export dérive de `headers_json` : produire le classeur complet = changer de gabarit, pas de logique |
+| **Largeur de `REFCAD`** | section + n° de plan ; si le plan dépasse 3 chiffres, la cellule **n'est pas écrite** et le bien reste « à vérifier » | garde-fou d'écriture (§11.2) |
+| **Feuille native** | `Feuil1` (confirmé par l'utilisateur) | détection automatique : on retient la feuille dont la clé est **effectivement renseignée** |
+
+> Principe de sûreté appliqué partout : **on n'écrit jamais dans le fichier de la
+> collectivité une valeur qu'on n'a pas su produire proprement.** Un doute laisse le bien
+> « à vérifier » dans l'écran plutôt que de partir dans ASTECH.
+
+## 16. Incrément 1 livré — import + rapprochement (2026-08-18)
+
+**Migration `0070`.** Deux tables :
+
+- `patrimoine_legacy_imports` — un export chargé : feuille, **ligne d'en-têtes**, et les
+  **en-têtes conservés à l'octet près** (`headers_json`). C'est le gabarit du futur
+  réexport : les en-têtes ne sont jamais retapés depuis le code, ils sont recopiés.
+- `patrimoine_legacy_assets` — un bien par `CODE_BIEN`, avec le **payload des 317 colonnes**
+  conservé, le rattachement `building_id` (N codes bien → 1 bâtiment), le statut, le
+  candidat proposé et le point de travail lat/lon.
+
+**Détection de feuille.** Le classeur porte deux feuilles aux en-têtes divergents. Le
+service retient celle dont la **clé est effectivement renseignée** — sinon on importerait
+`BAT`, dont le `CODEBIEN` est vide, et le rapprochement perdrait sa clé. Si aucune feuille
+n'a de clé remplie, l'import échoue avec un message explicite (« redemander un export
+ASTECH avec cette colonne renseignée ») plutôt que d'importer des lignes inutilisables.
+
+**Idempotence.** Rejouer le même export met à jour les biens existants sans dupliquer ;
+un bien déjà rattaché à la main conserve son rattachement et son statut.
+
+**Moteur de reconnaissance.** Réutilise `_site_similarity` (cvc.py, en production).
+L'adresse ne sert qu'à **départager** (bonus ≤ 0,02), conformément à la mesure du §4.
+Deux garde-fous, tous deux calibrés sur le fichier réel :
+
+1. **Ambiguïté** — si le 2ᵉ candidat est à moins de 0,05 du 1ᵉʳ, on propose sans rattacher.
+   *Exception* : un nom identique (≥ 0,98) reste rattaché. Sans cette exception,
+   `ECOLE ELEMENTAIRE PAUL BERT` → `ECOLE ELEMENTAIRE PAUL BERT` (score 1,0) était bloqué
+   à cause d'une école voisine au nom ressemblant.
+2. **Concurrence** — si plusieurs biens visent le même bâtiment, aucun n'est rattaché
+   automatiquement. Cas réel : `SERVICE ENSEIGNEMENT` et `SERVICE E.M.O.P. ENSEIGNEMENT`,
+   ou `TENNIS CLUB DU BARROU` et `SALLES TENNIS CLUB DU BARROU`.
+
+**Résultat mesuré sur les vraies données** (fichier réel × 212 bâtiments prod) :
+
+| | |
+|---|---|
+| Lignes lues (`Feuil1`, 317 colonnes) | 866 |
+| Importées (`BATI` en service) | **399** |
+| Écartées (autres genres, sorties du parc) | 467 |
+| Marquées hors périmètre (hors Sète) | **26** |
+| Candidat proposé | 277 |
+| **Rattachées automatiquement** | **78** |
+| Restent à traiter | **295** |
+
+Les 5 rapprochements à ≥ 0,90 non rattachés sont exactement les cas ambigus listés
+ci-dessus — ils attendent une validation humaine, ce qui est le comportement voulu.
+
+**API** (`/api/patrimoine/legacy`) : `POST /import`, `POST /candidates`, `GET ""`,
+`GET /counts`, `PATCH /{id}`. Le `code_bien` est volontairement absent du schéma de mise à
+jour : il ne doit jamais être modifié.
+
+**Tests** : `saas/backend/tests/test_patrimoine_legacy_import.py` (9 cas verts) —
+choix de feuille, en-têtes à l'octet près, périmètre (dont commune absente ≠ hors
+périmètre), payload conservé, idempotence, et les deux garde-fous.
+
+### Reste à construire
+
+- **Incrément 2** — écran unique : liste + carte, point de couleur dédiée, marqueur
+  déplaçable, bouton « Attribuer IGN » branché sur les endpoints existants.
+- **Incrément 3** — réexport ASTECH : normalisation d'adresse (§11.1), `REFCAD`,
+  coordonnées à virgule décimale, feuille de traçabilité.
+- Alimentation des champs d'adresse structurés côté `buildings` (§9.4).
