@@ -6029,3 +6029,38 @@ button:disabled {
   color: #94a3b8;
   font-size: 0.84rem;
 }
+
+/* Marqueurs des biens du référentiel historique (ASTECH) sur la carte.
+   Couleur dédiée (violet) pour les distinguer des bâtiments du patrimoine. */
+.legacy-marker {
+  background: none;
+  border: none;
+}
+
+.legacy-marker-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #a855f7;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 1px #7c3aed, 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+
+.legacy-marker-dot.is-active {
+  background: #7c3aed;
+  cursor: grab;
+  box-shadow: 0 0 0 2px #7c3aed, 0 0 0 7px rgba(168, 85, 247, 0.25);
+}
+
+.legacy-marker-dot.is-active:active {
+  cursor: grabbing;
+}
+
+/* Position jamais confirmée : contour pointillé, pour ne pas laisser croire
+   que le bien est déjà localisé. */
+.legacy-marker-dot.is-provisional {
+  background: #ffffff;
+  border-style: dashed;
+  border-color: #a855f7;
+}
