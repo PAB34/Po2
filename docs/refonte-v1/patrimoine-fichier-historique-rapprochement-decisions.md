@@ -1,6 +1,6 @@
 ---
 type: decisions
-statut: cadrage — decisions Q1-Q8 prises, Q9-Q14 ouvertes
+statut: cadrage — Q1-Q11 + Q13 tranchees ; restent Q2, Q12 et Q14
 sujet: Rapprochement du fichier patrimoine historique de la collectivité (CODE_BIEN) avec le référentiel Po2 (/buildings/list)
 créé: 2026-08-18
 related:
@@ -244,7 +244,7 @@ Briques **déjà existantes** : [1] partiellement, [3], et tout le back de [4] (
 Briques **à construire** : [2], la table de rapprochement, le **marqueur déplaçable**,
 l'**écran unique**, et **[6] le réexport** (entièrement neuf).
 
-## 8. Questions ouvertes restantes
+## 8. Questions ouvertes restantes *(repondues — voir §9)*
 
 **Q9 — `BISTER` au réexport : on écrit quoi ?**
 (a) le **type de voie** (`RUE`, `BD`…) pour rester cohérent avec l'usage réel de tes agents ;
@@ -280,3 +280,138 @@ les biens déjà connus d'ASTECH ?
 Chantier séparé et **destructif** : 151 sites en prod, avec des bâtiments rattachés par `site_id`
 et un modèle hiérarchique `SITE → BATIMENT → LOCAL` utilisé par d'autres modules (import CVC,
 rapprochements compteurs). À cadrer dans son propre document avant toute suppression.
+
+## 9. Décisions complémentaires — 2e passe (2026-08-18)
+
+| # | Question | Décision |
+|---|---|---|
+| Q9 | `BISTER` au réexport | **Bis/ter uniquement, quand l'information existe.** La colonne retrouve son usage légitime. |
+| Q10 | `LIBELVOIE` | **On normalise tout** — y compris les lignes déjà remplies. |
+| Q11 | Nom ASTECH vs nom IGN | **Le nom IGN gagne et est réécrit dans ASTECH** (`EX TRIBUNAL` → `EX TRIBUNAL D'INSTANCE`). Objectif assumé : la plateforme met ASTECH à jour. |
+| Q12 | Format du réexport | **En attente** — exemple concret fourni §9.3, à valider avec la référente ASTECH en même temps que Q2. |
+| Q13 | Bâtiments Po2 absents d'ASTECH | **Lignes à créer** — ils remontent dans l'export sans `CODE_BIEN`, à créer côté ASTECH. |
+
+### 9.1 Règle d'adresse dérivée de Q9 + Q10
+
+Q9 vide `BISTER` de son contenu actuel (le type de voie). Ce type doit donc aller
+**dans `LIBELVOIE`** — c'est la seule colonne qui puisse l'accueillir. Cette règle est
+**imposée par Q9**, elle n'est pas un choix supplémentaire.
+
+Usage constaté dans le fichier (615 lignes renseignées) : `LIBELVOIE` écrit le type de voie
+**en toutes lettres** dans **425 cas** — `RUE` 177, `QUAI` 46, `AVENUE` 43, `PLACE` 37,
+`BOULEVARD` 36, `CHEMIN` 28, `PROMENADE` 18, `IMPASSE` 17, `CORNICHE` 9, `ROUTE` 7.
+Les 190 lignes restantes sont précisément celles où `BISTER` portait l'abréviation.
+
+**Règle de normalisation retenue :**
+
+| Colonne | Contenu après normalisation | Exemple |
+|---|---|---|
+| `NORUE` | numéro de voirie seul | `17` |
+| `BISTER` | `BIS` / `TER` uniquement, sinon vide | *(vide)* |
+| `LIBELVOIE` | **type de voie en toutes lettres + nom** | `RUE LACAN` |
+
+Avant / après sur des lignes réelles :
+
+| `NORUE` | `BISTER` | `LIBELVOIE` | → | `NORUE` | `BISTER` | `LIBELVOIE` |
+|---|---|---|---|---|---|---|
+| `17` | `RUE` | `ANDRE PORTES` | → | `17` | | `RUE ANDRE PORTES` |
+| `81` | `BD` | `CAMILLE BLANC` | → | `81` | | `BOULEVARD CAMILLE BLANC` |
+| `10` | `AVE` | `MARX DORMOY` | → | `10` | | `AVENUE MARX DORMOY` |
+| `15` | `RUE` | `BIS LUCIEN SALETTE` | → | `15` | `BIS` | `RUE LUCIEN SALETTE` |
+| `17` | `RUE` | `RUE LACAN` | → | `17` | | `RUE LACAN` *(déjà bon)* |
+
+Le DGFIP/IGN livre des abréviations (`AV`, `IMP`, `BD`, `QUAI`) — une table d'expansion vers
+les formes longues d'ASTECH est nécessaire : `AV`/`AVE` → `AVENUE`, `BD` → `BOULEVARD`,
+`IMP` → `IMPASSE`, `CHE` → `CHEMIN`, `QUA` → `QUAI`, `PRO` → `PROMENADE`, `RTE` → `ROUTE`,
+`PL` → `PLACE`, `ALL` → `ALLEE`.
+
+### 9.2 Q11 : l'objection que j'avais soulevée tombe
+
+J'avais recommandé de conserver le nom ASTECH, au motif qu'un renommage casserait la
+reconnaissance au prochain import. **Cette objection ne tient plus** compte tenu de Q1 :
+le `CODE_BIEN` est stocké en base comme clé pivot, donc les imports suivants rapprochent
+**par code, pas par nom**. Le matching par nom ne sert qu'au **premier cycle**. Renommer est
+donc sans risque — et fait même converger les deux référentiels cycle après cycle.
+
+### 9.3 Q12 expliqué — les deux formats de réexport
+
+Prenons une ligne réelle, `ADMIANMAI02` (annexe mairie de la Corniche), aujourd'hui sans
+cadastre ni coordonnées. Après traitement dans Po2, on connaît son adresse exacte, sa parcelle
+et son point GPS. La question est : **à quoi ressemble le fichier qu'on rend à ASTECH ?**
+
+**Option A — le classeur complet, modifié en place**
+
+On rend le **même fichier** : 866 lignes × 317 colonnes, à l'identique, sauf les cellules
+enrichies qui ont été mises à jour. Les 300 colonnes qui ne nous concernent pas
+(`ERP_*`, `AMORT_*`, `PRIX_ACHAT`…) sont **recopiées telles quelles**.
+
+```
+CODE_BIEN | DESIGNATION            | ... | NORUE | BISTER | LIBELVOIE           | CODPOST | VILLE | COMMUNE | REFCAD | LATITUDE   | ... (300 autres colonnes inchangées)
+ADMIANMAI02 | ANNEXE MAIRIE ... MER | ... |  20   |        | CORNICHE DE NEUBURG | 34200   | SETE  |  34301  | AS023  | 43,404512  | ...
+```
+
+→ ASTECH **réimporte le fichier entier**, comme il l'a exporté.
+→ Avantage : aucune ambiguïté, c'est son propre format. Inconvénient : gros fichier, et on
+réécrit des colonnes qu'on n'a pas touchées (risque théorique d'écraser une modif faite dans
+ASTECH entre-temps).
+
+**Option B — une feuille réduite**
+
+On rend **uniquement la clé et les champs qu'on a modifiés** :
+
+```
+CODE_BIEN   | NORUE | BISTER | LIBELVOIE           | CODPOST | VILLE | COMMUNE | REFCAD | LATITUDE  | LONGITUDE
+ADMIANMAI02 |  20   |        | CORNICHE DE NEUBURG | 34200   | SETE  |  34301  | AS023  | 43,404512 | 3,693845
+CULRMUSEE02 |  148  |        | RUE FRANCOIS DESNOYER | 34200 | SETE  |  34301  | AS023  | 43,398211 | 3,695012
+```
+
+→ ASTECH fait une **mise à jour par clé** : « pour le bien `ADMIANMAI02`, remplace ces 9 champs ».
+→ Avantage : léger, lisible, ne touche à rien d'autre. **Inconvénient : ça ne marche que si
+ASTECH sait faire un import de mise à jour par clé** — beaucoup d'outils de gestion patrimoniale
+n'acceptent qu'un fichier au format complet.
+
+**C'est la seule question à poser à la référente : « ASTECH sait-il réimporter une mise à jour
+par CODE_BIEN, ou faut-il lui rendre le classeur complet ? »**
+→ **Recommandation : partir sur (A)**, qui marche dans tous les cas, et basculer en (B)
+seulement si elle confirme que l'import par clé existe.
+
+### 9.4 Constat bloquant à lever : les champs d'adresse structurés sont vides en prod
+
+Vérifié en base prod le 2026-08-18 sur les 212 bâtiments :
+
+| Champ `buildings` | Rempli |
+|---|---|
+| `adresse_reconstituee` | 177 |
+| `dgfip_reference_norm` | 163 |
+| `numero_voirie`, `nature_voie`, `nom_voie` | **0** |
+| `section`, `numero_plan`, `indice_repetition` | **0** |
+
+Les bâtiments actuels viennent de l'import en masse, qui ne renseigne que l'adresse en une
+seule chaîne et la référence de parcelle normalisée. **Les composants structurés dont le
+réexport a besoin ne sont donc pas alimentés aujourd'hui.**
+
+La donnée n'est pas perdue pour autant, elle est juste agrégée :
+
+```
+adresse_reconstituee  = "0002 Impasse DE LA BORDIGUE"
+dgfip_reference_norm  = "34301000AI0009"
+                         └INSEE┘└pfx┘└se┘└plan┘
+```
+
+Deux voies pour alimenter l'export, à trancher au moment de coder (pas bloquant pour le
+cadrage) : **(i)** parser ces deux chaînes — le format est parfaitement régulier — ou
+**(ii)** renseigner les champs structurés au fil de l'eau à chaque attribution IGN/DGFIP faite
+dans le nouvel écran. **(ii) est plus propre et se fait naturellement** puisque chaque bien
+traité passe par l'attribution ; **(i)** sert de rattrapage pour les bâtiments déjà en base.
+
+⚠️ Point de format à confirmer : `REFCAD` fait 5 caractères dans les 2 exemples observés
+(`AS023` = section sur 2 + plan sur 3), alors que Po2 stocke le plan sur **4** chiffres
+(`AI0009`). Pour les parcelles dont le numéro de plan dépasse 999, il faut savoir si ASTECH
+accepte un `REFCAD` plus long. **À confirmer avec la référente.**
+
+## 10. Reste à trancher avant de coder
+
+- **Q2** — périmètre importé (référente ASTECH).
+- **Q12** — format du réexport, complet ou par clé (référente ASTECH) — cf. §9.3.
+- **Largeur de `REFCAD`** (référente ASTECH) — cf. §9.4.
+- **Q14** — suppression des sites : chantier séparé, destructif, non démarré.
