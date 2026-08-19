@@ -238,8 +238,9 @@ export default function PatrimoineAstechPage() {
   // Deux pièges constatés en prod sur le groupe scolaire Anatole France :
   //   - plusieurs bâtiments portent EXACTEMENT le même nom, parce que l'attribution
   //     IGN les a nommés depuis la zone qui les englobe et non depuis le bâtiment ;
-  //   - deux bâtiments Po2 pointent sur le MÊME bâtiment IGN, donc l'un des deux est
-  //     un doublon de saisie.
+  //   - deux bâtiments Po2 pointent sur le MÊME bâtiment IGN. Ce n'est PAS forcément un
+  //     doublon : vérifié en prod, le restaurant scolaire et la maternelle Lacore
+  //     partagent légitimement une seule empreinte IGN. On signale, on ne conclut pas.
   // Dans les deux cas la référente ne peut pas choisir à l'aveugle : on le lui dit,
   // et l'adresse devient le seul critère qui les sépare.
   const buildingAmbiguities = useMemo(() => {
@@ -800,7 +801,9 @@ export default function PatrimoineAstechPage() {
                   {buildingAmbiguities.get(inspectedBuilding.id)!.sameIgn > 1 && (
                     <div>
                       ⚠ Un autre bâtiment Po2 est attaché au <strong>même bâtiment IGN</strong>{" "}
-                      ({inspectedBuilding.ign_id}) : l'un des deux est un doublon de saisie.
+                      ({inspectedBuilding.ign_id}). Ce n'est pas forcément un doublon — une
+                      empreinte IGN couvre parfois plusieurs bâtiments d'un même ensemble — mais
+                      les deux partageront la même adresse et le même cadastre au réexport.
                     </div>
                   )}
                 </div>
@@ -1131,7 +1134,7 @@ export default function PatrimoineAstechPage() {
                               </span>
                             )}
                             {(buildingAmbiguities.get(building.id)?.sameIgn ?? 1) > 1 && (
-                              <span style={{ color: "#fbbf24" }}> ⚠ doublon IGN probable</span>
+                              <span style={{ color: "#fbbf24" }}> ⚠ même empreinte IGN qu'un autre</span>
                             )}
                           </button>
                         ))}
