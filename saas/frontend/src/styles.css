@@ -6055,10 +6055,14 @@ button:disabled {
   box-shadow: 0 0 0 1px #15803d, 0 1px 4px rgba(15, 23, 42, 0.45);
 }
 
+/* Selection : un ANNEAU, jamais un changement de couleur. La couleur du point porte
+   son etat (violet = ASTECH seul, vert = apparie) ; la repeindre en selection faisait
+   croire que l'etat avait change au clic. L'anneau est neutre pour ne suggerer aucun
+   etat, et il se pose par-dessus n'importe quelle couleur de fond. */
 .legacy-marker-dot.is-active {
-  background: #7c3aed;
   cursor: grab;
-  box-shadow: 0 0 0 2px #7c3aed, 0 0 0 7px rgba(168, 85, 247, 0.25);
+  box-shadow: 0 0 0 2px #f8fafc, 0 0 0 8px rgba(56, 189, 248, 0.5),
+    0 1px 6px rgba(15, 23, 42, 0.5);
 }
 
 .legacy-marker-dot.is-active:active {

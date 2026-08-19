@@ -31,6 +31,7 @@ type RuntimeMap = {
   fitBounds: (bounds: RuntimeBounds, options?: Record<string, unknown>) => void;
   remove: () => void;
   invalidateSize?: () => void;
+  on?: (event: string, handler: (payload: unknown) => void) => void;
 };
 
 type RuntimeFeatureGroup = RuntimeLayer & {
@@ -74,6 +75,10 @@ export type LegacyMapPoint = {
   isLinked?: boolean;
   /** `true` quand la cible est un LOCAL et non le bâtiment entier. */
   isLocalTarget?: boolean;
+  /** Bâtiment Po2 porteur, quand le bien est rattaché : sert à fusionner les marqueurs. */
+  buildingId?: number | null;
+  /** Nom du bâtiment porteur, affiché dans la bulle du point fusionné. */
+  buildingLabel?: string | null;
 };
 
 type WindowWithLeaflet = Window & {
@@ -134,6 +139,12 @@ type BuildingPortfolioMapProps = {
    */
   draggableBuildingId?: number | null;
   onMoveBuilding?: (buildingId: number, lat: number, lon: number) => void;
+  /**
+   * Clic sur le FOND de carte (ni marqueur, ni polygone) : sert à sortir de la
+   * sélection en cours. Voir `markerClickAtRef` pour la distinction avec un clic
+   * sur un marqueur.
+   */
+  onBackgroundClick?: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -335,6 +346,7 @@ export function BuildingPortfolioMap({
   legacyDropRadiusM = 30,
   draggableBuildingId = null,
   onMoveBuilding,
+  onBackgroundClick,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -348,6 +360,14 @@ export function BuildingPortfolioMap({
   // Derniere « intention de cadrage » appliquee : evite de rezoomer a chaque
   // rafraichissement de donnees (cf. bloc de cadrage plus bas).
   const framingSignatureRef = useRef<string | null>(null);
+  // Horodatage du dernier clic sur un marqueur. Leaflet fait aussi remonter l'evenement
+  // au fond de carte selon le type de couche : sans ce garde, selectionner un point
+  // declencherait la deselection dans la foulee.
+  const markerClickAtRef = useRef(0);
+  // Le handler de clic vit dans une ref : l'abonnement Leaflet est pose une seule fois
+  // a l'initialisation, il ne doit pas se re-abonner a chaque rendu du parent.
+  const backgroundClickRef = useRef(onBackgroundClick);
+  backgroundClickRef.current = onBackgroundClick;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -365,6 +385,37 @@ export function BuildingPortfolioMap({
     () => mappableBuildings.find((b) => b.id === activeBuildingId) ?? mappableBuildings[0] ?? null,
     [activeBuildingId, mappableBuildings],
   );
+
+  /**
+   * Bâtiments dont le marqueur est **remplacé** par la pastille du bien ASTECH posé
+   * dessus : un bien rattaché et son bâtiment sont la même réalité, deux marqueurs
+   * superposés donnaient l'impression que le rattachement n'avait pas pris.
+   *
+   * Deux conditions, toutes deux nécessaires :
+   * - **un seul** bien vise ce bâtiment. À plusieurs, ils sont écartés en éventail et
+   *   le marqueur du bâtiment reste comme point d'ancrage, sinon l'éventail flotte.
+   * - le point est **effectivement sur** le bâtiment (< 5 m). Un point déplacé ailleurs
+   *   décrit autre chose que le bâtiment : masquer celui-ci ferait disparaître de la
+   *   carte un bâtiment bien réel.
+   */
+  const mergedBuildingIds = useMemo(() => {
+    const perBuilding = new Map<number, LegacyMapPoint[]>();
+    for (const point of legacyPoints ?? []) {
+      if (point.buildingId == null || !point.isLinked) continue;
+      perBuilding.set(point.buildingId, [...(perBuilding.get(point.buildingId) ?? []), point]);
+    }
+    const merged = new Set<number>();
+    for (const [buildingId, points] of perBuilding) {
+      if (points.length !== 1) continue;
+      const building = mappableBuildings.find((candidate) => candidate.id === buildingId);
+      if (!building) continue;
+      const distance = distanceMeters(
+        points[0].latitude, points[0].longitude, building.latitude, building.longitude,
+      );
+      if (distance <= 5) merged.add(buildingId);
+    }
+    return merged;
+  }, [legacyPoints, mappableBuildings]);
 
   // Priorité : focusLatLon (bâtiment sélectionné ou centroïde du site sélectionné),
   // sinon le bâtiment actif, sinon le premier bâtiment mappable.
@@ -398,6 +449,14 @@ export function BuildingPortfolioMap({
           attribution: "&copy; OpenStreetMap contributors",
         })
         .addTo(map);
+      // Clic sur le fond de carte = sortir de la selection. On ignore les clics qui
+      // suivent immediatement un clic sur un marqueur : selon le type de couche,
+      // Leaflet fait remonter l'evenement jusqu'a la carte, et la selection qu'on
+      // vient de faire serait annulee dans la foulee.
+      map.on?.("click", () => {
+        if (Date.now() - markerClickAtRef.current < 150) return;
+        backgroundClickRef.current?.();
+      });
       mapRef.current = map;
       setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
@@ -464,6 +523,10 @@ export function BuildingPortfolioMap({
           iconAnchor: [9, 9],
         }),
       });
+      // Point fusionné : il représente le bien ASTECH ET son bâtiment Po2, dont le
+      // marqueur n'est plus dessiné. La bulle doit donc nommer les deux, sinon
+      // l'information du bâtiment disparaît de la carte avec son marqueur.
+      const isMerged = point.buildingId != null && mergedBuildingIds.has(point.buildingId);
       marker.bindPopup?.(
         `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
           point.isLinked
@@ -471,9 +534,16 @@ export function BuildingPortfolioMap({
               ? "rattaché à un local"
               : "rattaché à un bâtiment Po2"
             : "non rattaché"
-        }${point.isProvisional ? ", position à confirmer" : ""}</em>`,
+        }${point.isProvisional ? ", position à confirmer" : ""}</em>${
+          isMerged && point.buildingLabel
+            ? `<br/>Po2 : <strong>${point.buildingLabel}</strong>`
+            : ""
+        }`,
       );
-      marker.on?.("click", () => onSelectLegacyId?.(point.id));
+      marker.on?.("click", () => {
+        markerClickAtRef.current = Date.now();
+        onSelectLegacyId?.(point.id);
+      });
       if (isActive && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
         marker.on?.("dragend", () => {
           const position = marker.getLatLng();
@@ -505,7 +575,7 @@ export function BuildingPortfolioMap({
     };
   }, [
     activeLegacyId, legacyDropRadiusM, legacyPoints, mappableBuildings, mapReady,
-    onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId,
+    mergedBuildingIds, onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId,
   ]);
 
   // ------------------------------------------------------------------
@@ -536,16 +606,40 @@ export function BuildingPortfolioMap({
       const isHighlighted = highlightedSet.has(building.id);
       const hasIgn = building.statut_geocodage === "IGN_VALIDE";
 
+      // Fusion ASTECH + Po2 : quand UN SEUL bien ASTECH est pose exactement sur ce
+      // batiment, les deux marqueurs se superposaient — d'ou l'impression de deux
+      // points pour une meme realite. On ne dessine alors que la pastille ASTECH, qui
+      // represente les deux. Des que PLUSIEURS biens visent le batiment, ils sont
+      // ecartes en eventail : le marqueur du batiment reste, c'est leur point d'ancrage.
+      if (mergedBuildingIds.has(building.id)) continue;
+
       let color = dimInAttach ? "#94a3b8" : "#38bdf8";
       let fillColor = dimInAttach ? "#94a3b8" : "#0ea5e9";
 
+      // La couleur dit l'ETAT du batiment (bleu = attache IGN, vert = cible du bien
+      // selectionne, gris = estompe en mode attachement). La selection, elle, ne
+      // repeint plus rien : elle ajoute un anneau (plus bas). Repeindre le point
+      // selectionne en orange faisait croire que son etat avait change au clic.
       if (!dimInAttach) {
-        if (isActive) { color = "#f97316"; fillColor = "#fb923c"; }
-        else if (isHighlighted && hasIgn) { color = "#15803d"; fillColor = "#16a34a"; }
+        if (isHighlighted && hasIgn) { color = "#15803d"; fillColor = "#16a34a"; }
         else if (isHighlighted) { color = "#ea580c"; fillColor = "#f97316"; }
         else if (hasIgn) { color = "#1d4ed8"; fillColor = "#2563eb"; }
-      } else if (isActive) {
-        color = "#f97316"; fillColor = "#fb923c";
+      }
+
+      // Anneau de selection : pose SOUS le marqueur, il ne touche pas a sa couleur.
+      // C'est ce qui permet au point selectionne de rester bleu (ou vert) tout en
+      // etant clairement designe.
+      if (isActive) {
+        layerGroup.addLayer(
+          runtime.circleMarker([building.latitude, building.longitude], {
+            radius: 14,
+            color: "#f8fafc",
+            fillColor: "#38bdf8",
+            fillOpacity: 0.18,
+            weight: 2,
+            interactive: false,
+          }),
+        );
       }
 
       const isDraggable = building.id === draggableBuildingId && attachMode === "none";
@@ -580,6 +674,7 @@ export function BuildingPortfolioMap({
         `<strong>${building.nom_batiment || `Bâtiment #${building.id}`}</strong><br/>${buildAddressLine(building)}${hasIgn ? "<br/><em>IGN attaché</em>" : ""}`,
       );
       marker.on?.("click", () => {
+        markerClickAtRef.current = Date.now();
         if (attachMode === "none") onSelectBuildingId(building.id);
       });
       layerGroup.addLayer(marker);
@@ -629,6 +724,7 @@ export function BuildingPortfolioMap({
     return () => { layerGroup.clearLayers(); };
   }, [
     activeBuildingId, attachMode, draggableBuildingId, focusLatLon, highlightedSet, mapReady,
+    mergedBuildingIds,
     mappableBuildings, onMoveBuilding, onSelectBuildingId, selectedBuilding,
   ]);
 
