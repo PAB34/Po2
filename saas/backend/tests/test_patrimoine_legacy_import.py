@@ -38,6 +38,7 @@ from app.models.patrimoine_legacy import (
 from app.models.site import Site  # noqa: F401
 from app.services.patrimoine_legacy import (
     compute_candidates,
+    confirm_proposed,
     import_astech_file,
     parse_astech_workbook,
 )
@@ -584,3 +585,62 @@ def test_lien_orphelin_sans_candidat_reste_a_traiter(db_session: Session):
     assert asset.status == STATUS_TODO
     assert asset.building_id is None
     assert asset.resolved_label is None
+
+
+def test_le_rattachement_automatique_fait_heriter_l_adresse(db_session: Session):
+    """Le moteur rattache : le bien doit hériter du bâtiment, comme un rattachement manuel.
+
+    Sans cet héritage, les biens proposés par le moteur n'ont aucun champ résolu — donc
+    le réexport ASTECH n'a rien à écrire pour eux, même une fois confirmés. Constaté en
+    prod le 2026-08-19 : 73 biens rattachés automatiquement, zéro adresse héritée.
+    """
+    db_session.add(
+        Building(
+            id=1,
+            city_id=1,
+            nom_batiment="CIMETIERE LE PY",
+            nom_commune="Sete",
+            adresse_reconstituee="12 RUE DES CAPECHADES",
+            dgfip_reference_norm="34301000AK0149",
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    assert asset.status == STATUS_PROPOSED
+    assert asset.resolved_name == "CIMETIERE LE PY"
+    assert asset.resolved_housenumber == "12"
+    assert asset.resolved_street == "RUE DES CAPECHADES"
+    # Section + plan sur 3 chiffres : le format attendu par ASTECH.
+    assert asset.resolved_refcad == "AK149"
+
+
+def test_la_confirmation_realigne_un_nom_devenu_perime(db_session: Session):
+    """Un bâtiment renommé après le rattachement ne doit pas réinjecter l'ancien nom.
+
+    Cas réel : « Attribuer IGN » avait renommé des bâtiments avec le toponyme de la zone
+    englobante ; après correction du nom du bâtiment, les biens ASTECH portaient encore
+    le nom périmé — celui qui serait reparti dans le fichier de la collectivité.
+    """
+    db_session.add(
+        Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete")
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    building = db_session.get(Building, 1)
+    building.nom_batiment = "CIMETIERE MARIN LE PY"
+    db_session.add(building)
+    db_session.commit()
+
+    confirm_proposed(db_session, 1)
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    assert asset.status == STATUS_LINKED
+    assert asset.resolved_name == "CIMETIERE MARIN LE PY"

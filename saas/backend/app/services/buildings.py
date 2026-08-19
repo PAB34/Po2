@@ -343,7 +343,25 @@ def attach_building_ign(
         or ""
     ).strip()
 
-    if proposed_name:
+    # Le nom resolu ne vient pas toujours du batiment IGN lui-meme : quand celui-ci est
+    # anonyme, `_resolve_building_name` retombe sur le toponyme de la ZONE qui l'englobe
+    # (`zone_d_activite_ou_d_interet`, `zone_d_habitation`, `erp`, toponymie). Ce nom
+    # designe alors le groupe entier, pas le batiment. L'ecrire renomme donc a l'identique
+    # tous les batiments d'un meme ensemble.
+    # Constate en prod sur le groupe scolaire Anatole France : 3 batiments renommes
+    # « Ecole Elementaire Anatole France », dont 2 accroches au meme batiment IGN. Le
+    # rapprochement ASTECH ne pouvait plus les departager (garde-fou « plusieurs batiments
+    # proches ») et la referente n'avait plus aucun moyen de les distinguer a l'ecran.
+    # On n'ecrase donc un nom existant que si l'utilisateur a explicitement valide le nom,
+    # ou si le nom vient du batiment lui-meme. Sinon la proposition reste disponible dans
+    # `ign_name_proposed`, que l'ecran peut offrir sans l'imposer.
+    name_from_building_itself = (
+        str(feature_properties.get("resolved_name_source") or "") == "batiment"
+    )
+    name_validated_by_user = bool(str(payload.validated_name or "").strip())
+    if proposed_name and (
+        name_validated_by_user or name_from_building_itself or not (building.nom_batiment or "").strip()
+    ):
         building.nom_batiment = proposed_name
     if primary_feature:
         building.ign_layer = feature_properties.get("ign_layer")
