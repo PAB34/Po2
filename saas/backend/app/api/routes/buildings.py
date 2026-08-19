@@ -23,6 +23,7 @@ from app.schemas.building import (
     LocalCreate,
     LocalRead,
     LocalUpdate,
+    BuildingPositionPayload,
     IgnPointLookupRead,
     NearbyDgfipResult,
     NearbyDgfipRow,
@@ -52,6 +53,7 @@ from app.services.buildings import (
     delete_building,
     delete_local,
     delete_site,
+    move_building,
     delete_building_meter_link,
     get_building_or_404,
     get_local_or_404,
@@ -346,6 +348,25 @@ def post_building_reclassify(
 ) -> PatrimonyReclassifyResult:
     building = get_building_or_404(db, building_id, current_user)
     return reclassify_building(db, building, payload, current_user)
+
+
+@router.patch("/{building_id}/position", response_model=BuildingRead)
+def patch_building_position(
+    building_id: int,
+    payload: BuildingPositionPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> BuildingRead:
+    """Repositionne un bâtiment sur la carte et rafraîchit son adresse.
+
+    Endpoint dédié : `PUT /buildings/{id}` remplace l'ensemble des champs, donc un appel
+    partiel effacerait le nom, la commune et le reste.
+    """
+    building = get_building_or_404(db, building_id, current_user)
+    updated = move_building(
+        db, building, payload.lat, payload.lon, resolve_address=payload.resolve_address
+    )
+    return BuildingRead.model_validate(updated)
 
 
 @router.post("/{building_id}/geo-attachment", response_model=BuildingRead)

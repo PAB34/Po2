@@ -12,6 +12,7 @@ from app.models.site import Site
 from app.models.user import User
 from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingMeterLinkCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, PatrimonyReclassifyPayload, PatrimonyReclassifyResult, SiteCreate, SiteUpdate
 from app.services.building_naming import _dedupe_candidate_dicts, build_building_payload
+from app.services.building_naming import reverse_geocode_point
 from app.services.cities import get_city_by_id
 
 
@@ -363,6 +364,32 @@ def attach_building_ign(
     if payload.lon is not None:
         building.longitude = payload.lon
 
+    db.add(building)
+    db.commit()
+    db.refresh(building)
+    return building
+
+
+def move_building(
+    db: Session, building: Building, lat: float, lon: float, resolve_address: bool = True
+) -> Building:
+    """Repositionne un batiment sur la carte et rafraichit son adresse.
+
+    Endpoint dedie plutot que `update_building` : ce dernier remplace l'ensemble des
+    champs a partir du payload, donc un appel partiel effacerait le nom, la commune et
+    le reste. Ici on ne touche qu'a la position et a l'adresse resolue.
+    """
+    building.latitude = lat
+    building.longitude = lon
+    if resolve_address:
+        found = reverse_geocode_point(lat, lon)
+        if found.get("found"):
+            if found.get("label"):
+                building.adresse_reconstituee = str(found["label"])[:255]
+            if found.get("city"):
+                building.nom_commune = str(found["city"])[:255]
+            if found.get("postcode"):
+                building.code_postal = str(found["postcode"])[:10]
     db.add(building)
     db.commit()
     db.refresh(building)

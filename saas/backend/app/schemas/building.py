@@ -187,6 +187,15 @@ class IgnPointLookupRead(BaseModel):
     parcel_labels: list[str]
 
 
+class BuildingPositionPayload(BaseModel):
+    """Déplacement d'un bâtiment sur la carte."""
+
+    lat: float
+    lon: float
+    # Géocodage inverse : l'adresse suit le point, sauf demande contraire.
+    resolve_address: bool = True
+
+
 class NearbyDgfipRow(BaseModel):
     unique_key: str
     address_display: str

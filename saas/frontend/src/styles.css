@@ -6080,3 +6080,35 @@ button:disabled {
   border-style: dashed;
   border-color: #ffffff;
 }
+
+/* Cible « local » et non le bâtiment entier : un anneau blanc au centre. La couleur
+   (vert = apparié) reste, seule la forme dit à quel niveau le bien est rattaché. */
+.legacy-marker-dot.is-local::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 3px auto 0;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+/* Bâtiment Po2 rendu déplaçable : même bleu que les autres, mais halo et curseur
+   de préhension pour signaler qu'on peut le saisir. */
+.po2-marker-dot {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px #1d4ed8, 0 0 0 7px rgba(37, 99, 235, 0.25);
+}
+
+.po2-marker-dot.is-draggable {
+  cursor: grab;
+}
+
+.po2-marker-dot.is-draggable:active {
+  cursor: grabbing;
+}
