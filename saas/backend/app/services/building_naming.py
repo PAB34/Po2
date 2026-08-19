@@ -94,11 +94,16 @@ def _strip_leading_zeros_in_address(text: str) -> str:
     """Remplace les nombres avec zeros initiaux par leur version sans zeros.
 
     Ex : '0021 RTE DE MONTPELLIER' -> '21 RTE DE MONTPELLIER'
+         '0005B BD JOLIOT CURIE'   -> '5B BD JOLIOT CURIE'
     L'API IGN GeoPF interprete mal '0021' comme numero de voirie.
+
+    Le suffixe bis/ter (lettre collee au numero) doit faire partie du motif : sans lui,
+    '0005B' n'offre aucune frontiere de mot apres les chiffres et gardait ses zeros.
+    Constate sur le referentiel reel : 5 adresses sur 177 dans ce cas.
     """
     if not text:
         return text
-    return re.sub(r"\b0+(\d+)\b", r"\1", text)
+    return re.sub(r"\b0+(\d+[A-Za-z]?)\b", r"\1", text)
 
 
 def _insee_from_reference(reference: str | None) -> str | None:
@@ -999,7 +1004,11 @@ def preview_building_import_file(
             source_address = _display_text(row.get(address_column))
             source_typology = _optional_import_value(row, typology_column)
             asset_type = _normalize_import_asset_type(source_typology or "")
-            address_display = re.sub(r"\s+", " ", source_address).strip()
+            # Normalisation des le chargement du fichier : l'utilisateur ne doit jamais
+            # avoir a retirer les zeros initiaux a la main ligne par ligne.
+            address_display = _strip_leading_zeros_in_address(
+                re.sub(r"\s+", " ", source_address).strip()
+            )
             source_parcel_value = _optional_import_value(row, parcel_column)
             expected_citycode = _insee_from_reference(source_parcel_value)
             resolved_city = None
@@ -1128,7 +1137,11 @@ def lookup_free_address_candidates(
     parcel_reference: str | None = None,
     skip_ign_buildings: bool = False,
 ) -> dict[str, Any]:
-    address_display = re.sub(r"\s+", " ", str(address).strip()).strip()
+    # Normalisee ici aussi : `input_address` est renvoyee au frontend, qui la reaffiche
+    # dans le champ editable. Sans ca, le zero revenait a l'ecran apres chaque controle.
+    address_display = _strip_leading_zeros_in_address(
+        re.sub(r"\s+", " ", str(address).strip()).strip()
+    )
     if len(address_display) < 3:
         raise ValueError("L'adresse doit contenir au moins 3 caractères.")
     effective_citycode = citycode or _insee_from_reference(parcel_reference)
