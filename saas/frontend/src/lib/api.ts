@@ -6056,3 +6056,15 @@ export async function fetchIgnBuildingsAtPoint(
   });
   return parseResponse<IgnPointLookup>(response);
 }
+
+/** Ajoute un bâtiment Po2 à la liste ASTECH comme bien « à créer » (décision Q13). */
+export async function createLegacyAssetFromBuilding(
+  token: string,
+  buildingId: number,
+): Promise<LegacyAsset> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/from-building/${buildingId}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyAsset>(response);
+}

@@ -91,6 +91,20 @@ def counts(
     return svc.counts_by_status(db, svc.resolve_city_id(db, current_user.city_id))
 
 
+@router.post("/from-building/{building_id}", response_model=LegacyAssetOut, status_code=status.HTTP_201_CREATED)
+def create_asset_from_building(
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LegacyAssetOut:
+    """Ajoute un bâtiment Po2 à la liste ASTECH comme bien « à créer » (décision Q13)."""
+    city_id = svc.resolve_city_id(db, current_user.city_id)
+    building = svc.get_building_for_city(db, city_id, building_id)
+    if building is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bâtiment introuvable.")
+    return LegacyAssetOut.model_validate(svc.create_asset_from_building(db, city_id, building))
+
+
 @router.patch("/{asset_id}", response_model=LegacyAssetOut)
 def update_asset(
     asset_id: int,
