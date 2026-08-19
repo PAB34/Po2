@@ -507,17 +507,31 @@ export function BuildingsListPage() {
           <div className="header-badge"><strong>{sites.length}</strong><span>site(s)</span></div>
           <div className="header-badge"><strong>{buildings.length}</strong><span>bâtiment(s)</span></div>
           <div className="header-badge"><strong>{locals.length}</strong><span>local(aux)</span></div>
-          {buildings.length > 0 && (
+          {/* Le bouton doit rester atteignable tant qu'il reste QUOI QUE CE SOIT dans
+              l'arborescence. Le conditionner aux seuls bâtiments créait une impasse :
+              après une purge, il restait des sites visibles et plus aucun moyen de les
+              supprimer, puisque le bouton disparaissait avec le dernier bâtiment. */}
+          {(buildings.length > 0 || sites.length > 0) && (
             <button type="button" className="danger-button" onClick={() => {
-              if (!window.confirm(`Supprimer les ${buildings.length} bâtiment(s) et leurs locaux ?`)) return;
-              const alsoSites = sites.length > 0 && window.confirm(
-                `Supprimer aussi les ${sites.length} site(s) ? ` +
-                  "OK = repartir d'une arborescence entièrement vide. " +
-                  "Annuler = ne supprimer que les bâtiments (les sites resteront affichés).",
-              );
-              deleteAllMutation.mutate(alsoSites);
+              if (buildings.length > 0) {
+                if (!window.confirm(`Supprimer les ${buildings.length} bâtiment(s) et leurs locaux ?`)) return;
+                const alsoSites = sites.length > 0 && window.confirm(
+                  `Supprimer aussi les ${sites.length} site(s) ? ` +
+                    "OK = repartir d'une arborescence entièrement vide. " +
+                    "Annuler = ne supprimer que les bâtiments (les sites resteront affichés).",
+                );
+                deleteAllMutation.mutate(alsoSites);
+                return;
+              }
+              // Plus aucun bâtiment : il ne reste que des sites à vider.
+              if (!window.confirm(`Supprimer les ${sites.length} site(s) restant(s) ?`)) return;
+              deleteAllMutation.mutate(true);
             }} disabled={deleteAllMutation.isPending}>
-              {deleteAllMutation.isPending ? "Suppression..." : "Supprimer tout"}
+              {deleteAllMutation.isPending
+                ? "Suppression..."
+                : buildings.length > 0
+                  ? "Supprimer tout"
+                  : `Supprimer les ${sites.length} site(s)`}
             </button>
           )}
         </div>
