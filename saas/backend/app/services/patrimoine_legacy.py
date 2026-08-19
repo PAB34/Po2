@@ -421,6 +421,29 @@ def compute_candidates(
     possible ensuite. Un bien déjà rattaché à la main n'est jamais recalculé.
     """
     targets = _load_building_targets(db, city_id)
+
+    # Auto-reparation : supprimer le patrimoine Po2 met `building_id` a NULL en cascade
+    # (ON DELETE SET NULL). Les biens restaient alors affiches « rattache » ou
+    # « a confirmer » alors qu'ils ne pointaient plus vers rien, et disparaissaient de
+    # la carte. On les remet a traiter pour qu'ils soient reproposes.
+    orphan_statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.building_id.is_(None),
+        PatrimoineLegacyAsset.status.in_([STATUS_LINKED, STATUS_PROPOSED]),
+    )
+    if city_id is not None:
+        orphan_statement = orphan_statement.where(PatrimoineLegacyAsset.city_id == city_id)
+    repaired = 0
+    for asset in db.scalars(orphan_statement):
+        asset.status = STATUS_TODO
+        asset.local_id = None
+        asset.target_type = TARGET_BUILDING
+        asset.link_origin = None
+        _clear_resolved_address(asset)
+        db.add(asset)
+        repaired += 1
+    if repaired:
+        db.commit()
+
     statement = select(PatrimoineLegacyAsset).where(PatrimoineLegacyAsset.status == STATUS_TODO)
     if city_id is not None:
         statement = statement.where(PatrimoineLegacyAsset.city_id == city_id)
@@ -468,7 +491,7 @@ def compute_candidates(
         linked += 1
 
     db.commit()
-    return {"scanned": scanned, "proposed": proposed, "auto_linked": linked}
+    return {"scanned": scanned, "proposed": proposed, "auto_linked": linked, "repaired": repaired}
 
 
 # ---------------------------------------------------------------------------

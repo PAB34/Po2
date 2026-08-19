@@ -171,11 +171,13 @@ export default function PatrimoineAstechPage() {
     enabled: !!token,
   });
 
-  // Les biens deja rattaches sont charges a part : la liste de gauche est filtree
-  // (« a traiter » par defaut), or la carte doit montrer l'avancement en permanence.
+  // La carte doit montrer TOUS les biens localisés, quel que soit leur statut : la
+  // liste de gauche est filtrée (« À traiter » par défaut) alors que la carte sert de
+  // vue d'ensemble. Filtrer sur « Rattaché » ne laissait apparaître qu'une poignée de
+  // points dès que les statuts changeaient.
   const linkedAssetsQuery = useQuery({
-    queryKey: ["legacy-assets", "lie"],
-    queryFn: () => fetchLegacyAssets(token!, { status: "lie", limit: 2000 }),
+    queryKey: ["legacy-assets", "carte"],
+    queryFn: () => fetchLegacyAssets(token!, { limit: 2000 }),
     enabled: !!token,
   });
 
@@ -264,7 +266,10 @@ export default function PatrimoineAstechPage() {
     onSuccess: (result) => {
       setFlash(
         `Reconnaissance : ${result.auto_linked} rattachement(s) évident(s), ` +
-          `${result.proposed} candidat(s) proposé(s) sur ${result.scanned} bien(s).`,
+          `${result.proposed} candidat(s) proposé(s) sur ${result.scanned} bien(s).` +
+          (result.repaired
+            ? ` ${result.repaired} bien(s) pointaient vers un bâtiment supprimé et sont repassés à traiter.`
+            : ""),
       );
       invalidate();
     },
@@ -720,11 +725,11 @@ export default function PatrimoineAstechPage() {
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", display: "inline-block" }} />
-              Apparié ASTECH + Po2 ({linkedAssetsQuery.data?.length ?? 0})
+              Apparié ASTECH + Po2 ({legacyPoints.filter((point) => point.isLinked).length})
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#a855f7", border: "2px solid #fff", display: "inline-block" }} />
-              Bien ASTECH non rattaché
+              Bien ASTECH non rattaché ({legacyPoints.filter((point) => !point.isLinked).length})
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#2563eb", border: "2px solid #38bdf8", display: "inline-block" }} />
