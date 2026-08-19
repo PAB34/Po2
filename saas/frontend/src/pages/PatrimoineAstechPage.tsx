@@ -28,6 +28,7 @@ import {
   fetchLegacyAssets,
   fetchLegacyCounts,
   importLegacyAstechFile,
+  moveBuildingRequest,
   updateLegacyAsset,
   type Building,
   type GeoJsonFeature,
@@ -138,7 +139,8 @@ export default function PatrimoineAstechPage() {
   // rien (aucun nom approchant) ou quand sa proposition est fausse.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [buildingSearch, setBuildingSearch] = useState("");
-  // Bâtiment Po2 consulté depuis la carte (simple lecture, aucune modification).
+  // Bâtiment Po2 consulté depuis la carte. C'est aussi le seul rendu déplaçable :
+  // un seul à la fois, pour ne pas bouger un voisin par mégarde.
   const [inspectedBuildingId, setInspectedBuildingId] = useState<number | null>(null);
 
   const countsQuery = useQuery({
@@ -273,6 +275,17 @@ export default function PatrimoineAstechPage() {
     mutationFn: () => confirmLegacyProposals(token!),
     onSuccess: (result) => {
       setFlash(`${result.confirmed} rattachement(s) confirmé(s).`);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const moveBuildingMutation = useMutation({
+    mutationFn: (variables: { buildingId: number; lat: number; lon: number }) =>
+      moveBuildingRequest(token!, variables.buildingId, variables.lat, variables.lon),
+    onSuccess: (building) => {
+      setFlash(`« ${building.nom_batiment} » déplacé, adresse mise à jour.`);
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
       invalidate();
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
@@ -421,6 +434,7 @@ export default function PatrimoineAstechPage() {
           longitude: DEFAULT_LON,
           isProvisional: true,
           isLinked: asset.building_id != null,
+          isLocalTarget: asset.target_type === "local",
         };
       }
       return {
@@ -430,6 +444,7 @@ export default function PatrimoineAstechPage() {
         longitude,
         isProvisional: asset.latitude == null,
         isLinked: asset.building_id != null,
+        isLocalTarget: asset.target_type === "local",
       };
     };
 
@@ -695,6 +710,10 @@ export default function PatrimoineAstechPage() {
               )
             }
             isAttachLoading={attachLookupQuery.isFetching}
+            draggableBuildingId={inspectedBuildingId}
+            onMoveBuilding={(buildingId, lat, lon) =>
+              moveBuildingMutation.mutate({ buildingId, lat, lon })
+            }
           />
 
           {/* Légende : sans elle, les trois états du point violet sont indevinables. */}
@@ -718,7 +737,7 @@ export default function PatrimoineAstechPage() {
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                 <div>
                   <div style={{ fontSize: 11, color: "#7dd3fc", textTransform: "uppercase" }}>
-                    Bâtiment Po2
+                    Bâtiment Po2 — déplaçable sur la carte
                   </div>
                   <h3 style={{ margin: "2px 0 8px", fontSize: 15 }}>{inspectedBuilding.nom_batiment}</h3>
                 </div>

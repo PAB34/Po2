@@ -70,8 +70,10 @@ export type LegacyMapPoint = {
   longitude: number;
   /** `true` quand le point n'a pas encore été confirmé (posé par défaut, à déplacer). */
   isProvisional?: boolean;
-  /** `true` quand le bien est rattaché à un bâtiment Po2 : violet plein. */
+  /** `true` quand le bien est rattaché à un bâtiment Po2 : point vert. */
   isLinked?: boolean;
+  /** `true` quand la cible est un LOCAL et non le bâtiment entier. */
+  isLocalTarget?: boolean;
 };
 
 type WindowWithLeaflet = Window & {
@@ -126,6 +128,12 @@ type BuildingPortfolioMapProps = {
   onDropLegacyOnBuilding?: (legacyId: number, buildingId: number) => void;
   /** Rayon d'accrochage du depot, en metres. */
   legacyDropRadiusM?: number;
+  /**
+   * Bâtiment Po2 rendu déplaçable. Un seul à la fois — comme pour les points ASTECH,
+   * cela évite de déplacer un voisin par mégarde en naviguant sur la carte.
+   */
+  draggableBuildingId?: number | null;
+  onMoveBuilding?: (buildingId: number, lat: number, lon: number) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -138,6 +146,45 @@ function buildAddressLine(
   if (building.adresse_reconstituee) return building.adresse_reconstituee;
   const parts = [building.numero_voirie, building.nature_voie, building.nom_voie].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
+}
+
+/**
+ * Ecarte en eventail les points qui partagent la meme position.
+ *
+ * Plusieurs biens ASTECH peuvent viser le meme batiment Po2 (plusieurs locaux) : leurs
+ * points sont alors exactement superposes, un seul est visible et cliquable. On les
+ * dispose sur un petit cercle autour de la position commune. Ce decalage est purement
+ * visuel — la position enregistree reste inchangee tant qu'on ne deplace pas le point.
+ */
+function spreadOverlappingPoints(points: LegacyMapPoint[]): LegacyMapPoint[] {
+  const groups = new Map<string, LegacyMapPoint[]>();
+  for (const point of points) {
+    const key = `${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`;
+    const group = groups.get(key);
+    if (group) group.push(point);
+    else groups.set(key, [point]);
+  }
+
+  const spread: LegacyMapPoint[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      spread.push(group[0]);
+      continue;
+    }
+    // ~12 m de rayon : assez pour separer les pastilles sans mentir sur la position.
+    const radiusDeg = 12 / 111_320;
+    group.forEach((point, index) => {
+      const angle = (2 * Math.PI * index) / group.length;
+      spread.push({
+        ...point,
+        latitude: point.latitude + radiusDeg * Math.cos(angle),
+        longitude:
+          point.longitude +
+          (radiusDeg * Math.sin(angle)) / Math.max(0.2, Math.cos((point.latitude * Math.PI) / 180)),
+      });
+    });
+  }
+  return spread;
 }
 
 /** Distance approximative entre deux points, en metres. */
@@ -286,6 +333,8 @@ export function BuildingPortfolioMap({
   onMoveLegacyPoint,
   onDropLegacyOnBuilding,
   legacyDropRadiusM = 30,
+  draggableBuildingId = null,
+  onMoveBuilding,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -393,7 +442,7 @@ export function BuildingPortfolioMap({
     legacyLayerRef.current?.remove?.();
     legacyLayerRef.current = null;
 
-    const points = legacyPoints ?? [];
+    const points = spreadOverlappingPoints(legacyPoints ?? []);
     if (points.length === 0) return;
 
     const layerGroup = runtime.featureGroup();
@@ -408,14 +457,20 @@ export function BuildingPortfolioMap({
           className: "legacy-marker",
           html: `<span class="legacy-marker-dot${isActive ? " is-active" : ""}${
             point.isLinked ? " is-linked" : ""
-          }${point.isProvisional ? " is-provisional" : ""}"></span>`,
+          }${point.isLocalTarget ? " is-local" : ""}${
+            point.isProvisional ? " is-provisional" : ""
+          }"></span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         }),
       });
       marker.bindPopup?.(
         `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
-          point.isLinked ? "rattaché à un bâtiment Po2" : "non rattaché"
+          point.isLinked
+            ? point.isLocalTarget
+              ? "rattaché à un local"
+              : "rattaché à un bâtiment Po2"
+            : "non rattaché"
         }${point.isProvisional ? ", position à confirmer" : ""}</em>`,
       );
       marker.on?.("click", () => onSelectLegacyId?.(point.id));
@@ -493,13 +548,34 @@ export function BuildingPortfolioMap({
         color = "#f97316"; fillColor = "#fb923c";
       }
 
-      const marker = runtime.circleMarker([building.latitude, building.longitude], {
-        radius: isActive ? 9 : dimInAttach ? 5 : isHighlighted ? 8 : 7,
-        color,
-        fillColor,
-        fillOpacity: dimInAttach && !isActive ? 0.45 : 0.92,
-        weight: isActive ? 3 : 2,
-      });
+      const isDraggable = building.id === draggableBuildingId && attachMode === "none";
+      // `circleMarker` n'est pas deplaçable : le batiment que l'on veut bouger passe
+      // donc en marqueur classique, avec la meme apparence.
+      const marker = isDraggable
+        ? runtime.marker([building.latitude, building.longitude], {
+            draggable: true,
+            autoPan: true,
+            icon: runtime.divIcon({
+              className: "legacy-marker",
+              html: '<span class="po2-marker-dot is-draggable"></span>',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            }),
+          })
+        : runtime.circleMarker([building.latitude, building.longitude], {
+            radius: isActive ? 9 : dimInAttach ? 5 : isHighlighted ? 8 : 7,
+            color,
+            fillColor,
+            fillOpacity: dimInAttach && !isActive ? 0.45 : 0.92,
+            weight: isActive ? 3 : 2,
+          });
+      if (isDraggable && onMoveBuilding) {
+        const draggableMarker = marker as RuntimeMarker;
+        draggableMarker.on?.("dragend", () => {
+          const position = draggableMarker.getLatLng();
+          onMoveBuilding(building.id, position.lat, position.lng);
+        });
+      }
       marker.bindPopup?.(
         `<strong>${building.nom_batiment || `Bâtiment #${building.id}`}</strong><br/>${buildAddressLine(building)}${hasIgn ? "<br/><em>IGN attaché</em>" : ""}`,
       );
@@ -551,7 +627,10 @@ export function BuildingPortfolioMap({
     map.invalidateSize?.();
     window.setTimeout(() => map.invalidateSize?.(), 50);
     return () => { layerGroup.clearLayers(); };
-  }, [activeBuildingId, mapReady, mappableBuildings, onSelectBuildingId, selectedBuilding, highlightedSet, focusLatLon, attachMode]);
+  }, [
+    activeBuildingId, attachMode, draggableBuildingId, focusLatLon, highlightedSet, mapReady,
+    mappableBuildings, onMoveBuilding, onSelectBuildingId, selectedBuilding,
+  ]);
 
   // ------------------------------------------------------------------
   // Couche polygones IGN déjà attachés (mode portfolio, bleu translucide)

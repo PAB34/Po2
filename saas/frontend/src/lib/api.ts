@@ -6096,3 +6096,18 @@ export async function confirmLegacyProposals(
   });
   return parseResponse<{ confirmed: number }>(response);
 }
+
+/** Repositionne un bâtiment Po2 et rafraîchit son adresse. */
+export async function moveBuildingRequest(
+  token: string,
+  buildingId: number,
+  lat: number,
+  lon: number,
+): Promise<Building> {
+  const response = await fetch(`${apiBaseUrl}/buildings/${buildingId}/position`, {
+    method: "PATCH",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ lat, lon, resolve_address: true }),
+  });
+  return parseResponse<Building>(response);
+}
