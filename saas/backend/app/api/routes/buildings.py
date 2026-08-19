@@ -214,12 +214,15 @@ def post_building_from_naming_selection(
 
 
 @router.delete("", status_code=status.HTTP_200_OK)
-def delete_buildings_all(
+def delete_buildings(
+    include_sites: bool = Query(
+        default=False,
+        description="Supprimer aussi les sites du périmètre (sinon ils restent dans l'arborescence).",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> dict:
-    count = delete_all_buildings(db, current_user)
-    return {"deleted": count}
+) -> dict[str, int]:
+    return delete_all_buildings(db, current_user, include_sites=include_sites)
 
 
 @router.get("", response_model=list[BuildingRead])

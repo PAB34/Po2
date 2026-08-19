@@ -466,7 +466,25 @@ export default function PatrimoineAstechPage() {
                   <div style={{ fontSize: 11, color: "#c4b5fd", fontFamily: "monospace" }}>
                     {asset.code_bien}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{assetLabel(asset)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>
+                    {assetLabel(asset)}
+                    {asset.horsparc === "O" && (
+                      <span
+                        title="Bien sorti du parc dans ASTECH (HORSPARC = O)"
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 10,
+                          padding: "1px 6px",
+                          borderRadius: 999,
+                          background: "rgba(251, 191, 36, 0.18)",
+                          color: "#fbbf24",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        sorti du parc
+                      </span>
+                    )}
+                  </div>
                   {asset.candidate_label && (
                     <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>
                       → {asset.candidate_label}{" "}

@@ -477,7 +477,16 @@ def update_local(db: Session, local: Local, payload: LocalUpdate) -> Local:
     return local
 
 
-def delete_all_buildings(db: Session, current_user: User) -> int:
+def delete_all_buildings(
+    db: Session, current_user: User, *, include_sites: bool = False
+) -> dict[str, int]:
+    """Purge le patrimoine du périmètre de l'utilisateur.
+
+    Les locaux partent en cascade avec leur bâtiment. Les **sites** ne sont pas des
+    enfants des bâtiments (c'est l'inverse : `Building.site_id`), donc supprimer les
+    bâtiments les laissait en place et l'arborescence restait peuplée de sites vides.
+    `include_sites=True` vide aussi les sites, pour repartir d'une base réellement propre.
+    """
     statement = select(Building)
     if current_user.city_id is not None:
         statement = statement.where(Building.city_id == current_user.city_id)
@@ -485,7 +494,19 @@ def delete_all_buildings(db: Session, current_user: User) -> int:
     for building in buildings:
         db.delete(building)
     db.commit()
-    return len(buildings)
+
+    deleted_sites = 0
+    if include_sites:
+        site_statement = select(Site)
+        if current_user.city_id is not None:
+            site_statement = site_statement.where(Site.city_id == current_user.city_id)
+        sites = list(db.scalars(site_statement))
+        for site in sites:
+            db.delete(site)
+        db.commit()
+        deleted_sites = len(sites)
+
+    return {"deleted": len(buildings), "deleted_sites": deleted_sites}
 
 
 def delete_local(db: Session, local: Local) -> None:

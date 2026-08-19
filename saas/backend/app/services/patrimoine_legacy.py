@@ -42,9 +42,12 @@ from app.models.patrimoine_legacy import (
 from app.services.cvc import _site_similarity
 
 # --- Périmètre par défaut ----------------------------------------------------
-# Q2 (périmètre exact) est encore en attente de la référente ASTECH : le filtre est
-# donc paramétrable, et non figé. Défaut = le bâti encore en service.
-DEFAULT_GENRES = ("BATI",)
+# Décision utilisateur (2026-08-19) : importer **tous les bâtiments de la feuille
+# `BAT`**, c'est-à-dire les genres `BATI` et `SITE`, y compris les biens sortis du
+# parc — ils font partie du référentiel à traiter et sont simplement signalés.
+# Le filtre reste paramétrable (`genres`, `include_out_of_park`).
+DEFAULT_GENRES = ("BATI", "SITE")
+DEFAULT_INCLUDE_OUT_OF_PARK = True
 # 'O' = sorti du parc. Le fichier historique conserve les biens désaffectés.
 EXCLUDED_HORSPARC = "O"
 
@@ -55,7 +58,10 @@ SETE_INSEE = "34301"
 SETE_NAMES = {"sete", "cette"}
 
 # Colonnes ASTECH lues (orthographe de `Feuil1`, gabarit retenu).
-_KEY_COLUMNS = ("CODE_BIEN", "CODEBIEN")
+# Clé pivot ASTECH. `CODBAR` est un repli : sur la feuille `BAT`, la colonne
+# `CODEBIEN` est vide alors que `CODBAR` porte le même code (vérifié : 863/866
+# lignes identiques sur l'export réel).
+_KEY_COLUMNS = ("CODE_BIEN", "CODEBIEN", "CODBAR")
 _COLUMN_MAP = {
     "designation": "DESIGNATION",
     "nomcourt": "NOMCOURT",
@@ -142,19 +148,22 @@ def parse_astech_workbook(raw_bytes: bytes) -> dict[str, Any]:
             continue
         header_row, headers = found
         upper_headers = [h.upper() for h in headers]
-        key_index = next(
-            (upper_headers.index(key) for key in _KEY_COLUMNS if key in upper_headers), None
-        )
-        if key_index is None:
+        key_indexes = [upper_headers.index(key) for key in _KEY_COLUMNS if key in upper_headers]
+        if not key_indexes:
             continue
         rows = [
             row
             for row in worksheet.iter_rows(min_row=header_row + 1, values_only=True)
             if any(cell is not None and str(cell).strip() for cell in row)
         ]
-        filled_keys = sum(
-            1 for row in rows if key_index < len(row) and _text(row[key_index]) is not None
-        )
+
+        def _filled(index: int) -> int:
+            return sum(1 for row in rows if index < len(row) and _text(row[index]) is not None)
+
+        # On retient la colonne clé réellement **renseignée**, pas la première trouvée :
+        # sur la feuille `BAT`, `CODEBIEN` est vide alors que `CODBAR` porte le code.
+        key_index = max(key_indexes, key=_filled)
+        filled_keys = _filled(key_index)
         candidate = {
             "sheet_name": worksheet.title,
             "header_row": header_row,
@@ -231,7 +240,7 @@ def import_astech_file(
     filename: str,
     raw_bytes: bytes,
     genres: tuple[str, ...] = DEFAULT_GENRES,
-    include_out_of_park: bool = False,
+    include_out_of_park: bool = DEFAULT_INCLUDE_OUT_OF_PARK,
     batch: str | None = None,
 ) -> dict[str, Any]:
     """Charge un export ASTECH. **Idempotent** : rejouer le même fichier met à jour les

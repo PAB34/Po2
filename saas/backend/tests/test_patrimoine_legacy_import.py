@@ -8,9 +8,9 @@ Les points à verrouiller, tous constatés sur le fichier réel de la collectivi
    bâti sur ses en-têtes serait refusé par ASTECH.
 2. **En-têtes conservés à l'octet près** : ASTECH ne réimporte le fichier modifié que
    si les en-têtes et le code bien sont strictement inchangés.
-3. **Périmètre** : `HORSPARC=O` (sorti du parc) exclu, hors Sète marqué hors périmètre,
-   mais une commune **absente** ne doit PAS écarter le bien (41 bâtiments sétois n'ont
-   aucune commune renseignée).
+3. **Périmètre** : par défaut tout le contenu de la feuille `BAT` (genres BATI et SITE,
+   y compris les biens sortis du parc), hors Sète marqué hors périmètre, mais une commune
+   **absente** ne doit PAS écarter le bien (41 bâtiments sétois n'ont aucune commune).
 4. **Idempotence** : rejouer le même export ne duplique rien et ne perd aucune décision.
 """
 from __future__ import annotations
@@ -127,18 +127,20 @@ def select_import(db: Session):
     return select(PatrimoineLegacyImport).where(PatrimoineLegacyImport.city_id == 1)
 
 
-def test_perimetre_horsparc_genre_et_commune(db_session: Session):
+def test_perimetre_par_defaut_couvre_la_feuille_bat(db_session: Session):
+    """Défaut (décision 2026-08-19) : tout le contenu de la feuille `BAT`, soit les
+    genres BATI et SITE, **y compris les biens sortis du parc**."""
     result = import_astech_file(
         db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook()
     )
-    codes = {
-        asset.code_bien: asset
-        for asset in db_session.scalars(_all_assets())
-    }
-    # Sorti du parc (HORSPARC=O) et espace vert (GENRE=EV) : hors périmètre par défaut.
-    assert "ADMIVIEUX99" not in codes
+    codes = {asset.code_bien: asset for asset in db_session.scalars(_all_assets())}
+
+    # Sorti du parc : importé, et signalé par `horsparc` plutôt qu'écarté.
+    assert "ADMIVIEUX99" in codes
+    assert codes["ADMIVIEUX99"].horsparc == "O"
+    # Espace vert : hors du périmètre « bâtiments ».
     assert "EVJARDIN01" not in codes
-    assert result["skipped_scope"] == 2
+    assert result["skipped_scope"] == 1
 
     # Hors Sète : importé mais marqué hors périmètre, jamais perdu silencieusement.
     assert codes["ADMIDECHE01"].status == STATUS_OUT_OF_SCOPE
@@ -146,6 +148,22 @@ def test_perimetre_horsparc_genre_et_commune(db_session: Session):
     # Commune absente : reste à traiter. C'est le cas des 41 bâtiments sétois
     # sans commune renseignée, qu'une lecture littérale de la règle supprimerait.
     assert codes["SAPLWCPUB05"].status == STATUS_TODO
+
+
+def test_perimetre_restrictif_reste_disponible(db_session: Session):
+    """Le périmètre reste paramétrable : Q2 n'est pas tranchée par la référente ASTECH."""
+    result = import_astech_file(
+        db_session,
+        city_id=1,
+        filename="export.xlsx",
+        raw_bytes=_build_workbook(),
+        genres=("BATI",),
+        include_out_of_park=False,
+    )
+    codes = {asset.code_bien for asset in db_session.scalars(_all_assets())}
+    assert "ADMIVIEUX99" not in codes
+    assert "EVJARDIN01" not in codes
+    assert result["skipped_scope"] == 2
 
 
 def _all_assets():
@@ -171,7 +189,7 @@ def test_payload_source_conserve_pour_le_reexport(db_session: Session):
 def test_import_idempotent_et_preserve_les_decisions(db_session: Session):
     raw = _build_workbook()
     first = import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=raw)
-    assert first["created"] == 3 and first["updated"] == 0
+    assert first["created"] == 4 and first["updated"] == 0
 
     # L'utilisateur rattache un bien à la main.
     building = Building(id=10, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete")
@@ -186,8 +204,8 @@ def test_import_idempotent_et_preserve_les_decisions(db_session: Session):
     db_session.commit()
 
     second = import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=raw)
-    assert second["created"] == 0 and second["updated"] == 3
-    assert db_session.scalar(_count_assets()) == 3
+    assert second["created"] == 0 and second["updated"] == 4
+    assert db_session.scalar(_count_assets()) == 4
 
     asset = db_session.scalar(
         _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
