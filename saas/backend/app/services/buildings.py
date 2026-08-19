@@ -435,6 +435,14 @@ def create_local(db: Session, building: Building, payload: LocalCreate) -> Local
         usage=payload.usage.strip() if payload.usage else None,
         statut_occupation=payload.statut_occupation.strip() if payload.statut_occupation else None,
         commentaire=payload.commentaire.strip() if payload.commentaire else None,
+        # Adresse propre du local : le fichier d'inventaire en porte une sur chaque
+        # ligne, y compris pour les locaux. Elle etait perdue jusqu'ici.
+        adresse_reconstituee=payload.adresse_reconstituee.strip() if payload.adresse_reconstituee else None,
+        code_postal=payload.code_postal.strip() if payload.code_postal else None,
+        nom_commune=payload.nom_commune.strip() if payload.nom_commune else None,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        dgfip_reference_norm=payload.dgfip_reference_norm.strip() if payload.dgfip_reference_norm else None,
     )
     db.add(local)
     db.commit()

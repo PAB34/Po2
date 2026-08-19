@@ -319,6 +319,12 @@ class LocalCreate(BaseModel):
     usage: str | None = Field(default=None, max_length=120)
     statut_occupation: str | None = Field(default=None, max_length=120)
     commentaire: str | None = Field(default=None, max_length=500)
+    adresse_reconstituee: str | None = Field(default=None, max_length=255)
+    code_postal: str | None = Field(default=None, max_length=10)
+    nom_commune: str | None = Field(default=None, max_length=255)
+    latitude: float | None = None
+    longitude: float | None = None
+    dgfip_reference_norm: str | None = Field(default=None, max_length=32)
 
 
 class LocalUpdate(BaseModel):
@@ -346,6 +352,12 @@ class LocalRead(BaseModel):
     usage: str | None
     statut_occupation: str | None
     commentaire: str | None
+    adresse_reconstituee: str | None = None
+    code_postal: str | None = None
+    nom_commune: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    dgfip_reference_norm: str | None = None
     created_at: datetime
     updated_at: datetime
 

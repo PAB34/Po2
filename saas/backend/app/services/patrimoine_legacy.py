@@ -562,9 +562,15 @@ def update_asset(
         building = db.get(Building, local.building_id)
         if building is not None:
             _inherit_building_address(asset, building)
-            if building.latitude is not None and building.longitude is not None:
-                asset.latitude = building.latitude
-                asset.longitude = building.longitude
+            # Le local peut porter SA propre adresse : le fichier d'inventaire en
+            # fournit une par ligne, et l'entrée d'un local diffère parfois de celle
+            # du bâtiment. Elle prime alors sur celle du bâtiment porteur.
+            _override_with_local_address(asset, local)
+            latitude_source = local.latitude if local.latitude is not None else building.latitude
+            longitude_source = local.longitude if local.longitude is not None else building.longitude
+            if latitude_source is not None and longitude_source is not None:
+                asset.latitude = latitude_source
+                asset.longitude = longitude_source
                 latitude = longitude = None
     elif building_id is not None:
         asset.building_id = building_id
@@ -702,6 +708,34 @@ def _inherit_building_address(asset: PatrimoineLegacyAsset, building: Building) 
     asset.resolved_numero_plan = numero_plan
     asset.resolved_refcad = refcad
     asset.resolved_source = RESOLVED_FROM_BUILDING
+
+
+def _override_with_local_address(asset: PatrimoineLegacyAsset, local: Local) -> None:
+    """Remplace l'héritage par l'adresse propre du local, quand elle existe.
+
+    Champ par champ : un local peut n'avoir qu'une partie de l'information, et il ne
+    faut pas effacer ce que le bâtiment fournissait déjà.
+    """
+    if local.adresse_reconstituee:
+        housenumber, street = _split_reconstituted_address(local.adresse_reconstituee)
+        asset.resolved_label = local.adresse_reconstituee[:255]
+        if housenumber:
+            asset.resolved_housenumber = housenumber
+        if street:
+            asset.resolved_street = street
+    if local.code_postal:
+        asset.resolved_postcode = local.code_postal
+    if local.nom_commune:
+        asset.resolved_city = local.nom_commune
+    if local.dgfip_reference_norm:
+        section, numero_plan, refcad = _split_cadastral_reference(local.dgfip_reference_norm)
+        if section:
+            asset.resolved_section = section
+            asset.resolved_numero_plan = numero_plan
+            asset.resolved_refcad = refcad
+            asset.resolved_citycode = local.dgfip_reference_norm[:5]
+    if local.nom_local:
+        asset.resolved_name = local.nom_local[:255]
 
 
 def _resolve_address_from_point(asset: PatrimoineLegacyAsset) -> None:

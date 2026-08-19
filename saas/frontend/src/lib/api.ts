@@ -341,6 +341,12 @@ export type UpdateBuildingPayload = {
 export type Local = {
   id: number;
   building_id: number;
+  adresse_reconstituee: string | null;
+  code_postal: string | null;
+  nom_commune: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  dgfip_reference_norm: string | null;
   nom_local: string;
   type_local: string;
   niveau: string | null;
@@ -353,6 +359,12 @@ export type Local = {
 };
 
 export type CreateLocalPayload = {
+  adresse_reconstituee?: string;
+  code_postal?: string;
+  nom_commune?: string;
+  latitude?: number;
+  longitude?: number;
+  dgfip_reference_norm?: string;
   nom_local: string;
   type_local: string;
   niveau?: string;

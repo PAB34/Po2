@@ -469,3 +469,65 @@ def test_rattachement_a_un_local_herite_du_batiment_porteur(db_session: Session)
     assert asset.resolved_label == "12 RUE LACAN"
     assert asset.resolved_refcad == "AB042"
     assert asset.latitude == 43.40
+
+
+def test_l_adresse_propre_du_local_prime_sur_celle_du_batiment(db_session: Session):
+    """Le fichier d'inventaire porte une adresse sur chaque ligne, y compris pour les
+    locaux : l'entrée d'un local peut différer de celle du bâtiment. Quand le local a
+    sa propre adresse, c'est elle qui part vers ASTECH."""
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=5, city_id=1, nom_batiment="GROUPE SCOLAIRE", nom_commune="Sete",
+            adresse_reconstituee="12 RUE LACAN", dgfip_reference_norm="34301000AB0042",
+            latitude=43.40, longitude=3.69,
+        )
+    )
+    db_session.commit()
+    db_session.add(
+        Local(
+            id=4, building_id=5, nom_local="LOGEMENT DE FONCTION", type_local="LOGEMENT",
+            adresse_reconstituee="14 RUE LACAN", code_postal="34200", nom_commune="Sete",
+            dgfip_reference_norm="34301000AB0043", latitude=43.401, longitude=3.691,
+        )
+    )
+    db_session.commit()
+
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, local_id=4)
+
+    # L'adresse du LOCAL l'emporte, pas celle du bâtiment parent.
+    assert asset.resolved_label == "14 RUE LACAN"
+    assert asset.resolved_housenumber == "14"
+    assert asset.resolved_refcad == "AB043"
+    assert asset.resolved_name == "LOGEMENT DE FONCTION"
+    assert asset.latitude == 43.401
+    # Le bâtiment porteur reste résolu pour la carte et le réexport.
+    assert asset.building_id == 5
+
+
+def test_un_local_sans_adresse_retombe_sur_le_batiment(db_session: Session):
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=6, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete",
+            adresse_reconstituee="1 QUAI DES MOULINS", dgfip_reference_norm="34301000AH0024",
+        )
+    )
+    db_session.commit()
+    db_session.add(Local(id=8, building_id=6, nom_local="SALLE DES MARIAGES", type_local="SALLE"))
+    db_session.commit()
+
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, local_id=8)
+
+    assert asset.resolved_label == "1 QUAI DES MOULINS"
+    assert asset.resolved_refcad == "AH024"
