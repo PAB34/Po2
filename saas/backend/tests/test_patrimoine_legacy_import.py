@@ -29,6 +29,7 @@ from app.models.city import City
 from app.models.local import Local  # noqa: F401 (enregistre la table)
 from app.models.patrimoine_legacy import (
     STATUS_LINKED,
+    STATUS_PROPOSED,
     STATUS_OUT_OF_SCOPE,
     STATUS_TODO,
     PatrimoineLegacyAsset,
@@ -237,7 +238,8 @@ def test_rapprochement_auto_des_evidences_et_garde_fou_semantique(db_session: Se
     )
     # Nom identique -> rattaché au bon cimetière, pas à « CIMETIERE MARIN ».
     assert cimetiere.building_id == 1
-    assert cimetiere.status == STATUS_LINKED
+    # Le moteur PROPOSE : la validation reste humaine (décision Q17).
+    assert cimetiere.status == STATUS_PROPOSED
     assert cimetiere.link_origin == "auto"
 
     # Aucun bâtiment ne ressemble aux WC publics : pas de candidat inventé.
@@ -263,7 +265,7 @@ def test_un_nom_identique_reste_rattache_malgre_un_voisin_ressemblant(db_session
         _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
     )
     assert asset.building_id == 1
-    assert asset.status == STATUS_LINKED
+    assert asset.status == STATUS_PROPOSED
 
 
 def test_deux_biens_qui_visent_le_meme_batiment_ne_sont_pas_rattaches_seuls(db_session: Session):
@@ -414,3 +416,56 @@ def test_ajouter_un_batiment_po2_a_la_liste_astech(db_session: Session):
     # Idempotent : un second appel ne cree pas de doublon.
     again = create_asset_from_building(db_session, 1, building)
     assert again.id == created.id
+
+
+def test_confirmation_des_propositions(db_session: Session):
+    """Un rattachement automatique n'est pas une validation : il doit être confirmé."""
+    from app.services.patrimoine_legacy import confirm_proposed
+
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    assert asset.status == STATUS_PROPOSED
+
+    result = confirm_proposed(db_session, 1)
+    assert result["confirmed"] >= 1
+    db_session.refresh(asset)
+    assert asset.status == STATUS_LINKED
+
+
+def test_rattachement_a_un_local_herite_du_batiment_porteur(db_session: Session):
+    """Un CODE_BIEN désigne souvent un local. Le local n'ayant ni adresse ni cadastre,
+    c'est le bâtiment parent qui les fournit — sinon viser un local ferait perdre
+    l'adresse qu'on cherche justement à renvoyer à ASTECH."""
+    from app.models.patrimoine_legacy import TARGET_LOCAL
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=5, city_id=1, nom_batiment="GROUPE SCOLAIRE", nom_commune="Sete",
+            adresse_reconstituee="12 RUE LACAN", dgfip_reference_norm="34301000AB0042",
+            latitude=43.40, longitude=3.69,
+        )
+    )
+    db_session.commit()
+    db_session.add(Local(id=3, building_id=5, nom_local="LOGEMENT DE FONCTION", type_local="LOGEMENT"))
+    db_session.commit()
+
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, local_id=3)
+
+    assert asset.target_type == TARGET_LOCAL
+    assert asset.local_id == 3
+    # Le bâtiment porteur est résolu : c'est lui qui alimente carte et réexport.
+    assert asset.building_id == 5
+    assert asset.resolved_label == "12 RUE LACAN"
+    assert asset.resolved_refcad == "AB042"
+    assert asset.latitude == 43.40

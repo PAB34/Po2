@@ -5916,6 +5916,8 @@ export type LegacyAsset = {
   source_commune: string | null;
   source_refcad: string | null;
   building_id: number | null;
+  local_id: number | null;
+  target_type: string;
   status: string;
   link_origin: string | null;
   candidate_building_id: number | null;
@@ -6016,6 +6018,7 @@ export async function updateLegacyAsset(
   payload: {
     status?: string | null;
     building_id?: number | null;
+    local_id?: number | null;
     clear_building?: boolean;
     latitude?: number | null;
     longitude?: number | null;
@@ -6067,4 +6070,17 @@ export async function createLegacyAssetFromBuilding(
     headers: buildHeaders(token),
   });
   return parseResponse<LegacyAsset>(response);
+}
+
+/** Valide les rattachements proposés par le moteur. Sans ids : tout confirmer. */
+export async function confirmLegacyProposals(
+  token: string,
+  assetIds?: number[],
+): Promise<{ confirmed: number }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/confirm`, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body: JSON.stringify({ asset_ids: assetIds ?? null }),
+  });
+  return parseResponse<{ confirmed: number }>(response);
 }

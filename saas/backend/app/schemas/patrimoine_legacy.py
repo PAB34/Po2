@@ -25,6 +25,8 @@ class LegacyAssetOut(BaseModel):
     source_commune: str | None = None
     source_refcad: str | None = None
     building_id: int | None = None
+    local_id: int | None = None
+    target_type: str = "building"
     status: str
     link_origin: str | None = None
     candidate_building_id: int | None = None
@@ -74,7 +76,14 @@ class LegacyAssetUpdateIn(BaseModel):
 
     status: str | None = Field(default=None, max_length=20)
     building_id: int | None = None
+    local_id: int | None = None
     clear_building: bool = False
     latitude: float | None = None
     longitude: float | None = None
     notes: str | None = None
+
+
+class LegacyConfirmIn(BaseModel):
+    """Vide = confirmer toutes les propositions en attente."""
+
+    asset_ids: list[int] | None = None
