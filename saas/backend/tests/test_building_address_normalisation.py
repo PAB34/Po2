@@ -48,3 +48,28 @@ def test_retire_les_zeros_initiaux(source: str, attendu: str):
 )
 def test_ne_touche_pas_aux_valeurs_sans_zeros_initiaux(source: str):
     assert _strip_leading_zeros_in_address(source) == source
+
+
+@pytest.mark.parametrize(
+    ("source", "attendu"),
+    [
+        # Cas courant : une seule parcelle.
+        ("34301000AN0347", ["34301000AN0347"]),
+        # Cas qui faisait échouer la ligne : plusieurs parcelles dans la même cellule.
+        # Traitée comme une référence unique, la valeur dépassait la limite du champ
+        # et l'adresse revenait en erreur « String should have at most 64 characters ».
+        (
+            "34301000AN0347, 34301000AN0348 ; 34301000AN0349",
+            ["34301000AN0347", "34301000AN0348", "34301000AN0349"],
+        ),
+        ("34301000AN0347 34301000AN0348", ["34301000AN0347", "34301000AN0348"]),
+        # Doublons écartés, casse normalisée.
+        ("34301000an0347, 34301000AN0347", ["34301000AN0347"]),
+        (None, []),
+        ("   ", []),
+    ],
+)
+def test_decoupe_les_parcelles_multiples(source, attendu):
+    from app.services.building_naming import _split_parcel_references
+
+    assert _split_parcel_references(source) == attendu

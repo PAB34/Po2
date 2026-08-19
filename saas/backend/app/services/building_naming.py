@@ -106,6 +106,25 @@ def _strip_leading_zeros_in_address(text: str) -> str:
     return re.sub(r"\b0+(\d+[A-Za-z]?)\b", r"\1", text)
 
 
+def _split_parcel_references(value: str | None) -> list[str]:
+    """Decoupe une cellule « parcelle » en references individuelles.
+
+    Le fichier d'inventaire concatene parfois plusieurs parcelles dans la meme
+    cellule ('34301000AN0347, 34301000AN0348, ...'), notamment sur les lignes de
+    type SITE qui couvrent plusieurs parcelles. Traitee comme une reference unique,
+    la valeur depassait la limite du champ et l'adresse partait en erreur.
+    """
+    if not value:
+        return []
+    parts = re.split(r"[\s,;/|]+", str(value).strip().upper())
+    seen: list[str] = []
+    for part in parts:
+        cleaned = part.strip()
+        if cleaned and cleaned not in seen:
+            seen.append(cleaned)
+    return seen
+
+
 def _insee_from_reference(reference: str | None) -> str | None:
     """Extrait le code INSEE 5 chiffres depuis une reference parcellaire MAJIC.
 
@@ -1144,10 +1163,15 @@ def lookup_free_address_candidates(
     )
     if len(address_display) < 3:
         raise ValueError("L'adresse doit contenir au moins 3 caractères.")
-    effective_citycode = citycode or _insee_from_reference(parcel_reference)
+    # Une cellule peut porter plusieurs parcelles : on les traite toutes, la
+    # resolution du point sait deja boucler sur une liste de references.
+    parcel_references = _split_parcel_references(parcel_reference)
+    effective_citycode = citycode or _insee_from_reference(
+        parcel_references[0] if parcel_references else None
+    )
     point_and_parcels = _resolve_point_and_parcels(
         address_display,
-        [parcel_reference] if parcel_reference else [],
+        parcel_references,
         city_hint=city_name,
         citycode=effective_citycode,
     )
