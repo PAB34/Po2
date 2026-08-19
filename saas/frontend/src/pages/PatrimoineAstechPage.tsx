@@ -234,6 +234,34 @@ export default function PatrimoineAstechPage() {
     void queryClient.invalidateQueries({ queryKey: ["legacy-counts"] });
   };
 
+  // --- Bâtiments Po2 indistinguables ------------------------------------------
+  // Deux pièges constatés en prod sur le groupe scolaire Anatole France :
+  //   - plusieurs bâtiments portent EXACTEMENT le même nom, parce que l'attribution
+  //     IGN les a nommés depuis la zone qui les englobe et non depuis le bâtiment ;
+  //   - deux bâtiments Po2 pointent sur le MÊME bâtiment IGN, donc l'un des deux est
+  //     un doublon de saisie.
+  // Dans les deux cas la référente ne peut pas choisir à l'aveugle : on le lui dit,
+  // et l'adresse devient le seul critère qui les sépare.
+  const buildingAmbiguities = useMemo(() => {
+    const byName = new Map<string, number[]>();
+    const byIgn = new Map<string, number[]>();
+    for (const building of buildings) {
+      const name = (building.nom_batiment ?? "").trim().toLowerCase();
+      if (name) byName.set(name, [...(byName.get(name) ?? []), building.id]);
+      const ignId = (building.ign_id ?? "").trim();
+      if (ignId) byIgn.set(ignId, [...(byIgn.get(ignId) ?? []), building.id]);
+    }
+    const result = new Map<number, { sameName: number; sameIgn: number }>();
+    for (const building of buildings) {
+      const name = (building.nom_batiment ?? "").trim().toLowerCase();
+      const ignId = (building.ign_id ?? "").trim();
+      const sameName = name ? (byName.get(name)?.length ?? 1) : 1;
+      const sameIgn = ignId ? (byIgn.get(ignId)?.length ?? 1) : 1;
+      if (sameName > 1 || sameIgn > 1) result.set(building.id, { sameName, sameIgn });
+    }
+    return result;
+  }, [buildings]);
+
   const buildingMatches = useMemo(() => {
     const needle = buildingSearch.trim().toLowerCase();
     const pool = needle
@@ -750,6 +778,33 @@ export default function PatrimoineAstechPage() {
                   Fermer
                 </button>
               </div>
+              {buildingAmbiguities.has(inspectedBuilding.id) && (
+                <div
+                  style={{
+                    border: "1px solid rgba(251, 191, 36, 0.5)",
+                    background: "rgba(251, 191, 36, 0.10)",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    marginBottom: 10,
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {buildingAmbiguities.get(inspectedBuilding.id)!.sameName > 1 && (
+                    <div>
+                      ⚠ <strong>{buildingAmbiguities.get(inspectedBuilding.id)!.sameName} bâtiments Po2</strong>{" "}
+                      portent ce nom. Il vient probablement de la zone IGN qui les englobe, pas du
+                      bâtiment : fie-toi à l'adresse pour choisir.
+                    </div>
+                  )}
+                  {buildingAmbiguities.get(inspectedBuilding.id)!.sameIgn > 1 && (
+                    <div>
+                      ⚠ Un autre bâtiment Po2 est attaché au <strong>même bâtiment IGN</strong>{" "}
+                      ({inspectedBuilding.ign_id}) : l'un des deux est un doublon de saisie.
+                    </div>
+                  )}
+                </div>
+              )}
               <dl
                 style={{
                   display: "grid",
@@ -932,6 +987,14 @@ export default function PatrimoineAstechPage() {
                           : ""}
                         )
                       </span>
+                      {/* Le nom seul ne suffit pas à identifier un bâtiment : plusieurs
+                          peuvent le partager. L'adresse tranche. */}
+                      {targetBuilding.adresse_reconstituee && (
+                        <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
+                          {" "}
+                          — {targetBuilding.adresse_reconstituee}
+                        </span>
+                      )}
                     </p>
                     {localsOfTarget.length > 0 && (
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -971,6 +1034,9 @@ export default function PatrimoineAstechPage() {
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
                     <p style={{ margin: "0 0 8px", fontSize: 13 }}>
                       Rattaché à <strong>{targetBuilding.nom_batiment}</strong>
+                      {targetBuilding.adresse_reconstituee
+                        ? ` — ${targetBuilding.adresse_reconstituee}`
+                        : ""}
                       {selected.link_origin === "auto" ? " (reconnaissance automatique)" : ""}
                     </p>
                     <button
@@ -1056,6 +1122,16 @@ export default function PatrimoineAstechPage() {
                                 {" "}
                                 — {building.adresse_reconstituee}
                               </span>
+                            )}
+                            {(buildingAmbiguities.get(building.id)?.sameName ?? 1) > 1 && (
+                              <span style={{ color: "#fbbf24" }}>
+                                {" "}
+                                ⚠ {buildingAmbiguities.get(building.id)!.sameName} bâtiments portent
+                                ce nom — c'est l'adresse qui les distingue
+                              </span>
+                            )}
+                            {(buildingAmbiguities.get(building.id)?.sameIgn ?? 1) > 1 && (
+                              <span style={{ color: "#fbbf24" }}> ⚠ doublon IGN probable</span>
                             )}
                           </button>
                         ))}
