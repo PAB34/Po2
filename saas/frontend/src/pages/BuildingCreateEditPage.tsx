@@ -419,20 +419,101 @@ export function BuildingCreateEditPage() {
     }
     setImportBulkValidationPending(true);
     setImportError(null);
-    setImportSuccess("Contrôle IGN en cours. Le traitement peut prendre plusieurs minutes sur un patrimoine volumineux.");
     try {
-      const preview = await previewBuildingImportFile(token, importFile, importNameColumn, importAddressColumn, true);
-      setImportPreview(preview);
-      setImportRows(normalizeImportedRows(preview.rows));
-      setSelectedImportRowNumber((current) =>
-        preview.rows.some((row: BuildingImportRow) => row.row_number === current)
-          ? current
-          : preview.rows.length > 0
-            ? preview.rows[0].row_number
-            : null,
-      );
+      // Le contrôle se faisait en UNE requête qui validait toutes les lignes côté
+      // serveur. Sur un patrimoine volumineux elle dépassait les 120 s de
+      // `response_header_timeout` du proxy : le navigateur recevait un 504 (« Une
+      // erreur est survenue ») alors que le backend continuait puis répondait 200.
+      // On valide donc ligne par ligne, en petits lots, avec une progression visible.
+      let rows = importRows;
+      if (rows.length === 0) {
+        const preview = await previewBuildingImportFile(token, importFile, importNameColumn, importAddressColumn, false);
+        setImportPreview(preview);
+        rows = normalizeImportedRows(preview.rows);
+        setImportRows(rows);
+        setSelectedImportRowNumber(preview.rows.length > 0 ? preview.rows[0].row_number : null);
+      }
+
+      const total = rows.length;
+      let done = 0;
+      let invalid = 0;
+      setImportSuccess(`Contrôle IGN : 0 / ${total} adresse(s)…`);
+
+      // Concurrence volontairement basse : le géocodeur IGN est déjà limité en débit
+      // côté serveur, saturer n'accélérerait pas et multiplierait les erreurs.
+      const CONCURRENCE = 4;
+      const queue = [...rows];
+
+      async function worker() {
+        for (;;) {
+          const row = queue.shift();
+          if (!row) return;
+          const address = (row.editableAddress || row.source_address || "").trim();
+          if (!address) {
+            invalid += 1;
+            updateImportRow(row.row_number, (current: ImportedRowState) => ({
+              ...current,
+              validation_status: "invalid",
+              validation_message: "Adresse absente ou vide.",
+              lat: null,
+              lon: null,
+            }));
+          } else {
+            try {
+              const lookup = await fetchFreeAddressLookup(token as string, address, {
+                citycode: row.expected_citycode ?? undefined,
+                parcel_reference: row.source_parcel ?? undefined,
+                // Les polygones IGN ne servent pas au contrôle de masse : les charger
+                // saturait la mémoire du backend et n'apporte rien ici.
+                skip_ign_buildings: true,
+              });
+              const geocoder = (lookup.geocoder ?? {}) as Record<string, unknown>;
+              const mismatch = Boolean(geocoder.commune_mismatch) || Boolean(geocoder.dept_mismatch);
+              const located = lookup.lat !== null && lookup.lon !== null;
+              if (!located) invalid += 1;
+              updateImportRow(row.row_number, (current: ImportedRowState) => ({
+                ...current,
+                editableAddress: lookup.input_address,
+                address_display: lookup.input_address,
+                validation_status: located ? (mismatch ? "warning" : "valid") : "invalid",
+                validation_message: located
+                  ? `Adresse géolocalisée : ${String(geocoder.display_name ?? lookup.input_address)}.` +
+                    (mismatch ? " ATTENTION : commune résolue différente de celle attendue." : "")
+                  : "Adresse non géolocalisée.",
+                lat: lookup.lat,
+                lon: lookup.lon,
+                resolved_city: typeof geocoder.resolved_city === "string" ? geocoder.resolved_city : null,
+                resolved_postcode: typeof geocoder.resolved_postcode === "string" ? geocoder.resolved_postcode : null,
+                resolved_citycode: typeof geocoder.resolved_citycode === "string" ? geocoder.resolved_citycode : null,
+                commune_mismatch: mismatch,
+              }));
+            } catch (error) {
+              // Une adresse en échec ne doit pas interrompre les 400 suivantes.
+              invalid += 1;
+              updateImportRow(row.row_number, (current: ImportedRowState) => ({
+                ...current,
+                validation_status: "invalid",
+                validation_message:
+                  error instanceof Error ? error.message : "Contrôle de l'adresse impossible.",
+                lat: null,
+                lon: null,
+              }));
+            }
+          }
+          done += 1;
+          if (done % 5 === 0 || done === total) {
+            setImportSuccess(`Contrôle IGN : ${done} / ${total} adresse(s)…`);
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCE, total) }, () => worker()));
+
       setImportError(null);
-      setImportSuccess(`Contrôle IGN terminé pour ${preview.rows.length} ligne(s). Corrige les lignes rouges avant validation.`);
+      setImportSuccess(
+        `Contrôle IGN terminé : ${total} ligne(s) traitée(s)` +
+          (invalid > 0 ? `, ${invalid} à corriger.` : ", toutes géolocalisées."),
+      );
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Contrôle des adresses importées impossible.");
       setImportSuccess(null);
