@@ -19,7 +19,24 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-08-18** (session Claude — référentiel patrimoine historique ASTECH).
+> Mise à jour : **2026-08-19** (session Claude — référentiel ASTECH : écran, carte, correctifs).
+
+- **✅ EN PROD — Écran ASTECH complet** (`/patrimoine/astech`, migrations **0070 → 0074**,
+  PR #98 à #117). Import idempotent avec gabarit conservé, moteur de reconnaissance,
+  carte (points violets / verts appariés, marqueurs déplaçables ASTECH **et** Po2,
+  éventail sur points superposés, géocodage inverse), héritage nom + adresse + cadastre,
+  cible **bâtiment ou local**, statut `propose` distinct de `lie`.
+- **État prod 2026-08-19** : 184 bâtiments · 160 sites · 626 locaux · 444 biens ASTECH.
+- **▶️ PROCHAIN CHANTIER — incrément 3 : le réexport ASTECH** (rien commencé). Feuille
+  réduite, en-têtes recopiés à l'octet près, normalisation d'adresse (bis/ter dans
+  `BISTER`, type de voie en toutes lettres dans `LIBELVOIE`), `REFCAD`, coordonnées à
+  virgule, feuille de traçabilité. Détail → `Sessions/2026-08-19 - Referentiel patrimoine historique ASTECH.md`.
+- **⚠️ Action utilisateur** : cliquer « 2. Reconnaître les noms » — la purge du patrimoine
+  a effacé les rattachements en cascade, le bouton les répare et les repropose.
+- **En attente référente ASTECH** : périmètre importé (Q2), import par clé accepté ou non
+  (Q12), largeur de `REFCAD`.
+
+> Reprise précédente : **2026-08-18** (session Claude — référentiel patrimoine historique ASTECH).
 
 - **✅ EN PROD — Référentiel patrimoine historique (ASTECH)** (PR #98, migration **0070**) :
   nouvelle page **`/patrimoine/astech`** (menu Patrimoine) pour l'aller-retour avec le fichier
@@ -143,7 +160,7 @@ do_not_auto_read:
 
 ## 📦 Migrations alembic
 
-HEAD prod constaté (2026-08-18) : **`0070_add_patrimoine_legacy_assets`** (référentiel patrimoine
+HEAD prod constaté (2026-08-19) : **`0074_add_local_address`** (référentiel patrimoine
 historique ASTECH). Précédent : `0066_add_accounting_budget_lines` (budget par marché, maille opération, branche `feat/budget-marches` PR #33 — non encore sur `main`). Dernière migration sur `main` : `0065_add_supplier_contacts`.
 Jalons : `0017` hiérarchie sites · `0041` seed CPE scope · `0048` CVC F-Gaz · `0056` rapprochements
 patrimoine · `0057` gas_invoices · `0064` matrices. Liste complète prod → journal archivé.
