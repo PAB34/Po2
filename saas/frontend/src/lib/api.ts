@@ -5986,6 +5986,7 @@ export type LegacyCandidatesResult = {
   scanned: number;
   proposed: number;
   auto_linked: number;
+  repaired: number;
 };
 
 export async function importLegacyAstechFile(

@@ -531,3 +531,56 @@ def test_un_local_sans_adresse_retombe_sur_le_batiment(db_session: Session):
 
     assert asset.resolved_label == "1 QUAI DES MOULINS"
     assert asset.resolved_refcad == "AH024"
+
+
+def test_reparation_des_liens_orphelins(db_session: Session):
+    """Supprimer le patrimoine Po2 met `building_id` à NULL en cascade. Les biens
+    restaient affichés « rattaché » alors qu'ils ne pointaient plus vers rien, et
+    disparaissaient de la carte. La reconnaissance doit les remettre à traiter."""
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    assert asset.status == STATUS_PROPOSED
+
+    # Le bâtiment disparaît : la base met building_id à NULL (ON DELETE SET NULL).
+    asset.building_id = None
+    db_session.add(asset)
+    db_session.commit()
+
+    result = compute_candidates(db_session, 1, auto_link=True)
+    assert result["repaired"] >= 1
+    db_session.refresh(asset)
+    # Remis à traiter puis reproposé contre le référentiel ACTUEL : c'est tout
+    # l'intérêt après un réimport du patrimoine, les liens se reconstruisent.
+    assert asset.building_id == 1
+    assert asset.status == STATUS_PROPOSED
+
+
+def test_lien_orphelin_sans_candidat_reste_a_traiter(db_session: Session):
+    """Si plus aucun bâtiment ne correspond, le bien ne doit pas rester marqué
+    « rattaché » à un bâtiment inexistant."""
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    asset.building_id = None
+    db_session.add(asset)
+    # Le patrimoine entier a disparu : plus aucune cible possible.
+    db_session.delete(db_session.get(Building, 1))
+    db_session.commit()
+
+    result = compute_candidates(db_session, 1, auto_link=True)
+    assert result["repaired"] >= 1
+    db_session.refresh(asset)
+    assert asset.status == STATUS_TODO
+    assert asset.building_id is None
+    assert asset.resolved_label is None

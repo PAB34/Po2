@@ -68,6 +68,8 @@ class LegacyCandidatesResult(BaseModel):
     scanned: int
     proposed: int
     auto_linked: int
+    # Biens dont le batiment avait disparu (patrimoine purge) et qui repassent a traiter.
+    repaired: int = 0
 
 
 class LegacyAssetUpdateIn(BaseModel):
