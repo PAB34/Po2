@@ -115,6 +115,8 @@ export default function PatrimoineAstechPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Une ref par ligne : permet d'amener a l'ecran le bien selectionne depuis la carte.
+  const rowRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   const [statusFilter, setStatusFilter] = useState<string>("a_traiter");
   const [search, setSearch] = useState("");
@@ -162,9 +164,19 @@ export default function PatrimoineAstechPage() {
 
   const assets = useMemo(() => assetsQuery.data ?? [], [assetsQuery.data]);
   const buildings = useMemo(() => buildingsQuery.data ?? [], [buildingsQuery.data]);
+  // Tous les biens affichables par l'ecran : la liste filtree ET les biens deja
+  // rattaches (montres en permanence sur la carte). Sans cette union, cliquer un point
+  // rattache sur la carte ne remplissait pas le panneau, le bien etant absent du filtre.
+  const knownAssets = useMemo(() => {
+    const byId = new Map<number, LegacyAsset>();
+    for (const asset of linkedAssetsQuery.data ?? []) byId.set(asset.id, asset);
+    for (const asset of assets) byId.set(asset.id, asset);
+    return byId;
+  }, [assets, linkedAssetsQuery.data]);
+
   const selected = useMemo(
-    () => assets.find((asset) => asset.id === selectedId) ?? null,
-    [assets, selectedId],
+    () => (selectedId != null ? knownAssets.get(selectedId) ?? null : null),
+    [knownAssets, selectedId],
   );
 
   const buildingsById = useMemo(() => {
@@ -319,6 +331,14 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur de création : ${(error as Error).message}`),
   });
 
+  // Amener la ligne sélectionnée à l'écran : sur plusieurs centaines de lignes, une
+  // sélection faite depuis la carte serait autrement invisible dans la liste de gauche.
+  useEffect(() => {
+    if (selectedId == null) return;
+    const node = rowRefs.current.get(selectedId);
+    node?.scrollIntoView({ block: "nearest" });
+  }, [selectedId, assets]);
+
   // Quitter le mode attribution dès qu'on change de bien : la sélection de
   // polygones ne vaut que pour le bâtiment en cours.
   useEffect(() => {
@@ -340,7 +360,7 @@ export default function PatrimoineAstechPage() {
         if (asset.id !== selected?.id) return null;
         return {
           id: asset.id,
-          label: `${asset.code_bien} — ${assetLabel(asset)}`,
+          label: assetLabel(asset),
           latitude: DEFAULT_LAT,
           longitude: DEFAULT_LON,
           isProvisional: true,
@@ -349,7 +369,7 @@ export default function PatrimoineAstechPage() {
       }
       return {
         id: asset.id,
-        label: `${asset.code_bien} — ${assetLabel(asset)}`,
+        label: assetLabel(asset),
         latitude,
         longitude,
         isProvisional: asset.latitude == null,
@@ -487,6 +507,10 @@ export default function PatrimoineAstechPage() {
                 <button
                   key={asset.id}
                   type="button"
+                  ref={(node) => {
+                    if (node) rowRefs.current.set(asset.id, node);
+                    else rowRefs.current.delete(asset.id);
+                  }}
                   onClick={() => setSelectedId(asset.id)}
                   style={{
                     ...card,
@@ -552,7 +576,16 @@ export default function PatrimoineAstechPage() {
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
             activeLegacyId={selected?.id ?? null}
-            onSelectLegacyId={(id) => setSelectedId(id)}
+            onSelectLegacyId={(id) => {
+              // Le bien doit aussi apparaitre dans la liste de gauche : si le filtre
+              // courant l'exclut, on bascule sur son statut plutot que de selectionner
+              // une ligne invisible.
+              const asset = knownAssets.get(id);
+              if (asset && statusFilter && asset.status !== statusFilter) {
+                setStatusFilter(asset.status);
+              }
+              setSelectedId(id);
+            }}
             onMoveLegacyPoint={(id, lat, lon) => {
               // Le serveur géocode le point à l'envers et renseigne l'adresse
               // trouvée, à côté de l'adresse ASTECH d'origine (jamais à sa place).
@@ -594,12 +627,12 @@ export default function PatrimoineAstechPage() {
           {/* Légende : sans elle, les trois états du point violet sont indevinables. */}
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#7c3aed", border: "2px solid #fff", display: "inline-block" }} />
-              Bien ASTECH rattaché ({linkedAssetsQuery.data?.length ?? 0})
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "linear-gradient(90deg, #a855f7 0 50%, #2563eb 50% 100%)", border: "2px solid #fff", display: "inline-block" }} />
+              Apparié ASTECH + Po2 ({linkedAssetsQuery.data?.length ?? 0})
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#fff", border: "2px dashed #a855f7", display: "inline-block" }} />
-              Position à confirmer
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#a855f7", border: "2px solid #fff", display: "inline-block" }} />
+              Bien ASTECH non rattaché
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#2563eb", border: "2px solid #38bdf8", display: "inline-block" }} />
