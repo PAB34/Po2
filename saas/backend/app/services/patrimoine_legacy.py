@@ -487,6 +487,11 @@ def compute_candidates(
         # Le moteur PROPOSE, il ne valide pas : la confirmation reste humaine.
         asset.status = STATUS_PROPOSED
         asset.link_origin = ORIGIN_AUTO
+        # Le rattachement manuel fait hériter l'adresse, le nom et le cadastre du
+        # bâtiment ; le rattachement automatique doit en faire autant. Sans cela les
+        # biens proposés par le moteur restent sans aucun champ résolu, et le réexport
+        # ASTECH n'a rien à écrire pour eux — même une fois confirmés.
+        _refresh_inherited_address(db, asset)
         db.add(asset)
         linked += 1
 
@@ -761,6 +766,32 @@ def _override_with_local_address(asset: PatrimoineLegacyAsset, local: Local) -> 
         asset.resolved_name = local.nom_local[:255]
 
 
+def _refresh_inherited_address(db: Session, asset: PatrimoineLegacyAsset) -> None:
+    """Réaligne les champs résolus du bien sur son bâtiment porteur.
+
+    Sûr à rejouer : quand `resolved_source` vaut `building`, les champs résolus ne sont
+    qu'une **copie** du bâtiment, donc les rafraîchir ne peut rien perdre. On préserve
+    en revanche `ign_reverse`, qui est le résultat d'un point posé à la main.
+
+    Nécessaire parce que le bâtiment porteur bouge : renommé, réadressé, réattaché à
+    l'IGN. Constaté en prod le 2026-08-19 — deux biens portaient encore le nom
+    « École Élémentaire Anatole France » hérité d'un bâtiment renommé depuis, et c'est
+    ce nom périmé qui serait reparti dans ASTECH au réexport.
+    """
+    if asset.building_id is None:
+        return
+    if asset.resolved_source == RESOLVED_FROM_REVERSE:
+        return
+    building = db.get(Building, asset.building_id)
+    if building is None:
+        return
+    _inherit_building_address(asset, building)
+    if asset.local_id is not None:
+        local = db.get(Local, asset.local_id)
+        if local is not None:
+            _override_with_local_address(asset, local)
+
+
 def _resolve_address_from_point(asset: PatrimoineLegacyAsset) -> None:
     """Géocodage inverse du point posé. Best effort : jamais bloquant."""
     try:
@@ -858,6 +889,10 @@ def confirm_proposed(
         if asset.building_id is None:
             continue
         asset.status = STATUS_LINKED
+        # Filet de sécurité : c'est le dernier passage avant que le bien ne devienne
+        # exportable vers ASTECH. On réaligne l'adresse héritée sur le bâtiment tel
+        # qu'il est AUJOURD'HUI, pour ne pas réinjecter un nom ou une adresse périmés.
+        _refresh_inherited_address(db, asset)
         db.add(asset)
         confirmed += 1
     db.commit()
