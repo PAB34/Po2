@@ -33,6 +33,7 @@ import {
 } from "../lib/api";
 
 const STATUS_LABEL: Record<string, string> = {
+  "": "Tous",
   a_traiter: "À traiter",
   lie: "Rattaché",
   hors_perimetre: "Hors périmètre",
@@ -40,7 +41,9 @@ const STATUS_LABEL: Record<string, string> = {
   ignore: "Ignoré",
 };
 
-const STATUS_ORDER = ["a_traiter", "lie", "hors_perimetre", "ignore"] as const;
+// « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
+// est simplement filtrée sur « À traiter ».
+const STATUS_ORDER = ["", "a_traiter", "lie", "hors_perimetre", "ignore"] as const;
 
 // Centre de Sète : point de départ d'un bien jamais localisé, que l'utilisateur
 // fait ensuite glisser à la bonne place.
@@ -131,6 +134,8 @@ export default function PatrimoineAstechPage() {
   // rien (aucun nom approchant) ou quand sa proposition est fausse.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [buildingSearch, setBuildingSearch] = useState("");
+  // Bâtiment Po2 consulté depuis la carte (simple lecture, aucune modification).
+  const [inspectedBuildingId, setInspectedBuildingId] = useState<number | null>(null);
 
   const countsQuery = useQuery({
     queryKey: ["legacy-counts"],
@@ -184,6 +189,11 @@ export default function PatrimoineAstechPage() {
     for (const building of buildings) index.set(building.id, building);
     return index;
   }, [buildings]);
+
+  const inspectedBuilding = useMemo(
+    () => (inspectedBuildingId != null ? buildingsById.get(inspectedBuildingId) ?? null : null),
+    [buildingsById, inspectedBuildingId],
+  );
 
   // Le bâtiment que pilote l'écran : celui déjà rattaché, sinon le candidat proposé.
   const targetBuilding = useMemo(() => {
@@ -464,12 +474,12 @@ export default function PatrimoineAstechPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
         {STATUS_ORDER.map((status) => (
           <button
             key={status}
             type="button"
-            onClick={() => setStatusFilter(statusFilter === status ? "" : status)}
+            onClick={() => setStatusFilter(status)}
             style={{
               ...card,
               textAlign: "left",
@@ -479,7 +489,9 @@ export default function PatrimoineAstechPage() {
             }}
           >
             <div style={{ fontSize: 13, color: TEXT_MUTED }}>{STATUS_LABEL[status]}</div>
-            <div style={{ fontSize: 24, fontWeight: 500, color: TEXT }}>{counts[status] ?? 0}</div>
+            <div style={{ fontSize: 24, fontWeight: 500, color: TEXT }}>
+              {status === "" ? counts.total ?? 0 : counts[status] ?? 0}
+            </div>
           </button>
         ))}
       </div>
@@ -565,13 +577,12 @@ export default function PatrimoineAstechPage() {
             buildings={buildings}
             activeBuildingId={targetBuilding?.id ?? null}
             onSelectBuildingId={(buildingId) => {
-              if (!selected || attachMode) return;
-              const building = buildingsById.get(buildingId);
-              updateMutation.mutate({ id: selected.id, payload: { building_id: buildingId } });
-              setFlash(
-                `« ${assetLabel(selected)} » rattaché à « ${building?.nom_batiment ?? buildingId} ». ` +
-                  "Utilise « Détacher » si ce n'est pas le bon.",
-              );
+              // Clic = CONSULTATION du bâtiment Po2. Le rattachement se fait en
+              // déposant le point ASTECH dessus : un clic ne doit pas modifier
+              // les données, c'était la source de confusion (le point bleu passait
+              // au vert sans qu'on l'ait demandé).
+              if (attachMode) return;
+              setInspectedBuildingId(buildingId);
             }}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
@@ -627,7 +638,7 @@ export default function PatrimoineAstechPage() {
           {/* Légende : sans elle, les trois états du point violet sont indevinables. */}
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "linear-gradient(90deg, #a855f7 0 50%, #2563eb 50% 100%)", border: "2px solid #fff", display: "inline-block" }} />
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", display: "inline-block" }} />
               Apparié ASTECH + Po2 ({linkedAssetsQuery.data?.length ?? 0})
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -639,6 +650,72 @@ export default function PatrimoineAstechPage() {
               Bâtiment Po2
             </span>
           </div>
+
+          {inspectedBuilding && (
+            <div style={{ ...card, borderColor: "rgba(56, 189, 248, 0.55)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#7dd3fc", textTransform: "uppercase" }}>
+                    Bâtiment Po2
+                  </div>
+                  <h3 style={{ margin: "2px 0 8px", fontSize: 15 }}>{inspectedBuilding.nom_batiment}</h3>
+                </div>
+                <button type="button" style={btnSecondary} onClick={() => setInspectedBuildingId(null)}>
+                  Fermer
+                </button>
+              </div>
+              <dl
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                  gap: 10,
+                  margin: 0,
+                }}
+              >
+                {[
+                  ["Adresse", inspectedBuilding.adresse_reconstituee ?? "—"],
+                  ["Commune", inspectedBuilding.nom_commune ?? "—"],
+                  ["Référence cadastrale", inspectedBuilding.dgfip_reference_norm ?? "—"],
+                  [
+                    "Attachement IGN",
+                    inspectedBuilding.statut_geocodage === "IGN_VALIDE" ? "Oui" : "Non",
+                  ],
+                  [
+                    "Biens ASTECH rattachés",
+                    String(
+                      (linkedAssetsQuery.data ?? []).filter(
+                        (asset) => asset.building_id === inspectedBuilding.id,
+                      ).length,
+                    ),
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase" }}>{label}</dt>
+                    <dd style={{ margin: 0, fontSize: 13 }}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {selected && selected.building_id !== inspectedBuilding.id && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    style={btnPrimary}
+                    onClick={() => {
+                      updateMutation.mutate({
+                        id: selected.id,
+                        payload: { building_id: inspectedBuilding.id },
+                      });
+                      setFlash(
+                        `« ${assetLabel(selected)} » rattaché à « ${inspectedBuilding.nom_batiment} ».`,
+                      );
+                    }}
+                  >
+                    Rattacher « {assetLabel(selected)} » à ce bâtiment
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div style={card}>
             {!selected && <p style={{ color: TEXT_MUTED, margin: 0 }}>Sélectionne un bien dans la liste.</p>}

@@ -28,7 +28,7 @@ type RuntimeBounds = {
 
 type RuntimeMap = {
   setView: (coords: [number, number], zoom: number) => RuntimeMap;
-  fitBounds: (bounds: RuntimeBounds) => void;
+  fitBounds: (bounds: RuntimeBounds, options?: Record<string, unknown>) => void;
   remove: () => void;
   invalidateSize?: () => void;
 };
@@ -80,6 +80,10 @@ type WindowWithLeaflet = Window & {
 };
 
 type MappableBuilding = Building & { latitude: number; longitude: number };
+
+/** Zoom de travail sur un bien : assez pres pour distinguer les batiments, mais dans
+    la plage ou OpenStreetMap fournit encore des tuiles nettes. */
+const FOCUS_ZOOM = 18;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -336,7 +340,11 @@ export function BuildingPortfolioMap({
         .setView([43.4028, 3.6928], 13);
       runtime
         .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 22,
+          // OpenStreetMap ne publie pas de tuiles au-dela du niveau 19 : au-dela,
+          // Leaflet reclamait des tuiles inexistantes et la carte devenait blanche.
+          // `maxNativeZoom` lui fait agrandir la derniere tuile disponible.
+          maxZoom: 19,
+          maxNativeZoom: 19,
           attribution: "&copy; OpenStreetMap contributors",
         })
         .addTo(map);
@@ -506,21 +514,21 @@ export function BuildingPortfolioMap({
     if (attachMode !== "ign" && shouldFrame) {
       // Cadrage normal (non-attach)
       if (focusLatLon) {
-        map.setView([focusLatLon.lat, focusLatLon.lon], 18);
+        map.setView([focusLatLon.lat, focusLatLon.lon], FOCUS_ZOOM);
       } else if (highlightedSet.size > 0) {
         const hGroup = runtime.featureGroup();
         for (const b of mappableBuildings) {
           if (highlightedSet.has(b.id)) hGroup.addLayer(runtime.circleMarker([b.latitude, b.longitude], { radius: 1, opacity: 0 }));
         }
         const hBounds = hGroup.getBounds();
-        if (hBounds.isValid()) map.fitBounds(hBounds.pad(0.3));
+        if (hBounds.isValid()) map.fitBounds(hBounds.pad(0.3), { maxZoom: FOCUS_ZOOM });
         else {
           const bounds = layerGroup.getBounds();
-          if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
+          if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: FOCUS_ZOOM });
         }
       } else {
         const bounds = layerGroup.getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds.pad(0.18));
+        if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: FOCUS_ZOOM });
         else if (selectedBuilding) map.setView([selectedBuilding.latitude, selectedBuilding.longitude], 17);
       }
     }
@@ -578,7 +586,7 @@ export function BuildingPortfolioMap({
     if (attachMode !== "ign" || attachLat == null || attachLon == null) return;
 
     // Centrage sur le bâtiment sélectionné
-    map.setView([attachLat, attachLon], 18);
+    map.setView([attachLat, attachLon], FOCUS_ZOOM);
     window.setTimeout(() => map.invalidateSize?.(), 50);
 
     // Marqueur de centrage (adresse géocodée)
