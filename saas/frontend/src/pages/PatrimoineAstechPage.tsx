@@ -125,6 +125,10 @@ export default function PatrimoineAstechPage() {
   // Rayon de recherche IGN autour du point. Plafonné à 1,5 km côté serveur : au-delà,
   // le WFS renvoie des milliers de polygones et la carte devient inutilisable.
   const [attachRadius, setAttachRadius] = useState(300);
+  // Sélecteur manuel de bâtiment Po2 : indispensable quand le moteur ne propose
+  // rien (aucun nom approchant) ou quand sa proposition est fausse.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [buildingSearch, setBuildingSearch] = useState("");
 
   const countsQuery = useQuery({
     queryKey: ["legacy-counts"],
@@ -172,6 +176,20 @@ export default function PatrimoineAstechPage() {
     void queryClient.invalidateQueries({ queryKey: ["legacy-assets"] });
     void queryClient.invalidateQueries({ queryKey: ["legacy-counts"] });
   };
+
+  const buildingMatches = useMemo(() => {
+    const needle = buildingSearch.trim().toLowerCase();
+    const pool = needle
+      ? buildings.filter((building) =>
+          `${building.nom_batiment ?? ""} ${building.adresse_reconstituee ?? ""}`
+            .toLowerCase()
+            .includes(needle),
+        )
+      : buildings;
+    return [...pool]
+      .sort((a, b) => (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? ""))
+      .slice(0, 40);
+  }, [buildingSearch, buildings]);
 
   const importMutation = useMutation({
     mutationFn: (file: File) => importLegacyAstechFile(token!, file),
@@ -296,6 +314,8 @@ export default function PatrimoineAstechPage() {
   useEffect(() => {
     setAttachMode(false);
     setAttachSelection([]);
+    setPickerOpen(false);
+    setBuildingSearch("");
   }, [selectedId]);
 
   // --- Point ASTECH sur la carte ----------------------------------------------
@@ -316,6 +336,12 @@ export default function PatrimoineAstechPage() {
   }, [buildingsById, selected]);
 
   const counts = countsQuery.data ?? {};
+  // Des biens importés mais aucun candidat ni rattachement : l'utilisateur n'a pas
+  // encore lancé la reconnaissance et la page semble sans action possible.
+  const needsRecognition =
+    assets.length > 0 &&
+    (counts.lie ?? 0) === 0 &&
+    assets.every((asset) => asset.candidate_building_id === null);
 
   return (
     <section>
@@ -346,7 +372,7 @@ export default function PatrimoineAstechPage() {
           onClick={() => fileInputRef.current?.click()}
           disabled={importMutation.isPending}
         >
-          {importMutation.isPending ? "Import…" : "Importer un export ASTECH"}
+          {importMutation.isPending ? "Import…" : "1. Importer un export ASTECH"}
         </button>
         <button
           type="button"
@@ -354,7 +380,7 @@ export default function PatrimoineAstechPage() {
           onClick={() => candidatesMutation.mutate()}
           disabled={candidatesMutation.isPending}
         >
-          {candidatesMutation.isPending ? "Analyse…" : "Reconnaître les noms"}
+          {candidatesMutation.isPending ? "Analyse…" : "2. Reconnaître les noms"}
         </button>
       </div>
 
@@ -365,6 +391,22 @@ export default function PatrimoineAstechPage() {
           style={{ fontSize: 13, color: "#0369a1", marginBottom: 12, cursor: "pointer" }}
         >
           {flash}
+        </div>
+      )}
+
+      {needsRecognition && (
+        <div
+          style={{
+            ...card,
+            marginBottom: 12,
+            borderColor: "rgba(251, 191, 36, 0.5)",
+            fontSize: 13,
+          }}
+        >
+          <strong>Prochaine étape :</strong> {assets.length} bien(s) importé(s), mais la
+          reconnaissance des noms n'a pas encore été lancée. Clique «&nbsp;2. Reconnaître les
+          noms&nbsp;» ci-dessus : la plateforme rattachera seule les évidences et proposera un
+          candidat pour le reste.
         </div>
       )}
 
@@ -446,7 +488,15 @@ export default function PatrimoineAstechPage() {
           <BuildingPortfolioMap
             buildings={buildings}
             activeBuildingId={targetBuilding?.id ?? null}
-            onSelectBuildingId={() => undefined}
+            onSelectBuildingId={(buildingId) => {
+              if (!selected || attachMode) return;
+              const building = buildingsById.get(buildingId);
+              updateMutation.mutate({ id: selected.id, payload: { building_id: buildingId } });
+              setFlash(
+                `« ${assetLabel(selected)} » rattaché à « ${building?.nom_batiment ?? buildingId} ». ` +
+                  "Utilise « Détacher » si ce n'est pas le bon.",
+              );
+            }}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
             activeLegacyId={selected?.id ?? null}
@@ -572,6 +622,82 @@ export default function PatrimoineAstechPage() {
                     </button>
                   </div>
                 )}
+
+                {/* Rapprochement manuel : le moteur ne propose rien pour environ un
+                    quart des biens, et sa proposition peut être fausse. Sans ce
+                    sélecteur, il n'y a aucun moyen de rattacher ces biens-là. */}
+                <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      style={btnSecondary}
+                      onClick={() => setPickerOpen((open) => !open)}
+                    >
+                      {pickerOpen ? "Fermer la liste" : "Choisir un bâtiment Po2…"}
+                    </button>
+                    <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                      ou clique directement un point bleu sur la carte
+                    </span>
+                  </div>
+
+                  {pickerOpen && (
+                    <div style={{ marginTop: 8 }}>
+                      <input
+                        type="search"
+                        style={input}
+                        placeholder="Filtrer les bâtiments Po2 par nom ou adresse…"
+                        value={buildingSearch}
+                        onChange={(event) => setBuildingSearch(event.target.value)}
+                      />
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                          maxHeight: 240,
+                          overflowY: "auto",
+                          marginTop: 6,
+                        }}
+                      >
+                        {buildingMatches.length === 0 && (
+                          <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                            Aucun bâtiment Po2 ne correspond.
+                          </span>
+                        )}
+                        {buildingMatches.map((building) => (
+                          <button
+                            key={building.id}
+                            type="button"
+                            style={{
+                              ...btnSecondary,
+                              textAlign: "left",
+                              padding: "6px 10px",
+                              fontSize: 12,
+                            }}
+                            onClick={() => {
+                              updateMutation.mutate({
+                                id: selected.id,
+                                payload: { building_id: building.id },
+                              });
+                              setPickerOpen(false);
+                              setFlash(
+                                `« ${assetLabel(selected)} » rattaché à « ${building.nom_batiment} ».`,
+                              );
+                            }}
+                          >
+                            <strong>{building.nom_batiment}</strong>
+                            {building.adresse_reconstituee && (
+                              <span style={{ color: TEXT_MUTED }}>
+                                {" "}
+                                — {building.adresse_reconstituee}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div
                   style={{
