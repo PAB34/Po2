@@ -20,8 +20,14 @@ router = APIRouter(prefix="/patrimoine/legacy", tags=["patrimoine-historique"])
 @router.post("/import", response_model=LegacyImportResult)
 async def import_astech_export(
     file: UploadFile = File(...),
-    genres: str = Query(default="BATI", description="Genres ASTECH à importer, séparés par des virgules. Vide = tous."),
-    include_out_of_park: bool = Query(default=False, description="Inclure les biens sortis du parc (HORSPARC=O)."),
+    genres: str = Query(
+        default="BATI,SITE",
+        description="Genres ASTECH importés, séparés par des virgules. Défaut = contenu de la feuille BAT. Vide = tous.",
+    ),
+    include_out_of_park: bool = Query(
+        default=True,
+        description="Inclure les biens sortis du parc (HORSPARC=O). Défaut : oui, ils font partie de la feuille BAT.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LegacyImportResult:

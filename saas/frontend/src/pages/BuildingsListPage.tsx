@@ -295,9 +295,20 @@ export function BuildingsListPage() {
   }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
+  // include_sites : les sites ne sont pas des enfants des bâtiments (c'est l'inverse,
+  // via Building.site_id), donc une purge des bâtiments les laissait en place et
+  // l'arborescence restait peuplée de sites vides.
   const deleteAllMutation = useMutation({
-    mutationFn: () => deleteAllBuildingsRequest(token as string),
-    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["buildings"] }); alert(`${data.deleted} bâtiment(s) supprimé(s).`); },
+    mutationFn: (includeSites: boolean) => deleteAllBuildingsRequest(token as string, includeSites),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      queryClient.invalidateQueries({ queryKey: ["buildings", "sites", token] });
+      queryClient.invalidateQueries({ queryKey: ["buildings", "locals", token] });
+      alert(
+        `${data.deleted} bâtiment(s) supprimé(s)` +
+          (data.deleted_sites ? ` et ${data.deleted_sites} site(s).` : "."),
+      );
+    },
   });
 
   const updateSiteMutation = useMutation({
@@ -497,7 +508,15 @@ export function BuildingsListPage() {
           <div className="header-badge"><strong>{buildings.length}</strong><span>bâtiment(s)</span></div>
           <div className="header-badge"><strong>{locals.length}</strong><span>local(aux)</span></div>
           {buildings.length > 0 && (
-            <button type="button" className="danger-button" onClick={() => { if (window.confirm(`Supprimer les ${buildings.length} bâtiment(s) ?`)) deleteAllMutation.mutate(); }} disabled={deleteAllMutation.isPending}>
+            <button type="button" className="danger-button" onClick={() => {
+              if (!window.confirm(`Supprimer les ${buildings.length} bâtiment(s) et leurs locaux ?`)) return;
+              const alsoSites = sites.length > 0 && window.confirm(
+                `Supprimer aussi les ${sites.length} site(s) ? ` +
+                  "OK = repartir d'une arborescence entièrement vide. " +
+                  "Annuler = ne supprimer que les bâtiments (les sites resteront affichés).",
+              );
+              deleteAllMutation.mutate(alsoSites);
+            }} disabled={deleteAllMutation.isPending}>
               {deleteAllMutation.isPending ? "Suppression..." : "Supprimer tout"}
             </button>
           )}

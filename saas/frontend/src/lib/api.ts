@@ -807,13 +807,19 @@ export async function reclassifyLocalRequest(
   return parseResponse<ReclassifyPatrimonyResult>(response);
 }
 
-export async function deleteAllBuildingsRequest(token: string): Promise<{ deleted: number }> {
-  const response = await fetch(`${apiBaseUrl}/buildings`, {
-    method: "DELETE",
-    headers: buildHeaders(token),
-  });
+export async function deleteAllBuildingsRequest(
+  token: string,
+  includeSites = false,
+): Promise<{ deleted: number; deleted_sites: number }> {
+  const response = await fetch(
+    `${apiBaseUrl}/buildings?include_sites=${includeSites ? "true" : "false"}`,
+    {
+      method: "DELETE",
+      headers: buildHeaders(token),
+    },
+  );
 
-  return parseResponse<{ deleted: number }>(response);
+  return parseResponse<{ deleted: number; deleted_sites: number }>(response);
 }
 
 export async function deleteSiteRequest(token: string, siteId: number): Promise<void> {
