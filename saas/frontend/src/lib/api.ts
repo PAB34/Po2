@@ -440,9 +440,24 @@ async function parseResponse<T>(response: Response): Promise<T> {
     let message = "Une erreur est survenue.";
 
     try {
-      const payload = (await response.json()) as { detail?: string };
-      if (payload.detail) {
-        message = payload.detail;
+      const payload = (await response.json()) as { detail?: unknown };
+      const detail = payload.detail;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (Array.isArray(detail)) {
+        // FastAPI renvoie une LISTE d'objets sur une erreur de validation (422).
+        // Sans ce traitement, `new Error(detail)` affichait « [object Object] ».
+        const parts = detail
+          .map((item) => {
+            if (typeof item === "string") return item;
+            const entry = item as { loc?: unknown[]; msg?: string };
+            const field = Array.isArray(entry.loc) ? entry.loc.filter((x) => x !== "body").join(".") : "";
+            return [field, entry.msg].filter(Boolean).join(" : ");
+          })
+          .filter(Boolean);
+        if (parts.length > 0) message = parts.join(" ; ");
+      } else if (detail) {
+        message = JSON.stringify(detail);
       }
     } catch {
       message = response.statusText || message;

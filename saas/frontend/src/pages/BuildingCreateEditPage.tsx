@@ -211,6 +211,9 @@ export function BuildingCreateEditPage() {
   const [importAddressColumn, setImportAddressColumn] = useState("");
   const [importRows, setImportRows] = useState<ImportedRowState[]>([]);
   const [importSearch, setImportSearch] = useState("");
+  // Sur un patrimoine de plusieurs centaines de lignes, les quelques adresses en
+  // erreur sont noyées : ce filtre permet de ne traiter qu'elles.
+  const [importOnlyInvalid, setImportOnlyInvalid] = useState(false);
   const [selectedImportRowNumber, setSelectedImportRowNumber] = useState<number | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
@@ -293,15 +296,18 @@ export function BuildingCreateEditPage() {
 
   const filteredImportRows = useMemo(() => {
     const query = importSearch.trim().toLowerCase();
+    const base = importOnlyInvalid
+      ? importRows.filter((row: ImportedRowState) => row.validation_status === "invalid")
+      : importRows;
     if (!query) {
-      return importRows;
+      return base;
     }
-    return importRows.filter((row: ImportedRowState) => {
+    return base.filter((row: ImportedRowState) => {
       return [row.editableName, row.editableAddress, row.asset_type, row.source_parent, row.source_local_id, row.validation_status, row.validation_message]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query));
     });
-  }, [importRows, importSearch]);
+  }, [importOnlyInvalid, importRows, importSearch]);
 
   const importStats = useMemo(() => {
     return importRows.reduce(
@@ -1159,6 +1165,16 @@ export function BuildingCreateEditPage() {
                     <label className="field">
                       <span>Recherche dans les lignes importées</span>
                       <input type="text" value={importSearch} onChange={(event: ChangeEvent<HTMLInputElement>) => setImportSearch(event.target.value)} />
+                    </label>
+                    <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={importOnlyInvalid}
+                        onChange={(event: ChangeEvent<HTMLInputElement>) => setImportOnlyInvalid(event.target.checked)}
+                      />
+                      <span>
+                        N'afficher que les adresses à corriger ({importStats.invalid})
+                      </span>
                     </label>
                     <div className="form-actions">
                       <button
