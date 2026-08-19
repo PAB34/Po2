@@ -28,9 +28,11 @@ from app.models.building import Building
 from app.models.city import City
 from app.models.local import Local  # noqa: F401 (enregistre la table)
 from app.models.patrimoine_legacy import (
+    STATUS_IGNORED,
     STATUS_LINKED,
     STATUS_PROPOSED,
     STATUS_OUT_OF_SCOPE,
+    STATUS_TO_CREATE,
     STATUS_TODO,
     PatrimoineLegacyAsset,
     PatrimoineLegacyImport,
@@ -39,8 +41,10 @@ from app.models.site import Site  # noqa: F401
 from app.services.patrimoine_legacy import (
     compute_candidates,
     confirm_proposed,
+    create_asset_from_building,
     import_astech_file,
     parse_astech_workbook,
+    reset_all_links,
 )
 
 # En-têtes tels qu'ils apparaissent dans l'export réel (orthographe incluse).
@@ -644,3 +648,63 @@ def test_la_confirmation_realigne_un_nom_devenu_perime(db_session: Session):
     )
     assert asset.status == STATUS_LINKED
     assert asset.resolved_name == "CIMETIERE MARIN LE PY"
+
+
+def test_la_purge_supprime_les_rapprochements_sans_toucher_aux_decisions(db_session: Session):
+    """« Supprimer tous les rapprochements » remet à traiter, sans effacer le reste.
+
+    Trois invariants : un bien « à créer » n'est pas coupé de son bâtiment (il n'existe
+    que par lui), une décision de périmètre (`ignore`, `hors_perimetre`) n'est pas
+    annulée, et la position de travail est conservée — l'effacer ferait disparaître le
+    bien de la carte.
+    """
+    db_session.add(
+        Building(
+            id=1,
+            city_id=1,
+            nom_batiment="CIMETIERE LE PY",
+            nom_commune="Sete",
+            adresse_reconstituee="12 RUE DES CAPECHADES",
+            latitude=43.4,
+            longitude=3.69,
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    lie = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    assert lie.building_id == 1 and lie.resolved_label is not None
+
+    # Sur un SECOND bâtiment : `create_asset_from_building` est idempotent et renverrait
+    # le bien déjà rattaché au bâtiment 1 au lieu d'en créer un.
+    db_session.add(Building(id=2, city_id=1, nom_batiment="HALLES CENTRALES", nom_commune="Sete"))
+    db_session.commit()
+    a_creer = create_asset_from_building(db_session, 1, db_session.get(Building, 2))
+    ignore = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien != "ADMICIMET02")
+    )
+    ignore.status = STATUS_IGNORED
+    ignore.building_id = 1
+    db_session.add(ignore)
+    db_session.commit()
+
+    result = reset_all_links(db_session, 1)
+    assert result["cleared"] >= 1
+
+    db_session.refresh(lie)
+    assert lie.building_id is None
+    assert lie.status == STATUS_TODO
+    # L'adresse héritée n'a plus de source : elle part avec le lien.
+    assert lie.resolved_label is None
+    # Le point reste : sinon le bien disparaît de la carte (régression #117).
+    assert lie.latitude is not None
+
+    # Le bien « à créer » garde son bâtiment : il n'existe que grâce à lui.
+    db_session.refresh(a_creer)
+    assert a_creer.building_id == 2
+    assert a_creer.status == STATUS_TO_CREATE
+
+    # Une décision de périmètre n'est pas un rapprochement : elle survit.
+    db_session.refresh(ignore)
+    assert ignore.status == STATUS_IGNORED

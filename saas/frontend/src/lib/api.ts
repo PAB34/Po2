@@ -6113,6 +6113,18 @@ export async function confirmLegacyProposals(
   return parseResponse<{ confirmed: number }>(response);
 }
 
+/**
+ * Supprime TOUS les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
+ * Les biens « à créer », « ignoré » et « hors périmètre » sont préservés.
+ */
+export async function resetLegacyLinks(token: string): Promise<{ cleared: number }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/reset-links`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ cleared: number }>(response);
+}
+
 /** Repositionne un bâtiment Po2 et rafraîchit son adresse. */
 export async function moveBuildingRequest(
   token: string,

@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import openpyxl
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
@@ -34,6 +34,7 @@ from app.models.local import Local
 from app.models.patrimoine_legacy import (
     ORIGIN_AUTO,
     ORIGIN_MANUAL,
+    STATUS_IGNORED,
     STATUS_LINKED,
     STATUS_PROPOSED,
     TARGET_BUILDING,
@@ -897,6 +898,63 @@ def confirm_proposed(
         confirmed += 1
     db.commit()
     return {"confirmed": confirmed}
+
+
+def reset_all_links(db: Session, city_id: int | None) -> dict[str, int]:
+    """Supprime **tous** les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
+
+    Sert à repartir d'une feuille blanche quand le référentiel Po2 a beaucoup bougé
+    (renommages, réimport du patrimoine) : plutôt que de détacher 400 biens un par un,
+    on efface et on relance « Reconnaître les noms ».
+
+    Trois choix délibérés :
+
+    - Les biens **`a_creer`** ne sont pas touchés : ils n'existent QUE parce qu'un
+      bâtiment Po2 les a créés (décision Q13). Couper leur lien en ferait des lignes
+      orphelines sans code ASTECH ni contrepartie.
+    - Les décisions **`ignore`** et **`hors_perimetre`** sont conservées : ce ne sont
+      pas des rapprochements mais des choix de périmètre, qu'une purge de liens n'a
+      aucune raison d'annuler.
+    - La **position de travail** (lat/lon) est conservée : c'est souvent un point posé
+      à la main, et l'effacer ferait disparaître le bien de la carte — exactement le
+      symptôme corrigé en #117.
+
+    L'adresse résolue, elle, est effacée : elle n'était qu'une copie du bâtiment
+    porteur, elle n'a plus de source une fois le lien coupé.
+    """
+    statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.status != STATUS_TO_CREATE,
+        or_(
+            PatrimoineLegacyAsset.building_id.is_not(None),
+            PatrimoineLegacyAsset.local_id.is_not(None),
+        ),
+    )
+    if city_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.city_id == city_id)
+
+    cleared = 0
+    for asset in db.scalars(statement):
+        # Un bien rattaché par le moteur n'a pas de position propre : il EMPRUNTE celle
+        # de son bâtiment pour s'afficher. Couper le lien sans figer cette position le
+        # ferait disparaître de la carte — la régression corrigée en #117. On recopie
+        # donc le dernier point connu dans le point de travail avant de détacher.
+        if asset.latitude is None or asset.longitude is None:
+            building = db.get(Building, asset.building_id) if asset.building_id else None
+            if building is not None and building.latitude is not None and building.longitude is not None:
+                asset.latitude = building.latitude
+                asset.longitude = building.longitude
+        asset.building_id = None
+        asset.local_id = None
+        asset.target_type = TARGET_BUILDING
+        asset.link_origin = None
+        # Une decision de perimetre n'est pas un rapprochement : elle survit a la purge.
+        if asset.status not in (STATUS_IGNORED, STATUS_OUT_OF_SCOPE):
+            asset.status = STATUS_TODO
+        _clear_resolved_address(asset)
+        db.add(asset)
+        cleared += 1
+    db.commit()
+    return {"cleared": cleared}
 
 
 def list_locals_for_building(db: Session, building_id: int) -> list[Local]:
