@@ -543,6 +543,10 @@ export default function PatrimoineAstechPage() {
     setAttachSelection([]);
     setPickerOpen(false);
     setBuildingSearch("");
+    // L'encart « Bâtiment Po2 » ne décrit QUE le point Po2 sur lequel on a cliqué.
+    // Le laisser ouvert en changeant de bien ASTECH laissait à l'écran la fiche d'un
+    // bâtiment sans rapport avec le bien en cours — d'où la confusion.
+    setInspectedBuildingId(null);
   }, [selectedId]);
 
   // Biens réellement affichables sur la carte : ceux qui ont une position propre, ou
@@ -604,6 +608,8 @@ export default function PatrimoineAstechPage() {
           isProvisional: true,
           isLinked: asset.building_id != null,
           isLocalTarget: asset.target_type === "local",
+          buildingId: asset.building_id,
+          buildingLabel: building?.nom_batiment ?? null,
         };
       }
       return {
@@ -614,6 +620,10 @@ export default function PatrimoineAstechPage() {
         isProvisional: asset.latitude == null,
         isLinked: asset.building_id != null,
         isLocalTarget: asset.target_type === "local",
+        // Permet à la carte de fusionner ce point avec le marqueur du bâtiment :
+        // un bien rattaché et son bâtiment sont une seule réalité.
+        buildingId: asset.building_id,
+        buildingLabel: building?.nom_batiment ?? null,
       };
     };
 
@@ -960,6 +970,14 @@ export default function PatrimoineAstechPage() {
               // au vert sans qu'on l'ait demandé).
               if (attachMode) return;
               setInspectedBuildingId(buildingId);
+            }}
+            // Clic dans le vide : on sort de la sélection. L'encart « Bâtiment Po2 »
+            // et le bien sélectionné disparaissent ensemble — c'est le geste
+            // « je ne travaille plus sur rien ».
+            onBackgroundClick={() => {
+              if (attachMode) return;
+              setInspectedBuildingId(null);
+              setSelectedId(null);
             }}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
