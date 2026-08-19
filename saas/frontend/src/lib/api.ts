@@ -5924,6 +5924,13 @@ export type LegacyAsset = {
   candidate_reason: string | null;
   latitude: number | null;
   longitude: number | null;
+  resolved_housenumber: string | null;
+  resolved_street: string | null;
+  resolved_postcode: string | null;
+  resolved_city: string | null;
+  resolved_citycode: string | null;
+  resolved_label: string | null;
+  resolved_source: string | null;
   import_batch: string | null;
   notes: string | null;
   updated_at: string | null;

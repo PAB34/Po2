@@ -152,6 +152,14 @@ export default function PatrimoineAstechPage() {
     enabled: !!token,
   });
 
+  // Les biens deja rattaches sont charges a part : la liste de gauche est filtree
+  // (« a traiter » par defaut), or la carte doit montrer l'avancement en permanence.
+  const linkedAssetsQuery = useQuery({
+    queryKey: ["legacy-assets", "lie"],
+    queryFn: () => fetchLegacyAssets(token!, { status: "lie", limit: 2000 }),
+    enabled: !!token,
+  });
+
   const assets = useMemo(() => assetsQuery.data ?? [], [assetsQuery.data]);
   const buildings = useMemo(() => buildingsQuery.data ?? [], [buildingsQuery.data]);
   const selected = useMemo(
@@ -173,6 +181,8 @@ export default function PatrimoineAstechPage() {
   }, [buildingsById, selected]);
 
   const invalidate = () => {
+    // La cle ["legacy-assets"] couvre aussi ["legacy-assets", "lie"] : la couche
+    // violette de la carte se met a jour des qu'un rattachement change.
     void queryClient.invalidateQueries({ queryKey: ["legacy-assets"] });
     void queryClient.invalidateQueries({ queryKey: ["legacy-counts"] });
   };
@@ -320,20 +330,44 @@ export default function PatrimoineAstechPage() {
 
   // --- Point ASTECH sur la carte ----------------------------------------------
   const legacyPoints = useMemo<LegacyMapPoint[]>(() => {
-    if (!selected) return [];
-    const building = selected.building_id != null ? buildingsById.get(selected.building_id) : null;
-    const latitude = selected.latitude ?? building?.latitude ?? DEFAULT_LAT;
-    const longitude = selected.longitude ?? building?.longitude ?? DEFAULT_LON;
-    return [
-      {
-        id: selected.id,
-        label: `${selected.code_bien} — ${assetLabel(selected)}`,
+    const toPoint = (asset: LegacyAsset): LegacyMapPoint | null => {
+      const building = asset.building_id != null ? buildingsById.get(asset.building_id) : null;
+      const latitude = asset.latitude ?? building?.latitude ?? null;
+      const longitude = asset.longitude ?? building?.longitude ?? null;
+      // Un bien sans position ET sans batiment localise n'a rien a faire sur la carte :
+      // l'empiler au centre de Sete creerait un tas de points faussement precis.
+      if (latitude == null || longitude == null) {
+        if (asset.id !== selected?.id) return null;
+        return {
+          id: asset.id,
+          label: `${asset.code_bien} — ${assetLabel(asset)}`,
+          latitude: DEFAULT_LAT,
+          longitude: DEFAULT_LON,
+          isProvisional: true,
+          isLinked: asset.building_id != null,
+        };
+      }
+      return {
+        id: asset.id,
+        label: `${asset.code_bien} — ${assetLabel(asset)}`,
         latitude,
         longitude,
-        isProvisional: selected.latitude == null,
-      },
-    ];
-  }, [buildingsById, selected]);
+        isProvisional: asset.latitude == null,
+        isLinked: asset.building_id != null,
+      };
+    };
+
+    const byId = new Map<number, LegacyMapPoint>();
+    for (const asset of linkedAssetsQuery.data ?? []) {
+      const point = toPoint(asset);
+      if (point) byId.set(point.id, point);
+    }
+    if (selected) {
+      const point = toPoint(selected);
+      if (point) byId.set(point.id, point);
+    }
+    return [...byId.values()];
+  }, [buildingsById, linkedAssetsQuery.data, selected]);
 
   const counts = countsQuery.data ?? {};
   // Des biens importés mais aucun candidat ni rattachement : l'utilisateur n'a pas
@@ -520,12 +554,19 @@ export default function PatrimoineAstechPage() {
             activeLegacyId={selected?.id ?? null}
             onSelectLegacyId={(id) => setSelectedId(id)}
             onMoveLegacyPoint={(id, lat, lon) => {
-              // Q6 : on enregistre le point, l'adresse sera proposée puis validée
-              // via l'attribution IGN — jamais écrasée en silence.
+              // Le serveur géocode le point à l'envers et renseigne l'adresse
+              // trouvée, à côté de l'adresse ASTECH d'origine (jamais à sa place).
               updateMutation.mutate({ id, payload: { latitude: lat, longitude: lon } });
+              setFlash("Position enregistrée, recherche de l'adresse correspondante…");
+            }}
+            onDropLegacyOnBuilding={(id, buildingId) => {
+              // Déposer le point ASTECH sur un point Po2 vaut rattachement : le bien
+              // reprend l'adresse et la position du bâtiment.
+              const building = buildingsById.get(buildingId);
+              updateMutation.mutate({ id, payload: { building_id: buildingId } });
               setFlash(
-                `Position enregistrée (${lat.toFixed(6)}, ${lon.toFixed(6)}). ` +
-                  "Lance « Attribuer IGN » pour récupérer adresse et cadastre.",
+                `Rattaché à « ${building?.nom_batiment ?? buildingId} » : le bien reprend son ` +
+                  "adresse et sa position. Utilise « Détacher » si ce n'est pas le bon.",
               );
             }}
             attachMode={attachMode ? "ign" : "none"}
@@ -550,6 +591,22 @@ export default function PatrimoineAstechPage() {
             isAttachLoading={attachLookupQuery.isFetching}
           />
 
+          {/* Légende : sans elle, les trois états du point violet sont indevinables. */}
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#7c3aed", border: "2px solid #fff", display: "inline-block" }} />
+              Bien ASTECH rattaché ({linkedAssetsQuery.data?.length ?? 0})
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#fff", border: "2px dashed #a855f7", display: "inline-block" }} />
+              Position à confirmer
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#2563eb", border: "2px solid #38bdf8", display: "inline-block" }} />
+              Bâtiment Po2
+            </span>
+          </div>
+
           <div style={card}>
             {!selected && <p style={{ color: TEXT_MUTED, margin: 0 }}>Sélectionne un bien dans la liste.</p>}
             {selected && (
@@ -569,6 +626,16 @@ export default function PatrimoineAstechPage() {
                   {[
                     ["Désignation ASTECH", selected.designation ?? "—"],
                     ["Adresse ASTECH", assetAddress(selected) ?? "— (à reconstituer)"],
+                    [
+                      "Adresse trouvée",
+                      selected.resolved_label
+                        ? `${selected.resolved_label}${
+                            selected.resolved_source === "building"
+                              ? " (bâtiment Po2)"
+                              : " (point sur la carte)"
+                          }`
+                        : "— (déplace le point sur la carte)",
+                    ],
                     ["Cadastre ASTECH", selected.source_refcad ?? "— (à récupérer via IGN)"],
                     ["Statut", STATUS_LABEL[selected.status] ?? selected.status],
                   ].map(([label, value]) => (

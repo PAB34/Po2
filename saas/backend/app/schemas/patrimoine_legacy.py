@@ -33,6 +33,13 @@ class LegacyAssetOut(BaseModel):
     candidate_reason: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    resolved_housenumber: str | None = None
+    resolved_street: str | None = None
+    resolved_postcode: str | None = None
+    resolved_city: str | None = None
+    resolved_citycode: str | None = None
+    resolved_label: str | None = None
+    resolved_source: str | None = None
     import_batch: str | None = None
     notes: str | None = None
     updated_at: datetime | None = None
