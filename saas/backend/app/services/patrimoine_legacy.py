@@ -35,6 +35,7 @@ from app.models.patrimoine_legacy import (
     ORIGIN_MANUAL,
     STATUS_LINKED,
     STATUS_OUT_OF_SCOPE,
+    STATUS_TO_CREATE,
     STATUS_TODO,
     PatrimoineLegacyAsset,
     PatrimoineLegacyImport,
@@ -557,13 +558,25 @@ def update_asset(
         asset.latitude = latitude
     if longitude is not None:
         asset.longitude = longitude
-    if (
-        (latitude is not None or longitude is not None)
-        and asset.building_id is None
-        and asset.latitude is not None
-        and asset.longitude is not None
-    ):
+    moved = (latitude is not None or longitude is not None) and asset.latitude is not None and asset.longitude is not None
+    if moved and asset.building_id is None:
         _resolve_address_from_point(asset)
+    elif moved:
+        # Bien rattaché : le point ASTECH et le bâtiment Po2 ne font plus qu'un.
+        # Déplacer ce point unique déplace donc AUSSI le bâtiment Po2, et l'adresse
+        # est recalculée pour les deux — c'est le sens du geste demandé.
+        _resolve_address_from_point(asset)
+        linked = db.get(Building, asset.building_id)
+        if linked is not None:
+            linked.latitude = asset.latitude
+            linked.longitude = asset.longitude
+            if asset.resolved_label:
+                linked.adresse_reconstituee = asset.resolved_label[:255]
+            if asset.resolved_city:
+                linked.nom_commune = asset.resolved_city[:255]
+            if asset.resolved_postcode:
+                linked.code_postal = asset.resolved_postcode[:10]
+            db.add(linked)
     if notes is not None:
         asset.notes = notes.strip() or None
     db.add(asset)
@@ -683,3 +696,56 @@ def resolve_city_id(db: Session, city_id: int | None) -> int | None:
     if city_id is not None:
         return city_id
     return db.scalar(select(City.id).order_by(City.id.asc()).limit(1))
+
+
+# Préfixe des biens créés depuis Po2 : ils n'ont pas encore de code ASTECH, c'est le
+# logiciel de la collectivité qui l'attribuera au réimport (décision Q13, « lignes à
+# créer »). Le réexport devra donc émettre ces lignes avec un CODE_BIEN vide.
+NEW_ASSET_CODE_PREFIX = "NOUVEAU_"
+
+
+def create_asset_from_building(
+    db: Session, city_id: int | None, building: Building
+) -> PatrimoineLegacyAsset:
+    """Ajoute un bâtiment Po2 à la liste ASTECH comme bien **à créer**.
+
+    Cas visé : un bâtiment connu de Po2 mais absent du référentiel de la collectivité.
+    Il doit remonter dans le réexport pour y être créé, sinon les deux référentiels ne
+    convergeront jamais.
+
+    Idempotent : rappeler la fonction pour le même bâtiment renvoie le bien existant.
+    """
+    existing = db.scalar(
+        select(PatrimoineLegacyAsset).where(
+            PatrimoineLegacyAsset.city_id == city_id,
+            PatrimoineLegacyAsset.building_id == building.id,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    asset = PatrimoineLegacyAsset(
+        city_id=city_id,
+        code_bien=f"{NEW_ASSET_CODE_PREFIX}{building.id}",
+        designation=(building.nom_batiment or f"Bâtiment {building.id}")[:255],
+        nomcourt=(building.nom_batiment or f"Bâtiment {building.id}")[:255],
+        genre="BATI",
+        horsparc="N",
+        building_id=building.id,
+        status=STATUS_TO_CREATE,
+        link_origin=ORIGIN_MANUAL,
+        latitude=building.latitude,
+        longitude=building.longitude,
+    )
+    _inherit_building_address(asset, building)
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def get_building_for_city(db: Session, city_id: int | None, building_id: int) -> Building | None:
+    statement = select(Building).where(Building.id == building_id)
+    if city_id is not None:
+        statement = statement.where(Building.city_id == city_id)
+    return db.scalar(statement)

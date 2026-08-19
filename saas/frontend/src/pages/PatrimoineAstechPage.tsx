@@ -20,6 +20,7 @@ import {
   computeLegacyCandidates,
   fetchBuildings,
   createBuildingRequest,
+  createLegacyAssetFromBuilding,
   fetchFreeAddressLookup,
   fetchIgnBuildingsAtPoint,
   fetchLegacyAssets,
@@ -43,7 +44,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
 // est simplement filtrée sur « À traiter ».
-const STATUS_ORDER = ["", "a_traiter", "lie", "hors_perimetre", "ignore"] as const;
+const STATUS_ORDER = ["", "a_traiter", "lie", "a_creer", "hors_perimetre", "ignore"] as const;
 
 // Centre de Sète : point de départ d'un bien jamais localisé, que l'utilisateur
 // fait ensuite glisser à la bonne place.
@@ -252,6 +253,22 @@ export default function PatrimoineAstechPage() {
     mutationFn: (variables: { id: number; payload: Parameters<typeof updateLegacyAsset>[2] }) =>
       updateLegacyAsset(token!, variables.id, variables.payload),
     onSuccess: () => invalidate(),
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  // Bâtiment Po2 absent du référentiel de la collectivité : il doit remonter dans le
+  // réexport pour y être créé, sinon les deux référentiels ne convergeront jamais (Q13).
+  const addToAstechMutation = useMutation({
+    mutationFn: (buildingId: number) => createLegacyAssetFromBuilding(token!, buildingId),
+    onSuccess: (asset) => {
+      setFlash(
+        `« ${assetLabel(asset)} » ajouté à la liste ASTECH comme bien à créer. ` +
+          "Il sortira dans le fichier de retour sans code bien : c'est ASTECH qui lui en attribuera un.",
+      );
+      setStatusFilter("a_creer");
+      setSelectedId(asset.id);
+      invalidate();
+    },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
@@ -474,7 +491,7 @@ export default function PatrimoineAstechPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
         {STATUS_ORDER.map((status) => (
           <button
             key={status}
@@ -601,7 +618,11 @@ export default function PatrimoineAstechPage() {
               // Le serveur géocode le point à l'envers et renseigne l'adresse
               // trouvée, à côté de l'adresse ASTECH d'origine (jamais à sa place).
               updateMutation.mutate({ id, payload: { latitude: lat, longitude: lon } });
-              setFlash("Position enregistrée, recherche de l'adresse correspondante…");
+              setFlash(
+                selected?.building_id != null
+                  ? "Point fusionné déplacé : le bâtiment Po2 suit, adresse recalculée pour les deux."
+                  : "Position enregistrée, recherche de l'adresse correspondante…",
+              );
             }}
             onDropLegacyOnBuilding={(id, buildingId) => {
               // Déposer le point ASTECH sur un point Po2 vaut rattachement : le bien
@@ -695,6 +716,26 @@ export default function PatrimoineAstechPage() {
                   </div>
                 ))}
               </dl>
+              {!(linkedAssetsQuery.data ?? []).some(
+                (asset) => asset.building_id === inspectedBuilding.id,
+              ) && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    style={btnSecondary}
+                    disabled={addToAstechMutation.isPending}
+                    onClick={() => addToAstechMutation.mutate(inspectedBuilding.id)}
+                  >
+                    {addToAstechMutation.isPending
+                      ? "Ajout…"
+                      : "Ajouter ce bâtiment à la liste ASTECH"}
+                  </button>
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+                    Ce bâtiment n'a aucun bien ASTECH en face : il remontera dans le fichier
+                    de retour comme ligne à créer.
+                  </p>
+                </div>
+              )}
               {selected && selected.building_id !== inspectedBuilding.id && (
                 <div style={{ marginTop: 10 }}>
                   <button

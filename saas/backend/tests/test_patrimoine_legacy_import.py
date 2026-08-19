@@ -361,3 +361,56 @@ def test_detachement_efface_les_valeurs_heritees(db_session: Session):
     assert asset.resolved_name is None
     assert asset.resolved_refcad is None
     assert asset.resolved_label is None
+
+
+def test_deplacer_un_point_fusionne_deplace_aussi_le_batiment_po2(db_session: Session):
+    """Un bien rattaché et son bâtiment Po2 ne font plus qu'un point sur la carte :
+    déplacer ce point doit déplacer les deux, sinon ils se désolidarisent en silence."""
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=7, city_id=1, nom_batiment="HOTEL DE VILLE", nom_commune="Sete",
+            adresse_reconstituee="1 QUAI DES MOULINS", latitude=43.40, longitude=3.69,
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, building_id=7)
+
+    update_asset(db_session, asset, latitude=43.4111, longitude=3.6999)
+
+    building = db_session.get(Building, 7)
+    assert asset.latitude == 43.4111 and asset.longitude == 3.6999
+    # Le bâtiment Po2 a suivi : c'est tout l'intérêt du point fusionné.
+    assert building.latitude == 43.4111 and building.longitude == 3.6999
+
+
+def test_ajouter_un_batiment_po2_a_la_liste_astech(db_session: Session):
+    """Un bâtiment Po2 sans contrepartie ASTECH doit pouvoir rejoindre la liste comme
+    bien « à créer » : sans ça, il ne remonterait jamais dans le fichier de retour."""
+    from app.models.patrimoine_legacy import STATUS_TO_CREATE
+    from app.services.patrimoine_legacy import create_asset_from_building
+
+    building = Building(
+        id=9, city_id=1, nom_batiment="NOUVELLE HALLE", nom_commune="Sete",
+        adresse_reconstituee="12 RUE NEUVE", dgfip_reference_norm="34301000AZ0007",
+        latitude=43.41, longitude=3.70,
+    )
+    db_session.add(building)
+    db_session.commit()
+
+    created = create_asset_from_building(db_session, 1, building)
+    assert created.status == STATUS_TO_CREATE
+    assert created.building_id == 9
+    assert created.nomcourt == "NOUVELLE HALLE"
+    assert created.resolved_refcad == "AZ007"
+    # Pas de code ASTECH : c'est le logiciel de la collectivité qui l'attribuera.
+    assert created.code_bien.startswith("NOUVEAU_")
+
+    # Idempotent : un second appel ne cree pas de doublon.
+    again = create_asset_from_building(db_session, 1, building)
+    assert again.id == created.id
