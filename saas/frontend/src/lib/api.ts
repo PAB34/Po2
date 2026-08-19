@@ -5931,6 +5931,10 @@ export type LegacyAsset = {
   resolved_citycode: string | null;
   resolved_label: string | null;
   resolved_source: string | null;
+  resolved_name: string | null;
+  resolved_section: string | null;
+  resolved_numero_plan: string | null;
+  resolved_refcad: string | null;
   import_batch: string | null;
   notes: string | null;
   updated_at: string | null;

@@ -580,19 +580,85 @@ def _clear_resolved_address(asset: PatrimoineLegacyAsset) -> None:
     asset.resolved_citycode = None
     asset.resolved_label = None
     asset.resolved_source = None
+    asset.resolved_name = None
+    asset.resolved_section = None
+    asset.resolved_numero_plan = None
+    asset.resolved_refcad = None
+
+
+_ADDRESS_PATTERN = re.compile(r"^\s*(\d+\s*[A-Za-z]?)\s+(.+?)\s*$")
+# INSEE(5) + prefixe(3) + section(2) + numero de plan(4) : '34301000AK0149'.
+_REFERENCE_NORM_PATTERN = re.compile(r"^(\d{5})(\d{3})([0-9A-Z]{2})(\d{4})$")
+
+
+def _split_reconstituted_address(address: str | None) -> tuple[str | None, str | None]:
+    """Sépare '208 AV DU MARECHAL JUIN' en ('208', 'AV DU MARECHAL JUIN').
+
+    Les bâtiments Po2 ne stockent PAS l'adresse découpée (vérifié en prod : les colonnes
+    numero_voirie / nom_voie sont vides sur toutes les lignes). Le découpage est donc
+    reconstitué ici — le format est régulier — pour pouvoir alimenter NORUE et LIBELVOIE.
+    """
+    if not address:
+        return None, None
+    match = _ADDRESS_PATTERN.match(address)
+    if match is None:
+        return None, _text(address)
+    return _text(match.group(1).replace(" ", "")), _text(match.group(2))
+
+
+def _split_cadastral_reference(reference: str | None) -> tuple[str | None, str | None, str | None]:
+    """Extrait (section, numéro de plan, REFCAD) de '34301000AK0149'.
+
+    Le REFCAD attendu par ASTECH fait 5 caractères : section (2) + plan sur 3 chiffres
+    (constaté : 'AS023'). Au-delà de 999, la valeur ne rentre pas dans ce format : on ne
+    produit alors PAS de REFCAD plutôt que d'écrire une référence tronquée dans le
+    référentiel de la collectivité. Section et plan restent disponibles séparément.
+    """
+    normalized = _text(reference)
+    if not normalized:
+        return None, None, None
+    match = _REFERENCE_NORM_PATTERN.match(normalized.upper())
+    if match is None:
+        return None, None, None
+    section = match.group(3)
+    plan = match.group(4)
+    plan_number = plan.lstrip("0") or "0"
+    refcad = f"{section}{plan_number.zfill(3)}" if len(plan_number) <= 3 else None
+    return section, plan, refcad
 
 
 def _inherit_building_address(asset: PatrimoineLegacyAsset, building: Building) -> None:
-    """Le bien reprend l'adresse du bâtiment Po2 auquel il vient d'être rattaché."""
+    """Le bien reprend **tout** ce que Po2 sait du bâtiment : nom, adresse, cadastre.
+
+    Les champs structurés du bâtiment étant vides en base, on reconstitue le découpage
+    depuis `adresse_reconstituee` et `dgfip_reference_norm`, qui eux sont renseignés.
+    """
     street = " ".join(part for part in [building.nature_voie, building.nom_voie] if part) or None
-    asset.resolved_housenumber = building.numero_voirie or None
+    housenumber = building.numero_voirie or None
+    if not housenumber or not street:
+        parsed_number, parsed_street = _split_reconstituted_address(building.adresse_reconstituee)
+        housenumber = housenumber or parsed_number
+        street = street or parsed_street
+
+    section, numero_plan, refcad = _split_cadastral_reference(building.dgfip_reference_norm)
+    if not section:
+        section, numero_plan = building.section or None, building.numero_plan or None
+        if section and numero_plan:
+            plan_number = numero_plan.lstrip("0") or "0"
+            refcad = f"{section}{plan_number.zfill(3)}" if len(plan_number) <= 3 else None
+
+    asset.resolved_name = building.nom_batiment or None
+    asset.resolved_housenumber = housenumber
     asset.resolved_street = street
     asset.resolved_postcode = building.code_postal or None
     asset.resolved_city = building.nom_commune or None
-    asset.resolved_citycode = None
+    asset.resolved_citycode = (building.dgfip_reference_norm or "")[:5] or None
     asset.resolved_label = building.adresse_reconstituee or (
-        " ".join(part for part in [building.numero_voirie, street, building.nom_commune] if part) or None
+        " ".join(part for part in [housenumber, street, building.nom_commune] if part) or None
     )
+    asset.resolved_section = section
+    asset.resolved_numero_plan = numero_plan
+    asset.resolved_refcad = refcad
     asset.resolved_source = RESOLVED_FROM_BUILDING
 
 

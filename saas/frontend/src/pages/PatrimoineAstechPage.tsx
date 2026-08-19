@@ -627,6 +627,10 @@ export default function PatrimoineAstechPage() {
                     ["Désignation ASTECH", selected.designation ?? "—"],
                     ["Adresse ASTECH", assetAddress(selected) ?? "— (à reconstituer)"],
                     [
+                      "Nom retenu",
+                      selected.resolved_name ?? "— (rattache le bien à un bâtiment Po2)",
+                    ],
+                    [
                       "Adresse trouvée",
                       selected.resolved_label
                         ? `${selected.resolved_label}${
@@ -635,6 +639,13 @@ export default function PatrimoineAstechPage() {
                               : " (point sur la carte)"
                           }`
                         : "— (déplace le point sur la carte)",
+                    ],
+                    [
+                      "Cadastre trouvé",
+                      selected.resolved_refcad ??
+                        (selected.resolved_section && selected.resolved_numero_plan
+                          ? `${selected.resolved_section} ${selected.resolved_numero_plan} (hors format ASTECH)`
+                          : "— (rattache le bien à un bâtiment Po2)"),
                     ],
                     ["Cadastre ASTECH", selected.source_refcad ?? "— (à récupérer via IGN)"],
                     ["Statut", STATUS_LABEL[selected.status] ?? selected.status],

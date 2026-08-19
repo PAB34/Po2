@@ -296,3 +296,68 @@ def test_deux_biens_qui_visent_le_meme_batiment_ne_sont_pas_rattaches_seuls(db_s
         assert asset.status == STATUS_TODO
         assert asset.candidate_building_id == 1
         assert asset.candidate_reason == "plusieurs biens visent ce bâtiment"
+
+
+def test_rattachement_herite_nom_adresse_et_cadastre(db_session: Session):
+    """Déposer un bien ASTECH sur un bâtiment Po2 doit lui faire reprendre TOUT ce que
+    Po2 sait : le nom, l'adresse découpée et la référence cadastrale.
+
+    Les bâtiments Po2 ne stockent pas l'adresse découpée (vérifié en prod : numero_voirie,
+    nom_voie, section et numero_plan sont vides sur les 183 lignes). Tout est agrégé dans
+    `adresse_reconstituee` et `dgfip_reference_norm` : l'héritage doit donc reconstituer
+    le découpage, sinon le réexport ASTECH n'a ni numéro, ni voie, ni cadastre à écrire.
+    """
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=42,
+            city_id=1,
+            nom_batiment="ECOLE ELEMENTAIRE PAUL BERT",
+            nom_commune="Sete",
+            adresse_reconstituee="208 AV DU MARECHAL JUIN",
+            dgfip_reference_norm="34301000AK0149",
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+
+    update_asset(db_session, asset, building_id=42)
+
+    assert asset.resolved_name == "ECOLE ELEMENTAIRE PAUL BERT"
+    assert asset.resolved_housenumber == "208"
+    assert asset.resolved_street == "AV DU MARECHAL JUIN"
+    assert asset.resolved_label == "208 AV DU MARECHAL JUIN"
+    assert asset.resolved_section == "AK"
+    assert asset.resolved_numero_plan == "0149"
+    # Format attendu par ASTECH : section + plan sur 3 chiffres.
+    assert asset.resolved_refcad == "AK149"
+    assert asset.resolved_source == "building"
+    # L'adresse ASTECH d'origine reste intacte : le fichier source n'est pas altéré.
+    assert asset.source_libelvoie == "CAMILLE BLANC"
+
+
+def test_detachement_efface_les_valeurs_heritees(db_session: Session):
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(
+        Building(
+            id=42, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete",
+            adresse_reconstituee="1 QUAI DES MOULINS", dgfip_reference_norm="34301000AH0024",
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, building_id=42)
+    assert asset.resolved_refcad == "AH024"
+
+    update_asset(db_session, asset, clear_building=True, status="a_traiter")
+    assert asset.resolved_name is None
+    assert asset.resolved_refcad is None
+    assert asset.resolved_label is None

@@ -40,6 +40,10 @@ class LegacyAssetOut(BaseModel):
     resolved_citycode: str | None = None
     resolved_label: str | None = None
     resolved_source: str | None = None
+    resolved_name: str | None = None
+    resolved_section: str | None = None
+    resolved_numero_plan: str | None = None
+    resolved_refcad: str | None = None
     import_batch: str | None = None
     notes: str | None = None
     updated_at: datetime | None = None

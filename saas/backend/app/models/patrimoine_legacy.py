@@ -134,6 +134,12 @@ class PatrimoineLegacyAsset(Base):
     resolved_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # 'ign_reverse' (point posé à la main) ou 'building' (hérité du bâtiment Po2).
     resolved_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Nom retenu — décision Q11 : le nom Po2/IGN gagne et sera réécrit dans ASTECH.
+    resolved_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resolved_section: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    resolved_numero_plan: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Référence telle qu'attendue par ASTECH : section + numéro de plan sur 3 chiffres.
+    resolved_refcad: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # --- Traçabilité + gabarit de réexport ------------------------------------
     import_batch: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
