@@ -1,6 +1,6 @@
 ---
 type: decisions
-statut: en cours — increment 1 (import + rapprochement) livre ; Q2 et confirmations ASTECH en attente
+statut: en cours — ecran ASTECH en prod ; cible du rattachement (Q15-Q17) a trancher
 sujet: Rapprochement du fichier patrimoine historique de la collectivité (CODE_BIEN) avec le référentiel Po2 (/buildings/list)
 créé: 2026-08-18
 related:
@@ -639,3 +639,105 @@ périmètre), payload conservé, idempotence, et les deux garde-fous.
 - **Incrément 3** — réexport ASTECH : normalisation d'adresse (§11.1), `REFCAD`,
   coordonnées à virgule décimale, feuille de traçabilité.
 - Alimentation des champs d'adresse structurés côté `buildings` (§9.4).
+
+## 17. Cible du rattachement : Site / Bâtiment / Local — analyse (2026-08-19)
+
+> Demande utilisateur : pouvoir affecter manuellement un bien ASTECH à un **site**, un
+> **bâtiment** ou un **local**, et considérer les rattachements automatiques comme
+> **non finalisés** tant qu'ils n'ont pas été validés.
+> Question posée : « est-ce cohérent, et cela ne crée-t-il pas de conflit ? »
+
+### 17.1 État réel du référentiel Po2 (prod, 2026-08-19)
+
+| | Nombre | Adresse | Coordonnées | Cadastre |
+|---|---|---|---|---|
+| `sites` | **156** | texte libre (`adresse`) | **non** | **non** |
+| `buildings` | **183** | `adresse_reconstituee` (183/183) | **oui** (183/183) | `dgfip_reference_norm` (170/183) |
+| `locals` | **625** | **non** | **non** | **non** |
+
+173 bâtiments sur 183 sont rattachés à un site ; les 625 locaux ont tous un bâtiment parent.
+
+### 17.2 Réponse : oui, c'est cohérent — mais quatre frictions réelles
+
+**C'est cohérent métier.** L'utilisateur l'avait d'ailleurs annoncé dès Q1 : « plusieurs
+locaux dans un bâtiment ». Un `CODE_BIEN` ASTECH désigne souvent un local (logement de
+fonction, salle, WC publics), pas le bâtiment entier. Restreindre la cible au bâtiment
+force des rapprochements approximatifs.
+
+**Mais quatre points doivent être tranchés, sinon le chantier se casse plus loin :**
+
+**F1 — L'adresse et le cadastre ne vivent QUE sur le bâtiment.**
+Un local n'a ni adresse, ni parcelle, ni coordonnées. Un site n'a qu'une adresse en texte
+libre, sans cadastre ni position. Or l'objet du chantier est de **renvoyer adresse +
+cadastre à ASTECH**. Rattacher un bien à un local sans règle lui ferait donc **perdre**
+l'adresse qu'il aurait eue en visant le bâtiment.
+→ **Règle nécessaire** : quel que soit le niveau visé, l'adresse et le cadastre sont
+toujours résolus **sur le bâtiment porteur** — le bâtiment lui-même, ou le bâtiment
+parent du local. Pour un site, il n'existe pas de bâtiment porteur évident (un site en
+contient plusieurs) : voir **Q15**.
+
+**F2 — La carte ne sait afficher que des bâtiments.**
+Seuls les bâtiments ont des coordonnées. Un local ou un site n'est pas positionnable.
+→ Le glisser-déposer et le point vert restent donc **réservés au niveau bâtiment** ; le
+rattachement à un local ou à un site se fera **depuis la liste**, pas depuis la carte.
+Ce n'est pas un conflit, c'est une asymétrie à assumer explicitement dans l'écran.
+
+**F3 — Contradiction avec la suppression des sites (Q14).**
+L'utilisateur avait annoncé vouloir **supprimer les sites** du listing (Q3/Q14). Vouloir
+maintenant y rattacher des biens ASTECH est **incompatible**. À trancher : voir **Q15**.
+
+**F4 — La double affectation n'est PAS un conflit, mais doit être assumée.**
+Si un bien vise un local et un autre le bâtiment parent, les deux recevront au réexport
+**la même adresse et le même cadastre**. C'est le comportement correct — plusieurs locaux
+d'un même bâtiment partagent bien l'adresse. Le seul risque serait qu'un futur moteur
+déduise l'inverse (« même adresse ⇒ doublon »). À ne pas faire.
+La relation **N codes bien → 1 cible** reste donc valide, et la contrainte d'unicité
+porte toujours sur `(city_id, code_bien)`, jamais sur la cible.
+
+### 17.3 Le rattachement automatique n'est pas une validation — d'accord
+
+Aujourd'hui `compute_candidates` passe directement les évidences en `lie`, statut qui
+signifie aussi « validé par l'utilisateur ». Les **78 biens actuellement en `lie` n'ont
+jamais été confirmés par personne**.
+
+→ Ajouter un état intermédiaire **`propose`** : rattaché par le moteur, **à confirmer**.
+`lie` devient le statut « validé par un humain ». Les 78 rattachements automatiques
+existants basculent en `propose` par migration de données.
+
+Bénéfice direct : l'écran peut afficher « 78 à confirmer », et le réexport peut refuser
+d'écrire dans ASTECH un rattachement que personne n'a validé — garde-fou cohérent avec la
+règle « on n'écrit jamais dans le fichier de la collectivité ce qu'on n'a pas su produire
+proprement ».
+
+### 17.4 Modèle technique proposé
+
+Suivre le précédent déjà en production dans `PatrimoineMatchItem` : un couple
+**`target_type` + `target_id`** plutôt que trois colonnes de clés étrangères.
+
+- `target_type` ∈ `building` | `local` | `site`
+- `building_id` **conservé** comme *bâtiment porteur résolu* (le bâtiment lui-même, ou le
+  parent du local) : c'est lui qui alimente l'adresse, le cadastre et la carte. Cela évite
+  de réécrire toute la logique d'héritage et de réexport déjà en place.
+
+Le moteur de reconnaissance automatique continue de ne proposer que des **bâtiments** :
+les noms ASTECH ressemblent à des noms de bâtiments, et rien ne permettrait aujourd'hui de
+départager 625 locaux par le nom. Le niveau local/site reste un **choix manuel**.
+
+## 18. Questions ouvertes
+
+**Q15 — Peut-on rattacher à un SITE, et que devient alors l'adresse ?**
+Un site n'a ni coordonnées ni cadastre, et en contient plusieurs bâtiments. Trois options :
+(a) **ne pas autoriser le site comme cible** — seulement bâtiment et local ;
+(b) l'autoriser, mais le bien n'aura **ni cadastre ni position** à renvoyer à ASTECH ;
+(c) l'autoriser en désignant en plus un **bâtiment de référence** dans le site.
+→ **Recommandation : (a)**. Le site est un regroupement administratif ; le référentiel
+ASTECH décrit du bâti. Et cela lève la contradiction avec Q14 (suppression des sites).
+
+**Q16 — Confirme-t-on la suppression des sites (Q14), ou les garde-t-on ?**
+Les deux demandes s'excluent. Si les sites doivent disparaître, la réponse à Q15 est
+mécaniquement (a).
+
+**Q17 — Les 78 rattachements automatiques actuels : à confirmer un par un, ou validés en
+bloc une fois relus ?**
+→ **Recommandation** : les basculer en « à confirmer », avec un bouton « tout confirmer »
+sur la liste filtrée, pour ne pas imposer 78 clics.
