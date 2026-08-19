@@ -125,6 +125,62 @@ const pillStyle: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/**
+ * Filtres de second niveau, cumulables entre eux et avec le filtre de statut.
+ *
+ * Chacun découpe un tas réel, mesuré sur les 444 biens de la collectivité — pas une
+ * catégorie théorique :
+ * - 364 biens n'apparaissent pas sur la carte et ne se traitent donc que d'ici ;
+ * - 217 ont un candidat que le moteur propose (validation rapide) contre 150 qui
+ *   n'ont aucune piste et demandent un rattachement manuel complet ;
+ * - 44 sont sortis du parc ASTECH, dont 42 dans le tas manuel : les mettre de côté
+ *   allège d'autant le travail ;
+ * - 103 n'ont aucune adresse dans ASTECH, c'est le tas le plus coûteux.
+ */
+const REFINE_FILTERS: {
+  key: string;
+  label: string;
+  title: string;
+  test: (asset: LegacyAsset, isMappable: boolean) => boolean;
+}[] = [
+  {
+    key: "hors_carte",
+    label: "Absent de la carte",
+    title: "Ni position ni bâtiment localisé : ces biens ne se traitent que depuis cette liste.",
+    test: (_asset, isMappable) => !isMappable,
+  },
+  {
+    key: "candidat",
+    label: "Candidat à valider",
+    title: "Le moteur propose un bâtiment : il reste à le confirmer ou à le corriger.",
+    test: (asset) => asset.building_id == null && asset.candidate_building_id != null,
+  },
+  {
+    key: "sans_candidat",
+    label: "Aucune piste",
+    title: "Aucun nom approchant trouvé : rattachement entièrement manuel.",
+    test: (asset) => asset.building_id == null && asset.candidate_building_id == null,
+  },
+  {
+    key: "sans_adresse",
+    label: "Sans adresse ASTECH",
+    title: "Le fichier historique ne donne aucune voie : le nom est le seul point de départ.",
+    test: (asset) => !(asset.source_libelvoie ?? "").trim(),
+  },
+  {
+    key: "en_service",
+    label: "En service",
+    title: "Exclut les biens sortis du parc ASTECH (HORSPARC = O).",
+    test: (asset) => asset.horsparc !== "O",
+  },
+  {
+    key: "hors_parc",
+    label: "Sorti du parc",
+    title: "Biens désaffectés côté ASTECH : souvent inutile de les géolocaliser.",
+    test: (asset) => asset.horsparc === "O",
+  },
+];
+
 function assetLabel(asset: LegacyAsset): string {
   return asset.nomcourt || asset.designation || asset.code_bien;
 }
@@ -147,6 +203,11 @@ export default function PatrimoineAstechPage() {
   const rowRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
   const [statusFilter, setStatusFilter] = useState<string>("a_traiter");
+  // Filtres de second niveau, cumulables avec le statut. Ils découpent la charge de
+  // travail réelle : « à traiter » compte 338 biens, mais 217 ont un candidat à
+  // valider en un clic et 150 n'ont rien du tout. Sans ce tri, l'opératrice ne peut
+  // pas commencer par le tas rapide.
+  const [refineKeys, setRefineKeys] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -498,6 +559,33 @@ export default function PatrimoineAstechPage() {
     return ids;
   }, [assets, buildingsById]);
 
+  // Application des filtres de second niveau, cumulés (ET).
+  const visibleAssets = useMemo(() => {
+    if (refineKeys.length === 0) return assets;
+    const active = REFINE_FILTERS.filter((filter) => refineKeys.includes(filter.key));
+    return assets.filter((asset) =>
+      active.every((filter) => filter.test(asset, mappableAssetIds.has(asset.id))),
+    );
+  }, [assets, mappableAssetIds, refineKeys]);
+
+  // Compteur de chaque puce **dans le contexte des autres puces actives** : une puce
+  // qui donnerait une liste vide (« Candidat à valider » + « Aucune piste », qui
+  // s'excluent) affiche 0 au lieu de vider la liste sans explication.
+  const refineCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const filter of REFINE_FILTERS) {
+      const others = REFINE_FILTERS.filter(
+        (other) => other.key !== filter.key && refineKeys.includes(other.key),
+      );
+      counts[filter.key] = assets.filter(
+        (asset) =>
+          filter.test(asset, mappableAssetIds.has(asset.id)) &&
+          others.every((other) => other.test(asset, mappableAssetIds.has(asset.id))),
+      ).length;
+    }
+    return counts;
+  }, [assets, mappableAssetIds, refineKeys]);
+
   // --- Point ASTECH sur la carte ----------------------------------------------
   const legacyPoints = useMemo<LegacyMapPoint[]>(() => {
     const toPoint = (asset: LegacyAsset): LegacyMapPoint | null => {
@@ -677,6 +765,57 @@ export default function PatrimoineAstechPage() {
         ))}
       </div>
 
+      {/* Filtres de second niveau : ils affinent le statut sélectionné plutôt que de
+          le remplacer. Le compteur de chaque puce dit la taille du tas avant de cliquer. */}
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 14,
+        }}
+      >
+        <span style={{ fontSize: 12, color: TEXT_MUTED, marginRight: 2 }}>Affiner :</span>
+        {REFINE_FILTERS.map((filter) => {
+          const isActive = refineKeys.includes(filter.key);
+          return (
+            <button
+              key={filter.key}
+              type="button"
+              title={filter.title}
+              onClick={() =>
+                setRefineKeys((keys) =>
+                  keys.includes(filter.key)
+                    ? keys.filter((key) => key !== filter.key)
+                    : [...keys, filter.key],
+                )
+              }
+              style={{
+                ...btnSecondary,
+                padding: "4px 10px",
+                fontSize: 12,
+                borderColor: isActive ? "#a855f7" : "rgba(148, 163, 184, 0.35)",
+                background: isActive ? "rgba(168, 85, 247, 0.18)" : "transparent",
+                color: isActive ? "#e9d5ff" : TEXT,
+              }}
+            >
+              {filter.label}{" "}
+              <span style={{ color: TEXT_MUTED }}>{refineCounts[filter.key] ?? 0}</span>
+            </button>
+          );
+        })}
+        {refineKeys.length > 0 && (
+          <button
+            type="button"
+            style={{ ...btnSecondary, padding: "4px 10px", fontSize: 12, border: "none", color: TEXT_MUTED }}
+            onClick={() => setRefineKeys([])}
+          >
+            Tout afficher
+          </button>
+        )}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) 1fr", gap: 16, alignItems: "start" }}>
         {/* --- File des biens ASTECH ----------------------------------------- */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -693,8 +832,25 @@ export default function PatrimoineAstechPage() {
               Aucun bien pour ce filtre. Commence par importer un export ASTECH.
             </p>
           )}
+          {!assetsQuery.isLoading && assets.length > 0 && visibleAssets.length === 0 && (
+            <p style={{ color: TEXT_MUTED, fontSize: 13 }}>
+              Aucun bien ne réunit ces critères — « Candidat à valider » et « Aucune piste »
+              s'excluent, par exemple. <button
+                type="button"
+                style={{ ...btnSecondary, padding: "2px 8px", fontSize: 12 }}
+                onClick={() => setRefineKeys([])}
+              >
+                Tout afficher
+              </button>
+            </p>
+          )}
+          {visibleAssets.length > 0 && visibleAssets.length !== assets.length && (
+            <p style={{ color: TEXT_MUTED, fontSize: 12, margin: 0 }}>
+              {visibleAssets.length} bien(s) sur {assets.length}
+            </p>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 620, overflowY: "auto" }}>
-            {assets.map((asset) => {
+            {visibleAssets.map((asset) => {
               const isSelected = asset.id === selectedId;
               return (
                 <button
@@ -815,6 +971,17 @@ export default function PatrimoineAstechPage() {
               const asset = knownAssets.get(id);
               if (asset && statusFilter && asset.status !== statusFilter) {
                 setStatusFilter(asset.status);
+              }
+              // Les filtres d'affinage peuvent aussi masquer la ligne : on les lève
+              // plutôt que de sélectionner un bien invisible dans la liste.
+              if (
+                asset &&
+                refineKeys.length > 0 &&
+                !REFINE_FILTERS.filter((filter) => refineKeys.includes(filter.key)).every(
+                  (filter) => filter.test(asset, mappableAssetIds.has(asset.id)),
+                )
+              ) {
+                setRefineKeys([]);
               }
               setSelectedId(id);
             }}
