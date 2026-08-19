@@ -29,6 +29,7 @@ import {
   fetchLegacyCounts,
   importLegacyAstechFile,
   moveBuildingRequest,
+  resetLegacyLinks,
   updateLegacyAsset,
   type Building,
   type GeoJsonFeature,
@@ -104,6 +105,25 @@ function scoreColor(score: number | null): string {
   if (score >= 0.7) return "#fbbf24";
   return "#f87171";
 }
+
+// Pastille de statut affichée sur chaque ligne de la file. Sans elle, le filtre
+// « Tous » ne dit pas ce qui est déjà traité : l'opératrice ne voit pas ce qui lui
+// reste à faire, d'autant que les biens sans position n'apparaissent pas sur la carte.
+const STATUS_PILL: Record<string, { label: string; color: string; background: string }> = {
+  a_traiter: { label: "à traiter", color: "#fca5a5", background: "rgba(248, 113, 113, 0.16)" },
+  propose: { label: "à confirmer", color: "#fbbf24", background: "rgba(251, 191, 36, 0.16)" },
+  lie: { label: "traité", color: "#4ade80", background: "rgba(34, 197, 94, 0.18)" },
+  a_creer: { label: "à créer dans ASTECH", color: "#7dd3fc", background: "rgba(56, 189, 248, 0.16)" },
+  ignore: { label: "ignoré", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
+  hors_perimetre: { label: "hors périmètre", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
+};
+
+const pillStyle: CSSProperties = {
+  fontSize: 10,
+  padding: "1px 6px",
+  borderRadius: 999,
+  whiteSpace: "nowrap",
+};
 
 function assetLabel(asset: LegacyAsset): string {
   return asset.nomcourt || asset.designation || asset.code_bien;
@@ -314,6 +334,19 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  const resetLinksMutation = useMutation({
+    mutationFn: () => resetLegacyLinks(token!),
+    onSuccess: (result) => {
+      setFlash(
+        `${result.cleared} rapprochement(s) supprimé(s). Les biens sont repassés « à traiter » : ` +
+          "relance « 2. Reconnaître les noms » pour repartir du référentiel Po2 actuel.",
+      );
+      setSelectedId(null);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
   const moveBuildingMutation = useMutation({
     mutationFn: (variables: { buildingId: number; lat: number; lon: number }) =>
       moveBuildingRequest(token!, variables.buildingId, variables.lat, variables.lon),
@@ -451,6 +484,20 @@ export default function PatrimoineAstechPage() {
     setBuildingSearch("");
   }, [selectedId]);
 
+  // Biens réellement affichables sur la carte : ceux qui ont une position propre, ou
+  // un bâtiment rattaché qui en a une. Les autres ne sont visibles QUE dans la file de
+  // gauche — c'est là que l'opératrice doit pouvoir les repérer.
+  const mappableAssetIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const asset of assets) {
+      const building = asset.building_id != null ? buildingsById.get(asset.building_id) : null;
+      const latitude = asset.latitude ?? building?.latitude ?? null;
+      const longitude = asset.longitude ?? building?.longitude ?? null;
+      if (latitude != null && longitude != null) ids.add(asset.id);
+    }
+    return ids;
+  }, [assets, buildingsById]);
+
   // --- Point ASTECH sur la carte ----------------------------------------------
   const legacyPoints = useMemo<LegacyMapPoint[]>(() => {
     const toPoint = (asset: LegacyAsset): LegacyMapPoint | null => {
@@ -551,6 +598,33 @@ export default function PatrimoineAstechPage() {
             {confirmMutation.isPending
               ? "Confirmation…"
               : `3. Confirmer les ${counts.propose} rattachement(s) proposé(s)`}
+          </button>
+        )}
+        {/* Repartir d'une feuille blanche quand le référentiel Po2 a beaucoup bougé.
+            Destructif : on demande confirmation, en annonçant le nombre exact. */}
+        {((counts.lie ?? 0) + (counts.propose ?? 0)) > 0 && (
+          <button
+            type="button"
+            style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+            onClick={() => {
+              const total = (counts.lie ?? 0) + (counts.propose ?? 0);
+              if (
+                !window.confirm(
+                  `Supprimer les ${total} rapprochement(s) entre les biens ASTECH et Po2 ?\n\n` +
+                    "Les biens repassent « à traiter » et il faudra relancer « Reconnaître les noms ».\n" +
+                    "Les biens « à créer », « ignoré » et « hors périmètre » ne sont pas touchés, " +
+                    "et les points déjà posés sur la carte sont conservés.",
+                )
+              ) {
+                return;
+              }
+              resetLinksMutation.mutate();
+            }}
+            disabled={resetLinksMutation.isPending}
+          >
+            {resetLinksMutation.isPending
+              ? "Suppression…"
+              : "Supprimer tous les rapprochements"}
           </button>
         )}
       </div>
@@ -662,7 +736,47 @@ export default function PatrimoineAstechPage() {
                       </span>
                     )}
                   </div>
-                  {asset.candidate_label && (
+                  {/* Ce qu'il reste à faire, lisible sans ouvrir le bien : son statut,
+                      la cible quand il est traité, et le fait qu'il soit absent de la
+                      carte — ces biens-là ne se traitent QUE depuis cette liste. */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 5,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      marginTop: 4,
+                    }}
+                  >
+                    {STATUS_PILL[asset.status] && (
+                      <span
+                        style={{
+                          ...pillStyle,
+                          color: STATUS_PILL[asset.status].color,
+                          background: STATUS_PILL[asset.status].background,
+                        }}
+                      >
+                        {STATUS_PILL[asset.status].label}
+                      </span>
+                    )}
+                    {!mappableAssetIds.has(asset.id) && (
+                      <span
+                        title="Ce bien n'a ni position ni bâtiment localisé : il n'apparaît pas sur la carte et se traite depuis cette liste."
+                        style={{ ...pillStyle, color: "#c4b5fd", background: "rgba(168, 85, 247, 0.16)" }}
+                      >
+                        absent de la carte
+                      </span>
+                    )}
+                  </div>
+                  {asset.building_id != null && (
+                    <div style={{ fontSize: 12, color: "#86efac", marginTop: 2 }}>
+                      ✓ {buildingsById.get(asset.building_id)?.nom_batiment ?? `bâtiment ${asset.building_id}`}
+                      {asset.target_type === "local" && asset.local_id != null
+                        ? ` › ${localsById.get(asset.local_id)?.nom_local ?? "local"}`
+                        : ""}
+                    </div>
+                  )}
+                  {asset.building_id == null && asset.candidate_label && (
                     <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>
                       → {asset.candidate_label}{" "}
                       <span style={{ color: scoreColor(asset.candidate_score) }}>

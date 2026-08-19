@@ -106,6 +106,19 @@ def confirm_proposed_links(
     )
 
 
+@router.post("/reset-links")
+def reset_all_links(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    """Supprime TOUS les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
+
+    Les biens « à créer », « ignoré » et « hors périmètre » sont préservés : ce sont des
+    décisions de périmètre, pas des rapprochements.
+    """
+    return svc.reset_all_links(db, svc.resolve_city_id(db, current_user.city_id))
+
+
 @router.post("/from-building/{building_id}", response_model=LegacyAssetOut, status_code=status.HTTP_201_CREATED)
 def create_asset_from_building(
     building_id: int,
