@@ -6047,13 +6047,12 @@ button:disabled {
   box-shadow: 0 0 0 1px #7c3aed, 0 1px 4px rgba(15, 23, 42, 0.35);
 }
 
-/* Rattache a un batiment Po2 : moitie violet (ASTECH), moitie bleu (Po2). Le point
-   porte donc visuellement les deux referentiels reunis — un coup d'oeil sur la carte
-   montre ce qui est apparie et ce qui reste a traiter. */
+/* Apparie ASTECH + Po2 : vert. Une couleur franche, distincte du violet (ASTECH seul)
+   et du bleu (Po2 seul) — un coup d'oeil sur la carte montre ce qui est fait. */
 .legacy-marker-dot.is-linked {
-  background: linear-gradient(90deg, #a855f7 0 50%, #2563eb 50% 100%);
+  background: #22c55e;
   border-color: #ffffff;
-  box-shadow: 0 0 0 1px #5b21b6, 0 1px 4px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 0 0 1px #15803d, 0 1px 4px rgba(15, 23, 42, 0.45);
 }
 
 .legacy-marker-dot.is-active {
@@ -6077,7 +6076,7 @@ button:disabled {
 /* Rattache mais jamais positionne : on garde le bicolore (l'information « rattache »
    prime) et le pointille signale que le point reste a placer. */
 .legacy-marker-dot.is-linked.is-provisional {
-  background: linear-gradient(90deg, #a855f7 0 50%, #2563eb 50% 100%);
+  background: #22c55e;
   border-style: dashed;
   border-color: #ffffff;
 }
