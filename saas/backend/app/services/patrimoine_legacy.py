@@ -30,10 +30,14 @@ from sqlalchemy.orm import Session
 
 from app.models.building import Building
 from app.models.city import City
+from app.models.local import Local
 from app.models.patrimoine_legacy import (
     ORIGIN_AUTO,
     ORIGIN_MANUAL,
     STATUS_LINKED,
+    STATUS_PROPOSED,
+    TARGET_BUILDING,
+    TARGET_LOCAL,
     STATUS_OUT_OF_SCOPE,
     STATUS_TO_CREATE,
     STATUS_TODO,
@@ -456,7 +460,9 @@ def compute_candidates(
             db.add(asset)
             continue
         asset.building_id = candidate["id"]
-        asset.status = STATUS_LINKED
+        asset.target_type = TARGET_BUILDING
+        # Le moteur PROPOSE, il ne valide pas : la confirmation reste humaine.
+        asset.status = STATUS_PROPOSED
         asset.link_origin = ORIGIN_AUTO
         db.add(asset)
         linked += 1
@@ -522,6 +528,7 @@ def update_asset(
     *,
     status: str | None = None,
     building_id: int | None = None,
+    local_id: int | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
     notes: str | None = None,
@@ -537,10 +544,32 @@ def update_asset(
     """
     if clear_building:
         asset.building_id = None
+        asset.local_id = None
+        asset.target_type = TARGET_BUILDING
         asset.link_origin = None
         _clear_resolved_address(asset)
+    elif local_id is not None:
+        # Cible « local » : le bâtiment porteur reste renseigné, c'est lui qui porte
+        # l'adresse, le cadastre et la position — un local n'a rien de tout cela.
+        local = db.get(Local, local_id)
+        if local is None:
+            raise ValueError("Local introuvable.")
+        asset.local_id = local_id
+        asset.building_id = local.building_id
+        asset.target_type = TARGET_LOCAL
+        asset.status = STATUS_LINKED
+        asset.link_origin = ORIGIN_MANUAL
+        building = db.get(Building, local.building_id)
+        if building is not None:
+            _inherit_building_address(asset, building)
+            if building.latitude is not None and building.longitude is not None:
+                asset.latitude = building.latitude
+                asset.longitude = building.longitude
+                latitude = longitude = None
     elif building_id is not None:
         asset.building_id = building_id
+        asset.local_id = None
+        asset.target_type = TARGET_BUILDING
         asset.status = STATUS_LINKED
         asset.link_origin = ORIGIN_MANUAL
         building = db.get(Building, building_id)
@@ -749,3 +778,38 @@ def get_building_for_city(db: Session, city_id: int | None, building_id: int) ->
     if city_id is not None:
         statement = statement.where(Building.city_id == city_id)
     return db.scalar(statement)
+
+
+def confirm_proposed(
+    db: Session, city_id: int | None, asset_ids: list[int] | None = None
+) -> dict[str, int]:
+    """Valide les rattachements proposes par le moteur.
+
+    Sans `asset_ids`, confirme tout ce qui est en attente : sur 78 propositions, les
+    confirmer une par une n'apporterait rien une fois la liste relue.
+    """
+    statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.status == STATUS_PROPOSED
+    )
+    if city_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.city_id == city_id)
+    if asset_ids:
+        statement = statement.where(PatrimoineLegacyAsset.id.in_(asset_ids))
+
+    confirmed = 0
+    for asset in db.scalars(statement):
+        if asset.building_id is None:
+            continue
+        asset.status = STATUS_LINKED
+        db.add(asset)
+        confirmed += 1
+    db.commit()
+    return {"confirmed": confirmed}
+
+
+def list_locals_for_building(db: Session, building_id: int) -> list[Local]:
+    return list(
+        db.scalars(
+            select(Local).where(Local.building_id == building_id).order_by(Local.nom_local.asc())
+        )
+    )

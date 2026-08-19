@@ -8,6 +8,7 @@ from app.core.db import get_db
 from app.models.user import User
 from app.schemas.patrimoine_legacy import (
     LegacyAssetOut,
+    LegacyConfirmIn,
     LegacyAssetUpdateIn,
     LegacyCandidatesResult,
     LegacyImportResult,
@@ -89,6 +90,20 @@ def counts(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, int]:
     return svc.counts_by_status(db, svc.resolve_city_id(db, current_user.city_id))
+
+
+@router.post("/confirm")
+def confirm_proposed_links(
+    payload: LegacyConfirmIn | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    """Valide les rattachements proposes par le moteur (statut « a confirmer »)."""
+    return svc.confirm_proposed(
+        db,
+        svc.resolve_city_id(db, current_user.city_id),
+        asset_ids=payload.asset_ids if payload else None,
+    )
 
 
 @router.post("/from-building/{building_id}", response_model=LegacyAssetOut, status_code=status.HTTP_201_CREATED)

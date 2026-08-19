@@ -18,6 +18,8 @@ import { useAuth } from "../providers/AuthProvider";
 import {
   attachBuildingIgnRequest,
   computeLegacyCandidates,
+  confirmLegacyProposals,
+  fetchAllLocals,
   fetchBuildings,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
@@ -36,6 +38,7 @@ import {
 const STATUS_LABEL: Record<string, string> = {
   "": "Tous",
   a_traiter: "À traiter",
+  propose: "À confirmer",
   lie: "Rattaché",
   hors_perimetre: "Hors périmètre",
   a_creer: "À créer",
@@ -44,7 +47,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 // « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
 // est simplement filtrée sur « À traiter ».
-const STATUS_ORDER = ["", "a_traiter", "lie", "a_creer", "hors_perimetre", "ignore"] as const;
+const STATUS_ORDER = ["", "a_traiter", "propose", "lie", "a_creer", "hors_perimetre", "ignore"] as const;
 
 // Centre de Sète : point de départ d'un bien jamais localisé, que l'utilisateur
 // fait ensuite glisser à la bonne place.
@@ -154,6 +157,12 @@ export default function PatrimoineAstechPage() {
     enabled: !!token,
   });
 
+  const localsQuery = useQuery({
+    queryKey: ["buildings", "locals"],
+    queryFn: () => fetchAllLocals(token!),
+    enabled: !!token,
+  });
+
   const buildingsQuery = useQuery({
     queryKey: ["buildings"],
     queryFn: () => fetchBuildings(token!),
@@ -191,6 +200,12 @@ export default function PatrimoineAstechPage() {
     return index;
   }, [buildings]);
 
+  const locals = useMemo(() => localsQuery.data ?? [], [localsQuery.data]);
+  const localsById = useMemo(() => {
+    const index = new Map<number, (typeof locals)[number]>();
+    for (const local of locals) index.set(local.id, local);
+    return index;
+  }, [locals]);
   const inspectedBuilding = useMemo(
     () => (inspectedBuildingId != null ? buildingsById.get(inspectedBuildingId) ?? null : null),
     [buildingsById, inspectedBuildingId],
@@ -202,6 +217,11 @@ export default function PatrimoineAstechPage() {
     const id = selected.building_id ?? selected.candidate_building_id;
     return id != null ? buildingsById.get(id) ?? null : null;
   }, [buildingsById, selected]);
+
+  const localsOfTarget = useMemo(
+    () => (targetBuilding ? locals.filter((local) => local.building_id === targetBuilding.id) : []),
+    [locals, targetBuilding],
+  );
 
   const invalidate = () => {
     // La cle ["legacy-assets"] couvre aussi ["legacy-assets", "lie"] : la couche
@@ -244,6 +264,15 @@ export default function PatrimoineAstechPage() {
         `Reconnaissance : ${result.auto_linked} rattachement(s) évident(s), ` +
           `${result.proposed} candidat(s) proposé(s) sur ${result.scanned} bien(s).`,
       );
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: () => confirmLegacyProposals(token!),
+    onSuccess: (result) => {
+      setFlash(`${result.confirmed} rattachement(s) confirmé(s).`);
       invalidate();
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
@@ -463,6 +492,18 @@ export default function PatrimoineAstechPage() {
         >
           {candidatesMutation.isPending ? "Analyse…" : "2. Reconnaître les noms"}
         </button>
+        {(counts.propose ?? 0) > 0 && (
+          <button
+            type="button"
+            style={btnSecondary}
+            onClick={() => confirmMutation.mutate()}
+            disabled={confirmMutation.isPending}
+          >
+            {confirmMutation.isPending
+              ? "Confirmation…"
+              : `3. Confirmer les ${counts.propose} rattachement(s) proposé(s)`}
+          </button>
+        )}
       </div>
 
       {flash && (
@@ -491,7 +532,7 @@ export default function PatrimoineAstechPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginBottom: 16 }}>
         {STATUS_ORDER.map((status) => (
           <button
             key={status}
@@ -846,6 +887,59 @@ export default function PatrimoineAstechPage() {
                         Écarter
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Cible du rattachement. Le site n'est pas proposé (décision Q15) :
+                    il n'a ni position ni cadastre à transmettre à ASTECH. */}
+                {targetBuilding && (
+                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 13 }}>
+                      Cible :{" "}
+                      <strong>
+                        {selected.target_type === "local"
+                          ? localsById.get(selected.local_id ?? -1)?.nom_local ?? "Local"
+                          : targetBuilding.nom_batiment}
+                      </strong>{" "}
+                      <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
+                        ({selected.target_type === "local" ? "local" : "bâtiment"}
+                        {selected.target_type === "local"
+                          ? ` de ${targetBuilding.nom_batiment}`
+                          : ""}
+                        )
+                      </span>
+                    </p>
+                    {localsOfTarget.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <label style={{ fontSize: 12, color: TEXT_MUTED }}>
+                          Préciser un local&nbsp;
+                          <select
+                            value={selected.target_type === "local" ? String(selected.local_id ?? "") : ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              updateMutation.mutate({
+                                id: selected.id,
+                                payload: value
+                                  ? { local_id: Number(value) }
+                                  : { building_id: targetBuilding.id },
+                              });
+                            }}
+                            style={{ ...input, width: "auto", padding: "4px 8px" }}
+                          >
+                            <option value="">— tout le bâtiment —</option>
+                            {localsOfTarget.map((local) => (
+                              <option key={local.id} value={local.id}>
+                                {local.nom_local}
+                                {local.niveau ? ` (${local.niveau})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                          L'adresse et le cadastre restent ceux du bâtiment.
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -37,10 +37,19 @@ from app.core.db import Base
 
 # Statuts de traitement d'un bien historique.
 STATUS_TODO = "a_traiter"
+# Rattache par le moteur, **a confirmer** : un rattachement automatique n'est pas une
+# validation. `lie` signifie « valide par un humain ».
+STATUS_PROPOSED = "propose"
 STATUS_LINKED = "lie"
 STATUS_IGNORED = "ignore"
 STATUS_OUT_OF_SCOPE = "hors_perimetre"
 STATUS_TO_CREATE = "a_creer"
+
+# Cibles autorisées. Le site n'en est pas une : il regroupe plusieurs bâtiments et ne
+# porte ni position ni parcelle (décision Q15/Q16). Les sites restent néanmoins dans la
+# plateforme, ils assurent la hiérarchie Site > Bâtiment > Local.
+TARGET_BUILDING = "building"
+TARGET_LOCAL = "local"
 
 # Origine du rattachement, pour la feuille de traçabilité du réexport.
 ORIGIN_AUTO = "auto"
@@ -103,10 +112,18 @@ class PatrimoineLegacyAsset(Base):
     source_commune: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     source_refcad: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
-    # --- Rattachement au référentiel Po2 (N codes bien -> 1 bâtiment) ----------
+    # --- Rattachement au référentiel Po2 (N codes bien -> 1 cible) -------------
+    # `building_id` est le **bâtiment porteur résolu** : pour une cible « local », c'est
+    # le bâtiment parent. Seuls les bâtiments portent adresse, position et cadastre, donc
+    # c'est toujours lui qui alimente l'héritage, la carte et le réexport.
     building_id: Mapped[int | None] = mapped_column(
         ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    local_id: Mapped[int | None] = mapped_column(
+        ForeignKey("locals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # 'building' ou 'local'. Le SITE est exclu (Q15) : ni coordonnées, ni cadastre.
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False, default=TARGET_BUILDING)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=STATUS_TODO, index=True
     )
