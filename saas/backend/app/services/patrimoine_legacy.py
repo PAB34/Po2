@@ -39,6 +39,7 @@ from app.models.patrimoine_legacy import (
     PatrimoineLegacyAsset,
     PatrimoineLegacyImport,
 )
+from app.services.building_naming import reverse_geocode_point
 from app.services.cvc import _site_similarity
 
 # --- Périmètre par défaut ----------------------------------------------------
@@ -100,6 +101,10 @@ AMBIGUITY_GAP = 0.05
 # exception, « ECOLE ELEMENTAIRE PAUL BERT » -> « ECOLE ELEMENTAIRE PAUL BERT » (score 1,0)
 # était bloqué à cause d'une école voisine au nom ressemblant.
 EXACT_MATCH_SCORE = 0.98
+
+# Provenance de l'adresse resolue, pour la feuille de tracabilite du reexport.
+RESOLVED_FROM_BUILDING = "building"
+RESOLVED_FROM_REVERSE = "ign_reverse"
 
 
 def _text(value: Any) -> str | None:
@@ -522,26 +527,90 @@ def update_asset(
     clear_building: bool = False,
 ) -> PatrimoineLegacyAsset:
     """Décision utilisateur. Le `code_bien` n'est jamais modifiable : c'est la clé de
-    mise à jour d'ASTECH."""
+    mise à jour d'ASTECH.
+
+    Deux enrichissements automatiques, pour éviter une saisie manuelle :
+    - rattachement à un bâtiment Po2 → le bien **hérite de son adresse et de sa position** ;
+    - point déplacé sans rattachement → l'adresse est **résolue par géocodage inverse**.
+    Dans les deux cas l'adresse d'origine (`source_*`) reste intacte.
+    """
     if clear_building:
         asset.building_id = None
         asset.link_origin = None
+        _clear_resolved_address(asset)
     elif building_id is not None:
         asset.building_id = building_id
         asset.status = STATUS_LINKED
         asset.link_origin = ORIGIN_MANUAL
+        building = db.get(Building, building_id)
+        if building is not None:
+            _inherit_building_address(asset, building)
+            # Le point ASTECH rejoint le bâtiment : c'est le geste « je dépose le
+            # point sur le bâtiment Po2 », il ne doit pas rester à côté.
+            if building.latitude is not None and building.longitude is not None:
+                asset.latitude = building.latitude
+                asset.longitude = building.longitude
+                latitude = longitude = None
     if status is not None:
         asset.status = status
     if latitude is not None:
         asset.latitude = latitude
     if longitude is not None:
         asset.longitude = longitude
+    if (
+        (latitude is not None or longitude is not None)
+        and asset.building_id is None
+        and asset.latitude is not None
+        and asset.longitude is not None
+    ):
+        _resolve_address_from_point(asset)
     if notes is not None:
         asset.notes = notes.strip() or None
     db.add(asset)
     db.commit()
     db.refresh(asset)
     return asset
+
+
+def _clear_resolved_address(asset: PatrimoineLegacyAsset) -> None:
+    asset.resolved_housenumber = None
+    asset.resolved_street = None
+    asset.resolved_postcode = None
+    asset.resolved_city = None
+    asset.resolved_citycode = None
+    asset.resolved_label = None
+    asset.resolved_source = None
+
+
+def _inherit_building_address(asset: PatrimoineLegacyAsset, building: Building) -> None:
+    """Le bien reprend l'adresse du bâtiment Po2 auquel il vient d'être rattaché."""
+    street = " ".join(part for part in [building.nature_voie, building.nom_voie] if part) or None
+    asset.resolved_housenumber = building.numero_voirie or None
+    asset.resolved_street = street
+    asset.resolved_postcode = building.code_postal or None
+    asset.resolved_city = building.nom_commune or None
+    asset.resolved_citycode = None
+    asset.resolved_label = building.adresse_reconstituee or (
+        " ".join(part for part in [building.numero_voirie, street, building.nom_commune] if part) or None
+    )
+    asset.resolved_source = RESOLVED_FROM_BUILDING
+
+
+def _resolve_address_from_point(asset: PatrimoineLegacyAsset) -> None:
+    """Géocodage inverse du point posé. Best effort : jamais bloquant."""
+    try:
+        found = reverse_geocode_point(asset.latitude, asset.longitude)
+    except Exception:
+        return
+    if not found.get("found"):
+        return
+    asset.resolved_housenumber = (found.get("housenumber") or None)
+    asset.resolved_street = (found.get("street") or None)
+    asset.resolved_postcode = (found.get("postcode") or None)
+    asset.resolved_city = (found.get("city") or None)
+    asset.resolved_citycode = (found.get("citycode") or None)
+    asset.resolved_label = (found.get("label") or None)
+    asset.resolved_source = RESOLVED_FROM_REVERSE
 
 
 def resolve_city_id(db: Session, city_id: int | None) -> int | None:

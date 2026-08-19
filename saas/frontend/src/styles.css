@@ -6047,6 +6047,14 @@ button:disabled {
   box-shadow: 0 0 0 1px #7c3aed, 0 1px 4px rgba(15, 23, 42, 0.35);
 }
 
+/* Rattache a un batiment Po2 : violet plein et sature. C'est le repere visuel de
+   l'avancement — un coup d'oeil sur la carte montre ce qui reste a traiter. */
+.legacy-marker-dot.is-linked {
+  background: #7c3aed;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #5b21b6, 0 1px 4px rgba(15, 23, 42, 0.45);
+}
+
 .legacy-marker-dot.is-active {
   background: #7c3aed;
   cursor: grab;
@@ -6063,4 +6071,12 @@ button:disabled {
   background: #ffffff;
   border-style: dashed;
   border-color: #a855f7;
+}
+
+/* Rattache mais jamais positionne : on garde le violet (l'information « rattache »
+   prime) et le pointille signale que le point reste a placer. */
+.legacy-marker-dot.is-linked.is-provisional {
+  background: #7c3aed;
+  border-style: dashed;
+  border-color: #ffffff;
 }

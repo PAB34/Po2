@@ -122,6 +122,19 @@ class PatrimoineLegacyAsset(Base):
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # --- Adresse résolue depuis le point posé (géocodage inverse) --------------
+    # Stockée À CÔTÉ de l'adresse d'origine (`source_*`), jamais à sa place : le
+    # fichier ASTECH reste intact, et le réexport a besoin des deux pour tracer
+    # l'ancienne et la nouvelle valeur.
+    resolved_housenumber: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    resolved_street: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resolved_postcode: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    resolved_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    resolved_citycode: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    resolved_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 'ign_reverse' (point posé à la main) ou 'building' (hérité du bâtiment Po2).
+    resolved_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     # --- Traçabilité + gabarit de réexport ------------------------------------
     import_batch: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     source_row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)

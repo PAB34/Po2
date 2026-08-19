@@ -70,6 +70,8 @@ export type LegacyMapPoint = {
   longitude: number;
   /** `true` quand le point n'a pas encore été confirmé (posé par défaut, à déplacer). */
   isProvisional?: boolean;
+  /** `true` quand le bien est rattaché à un bâtiment Po2 : violet plein. */
+  isLinked?: boolean;
 };
 
 type WindowWithLeaflet = Window & {
@@ -112,6 +114,14 @@ type BuildingPortfolioMapProps = {
   activeLegacyId?: number | null;
   onSelectLegacyId?: (legacyId: number) => void;
   onMoveLegacyPoint?: (legacyId: number, lat: number, lon: number) => void;
+  /**
+   * Appele quand le point ASTECH est lache SUR un batiment Po2 (a moins de
+   * `legacyDropRadiusM` metres). Le geste « je depose le point sur le batiment »
+   * vaut rattachement : le bien herite alors des informations du batiment.
+   */
+  onDropLegacyOnBuilding?: (legacyId: number, buildingId: number) => void;
+  /** Rayon d'accrochage du depot, en metres. */
+  legacyDropRadiusM?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +134,18 @@ function buildAddressLine(
   if (building.adresse_reconstituee) return building.adresse_reconstituee;
   const parts = [building.numero_voirie, building.nature_voie, building.nom_voie].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" ")}, ${building.nom_commune}` : building.nom_commune;
+}
+
+/** Distance approximative entre deux points, en metres. */
+function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 function toCoordinate(value: unknown): number | null {
@@ -258,6 +280,8 @@ export function BuildingPortfolioMap({
   activeLegacyId = null,
   onSelectLegacyId,
   onMoveLegacyPoint,
+  onDropLegacyOnBuilding,
+  legacyDropRadiusM = 30,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -268,6 +292,9 @@ export function BuildingPortfolioMap({
   const attachLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const centerMarkerRef = useRef<RuntimeLayer | null>(null);
   const legacyLayerRef = useRef<RuntimeFeatureGroup | null>(null);
+  // Derniere « intention de cadrage » appliquee : evite de rezoomer a chaque
+  // rafraichissement de donnees (cf. bloc de cadrage plus bas).
+  const framingSignatureRef = useRef<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   const mappableBuildings = useMemo(
@@ -357,22 +384,37 @@ export function BuildingPortfolioMap({
         icon: runtime.divIcon({
           className: "legacy-marker",
           html: `<span class="legacy-marker-dot${isActive ? " is-active" : ""}${
-            point.isProvisional ? " is-provisional" : ""
-          }"></span>`,
+            point.isLinked ? " is-linked" : ""
+          }${point.isProvisional ? " is-provisional" : ""}"></span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         }),
       });
       marker.bindPopup?.(
-        `<strong>${point.label}</strong><br/><em>Bien ASTECH${
-          point.isProvisional ? " — position à confirmer" : ""
-        }</em>`,
+        `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
+          point.isLinked ? "rattaché à un bâtiment Po2" : "non rattaché"
+        }${point.isProvisional ? ", position à confirmer" : ""}</em>`,
       );
       marker.on?.("click", () => onSelectLegacyId?.(point.id));
-      if (isActive && onMoveLegacyPoint) {
+      if (isActive && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
         marker.on?.("dragend", () => {
           const position = marker.getLatLng();
-          onMoveLegacyPoint(point.id, position.lat, position.lng);
+          // Depot sur un batiment Po2 : on cherche le plus proche dans le rayon
+          // d'accrochage. C'est le geste « ce bien ASTECH, c'est ce batiment-la ».
+          let nearest: { id: number; distance: number } | null = null;
+          for (const building of mappableBuildings) {
+            const distance = distanceMeters(
+              position.lat, position.lng, building.latitude, building.longitude,
+            );
+            if (distance <= legacyDropRadiusM && (nearest === null || distance < nearest.distance)) {
+              nearest = { id: building.id, distance };
+            }
+          }
+          if (nearest !== null && onDropLegacyOnBuilding) {
+            onDropLegacyOnBuilding(point.id, nearest.id);
+            return;
+          }
+          onMoveLegacyPoint?.(point.id, position.lat, position.lng);
         });
       }
       layerGroup.addLayer(marker);
@@ -383,7 +425,10 @@ export function BuildingPortfolioMap({
     return () => {
       layerGroup.clearLayers();
     };
-  }, [activeLegacyId, legacyPoints, mapReady, onMoveLegacyPoint, onSelectLegacyId]);
+  }, [
+    activeLegacyId, legacyDropRadiusM, legacyPoints, mappableBuildings, mapReady,
+    onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId,
+  ]);
 
   // ------------------------------------------------------------------
   // Couche bâtiments du patrimoine (markers circulaires)
@@ -397,7 +442,11 @@ export function BuildingPortfolioMap({
     buildingsLayerRef.current = null;
 
     if (mappableBuildings.length === 0) {
-      map.setView([43.4028, 3.6928], 13);
+      // Meme garde que le cadrage plus bas : ne recentrer qu'au premier passage.
+      if (framingSignatureRef.current !== "empty") {
+        framingSignatureRef.current = "empty";
+        map.setView([43.4028, 3.6928], 13);
+      }
       return;
     }
 
@@ -440,7 +489,21 @@ export function BuildingPortfolioMap({
     layerGroup.addTo(map);
     buildingsLayerRef.current = layerGroup;
 
-    if (attachMode !== "ign") {
+    // Le recadrage ne doit se produire QUE si l'intention de cadrage a change
+    // (selection, focus, mode). Sans ce garde, le moindre rafraichissement de la
+    // liste des batiments — par exemple apres avoir deplace un point ASTECH —
+    // rejouait fitBounds et rezoomait la carte au niveau ville : l'utilisateur
+    // devait rezoomer manuellement apres chaque deplacement.
+    const framingSignature = [
+      attachMode,
+      focusLatLon ? `${focusLatLon.lat},${focusLatLon.lon}` : "",
+      [...highlightedSet].sort((a, b) => a - b).join("-"),
+      mappableBuildings.length > 0 ? "has-buildings" : "empty",
+    ].join("|");
+    const shouldFrame = framingSignatureRef.current !== framingSignature;
+    framingSignatureRef.current = framingSignature;
+
+    if (attachMode !== "ign" && shouldFrame) {
       // Cadrage normal (non-attach)
       if (focusLatLon) {
         map.setView([focusLatLon.lat, focusLatLon.lon], 18);

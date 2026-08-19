@@ -1532,3 +1532,64 @@ def _geopf_parcel_at_point(lat: float, lon: float) -> dict[str, Any]:
         "parcel_feature_collection": {"type": "FeatureCollection", "features": features},
         "parcel_labels": labels,
     }
+
+
+GEOPF_REVERSE_URL = "https://data.geopf.fr/geocodage/reverse"
+
+
+def reverse_geocode_point(lat: float, lon: float) -> dict[str, Any]:
+    """Adresse la plus proche d'un point (geocodage inverse IGN/BAN).
+
+    Sert quand l'utilisateur pose lui-meme un bien sur la carte : on lui propose
+    l'adresse correspondante plutot que de la lui faire saisir. Les champs sont rendus
+    separes (numero, voie, code postal, commune, INSEE) car c'est sous cette forme
+    qu'ils devront etre reecrits dans le referentiel d'origine.
+    """
+    latitude = _safe_float(lat)
+    longitude = _safe_float(lon)
+    if latitude is None or longitude is None:
+        raise ValueError("Coordonnees invalides.")
+    cache_key = f"{round(latitude, 6)}|{round(longitude, 6)}|reverse"
+    cached = _APP_STATE["cache_geocode"].get(cache_key)
+    if isinstance(cached, dict) and "found" in cached:
+        return cached
+
+    empty = {
+        "found": False, "housenumber": None, "street": None, "postcode": None,
+        "city": None, "citycode": None, "label": None, "distance_m": None,
+    }
+    try:
+        response = _rate_limited_get(
+            GEOPF_REVERSE_URL,
+            {"lon": longitude, "lat": latitude, "limit": 1, "index": "address"},
+            host_key="geopf_search",
+            timeout=30,
+        )
+        features = response.json().get("features") or []
+    except Exception:
+        # Best effort : un geocodage inverse indisponible ne doit jamais empecher
+        # d'enregistrer la position posee par l'utilisateur.
+        return empty
+    if not features:
+        _store_in_bounded_cache("cache_geocode", cache_key, empty)
+        return empty
+
+    properties = features[0].get("properties", {}) or {}
+    housenumber = _display_text(properties.get("housenumber")) or None
+    street = _display_text(properties.get("street") or properties.get("name")) or None
+    # `name` porte « 12 Rue X » pour une adresse et « Rue X » pour une voie : on retire
+    # le numero pour ne garder que le libelle de voie.
+    if housenumber and street and street.startswith(f"{housenumber} "):
+        street = street[len(housenumber) + 1:]
+    result = {
+        "found": True,
+        "housenumber": housenumber,
+        "street": street,
+        "postcode": _display_text(properties.get("postcode")) or None,
+        "city": _display_text(properties.get("city")) or None,
+        "citycode": _display_text(properties.get("citycode")) or None,
+        "label": _display_text(properties.get("label")) or None,
+        "distance_m": _safe_float(properties.get("distance")),
+    }
+    _store_in_bounded_cache("cache_geocode", cache_key, result)
+    return result
