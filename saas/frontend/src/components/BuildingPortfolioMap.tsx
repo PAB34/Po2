@@ -299,6 +299,7 @@ export function BuildingPortfolioMap({
   // Derniere « intention de cadrage » appliquee : evite de rezoomer a chaque
   // rafraichissement de donnees (cf. bloc de cadrage plus bas).
   const framingSignatureRef = useRef<string | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   const mappableBuildings = useMemo(
@@ -352,10 +353,24 @@ export function BuildingPortfolioMap({
       setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
       window.setTimeout(() => map.invalidateSize?.(), 80);
+
+      // Leaflet fige les dimensions du conteneur a l'initialisation. Or la carte vit
+      // dans une grille dont la colonne de gauche s'elargit quand les donnees arrivent,
+      // bien apres ces deux rafraichissements : la carte gardait alors une largeur
+      // perimee et n'affichait aucune tuile au premier chargement. Elle ne reapparaissait
+      // qu'apres un aller-retour de navigation, qui la remontait a la bonne taille.
+      // L'observateur rattrape tout changement de taille, d'ou qu'il vienne.
+      if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+        const observer = new ResizeObserver(() => map.invalidateSize?.());
+        observer.observe(containerRef.current);
+        resizeObserverRef.current = observer;
+      }
     }
     void mountMap();
     return () => {
       disposed = true;
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
