@@ -181,6 +181,15 @@ function buildImportedLocalPayload(row: ImportedRowState): CreateLocalPayload {
     niveau: pickString(row.source_floor),
     statut_occupation: pickString(row.source_occupancy_status),
     commentaire: details.length > 0 ? details.join(" | ") : undefined,
+    // Le fichier d'inventaire porte une adresse ET une parcelle sur chaque ligne, y
+    // compris pour les locaux. Elles etaient jetees ici : seul le nom et le niveau
+    // etaient conserves, et la parcelle finissait en texte libre dans le commentaire.
+    adresse_reconstituee: pickString(row.editableAddress) ?? pickString(row.address_display),
+    code_postal: pickString(row.resolved_postcode),
+    nom_commune: pickString(row.resolved_city),
+    latitude: row.lat ?? undefined,
+    longitude: row.lon ?? undefined,
+    dgfip_reference_norm: pickString(row.source_parcel),
   };
 }
 

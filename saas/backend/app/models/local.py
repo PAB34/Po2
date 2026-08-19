@@ -18,6 +18,15 @@ class Local(Base):
     usage: Mapped[str | None] = mapped_column(String(120), nullable=True)
     statut_occupation: Mapped[str | None] = mapped_column(String(120), nullable=True)
     commentaire: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Adresse propre du local. Le fichier d'inventaire en porte une sur chaque ligne,
+    # y compris pour les locaux : une entrée ou un numéro de voirie peut différer de
+    # celui du bâtiment. Elle était jusqu'ici perdue à l'import.
+    adresse_reconstituee: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    code_postal: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    nom_commune: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dgfip_reference_norm: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
