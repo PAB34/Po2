@@ -730,6 +730,7 @@ export default function PatrimoineAstechPage() {
           isProvisional: true,
           isLinked: asset.building_id != null,
           isLocalTarget: asset.target_type === "local",
+          isProposal: asset.status === "propose",
           buildingId: asset.building_id,
           buildingLabel: building?.nom_batiment ?? null,
         };
@@ -742,8 +743,10 @@ export default function PatrimoineAstechPage() {
         isProvisional: asset.latitude == null,
         isLinked: asset.building_id != null,
         isLocalTarget: asset.target_type === "local",
-        // Permet à la carte de fusionner ce point avec le marqueur du bâtiment :
-        // un bien rattaché et son bâtiment sont une seule réalité.
+        // « propose » = rattaché par le moteur, pas encore confirmé par un humain.
+        // La carte l'affiche en ambre : une suggestion ne doit pas avoir l'air d'une
+        // décision prise.
+        isProposal: asset.status === "propose",
         buildingId: asset.building_id,
         buildingLabel: building?.nom_batiment ?? null,
       };
@@ -1262,7 +1265,13 @@ export default function PatrimoineAstechPage() {
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#22c55e", border: "2px solid #fff", display: "inline-block" }} />
-              Apparié ASTECH + Po2 ({legacyPoints.filter((point) => point.isLinked).length})
+              Rattachement validé (
+              {legacyPoints.filter((point) => point.isLinked && !point.isProposal).length})
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#fbbf24", border: "2px solid #fff", display: "inline-block" }} />
+              Proposé par le moteur, à confirmer (
+              {legacyPoints.filter((point) => point.isProposal).length})
             </span>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#a855f7", border: "2px solid #fff", display: "inline-block" }} />
@@ -1538,7 +1547,7 @@ export default function PatrimoineAstechPage() {
                             {
                               onSuccess: () =>
                                 setFlash(
-                                  `« ${assetLabel(selected)} » rattaché — le bâtiment Po2 porte désormais ce nom.`,
+                                  `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
                                 ),
                             },
                           )
@@ -1546,14 +1555,48 @@ export default function PatrimoineAstechPage() {
                       >
                         Valider ce rattachement
                       </button>
+                      {/* « Écarter » mettait le BIEN au statut « ignoré », ce qui le
+                          sortait du parcours — pas du tout l'intention de « cette
+                          suggestion est fausse ». Le bien reste donc à traiter, sans
+                          candidat, et son point devient posable à la main sur la carte. */}
                       <button
                         type="button"
                         style={btnSecondary}
+                        title="Rejette la suggestion du moteur. Le bien reste à traiter : pose son point sur la carte, puis rattache-le."
                         onClick={() =>
-                          updateMutation.mutate({ id: selected.id, payload: { status: "ignore" } })
+                          updateMutation.mutate(
+                            { id: selected.id, payload: { clear_candidate: true } },
+                            {
+                              onSuccess: () =>
+                                setFlash(
+                                  "Proposition écartée. Le bien reste à traiter : fais glisser son point violet " +
+                                    "à la bonne place sur la carte, puis dépose-le sur un bâtiment Po2 — ou " +
+                                    "utilise « Choisir un bâtiment Po2… ».",
+                                ),
+                            },
+                          )
                         }
                       >
-                        Écarter
+                        Écarter cette proposition
+                      </button>
+                      <button
+                        type="button"
+                        style={{ ...btnSecondary, color: TEXT_MUTED }}
+                        title="Sort ce bien du parcours de rapprochement."
+                        onClick={() =>
+                          updateMutation.mutate(
+                            { id: selected.id, payload: { status: "ignore" } },
+                            {
+                              onSuccess: () =>
+                                setFlash(
+                                  `« ${assetLabel(selected)} » ignoré : il sort du parcours. ` +
+                                    "Tu le retrouveras avec le filtre « Ignoré ».",
+                                ),
+                            },
+                          )
+                        }
+                      >
+                        Ignorer ce bien
                       </button>
                     </div>
                   </div>

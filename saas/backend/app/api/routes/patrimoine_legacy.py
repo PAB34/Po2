@@ -208,6 +208,7 @@ def update_asset(
             longitude=payload.longitude,
             notes=payload.notes,
             clear_building=payload.clear_building,
+            clear_candidate=payload.clear_candidate,
         )
     except ValueError as error:
         # Cible disparue (patrimoine reimporte) : message explicite plutot qu'une 500

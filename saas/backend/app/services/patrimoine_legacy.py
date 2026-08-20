@@ -584,6 +584,7 @@ def update_asset(
     longitude: float | None = None,
     notes: str | None = None,
     clear_building: bool = False,
+    clear_candidate: bool = False,
 ) -> PatrimoineLegacyAsset:
     """Décision utilisateur. Le `code_bien` n'est jamais modifiable : c'est la clé de
     mise à jour d'ASTECH.
@@ -675,6 +676,16 @@ def update_asset(
             if asset.resolved_postcode:
                 linked.code_postal = asset.resolved_postcode[:10]
             db.add(linked)
+    if clear_candidate:
+        # Rejeter la proposition du moteur SANS ecarter le bien : il reste a traiter.
+        # « Ecarter » signifiait jusqu'ici « ignorer le bien », ce qui le sortait du
+        # parcours — pas du tout la meme intention que « cette suggestion est fausse ».
+        # Le bien n'a alors plus de candidat : il se positionne a la main sur la carte,
+        # puis se rattache par depot sur un batiment ou par le selecteur.
+        asset.candidate_building_id = None
+        asset.candidate_label = None
+        asset.candidate_score = None
+        asset.candidate_reason = None
     if designation is not None:
         # Le nom affiché vient de `nomcourt` sinon de `designation` : on écrit les deux,
         # sinon corriger le libellé ne changerait rien à l'écran. C'est aussi ce qui

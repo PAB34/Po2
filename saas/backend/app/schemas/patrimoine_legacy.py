@@ -83,6 +83,10 @@ class LegacyAssetUpdateIn(BaseModel):
     # contient des libellés fautifs ou tronqués. Le `code_bien`, lui, ne l'est jamais.
     designation: str | None = Field(default=None, max_length=255)
     clear_building: bool = False
+    # Rejette la proposition du moteur sans écarter le bien : il reste à traiter, prêt
+    # à être positionné à la main puis rattaché. À distinguer du statut « ignoré », qui
+    # sort le bien du parcours.
+    clear_candidate: bool = False
     latitude: float | None = None
     longitude: float | None = None
     notes: str | None = None

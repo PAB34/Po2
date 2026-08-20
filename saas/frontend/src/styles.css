@@ -6103,6 +6103,14 @@ button:disabled {
   cursor: grabbing;
 }
 
+/* Proposition du moteur NON confirmee : ambre, comme la pastille « a confirmer » de la
+   file. Elle s'affichait du meme vert qu'un rattachement valide par un humain — on ne
+   pouvait pas distinguer une suggestion d'une decision prise. */
+.legacy-marker-dot.is-linked.is-proposal {
+  background: #fbbf24;
+  box-shadow: 0 0 0 1px #b45309, 0 1px 4px rgba(15, 23, 42, 0.45);
+}
+
 /* Position jamais confirmée : contour pointillé, pour ne pas laisser croire
    que le bien est déjà localisé. */
 .legacy-marker-dot.is-provisional {

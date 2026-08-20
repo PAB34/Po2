@@ -6050,6 +6050,8 @@ export async function updateLegacyAsset(
     /** Nom du bien, tel qu'il repartira dans ASTECH. Le code bien reste intouchable. */
     designation?: string | null;
     clear_building?: boolean;
+    /** Rejette la proposition du moteur sans écarter le bien : il reste à traiter. */
+    clear_candidate?: boolean;
     latitude?: number | null;
     longitude?: number | null;
     notes?: string | null;
