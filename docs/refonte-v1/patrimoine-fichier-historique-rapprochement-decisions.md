@@ -788,3 +788,91 @@ douteux : il a son propre bâtiment, 1020.)
   est mal rattaché.
 - La bulle du point fusionné sur la carte dit le **niveau** de chaque bien, là où elle
   n'affichait qu'un compteur.
+
+## 20. Nouvel export ASTECH (2026-08-20) — audit avant de coder
+
+Fichier fourni par le référent ASTECH :
+`saas/energie/ASTECH/OPUS_Patrimoine20260707.xlsx`. Il remplace l'export analysé au §2.
+
+### 20.1 Ce qu'il contient réellement
+
+Une seule feuille `Worksheet`, **en-têtes en ligne 1**, **12 colonnes** (contre 317 sur
+deux feuilles). **1 501 lignes**, soit tout ASTECH et non plus le seul bâti.
+
+| `GENRE` | Lignes |
+|---|---|
+| `VOIE / VOIE` | 781 |
+| **`BATI / BATIMENT`** | **378** |
+| `ESVE / ESPACES VERTS` | 286 |
+| `EVEF / EVENEMENT / FESTIVITE` | 43 |
+| `ARJE / AIRE DE JEUX` | 10 |
+| `SITE / SITE` · `TERR / TERRAIN` | 2 · 1 |
+
+Deux colonnes sont **composites**, au format `CODE / LIBELLÉ` :
+`Genre` = `BATI / BATIMENT`, `Commune` = `34301 / 34301 SETE`. Il faut n'en garder que
+le code, sinon le filtre de périmètre et le champ `COMMUNE` sortiraient faux.
+
+### 20.2 ⚠️ Le CODE_BIEN a changé de schéma — **zéro code commun**
+
+C'est le point structurant. L'ancien export codait `ADMICIMET02`, `SCOLMATER11` ; le
+nouveau code `BATI00272`, `BATI00140`.
+
+**Intersection mesurée entre les 444 biens en base et les 378 `BATI` du nouveau
+fichier : 0 code commun.**
+
+Or le `CODE_BIEN` est la **clé pivot permanente** de l'aller-retour (Q1, §13). En
+conséquence :
+
+- réimporter par-dessus ne mettrait rien à jour — les clés ne se rencontrent jamais —
+  et **créerait 378 biens de plus** à côté des 444 existants ;
+- le réexport renverrait des codes qu'ASTECH ne connaît plus ;
+- les **81 rattachements** actuels (6 validés, 75 proposés) pendent dans le vide.
+
+**Un pont par le nom existe** : 564 libellés (nom court ou désignation) sont identiques
+de part et d'autre, soit **81 % des noms de l'ancien import**. Exemples mesurés :
+`CULRMUSEE01` → `BATI00177` (`M.I.A.M.`), `SPORGYMNA01` → `BATI00438`
+(`ALFRED NAKACHE`). Les 130 sans correspondance sont surtout les déchetteries hors Sète,
+déjà marquées hors périmètre.
+
+### 20.3 Correspondance des colonnes
+
+| Nouveau | Ancien | Remarque |
+|---|---|---|
+| `Code` | `CODE_BIEN` | **schéma changé**, cf. §20.2 |
+| `Genre` | `GENRE` | composite → garder `BATI` |
+| `Nom court` | `NOMCOURT` | |
+| `Désignation` | `DESIGNATION` | |
+| `Numéro(s)` | `NORUE` | 285/378 valent `0` — même défaut qu'avant |
+| `Complément` | `BISTER` | **même détournement** : `RUE` 91, `BD` 19, `QUA` 13, `AVE` 9, et `BIS` 3 seulement |
+| `Adresse` | `LIBELVOIE` | 309/378 renseignés |
+| `Code postal` / `Ville` / `Commune` | `CODPOST` / `VILLE` / `COMMUNE` | |
+| `Lien voirie` | *(aucun)* | 167/378, identique à `Adresse` dans 210 cas |
+| `Adresse2` | *(aucun)* | 2/378, ignorable |
+
+Le piège `BISTER` du §6 est donc **confirmé sur le nouveau fichier** : la colonne porte
+le type de voie, pas le bis/ter. La règle de normalisation du §9.1 reste valable telle
+quelle.
+
+Colonnes de l'ancien gabarit **absentes** du nouveau : `REFCAD`, `LATITUDE`,
+`LONGITUDE`, `HORSPARC`, `CODE_PARENT`. Le drapeau « sorti du parc » n'existe plus, et
+le fichier n'a plus aucune colonne pour recevoir le cadastre ni les coordonnées.
+
+### 20.4 Questions ouvertes
+
+**Q20 — Que deviennent les 444 biens et 81 rattachements existants ?**
+(a) **Repartir de zéro** : supprimer l'import, charger le nouveau, relancer la
+reconnaissance. Coût réel : 6 rattachements validés à refaire, les 75 proposés étant de
+toute façon recalculés.
+(b) **Pont par le nom** : transposer les rattachements sur 81 % des biens.
+→ **Recommandation : (a).** Le pont ferait reposer la clé pivot sur un appariement de
+libellés — exactement ce que le `CODE_BIEN` sert à éviter — pour économiser six clics.
+
+**Q21 — Le réexport porte quels en-têtes ?**
+La règle §13 dit : recopiés à l'octet près depuis le fichier importé, donc `Code`,
+`Genre`, `Nom court`… Or la demande est de rendre les **anciens** noms (`CODE_BIEN`,
+`GENRE`, `NOMCOURT`…). C'est faisable, mais c'est précisément la contrainte qui fait
+échouer un import ASTECH : à confirmer auprès du référent.
+
+**Q22 — Où écrire le cadastre et les coordonnées ?** Le nouveau fichier n'a plus ni
+`REFCAD`, ni `LATITUDE`, ni `LONGITUDE`. Soit on les ajoute en colonnes supplémentaires
+(au risque du refus à l'import), soit l'enrichissement se limite à l'adresse.

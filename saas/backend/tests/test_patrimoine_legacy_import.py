@@ -1068,3 +1068,105 @@ def test_les_cles_des_biens_a_creer_ne_se_marchent_pas_dessus(db_session: Sessio
     # qui attribue la cle (Q13).
     assert depuis_batiment.code_bien.startswith("NOUVEAU_")
     assert depuis_local.code_bien.startswith("NOUVEAU_")
+
+
+# --- Nouvel export ASTECH (fichier du 2026-08-20) -----------------------------
+#
+# Le référent a renommé les colonnes et changé le schéma de codification. Le lecteur
+# doit accepter les DEUX générations : imposer un format ferait échouer l'import à
+# chaque évolution de leur outil.
+
+NEW_HEADERS = [
+    "Code", "Genre", "Nom court", "Désignation", "Lien voirie", "Numéro(s)",
+    "Complément", "Adresse", "Adresse2", "Code postal", "Ville", "Commune",
+]
+
+NEW_ROWS = [
+    # Genre et Commune sont COMPOSITES : « CODE / LIBELLÉ ».
+    ("BATI00140", "BATI / BATIMENT", "A.P.P.", "ATELIER DE PEDAGOGIE",
+     None, "1", "RUE", "MIRABEAU", None, "34200", "SETE", "34301 / 34301 SETE"),
+    ("VOIE00001", "VOIE / VOIE", "RUE DU LOUP", "RUE DU LOUP",
+     None, "0", None, "RUE DU LOUP", None, "34200", "SETE", "34301 / 34301 SETE"),
+    ("BATI00272", "BATI / BATIMENT", "3 DIGUES", "POSTE DE SECOURS 3 DIGUES",
+     None, "0", None, None, None, "34200", "SETE", "34301 / 34301 SETE"),
+]
+
+
+def _build_new_workbook() -> bytes:
+    """Reproduit le nouvel export : une feuille, en-têtes en ligne 1, 12 colonnes."""
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Worksheet"
+    sheet.append(NEW_HEADERS)
+    for row in NEW_ROWS:
+        sheet.append(list(row))
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def test_le_nouveau_format_astech_est_reconnu(db_session: Session):
+    """En-têtes en ligne 1, clé nommée « Code », accents compris.
+
+    La détection porte sur le CONTENU — une colonne clé et une désignation — et non sur
+    un numéro de ligne figé : le nouveau fichier place ses en-têtes en ligne 1 là où
+    `Feuil1` les mettait en ligne 2.
+    """
+    parsed = parse_astech_workbook(_build_new_workbook())
+    assert parsed["sheet_name"] == "Worksheet"
+    assert parsed["header_row"] == 1
+    assert parsed["key_header"] == "Code"
+    # Les en-têtes sont conservés à l'octet près, accent inclus : c'est le gabarit du
+    # réexport, et « Désignation » ne doit pas devenir « DESIGNATION ».
+    assert parsed["headers"] == NEW_HEADERS
+
+
+def test_le_nouveau_format_decompose_les_valeurs_composites(db_session: Session):
+    """« BATI / BATIMENT » → « BATI », « 34301 / 34301 SETE » → « 34301 ».
+
+    Sans ce découpage, le filtre de périmètre ne reconnaîtrait aucun genre et la
+    colonne `COMMUNE` repartirait dans ASTECH avec le libellé collé au code.
+    """
+    result = import_astech_file(
+        db_session, city_id=1, filename="OPUS.xlsx",
+        raw_bytes=_build_new_workbook(), genres=("BATI",),
+    )
+    assert result["created"] == 2
+    assert result["skipped_scope"] == 1  # la ligne VOIE
+
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "BATI00140")
+    )
+    assert asset.genre == "BATI"
+    assert asset.source_commune == "34301"
+    assert asset.status == STATUS_TODO
+
+
+def test_le_nouveau_format_mappe_les_colonnes_renommees(db_session: Session):
+    """`Numéro(s)`→NORUE, `Complément`→BISTER, `Adresse`→LIBELVOIE, `Nom court`→NOMCOURT.
+
+    `Complément` porte le TYPE DE VOIE exactement comme `BISTER` avant lui — vérifié sur
+    le fichier réel : RUE 91 fois, BD 19, QUA 13, et BIS seulement 3. La règle de
+    normalisation du §9.1 reste donc valable telle quelle.
+    """
+    import_astech_file(
+        db_session, city_id=1, filename="OPUS.xlsx",
+        raw_bytes=_build_new_workbook(), genres=("BATI",),
+    )
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "BATI00140")
+    )
+    assert asset.nomcourt == "A.P.P."
+    assert asset.designation == "ATELIER DE PEDAGOGIE"
+    assert asset.source_norue == "1"
+    assert asset.source_bister == "RUE"
+    assert asset.source_libelvoie == "MIRABEAU"
+    assert asset.source_codpost == "34200"
+
+
+def test_l_ancien_format_reste_lisible(db_session: Session):
+    """Accepter le nouveau format ne doit pas casser l'ancien : les deux coexistent."""
+    parsed = parse_astech_workbook(_build_workbook())
+    assert parsed["sheet_name"] == "Feuil1"
+    assert parsed["header_row"] == 2
+    assert parsed["key_header"] == "CODE_BIEN"

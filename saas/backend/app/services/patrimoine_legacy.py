@@ -68,24 +68,37 @@ SETE_NAMES = {"sete", "cette"}
 # Clé pivot ASTECH. `CODBAR` est un repli : sur la feuille `BAT`, la colonne
 # `CODEBIEN` est vide alors que `CODBAR` porte le même code (vérifié : 863/866
 # lignes identiques sur l'export réel).
-_KEY_COLUMNS = ("CODE_BIEN", "CODEBIEN", "CODBAR")
-_COLUMN_MAP = {
-    "designation": "DESIGNATION",
-    "nomcourt": "NOMCOURT",
-    "genre": "GENRE",
-    "categ": "CATEG",
-    "categ_des": "CATEG_DES",
-    "souscat_des": "SOUSCAT_DES",
-    "horsparc": "HORSPARC",
-    "code_parent": "CODE_PARENT",
-    "source_norue": "NORUE",
-    "source_bister": "BISTER",
-    "source_libelvoie": "LIBELVOIE",
-    "source_codpost": "CODPOST",
-    "source_ville": "VILLE",
-    "source_commune": "COMMUNE",
-    "source_refcad": "REFCAD",
+_KEY_COLUMNS = ("CODE_BIEN", "CODEBIEN", "CODBAR", "CODE")
+
+# Le referent ASTECH a renomme les colonnes de son export (fichier du 2026-08-20) :
+# `CODE_BIEN` devient `Code`, `NOMCOURT` devient `Nom court`, `BISTER` devient
+# `Complement`... On accepte donc les DEUX generations plutot que d'imposer un format,
+# et le premier alias trouve dans le fichier gagne. La comparaison se fait sans accent
+# ni casse : le nouveau fichier ecrit « Designation » avec un accent.
+_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "designation": ("DESIGNATION",),
+    "nomcourt": ("NOMCOURT", "NOM COURT"),
+    "genre": ("GENRE",),
+    "categ": ("CATEG",),
+    "categ_des": ("CATEG_DES",),
+    "souscat_des": ("SOUSCAT_DES",),
+    "horsparc": ("HORSPARC",),
+    "code_parent": ("CODE_PARENT",),
+    "source_norue": ("NORUE", "NUMERO(S)", "NUMEROS", "NUMERO"),
+    # `Complement` porte le type de voie, exactement comme `BISTER` avant lui :
+    # verifie sur le nouveau fichier — RUE 91, BD 19, QUA 13, AVE 9, et BIS 3 fois.
+    "source_bister": ("BISTER", "COMPLEMENT"),
+    "source_libelvoie": ("LIBELVOIE", "ADRESSE"),
+    "source_codpost": ("CODPOST", "CODE POSTAL"),
+    "source_ville": ("VILLE",),
+    "source_commune": ("COMMUNE",),
+    "source_refcad": ("REFCAD", "REF CADASTRALE"),
 }
+
+# Colonnes dont la valeur est composite, au format `CODE / LIBELLE` : `BATI / BATIMENT`,
+# `34301 / 34301 SETE`. On ne garde que le code — sinon le filtre de perimetre ne
+# reconnaitrait aucun genre et `COMMUNE` sortirait avec le libelle colle.
+_COMPOSITE_FIELDS = ("genre", "source_commune")
 # Longueurs déclarées sur le modèle : on tronque proprement plutôt que de laisser la
 # base rejeter une ligne (le fichier historique contient des libellés très longs).
 _MAX_LENGTHS = {
@@ -132,13 +145,20 @@ def _normalize_ascii(value: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _find_header_row(worksheet, max_scan: int = 6) -> tuple[int, list[str]] | None:
-    """Localise la ligne d'en-têtes : `Feuil1` la place en ligne 2, `BAT` en ligne 1."""
+    """Localise la ligne d'en-têtes.
+
+    L'ancien export la plaçait en ligne 2 (`Feuil1`) ou 1 (`BAT`) ; le nouveau en
+    ligne 1. La reconnaissance se fait sur le CONTENU — une colonne clé et une
+    désignation — et non sur un numéro de ligne figé.
+
+    Comparaison sans accent ni casse : le nouveau fichier écrit « Désignation ».
+    """
     for row_index, row in enumerate(
         worksheet.iter_rows(min_row=1, max_row=max_scan, values_only=True), start=1
     ):
         values = [("" if cell is None else str(cell).strip()) for cell in row]
-        upper = {v.upper() for v in values if v}
-        if any(key in upper for key in _KEY_COLUMNS) and "DESIGNATION" in upper:
+        keys = {_header_key(v) for v in values if v}
+        if any(key in keys for key in _KEY_COLUMNS) and "DESIGNATION" in keys:
             return row_index, values
     return None
 
@@ -158,8 +178,10 @@ def parse_astech_workbook(raw_bytes: bytes) -> dict[str, Any]:
         if found is None:
             continue
         header_row, headers = found
-        upper_headers = [h.upper() for h in headers]
-        key_indexes = [upper_headers.index(key) for key in _KEY_COLUMNS if key in upper_headers]
+        normalized_headers = [_header_key(h) for h in headers]
+        key_indexes = [
+            normalized_headers.index(key) for key in _KEY_COLUMNS if key in normalized_headers
+        ]
         if not key_indexes:
             continue
         rows = [
@@ -232,11 +254,34 @@ def _row_in_scope(values: dict[str, Any], genres: tuple[str, ...], include_out_o
 # Import
 # ---------------------------------------------------------------------------
 
+def _header_key(value: Any) -> str:
+    """Cle de comparaison d'un en-tete : majuscules, sans accent, espaces normalises.
+
+    Le nouveau fichier ecrit « Designation » avec un accent et « Nom court » en deux
+    mots : comparer les octets bruts ne reconnaitrait aucune colonne.
+    """
+    return _normalize_ascii(value).upper()
+
+
+def _composite_code(value: str | None) -> str | None:
+    """`BATI / BATIMENT` -> `BATI`, `34301 / 34301 SETE` -> `34301`.
+
+    Le nouveau export ASTECH livre ces deux colonnes au format `CODE / LIBELLE`.
+    """
+    if not value or " / " not in value:
+        return value
+    return value.split(" / ", 1)[0].strip() or value
+
+
 def _extract_values(row: tuple[Any, ...], header_index: dict[str, int]) -> dict[str, Any]:
     values: dict[str, Any] = {}
-    for field, column in _COLUMN_MAP.items():
-        index = header_index.get(column)
+    for field, aliases in _COLUMN_ALIASES.items():
+        index = next(
+            (header_index[alias] for alias in aliases if alias in header_index), None
+        )
         text = _text(row[index]) if index is not None and index < len(row) else None
+        if text is not None and field in _COMPOSITE_FIELDS:
+            text = _composite_code(text)
         limit = _MAX_LENGTHS.get(field)
         if text is not None and limit is not None and len(text) > limit:
             text = text[:limit]
@@ -259,7 +304,7 @@ def import_astech_file(
     """
     parsed = parse_astech_workbook(raw_bytes)
     headers: list[str] = parsed["headers"]
-    header_index = {header.upper(): position for position, header in enumerate(headers) if header}
+    header_index = {_header_key(header): position for position, header in enumerate(headers) if header}
     key_index: int = parsed["key_index"]
     batch_name = batch or f"astech_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
