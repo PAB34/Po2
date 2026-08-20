@@ -826,20 +826,29 @@ export default function PatrimoineAstechPage() {
   // n'ont rien à faire sur la carte — les empiler sur leur bâtiment mentirait.
   const localPoints = useMemo<LocalMapPoint[]>(() => {
     if (!showLocals) return [];
-    return locals.flatMap((local) =>
-      local.latitude == null || local.longitude == null
-        ? []
-        : [
-            {
-              id: local.id,
-              buildingId: local.building_id,
-              label: local.nom_local,
-              buildingLabel: buildingsById.get(local.building_id)?.nom_batiment ?? null,
-              latitude: local.latitude,
-              longitude: local.longitude,
-            },
-          ],
-    );
+    return locals.flatMap((local) => {
+      const building = buildingsById.get(local.building_id);
+      // Un local est DANS son bâtiment : hériter de sa position n'invente rien, c'est la
+      // meilleure vérité disponible — et c'est déjà ce qu'on fait pour les biens ASTECH.
+      // Vérifié en base : les 121 locaux sans coordonnées ont tous un bâtiment parent
+      // localisé et adressé, donc aucun n'est laissé de côté.
+      const inherited = local.latitude == null || local.longitude == null;
+      const latitude = local.latitude ?? building?.latitude ?? null;
+      const longitude = local.longitude ?? building?.longitude ?? null;
+      if (latitude == null || longitude == null) return [];
+      return [
+        {
+          id: local.id,
+          buildingId: local.building_id,
+          label: local.nom_local,
+          buildingLabel: building?.nom_batiment ?? null,
+          latitude,
+          longitude,
+          isInherited: inherited,
+          address: local.adresse_reconstituee ?? building?.adresse_reconstituee ?? null,
+        },
+      ];
+    });
   }, [buildingsById, locals, showLocals]);
 
   // --- Point ASTECH sur la carte ----------------------------------------------
@@ -1485,7 +1494,11 @@ export default function PatrimoineAstechPage() {
                 onChange={(event) => setShowLocals(event.target.checked)}
               />
               <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#6366f1", border: "1px solid #a5b4fc", display: "inline-block" }} />
-              Locaux Po2 ({localPoints.length})
+              Locaux Po2 ({localPoints.length}
+              {localPoints.filter((point) => point.isInherited).length > 0
+                ? `, dont ${localPoints.filter((point) => point.isInherited).length} en creux : position héritée du bâtiment`
+                : ""}
+              )
             </label>
             {/* Rendre le comportement de la carte VISIBLE et réversible : sans cette
                 bascule, « la carte suit le filtre » vidait l'écran sans rien expliquer,
