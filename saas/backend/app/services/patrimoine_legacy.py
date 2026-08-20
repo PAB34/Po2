@@ -973,6 +973,43 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
     return asset
 
 
+def delete_all_imports(db: Session, city_id: int | None) -> dict[str, int]:
+    """Efface **tout** le référentiel ASTECH importé : les biens et les imports.
+
+    Sert à repartir d'un export neuf. À distinguer de `reset_all_links`, qui ne coupe
+    que les rapprochements et garde les biens.
+
+    ⚠️ Destructif : tout le travail de rapprochement part avec les biens — statuts,
+    cibles, points posés à la main. C'est à l'écran d'annoncer le compte exact avant
+    de le faire.
+
+    Ce qui **reste** délibérément, parce que ce sont désormais des données Po2 et non
+    des données ASTECH :
+    - les **bâtiments** créés depuis un bien ASTECH (« Créer le bâtiment Po2 ») ;
+    - les **locaux** créés depuis un bien ASTECH (« En faire un local »).
+
+    Les uns et les autres seront retrouvés par le moteur de reconnaissance au
+    réimport, puisqu'ils portent le nom du bien. Les supprimer ferait perdre du
+    patrimoine réel pour effacer un fichier source.
+    """
+    asset_statement = select(PatrimoineLegacyAsset)
+    import_statement = select(PatrimoineLegacyImport)
+    if city_id is not None:
+        asset_statement = asset_statement.where(PatrimoineLegacyAsset.city_id == city_id)
+        import_statement = import_statement.where(PatrimoineLegacyImport.city_id == city_id)
+
+    assets_deleted = 0
+    for asset in db.scalars(asset_statement):
+        db.delete(asset)
+        assets_deleted += 1
+    imports_deleted = 0
+    for import_row in db.scalars(import_statement):
+        db.delete(import_row)
+        imports_deleted += 1
+    db.commit()
+    return {"assets_deleted": assets_deleted, "imports_deleted": imports_deleted}
+
+
 def reset_all_links(db: Session, city_id: int | None) -> dict[str, int]:
     """Supprime **tous** les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
 

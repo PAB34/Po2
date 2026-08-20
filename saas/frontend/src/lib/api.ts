@@ -6114,6 +6114,20 @@ export async function confirmLegacyProposals(
 }
 
 /**
+ * Efface TOUT le référentiel ASTECH importé (biens + imports), pour repartir d'un
+ * export neuf. Les bâtiments et locaux Po2 créés en cours de route sont conservés.
+ */
+export async function deleteLegacyImports(
+  token: string,
+): Promise<{ assets_deleted: number; imports_deleted: number }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/import`, {
+    method: "DELETE",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ assets_deleted: number; imports_deleted: number }>(response);
+}
+
+/**
  * Fait du bien ASTECH un local du bâtiment auquel il est rattaché — en créant ce local
  * s'il n'existe pas. Le bâtiment porteur reste la source de l'adresse et du cadastre.
  */

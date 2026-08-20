@@ -106,6 +106,20 @@ def confirm_proposed_links(
     )
 
 
+@router.delete("/import")
+def delete_all_imports(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    """Efface tout le référentiel ASTECH importé, pour repartir d'un export neuf.
+
+    ⚠️ Destructif : le travail de rapprochement part avec les biens. Les bâtiments et
+    les locaux Po2 créés en cours de route sont conservés — ce sont des données Po2,
+    et le moteur les retrouvera au réimport.
+    """
+    return svc.delete_all_imports(db, svc.resolve_city_id(db, current_user.city_id))
+
+
 @router.post("/reset-links")
 def reset_all_links(
     db: Session = Depends(get_db),
