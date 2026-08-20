@@ -41,10 +41,12 @@ import {
   resetLegacyLinks,
   updateBuildingRequest,
   updateLegacyAsset,
+  updateLocalRequest,
   type Building,
   type GeoJsonFeature,
   type GeoJsonFeatureCollection,
   type LegacyAsset,
+  type Local,
 } from "../lib/api";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -244,6 +246,11 @@ export default function PatrimoineAstechPage() {
   // carte les ignorait complètement, alors qu'un CODE_BIEN ASTECH désigne souvent un
   // local. La bascule reste offerte, un parc dense pouvant devenir illisible.
   const [showLocals, setShowLocals] = useState(true);
+  // Local Po2 consulte depuis la carte. Symetrique de `inspectedBuildingId` : cliquer
+  // un local RATTACHAIT aussitot le bien selectionne, alors que cliquer un batiment ne
+  // fait que consulter. Deux gestes identiques aux consequences opposees.
+  const [inspectedLocalId, setInspectedLocalId] = useState<number | null>(null);
+  const [localNameDraft, setLocalNameDraft] = useState("");
   // Noms en cours de saisie. Enregistrement explicite : la sauvegarde à la sortie du
   // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
   const [assetNameDraft, setAssetNameDraft] = useState("");
@@ -320,6 +327,29 @@ export default function PatrimoineAstechPage() {
     () => (inspectedBuildingId != null ? buildingsById.get(inspectedBuildingId) ?? null : null),
     [buildingsById, inspectedBuildingId],
   );
+
+  const inspectedLocal = useMemo(
+    () => (inspectedLocalId != null ? localsById.get(inspectedLocalId) ?? null : null),
+    [inspectedLocalId, localsById],
+  );
+
+  // Le brouillon suit le local consulté, sinon on éditerait le nom du précédent.
+  useEffect(() => {
+    setLocalNameDraft(inspectedLocal?.nom_local ?? "");
+  }, [inspectedLocal]);
+
+  const renameLocalMutation = useMutation({
+    mutationFn: (variables: { local: Local; nom: string }) =>
+      updateLocalRequest(token!, variables.local.building_id, variables.local.id, {
+        nom_local: variables.nom,
+      }),
+    onSuccess: (local) => {
+      setFlash(`Local renommé en « ${local.nom_local} ».`);
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
 
   // Le bâtiment que pilote l'écran : celui déjà rattaché, sinon le candidat proposé.
   const targetBuilding = useMemo(() => {
@@ -754,10 +784,11 @@ export default function PatrimoineAstechPage() {
     setAttachSelection([]);
     setPickerOpen(false);
     setBuildingSearch("");
-    // L'encart « Bâtiment Po2 » ne décrit QUE le point Po2 sur lequel on a cliqué.
-    // Le laisser ouvert en changeant de bien ASTECH laissait à l'écran la fiche d'un
-    // bâtiment sans rapport avec le bien en cours — d'où la confusion.
+    // Les encarts « Bâtiment Po2 » et « Local Po2 » ne décrivent QUE le point sur
+    // lequel on a cliqué. Les laisser ouverts en changeant de bien ASTECH laissait à
+    // l'écran la fiche d'une entité sans rapport avec le bien en cours.
     setInspectedBuildingId(null);
+    setInspectedLocalId(null);
   }, [selectedId]);
 
   // Le champ de saisie suit le bien affiché : sans cela, changer de bien laisserait le
@@ -1357,6 +1388,7 @@ export default function PatrimoineAstechPage() {
               // les données, c'était la source de confusion (le point bleu passait
               // au vert sans qu'on l'ait demandé).
               if (attachMode) return;
+              setInspectedLocalId(null);
               setInspectedBuildingId(buildingId);
             }}
             // Clic dans le vide : on sort de la sélection. L'encart « Bâtiment Po2 »
@@ -1365,6 +1397,7 @@ export default function PatrimoineAstechPage() {
             onBackgroundClick={() => {
               if (attachMode) return;
               setInspectedBuildingId(null);
+              setInspectedLocalId(null);
               setSelectedId(null);
             }}
             onViewCenterChange={setMapCenter}
@@ -1372,23 +1405,12 @@ export default function PatrimoineAstechPage() {
             // Cliquer un local en fait la cible du bien sélectionné : c'est le geste
             // « ce CODE_BIEN, c'est CE local-là », jusqu'ici seulement possible par le
             // menu déroulant, et seulement après un rattachement au bâtiment.
-            onSelectLocalId={(localId, buildingId) => {
+            onSelectLocalId={(localId) => {
+              // Clic = CONSULTATION, comme pour un bâtiment. Le rattachement se fait
+              // depuis le panneau : un clic ne doit pas modifier les données.
               if (attachMode) return;
-              if (!selected) {
-                setInspectedBuildingId(buildingId);
-                return;
-              }
-              updateMutation.mutate(
-                { id: selected.id, payload: { local_id: localId } },
-                {
-                  onSuccess: () =>
-                    setFlash(
-                      `« ${assetLabel(selected)} » rattaché au local « ${
-                        localsById.get(localId)?.nom_local ?? localId
-                      } ». L'adresse et le cadastre restent ceux du bâtiment.`,
-                    ),
-                },
-              );
+              setInspectedBuildingId(null);
+              setInspectedLocalId(localId);
             }}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
@@ -1556,6 +1578,144 @@ export default function PatrimoineAstechPage() {
 
         {/* --- Panneau d'action (colonne de droite) -------------------------- */}
         <div className="astech-panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Panneau du LOCAL consulté — symétrique de celui du bâtiment. Un CODE_BIEN
+              ASTECH désigne souvent un local : il lui fallait les mêmes prises. */}
+          {inspectedLocal && (
+            <div style={{ ...card, borderColor: "rgba(129, 140, 248, 0.55)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: "#a5b4fc", textTransform: "uppercase" }}>
+                    Local Po2
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "4px 0 8px" }}>
+                    <input
+                      value={localNameDraft}
+                      onChange={(event) => setLocalNameDraft(event.target.value)}
+                      style={{ ...input, fontSize: 15, flex: 1, minWidth: 200 }}
+                      title="Nom du local Po2. Modifiable."
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && localNameDraft.trim()) {
+                          renameLocalMutation.mutate({
+                            local: inspectedLocal,
+                            nom: localNameDraft.trim(),
+                          });
+                        }
+                        if (event.key === "Escape") setLocalNameDraft(inspectedLocal.nom_local);
+                      }}
+                    />
+                    {localNameDraft.trim() !== "" &&
+                      localNameDraft !== inspectedLocal.nom_local && (
+                        <>
+                          <button
+                            type="button"
+                            style={btnPrimary}
+                            onClick={() =>
+                              renameLocalMutation.mutate({
+                                local: inspectedLocal,
+                                nom: localNameDraft.trim(),
+                              })
+                            }
+                          >
+                            Enregistrer
+                          </button>
+                          <button
+                            type="button"
+                            style={btnSecondary}
+                            onClick={() => setLocalNameDraft(inspectedLocal.nom_local)}
+                          >
+                            Annuler
+                          </button>
+                        </>
+                      )}
+                  </div>
+                </div>
+                <button type="button" style={btnSecondary} onClick={() => setInspectedLocalId(null)}>
+                  Fermer
+                </button>
+              </div>
+              <dl
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                  gap: 10,
+                  margin: 0,
+                }}
+              >
+                {[
+                  [
+                    "Bâtiment porteur",
+                    buildingsById.get(inspectedLocal.building_id)?.nom_batiment ?? "—",
+                  ],
+                  [
+                    "Adresse",
+                    inspectedLocal.adresse_reconstituee ??
+                      `${
+                        buildingsById.get(inspectedLocal.building_id)?.adresse_reconstituee ?? "—"
+                      } (héritée du bâtiment)`,
+                  ],
+                  [
+                    "Position",
+                    inspectedLocal.latitude != null
+                      ? "propre au local"
+                      : "héritée du bâtiment",
+                  ],
+                  [
+                    "Référence cadastrale",
+                    inspectedLocal.dgfip_reference_norm ??
+                      buildingsById.get(inspectedLocal.building_id)?.dgfip_reference_norm ??
+                      "—",
+                  ],
+                  ["Type", inspectedLocal.type_local ?? "—"],
+                  [
+                    "Biens ASTECH rattachés",
+                    String(
+                      [...knownAssets.values()].filter(
+                        (asset) => asset.local_id === inspectedLocal.id,
+                      ).length,
+                    ),
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase" }}>{label}</dt>
+                    <dd style={{ margin: 0, fontSize: 13 }}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {selected && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    style={btnPrimary}
+                    onClick={() => {
+                      updateMutation.mutate(
+                        { id: selected.id, payload: { local_id: inspectedLocal.id } },
+                        {
+                          onSuccess: () =>
+                            setFlash(
+                              `« ${assetLabel(selected)} » rattaché au local « ${inspectedLocal.nom_local} ». ` +
+                                "L'adresse et le cadastre restent ceux du bâtiment porteur.",
+                            ),
+                        },
+                      );
+                    }}
+                  >
+                    Rattacher « {assetLabel(selected)} » à ce local
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                style={{ ...btnSecondary, marginTop: 10 }}
+                onClick={() => {
+                  setInspectedLocalId(null);
+                  setInspectedBuildingId(inspectedLocal.building_id);
+                }}
+              >
+                Voir le bâtiment porteur
+              </button>
+            </div>
+          )}
+
           {inspectedBuilding && (
             <div style={{ ...card, borderColor: "rgba(56, 189, 248, 0.55)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
