@@ -59,6 +59,10 @@ type LeafletRuntime = {
     wms?: (url: string, options: Record<string, unknown>) => RuntimeLayer;
   };
   circleMarker: (coords: [number, number], options: Record<string, unknown>) => RuntimeLayer;
+  polyline?: (
+    coords: [number, number][],
+    options: Record<string, unknown>,
+  ) => RuntimeLayer;
   marker: (coords: [number, number], options: Record<string, unknown>) => RuntimeMarker;
   divIcon: (options: Record<string, unknown>) => unknown;
   featureGroup: () => RuntimeFeatureGroup;
@@ -77,17 +81,19 @@ export type LegacyMapPoint = {
   isLinked?: boolean;
   /** `true` quand la cible est un LOCAL et non le bâtiment entier. */
   isLocalTarget?: boolean;
-  /** Bâtiment Po2 porteur, quand le bien est rattaché : sert à fusionner les marqueurs. */
+  /** Bâtiment Po2 porteur : centre de l'araignée à laquelle ce bien est relié. */
   buildingId?: number | null;
-  /** Nom du bâtiment porteur, affiché dans la bulle du point fusionné. */
+  /** Nom du bâtiment porteur, rappelé dans la bulle du bien. */
   buildingLabel?: string | null;
 };
 
 /**
- * Un marqueur ASTECH réellement dessiné. Il porte **un ou plusieurs** biens : tous les
- * biens rattachés à un même bâtiment sont représentés par un point unique, posé sur le
- * bâtiment, dont le marqueur propre n'est alors plus dessiné. Un bâtiment et les biens
- * qui le désignent sont une seule réalité sur le terrain.
+ * Un marqueur ASTECH réellement dessiné — **un seul bien** par marqueur.
+ *
+ * Les biens rattachés à un même bâtiment sont disposés en ARAIGNÉE autour de lui : le
+ * bâtiment reste au centre à sa vraie position, chaque bien est posé à ~15 m et relié
+ * par un trait. Chacun garde ainsi sa pastille, donc reste sélectionnable et
+ * détachable — ce qu'un point fusionné interdisait dès qu'un rattachement était faux.
  */
 type LegacyRenderMarker = {
   points: LegacyMapPoint[];
@@ -95,6 +101,20 @@ type LegacyRenderMarker = {
   longitude: number;
   buildingId: number | null;
   buildingLabel: string | null;
+  /** `true` quand ce marqueur tient lieu de bâtiment : il ne doit pas être décalé. */
+  isBuildingAnchor: boolean;
+  /** Décalage visuel appliqué (patte d'araignée), à retrancher au déplacement. */
+  offsetLat: number;
+  offsetLon: number;
+};
+
+/** Un trait reliant un bien ASTECH au bâtiment qui le porte. */
+type LegacySpiderLeg = {
+  fromLat: number;
+  fromLon: number;
+  toLat: number;
+  toLon: number;
+  isLocalTarget: boolean;
 };
 
 type WindowWithLeaflet = Window & {
@@ -107,6 +127,9 @@ type MappableBuilding = Building & { latitude: number; longitude: number };
 /** Zoom de travail sur un bien : assez pres pour distinguer les batiments, mais dans
     la plage ou OpenStreetMap fournit encore des tuiles nettes. */
 const FOCUS_ZOOM = 18;
+// Rayon des pattes d'araignee : ~15 m. Assez pour separer les pastilles et laisser voir
+// le batiment au centre, assez peu pour qu'on lise l'appartenance au meme batiment.
+const SPIDER_RADIUS_DEG = 15 / 111_320;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -176,38 +199,47 @@ function buildAddressLine(
 }
 
 /**
- * Ecarte en eventail les points qui partagent la meme position.
+ * Ecarte les marqueurs qui partagent exactement la meme position.
  *
- * Plusieurs biens ASTECH peuvent viser le meme batiment Po2 (plusieurs locaux) : leurs
- * points sont alors exactement superposes, un seul est visible et cliquable. On les
- * dispose sur un petit cercle autour de la position commune. Ce decalage est purement
- * visuel — la position enregistree reste inchangee tant qu'on ne deplace pas le point.
+ * Cas qui l'impose : un bien qu'on vient de DETACHER de son batiment garde la position
+ * qu'il en avait heritee. Il se retrouvait alors pile sous le marqueur du batiment, donc
+ * invisible — le detachement semblait sans effet.
+ *
+ * Le marqueur **ancre** (celui qui represente le batiment, c'est-a-dire le groupe
+ * fusionne) ne bouge pas : c'est lui qui dit ou est le batiment. Ce sont les autres qui
+ * sont disposes autour. Le decalage est purement visuel, la position enregistree ne
+ * change pas tant qu'on ne deplace pas le point a la main.
  */
-function spreadOverlappingPoints(points: LegacyMapPoint[]): LegacyMapPoint[] {
-  const groups = new Map<string, LegacyMapPoint[]>();
-  for (const point of points) {
-    const key = `${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`;
-    const group = groups.get(key);
-    if (group) group.push(point);
-    else groups.set(key, [point]);
+function spreadCoLocatedMarkers(markers: LegacyRenderMarker[]): LegacyRenderMarker[] {
+  const groups = new Map<string, LegacyRenderMarker[]>();
+  for (const marker of markers) {
+    const key = `${marker.latitude.toFixed(5)}|${marker.longitude.toFixed(5)}`;
+    groups.set(key, [...(groups.get(key) ?? []), marker]);
   }
 
-  const spread: LegacyMapPoint[] = [];
+  const spread: LegacyRenderMarker[] = [];
   for (const group of groups.values()) {
     if (group.length === 1) {
       spread.push(group[0]);
       continue;
     }
-    // ~12 m de rayon : assez pour separer les pastilles sans mentir sur la position.
-    const radiusDeg = 12 / 111_320;
-    group.forEach((point, index) => {
-      const angle = (2 * Math.PI * index) / group.length;
+    // L'ancre est le marqueur qui tient lieu de batiment ; a defaut, le premier.
+    const anchorIndex = Math.max(
+      0,
+      group.findIndex((marker) => marker.isBuildingAnchor),
+    );
+    const others = group.filter((_, index) => index !== anchorIndex);
+    spread.push(group[anchorIndex]);
+    // ~14 m de rayon : assez pour separer les pastilles sans mentir sur la position.
+    const radiusDeg = 14 / 111_320;
+    others.forEach((marker, index) => {
+      const angle = (2 * Math.PI * index) / others.length;
       spread.push({
-        ...point,
-        latitude: point.latitude + radiusDeg * Math.cos(angle),
+        ...marker,
+        latitude: marker.latitude + radiusDeg * Math.cos(angle),
         longitude:
-          point.longitude +
-          (radiusDeg * Math.sin(angle)) / Math.max(0.2, Math.cos((point.latitude * Math.PI) / 180)),
+          marker.longitude +
+          (radiusDeg * Math.sin(angle)) / Math.max(0.2, Math.cos((marker.latitude * Math.PI) / 180)),
       });
     });
   }
@@ -417,7 +449,7 @@ export function BuildingPortfolioMap({
    *   décrit autre chose que le bâtiment : masquer celui-ci ferait disparaître de la
    *   carte un bâtiment bien réel.
    */
-  const { legacyMarkers, mergedBuildingIds } = useMemo(() => {
+  const { legacyMarkers, spiderLegs } = useMemo(() => {
     const perBuilding = new Map<number, LegacyMapPoint[]>();
     const loose: LegacyMapPoint[] = [];
 
@@ -440,29 +472,63 @@ export function BuildingPortfolioMap({
     }
 
     const markers: LegacyRenderMarker[] = [];
+    const legs: LegacySpiderLeg[] = [];
+
     for (const [buildingId, points] of perBuilding) {
       const building = mappableBuildings.find((candidate) => candidate.id === buildingId)!;
-      markers.push({
-        points,
-        // Position canonique = celle du bâtiment. Les biens d'un même bâtiment étaient
-        // auparavant écartés en éventail à 12 m : on voyait trois pastilles là où il
-        // n'y a qu'un bâtiment, et le marqueur bleu restait au milieu.
-        latitude: building.latitude,
-        longitude: building.longitude,
-        buildingId,
-        buildingLabel: building.nom_batiment ?? points[0].buildingLabel ?? null,
+      // Disposition en ARAIGNEE : le batiment ne bouge pas, chaque bien est pose autour
+      // et relie par un trait. La fusion en un point unique se lisait bien tant que tout
+      // etait juste, mais elle enlevait toute prise des qu'un rattachement etait faux :
+      // impossible de designer, ni de detacher, un bien parmi ceux qui se superposaient.
+      points.forEach((point, index) => {
+        const angle = (2 * Math.PI * index) / points.length - Math.PI / 2;
+        const latitude = building.latitude + SPIDER_RADIUS_DEG * Math.cos(angle);
+        const longitude =
+          building.longitude +
+          (SPIDER_RADIUS_DEG * Math.sin(angle)) /
+            Math.max(0.2, Math.cos((building.latitude * Math.PI) / 180));
+        markers.push({
+          points: [point],
+          latitude,
+          longitude,
+          buildingId,
+          buildingLabel: building.nom_batiment ?? point.buildingLabel ?? null,
+          isBuildingAnchor: false,
+          // L'ecart est purement visuel : au deplacement, on le retranche pour ne pas
+          // enregistrer une position decalee de 15 m.
+          offsetLat: latitude - point.latitude,
+          offsetLon: longitude - point.longitude,
+        });
+        legs.push({
+          fromLat: building.latitude,
+          fromLon: building.longitude,
+          toLat: latitude,
+          toLon: longitude,
+          isLocalTarget: point.isLocalTarget === true,
+        });
       });
     }
-    for (const point of spreadOverlappingPoints(loose)) {
+
+    for (const point of loose) {
       markers.push({
         points: [point],
         latitude: point.latitude,
         longitude: point.longitude,
         buildingId: point.buildingId ?? null,
         buildingLabel: point.buildingLabel ?? null,
+        isBuildingAnchor: false,
+        offsetLat: 0,
+        offsetLon: 0,
       });
     }
-    return { legacyMarkers: markers, mergedBuildingIds: new Set(perBuilding.keys()) };
+
+    return {
+      // Les biens detaches gardent la position heritee du batiment : sans cet
+      // ecartement ils resteraient pile sous lui, et le detachement semblerait sans
+      // effet. C'est le symptome remonte le 2026-08-20.
+      legacyMarkers: spreadCoLocatedMarkers(markers),
+      spiderLegs: legs,
+    };
   }, [legacyPoints, mappableBuildings]);
 
   // Priorité : focusLatLon (bâtiment sélectionné ou centroïde du site sélectionné),
@@ -567,13 +633,34 @@ export function BuildingPortfolioMap({
     if (legacyMarkers.length === 0) return;
 
     const layerGroup = runtime.featureGroup();
+
+    // Les pattes d'araignee AVANT les pastilles, pour passer dessous. Un trait pointille
+    // pour une cible « local », plein pour le batiment entier : le niveau du
+    // rattachement se lit sur la carte, sans ouvrir quoi que ce soit.
+    for (const leg of spiderLegs) {
+      const line = runtime.polyline?.(
+        [
+          [leg.fromLat, leg.fromLon],
+          [leg.toLat, leg.toLon],
+        ],
+        {
+          color: "#22c55e",
+          weight: 2,
+          opacity: 0.75,
+          dashArray: leg.isLocalTarget ? "3 4" : undefined,
+          interactive: false,
+        },
+      );
+      if (line) layerGroup.addLayer(line);
+    }
+
     for (const entry of legacyMarkers) {
+      // Un marqueur = UN bien, toujours. C'est ce que la disposition en araignee
+      // retablit : chaque bien reste designable et detachable individuellement, la ou
+      // le point fusionne les rendait inatteignables des qu'un rattachement etait faux.
       const point = entry.points[0];
-      const groupSize = entry.points.length;
-      const isActive = entry.points.some((candidate) => candidate.id === activeLegacyId);
-      // Un marqueur qui porte PLUSIEURS biens n'est pas déplaçable : on ne saurait pas
-      // lequel on déplace. Ces biens se repositionnent en les isolant d'abord.
-      const isDraggable = isActive && groupSize === 1;
+      const isActive = point.id === activeLegacyId;
+      const isDraggable = isActive;
       const marker = runtime.marker([entry.latitude, entry.longitude], {
         draggable: isDraggable,
         autoPan: isDraggable,
@@ -583,51 +670,27 @@ export function BuildingPortfolioMap({
             point.isLinked ? " is-linked" : ""
           }${point.isLocalTarget ? " is-local" : ""}${
             point.isProvisional ? " is-provisional" : ""
-          }">${groupSize > 1 ? `<i class="legacy-marker-count">${groupSize}</i>` : ""}</span>`,
+          }"></span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         }),
       });
-      // Ce point représente les biens ASTECH **et** le bâtiment Po2, dont le marqueur
-      // n'est plus dessiné : la bulle doit nommer les deux, sinon l'information du
-      // bâtiment disparaît de la carte avec son marqueur.
-      const isMerged = entry.buildingId != null && mergedBuildingIds.has(entry.buildingId);
-      const bienLines =
-        groupSize === 1
-          ? `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
-              point.isLinked
-                ? point.isLocalTarget
-                  ? "rattaché à un local"
-                  : "rattaché à un bâtiment Po2"
-                : "non rattaché"
-            }${point.isProvisional ? ", position à confirmer" : ""}</em>`
-          : // Plusieurs biens sur un meme batiment : ce qui compte n'est pas leur
-            // nombre mais leur NIVEAU. En principe un seul designe le batiment entier,
-            // les autres sont des locaux — la bulle doit rendre cette structure lisible.
-            `<strong>${groupSize} biens ASTECH ici</strong><br/>` +
-            entry.points
-              .map(
-                (candidate) =>
-                  `${candidate.isLocalTarget ? "&nbsp;&nbsp;› " : "▪ "}${candidate.label}` +
-                  `<br/><span style="opacity:.7">&nbsp;&nbsp;&nbsp;${
-                    candidate.isLocalTarget ? "local" : "bâtiment entier"
-                  }</span>`,
-              )
-              .join("<br/>") +
-            `<br/><em>Clique à nouveau pour passer au suivant.</em>`;
       marker.bindPopup?.(
-        `${bienLines}${
-          isMerged && entry.buildingLabel ? `<br/>Po2 : <strong>${entry.buildingLabel}</strong>` : ""
+        `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
+          point.isLinked
+            ? point.isLocalTarget
+              ? "rattaché à un local"
+              : "rattaché au bâtiment entier"
+            : "non rattaché"
+        }${point.isProvisional ? ", position à confirmer" : ""}</em>${
+          point.isLinked && entry.buildingLabel
+            ? `<br/>Po2 : <strong>${entry.buildingLabel}</strong>`
+            : ""
         }`,
       );
       marker.on?.("click", () => {
         markerClickAtRef.current = Date.now();
-        // Sur un marqueur groupé, chaque clic passe au bien suivant : c'est le seul
-        // moyen d'atteindre le 2e bien depuis la carte, maintenant qu'ils partagent
-        // un point unique. La file de gauche reste l'accès direct.
-        const current = entry.points.findIndex((candidate) => candidate.id === activeLegacyId);
-        const next = entry.points[(current + 1) % groupSize];
-        onSelectLegacyId?.(next.id);
+        onSelectLegacyId?.(point.id);
       });
       if (isDraggable && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
         // Leaflet fait suivre un glisser-deposer d'un `click` qui remonte jusqu'au fond
@@ -638,7 +701,14 @@ export function BuildingPortfolioMap({
         });
         marker.on?.("dragend", () => {
           markerClickAtRef.current = Date.now();
-          const position = marker.getLatLng();
+          const dropped = marker.getLatLng();
+          // Le marqueur est dessine DECALE (patte d'araignee) : ce decalage est
+          // purement visuel. On le retranche avant d'enregistrer, sinon deplacer un
+          // point de quelques metres y ajouterait les 15 m de la patte.
+          const position = {
+            lat: dropped.lat - entry.offsetLat,
+            lng: dropped.lng - entry.offsetLon,
+          };
           // Depot sur un batiment Po2 : on cherche le plus proche dans le rayon
           // d'accrochage. C'est le geste « ce bien ASTECH, c'est ce batiment-la ».
           let nearest: { id: number; distance: number } | null = null;
@@ -667,7 +737,7 @@ export function BuildingPortfolioMap({
     };
   }, [
     activeLegacyId, legacyDropRadiusM, legacyMarkers, mappableBuildings, mapReady,
-    mergedBuildingIds, onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId,
+    onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId, spiderLegs,
   ]);
 
   // ------------------------------------------------------------------
@@ -698,12 +768,10 @@ export function BuildingPortfolioMap({
       const isHighlighted = highlightedSet.has(building.id);
       const hasIgn = building.statut_geocodage === "IGN_VALIDE";
 
-      // Fusion ASTECH + Po2 : quand UN SEUL bien ASTECH est pose exactement sur ce
-      // batiment, les deux marqueurs se superposaient — d'ou l'impression de deux
-      // points pour une meme realite. On ne dessine alors que la pastille ASTECH, qui
-      // represente les deux. Des que PLUSIEURS biens visent le batiment, ils sont
-      // ecartes en eventail : le marqueur du batiment reste, c'est leur point d'ancrage.
-      if (mergedBuildingIds.has(building.id)) continue;
+      // Le batiment est TOUJOURS dessine : c'est le centre de l'araignee, le point
+      // fixe auquel les biens ASTECH se rattachent par un trait. L'avoir masque au
+      // profit d'une pastille fusionnee rendait les rattachements faux impossibles a
+      // corriger — on ne pouvait plus designer un bien en particulier.
 
       let color = dimInAttach ? "#94a3b8" : "#38bdf8";
       let fillColor = dimInAttach ? "#94a3b8" : "#0ea5e9";
@@ -836,7 +904,6 @@ export function BuildingPortfolioMap({
     return () => { layerGroup.clearLayers(); };
   }, [
     activeBuildingId, attachMode, draggableBuildingId, focusLatLon, highlightedSet, mapReady,
-    mergedBuildingIds,
     mappableBuildings, onMoveBuilding, onSelectBuildingId, selectedBuilding,
   ]);
 

@@ -6039,7 +6039,7 @@ button:disabled {
 
 .legacy-marker-dot {
   display: block;
-  position: relative; /* ancre le badge de comptage .legacy-marker-count */
+  position: relative;
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -6068,27 +6068,6 @@ button:disabled {
 
 .legacy-marker-dot.is-active:active {
   cursor: grabbing;
-}
-
-/* Plusieurs biens ASTECH sur un meme batiment : un seul point, et le nombre dessus.
-   Les ecarter en eventail montrait trois pastilles la ou il n'y a qu'un batiment. */
-.legacy-marker-count {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border-radius: 999px;
-  background: #0f172a;
-  border: 2px solid #ffffff;
-  color: #ffffff;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 700;
-  line-height: 15px;
-  text-align: center;
-  box-sizing: content-box;
 }
 
 /* Position jamais confirmée : contour pointillé, pour ne pas laisser croire

@@ -163,11 +163,15 @@ def update_asset(
     asset = svc.get_asset_or_none(db, svc.resolve_city_id(db, current_user.city_id), asset_id)
     if asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bien historique introuvable.")
+    # `local_id` etait accepte par le schema mais jamais transmis au service : le menu
+    # « Preciser un local » renvoyait 200 sans rien changer. C'est la raison pour
+    # laquelle aucun bien n'avait jamais ete rattache au niveau local.
     updated = svc.update_asset(
         db,
         asset,
         status=payload.status,
         building_id=payload.building_id,
+        local_id=payload.local_id,
         latitude=payload.latitude,
         longitude=payload.longitude,
         notes=payload.notes,
