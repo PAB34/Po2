@@ -28,6 +28,7 @@ import {
   convertLegacyAssetToLocal,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
+  createLegacyAssetFromLocal,
   deleteLegacyImports,
   downloadLegacyExport,
   previewLegacyExport,
@@ -337,6 +338,23 @@ export default function PatrimoineAstechPage() {
   useEffect(() => {
     setLocalNameDraft(inspectedLocal?.nom_local ?? "");
   }, [inspectedLocal]);
+
+  // Pendant de `addToAstechMutation` pour un local : une entite Po2 absente du
+  // referentiel de la collectivite doit remonter dans le fichier de retour, sinon les
+  // deux referentiels ne convergeront jamais (Q13). Seuls les batiments le pouvaient.
+  const addLocalToAstechMutation = useMutation({
+    mutationFn: (localId: number) => createLegacyAssetFromLocal(token!, localId),
+    onSuccess: (asset) => {
+      setFlash(
+        `« ${assetLabel(asset)} » ajouté à la liste ASTECH comme bien à créer. ` +
+          "Il sortira dans le fichier de retour sans code bien : c'est ASTECH qui lui en attribuera un.",
+      );
+      setStatusFilter("a_creer");
+      setSelectedId(asset.id);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
 
   const renameLocalMutation = useMutation({
     mutationFn: (variables: { local: Local; nom: string }) =>
@@ -1701,6 +1719,29 @@ export default function PatrimoineAstechPage() {
                   >
                     Rattacher « {assetLabel(selected)} » à ce local
                   </button>
+                </div>
+              )}
+              {/* Un local Po2 sans contrepartie ASTECH doit pouvoir remonter dans le
+                  fichier de retour, comme un bâtiment (Q13). Le bouton disparaît une
+                  fois le local présent dans la liste : il n'y a rien à ajouter deux fois. */}
+              {![...knownAssets.values()].some(
+                (asset) => asset.local_id === inspectedLocal.id,
+              ) && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    style={btnSecondary}
+                    disabled={addLocalToAstechMutation.isPending}
+                    onClick={() => addLocalToAstechMutation.mutate(inspectedLocal.id)}
+                  >
+                    {addLocalToAstechMutation.isPending
+                      ? "Ajout…"
+                      : "Ajouter ce local à la liste ASTECH"}
+                  </button>
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+                    Ce local n'a aucun bien ASTECH en face : il remontera dans le fichier de
+                    retour comme ligne à créer, avec l'adresse de son bâtiment porteur.
+                  </p>
                 </div>
               )}
               <button

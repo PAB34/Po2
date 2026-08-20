@@ -216,6 +216,27 @@ def create_asset_from_building(
     return LegacyAssetOut.model_validate(svc.create_asset_from_building(db, city_id, building))
 
 
+@router.post("/from-local/{local_id}", response_model=LegacyAssetOut, status_code=status.HTTP_201_CREATED)
+def create_asset_from_local(
+    local_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LegacyAssetOut:
+    """Ajoute un local Po2 à la liste ASTECH comme bien « à créer » (décision Q13).
+
+    Même besoin que pour un bâtiment : un `CODE_BIEN` désigne très souvent un local, et
+    seuls les bâtiments pouvaient jusqu'ici remonter dans le fichier de retour.
+    """
+    city_id = svc.resolve_city_id(db, current_user.city_id)
+    local = svc.get_local_for_city(db, city_id, local_id)
+    if local is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Local introuvable.")
+    try:
+        return LegacyAssetOut.model_validate(svc.create_asset_from_local(db, city_id, local))
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.post("/{asset_id}/to-local", response_model=LegacyAssetOut)
 def convert_asset_to_local(
     asset_id: int,

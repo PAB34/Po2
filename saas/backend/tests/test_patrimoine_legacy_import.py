@@ -43,6 +43,7 @@ from app.services.patrimoine_legacy import (
     convert_asset_to_local,
     confirm_proposed,
     create_asset_from_building,
+    create_asset_from_local,
     delete_all_imports,
     import_astech_file,
     parse_astech_workbook,
@@ -1003,3 +1004,67 @@ def test_un_nom_saisi_a_la_main_gagne_sur_le_nom_du_batiment(db_session: Session
 
     db_session.refresh(asset)
     assert asset.designation == "NOM CHOISI A LA MAIN"
+
+
+def test_un_local_po2_peut_remonter_dans_la_liste_astech(db_session: Session):
+    """Décision Q13, appliquée aux locaux.
+
+    Une entité connue de Po2 mais absente du référentiel de la collectivité doit
+    remonter dans le fichier de retour, sinon les deux référentiels ne convergeront
+    jamais. Or un `CODE_BIEN` désigne très souvent un local — logement de fonction,
+    salle, WC publics — et seuls les bâtiments pouvaient être ajoutés.
+    """
+    db_session.add(
+        Building(
+            id=1,
+            city_id=1,
+            nom_batiment="ECOLE JEAN MOULIN",
+            nom_commune="Sete",
+            adresse_reconstituee="12 RUE DES CAPECHADES",
+            dgfip_reference_norm="34301000AK0149",
+            latitude=43.4,
+            longitude=3.69,
+        )
+    )
+    db_session.commit()
+    local = Local(building_id=1, nom_local="LOGEMENT DE FONCTION", type_local="PRINCIPAL")
+    db_session.add(local)
+    db_session.commit()
+
+    asset = create_asset_from_local(db_session, 1, local)
+
+    assert asset.status == STATUS_TO_CREATE
+    assert asset.local_id == local.id
+    assert asset.building_id == 1
+    assert asset.target_type == "local"
+    assert asset.designation == "LOGEMENT DE FONCTION"
+    # Le local n'a pas de position propre : il prend celle de son bâtiment, il est dedans.
+    assert asset.latitude == 43.4
+    # L'adresse et le cadastre viennent du bâtiment porteur.
+    assert asset.resolved_refcad == "AK149"
+
+    # Idempotent : rappeler la fonction ne cree pas un second bien.
+    again = create_asset_from_local(db_session, 1, local)
+    assert again.id == asset.id
+
+
+def test_les_cles_des_biens_a_creer_ne_se_marchent_pas_dessus(db_session: Session):
+    """Un bâtiment et un local de même identifiant produiraient sinon la même clé.
+
+    La contrainte d'unicité porte sur `(city_id, code_bien)` : `NOUVEAU_1` pour le
+    bâtiment 1 et `NOUVEAU_1` pour le local 1 se seraient télescopés.
+    """
+    db_session.add(Building(id=1, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete"))
+    db_session.commit()
+    local = Local(id=1, building_id=1, nom_local="SALLE DES MARIAGES", type_local="PRINCIPAL")
+    db_session.add(local)
+    db_session.commit()
+
+    depuis_batiment = create_asset_from_building(db_session, 1, db_session.get(Building, 1))
+    depuis_local = create_asset_from_local(db_session, 1, local)
+
+    assert depuis_batiment.code_bien != depuis_local.code_bien
+    # Les deux sortent malgre tout avec un CODE_BIEN VIDE au reexport : c'est ASTECH
+    # qui attribue la cle (Q13).
+    assert depuis_batiment.code_bien.startswith("NOUVEAU_")
+    assert depuis_local.code_bien.startswith("NOUVEAU_")

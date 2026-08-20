@@ -6117,6 +6117,21 @@ export async function confirmLegacyProposals(
   return parseResponse<{ confirmed: number }>(response);
 }
 
+/**
+ * Ajoute un LOCAL Po2 à la liste ASTECH comme bien « à créer » (décision Q13).
+ * Pendant de `createLegacyAssetFromBuilding` : un CODE_BIEN désigne souvent un local.
+ */
+export async function createLegacyAssetFromLocal(
+  token: string,
+  localId: number,
+): Promise<LegacyAsset> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/from-local/${localId}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyAsset>(response);
+}
+
 /** Compte ce qui partirait dans le fichier de retour, sans produire le classeur. */
 export async function previewLegacyExport(
   token: string,

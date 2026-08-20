@@ -938,6 +938,73 @@ def create_asset_from_building(
     return asset
 
 
+def create_asset_from_local(
+    db: Session, city_id: int | None, local: Local
+) -> PatrimoineLegacyAsset:
+    """Ajoute un **local** Po2 à la liste ASTECH comme bien à créer.
+
+    Même besoin que pour un bâtiment (décision Q13) : une entité connue de Po2 mais
+    absente du référentiel de la collectivité doit remonter dans le fichier de retour,
+    sinon les deux référentiels ne convergeront jamais. Or un `CODE_BIEN` désigne très
+    souvent un local — logement de fonction, salle, WC publics — et seuls les bâtiments
+    pouvaient être ajoutés.
+
+    Le préfixe `NOUVEAU_L` distingue ces lignes de celles nées d'un bâtiment
+    (`NOUVEAU_`) : deux entités différentes ne doivent pas produire la même clé, la
+    contrainte d'unicité portant sur `(city_id, code_bien)`. Le réexport les émet avec
+    un `CODE_BIEN` **vide** dans les deux cas — c'est ASTECH qui l'attribuera.
+
+    Idempotent : rappeler la fonction pour le même local renvoie le bien existant.
+    """
+    existing = db.scalar(
+        select(PatrimoineLegacyAsset).where(
+            PatrimoineLegacyAsset.city_id == city_id,
+            PatrimoineLegacyAsset.local_id == local.id,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    building = db.get(Building, local.building_id)
+    if building is None:
+        raise ValueError("Le bâtiment porteur de ce local est introuvable.")
+
+    name = (local.nom_local or f"Local {local.id}")[:255]
+    asset = PatrimoineLegacyAsset(
+        city_id=city_id,
+        code_bien=f"{NEW_ASSET_CODE_PREFIX}L{local.id}",
+        designation=name,
+        nomcourt=name,
+        genre="BATI",
+        horsparc="N",
+        building_id=building.id,
+        local_id=local.id,
+        target_type=TARGET_LOCAL,
+        status=STATUS_TO_CREATE,
+        link_origin=ORIGIN_MANUAL,
+        # Un local sans position propre prend celle de son bâtiment : il est dedans.
+        latitude=local.latitude if local.latitude is not None else building.latitude,
+        longitude=local.longitude if local.longitude is not None else building.longitude,
+    )
+    _inherit_building_address(asset, building)
+    _override_with_local_address(asset, local)
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def get_local_for_city(db: Session, city_id: int | None, local_id: int) -> Local | None:
+    """Le local n'a pas de `city_id` : on passe par son bâtiment porteur."""
+    local = db.get(Local, local_id)
+    if local is None:
+        return None
+    if city_id is None:
+        return local
+    building = db.get(Building, local.building_id)
+    return local if building is not None and building.city_id == city_id else None
+
+
 def get_building_for_city(db: Session, city_id: int | None, building_id: int) -> Building | None:
     statement = select(Building).where(Building.id == building_id)
     if city_id is not None:
