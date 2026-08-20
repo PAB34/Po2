@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -14,6 +16,7 @@ from app.schemas.patrimoine_legacy import (
     LegacyImportResult,
 )
 from app.services import patrimoine_legacy as svc
+from app.services import patrimoine_legacy_export as export_svc
 
 router = APIRouter(prefix="/patrimoine/legacy", tags=["patrimoine-historique"])
 
@@ -104,6 +107,56 @@ def confirm_proposed_links(
         svc.resolve_city_id(db, current_user.city_id),
         asset_ids=payload.asset_ids if payload else None,
     )
+
+
+@router.get("/export")
+def export_astech_workbook(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Classeur de retour ASTECH : feuille réinjectable + traçabilité + à vérifier.
+
+    Les en-têtes sont recopiés à l'octet près depuis le fichier importé — c'est la
+    condition de réinjection posée par la collectivité.
+    """
+    try:
+        result = export_svc.build_astech_workbook(
+            db, svc.resolve_city_id(db, current_user.city_id)
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    return Response(
+        content=result["content"],
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+            # Lus par l'écran pour annoncer le résultat sans rouvrir le fichier.
+            "X-Astech-Exported": str(result["exported_rows"]),
+            "X-Astech-Review": str(result["review_rows"]),
+            "Access-Control-Expose-Headers": "X-Astech-Exported, X-Astech-Review",
+        },
+    )
+
+
+@router.get("/export/preview")
+def preview_astech_export(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Compte ce qui partirait, sans produire le fichier."""
+    try:
+        result = export_svc.build_astech_workbook(
+            db, svc.resolve_city_id(db, current_user.city_id)
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    return {
+        "exported_rows": result["exported_rows"],
+        "review_rows": result["review_rows"],
+        "columns": result["columns"],
+        "missing_columns": result["missing_columns"],
+        "sheet_name": result["sheet_name"],
+    }
 
 
 @router.post("/reset-all")
