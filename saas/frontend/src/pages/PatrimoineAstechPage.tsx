@@ -772,6 +772,17 @@ export default function PatrimoineAstechPage() {
     return ids;
   }, [assets, buildingsById]);
 
+  // Combien de biens sont positionnés **tous filtres confondus** : sert à expliquer une
+  // carte vide plutôt que de la laisser muette.
+  const positionedAssetCount = useMemo(
+    () =>
+      (linkedAssetsQuery.data ?? []).filter((asset) => {
+        const building = asset.building_id != null ? buildingsById.get(asset.building_id) : null;
+        return (asset.latitude ?? building?.latitude) != null;
+      }).length,
+    [buildingsById, linkedAssetsQuery.data],
+  );
+
   // Application des filtres de second niveau, cumulés (ET).
   const visibleAssets = useMemo(() => {
     if (refineKeys.length === 0) return assets;
@@ -1405,6 +1416,43 @@ export default function PatrimoineAstechPage() {
               Bâtiment Po2
             </span>
           </div>
+
+          {/* La carte suit le filtre (demande du 2026-08-20). Conséquence : avec le
+              filtre par défaut « À traiter », elle est VIDE de points ASTECH — ces biens
+              n'ont pas encore de coordonnées. Une carte muette laissait croire à une
+              panne : on dit pourquoi, et on donne le raccourci. */}
+          {legacyPoints.length === 0 && (counts.total ?? 0) > 0 && (
+            <div
+              style={{
+                ...card,
+                borderColor: "rgba(251, 191, 36, 0.5)",
+                background: "rgba(251, 191, 36, 0.10)",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              Aucun bien ASTECH n'a de position dans ce filtre — la carte ne peut donc rien
+              y afficher. C'est normal : un bien ASTECH n'a pas de coordonnées propres, il
+              n'apparaît qu'une fois rattaché à un bâtiment ou posé à la main.
+              {positionedAssetCount > 0 && (
+                <>
+                  {" "}
+                  <strong>{positionedAssetCount} bien(s)</strong> sont positionnés dans les
+                  autres filtres.{" "}
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, padding: "2px 8px", fontSize: 12 }}
+                    onClick={() => {
+                      setStatusFilter("");
+                      setRefineKeys([]);
+                    }}
+                  >
+                    Tout afficher
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* --- Panneau d'action (colonne de droite) -------------------------- */}
