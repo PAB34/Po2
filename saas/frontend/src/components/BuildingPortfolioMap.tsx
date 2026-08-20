@@ -81,6 +81,12 @@ export type LegacyMapPoint = {
   isLinked?: boolean;
   /** `true` quand la cible est un LOCAL et non le bâtiment entier. */
   isLocalTarget?: boolean;
+  /**
+   * `true` quand le rattachement est une **proposition du moteur non confirmée**.
+   * Sans cette distinction, une suggestion s'affichait du même vert qu'un rattachement
+   * validé par un humain : impossible de savoir ce qui avait réellement été décidé.
+   */
+  isProposal?: boolean;
   /** Bâtiment Po2 porteur : centre de l'araignée à laquelle ce bien est relié. */
   buildingId?: number | null;
   /** Nom du bâtiment porteur, rappelé dans la bulle du bien. */
@@ -115,6 +121,8 @@ type LegacySpiderLeg = {
   toLat: number;
   toLon: number;
   isLocalTarget: boolean;
+  /** Proposition non confirmée : trait ambre, comme la pastille. */
+  isProposal: boolean;
 };
 
 type WindowWithLeaflet = Window & {
@@ -544,6 +552,7 @@ export function BuildingPortfolioMap({
           toLat: latitude,
           toLon: longitude,
           isLocalTarget: point.isLocalTarget === true,
+          isProposal: point.isProposal === true,
         });
       });
     }
@@ -707,7 +716,7 @@ export function BuildingPortfolioMap({
           className: "legacy-marker",
           html: `<span class="legacy-marker-dot${isActive ? " is-active" : ""}${
             point.isLinked ? " is-linked" : ""
-          }${point.isLocalTarget ? " is-local" : ""}${
+          }${point.isProposal ? " is-proposal" : ""}${point.isLocalTarget ? " is-local" : ""}${
             point.isProvisional ? " is-provisional" : ""
           }"></span>`,
           iconSize: [18, 18],
@@ -717,9 +726,9 @@ export function BuildingPortfolioMap({
       marker.bindPopup?.(
         `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
           point.isLinked
-            ? point.isLocalTarget
-              ? "rattaché à un local"
-              : "rattaché au bâtiment entier"
+            ? `${point.isProposal ? "proposé par le moteur, à confirmer" : "rattaché"} — ${
+                point.isLocalTarget ? "un local" : "le bâtiment entier"
+              }`
             : "non rattaché"
         }${point.isProvisional ? ", position à confirmer" : ""}</em>${
           point.isLinked && entry.buildingLabel
