@@ -900,6 +900,79 @@ def confirm_proposed(
     return {"confirmed": confirmed}
 
 
+# Type des locaux nes d'un bien ASTECH : trace leur origine dans le referentiel Po2,
+# a cote de 'PRINCIPAL' (import DGFIP) et 'RECLASSEMENT' (reclassement manuel).
+LOCAL_TYPE_FROM_ASTECH = "ASTECH"
+
+
+def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> PatrimoineLegacyAsset:
+    """Fait du bien ASTECH un **local** du bâtiment auquel il est rattaché.
+
+    C'était le chaînon manquant : l'écran savait viser un local *déjà existant*, mais
+    rien ne permettait d'en créer un. Mesuré en prod le 2026-08-20 : 0 bien sur 79
+    rattaché au niveau local, alors que c'est le cas de figure normal dès que plusieurs
+    biens ASTECH désignent un même bâtiment (le club et ses salles, l'école et son
+    restaurant scolaire).
+
+    Le bâtiment porteur **reste** renseigné : c'est lui qui porte l'adresse, le cadastre
+    et la position, et donc ce que le bien renverra à ASTECH (décision Q1 du
+    2026-08-20). Passer au niveau local précise la structure sans rien retirer.
+
+    Idempotent : un bien déjà rattaché à un local est renvoyé tel quel.
+    """
+    if asset.building_id is None:
+        raise ValueError(
+            "Ce bien n'est rattaché à aucun bâtiment Po2 : rattache-le d'abord, "
+            "le local sera créé dans ce bâtiment."
+        )
+    if asset.target_type == TARGET_LOCAL and asset.local_id is not None:
+        return asset
+
+    building = db.get(Building, asset.building_id)
+    if building is None:
+        raise ValueError("Le bâtiment porteur est introuvable.")
+
+    name = (asset.nomcourt or asset.designation or asset.code_bien).strip()[:255]
+    # Un local du meme nom existe deja dans ce batiment : on le reutilise plutot que
+    # d'en creer un doublon. C'est le cas du TENNIS CLUB DU BARROU, dont le local
+    # « SALLE TENNIS CLUB DU BARROU » etait deja en base.
+    existing = db.scalar(
+        select(Local).where(
+            Local.building_id == building.id,
+            func.lower(Local.nom_local) == name.lower(),
+        )
+    )
+    local = existing
+    if local is None:
+        local = Local(
+            building_id=building.id,
+            nom_local=name,
+            type_local=LOCAL_TYPE_FROM_ASTECH,
+            # Le local herite de l'adresse et de la position du batiment : un local n'a
+            # pas d'adresse propre tant que personne ne lui en donne une, et le laisser
+            # vide ferait perdre au bien ce qu'il avait en visant le batiment.
+            adresse_reconstituee=building.adresse_reconstituee,
+            code_postal=building.code_postal,
+            nom_commune=building.nom_commune,
+            latitude=building.latitude,
+            longitude=building.longitude,
+            dgfip_reference_norm=building.dgfip_reference_norm,
+        )
+        db.add(local)
+        db.flush()
+
+    asset.local_id = local.id
+    asset.target_type = TARGET_LOCAL
+    asset.status = STATUS_LINKED
+    asset.link_origin = ORIGIN_MANUAL
+    _inherit_building_address(asset, building)
+    _override_with_local_address(asset, local)
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
 def reset_all_links(db: Session, city_id: int | None) -> dict[str, int]:
     """Supprime **tous** les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
 

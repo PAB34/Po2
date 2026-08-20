@@ -21,6 +21,7 @@ import {
   confirmLegacyProposals,
   fetchAllLocals,
   fetchBuildings,
+  convertLegacyAssetToLocal,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
   fetchFreeAddressLookup,
@@ -308,6 +309,23 @@ export default function PatrimoineAstechPage() {
     [locals, targetBuilding],
   );
 
+  // Les autres biens ASTECH qui visent le même bâtiment porteur. Un bâtiment peut en
+  // héberger plusieurs (le club et ses salles, l'école et son restaurant) : montrer la
+  // fratrie est le seul moyen de voir si la structure est juste — un seul bien doit
+  // désigner le bâtiment entier, les autres sont des locaux.
+  const siblingAssets = useMemo(() => {
+    if (!selected?.building_id) return [];
+    return [...knownAssets.values()]
+      .filter((asset) => asset.building_id === selected.building_id)
+      .sort((a, b) => {
+        // Le bâtiment entier d'abord, ses locaux ensuite : c'est la hiérarchie réelle.
+        if ((a.target_type === "local") !== (b.target_type === "local")) {
+          return a.target_type === "local" ? 1 : -1;
+        }
+        return assetLabel(a).localeCompare(assetLabel(b));
+      });
+  }, [knownAssets, selected]);
+
   const invalidate = () => {
     // La cle ["legacy-assets"] couvre aussi ["legacy-assets", "lie"] : la couche
     // violette de la carte se met a jour des qu'un rattachement change.
@@ -390,6 +408,22 @@ export default function PatrimoineAstechPage() {
     mutationFn: () => confirmLegacyProposals(token!),
     onSuccess: (result) => {
       setFlash(`${result.confirmed} rattachement(s) confirmé(s).`);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const toLocalMutation = useMutation({
+    mutationFn: (assetId: number) => convertLegacyAssetToLocal(token!, assetId),
+    onSuccess: (asset) => {
+      setFlash(
+        `« ${assetLabel(asset)} » est désormais un local du bâtiment. ` +
+          "Il garde l'adresse et le cadastre du bâtiment pour le retour ASTECH.",
+      );
+      // La liste des locaux est indexee sous ["buildings", "locals"] : invalider
+      // ["locals"] ne l'atteindrait pas, et le local qu'on vient de creer n'apparaitrait
+      // pas dans le menu « Preciser un local ».
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
       invalidate();
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
@@ -1327,6 +1361,80 @@ export default function PatrimoineAstechPage() {
                         <span style={{ fontSize: 12, color: TEXT_MUTED }}>
                           L'adresse et le cadastre restent ceux du bâtiment.
                         </span>
+                      </div>
+                    )}
+
+                    {/* Le chaînon qui manquait : le menu ci-dessus ne propose que les
+                        locaux DÉJÀ existants. Quand plusieurs biens ASTECH désignent le
+                        même bâtiment, le second est presque toujours un local qui n'est
+                        pas encore dans Po2 — sans ce bouton, impossible de le dire. */}
+                    {selected.building_id != null && selected.target_type !== "local" && (
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          type="button"
+                          style={btnSecondary}
+                          disabled={toLocalMutation.isPending}
+                          onClick={() => toLocalMutation.mutate(selected.id)}
+                        >
+                          {toLocalMutation.isPending
+                            ? "Création…"
+                            : "En faire un local de ce bâtiment"}
+                        </button>
+                        <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+                          Crée le local dans Po2 et y rattache ce bien. Il garde l'adresse et
+                          le cadastre du bâtiment, donc ce qu'il renverra à ASTECH ne change pas.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Structure du bâtiment porteur : qui d'autre le vise, et à quel
+                        niveau. C'est ce que le compteur de la carte ne disait pas. */}
+                    {siblingAssets.length > 1 && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          padding: "8px 10px",
+                          border: BORDER,
+                          borderRadius: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        <div style={{ color: TEXT_MUTED, marginBottom: 4 }}>
+                          {siblingAssets.length} biens ASTECH désignent ce bâtiment :
+                        </div>
+                        {siblingAssets.map((sibling) => (
+                          <div key={sibling.id} style={{ marginTop: 2 }}>
+                            {sibling.target_type === "local" ? "  › " : "▪ "}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedId(sibling.id)}
+                              style={{
+                                border: "none",
+                                background: "transparent",
+                                padding: 0,
+                                fontSize: 12,
+                                cursor: "pointer",
+                                color: sibling.id === selected.id ? "#e9d5ff" : TEXT,
+                                fontWeight: sibling.id === selected.id ? 600 : 400,
+                              }}
+                            >
+                              {assetLabel(sibling)}
+                            </button>{" "}
+                            <span style={{ color: TEXT_MUTED }}>
+                              {sibling.target_type === "local"
+                                ? `local « ${localsById.get(sibling.local_id ?? -1)?.nom_local ?? "?"} »`
+                                : "bâtiment entier"}
+                            </span>
+                          </div>
+                        ))}
+                        {siblingAssets.filter((sibling) => sibling.target_type !== "local").length >
+                          1 && (
+                          <div style={{ marginTop: 6, color: "#fbbf24" }}>
+                            ⚠ Plusieurs visent le <strong>bâtiment entier</strong>. En principe un
+                            seul le désigne, les autres sont des locaux — ou l'un d'eux est mal
+                            rattaché.
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

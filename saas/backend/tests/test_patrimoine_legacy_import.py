@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.db import Base
 from app.models.building import Building
 from app.models.city import City
-from app.models.local import Local  # noqa: F401 (enregistre la table)
+from app.models.local import Local
 from app.models.patrimoine_legacy import (
     STATUS_IGNORED,
     STATUS_LINKED,
@@ -40,6 +40,7 @@ from app.models.patrimoine_legacy import (
 from app.models.site import Site  # noqa: F401
 from app.services.patrimoine_legacy import (
     compute_candidates,
+    convert_asset_to_local,
     confirm_proposed,
     create_asset_from_building,
     import_astech_file,
@@ -708,3 +709,88 @@ def test_la_purge_supprime_les_rapprochements_sans_toucher_aux_decisions(db_sess
     # Une décision de périmètre n'est pas un rapprochement : elle survit.
     db_session.refresh(ignore)
     assert ignore.status == STATUS_IGNORED
+
+
+def test_un_bien_peut_devenir_un_local_de_son_batiment(db_session: Session):
+    """Le chaînon manquant : créer le local, et NE RIEN perdre pour le retour ASTECH.
+
+    Mesuré en prod le 2026-08-20 : 0 bien sur 79 visait un local, faute de pouvoir en
+    créer un. Or c'est le cas normal dès que plusieurs biens ASTECH désignent le même
+    bâtiment (le club et ses salles, l'école et son restaurant scolaire).
+
+    Décision Q1 (2026-08-20) : passer au niveau local **précise** la structure, il ne
+    retire rien — l'adresse et le cadastre restent ceux du bâtiment porteur, donc ce
+    que le bien renvoie à ASTECH est inchangé.
+    """
+    db_session.add(
+        Building(
+            id=1,
+            city_id=1,
+            nom_batiment="CIMETIERE LE PY",
+            nom_commune="Sete",
+            adresse_reconstituee="12 RUE DES CAPECHADES",
+            dgfip_reference_norm="34301000AK0149",
+            latitude=43.4,
+            longitude=3.69,
+        )
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    assert asset.building_id == 1 and asset.target_type == "building"
+
+    converted = convert_asset_to_local(db_session, asset)
+
+    assert converted.target_type == "local"
+    assert converted.local_id is not None
+    # Le bâtiment porteur RESTE : c'est lui qui porte adresse, cadastre et position.
+    assert converted.building_id == 1
+    assert converted.resolved_refcad == "AK149"
+    assert converted.resolved_housenumber == "12"
+
+    local = db_session.get(Local, converted.local_id)
+    assert local.building_id == 1
+    assert local.nom_local == "CIMETIERE LE PY"
+    # Le local hérite de l'adresse du bâtiment : le laisser vide ferait perdre au bien
+    # ce qu'il avait en visant le bâtiment.
+    assert local.adresse_reconstituee == "12 RUE DES CAPECHADES"
+
+    # Idempotent : rappeler la conversion ne crée pas un second local.
+    convert_asset_to_local(db_session, converted)
+    assert len(db_session.scalars(select_locals_of(1)).all()) == 1
+
+
+def test_la_conversion_en_local_reutilise_un_local_existant(db_session: Session):
+    """Cas réel du TENNIS CLUB DU BARROU : le local « SALLE… » est déjà en base.
+
+    En créer un second du même nom ferait un doublon dans le référentiel Po2.
+    """
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    db_session.add(Local(building_id=1, nom_local="CIMETIERE LE PY", type_local="PRINCIPAL"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    converted = convert_asset_to_local(db_session, asset)
+
+    locals_found = db_session.scalars(select_locals_of(1)).all()
+    assert len(locals_found) == 1
+    assert converted.local_id == locals_found[0].id
+
+
+def test_un_bien_non_rattache_ne_peut_pas_devenir_un_local(db_session: Session):
+    """Sans bâtiment porteur, il n'y a pas de parent où créer le local."""
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    with pytest.raises(ValueError):
+        convert_asset_to_local(db_session, asset)
+
+
+def select_locals_of(building_id: int):
+    from sqlalchemy import select
+
+    return select(Local).where(Local.building_id == building_id)

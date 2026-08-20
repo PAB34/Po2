@@ -133,6 +133,26 @@ def create_asset_from_building(
     return LegacyAssetOut.model_validate(svc.create_asset_from_building(db, city_id, building))
 
 
+@router.post("/{asset_id}/to-local", response_model=LegacyAssetOut)
+def convert_asset_to_local(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LegacyAssetOut:
+    """Fait du bien un **local** du bâtiment auquel il est rattaché, en le créant.
+
+    L'écran savait viser un local existant mais pas en créer un : c'est le cas normal
+    dès que plusieurs biens ASTECH désignent le même bâtiment.
+    """
+    asset = svc.get_asset_or_none(db, svc.resolve_city_id(db, current_user.city_id), asset_id)
+    if asset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bien historique introuvable.")
+    try:
+        return LegacyAssetOut.model_validate(svc.convert_asset_to_local(db, asset))
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
 @router.patch("/{asset_id}", response_model=LegacyAssetOut)
 def update_asset(
     asset_id: int,
