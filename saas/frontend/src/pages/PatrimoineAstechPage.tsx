@@ -232,6 +232,10 @@ export default function PatrimoineAstechPage() {
   // Centre courant de la carte : permet de poser le point d'un bien là où l'utilisateur
   // regarde, au lieu du centre de Sète — souvent hors écran quand on a zoomé.
   const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number } | null>(null);
+  // La carte suit-elle le filtre de la liste ? Non par défaut : 338 biens sur 444 n'ont
+  // aucune position et le filtre initial est « À traiter », donc la carte se retrouvait
+  // vide au chargement — au point de passer pour une panne.
+  const [mapFollowsFilter, setMapFollowsFilter] = useState(false);
   // Noms en cours de saisie. Enregistrement explicite : la sauvegarde à la sortie du
   // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
   const [assetNameDraft, setAssetNameDraft] = useState("");
@@ -850,12 +854,18 @@ export default function PatrimoineAstechPage() {
       };
     };
 
-    // La carte suit le FILTRE : elle n'affiche que les biens de la liste de gauche.
-    // Elle montrait auparavant tous les biens rattachés quel que soit le filtre, si
-    // bien que choisir « À confirmer » ne changeait rien à ce qu'on voyait — la carte
-    // et la liste racontaient deux choses différentes.
+    // Deux lectures de la carte, au choix de l'utilisateur (bascule sous la carte) :
+    //
+    // - « tous les biens positionnés » (par défaut) : on voit l'ensemble du travail,
+    //   quel que soit le filtre de la liste ;
+    // - « suit le filtre » : la carte et la liste racontent la même chose.
+    //
+    // Le mode « suit le filtre » ne peut pas être le défaut : 338 biens sur 444 n'ont
+    // aucune position, et le filtre initial est « À traiter » — la carte se retrouvait
+    // donc vide au chargement, ce qui ressemblait à une panne.
+    const source = mapFollowsFilter ? visibleAssets : linkedAssetsQuery.data ?? [];
     const byId = new Map<number, LegacyMapPoint>();
-    for (const asset of visibleAssets) {
+    for (const asset of source) {
       const point = toPoint(asset);
       if (point) byId.set(point.id, point);
     }
@@ -866,7 +876,7 @@ export default function PatrimoineAstechPage() {
       if (point) byId.set(point.id, point);
     }
     return [...byId.values()];
-  }, [buildingsById, selected, visibleAssets]);
+  }, [buildingsById, linkedAssetsQuery.data, mapFollowsFilter, selected, visibleAssets]);
 
   const counts = countsQuery.data ?? {};
   // Des biens importés mais aucun candidat ni rattachement : l'utilisateur n'a pas
@@ -1415,6 +1425,20 @@ export default function PatrimoineAstechPage() {
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#2563eb", border: "2px solid #38bdf8", display: "inline-block" }} />
               Bâtiment Po2
             </span>
+            {/* Rendre le comportement de la carte VISIBLE et réversible : sans cette
+                bascule, « la carte suit le filtre » vidait l'écran sans rien expliquer,
+                et on ne pouvait pas revenir en arrière. */}
+            <label
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              title="Sinon la carte affiche tous les biens positionnés, quel que soit le filtre de la liste."
+            >
+              <input
+                type="checkbox"
+                checked={mapFollowsFilter}
+                onChange={(event) => setMapFollowsFilter(event.target.checked)}
+              />
+              La carte suit le filtre ({legacyPoints.length} point(s))
+            </label>
           </div>
 
           {/* La carte suit le filtre (demande du 2026-08-20). Conséquence : avec le
@@ -1431,23 +1455,23 @@ export default function PatrimoineAstechPage() {
                 lineHeight: 1.5,
               }}
             >
-              Aucun bien ASTECH n'a de position dans ce filtre — la carte ne peut donc rien
-              y afficher. C'est normal : un bien ASTECH n'a pas de coordonnées propres, il
-              n'apparaît qu'une fois rattaché à un bâtiment ou posé à la main.
+              Aucun bien ASTECH à afficher ici. C'est attendu : un bien ASTECH n'a pas de
+              coordonnées propres — le fichier n'en porte qu'une sur 444 — il n'apparaît
+              qu'une fois rattaché à un bâtiment ou posé à la main.
               {positionedAssetCount > 0 && (
                 <>
                   {" "}
-                  <strong>{positionedAssetCount} bien(s)</strong> sont positionnés dans les
-                  autres filtres.{" "}
+                  <strong>{positionedAssetCount} bien(s)</strong> sont pourtant positionnés.{" "}
                   <button
                     type="button"
                     style={{ ...btnSecondary, padding: "2px 8px", fontSize: 12 }}
                     onClick={() => {
+                      setMapFollowsFilter(false);
                       setStatusFilter("");
                       setRefineKeys([]);
                     }}
                   >
-                    Tout afficher
+                    Les afficher tous
                   </button>
                 </>
               )}
