@@ -438,17 +438,50 @@ export function BuildingPortfolioMap({
   );
 
   /**
-   * Bâtiments dont le marqueur est **remplacé** par la pastille du bien ASTECH posé
-   * dessus : un bien rattaché et son bâtiment sont la même réalité, deux marqueurs
-   * superposés donnaient l'impression que le rattachement n'avait pas pris.
+   * Position d'AFFICHAGE de chaque bâtiment, écartée quand plusieurs partagent le même
+   * point.
    *
-   * Deux conditions, toutes deux nécessaires :
-   * - **un seul** bien vise ce bâtiment. À plusieurs, ils sont écartés en éventail et
-   *   le marqueur du bâtiment reste comme point d'ancrage, sinon l'éventail flotte.
-   * - le point est **effectivement sur** le bâtiment (< 5 m). Un point déplacé ailleurs
-   *   décrit autre chose que le bâtiment : masquer celui-ci ferait disparaître de la
-   *   carte un bâtiment bien réel.
+   * Mesuré en prod le 2026-08-20 : **67 bâtiments sur 184** ont exactement les mêmes
+   * coordonnées qu'un autre, en 26 groupes — 143 positions distinctes seulement. Ils
+   * ont hérité du point de leur parcelle, pas de leur emprise propre. Empilés au même
+   * pixel, un seul était visible et cliquable : les autres semblaient avoir disparu de
+   * la carte, alors qu'ils étaient dessous.
+   *
+   * L'écart est **purement visuel** — la position enregistrée ne change pas — et il est
+   * retranché au déplacement d'un bâtiment.
    */
+  const buildingDisplay = useMemo(() => {
+    const groups = new Map<string, MappableBuilding[]>();
+    for (const building of mappableBuildings) {
+      const key = `${building.latitude.toFixed(6)}|${building.longitude.toFixed(6)}`;
+      groups.set(key, [...(groups.get(key) ?? []), building]);
+    }
+    const display = new Map<number, { lat: number; lon: number; offsetLat: number; offsetLon: number }>();
+    for (const group of groups.values()) {
+      if (group.length === 1) {
+        display.set(group[0].id, {
+          lat: group[0].latitude, lon: group[0].longitude, offsetLat: 0, offsetLon: 0,
+        });
+        continue;
+      }
+      // ~22 m : au-delà du rayon des pattes d'araignée (15 m), pour que les grappes de
+      // deux bâtiments voisins ne se mélangent pas.
+      const radiusDeg = 22 / 111_320;
+      group.forEach((building, index) => {
+        const angle = (2 * Math.PI * index) / group.length;
+        const lat = building.latitude + radiusDeg * Math.cos(angle);
+        const lon =
+          building.longitude +
+          (radiusDeg * Math.sin(angle)) /
+            Math.max(0.2, Math.cos((building.latitude * Math.PI) / 180));
+        display.set(building.id, {
+          lat, lon, offsetLat: lat - building.latitude, offsetLon: lon - building.longitude,
+        });
+      });
+    }
+    return display;
+  }, [mappableBuildings]);
+
   const { legacyMarkers, spiderLegs } = useMemo(() => {
     const perBuilding = new Map<number, LegacyMapPoint[]>();
     const loose: LegacyMapPoint[] = [];
@@ -476,15 +509,21 @@ export function BuildingPortfolioMap({
 
     for (const [buildingId, points] of perBuilding) {
       const building = mappableBuildings.find((candidate) => candidate.id === buildingId)!;
+      // Centre de l'araignee = la position d'AFFICHAGE du batiment. Sans cela, les
+      // araignees de plusieurs batiments empiles au meme point se superposeraient
+      // exactement, et les traits partiraient tous du meme endroit.
+      const center = buildingDisplay.get(buildingId) ?? {
+        lat: building.latitude, lon: building.longitude,
+      };
       // Disposition en ARAIGNEE : le batiment ne bouge pas, chaque bien est pose autour
       // et relie par un trait. La fusion en un point unique se lisait bien tant que tout
       // etait juste, mais elle enlevait toute prise des qu'un rattachement etait faux :
       // impossible de designer, ni de detacher, un bien parmi ceux qui se superposaient.
       points.forEach((point, index) => {
         const angle = (2 * Math.PI * index) / points.length - Math.PI / 2;
-        const latitude = building.latitude + SPIDER_RADIUS_DEG * Math.cos(angle);
+        const latitude = center.lat + SPIDER_RADIUS_DEG * Math.cos(angle);
         const longitude =
-          building.longitude +
+          center.lon +
           (SPIDER_RADIUS_DEG * Math.sin(angle)) /
             Math.max(0.2, Math.cos((building.latitude * Math.PI) / 180));
         markers.push({
@@ -500,8 +539,8 @@ export function BuildingPortfolioMap({
           offsetLon: longitude - point.longitude,
         });
         legs.push({
-          fromLat: building.latitude,
-          fromLon: building.longitude,
+          fromLat: center.lat,
+          fromLon: center.lon,
           toLat: latitude,
           toLon: longitude,
           isLocalTarget: point.isLocalTarget === true,
@@ -529,7 +568,7 @@ export function BuildingPortfolioMap({
       legacyMarkers: spreadCoLocatedMarkers(markers),
       spiderLegs: legs,
     };
-  }, [legacyPoints, mappableBuildings]);
+  }, [buildingDisplay, legacyPoints, mappableBuildings]);
 
   // Priorité : focusLatLon (bâtiment sélectionné ou centroïde du site sélectionné),
   // sinon le bâtiment actif, sinon le premier bâtiment mappable.
@@ -786,12 +825,18 @@ export function BuildingPortfolioMap({
         else if (hasIgn) { color = "#1d4ed8"; fillColor = "#2563eb"; }
       }
 
+      // Position d'affichage : ecartee quand plusieurs batiments partagent le meme
+      // point (67 sur 184 en prod). Empiles, un seul etait visible et cliquable.
+      const shown = buildingDisplay.get(building.id) ?? {
+        lat: building.latitude, lon: building.longitude, offsetLat: 0, offsetLon: 0,
+      };
+
       // Anneau de selection : pose SOUS le marqueur, il ne touche pas a sa couleur.
       // C'est ce qui permet au point selectionne de rester bleu (ou vert) tout en
       // etant clairement designe.
       if (isActive) {
         layerGroup.addLayer(
-          runtime.circleMarker([building.latitude, building.longitude], {
+          runtime.circleMarker([shown.lat, shown.lon], {
             radius: 14,
             color: "#f8fafc",
             fillColor: "#38bdf8",
@@ -806,7 +851,7 @@ export function BuildingPortfolioMap({
       // `circleMarker` n'est pas deplaçable : le batiment que l'on veut bouger passe
       // donc en marqueur classique, avec la meme apparence.
       const marker = isDraggable
-        ? runtime.marker([building.latitude, building.longitude], {
+        ? runtime.marker([shown.lat, shown.lon], {
             draggable: true,
             autoPan: true,
             icon: runtime.divIcon({
@@ -816,7 +861,7 @@ export function BuildingPortfolioMap({
               iconAnchor: [10, 10],
             }),
           })
-        : runtime.circleMarker([building.latitude, building.longitude], {
+        : runtime.circleMarker([shown.lat, shown.lon], {
             radius: isActive ? 9 : dimInAttach ? 5 : isHighlighted ? 8 : 7,
             color,
             fillColor,
@@ -827,7 +872,13 @@ export function BuildingPortfolioMap({
         const draggableMarker = marker as RuntimeMarker;
         draggableMarker.on?.("dragend", () => {
           const position = draggableMarker.getLatLng();
-          onMoveBuilding(building.id, position.lat, position.lng);
+          // L'ecart d'affichage (batiments empiles) est retranche : deplacer un
+          // batiment de deux metres ne doit pas y ajouter les 22 m de l'ecartement.
+          onMoveBuilding(
+            building.id,
+            position.lat - shown.offsetLat,
+            position.lng - shown.offsetLon,
+          );
         });
       }
       marker.bindPopup?.(
@@ -903,8 +954,9 @@ export function BuildingPortfolioMap({
     window.setTimeout(() => map.invalidateSize?.(), 50);
     return () => { layerGroup.clearLayers(); };
   }, [
-    activeBuildingId, attachMode, draggableBuildingId, focusLatLon, highlightedSet, mapReady,
-    mappableBuildings, onMoveBuilding, onSelectBuildingId, selectedBuilding,
+    activeBuildingId, attachMode, buildingDisplay, draggableBuildingId, focusLatLon,
+    highlightedSet, mapReady, mappableBuildings, onMoveBuilding, onSelectBuildingId,
+    selectedBuilding,
   ]);
 
   // ------------------------------------------------------------------

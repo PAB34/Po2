@@ -227,6 +227,10 @@ export default function PatrimoineAstechPage() {
   // Bâtiment Po2 consulté depuis la carte. C'est aussi le seul rendu déplaçable :
   // un seul à la fois, pour ne pas bouger un voisin par mégarde.
   const [inspectedBuildingId, setInspectedBuildingId] = useState<number | null>(null);
+  // Noms en cours de saisie. Enregistrement explicite : la sauvegarde à la sortie du
+  // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
+  const [assetNameDraft, setAssetNameDraft] = useState("");
+  const [buildingNameDraft, setBuildingNameDraft] = useState("");
 
   const countsQuery = useQuery({
     queryKey: ["legacy-counts"],
@@ -424,6 +428,21 @@ export default function PatrimoineAstechPage() {
    * C'est aussi pourquoi la carte l'écarte visuellement du bâtiment une fois détaché —
    * sinon il resterait pile dessous et le détachement semblerait sans effet.
    */
+  const saveAssetName = () => {
+    const value = assetNameDraft.trim();
+    if (!selected || !value || value === assetLabel(selected)) return;
+    updateMutation.mutate(
+      { id: selected.id, payload: { designation: value } },
+      { onSuccess: () => setFlash(`Bien ASTECH renommé en « ${value} ».`) },
+    );
+  };
+
+  const saveBuildingName = () => {
+    const value = buildingNameDraft.trim();
+    if (!inspectedBuilding || !value || value === (inspectedBuilding.nom_batiment ?? "")) return;
+    renameBuildingMutation.mutate({ id: inspectedBuilding.id, nom: value });
+  };
+
   const detachAsset = (assetId: number) => {
     updateMutation.mutate({
       id: assetId,
@@ -641,6 +660,16 @@ export default function PatrimoineAstechPage() {
     // bâtiment sans rapport avec le bien en cours — d'où la confusion.
     setInspectedBuildingId(null);
   }, [selectedId]);
+
+  // Le champ de saisie suit le bien affiché : sans cela, changer de bien laisserait le
+  // nom du précédent dans la case, et « Enregistrer » l'écrirait sur le mauvais.
+  useEffect(() => {
+    setAssetNameDraft(selected ? assetLabel(selected) : "");
+  }, [selected]);
+
+  useEffect(() => {
+    setBuildingNameDraft(inspectedBuilding?.nom_batiment ?? "");
+  }, [inspectedBuilding]);
 
   // Biens réellement affichables sur la carte : ceux qui ont une position propre, ou
   // un bâtiment rattaché qui en a une. Les autres ne sont visibles QUE dans la file de
@@ -1193,10 +1222,14 @@ export default function PatrimoineAstechPage() {
               // Déposer le point ASTECH sur un point Po2 vaut rattachement : le bien
               // reprend l'adresse et la position du bâtiment.
               const building = buildingsById.get(buildingId);
-              updateMutation.mutate({ id, payload: { building_id: buildingId } });
+              updateMutation.mutate({
+                id,
+                payload: { building_id: buildingId },
+              });
               setFlash(
                 `Rattaché à « ${building?.nom_batiment ?? buildingId} » : le bien reprend son ` +
-                  "adresse et sa position. Utilise « Détacher » si ce n'est pas le bon.",
+                  "adresse et sa position, et le bâtiment porte désormais le nom ASTECH. " +
+                  "Utilise « Détacher » si ce n'est pas le bon.",
               );
             }}
             attachMode={attachMode ? "ign" : "none"}
@@ -1254,17 +1287,36 @@ export default function PatrimoineAstechPage() {
                   {/* Nom éditable : les noms Po2 viennent d'un import ou d'une
                       attribution IGN, et sont parfois faux ou en doublon. Les corriger
                       ici évite de sortir de l'écran de rapprochement pour le faire. */}
-                  <input
-                    key={`building-name-${inspectedBuilding.id}`}
-                    defaultValue={inspectedBuilding.nom_batiment ?? ""}
-                    style={{ ...input, fontSize: 15, margin: "2px 0 8px", minWidth: 260 }}
-                    title="Nom du bâtiment Po2. Modifiable."
-                    onBlur={(event) => {
-                      const value = event.target.value.trim();
-                      if (!value || value === (inspectedBuilding.nom_batiment ?? "")) return;
-                      renameBuildingMutation.mutate({ id: inspectedBuilding.id, nom: value });
-                    }}
-                  />
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "2px 0 8px" }}>
+                    <input
+                      value={buildingNameDraft}
+                      onChange={(event) => setBuildingNameDraft(event.target.value)}
+                      style={{ ...input, fontSize: 15, minWidth: 180 }}
+                      title="Nom du bâtiment Po2. Modifiable."
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") saveBuildingName();
+                        if (event.key === "Escape")
+                          setBuildingNameDraft(inspectedBuilding.nom_batiment ?? "");
+                      }}
+                    />
+                    {buildingNameDraft.trim() !== "" &&
+                      buildingNameDraft !== (inspectedBuilding.nom_batiment ?? "") && (
+                        <>
+                          <button type="button" style={btnPrimary} onClick={saveBuildingName}>
+                            Enregistrer
+                          </button>
+                          <button
+                            type="button"
+                            style={btnSecondary}
+                            onClick={() =>
+                              setBuildingNameDraft(inspectedBuilding.nom_batiment ?? "")
+                            }
+                          >
+                            Annuler
+                          </button>
+                        </>
+                      )}
+                  </div>
                 </div>
                 <button type="button" style={btnSecondary} onClick={() => setInspectedBuildingId(null)}>
                   Fermer
@@ -1361,7 +1413,7 @@ export default function PatrimoineAstechPage() {
                         payload: { building_id: inspectedBuilding.id },
                       });
                       setFlash(
-                        `« ${assetLabel(selected)} » rattaché à « ${inspectedBuilding.nom_batiment} ».`,
+                        `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
                       );
                     }}
                   >
@@ -1387,19 +1439,32 @@ export default function PatrimoineAstechPage() {
                     {selected.code_bien}
                   </span>
                   <input
-                    key={`asset-name-${selected.id}`}
-                    defaultValue={assetLabel(selected)}
+                    value={assetNameDraft}
+                    onChange={(event) => setAssetNameDraft(event.target.value)}
                     style={{ ...input, flex: 1, fontSize: 14 }}
                     title="Nom du bien ASTECH. Modifiable : c'est lui qui repartira dans le fichier de retour."
-                    onBlur={(event) => {
-                      const value = event.target.value.trim();
-                      if (!value || value === assetLabel(selected)) return;
-                      updateMutation.mutate(
-                        { id: selected.id, payload: { designation: value } },
-                        { onSuccess: () => setFlash(`Bien ASTECH renommé en « ${value} ».`) },
-                      );
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") saveAssetName();
+                      if (event.key === "Escape") setAssetNameDraft(assetLabel(selected));
                     }}
                   />
+                  {/* Enregistrement explicite : la sauvegarde à la sortie du champ
+                      partait au moindre clic ailleurs, sans qu'on sache si elle avait
+                      eu lieu. Le bouton n'apparaît que si le nom a changé. */}
+                  {assetNameDraft.trim() !== "" && assetNameDraft !== assetLabel(selected) && (
+                    <>
+                      <button type="button" style={btnPrimary} onClick={saveAssetName}>
+                        Enregistrer
+                      </button>
+                      <button
+                        type="button"
+                        style={btnSecondary}
+                        onClick={() => setAssetNameDraft(assetLabel(selected))}
+                      >
+                        Annuler
+                      </button>
+                    </>
+                  )}
                 </div>
                 <dl
                   style={{
@@ -1466,12 +1531,14 @@ export default function PatrimoineAstechPage() {
                           updateMutation.mutate(
                             {
                               id: selected.id,
-                              payload: { building_id: selected.candidate_building_id },
+                              payload: {
+                                building_id: selected.candidate_building_id,
+                              },
                             },
                             {
                               onSuccess: () =>
                                 setFlash(
-                                  `« ${assetLabel(selected)} » rattaché à « ${selected.candidate_label} ».`,
+                                  `« ${assetLabel(selected)} » rattaché — le bâtiment Po2 porte désormais ce nom.`,
                                 ),
                             },
                           )
@@ -1733,7 +1800,7 @@ export default function PatrimoineAstechPage() {
                               });
                               setPickerOpen(false);
                               setFlash(
-                                `« ${assetLabel(selected)} » rattaché à « ${building.nom_batiment} ».`,
+                                `« ${assetLabel(selected)} » rattaché — le bâtiment Po2 porte désormais ce nom.`,
                               );
                             }}
                           >

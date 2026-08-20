@@ -642,6 +642,7 @@ def update_asset(
         asset.status = STATUS_LINKED
         asset.link_origin = ORIGIN_MANUAL
         if building is not None:
+            _adopt_target_name(asset, building.nom_batiment, designation)
             _inherit_building_address(asset, building)
             # Le point ASTECH rejoint le bâtiment : c'est le geste « je dépose le
             # point sur le bâtiment Po2 », il ne doit pas rester à côté.
@@ -687,6 +688,30 @@ def update_asset(
     db.commit()
     db.refresh(asset)
     return asset
+
+
+def _adopt_target_name(
+    asset: PatrimoineLegacyAsset, target_name: str | None, explicit_designation: str | None
+) -> None:
+    """Le bien ASTECH prend le nom de la cible Po2 à laquelle on vient de le rattacher.
+
+    C'est la décision Q11, appliquée jusqu'au bout : le nom Po2/IGN gagne et sera
+    réécrit dans ASTECH. Le rattachement fait converger les deux référentiels — c'est
+    l'objet même du chantier. Le `code_bien` reste la clé, donc renommer ne casse rien
+    au cycle suivant.
+
+    Deux garde-fous :
+    - une **modification manuelle** passée dans le même appel gagne : l'utilisateur qui
+      corrige un nom n'a pas à se le faire écraser par le rattachement ;
+    - une cible sans nom ne vide pas le libellé ASTECH, mieux vaut l'ancien que rien.
+    """
+    if explicit_designation is not None:
+        return
+    cleaned = (target_name or "").strip()[:255]
+    if not cleaned:
+        return
+    asset.designation = cleaned
+    asset.nomcourt = cleaned
 
 
 def _clear_resolved_address(asset: PatrimoineLegacyAsset) -> None:
