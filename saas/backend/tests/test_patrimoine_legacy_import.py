@@ -48,6 +48,7 @@ from app.services.patrimoine_legacy import (
     parse_astech_workbook,
     reset_all_links,
     reset_everything,
+    update_asset,
 )
 
 # En-têtes tels qu'ils apparaissent dans l'export réel (orthographe incluse).
@@ -911,3 +912,56 @@ def test_la_remise_a_zero_totale_vide_tout_sauf_le_hors_perimetre(db_session: Se
     # Le hors-perimetre survit : c'est un constat, pas une decision.
     hors = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMIDECHE01"))
     assert hors.status == STATUS_OUT_OF_SCOPE
+
+
+def test_valider_un_candidat_disparu_renvoie_un_message_clair(db_session: Session):
+    """`candidate_building_id` n'a pas de clé étrangère : il survit à une purge du parc.
+
+    Cas réel du 2026-08-20 : le patrimoine Po2 avait été réimporté, les bâtiments
+    avaient de nouveaux identifiants (1132→1315) et les 294 candidats pointaient vers
+    les anciens (937→1131). « Valider ce rattachement » échouait alors sur la contrainte
+    d'intégrité — une 500 opaque, donc un bouton qui semblait ne rien faire.
+    """
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+
+    with pytest.raises(ValueError, match="n'existe plus"):
+        update_asset(db_session, asset, building_id=999)
+
+
+def test_reconnaitre_les_noms_nettoie_les_candidats_perimes(db_session: Session):
+    """Relancer la reconnaissance doit effacer les candidats qui pointent dans le vide."""
+    db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+
+    # Un bien hors périmètre n'est pas rescanné : sans nettoyage explicite, son candidat
+    # périmé resterait affiché avec un bouton de validation qui échoue.
+    hors = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMIDECHE01"))
+    hors.candidate_building_id = 999
+    hors.candidate_label = "BATIMENT DISPARU"
+    db_session.add(hors)
+    db_session.commit()
+
+    compute_candidates(db_session, 1, auto_link=False)
+
+    db_session.refresh(hors)
+    assert hors.candidate_building_id is None
+    assert hors.candidate_label is None
+
+
+def test_le_nom_du_bien_est_modifiable_mais_pas_son_code(db_session: Session):
+    """Le libellé ASTECH est parfois fautif ; le code bien, lui, est la clé de retour."""
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+
+    update_asset(db_session, asset, designation="CIMETIERE MARIN LE PY")
+
+    db_session.refresh(asset)
+    # Les deux libellés bougent ensemble : l'écran affiche `nomcourt` en priorité, ne
+    # corriger que `designation` ne changerait rien à ce qu'on voit.
+    assert asset.designation == "CIMETIERE MARIN LE PY"
+    assert asset.nomcourt == "CIMETIERE MARIN LE PY"
+    assert asset.code_bien == "ADMICIMET02"

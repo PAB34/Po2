@@ -6047,6 +6047,8 @@ export async function updateLegacyAsset(
     status?: string | null;
     building_id?: number | null;
     local_id?: number | null;
+    /** Nom du bien, tel qu'il repartira dans ASTECH. Le code bien reste intouchable. */
+    designation?: string | null;
     clear_building?: boolean;
     latitude?: number | null;
     longitude?: number | null;

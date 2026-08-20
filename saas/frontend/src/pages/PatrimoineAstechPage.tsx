@@ -33,6 +33,7 @@ import {
   moveBuildingRequest,
   resetLegacyEverything,
   resetLegacyLinks,
+  updateBuildingRequest,
   updateLegacyAsset,
   type Building,
   type GeoJsonFeature,
@@ -441,6 +442,17 @@ export default function PatrimoineAstechPage() {
       // La liste des locaux est indexee sous ["buildings", "locals"] : invalider
       // ["locals"] ne l'atteindrait pas, et le local qu'on vient de creer n'apparaitrait
       // pas dans le menu « Preciser un local ».
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const renameBuildingMutation = useMutation({
+    mutationFn: (variables: { id: number; nom: string }) =>
+      updateBuildingRequest(token!, variables.id, { nom_batiment: variables.nom }),
+    onSuccess: (building) => {
+      setFlash(`Bâtiment Po2 renommé en « ${building.nom_batiment} ».`);
       void queryClient.invalidateQueries({ queryKey: ["buildings"] });
       invalidate();
     },
@@ -874,7 +886,23 @@ export default function PatrimoineAstechPage() {
         <div
           role="status"
           onClick={() => setFlash(null)}
-          style={{ fontSize: 13, color: "#0369a1", marginBottom: 12, cursor: "pointer" }}
+          // Le message était écrit en bleu foncé (#0369a1) sur le fond sombre de la
+          // plateforme : illisible. Les erreurs passaient donc totalement inaperçues et
+          // l'action semblait « ne rien faire ». Rouge pour une erreur, bleu clair sinon.
+          style={{
+            fontSize: 13,
+            marginBottom: 12,
+            cursor: "pointer",
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: flash.startsWith("Erreur")
+              ? "1px solid rgba(248, 113, 113, 0.5)"
+              : "1px solid rgba(56, 189, 248, 0.4)",
+            background: flash.startsWith("Erreur")
+              ? "rgba(248, 113, 113, 0.12)"
+              : "rgba(56, 189, 248, 0.10)",
+            color: flash.startsWith("Erreur") ? "#fca5a5" : "#7dd3fc",
+          }}
         >
           {flash}
         </div>
@@ -1215,7 +1243,20 @@ export default function PatrimoineAstechPage() {
                   <div style={{ fontSize: 11, color: "#7dd3fc", textTransform: "uppercase" }}>
                     Bâtiment Po2 — déplaçable sur la carte
                   </div>
-                  <h3 style={{ margin: "2px 0 8px", fontSize: 15 }}>{inspectedBuilding.nom_batiment}</h3>
+                  {/* Nom éditable : les noms Po2 viennent d'un import ou d'une
+                      attribution IGN, et sont parfois faux ou en doublon. Les corriger
+                      ici évite de sortir de l'écran de rapprochement pour le faire. */}
+                  <input
+                    key={`building-name-${inspectedBuilding.id}`}
+                    defaultValue={inspectedBuilding.nom_batiment ?? ""}
+                    style={{ ...input, fontSize: 15, margin: "2px 0 8px", minWidth: 260 }}
+                    title="Nom du bâtiment Po2. Modifiable."
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (!value || value === (inspectedBuilding.nom_batiment ?? "")) return;
+                      renameBuildingMutation.mutate({ id: inspectedBuilding.id, nom: value });
+                    }}
+                  />
                 </div>
                 <button type="button" style={btnSecondary} onClick={() => setInspectedBuildingId(null)}>
                   Fermer
@@ -1327,10 +1368,31 @@ export default function PatrimoineAstechPage() {
             {!selected && <p style={{ color: TEXT_MUTED, margin: 0 }}>Sélectionne un bien dans la liste.</p>}
             {selected && (
               <>
-                <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>
-                  <span style={{ fontFamily: "monospace", color: "#c4b5fd" }}>{selected.code_bien}</span>{" "}
-                  — {assetLabel(selected)}
-                </h3>
+                {/* Nom éditable : le fichier historique contient des libellés fautifs
+                    ou tronqués, et c'est ce nom qui repartira dans ASTECH. Le CODE_BIEN
+                    reste affiché mais jamais modifiable : c'est la clé de réinjection. */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 10px" }}>
+                  <span
+                    title="Code bien ASTECH — clé de réinjection, jamais modifiable"
+                    style={{ fontFamily: "monospace", color: "#c4b5fd", fontSize: 13 }}
+                  >
+                    {selected.code_bien}
+                  </span>
+                  <input
+                    key={`asset-name-${selected.id}`}
+                    defaultValue={assetLabel(selected)}
+                    style={{ ...input, flex: 1, fontSize: 14 }}
+                    title="Nom du bien ASTECH. Modifiable : c'est lui qui repartira dans le fichier de retour."
+                    onBlur={(event) => {
+                      const value = event.target.value.trim();
+                      if (!value || value === assetLabel(selected)) return;
+                      updateMutation.mutate(
+                        { id: selected.id, payload: { designation: value } },
+                        { onSuccess: () => setFlash(`Bien ASTECH renommé en « ${value} ».`) },
+                      );
+                    }}
+                  />
+                </div>
                 <dl
                   style={{
                     display: "grid",
@@ -1393,10 +1455,18 @@ export default function PatrimoineAstechPage() {
                         type="button"
                         style={btnPrimary}
                         onClick={() =>
-                          updateMutation.mutate({
-                            id: selected.id,
-                            payload: { building_id: selected.candidate_building_id },
-                          })
+                          updateMutation.mutate(
+                            {
+                              id: selected.id,
+                              payload: { building_id: selected.candidate_building_id },
+                            },
+                            {
+                              onSuccess: () =>
+                                setFlash(
+                                  `« ${assetLabel(selected)} » rattaché à « ${selected.candidate_label} ».`,
+                                ),
+                            },
+                          )
                         }
                       >
                         Valider ce rattachement
