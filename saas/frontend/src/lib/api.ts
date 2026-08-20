@@ -6117,6 +6117,38 @@ export async function confirmLegacyProposals(
   return parseResponse<{ confirmed: number }>(response);
 }
 
+/** Compte ce qui partirait dans le fichier de retour, sans produire le classeur. */
+export async function previewLegacyExport(
+  token: string,
+): Promise<{ exported_rows: number; review_rows: number; columns: string[]; missing_columns: string[]; sheet_name: string }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/export/preview`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse(response);
+}
+
+/**
+ * Télécharge le classeur de retour ASTECH (feuille réinjectable + traçabilité +
+ * à vérifier). Les en-têtes sont recopiés à l'octet près depuis le fichier importé.
+ */
+export async function downloadLegacyExport(
+  token: string,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/export`, {
+    headers: buildHeaders(token),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || "Export impossible.");
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  return {
+    blob: await response.blob(),
+    filename: match?.[1] ?? "retour_astech.xlsx",
+  };
+}
+
 /**
  * Remise à zéro totale : rattachements, candidats, positions et décisions « ignoré ».
  * Les biens restent, l'écran revient à l'état juste après l'import.

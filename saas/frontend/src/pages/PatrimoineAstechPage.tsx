@@ -25,6 +25,8 @@ import {
   createBuildingRequest,
   createLegacyAssetFromBuilding,
   deleteLegacyImports,
+  downloadLegacyExport,
+  previewLegacyExport,
   fetchFreeAddressLookup,
   fetchIgnBuildingsAtPoint,
   fetchLegacyAssets,
@@ -530,6 +532,39 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  /**
+   * Télécharge le classeur de retour ASTECH.
+   *
+   * Le fichier ne contient que les rattachements **validés par un humain** : une
+   * proposition du moteur n'a rien à faire dans le référentiel de la collectivité tant
+   * que personne ne l'a confirmée. Les autres biens ressortent en feuille « à vérifier »
+   * avec leur motif, ce qui rend le compte lisible plutôt que silencieux.
+   */
+  const exportMutation = useMutation({
+    mutationFn: () => downloadLegacyExport(token!),
+    onSuccess: ({ blob, filename }) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setFlash(
+        `Fichier « ${filename} » téléchargé. Relis la feuille « Traçabilité » avant de le ` +
+          "réinjecter dans ASTECH : elle liste chaque valeur remplacée.",
+      );
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  // `countsQuery.data` plutôt que `counts` : ce dernier est déclaré plus bas dans le
+  // composant, l'utiliser ici lèverait une erreur d'initialisation.
+  const exportPreviewQuery = useQuery({
+    queryKey: ["legacy-export-preview", countsQuery.data?.lie, countsQuery.data?.a_creer],
+    queryFn: () => previewLegacyExport(token!),
+    enabled: !!token && (countsQuery.data?.total ?? 0) > 0,
+  });
+
   const resetAllMutation = useMutation({
     mutationFn: () => resetLegacyEverything(token!),
     onSuccess: (result) => {
@@ -880,6 +915,35 @@ export default function PatrimoineAstechPage() {
               ? "Confirmation…"
               : `3. Confirmer les ${counts.propose} rattachement(s) proposé(s)`}
           </button>
+        )}
+        {/* Le retour de l'aller-retour : le classeur que la collectivité réinjecte.
+            Le compteur annonce ce qui partira AVANT le clic — un export silencieux de
+            6 lignes sur 444 serait incompréhensible. */}
+        {(counts.total ?? 0) > 0 && (
+          <button
+            type="button"
+            style={btnPrimary}
+            disabled={exportMutation.isPending || (exportPreviewQuery.data?.exported_rows ?? 0) === 0}
+            title={
+              (exportPreviewQuery.data?.exported_rows ?? 0) === 0
+                ? "Aucun rattachement validé : confirme d'abord les propositions du moteur."
+                : "Classeur au gabarit ASTECH, en-têtes recopiés depuis ton export d'origine."
+            }
+            onClick={() => exportMutation.mutate()}
+          >
+            {exportMutation.isPending
+              ? "Génération…"
+              : `4. Exporter pour ASTECH${
+                  exportPreviewQuery.data
+                    ? ` (${exportPreviewQuery.data.exported_rows} ligne(s))`
+                    : ""
+                }`}
+          </button>
+        )}
+        {exportPreviewQuery.data && (exportPreviewQuery.data.review_rows ?? 0) > 0 && (
+          <span style={{ fontSize: 12, color: TEXT_MUTED, alignSelf: "center" }}>
+            {exportPreviewQuery.data.review_rows} bien(s) resteront en feuille « à vérifier »
+          </span>
         )}
         {/* Repartir d'une feuille blanche quand le référentiel Po2 a beaucoup bougé.
             Destructif : on demande confirmation, en annonçant le nombre exact.
