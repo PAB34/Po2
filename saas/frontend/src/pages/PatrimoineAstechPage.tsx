@@ -413,6 +413,22 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  /**
+   * Coupe le lien d'un bien avec Po2, quel que soit son niveau (bâtiment ou local) et
+   * quel que soit son statut.
+   *
+   * Le bien garde sa position : c'est voulu, elle reste un point de travail utilisable.
+   * C'est aussi pourquoi la carte l'écarte visuellement du bâtiment une fois détaché —
+   * sinon il resterait pile dessous et le détachement semblerait sans effet.
+   */
+  const detachAsset = (assetId: number) => {
+    updateMutation.mutate({
+      id: assetId,
+      payload: { clear_building: true, status: "a_traiter" },
+    });
+    setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte.");
+  };
+
   const toLocalMutation = useMutation({
     mutationFn: (assetId: number) => convertLegacyAssetToLocal(token!, assetId),
     onSuccess: (asset) => {
@@ -1402,9 +1418,15 @@ export default function PatrimoineAstechPage() {
                         <div style={{ color: TEXT_MUTED, marginBottom: 4 }}>
                           {siblingAssets.length} biens ASTECH désignent ce bâtiment :
                         </div>
+                        {/* Détacher depuis la fratrie : quand plusieurs biens partagent
+                            un point fusionné sur la carte, aller les chercher un par un
+                            sur la carte est pénible. Ici chacun a son bouton. */}
                         {siblingAssets.map((sibling) => (
-                          <div key={sibling.id} style={{ marginTop: 2 }}>
-                            {sibling.target_type === "local" ? "  › " : "▪ "}
+                          <div
+                            key={sibling.id}
+                            style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}
+                          >
+                            <span>{sibling.target_type === "local" ? "  ›" : "▪"}</span>
                             <button
                               type="button"
                               onClick={() => setSelectedId(sibling.id)}
@@ -1414,17 +1436,36 @@ export default function PatrimoineAstechPage() {
                                 padding: 0,
                                 fontSize: 12,
                                 cursor: "pointer",
+                                textAlign: "left",
                                 color: sibling.id === selected.id ? "#e9d5ff" : TEXT,
                                 fontWeight: sibling.id === selected.id ? 600 : 400,
                               }}
                             >
                               {assetLabel(sibling)}
-                            </button>{" "}
+                            </button>
                             <span style={{ color: TEXT_MUTED }}>
                               {sibling.target_type === "local"
                                 ? `local « ${localsById.get(sibling.local_id ?? -1)?.nom_local ?? "?"} »`
                                 : "bâtiment entier"}
                             </span>
+                            <button
+                              type="button"
+                              title="Détacher ce bien du bâtiment"
+                              onClick={() => detachAsset(sibling.id)}
+                              style={{
+                                marginLeft: "auto",
+                                border: "1px solid rgba(248, 113, 113, 0.4)",
+                                background: "transparent",
+                                color: "#fca5a5",
+                                borderRadius: 6,
+                                padding: "1px 7px",
+                                fontSize: 11,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Détacher
+                            </button>
                           </div>
                         ))}
                         {siblingAssets.filter((sibling) => sibling.target_type !== "local").length >
@@ -1440,7 +1481,11 @@ export default function PatrimoineAstechPage() {
                   </div>
                 )}
 
-                {selected.status === "lie" && targetBuilding && (
+                {/* Le détachement ne dépendait que du statut « lié » : un bien seulement
+                    PROPOSÉ par le moteur ne pouvait pas être détaché, alors que c'est
+                    précisément celui dont le rattachement est le moins sûr. La seule
+                    condition qui compte est qu'il y ait un lien à couper. */}
+                {selected.building_id != null && targetBuilding && (
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
                     <p style={{ margin: "0 0 8px", fontSize: 13 }}>
                       Rattaché à <strong>{targetBuilding.nom_batiment}</strong>
@@ -1452,12 +1497,7 @@ export default function PatrimoineAstechPage() {
                     <button
                       type="button"
                       style={btnSecondary}
-                      onClick={() =>
-                        updateMutation.mutate({
-                          id: selected.id,
-                          payload: { clear_building: true, status: "a_traiter" },
-                        })
-                      }
+                      onClick={() => detachAsset(selected.id)}
                     >
                       Détacher
                     </button>
