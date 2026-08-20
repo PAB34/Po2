@@ -196,15 +196,21 @@ def update_asset(
     # `local_id` etait accepte par le schema mais jamais transmis au service : le menu
     # « Preciser un local » renvoyait 200 sans rien changer. C'est la raison pour
     # laquelle aucun bien n'avait jamais ete rattache au niveau local.
-    updated = svc.update_asset(
-        db,
-        asset,
-        status=payload.status,
-        building_id=payload.building_id,
-        local_id=payload.local_id,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        notes=payload.notes,
-        clear_building=payload.clear_building,
-    )
+    try:
+        updated = svc.update_asset(
+            db,
+            asset,
+            status=payload.status,
+            building_id=payload.building_id,
+            local_id=payload.local_id,
+            designation=payload.designation,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            notes=payload.notes,
+            clear_building=payload.clear_building,
+        )
+    except ValueError as error:
+        # Cible disparue (patrimoine reimporte) : message explicite plutot qu'une 500
+        # opaque, qui donnait l'impression que le bouton ne faisait rien.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     return LegacyAssetOut.model_validate(updated)

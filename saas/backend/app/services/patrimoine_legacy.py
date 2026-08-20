@@ -442,7 +442,28 @@ def compute_candidates(
         _clear_resolved_address(asset)
         db.add(asset)
         repaired += 1
-    if repaired:
+    # Candidats perimes : `candidate_building_id` n'a PAS de cle etrangere, il survit
+    # donc a une purge du patrimoine. Constate en prod le 2026-08-20 : le referentiel
+    # Po2 avait ete reimporte, les batiments avaient de nouveaux identifiants, et les
+    # 294 candidats proposes pointaient tous vers des batiments disparus. « Valider ce
+    # rattachement » echouait alors sur la contrainte d'integrite.
+    known_ids = {target[0] for target in targets}
+    stale_statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.candidate_building_id.is_not(None)
+    )
+    if city_id is not None:
+        stale_statement = stale_statement.where(PatrimoineLegacyAsset.city_id == city_id)
+    stale = 0
+    for asset in db.scalars(stale_statement):
+        if asset.candidate_building_id in known_ids:
+            continue
+        asset.candidate_building_id = None
+        asset.candidate_label = None
+        asset.candidate_score = None
+        asset.candidate_reason = None
+        db.add(asset)
+        stale += 1
+    if repaired or stale:
         db.commit()
 
     statement = select(PatrimoineLegacyAsset).where(PatrimoineLegacyAsset.status == STATUS_TODO)
@@ -558,6 +579,7 @@ def update_asset(
     status: str | None = None,
     building_id: int | None = None,
     local_id: int | None = None,
+    designation: str | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
     notes: str | None = None,
@@ -602,12 +624,23 @@ def update_asset(
                 asset.longitude = longitude_source
                 latitude = longitude = None
     elif building_id is not None:
+        building = db.get(Building, building_id)
+        # Le batiment vise peut avoir disparu : `candidate_building_id` n'a pas de cle
+        # etrangere et survit donc a une purge du patrimoine. Constate en prod le
+        # 2026-08-20 : le referentiel Po2 avait ete reimporte, les batiments avaient
+        # de nouveaux identifiants, et les 294 candidats pointaient tous dans le vide.
+        # Sans ce controle, la contrainte d'integrite renvoyait une 500 opaque et le
+        # bouton « Valider ce rattachement » semblait ne rien faire.
+        if building is None:
+            raise ValueError(
+                "Ce bâtiment Po2 n'existe plus — le patrimoine a été réimporté depuis. "
+                "Relance « 2. Reconnaître les noms » pour recalculer les candidats."
+            )
         asset.building_id = building_id
         asset.local_id = None
         asset.target_type = TARGET_BUILDING
         asset.status = STATUS_LINKED
         asset.link_origin = ORIGIN_MANUAL
-        building = db.get(Building, building_id)
         if building is not None:
             _inherit_building_address(asset, building)
             # Le point ASTECH rejoint le bâtiment : c'est le geste « je dépose le
@@ -641,6 +674,13 @@ def update_asset(
             if asset.resolved_postcode:
                 linked.code_postal = asset.resolved_postcode[:10]
             db.add(linked)
+    if designation is not None:
+        # Le nom affiché vient de `nomcourt` sinon de `designation` : on écrit les deux,
+        # sinon corriger le libellé ne changerait rien à l'écran. C'est aussi ce qui
+        # repartira dans ASTECH — le `code_bien`, lui, reste intouchable.
+        cleaned = designation.strip()[:255] or None
+        asset.designation = cleaned
+        asset.nomcourt = cleaned
     if notes is not None:
         asset.notes = notes.strip() or None
     db.add(asset)

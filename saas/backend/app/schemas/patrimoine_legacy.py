@@ -79,6 +79,9 @@ class LegacyAssetUpdateIn(BaseModel):
     status: str | None = Field(default=None, max_length=20)
     building_id: int | None = None
     local_id: int | None = None
+    # Nom du bien tel qu'il sera renvoyé à ASTECH. Modifiable : le fichier historique
+    # contient des libellés fautifs ou tronqués. Le `code_bien`, lui, ne l'est jamais.
+    designation: str | None = Field(default=None, max_length=255)
     clear_building: bool = False
     latitude: float | None = None
     longitude: float | None = None
