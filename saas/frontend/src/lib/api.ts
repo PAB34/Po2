@@ -6114,6 +6114,21 @@ export async function confirmLegacyProposals(
 }
 
 /**
+ * Fait du bien ASTECH un local du bâtiment auquel il est rattaché — en créant ce local
+ * s'il n'existe pas. Le bâtiment porteur reste la source de l'adresse et du cadastre.
+ */
+export async function convertLegacyAssetToLocal(
+  token: string,
+  assetId: number,
+): Promise<LegacyAsset> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/${assetId}/to-local`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyAsset>(response);
+}
+
+/**
  * Supprime TOUS les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
  * Les biens « à créer », « ignoré » et « hors périmètre » sont préservés.
  */

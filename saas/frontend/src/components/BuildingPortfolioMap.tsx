@@ -601,8 +601,19 @@ export function BuildingPortfolioMap({
                   : "rattaché à un bâtiment Po2"
                 : "non rattaché"
             }${point.isProvisional ? ", position à confirmer" : ""}</em>`
-          : `<strong>${groupSize} biens ASTECH ici</strong><br/>` +
-            entry.points.map((candidate) => `• ${candidate.label}`).join("<br/>") +
+          : // Plusieurs biens sur un meme batiment : ce qui compte n'est pas leur
+            // nombre mais leur NIVEAU. En principe un seul designe le batiment entier,
+            // les autres sont des locaux — la bulle doit rendre cette structure lisible.
+            `<strong>${groupSize} biens ASTECH ici</strong><br/>` +
+            entry.points
+              .map(
+                (candidate) =>
+                  `${candidate.isLocalTarget ? "&nbsp;&nbsp;› " : "▪ "}${candidate.label}` +
+                  `<br/><span style="opacity:.7">&nbsp;&nbsp;&nbsp;${
+                    candidate.isLocalTarget ? "local" : "bâtiment entier"
+                  }</span>`,
+              )
+              .join("<br/>") +
             `<br/><em>Clique à nouveau pour passer au suivant.</em>`;
       marker.bindPopup?.(
         `${bienLines}${

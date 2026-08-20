@@ -741,3 +741,50 @@ mécaniquement (a).
 bloc une fois relus ?**
 → **Recommandation** : les basculer en « à confirmer », avec un bouton « tout confirmer »
 sur la liste filtrée, pour ne pas imposer 78 clics.
+
+## 19. Hiérarchie bâtiment / local — décisions 2026-08-20
+
+> Question posée : « un bâtiment Po2 doit pouvoir héberger un ou plusieurs points ASTECH
+> et vice versa ; le bâtiment est le point principal et les points qui s'y attachent
+> deviennent soit des bâtiments soit des locaux. Comment est-ce géré ? »
+
+### 19.1 Ce qui était déjà en place — et le trou constaté
+
+Le modèle portait déjà la cible à deux niveaux (`target_type` + `local_id`, §17.4), le
+bâtiment porteur restant toujours renseigné pour l'adresse et le cadastre.
+
+**Mais l'écran ne savait viser qu'un local *déjà existant*.** Aucun moyen de créer un
+local depuis un bien ASTECH. Mesure en prod le 2026-08-20 : **0 bien sur 79** rattaché
+au niveau local, pour 626 locaux en base.
+
+C'est pourtant le cas de figure normal dès que plusieurs biens visent un bâtiment. Les
+deux seuls cas réels en prod le montrent :
+
+| Bâtiment | Biens ASTECH | Locaux Po2 existants |
+|---|---|---|
+| 1004 — SALLE TENNIS CLUB DU BARROU | `TENNIS CLUB DU BARROU` + `SALLES TENNIS CLUB DU BARROU` | `SALLE TENNIS CLUB DU BARROU` |
+| 1021 — ECOLE MATERNELLE SUZANNE LACORE | `ECOLE MATERNELLE SUZANNE LACORE` + `RESTAURATION SCOLAIRE ANATOLE FRANCE` | `ECOLE MATERNELLE SUZANNE LACORE` |
+
+Pour 1004 le local existait et personne ne l'a visé ; pour 1021 il aurait fallu le créer,
+ce qui était impossible. (Le rattachement du restaurant scolaire à 1021 est par ailleurs
+douteux : il a son propre bâtiment, 1020.)
+
+### 19.2 Décisions
+
+| # | Question | Décision |
+|---|---|---|
+| Q18 | Un bien devenu local garde-t-il ce qu'il renvoie à ASTECH ? | **Oui.** Passer au niveau local **précise** la structure, il ne retire rien : l'adresse, le cadastre et la position restent ceux du bâtiment porteur. Le local créé en hérite aussi, pour ne rien perdre si on lui donne plus tard une adresse propre. |
+| Q19 | Un bien ASTECH couvrant **plusieurs** bâtiments Po2 ? | **Non traité.** On ne sait pas encore si le cas existe réellement dans le fichier. La relation reste **N codes bien → 1 cible**. À rouvrir seulement sur un cas constaté : ce serait un changement de modèle (table de liaison), pas un réglage. |
+
+### 19.3 Ce qui est livré
+
+- `convert_asset_to_local()` + `POST /patrimoine/legacy/{id}/to-local` : crée le local
+  dans le bâtiment porteur et y rattache le bien. **Réutilise un local homonyme** s'il
+  existe déjà (cas 1004) plutôt que de créer un doublon. Idempotent.
+- Bouton **« En faire un local de ce bâtiment »** dans le panneau d'action.
+- **La fratrie affichée** : les biens ASTECH qui visent le même bâtiment, avec leur
+  niveau (bâtiment entier / local), et une alerte quand **plusieurs visent le bâtiment
+  entier** — en principe un seul le désigne, les autres sont des locaux ou l'un d'eux
+  est mal rattaché.
+- La bulle du point fusionné sur la carte dit le **niveau** de chaque bien, là où elle
+  n'affichait qu'un compteur.
