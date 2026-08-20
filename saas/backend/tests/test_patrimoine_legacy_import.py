@@ -43,6 +43,7 @@ from app.services.patrimoine_legacy import (
     convert_asset_to_local,
     confirm_proposed,
     create_asset_from_building,
+    delete_all_imports,
     import_astech_file,
     parse_astech_workbook,
     reset_all_links,
@@ -794,3 +795,39 @@ def select_locals_of(building_id: int):
     from sqlalchemy import select
 
     return select(Local).where(Local.building_id == building_id)
+
+
+def test_la_suppression_de_l_import_conserve_le_patrimoine_po2(db_session: Session):
+    """« Supprimer l'import ASTECH » efface les biens, pas le patrimoine Po2.
+
+    Les bâtiments et les locaux créés en cours de rapprochement sont désormais des
+    données **Po2**, pas des données ASTECH : les supprimer ferait perdre du patrimoine
+    réel pour effacer un fichier source. Le moteur les retrouvera au réimport, puisqu'ils
+    portent le nom du bien.
+    """
+    db_session.add(
+        Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete")
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    convert_asset_to_local(db_session, asset)
+    assert len(db_session.scalars(select_locals_of(1)).all()) == 1
+
+    result = delete_all_imports(db_session, 1)
+
+    assert result["assets_deleted"] >= 1
+    assert result["imports_deleted"] == 1
+    assert db_session.scalars(_all_assets()).all() == []
+    # Le patrimoine Po2 survit : bâtiment ET local créés en cours de route.
+    assert db_session.get(Building, 1) is not None
+    assert len(db_session.scalars(select_locals_of(1)).all()) == 1
+
+    # Et le réimport repart proprement, sans reliquat ni doublon.
+    reimport = import_astech_file(
+        db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook()
+    )
+    assert reimport["created"] > 0
+    assert reimport["updated"] == 0

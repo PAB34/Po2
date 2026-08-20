@@ -24,6 +24,7 @@ import {
   convertLegacyAssetToLocal,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
+  deleteLegacyImports,
   fetchFreeAddressLookup,
   fetchIgnBuildingsAtPoint,
   fetchLegacyAssets,
@@ -445,6 +446,20 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  const deleteImportsMutation = useMutation({
+    mutationFn: () => deleteLegacyImports(token!),
+    onSuccess: (result) => {
+      setFlash(
+        `${result.assets_deleted} bien(s) ASTECH supprimé(s). ` +
+          "Tu peux réimporter un export avec « 1. Importer un export ASTECH ».",
+      );
+      setSelectedId(null);
+      setInspectedBuildingId(null);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur de suppression : ${(error as Error).message}`),
+  });
+
   const resetLinksMutation = useMutation({
     mutationFn: () => resetLegacyLinks(token!),
     onSuccess: (result) => {
@@ -773,6 +788,36 @@ export default function PatrimoineAstechPage() {
             {resetLinksMutation.isPending
               ? "Suppression…"
               : "Supprimer tous les rapprochements"}
+          </button>
+        )}
+        {/* Repartir d'un export ASTECH neuf. Bien plus destructif que la purge des
+            rapprochements : les biens eux-mêmes disparaissent. La confirmation annonce
+            donc le compte exact, et ce qui survit. */}
+        {(counts.total ?? 0) > 0 && (
+          <button
+            type="button"
+            style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+            onClick={() => {
+              const total = counts.total ?? 0;
+              const traites = (counts.lie ?? 0) + (counts.propose ?? 0);
+              if (
+                !window.confirm(
+                  `Supprimer l'import ASTECH : ${total} bien(s) seront effacés.\n\n` +
+                    `Tu perdras ${traites} rapprochement(s) déjà faits, ainsi que les points ` +
+                    "posés à la main et les décisions (ignoré, hors périmètre).\n\n" +
+                    "Les bâtiments et les locaux Po2 créés depuis ASTECH sont CONSERVÉS : " +
+                    "le moteur les retrouvera au réimport.\n\n" +
+                    "À savoir : réimporter par-dessus sans supprimer met déjà les biens à jour " +
+                    "sans rien dupliquer, et garde les rapprochements.",
+                )
+              ) {
+                return;
+              }
+              deleteImportsMutation.mutate();
+            }}
+            disabled={deleteImportsMutation.isPending}
+          >
+            {deleteImportsMutation.isPending ? "Suppression…" : "Supprimer l'import ASTECH"}
           </button>
         )}
       </div>
