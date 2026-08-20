@@ -1170,3 +1170,35 @@ def test_l_ancien_format_reste_lisible(db_session: Session):
     assert parsed["sheet_name"] == "Feuil1"
     assert parsed["header_row"] == 2
     assert parsed["key_header"] == "CODE_BIEN"
+
+
+def test_un_fichier_a_codification_differente_est_signale(db_session: Session):
+    """Deux jeux de codes disjoints cohabitent au lieu de se mettre à jour — il faut le dire.
+
+    Constaté le 2026-08-20 : le référent a changé la codification (`ADMICIMET02` devenu
+    `BATI00272`). Importer le nouveau fichier par-dessus l'ancien a produit 824 biens
+    (444 + 380) sans un mot d'explication à l'écran. L'utilisateur a alors cliqué
+    « remise à zéro totale », qui garde les biens, au lieu de « supprimer les biens ».
+    """
+    import_astech_file(db_session, city_id=1, filename="ancien.xlsx", raw_bytes=_build_workbook())
+
+    result = import_astech_file(
+        db_session, city_id=1, filename="OPUS.xlsx",
+        raw_bytes=_build_new_workbook(), genres=("BATI",),
+    )
+
+    assert result["codes_disjoints"] is True
+    assert result["existing_before"] == 4
+    assert result["created"] == 2
+    assert result["updated"] == 0
+
+
+def test_rejouer_le_meme_fichier_ne_declenche_pas_l_alerte(db_session: Session):
+    """L'idempotence normale ne doit pas passer pour un changement de codification."""
+    import_astech_file(db_session, city_id=1, filename="OPUS.xlsx",
+                       raw_bytes=_build_new_workbook(), genres=("BATI",))
+    result = import_astech_file(db_session, city_id=1, filename="OPUS.xlsx",
+                                raw_bytes=_build_new_workbook(), genres=("BATI",))
+    assert result["codes_disjoints"] is False
+    assert result["updated"] == 2
+    assert result["created"] == 0
