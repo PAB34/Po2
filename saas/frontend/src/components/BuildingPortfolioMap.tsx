@@ -24,6 +24,7 @@ type RuntimeLayer = {
 type RuntimeBounds = {
   isValid: () => boolean;
   pad: (ratio: number) => RuntimeBounds;
+  contains?: (point: [number, number]) => boolean;
 };
 
 type RuntimeMap = {
@@ -32,6 +33,7 @@ type RuntimeMap = {
   remove: () => void;
   invalidateSize?: () => void;
   on?: (event: string, handler: (payload: unknown) => void) => void;
+  getBounds?: () => RuntimeBounds;
 };
 
 type RuntimeFeatureGroup = RuntimeLayer & {
@@ -79,6 +81,20 @@ export type LegacyMapPoint = {
   buildingId?: number | null;
   /** Nom du bâtiment porteur, affiché dans la bulle du point fusionné. */
   buildingLabel?: string | null;
+};
+
+/**
+ * Un marqueur ASTECH réellement dessiné. Il porte **un ou plusieurs** biens : tous les
+ * biens rattachés à un même bâtiment sont représentés par un point unique, posé sur le
+ * bâtiment, dont le marqueur propre n'est alors plus dessiné. Un bâtiment et les biens
+ * qui le désignent sont une seule réalité sur le terrain.
+ */
+type LegacyRenderMarker = {
+  points: LegacyMapPoint[];
+  latitude: number;
+  longitude: number;
+  buildingId: number | null;
+  buildingLabel: string | null;
 };
 
 type WindowWithLeaflet = Window & {
@@ -364,6 +380,9 @@ export function BuildingPortfolioMap({
   // au fond de carte selon le type de couche : sans ce garde, selectionner un point
   // declencherait la deselection dans la foulee.
   const markerClickAtRef = useRef(0);
+  // Le cadrage « tout le parc » est un cadrage d'ARRIVEE : il ne doit jouer qu'une
+  // fois. Ensuite, seuls un focus explicite ou une selection recadrent la carte.
+  const hasFramedOnceRef = useRef(false);
   // Le handler de clic vit dans une ref : l'abonnement Leaflet est pose une seule fois
   // a l'initialisation, il ne doit pas se re-abonner a chaque rendu du parent.
   const backgroundClickRef = useRef(onBackgroundClick);
@@ -398,23 +417,52 @@ export function BuildingPortfolioMap({
    *   décrit autre chose que le bâtiment : masquer celui-ci ferait disparaître de la
    *   carte un bâtiment bien réel.
    */
-  const mergedBuildingIds = useMemo(() => {
+  const { legacyMarkers, mergedBuildingIds } = useMemo(() => {
     const perBuilding = new Map<number, LegacyMapPoint[]>();
+    const loose: LegacyMapPoint[] = [];
+
     for (const point of legacyPoints ?? []) {
-      if (point.buildingId == null || !point.isLinked) continue;
-      perBuilding.set(point.buildingId, [...(perBuilding.get(point.buildingId) ?? []), point]);
+      const building =
+        point.isLinked && point.buildingId != null
+          ? mappableBuildings.find((candidate) => candidate.id === point.buildingId)
+          : undefined;
+      // Le point doit être **effectivement posé sur** le bâtiment (< 5 m). Déplacé
+      // ailleurs, il décrit autre chose : le fondre dans le bâtiment mentirait sur sa
+      // position, et masquer le bâtiment ferait disparaître une réalité distincte.
+      const onBuilding =
+        building != null &&
+        distanceMeters(point.latitude, point.longitude, building.latitude, building.longitude) <= 5;
+      if (building && onBuilding) {
+        perBuilding.set(building.id, [...(perBuilding.get(building.id) ?? []), point]);
+      } else {
+        loose.push(point);
+      }
     }
-    const merged = new Set<number>();
+
+    const markers: LegacyRenderMarker[] = [];
     for (const [buildingId, points] of perBuilding) {
-      if (points.length !== 1) continue;
-      const building = mappableBuildings.find((candidate) => candidate.id === buildingId);
-      if (!building) continue;
-      const distance = distanceMeters(
-        points[0].latitude, points[0].longitude, building.latitude, building.longitude,
-      );
-      if (distance <= 5) merged.add(buildingId);
+      const building = mappableBuildings.find((candidate) => candidate.id === buildingId)!;
+      markers.push({
+        points,
+        // Position canonique = celle du bâtiment. Les biens d'un même bâtiment étaient
+        // auparavant écartés en éventail à 12 m : on voyait trois pastilles là où il
+        // n'y a qu'un bâtiment, et le marqueur bleu restait au milieu.
+        latitude: building.latitude,
+        longitude: building.longitude,
+        buildingId,
+        buildingLabel: building.nom_batiment ?? points[0].buildingLabel ?? null,
+      });
     }
-    return merged;
+    for (const point of spreadOverlappingPoints(loose)) {
+      markers.push({
+        points: [point],
+        latitude: point.latitude,
+        longitude: point.longitude,
+        buildingId: point.buildingId ?? null,
+        buildingLabel: point.buildingLabel ?? null,
+      });
+    }
+    return { legacyMarkers: markers, mergedBuildingIds: new Set(perBuilding.keys()) };
   }, [legacyPoints, mappableBuildings]);
 
   // Priorité : focusLatLon (bâtiment sélectionné ou centroïde du site sélectionné),
@@ -453,8 +501,23 @@ export function BuildingPortfolioMap({
       // suivent immediatement un clic sur un marqueur : selon le type de couche,
       // Leaflet fait remonter l'evenement jusqu'a la carte, et la selection qu'on
       // vient de faire serait annulee dans la foulee.
-      map.on?.("click", () => {
-        if (Date.now() - markerClickAtRef.current < 150) return;
+      map.on?.("click", (payload) => {
+        // Deux gardes, parce qu'un seul ne suffit pas :
+        // - la cible reelle du clic. Leaflet laisse remonter l'evenement depuis les
+        //   marqueurs et les polygones ; seul un clic sur les tuiles est un clic
+        //   « dans le vide » ;
+        // - un delai apres un clic ou un glisser sur marqueur, car un deposer emet un
+        //   `click` dont la cible est deja demontee au moment ou on l'examine.
+        if (Date.now() - markerClickAtRef.current < 400) return;
+        const original = (payload as { originalEvent?: Event } | undefined)?.originalEvent;
+        const target = original?.target as HTMLElement | undefined;
+        if (
+          target?.closest?.(
+            ".leaflet-marker-pane, .leaflet-overlay-pane, .leaflet-popup-pane, .leaflet-control-container",
+          )
+        ) {
+          return;
+        }
         backgroundClickRef.current?.();
       });
       mapRef.current = map;
@@ -501,51 +564,69 @@ export function BuildingPortfolioMap({
     legacyLayerRef.current?.remove?.();
     legacyLayerRef.current = null;
 
-    const points = spreadOverlappingPoints(legacyPoints ?? []);
-    if (points.length === 0) return;
+    if (legacyMarkers.length === 0) return;
 
     const layerGroup = runtime.featureGroup();
-    for (const point of points) {
-      const isActive = point.id === activeLegacyId;
-      // Seul le point sélectionné est déplaçable : on évite de bouger un voisin
-      // par mégarde en naviguant sur la carte.
-      const marker = runtime.marker([point.latitude, point.longitude], {
-        draggable: isActive,
-        autoPan: isActive,
+    for (const entry of legacyMarkers) {
+      const point = entry.points[0];
+      const groupSize = entry.points.length;
+      const isActive = entry.points.some((candidate) => candidate.id === activeLegacyId);
+      // Un marqueur qui porte PLUSIEURS biens n'est pas déplaçable : on ne saurait pas
+      // lequel on déplace. Ces biens se repositionnent en les isolant d'abord.
+      const isDraggable = isActive && groupSize === 1;
+      const marker = runtime.marker([entry.latitude, entry.longitude], {
+        draggable: isDraggable,
+        autoPan: isDraggable,
         icon: runtime.divIcon({
           className: "legacy-marker",
           html: `<span class="legacy-marker-dot${isActive ? " is-active" : ""}${
             point.isLinked ? " is-linked" : ""
           }${point.isLocalTarget ? " is-local" : ""}${
             point.isProvisional ? " is-provisional" : ""
-          }"></span>`,
+          }">${groupSize > 1 ? `<i class="legacy-marker-count">${groupSize}</i>` : ""}</span>`,
           iconSize: [18, 18],
           iconAnchor: [9, 9],
         }),
       });
-      // Point fusionné : il représente le bien ASTECH ET son bâtiment Po2, dont le
-      // marqueur n'est plus dessiné. La bulle doit donc nommer les deux, sinon
-      // l'information du bâtiment disparaît de la carte avec son marqueur.
-      const isMerged = point.buildingId != null && mergedBuildingIds.has(point.buildingId);
+      // Ce point représente les biens ASTECH **et** le bâtiment Po2, dont le marqueur
+      // n'est plus dessiné : la bulle doit nommer les deux, sinon l'information du
+      // bâtiment disparaît de la carte avec son marqueur.
+      const isMerged = entry.buildingId != null && mergedBuildingIds.has(entry.buildingId);
+      const bienLines =
+        groupSize === 1
+          ? `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
+              point.isLinked
+                ? point.isLocalTarget
+                  ? "rattaché à un local"
+                  : "rattaché à un bâtiment Po2"
+                : "non rattaché"
+            }${point.isProvisional ? ", position à confirmer" : ""}</em>`
+          : `<strong>${groupSize} biens ASTECH ici</strong><br/>` +
+            entry.points.map((candidate) => `• ${candidate.label}`).join("<br/>") +
+            `<br/><em>Clique à nouveau pour passer au suivant.</em>`;
       marker.bindPopup?.(
-        `<strong>${point.label}</strong><br/><em>Bien ASTECH — ${
-          point.isLinked
-            ? point.isLocalTarget
-              ? "rattaché à un local"
-              : "rattaché à un bâtiment Po2"
-            : "non rattaché"
-        }${point.isProvisional ? ", position à confirmer" : ""}</em>${
-          isMerged && point.buildingLabel
-            ? `<br/>Po2 : <strong>${point.buildingLabel}</strong>`
-            : ""
+        `${bienLines}${
+          isMerged && entry.buildingLabel ? `<br/>Po2 : <strong>${entry.buildingLabel}</strong>` : ""
         }`,
       );
       marker.on?.("click", () => {
         markerClickAtRef.current = Date.now();
-        onSelectLegacyId?.(point.id);
+        // Sur un marqueur groupé, chaque clic passe au bien suivant : c'est le seul
+        // moyen d'atteindre le 2e bien depuis la carte, maintenant qu'ils partagent
+        // un point unique. La file de gauche reste l'accès direct.
+        const current = entry.points.findIndex((candidate) => candidate.id === activeLegacyId);
+        const next = entry.points[(current + 1) % groupSize];
+        onSelectLegacyId?.(next.id);
       });
-      if (isActive && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
+      if (isDraggable && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
+        // Leaflet fait suivre un glisser-deposer d'un `click` qui remonte jusqu'au fond
+        // de carte. Sans ce marquage, lacher le point declenchait la deselection — et
+        // la carte se recadrait aussitot sur tout le parc.
+        marker.on?.("dragstart", () => {
+          markerClickAtRef.current = Date.now();
+        });
         marker.on?.("dragend", () => {
+          markerClickAtRef.current = Date.now();
           const position = marker.getLatLng();
           // Depot sur un batiment Po2 : on cherche le plus proche dans le rayon
           // d'accrochage. C'est le geste « ce bien ASTECH, c'est ce batiment-la ».
@@ -574,7 +655,7 @@ export function BuildingPortfolioMap({
       layerGroup.clearLayers();
     };
   }, [
-    activeLegacyId, legacyDropRadiusM, legacyPoints, mappableBuildings, mapReady,
+    activeLegacyId, legacyDropRadiusM, legacyMarkers, mappableBuildings, mapReady,
     mergedBuildingIds, onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId,
   ]);
 
@@ -702,21 +783,41 @@ export function BuildingPortfolioMap({
       if (focusLatLon) {
         map.setView([focusLatLon.lat, focusLatLon.lon], FOCUS_ZOOM);
       } else if (highlightedSet.size > 0) {
+        const highlighted = mappableBuildings.filter((b) => highlightedSet.has(b.id));
+        // Ne pas bouger la carte quand la cible est DEJA a l'ecran. Valider un
+        // rattachement sur un batiment qu'on vient de cliquer recadrait dessus au
+        // zoom 18 : si on travaillait plus pres, cela ressemblait a un dezoom subi.
+        // Le recadrage n'a de sens que pour aller chercher un batiment hors champ,
+        // typiquement quand la selection vient de la liste de gauche.
+        const viewBounds = map.getBounds?.();
+        const alreadyVisible =
+          highlighted.length > 0 &&
+          viewBounds?.contains != null &&
+          highlighted.every((b) => viewBounds.contains?.([b.latitude, b.longitude]));
+
         const hGroup = runtime.featureGroup();
-        for (const b of mappableBuildings) {
-          if (highlightedSet.has(b.id)) hGroup.addLayer(runtime.circleMarker([b.latitude, b.longitude], { radius: 1, opacity: 0 }));
+        for (const b of highlighted) {
+          hGroup.addLayer(runtime.circleMarker([b.latitude, b.longitude], { radius: 1, opacity: 0 }));
         }
         const hBounds = hGroup.getBounds();
-        if (hBounds.isValid()) map.fitBounds(hBounds.pad(0.3), { maxZoom: FOCUS_ZOOM });
+        if (alreadyVisible) {
+          // rien a faire : la vue courante convient
+        } else if (hBounds.isValid()) map.fitBounds(hBounds.pad(0.3), { maxZoom: FOCUS_ZOOM });
         else {
           const bounds = layerGroup.getBounds();
           if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: FOCUS_ZOOM });
         }
-      } else {
+      } else if (!hasFramedOnceRef.current) {
+        // Cadrage sur TOUT le parc : uniquement au premier affichage. Le rejouer
+        // ensuite est le bug du « dezoom » — perdre la selection (validation d'un
+        // rattachement, lacher d'un point, clic dans le vide) vidait `highlightedSet`
+        // et renvoyait la carte au niveau ville, obligeant a rezoomer a chaque geste.
+        // Une DESELECTION ne doit pas deplacer la carte : on laisse la vue en place.
         const bounds = layerGroup.getBounds();
         if (bounds.isValid()) map.fitBounds(bounds.pad(0.18), { maxZoom: FOCUS_ZOOM });
         else if (selectedBuilding) map.setView([selectedBuilding.latitude, selectedBuilding.longitude], 17);
       }
+      hasFramedOnceRef.current = true;
     }
 
     map.invalidateSize?.();
