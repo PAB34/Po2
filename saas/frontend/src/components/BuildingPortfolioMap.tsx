@@ -130,6 +130,17 @@ export type LocalMapPoint = {
   buildingLabel: string | null;
   latitude: number;
   longitude: number;
+  /**
+   * `true` quand la position vient du **bâtiment parent** et non du local lui-même.
+   *
+   * Un local est dans son bâtiment : hériter de sa position n'invente rien, c'est la
+   * meilleure vérité disponible — et c'est déjà ce qu'on fait pour les biens ASTECH.
+   * Mais un point hérité n'est pas un point relevé : il est dessiné en creux, pour ne
+   * pas laisser croire à une position mesurée.
+   */
+  isInherited?: boolean;
+  /** Adresse à rappeler dans la bulle, héritée le cas échéant. */
+  address?: string | null;
 };
 
 /** Un trait reliant un bien ASTECH au bâtiment qui le porte. */
@@ -754,11 +765,17 @@ export function BuildingPortfolioMap({
           radius: 4,
           color: "#a5b4fc",
           fillColor: "#6366f1",
-          fillOpacity: 0.9,
+          // Position heritee du batiment : pastille en creux et contour pointille.
+          // Le local est bien la, mais personne n'a releve SA position propre.
+          fillOpacity: point.isInherited ? 0.15 : 0.9,
           weight: 1,
+          dashArray: point.isInherited ? "2 2" : undefined,
         });
         marker.bindPopup?.(
-          `<strong>${point.label}</strong><br/><em>Local Po2</em>` +
+          `<strong>${point.label}</strong><br/><em>Local Po2${
+            point.isInherited ? ", position héritée du bâtiment" : ""
+          }</em>` +
+            (point.address ? `<br/>${point.address}` : "") +
             (point.buildingLabel ? `<br/>dans : ${point.buildingLabel}` : "") +
             (onSelectLocalId ? "<br/><em>Clic : en faire la cible du bien sélectionné</em>" : ""),
         );
