@@ -13,7 +13,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { BuildingPortfolioMap, type LegacyMapPoint } from "../components/BuildingPortfolioMap";
+import {
+  BuildingPortfolioMap,
+  type LegacyMapPoint,
+  type LocalMapPoint,
+} from "../components/BuildingPortfolioMap";
 import { useAuth } from "../providers/AuthProvider";
 import {
   attachBuildingIgnRequest,
@@ -236,6 +240,10 @@ export default function PatrimoineAstechPage() {
   // aucune position et le filtre initial est « À traiter », donc la carte se retrouvait
   // vide au chargement — au point de passer pour une panne.
   const [mapFollowsFilter, setMapFollowsFilter] = useState(false);
+  // Les locaux Po2 sont affichés par défaut : 505 sur 626 ont des coordonnées et la
+  // carte les ignorait complètement, alors qu'un CODE_BIEN ASTECH désigne souvent un
+  // local. La bascule reste offerte, un parc dense pouvant devenir illisible.
+  const [showLocals, setShowLocals] = useState(true);
   // Noms en cours de saisie. Enregistrement explicite : la sauvegarde à la sortie du
   // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
   const [assetNameDraft, setAssetNameDraft] = useState("");
@@ -814,6 +822,26 @@ export default function PatrimoineAstechPage() {
     return counts;
   }, [assets, mappableAssetIds, refineKeys]);
 
+  // Locaux affichables : ceux qui ont une position propre. Les 121 sans coordonnées
+  // n'ont rien à faire sur la carte — les empiler sur leur bâtiment mentirait.
+  const localPoints = useMemo<LocalMapPoint[]>(() => {
+    if (!showLocals) return [];
+    return locals.flatMap((local) =>
+      local.latitude == null || local.longitude == null
+        ? []
+        : [
+            {
+              id: local.id,
+              buildingId: local.building_id,
+              label: local.nom_local,
+              buildingLabel: buildingsById.get(local.building_id)?.nom_batiment ?? null,
+              latitude: local.latitude,
+              longitude: local.longitude,
+            },
+          ],
+    );
+  }, [buildingsById, locals, showLocals]);
+
   // --- Point ASTECH sur la carte ----------------------------------------------
   const legacyPoints = useMemo<LegacyMapPoint[]>(() => {
     const toPoint = (asset: LegacyAsset): LegacyMapPoint | null => {
@@ -1331,6 +1359,28 @@ export default function PatrimoineAstechPage() {
               setSelectedId(null);
             }}
             onViewCenterChange={setMapCenter}
+            localPoints={localPoints}
+            // Cliquer un local en fait la cible du bien sélectionné : c'est le geste
+            // « ce CODE_BIEN, c'est CE local-là », jusqu'ici seulement possible par le
+            // menu déroulant, et seulement après un rattachement au bâtiment.
+            onSelectLocalId={(localId, buildingId) => {
+              if (attachMode) return;
+              if (!selected) {
+                setInspectedBuildingId(buildingId);
+                return;
+              }
+              updateMutation.mutate(
+                { id: selected.id, payload: { local_id: localId } },
+                {
+                  onSuccess: () =>
+                    setFlash(
+                      `« ${assetLabel(selected)} » rattaché au local « ${
+                        localsById.get(localId)?.nom_local ?? localId
+                      } ». L'adresse et le cadastre restent ceux du bâtiment.`,
+                    ),
+                },
+              );
+            }}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
             activeLegacyId={selected?.id ?? null}
@@ -1425,6 +1475,18 @@ export default function PatrimoineAstechPage() {
               <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#2563eb", border: "2px solid #38bdf8", display: "inline-block" }} />
               Bâtiment Po2
             </span>
+            <label
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+              title="Un CODE_BIEN ASTECH désigne souvent un local (logement de fonction, salle, WC publics). Clique un local pour en faire la cible du bien sélectionné."
+            >
+              <input
+                type="checkbox"
+                checked={showLocals}
+                onChange={(event) => setShowLocals(event.target.checked)}
+              />
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#6366f1", border: "1px solid #a5b4fc", display: "inline-block" }} />
+              Locaux Po2 ({localPoints.length})
+            </label>
             {/* Rendre le comportement de la carte VISIBLE et réversible : sans cette
                 bascule, « la carte suit le filtre » vidait l'écran sans rien expliquer,
                 et on ne pouvait pas revenir en arrière. */}
