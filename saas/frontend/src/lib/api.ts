@@ -5980,6 +5980,9 @@ export type LegacyImportResult = {
   skipped_scope: number;
   skipped_no_key: number;
   out_of_scope_commune: number;
+  /** Aucun code en commun avec les biens déjà présents : codification ASTECH changée. */
+  codes_disjoints?: boolean;
+  existing_before?: number;
 };
 
 export type LegacyCandidatesResult = {

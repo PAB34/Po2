@@ -308,6 +308,14 @@ def import_astech_file(
     key_index: int = parsed["key_index"]
     batch_name = batch or f"astech_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
+    # Combien de biens etaient deja la AVANT cet import : sert a detecter un changement
+    # de codification (cf. `codes_disjoints` plus bas).
+    existing_before = db.scalar(
+        select(func.count(PatrimoineLegacyAsset.id)).where(
+            PatrimoineLegacyAsset.city_id == city_id
+        )
+    ) or 0
+
     created = updated = skipped_scope = skipped_out_of_city = skipped_no_key = 0
 
     for row in parsed["rows"]:
@@ -387,6 +395,13 @@ def import_astech_file(
         "skipped_scope": skipped_scope,
         "skipped_no_key": skipped_no_key,
         "out_of_scope_commune": skipped_out_of_city,
+        # Garde-fou : ce fichier n'a AUCUN code en commun avec les biens deja presents.
+        # C'est le signe d'un changement de codification cote ASTECH — constate le
+        # 2026-08-20, `ADMICIMET02` devenu `BATI00272`. Les deux jeux cohabitent alors
+        # au lieu de se mettre a jour, et l'ecran doit le dire : l'utilisateur s'est
+        # retrouve avec 824 biens (444 + 380) sans comprendre pourquoi.
+        "codes_disjoints": bool(existing_before and created and not updated),
+        "existing_before": existing_before,
     }
 
 

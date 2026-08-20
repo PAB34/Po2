@@ -451,8 +451,17 @@ export default function PatrimoineAstechPage() {
   const importMutation = useMutation({
     mutationFn: (file: File) => importLegacyAstechFile(token!, file),
     onSuccess: (result) => {
+      // Un fichier dont AUCUN code ne recoupe l'existant signale un changement de
+      // codification cote ASTECH : les deux jeux cohabitent alors au lieu de se mettre
+      // a jour. Constate le 2026-08-20 — 444 + 380 = 824 biens, sans explication a
+      // l'ecran. On le dit, et on nomme le bouton qui repare.
       setFlash(
-        `Import « ${result.sheet_name} » (${result.columns} colonnes) : ${result.created} bien(s) créé(s), ` +
+        (result.codes_disjoints
+          ? `⚠️ Erreur : ce fichier n'a AUCUN code bien en commun avec les ${result.existing_before} ` +
+            "biens déjà présents — la codification ASTECH a changé. Les deux jeux cohabitent " +
+            "désormais. Utilise « 3 · Supprimer les biens ASTECH » puis réimporte ce fichier. — "
+          : "") +
+          `Import « ${result.sheet_name} » (${result.columns} colonnes) : ${result.created} bien(s) créé(s), ` +
           `${result.updated} mis à jour, ${result.skipped_scope} écarté(s), ` +
           `${result.out_of_scope_commune} hors périmètre.`,
       );
@@ -1079,7 +1088,7 @@ export default function PatrimoineAstechPage() {
           >
             {resetLinksMutation.isPending
               ? "Suppression…"
-              : "Supprimer tous les rapprochements"}
+              : "1 · Détacher les rapprochements (garde les biens)"}
           </button>
         )}
         {/* Remise à zéro totale : plus fort que la purge des liens, car elle efface
@@ -1108,7 +1117,9 @@ export default function PatrimoineAstechPage() {
             }}
             disabled={resetAllMutation.isPending}
           >
-            {resetAllMutation.isPending ? "Remise à zéro…" : "Remise à zéro totale"}
+            {resetAllMutation.isPending
+              ? "Remise à zéro…"
+              : "2 · Remettre le traitement à zéro (garde les biens)"}
           </button>
         )}
         {/* Repartir d'un export ASTECH neuf. Bien plus destructif que la purge des
@@ -1138,7 +1149,9 @@ export default function PatrimoineAstechPage() {
             }}
             disabled={deleteImportsMutation.isPending}
           >
-            {deleteImportsMutation.isPending ? "Suppression…" : "Supprimer l'import ASTECH"}
+            {deleteImportsMutation.isPending
+              ? "Suppression…"
+              : "3 · Supprimer les biens ASTECH (pour réimporter)"}
           </button>
         )}
       </div>

@@ -62,6 +62,10 @@ class LegacyImportResult(BaseModel):
     skipped_scope: int
     skipped_no_key: int
     out_of_scope_commune: int
+    # Aucun code en commun avec les biens deja presents : changement de codification
+    # cote ASTECH. Les deux jeux cohabitent au lieu de se mettre a jour.
+    codes_disjoints: bool = False
+    existing_before: int = 0
 
 
 class LegacyCandidatesResult(BaseModel):
