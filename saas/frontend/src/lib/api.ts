@@ -6114,6 +6114,18 @@ export async function confirmLegacyProposals(
 }
 
 /**
+ * Remise à zéro totale : rattachements, candidats, positions et décisions « ignoré ».
+ * Les biens restent, l'écran revient à l'état juste après l'import.
+ */
+export async function resetLegacyEverything(token: string): Promise<{ reset: number }> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/reset-all`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<{ reset: number }>(response);
+}
+
+/**
  * Efface TOUT le référentiel ASTECH importé (biens + imports), pour repartir d'un
  * export neuf. Les bâtiments et locaux Po2 créés en cours de route sont conservés.
  */
