@@ -719,6 +719,36 @@ select.form-input {
   flex-wrap: wrap;
 }
 
+/* Ecran de rapprochement ASTECH : file des biens · carte · panneau d'action.
+   Le panneau etait sous la carte : il obligeait a faire defiler la page entre le point
+   qu'on vise et les boutons qui agissent dessus. */
+.astech-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 300px) minmax(420px, 1fr) minmax(340px, 430px);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Sous 1500 px, trois colonnes rendraient la carte trop etroite pour viser un point :
+   le panneau repasse dessous, dans la colonne de la carte. */
+@media (max-width: 1500px) {
+  .astech-layout {
+    grid-template-columns: minmax(250px, 300px) 1fr;
+  }
+  .astech-layout > .astech-panel {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .astech-layout {
+    grid-template-columns: 1fr;
+  }
+  .astech-layout > .astech-panel {
+    grid-column: 1;
+  }
+}
+
 .map-canvas {
   height: 540px;
   width: 100%;

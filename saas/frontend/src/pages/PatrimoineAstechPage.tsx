@@ -997,7 +997,12 @@ export default function PatrimoineAstechPage() {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 360px) 1fr", gap: 16, alignItems: "start" }}>
+      {/* Trois colonnes : file · carte · panneau d'action. Les media queries de
+          `.astech-layout` (styles.css) replient le panneau sous la carte sur un écran
+          étroit — à trois colonnes serrées, la carte devient trop fine pour viser un
+          point. La carte garde sa hauteur fixe et son ResizeObserver se charge de
+          prévenir Leaflet du changement de largeur. */}
+      <div className="astech-layout">
         {/* --- File des biens ASTECH ----------------------------------------- */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <input
@@ -1129,7 +1134,7 @@ export default function PatrimoineAstechPage() {
           </div>
         </div>
 
-        {/* --- Carte + panneau d'action -------------------------------------- */}
+        {/* --- Carte (colonne du milieu) ------------------------------------- */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <BuildingPortfolioMap
             buildings={buildings}
@@ -1235,7 +1240,10 @@ export default function PatrimoineAstechPage() {
               Bâtiment Po2
             </span>
           </div>
+        </div>
 
+        {/* --- Panneau d'action (colonne de droite) -------------------------- */}
+        <div className="astech-panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {inspectedBuilding && (
             <div style={{ ...card, borderColor: "rgba(56, 189, 248, 0.55)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
