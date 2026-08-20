@@ -724,7 +724,10 @@ select.form-input {
    qu'on vise et les boutons qui agissent dessus. */
 .astech-layout {
   display: grid;
-  grid-template-columns: minmax(250px, 300px) minmax(420px, 1fr) minmax(340px, 430px);
+  /* La carte cede ~30 % de sa largeur au panneau : les deux se partagent desormais
+     l'espace restant a parts egales. La carte garde un plancher de 380 px, en dessous
+     duquel viser un point devient impraticable. */
+  grid-template-columns: minmax(250px, 300px) minmax(380px, 1fr) minmax(400px, 1fr);
   gap: 16px;
   align-items: start;
 }

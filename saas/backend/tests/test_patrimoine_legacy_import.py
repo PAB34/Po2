@@ -965,3 +965,41 @@ def test_le_nom_du_bien_est_modifiable_mais_pas_son_code(db_session: Session):
     assert asset.designation == "CIMETIERE MARIN LE PY"
     assert asset.nomcourt == "CIMETIERE MARIN LE PY"
     assert asset.code_bien == "ADMICIMET02"
+
+
+def test_le_rattachement_donne_au_bien_le_nom_du_batiment_po2(db_session: Session):
+    """Décision Q11, appliquée au geste : rattacher fait converger les deux référentiels.
+
+    Le nom Po2 gagne et sera réécrit dans ASTECH. Le `code_bien` reste la clé de
+    rapprochement, donc renommer ne casse rien au cycle suivant.
+    """
+    db_session.add(
+        Building(id=1, city_id=1, nom_batiment="CIMETIERE MARIN LE PY", nom_commune="Sete")
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    assert asset.designation == "CIMETIERE LE PY"
+
+    update_asset(db_session, asset, building_id=1)
+
+    db_session.refresh(asset)
+    assert asset.designation == "CIMETIERE MARIN LE PY"
+    assert asset.nomcourt == "CIMETIERE MARIN LE PY"
+    # Le batiment Po2, lui, n'est pas renomme : c'est la source, pas la cible.
+    assert db_session.get(Building, 1).nom_batiment == "CIMETIERE MARIN LE PY"
+    # Et la cle de reinjection ne bouge jamais.
+    assert asset.code_bien == "ADMICIMET02"
+
+
+def test_un_nom_saisi_a_la_main_gagne_sur_le_nom_du_batiment(db_session: Session):
+    """Corriger un libellé dans le même geste ne doit pas se faire écraser."""
+    db_session.add(Building(id=1, city_id=1, nom_batiment="NOM PO2", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+
+    update_asset(db_session, asset, building_id=1, designation="NOM CHOISI A LA MAIN")
+
+    db_session.refresh(asset)
+    assert asset.designation == "NOM CHOISI A LA MAIN"
