@@ -227,6 +227,9 @@ export default function PatrimoineAstechPage() {
   // Bâtiment Po2 consulté depuis la carte. C'est aussi le seul rendu déplaçable :
   // un seul à la fois, pour ne pas bouger un voisin par mégarde.
   const [inspectedBuildingId, setInspectedBuildingId] = useState<number | null>(null);
+  // Centre courant de la carte : permet de poser le point d'un bien là où l'utilisateur
+  // regarde, au lieu du centre de Sète — souvent hors écran quand on a zoomé.
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number } | null>(null);
   // Noms en cours de saisie. Enregistrement explicite : la sauvegarde à la sortie du
   // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
   const [assetNameDraft, setAssetNameDraft] = useState("");
@@ -801,17 +804,23 @@ export default function PatrimoineAstechPage() {
       };
     };
 
+    // La carte suit le FILTRE : elle n'affiche que les biens de la liste de gauche.
+    // Elle montrait auparavant tous les biens rattachés quel que soit le filtre, si
+    // bien que choisir « À confirmer » ne changeait rien à ce qu'on voyait — la carte
+    // et la liste racontaient deux choses différentes.
     const byId = new Map<number, LegacyMapPoint>();
-    for (const asset of linkedAssetsQuery.data ?? []) {
+    for (const asset of visibleAssets) {
       const point = toPoint(asset);
       if (point) byId.set(point.id, point);
     }
+    // Le bien sélectionné reste visible même si le filtre vient de l'exclure : sans
+    // cela, valider un rattachement le ferait disparaître de la carte sous le curseur.
     if (selected) {
       const point = toPoint(selected);
       if (point) byId.set(point.id, point);
     }
     return [...byId.values()];
-  }, [buildingsById, linkedAssetsQuery.data, selected]);
+  }, [buildingsById, selected, visibleAssets]);
 
   const counts = countsQuery.data ?? {};
   // Des biens importés mais aucun candidat ni rattachement : l'utilisateur n'a pas
@@ -1236,6 +1245,7 @@ export default function PatrimoineAstechPage() {
               setInspectedBuildingId(null);
               setSelectedId(null);
             }}
+            onViewCenterChange={setMapCenter}
             highlightedBuildingIds={targetBuilding ? [targetBuilding.id] : []}
             legacyPoints={legacyPoints}
             activeLegacyId={selected?.id ?? null}
@@ -1589,6 +1599,42 @@ export default function PatrimoineAstechPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Placement entièrement manuel. Indispensable pour les biens que le
+                    moteur ne rapproche de rien, et pour ceux dont Po2 n'a aucune
+                    contrepartie : leur point n'apparaissait qu'au centre de Sète, à
+                    aller chercher hors écran avant de pouvoir le déplacer. */}
+                <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                  <button
+                    type="button"
+                    style={btnSecondary}
+                    disabled={mapCenter === null || updateMutation.isPending}
+                    title="Pose le point du bien au centre de la vue actuelle, puis affine en le faisant glisser."
+                    onClick={() => {
+                      if (!mapCenter) return;
+                      updateMutation.mutate(
+                        {
+                          id: selected.id,
+                          payload: { latitude: mapCenter.lat, longitude: mapCenter.lon },
+                        },
+                        {
+                          onSuccess: () =>
+                            setFlash(
+                              `Point de « ${assetLabel(selected)} » posé au centre de la vue. ` +
+                                "Fais-le glisser pour l'ajuster, ou dépose-le sur un bâtiment Po2 pour le rattacher.",
+                            ),
+                        },
+                      );
+                    }}
+                  >
+                    Poser le point ici (centre de la carte)
+                  </button>
+                  <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+                    Pour les biens sans rapprochement possible : zoome sur l'endroit voulu,
+                    pose le point, puis affine en le faisant glisser. Déposé sur un bâtiment
+                    Po2, il s'y rattache.
+                  </p>
+                </div>
 
                 {selected.candidate_label && selected.status !== "lie" && (
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>

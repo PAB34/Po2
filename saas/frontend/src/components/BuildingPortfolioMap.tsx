@@ -32,6 +32,7 @@ type RuntimeMap = {
   fitBounds: (bounds: RuntimeBounds, options?: Record<string, unknown>) => void;
   remove: () => void;
   invalidateSize?: () => void;
+  getCenter?: () => { lat: number; lng: number };
   on?: (event: string, handler: (payload: unknown) => void) => void;
   getBounds?: () => RuntimeBounds;
 };
@@ -192,6 +193,14 @@ type BuildingPortfolioMapProps = {
    * sur un marqueur.
    */
   onBackgroundClick?: () => void;
+  /**
+   * Centre courant de la carte, émis à chaque déplacement.
+   *
+   * Sert à poser le point d'un bien **là où l'utilisateur regarde**. Un bien ASTECH
+   * sans coordonnées apparaissait au centre de Sète : quand on avait zoomé sur un
+   * quartier, il fallait aller le chercher hors écran avant de pouvoir le placer.
+   */
+  onViewCenterChange?: (center: { lat: number; lon: number }) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -403,6 +412,7 @@ export function BuildingPortfolioMap({
   draggableBuildingId = null,
   onMoveBuilding,
   onBackgroundClick,
+  onViewCenterChange,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +437,8 @@ export function BuildingPortfolioMap({
   // a l'initialisation, il ne doit pas se re-abonner a chaque rendu du parent.
   const backgroundClickRef = useRef(onBackgroundClick);
   backgroundClickRef.current = onBackgroundClick;
+  const viewCenterRef = useRef(onViewCenterChange);
+  viewCenterRef.current = onViewCenterChange;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -634,6 +646,15 @@ export function BuildingPortfolioMap({
         }
         backgroundClickRef.current?.();
       });
+      // Le centre courant permet de poser un point la ou l'utilisateur regarde,
+      // plutot qu'au centre de Sete — souvent hors ecran quand on a zoome.
+      const emitCenter = () => {
+        const center = (map as unknown as { getCenter?: () => { lat: number; lng: number } })
+          .getCenter?.();
+        if (center) viewCenterRef.current?.({ lat: center.lat, lon: center.lng });
+      };
+      map.on?.("moveend", emitCenter);
+      emitCenter();
       mapRef.current = map;
       setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
