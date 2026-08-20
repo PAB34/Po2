@@ -42,20 +42,41 @@ from app.services.patrimoine_legacy import NEW_ASSET_CODE_PREFIX
 
 # Colonnes ASTECH que Po2 maîtrise et réécrit (décision Q12, §11.3). Toute autre colonne
 # du fichier d'origine est hors de notre portée et n'est pas émise.
-EXPORTED_COLUMNS = (
-    "CODE_BIEN",
-    "DESIGNATION",
-    "NOMCOURT",
-    "NORUE",
-    "BISTER",
-    "LIBELVOIE",
-    "CODPOST",
-    "VILLE",
-    "COMMUNE",
-    "REFCAD",
-    "LATITUDE",
-    "LONGITUDE",
+# Chaque champ exporte, avec les en-tetes qui peuvent le porter selon la generation du
+# fichier. Le referent ASTECH a renomme ses colonnes (2026-08-20) : `CODE_BIEN` est
+# devenu `Code`, `BISTER` est devenu `Complement`... L'en-tete REELLEMENT ecrit est
+# toujours celui trouve dans le fichier importe, jamais un nom choisi ici.
+EXPORTED_FIELDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("CODE_BIEN", ("CODE_BIEN", "CODEBIEN", "CODBAR", "CODE")),
+    ("DESIGNATION", ("DESIGNATION",)),
+    ("NOMCOURT", ("NOMCOURT", "NOM COURT")),
+    ("NORUE", ("NORUE", "NUMERO(S)", "NUMEROS", "NUMERO")),
+    ("BISTER", ("BISTER", "COMPLEMENT")),
+    ("LIBELVOIE", ("LIBELVOIE", "ADRESSE")),
+    ("CODPOST", ("CODPOST", "CODE POSTAL")),
+    ("VILLE", ("VILLE",)),
+    ("COMMUNE", ("COMMUNE",)),
+    ("REFCAD", ("REFCAD", "REF CADASTRALE")),
+    ("LATITUDE", ("LATITUDE",)),
+    ("LONGITUDE", ("LONGITUDE",)),
 )
+
+# Colonnes que Po2 AJOUTE quand le fichier source ne les porte pas.
+#
+# Le nouvel export ASTECH n'a plus ni cadastre ni coordonnees : sans ces colonnes,
+# l'enrichissement se limiterait a l'adresse et tout le travail d'attribution IGN
+# serait perdu au retour. Decision Q22 du 2026-08-20 : on les ajoute, le referent
+# retraitant le fichier avant reinjection.
+#
+# C'est la SEULE exception a la regle « en-tetes recopies du fichier source » — elle
+# est explicite, limitee a trois colonnes absentes, et annoncee dans le resultat.
+ADDED_COLUMNS = {
+    "REFCAD": "Ref cadastrale",
+    "LATITUDE": "Latitude",
+    "LONGITUDE": "Longitude",
+}
+
+EXPORTED_COLUMNS = tuple(field for field, _aliases in EXPORTED_FIELDS)
 
 # Statuts autorisés dans la feuille réinjectable. Un rattachement **proposé** par le
 # moteur n'a été validé par personne : il n'a rien à faire dans le fichier de la
@@ -287,11 +308,27 @@ def build_astech_workbook(db: Session, city_id: int | None) -> dict[str, Any]:
         )
     headers: list[str] = json.loads(source_import.headers_json)
 
-    # Les en-têtes sont pris DANS le gabarit, par index. Jamais retapés : c'est la
-    # condition de réinjection posée par la collectivité (§13).
-    header_index = {name.upper(): position for position, name in enumerate(headers) if name}
-    exported = [name for name in EXPORTED_COLUMNS if name in header_index]
-    missing = [name for name in EXPORTED_COLUMNS if name not in header_index]
+    # Les en-têtes sont pris DANS le gabarit, par index, et écrits tels quels : c'est la
+    # condition de réinjection posée par la collectivité (§13). La comparaison ignore
+    # accents et casse — le nouvel export écrit « Désignation », « Nom court » — mais ce
+    # qu'on ÉCRIT reste l'orthographe exacte du fichier.
+    header_index = {_ascii_upper(name): position for position, name in enumerate(headers) if name}
+    exported: list[tuple[str, str]] = []  # (champ logique, en-tête réellement écrit)
+    added: list[str] = []
+    for field, aliases in EXPORTED_FIELDS:
+        position = next((header_index[alias] for alias in aliases if alias in header_index), None)
+        if position is not None:
+            exported.append((field, headers[position]))
+        elif field in ADDED_COLUMNS:
+            # Colonne absente du fichier source mais indispensable au retour (Q22) :
+            # sans elle, tout le travail d'attribution IGN serait perdu.
+            exported.append((field, ADDED_COLUMNS[field]))
+            added.append(ADDED_COLUMNS[field])
+    missing = [
+        field
+        for field, aliases in EXPORTED_FIELDS
+        if not any(alias in header_index for alias in aliases) and field not in ADDED_COLUMNS
+    ]
 
     workbook = openpyxl.Workbook()
     sheet = workbook.active
@@ -301,7 +338,7 @@ def build_astech_workbook(db: Session, city_id: int | None) -> dict[str, Any]:
     # mise en page, pas une mise en page à nous.
     for _ in range(source_import.header_row - 1):
         sheet.append([None] * len(exported))
-    sheet.append([headers[header_index[name]] for name in exported])
+    sheet.append([header for _field, header in exported])
     for cell in sheet[source_import.header_row]:
         cell.font = Font(bold=True)
 
@@ -348,11 +385,11 @@ def build_astech_workbook(db: Session, city_id: int | None) -> dict[str, Any]:
             if not built["values"].get("LIBELVOIE") and not built["values"].get("REFCAD"):
                 continue
 
-        sheet.append([built["values"].get(name, "") for name in exported])
+        sheet.append([built["values"].get(field, "") for field, _header in exported])
         exported_rows += 1
 
         origin = "IGN/DGFIP" if asset.resolved_source == "building" else "point posé sur la carte"
-        for column in exported:
+        for column, _header in exported:
             if column == "CODE_BIEN":
                 continue
             new_value = built["values"].get(column)
@@ -371,8 +408,9 @@ def build_astech_workbook(db: Session, city_id: int | None) -> dict[str, Any]:
         "filename": filename,
         "exported_rows": exported_rows,
         "review_rows": review_rows,
-        "columns": exported,
+        "columns": [header for _field, header in exported],
         "missing_columns": missing,
+        "added_columns": added,
         "sheet_name": sheet.title,
         "header_row": source_import.header_row,
     }
