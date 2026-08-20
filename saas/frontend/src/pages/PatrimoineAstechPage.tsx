@@ -467,6 +467,55 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  /**
+   * Pose le point du bien sur SON adresse ASTECH, celle du fichier de la collectivité.
+   *
+   * Cas visé : l'adresse ASTECH est la bonne et celle du bâtiment Po2 est fausse. Le
+   * bien étant rattaché, déplacer son point emmène aussi le bâtiment et recalcule
+   * l'adresse des deux — c'est ce qui aligne Po2 sur ASTECH.
+   *
+   * Règle de sûreté (§11.2) : sans numéro de voirie, le géocodeur rend le milieu de la
+   * voie. On le DIT au lieu de laisser croire à une position exacte, et aucun numéro
+   * n'est inventé : c'est « Attribuer IGN » qui le relèvera dans le DGFIP.
+   */
+  const geocodeAstechMutation = useMutation({
+    mutationFn: async (asset: LegacyAsset) => {
+      const address = assetAddress(asset);
+      if (!address) throw new Error("Ce bien n'a pas d'adresse dans le fichier ASTECH.");
+      const lookup = await fetchFreeAddressLookup(token!, address, {
+        citycode: asset.source_commune,
+        skip_ign_buildings: true,
+      });
+      if (lookup.lat == null || lookup.lon == null) {
+        throw new Error(`Adresse ASTECH introuvable : « ${address} ».`);
+      }
+      await updateLegacyAsset(token!, asset.id, {
+        latitude: lookup.lat,
+        longitude: lookup.lon,
+      });
+      return lookup;
+    },
+    onSuccess: (lookup) => {
+      const properties = (lookup.geocoder?.properties ?? {}) as Record<string, unknown>;
+      const found = String(properties.label ?? "adresse inconnue");
+      // Toujours annoncer CE QUI A ÉTÉ TROUVÉ, pas seulement qu'on a trouvé. Vérifié
+      // sur les données réelles : « LE BARROU » (un lieu-dit du fichier ASTECH) est
+      // géocodé en « Rue Marceau », une voie sans aucun rapport. Sans le libellé sous
+      // les yeux, l'utilisateur poserait le point au mauvais endroit en toute confiance.
+      setFlash(
+        properties.type === "housenumber"
+          ? `Point posé sur « ${found} ». Vérifie qu'il tombe bien sur le bâtiment.`
+          : `Trouvé : « ${found} » — au milieu de la voie, faute de numéro dans ASTECH. ` +
+            "⚠️ Vérifie que c'est bien la bonne rue : sur un lieu-dit, le géocodeur retombe " +
+            "parfois sur une voie approchante. Fais glisser le point sur le bon bâtiment, " +
+            "puis « Attribuer IGN » relèvera le numéro exact — aucun numéro n'est inventé.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
   const renameBuildingMutation = useMutation({
     mutationFn: (variables: { id: number; nom: string }) =>
       updateBuildingRequest(token!, variables.id, { nom_batiment: variables.nom }),
@@ -1516,6 +1565,30 @@ export default function PatrimoineAstechPage() {
                     </div>
                   ))}
                 </dl>
+
+                {/* Le géocodage d'adresse ne servait QUE l'adresse du bâtiment Po2 :
+                    quand c'est l'adresse ASTECH qui est la bonne, elle n'était jamais
+                    exploitée et il fallait chercher la rue à la main depuis le centre
+                    de Sète. */}
+                {assetAddress(selected) && (
+                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                    <button
+                      type="button"
+                      style={btnSecondary}
+                      disabled={geocodeAstechMutation.isPending}
+                      onClick={() => geocodeAstechMutation.mutate(selected)}
+                    >
+                      {geocodeAstechMutation.isPending
+                        ? "Recherche…"
+                        : "Placer le point sur l'adresse ASTECH"}
+                    </button>
+                    <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
+                      Utilise l'adresse du fichier de la collectivité. Sans numéro de voirie,
+                      le point se pose au milieu de la voie : fais-le ensuite glisser sur le
+                      bon bâtiment, puis « Attribuer IGN » relèvera le numéro exact.
+                    </p>
+                  </div>
+                )}
 
                 {selected.candidate_label && selected.status !== "lie" && (
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
