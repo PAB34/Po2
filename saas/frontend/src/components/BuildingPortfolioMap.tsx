@@ -115,6 +115,23 @@ type LegacyRenderMarker = {
   offsetLon: number;
 };
 
+/**
+ * Un **local** Po2 posé sur la carte.
+ *
+ * La carte ne dessinait que les bâtiments : 505 locaux sur 626 ont pourtant des
+ * coordonnées, et restaient invisibles. Or un `CODE_BIEN` ASTECH désigne souvent un
+ * local (logement de fonction, salle, WC publics) — ne pas les montrer obligeait à
+ * passer par le menu déroulant après coup, sans jamais les voir sur le terrain.
+ */
+export type LocalMapPoint = {
+  id: number;
+  buildingId: number;
+  label: string;
+  buildingLabel: string | null;
+  latitude: number;
+  longitude: number;
+};
+
 /** Un trait reliant un bien ASTECH au bâtiment qui le porte. */
 type LegacySpiderLeg = {
   fromLat: number;
@@ -201,6 +218,10 @@ type BuildingPortfolioMapProps = {
    * quartier, il fallait aller le chercher hors écran avant de pouvoir le placer.
    */
   onViewCenterChange?: (center: { lat: number; lon: number }) => void;
+  /** Locaux Po2 à dessiner : pastilles plus petites, subordonnées à leur bâtiment. */
+  localPoints?: LocalMapPoint[];
+  /** Clic sur un local — sert à en faire la cible du bien ASTECH sélectionné. */
+  onSelectLocalId?: (localId: number, buildingId: number) => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -413,6 +434,8 @@ export function BuildingPortfolioMap({
   onMoveBuilding,
   onBackgroundClick,
   onViewCenterChange,
+  localPoints,
+  onSelectLocalId,
 }: BuildingPortfolioMapProps) {
   const highlightedSet = useMemo(() => new Set(highlightedBuildingIds ?? []), [highlightedBuildingIds]);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -423,6 +446,7 @@ export function BuildingPortfolioMap({
   const attachLayerRef = useRef<RuntimeGeoJsonLayer | null>(null);
   const centerMarkerRef = useRef<RuntimeLayer | null>(null);
   const legacyLayerRef = useRef<RuntimeFeatureGroup | null>(null);
+  const localsLayerRef = useRef<RuntimeFeatureGroup | null>(null);
   // Derniere « intention de cadrage » appliquee : evite de rezoomer a chaque
   // rafraichissement de donnees (cf. bloc de cadrage plus bas).
   const framingSignatureRef = useRef<string | null>(null);
@@ -685,8 +709,73 @@ export function BuildingPortfolioMap({
       attachLayerRef.current = null;
       centerMarkerRef.current = null;
       legacyLayerRef.current = null;
+      localsLayerRef.current = null;
     };
   }, []);
+
+  // ------------------------------------------------------------------
+  // Couche « locaux Po2 » — pastilles subordonnées aux bâtiments
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const runtime = runtimeRef.current;
+    const map = mapRef.current;
+    if (!runtime || !map || !mapReady) return;
+
+    localsLayerRef.current?.remove?.();
+    localsLayerRef.current = null;
+
+    const points = localPoints ?? [];
+    if (points.length === 0 || attachMode === "ign") return;
+
+    // Beaucoup de locaux partagent le point de leur bâtiment (ils héritent de sa
+    // position à l'import) : sans écartement, un seul serait visible — le même piège
+    // que pour les bâtiments empilés.
+    const groups = new Map<string, LocalMapPoint[]>();
+    for (const point of points) {
+      const key = `${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`;
+      groups.set(key, [...(groups.get(key) ?? []), point]);
+    }
+
+    const layerGroup = runtime.featureGroup();
+    for (const group of groups.values()) {
+      // ~9 m : plus serré que les pattes d'araignée ASTECH (15 m) et que l'écartement
+      // des bâtiments (22 m), pour que les trois familles restent distinctes à l'œil.
+      const radiusDeg = 9 / 111_320;
+      group.forEach((point, index) => {
+        const angle = group.length === 1 ? 0 : (2 * Math.PI * index) / group.length;
+        const latitude = group.length === 1 ? point.latitude : point.latitude + radiusDeg * Math.cos(angle);
+        const longitude =
+          group.length === 1
+            ? point.longitude
+            : point.longitude +
+              (radiusDeg * Math.sin(angle)) /
+                Math.max(0.2, Math.cos((point.latitude * Math.PI) / 180));
+        const marker = runtime.circleMarker([latitude, longitude], {
+          radius: 4,
+          color: "#a5b4fc",
+          fillColor: "#6366f1",
+          fillOpacity: 0.9,
+          weight: 1,
+        });
+        marker.bindPopup?.(
+          `<strong>${point.label}</strong><br/><em>Local Po2</em>` +
+            (point.buildingLabel ? `<br/>dans : ${point.buildingLabel}` : "") +
+            (onSelectLocalId ? "<br/><em>Clic : en faire la cible du bien sélectionné</em>" : ""),
+        );
+        marker.on?.("click", () => {
+          markerClickAtRef.current = Date.now();
+          onSelectLocalId?.(point.id, point.buildingId);
+        });
+        layerGroup.addLayer(marker);
+      });
+    }
+
+    layerGroup.addTo(map);
+    localsLayerRef.current = layerGroup;
+    return () => {
+      layerGroup.clearLayers();
+    };
+  }, [attachMode, localPoints, mapReady, onSelectLocalId]);
 
   // ------------------------------------------------------------------
   // Couche « biens historiques ASTECH » — couleur dédiée, marqueur déplaçable
