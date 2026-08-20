@@ -31,6 +31,7 @@ import {
   fetchLegacyCounts,
   importLegacyAstechFile,
   moveBuildingRequest,
+  resetLegacyEverything,
   resetLegacyLinks,
   updateLegacyAsset,
   type Building,
@@ -446,6 +447,21 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  const resetAllMutation = useMutation({
+    mutationFn: () => resetLegacyEverything(token!),
+    onSuccess: (result) => {
+      setFlash(
+        `${result.reset} bien(s) remis à zéro. La carte n'affiche plus que les bâtiments Po2 : ` +
+          "les biens ASTECH n'ont pas de coordonnées propres. Clique « 2. Reconnaître les noms » " +
+          "pour les y ramener.",
+      );
+      setSelectedId(null);
+      setInspectedBuildingId(null);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
   const deleteImportsMutation = useMutation({
     mutationFn: () => deleteLegacyImports(token!),
     onSuccess: (result) => {
@@ -764,8 +780,11 @@ export default function PatrimoineAstechPage() {
           </button>
         )}
         {/* Repartir d'une feuille blanche quand le référentiel Po2 a beaucoup bougé.
-            Destructif : on demande confirmation, en annonçant le nombre exact. */}
-        {((counts.lie ?? 0) + (counts.propose ?? 0)) > 0 && (
+            Destructif : on demande confirmation, en annonçant le nombre exact.
+            Affiché dès qu'il y a des biens, et non plus seulement quand il reste des
+            liens : le bouton disparaissait justement au moment où l'on voulait
+            vérifier l'état du référentiel. */}
+        {(counts.total ?? 0) > 0 && (
           <button
             type="button"
             style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
@@ -788,6 +807,35 @@ export default function PatrimoineAstechPage() {
             {resetLinksMutation.isPending
               ? "Suppression…"
               : "Supprimer tous les rapprochements"}
+          </button>
+        )}
+        {/* Remise à zéro totale : plus fort que la purge des liens, car elle efface
+            AUSSI les positions et les décisions « ignoré ». C'est le « repartir de 0 »
+            au sens strict — l'écran revient à l'état juste après l'import. */}
+        {(counts.total ?? 0) > 0 && (
+          <button
+            type="button"
+            style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Remise à zéro totale de ${counts.total ?? 0} bien(s) ASTECH.\n\n` +
+                    "Sont effacés : les rattachements, les candidats proposés, les positions " +
+                    "posées à la main et les décisions « ignoré ».\n\n" +
+                    "⚠️ Les biens ASTECH DISPARAÎTRONT de la carte : ils n'ont pas de " +
+                    "coordonnées propres (le fichier n'en porte qu'une sur 444). Ils y " +
+                    "reviendront en cliquant « 2. Reconnaître les noms ».\n\n" +
+                    "Les biens hors périmètre gardent leur statut, et les bâtiments et locaux " +
+                    "Po2 ne sont pas touchés.",
+                )
+              ) {
+                return;
+              }
+              resetAllMutation.mutate();
+            }}
+            disabled={resetAllMutation.isPending}
+          >
+            {resetAllMutation.isPending ? "Remise à zéro…" : "Remise à zéro totale"}
           </button>
         )}
         {/* Repartir d'un export ASTECH neuf. Bien plus destructif que la purge des

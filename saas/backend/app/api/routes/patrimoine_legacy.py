@@ -106,6 +106,22 @@ def confirm_proposed_links(
     )
 
 
+@router.post("/reset-all")
+def reset_everything(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    """Remise à zéro totale : l'écran revient à l'état juste après l'import.
+
+    Efface les rattachements, les candidats, les positions posées à la main et les
+    décisions « ignoré ». Les biens ASTECH disparaissent alors de la carte — c'est
+    normal, ils n'ont pas de coordonnées propres — et « Reconnaître les noms » les y
+    ramène. `hors_perimetre` est conservé : c'est un constat de périmètre, pas une
+    décision.
+    """
+    return svc.reset_everything(db, svc.resolve_city_id(db, current_user.city_id))
+
+
 @router.delete("/import")
 def delete_all_imports(
     db: Session = Depends(get_db),

@@ -47,6 +47,7 @@ from app.services.patrimoine_legacy import (
     import_astech_file,
     parse_astech_workbook,
     reset_all_links,
+    reset_everything,
 )
 
 # En-têtes tels qu'ils apparaissent dans l'export réel (orthographe incluse).
@@ -699,8 +700,11 @@ def test_la_purge_supprime_les_rapprochements_sans_toucher_aux_decisions(db_sess
     assert lie.status == STATUS_TODO
     # L'adresse héritée n'a plus de source : elle part avec le lien.
     assert lie.resolved_label is None
-    # Le point reste : sinon le bien disparaît de la carte (régression #117).
-    assert lie.latitude is not None
+    # La position empruntée au bâtiment repart avec le lien : un bien ASTECH n'a pas de
+    # position à lui. La figer fabriquait de faux points sur d'anciens bâtiments
+    # (73 cas sur 82 mesurés en prod). Voir
+    # `test_detacher_rend_au_bien_son_absence_de_position` pour la règle complète.
+    assert lie.latitude is None
 
     # Le bien « à créer » garde son bâtiment : il n'existe que grâce à lui.
     db_session.refresh(a_creer)
@@ -831,3 +835,79 @@ def test_la_suppression_de_l_import_conserve_le_patrimoine_po2(db_session: Sessi
     )
     assert reimport["created"] > 0
     assert reimport["updated"] == 0
+
+
+def test_detacher_rend_au_bien_son_absence_de_position(db_session: Session):
+    """Un bien détaché ne doit PAS garder le point emprunté à son bâtiment.
+
+    Un bien ASTECH n'a pas de position à lui : le fichier réel n'en porte qu'une sur
+    444. La version précédente figeait le point du bâtiment dans le bien pour qu'il ne
+    disparaisse pas de la carte — elle fabriquait de faux points. Mesuré en prod le
+    2026-08-20 : 73 des 82 positions étaient posées exactement sur d'anciens bâtiments.
+
+    Ce qui a été **déplacé volontairement** est en revanche conservé.
+    """
+    db_session.add(
+        Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete",
+                 latitude=43.4, longitude=3.69)
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    herite = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02"))
+    herite.latitude, herite.longitude = 43.4, 3.69  # exactement le bâtiment : emprunté
+    deplace = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "SAPLWCPUB05"))
+    deplace.building_id = 1
+    deplace.latitude, deplace.longitude = 43.41, 3.70  # posé ailleurs à la main
+    db_session.add_all([herite, deplace])
+    db_session.commit()
+
+    reset_all_links(db_session, 1)
+
+    db_session.refresh(herite)
+    db_session.refresh(deplace)
+    # Position empruntée au bâtiment : elle repart avec le lien.
+    assert herite.latitude is None
+    # Position choisie par l'utilisateur : elle survit, c'est du vrai travail.
+    assert deplace.latitude == 43.41
+
+
+def test_la_remise_a_zero_totale_vide_tout_sauf_le_hors_perimetre(db_session: Session):
+    """« Repartir de 0 » : plus rien, sauf le constat de périmètre.
+
+    `hors_perimetre` n'est pas une décision de l'utilisateur mais un fait (bien hors
+    Sète, décision Q4), recalculé à chaque import. L'annuler ferait remonter dans la
+    file des biens qui n'ont rien à y faire.
+    """
+    db_session.add(
+        Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete",
+                 latitude=43.4, longitude=3.69)
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    compute_candidates(db_session, 1, auto_link=True)
+
+    ignore = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "SAPLWCPUB05"))
+    ignore.status = STATUS_IGNORED
+    ignore.latitude, ignore.longitude = 43.41, 3.70
+    db_session.add(ignore)
+    db_session.commit()
+
+    reset_everything(db_session, 1)
+
+    for asset in db_session.scalars(_all_assets()):
+        if asset.status == STATUS_OUT_OF_SCOPE:
+            continue
+        assert asset.status == STATUS_TODO
+        assert asset.building_id is None
+        assert asset.local_id is None
+        # Aucune position : c'est bien l'etat d'apres import, ou les biens ASTECH
+        # n'apparaissent pas sur la carte faute de coordonnees propres.
+        assert asset.latitude is None
+        assert asset.candidate_building_id is None
+        assert asset.resolved_label is None
+
+    # Le hors-perimetre survit : c'est un constat, pas une decision.
+    hors = db_session.scalar(_all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMIDECHE01"))
+    assert hors.status == STATUS_OUT_OF_SCOPE

@@ -973,6 +973,75 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
     return asset
 
 
+def _drop_inherited_position(db: Session, asset: PatrimoineLegacyAsset) -> None:
+    """Efface la position du bien si elle n'est qu'un **emprunt** au bâtiment porteur.
+
+    Un bien ASTECH n'a pas de position à lui : le fichier de la collectivité n'en porte
+    qu'une seule sur 444. Quand un bien s'affiche sur la carte, c'est soit parce qu'il
+    est rattaché (il prend le point du bâtiment), soit parce qu'on l'a posé à la main.
+
+    Détacher un bien devait donc lui rendre son absence de position. La version
+    précédente faisait l'inverse : elle figeait le point du bâtiment dans le bien pour
+    qu'il ne disparaisse pas de la carte. Résultat mesuré en prod le 2026-08-20 :
+    **73 des 82 positions** étaient des faux points posés exactement sur d'anciens
+    bâtiments, contre ~8 réellement placés à la main.
+
+    On ne garde donc que ce qui a été **déplacé volontairement** : une position qui ne
+    coïncide pas avec celle du bâtiment porteur.
+    """
+    if asset.latitude is None or asset.longitude is None or asset.building_id is None:
+        return
+    building = db.get(Building, asset.building_id)
+    if building is None or building.latitude is None or building.longitude is None:
+        return
+    # ~1 m : en deçà, la position est celle du bâtiment, pas un choix de l'utilisateur.
+    if (
+        abs(building.latitude - asset.latitude) < 0.00001
+        and abs(building.longitude - asset.longitude) < 0.00001
+    ):
+        asset.latitude = None
+        asset.longitude = None
+
+
+def reset_everything(db: Session, city_id: int | None) -> dict[str, int]:
+    """Remise à zéro **totale** : l'écran revient à l'état juste après l'import.
+
+    Plus fort que `reset_all_links` : on efface aussi les positions posées à la main et
+    on annule les décisions « ignoré ». Aucun bien ASTECH ne reste alors sur la carte —
+    c'est normal, ils n'ont pas de coordonnées propres — et « Reconnaître les noms » les
+    y ramène en les rattachant.
+
+    Ce qui **n'est pas** remis à zéro : `hors_perimetre`. Ce n'est pas une décision de
+    l'utilisateur mais un constat de périmètre (bien hors Sète, décision Q4), recalculé
+    à chaque import. L'annuler ferait remonter dans la file 27 biens qui n'ont rien à
+    y faire.
+    """
+    statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.status != STATUS_OUT_OF_SCOPE
+    )
+    if city_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.city_id == city_id)
+
+    reset = 0
+    for asset in db.scalars(statement):
+        asset.building_id = None
+        asset.local_id = None
+        asset.target_type = TARGET_BUILDING
+        asset.link_origin = None
+        asset.latitude = None
+        asset.longitude = None
+        asset.candidate_building_id = None
+        asset.candidate_label = None
+        asset.candidate_score = None
+        asset.candidate_reason = None
+        asset.status = STATUS_TODO
+        _clear_resolved_address(asset)
+        db.add(asset)
+        reset += 1
+    db.commit()
+    return {"reset": reset}
+
+
 def delete_all_imports(db: Session, city_id: int | None) -> dict[str, int]:
     """Efface **tout** le référentiel ASTECH importé : les biens et les imports.
 
@@ -1044,15 +1113,7 @@ def reset_all_links(db: Session, city_id: int | None) -> dict[str, int]:
 
     cleared = 0
     for asset in db.scalars(statement):
-        # Un bien rattaché par le moteur n'a pas de position propre : il EMPRUNTE celle
-        # de son bâtiment pour s'afficher. Couper le lien sans figer cette position le
-        # ferait disparaître de la carte — la régression corrigée en #117. On recopie
-        # donc le dernier point connu dans le point de travail avant de détacher.
-        if asset.latitude is None or asset.longitude is None:
-            building = db.get(Building, asset.building_id) if asset.building_id else None
-            if building is not None and building.latitude is not None and building.longitude is not None:
-                asset.latitude = building.latitude
-                asset.longitude = building.longitude
+        _drop_inherited_position(db, asset)
         asset.building_id = None
         asset.local_id = None
         asset.target_type = TARGET_BUILDING
