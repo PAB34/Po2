@@ -415,22 +415,41 @@ def move_building(
     return building
 
 
+# Champs texte de `BuildingUpdate` appliques tels quels, apres `.strip()`.
+_BUILDING_TEXT_FIELDS = (
+    "nom_batiment", "code_postal", "numero_voirie", "indice_repetition", "nature_voie",
+    "nom_voie", "prefixe", "section", "numero_plan", "adresse_reconstituee",
+)
+
+
 def update_building(db: Session, building: Building, payload: BuildingUpdate) -> Building:
+    """Mise a jour PARTIELLE : seuls les champs presents dans le payload sont touches.
+
+    Cette fonction remettait a plat TOUT le batiment : chaque champ absent du payload
+    etait ecrase par `None`. Un appel qui n'envoyait que `nom_batiment` — renommer un
+    batiment depuis l'ecran de rapprochement — effacait donc sa position, son adresse,
+    son code postal et son cadastre.
+
+    Constate en prod le 2026-08-21 : le batiment 1316 « STADE FRANCOIS MAILLOL », cree
+    avec ses coordonnees a 07:57, les avait perdues a 08:00 apres un simple renommage.
+    Il n'apparaissait plus sur la carte, et le bien ASTECH qui le visait semblait
+    disparaitre avec lui.
+
+    Les ecrans qui envoient le formulaire complet ne changent pas de comportement :
+    leurs champs sont, eux, bien presents dans le payload.
+    """
     fields_set = payload.model_fields_set
-    building.nom_batiment = payload.nom_batiment.strip() if payload.nom_batiment else None
-    if payload.nom_commune:
+    for field in _BUILDING_TEXT_FIELDS:
+        if field not in fields_set:
+            continue
+        value = getattr(payload, field)
+        setattr(building, field, value.strip() if value else None)
+    if "nom_commune" in fields_set and payload.nom_commune:
         building.nom_commune = payload.nom_commune.strip()
-    building.code_postal = payload.code_postal.strip() if payload.code_postal else None
-    building.numero_voirie = payload.numero_voirie.strip() if payload.numero_voirie else None
-    building.indice_repetition = payload.indice_repetition.strip() if payload.indice_repetition else None
-    building.nature_voie = payload.nature_voie.strip() if payload.nature_voie else None
-    building.nom_voie = payload.nom_voie.strip() if payload.nom_voie else None
-    building.prefixe = payload.prefixe.strip() if payload.prefixe else None
-    building.section = payload.section.strip() if payload.section else None
-    building.numero_plan = payload.numero_plan.strip() if payload.numero_plan else None
-    building.adresse_reconstituee = payload.adresse_reconstituee.strip() if payload.adresse_reconstituee else None
-    building.latitude = payload.latitude
-    building.longitude = payload.longitude
+    if "latitude" in fields_set:
+        building.latitude = payload.latitude
+    if "longitude" in fields_set:
+        building.longitude = payload.longitude
     # site_id : patch semantic. Si le frontend envoie site_id explicitement (meme None),
     # on l'applique. Sinon (champ absent du payload), on ne touche pas. Sert au drag&drop
     # Site>Batiment dans la vue cascade ET evite que les autres updates (rename, etc.)
