@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
   ignore: "Ignoré",
   // La valeur stockee reste `disparu` : renommer la cle imposerait une migration de
   // donnees pour un simple libellé. Seul l'affichage change.
-  disparu: "A SUPPRIMER DE AS-TECH",
+  disparu: "REFORMER",
 };
 
 // « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
@@ -138,7 +138,7 @@ const STATUS_PILL: Record<string, { label: string; color: string; background: st
   hors_perimetre: { label: "hors périmètre", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
   // Le bien n'existe plus chez ASTECH. Distinct d'« ignoré » (qui existe toujours,
   // mais qu'on ne traite pas) : la pastille doit se lire autrement, d'où le rouge sourd.
-  disparu: { label: "à supprimer de AS-TECH", color: "#e879a6", background: "rgba(232, 121, 166, 0.16)" },
+  disparu: { label: "réformé", color: "#e879a6", background: "rgba(232, 121, 166, 0.16)" },
 };
 
 const pillStyle: CSSProperties = {
@@ -253,10 +253,6 @@ export default function PatrimoineAstechPage() {
   // aucune position et le filtre initial est « À traiter », donc la carte se retrouvait
   // vide au chargement — au point de passer pour une panne.
   const [mapFollowsFilter, setMapFollowsFilter] = useState(false);
-  // Passer au bien suivant apres chaque decision. Sur 380 biens, c'est le geste qu'on
-  // repete le plus : sans cela il faut revenir cliquer la ligne suivante dans la file
-  // apres chaque validation.
-  const [autoAdvance, setAutoAdvance] = useState(true);
   // Les locaux Po2 sont affichés par défaut : 505 sur 626 ont des coordonnées et la
   // carte les ignorait complètement, alors qu'un CODE_BIEN ASTECH désigne souvent un
   // local. La bascule reste offerte, un parc dense pouvant devenir illisible.
@@ -281,6 +277,11 @@ export default function PatrimoineAstechPage() {
    * La position lâchée est mémorisée : elle sert à tenir le point là où l'utilisateur
    * l'a posé pendant qu'il décide, sans rien enregistrer.
    */
+  const [addressSearch, setAddressSearch] = useState("");
+  // Point sur lequel la carte est priée de se rendre. Une NOUVELLE référence à chaque
+  // recherche, même pour la même adresse : la carte ne recadre que si l'intention de
+  // cadrage a changé, sinon rechercher deux fois de suite ne ferait rien la seconde.
+  const [mapFocus, setMapFocus] = useState<{ lat: number; lon: number } | null>(null);
   const [pendingLink, setPendingLink] = useState<
     { assetId: number; buildingId: number; localId: number | null; lat: number; lon: number } | null
   >(null);
@@ -615,20 +616,10 @@ export default function PatrimoineAstechPage() {
     renameBuildingMutation.mutate({ id: inspectedBuilding.id, nom: value });
   };
 
-  /**
-   * Passe au bien suivant de la file, si l'option est active.
-   *
-   * Appelé après une décision (valider, écarter, ignorer). Le bien traité vient de
-   * quitter le filtre courant : « suivant » est donc celui qui occupe désormais sa
-   * place, sinon le précédent quand on était en fin de liste.
-   */
-  const goToNextAsset = (fromId: number) => {
-    if (!autoAdvance) return;
-    const index = visibleAssets.findIndex((asset) => asset.id === fromId);
-    if (index < 0) return;
-    const next = visibleAssets[index + 1] ?? visibleAssets[index - 1] ?? null;
-    setSelectedId(next ? next.id : null);
-  };
+  // Le passage automatique au bien suivant a ete retire (demande du 2026-08-21) : apres
+  // une decision, la selection RESTE sur le bien qu'on vient de traiter. On voit ce
+  // qu'on a fait, et on peut le corriger dans la foulee — sauter ailleurs obligeait a
+  // revenir en arriere des que la decision demandait une verification.
 
   const detachAsset = (assetId: number) => {
     updateMutation.mutate({
@@ -698,6 +689,30 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  /**
+   * Recherche d'adresse : la carte s'y rend, au zoom du bâtiment.
+   *
+   * Passe par le même géocodeur que « Sur l'adresse ASTECH » (BAN). Rien n'est
+   * enregistré : cela ne fait que déplacer le regard, aucun bien n'est touché.
+   */
+  const addressSearchMutation = useMutation({
+    mutationFn: async (address: string) => {
+      const lookup = await fetchFreeAddressLookup(token!, address, { skip_ign_buildings: true });
+      if (lookup.lat == null || lookup.lon == null) {
+        throw new Error(`Adresse introuvable : « ${address} ».`);
+      }
+      // On rend l'adresse SAISIE, pas celle du géocodeur : le résultat ne porte pas de
+      // libellé normalisé, et afficher autre chose que ce qui a été tapé ferait douter
+      // de l'endroit où la carte s'est rendue.
+      return { lat: lookup.lat, lon: lookup.lon, label: address };
+    },
+    onSuccess: (result) => {
+      setMapFocus({ lat: result.lat, lon: result.lon });
+      setFlash(`Carte centrée sur « ${result.label} ».`);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
   /** Valide le rattachement proposé par un dépôt sur la carte (Q25). */
   const confirmPendingLink = () => {
     if (!pendingLink) return;
@@ -754,7 +769,7 @@ export default function PatrimoineAstechPage() {
   });
 
   /**
-   * Marque un bien comme **à supprimer de AS-TECH**, ou annule cette consigne (Q23).
+   * **Réforme** un bien — il sort du parc — ou annule cette réforme (Q23).
    *
    * Le bien n'a plus lieu d'être dans le référentiel de la collectivité. On ne l'efface
    * pas de Po2 pour autant — revenir sur une suppression à tort imposerait de recharger
@@ -767,12 +782,11 @@ export default function PatrimoineAstechPage() {
     onSuccess: (asset, variables) => {
       setFlash(
         variables.gone
-          ? `« ${assetLabel(asset)} » marqué à supprimer de AS-TECH : il sort du parcours et ` +
-            "ne repartira pas dans le réexport. Filtre « A SUPPRIMER DE AS-TECH » pour le revoir."
-          : `« ${assetLabel(asset)} » gardé dans AS-TECH : il repasse « ${STATUS_LABEL[asset.status] ?? asset.status} ».`,
+          ? `« ${assetLabel(asset)} » réformé : il sort du parcours et ` +
+            "ne repartira pas dans le réexport. Filtre « REFORMER » pour le revoir."
+          : `« ${assetLabel(asset)} » remis au parc : il repasse « ${STATUS_LABEL[asset.status] ?? asset.status} ».`,
       );
       invalidate();
-      if (variables.gone) goToNextAsset(variables.assetId);
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
@@ -1203,7 +1217,7 @@ export default function PatrimoineAstechPage() {
     // Le mode « suit le filtre » ne peut pas être le défaut : 338 biens sur 444 n'ont
     // aucune position, et le filtre initial est « À traiter » — la carte se retrouvait
     // donc vide au chargement, ce qui ressemblait à une panne.
-    // Un bien à supprimer de AS-TECH n'a plus rien à faire sur la vue d'ensemble : il
+    // Un bien réformé n'a plus rien à faire sur la vue d'ensemble : il
     // continuerait de désigner un bâtiment Po2 pour un CODE_BIEN voué à disparaître.
     // En mode « suit le filtre » on ne l'écarte pas : c'est le seul moyen de les revoir
     // sur la carte, en choisissant leur filtre.
@@ -1495,17 +1509,6 @@ export default function PatrimoineAstechPage() {
           <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
             {counts.propose ?? 0} à confirmer · {counts.a_traiter ?? 0} à traiter
           </span>
-          <label
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: TEXT_MUTED }}
-            title="Après chaque décision, sélectionne automatiquement le bien suivant de la file."
-          >
-            <input
-              type="checkbox"
-              checked={autoAdvance}
-              onChange={(event) => setAutoAdvance(event.target.checked)}
-            />
-            Passer au suivant après chaque décision
-          </label>
         </div>
       )}
 
@@ -1721,7 +1724,35 @@ export default function PatrimoineAstechPage() {
 
         {/* --- Carte (colonne du milieu) ------------------------------------- */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Aller a une adresse. Sans cela, rejoindre un quartier precis obligeait a
+              chercher un bien qui s'y trouve puis a le selectionner — alors que le
+              besoin est souvent l'inverse : on connait l'adresse, on cherche ce qu'il
+              y a dessus. */}
+          <form
+            style={{ display: "flex", gap: 6 }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const value = addressSearch.trim();
+              if (value) addressSearchMutation.mutate(value);
+            }}
+          >
+            <input
+              type="search"
+              style={{ ...input, flex: 1 }}
+              placeholder="Aller à une adresse (ex. 11 rue Alsace Lorraine)…"
+              value={addressSearch}
+              onChange={(event) => setAddressSearch(event.target.value)}
+            />
+            <button
+              type="submit"
+              style={{ ...btnSecondary, fontSize: 12, padding: "6px 12px", whiteSpace: "nowrap" }}
+              disabled={addressSearchMutation.isPending || !addressSearch.trim()}
+            >
+              {addressSearchMutation.isPending ? "Recherche…" : "Y aller"}
+            </button>
+          </form>
           <BuildingPortfolioMap
+            focusLatLon={mapFocus}
             buildings={buildings}
             activeBuildingId={targetBuilding?.id ?? null}
             onSelectBuildingId={(buildingId) => {
@@ -2480,6 +2511,35 @@ export default function PatrimoineAstechPage() {
                     </div>
                   ))}
                 </dl>
+
+                {/* « Réformer » décrit le BIEN ASTECH — il sort du parc — et non la
+                    cible Po2 : sa place est donc ici, dans le bloc violet, et non dans
+                    le bloc bleu du rattachement. Il y était d'ailleurs invisible tant
+                    qu'aucun bâtiment n'était visé, alors qu'un bien réformé n'a
+                    justement pas besoin d'être rattaché pour l'être. */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                  {selected.status === "disparu" ? (
+                    <button
+                      type="button"
+                      style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                      disabled={goneMutation.isPending}
+                      title="Ce bien reste finalement au parc : annuler la réforme et le remettre dans le parcours."
+                      onClick={() => goneMutation.mutate({ assetId: selected.id, gone: false })}
+                    >
+                      {goneMutation.isPending ? "…" : "Annuler la réforme"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px", color: "#e879a6" }}
+                      disabled={goneMutation.isPending}
+                      title="Ce bien est réformé : il sort du parcours et du réexport, sans être effacé de Po2. Le geste est réversible."
+                      onClick={() => goneMutation.mutate({ assetId: selected.id, gone: true })}
+                    >
+                      {goneMutation.isPending ? "…" : "REFORMER"}
+                    </button>
+                  )}
+                </div>
                 </div>
 
 
@@ -2584,7 +2644,6 @@ export default function PatrimoineAstechPage() {
                                 {
                                   onSuccess: () => {
                                     setFlash(`« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`);
-                                    goToNextAsset(selected.id);
                                   },
                                 },
                               )
@@ -2653,7 +2712,6 @@ export default function PatrimoineAstechPage() {
                                   `« ${assetLabel(selected)} » ignoré : il sort du parcours. ` +
                                     "Tu le retrouveras avec le filtre « Ignoré ».",
                                 );
-                                goToNextAsset(selected.id);
                               },
                             },
                           )
@@ -2661,30 +2719,6 @@ export default function PatrimoineAstechPage() {
                       >
                         Ignorer ce bien
                       </button>
-                      {/* « À supprimer » ≠ « ignoré » : c'est une consigne adressée à
-                          AS-TECH, pas un bien qu'on met de côté. Réversible, d'où
-                          l'absence de confirmation bloquante. */}
-                      {selected.status === "disparu" ? (
-                        <button
-                          type="button"
-                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
-                          disabled={goneMutation.isPending}
-                          title="Ce bien doit finalement rester dans AS-TECH : annuler la consigne et le remettre dans le parcours."
-                          onClick={() => goneMutation.mutate({ assetId: selected.id, gone: false })}
-                        >
-                          {goneMutation.isPending ? "…" : "Le garder dans AS-TECH"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px", color: "#e879a6" }}
-                          disabled={goneMutation.isPending}
-                          title="Ce bien n'a plus lieu d'être dans AS-TECH. Il sort du parcours et du réexport, sans être effacé de Po2 : le geste est réversible."
-                          onClick={() => goneMutation.mutate({ assetId: selected.id, gone: true })}
-                        >
-                          {goneMutation.isPending ? "…" : "A SUPPRIMER DE AS-TECH"}
-                        </button>
-                      )}
                     </div>
 
                     {/* La fratrie : qui d'autre vise ce bâtiment, et à quel niveau. */}

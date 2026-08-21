@@ -6238,9 +6238,9 @@ export async function purgePatrimonyDuplicates(
 }
 
 /**
- * Marque un bien **à supprimer de AS-TECH**, ou annule cette consigne.
+ * **Réforme** un bien — il sort du parc — ou annule cette réforme.
  * La ligne est conservée dans Po2 : elle sort du parcours et du réexport, et reste
- * consultable sous le filtre « A SUPPRIMER DE AS-TECH ».
+ * consultable sous le filtre « REFORMER ».
  */
 export async function markLegacyAssetGone(
   token: string,
