@@ -6208,6 +6208,35 @@ export async function convertLegacyAssetToLocal(
   return parseResponse<LegacyAsset>(response);
 }
 
+export type PatrimonyDuplicateEntry = {
+  id: number;
+  nom: string | null;
+  conserve_id: number;
+  liens: number;
+};
+
+export type PatrimonyDuplicatesResult = {
+  dry_run: boolean;
+  batiments_supprimes: PatrimonyDuplicateEntry[];
+  locaux_supprimes: PatrimonyDuplicateEntry[];
+  conserves_car_lies: PatrimonyDuplicateEntry[];
+};
+
+/**
+ * Supprime les doublons **stricts** du référentiel Po2 (bâtiments et locaux).
+ * `dryRun` ne supprime rien : il renvoie ce qui partirait, pour l'annoncer avant.
+ */
+export async function purgePatrimonyDuplicates(
+  token: string,
+  dryRun: boolean,
+): Promise<PatrimonyDuplicatesResult> {
+  const response = await fetch(
+    `${apiBaseUrl}/buildings/duplicates/purge?dry_run=${dryRun ? "true" : "false"}`,
+    { method: "POST", headers: buildHeaders(token) },
+  );
+  return parseResponse<PatrimonyDuplicatesResult>(response);
+}
+
 /**
  * Marque un bien **à supprimer de AS-TECH**, ou annule cette consigne.
  * La ligne est conservée dans Po2 : elle sort du parcours et du réexport, et reste

@@ -1,6 +1,6 @@
 from fastapi import HTTPException, status
 import json
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.building import Building
@@ -920,3 +920,167 @@ def create_building_meter_link(
 def delete_building_meter_link(db: Session, meter_link: BuildingMeterLink) -> None:
     db.delete(meter_link)
     db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Doublons du référentiel Po2 (§23, décisions Q28/Q29)
+# ---------------------------------------------------------------------------
+
+# Tout ce qui pointe vers un bâtiment. Un exemplaire qui porte l'une de ces
+# references n'est JAMAIS supprime : le dedoublonnage ne fusionne rien, il ne fait
+# qu'effacer des coquilles. Liste relevee dans le schema de prod le 2026-08-21 —
+# une table ajoutee plus tard sans etre inscrite ici rendrait la suppression moins
+# prudente, d'ou le test qui la compare au schema reel.
+BUILDING_REFERENCES: tuple[tuple[str, str], ...] = (
+    ("accounting_matrix_rules", "building_id"),
+    ("building_equipments", "building_id"),
+    ("building_meter_links", "building_id"),
+    ("cvc_inventory_items", "building_id"),
+    ("cvc_refrigerant_items", "building_id"),
+    ("cvc_source_building_mappings", "building_id"),
+    ("gas_invoices", "building_id"),
+    ("gas_pces", "building_id"),
+    ("locals", "building_id"),
+    ("patrimoine_legacy_assets", "building_id"),
+)
+
+LOCAL_REFERENCES: tuple[tuple[str, str], ...] = (
+    ("cvc_inventory_items", "local_id"),
+    ("patrimoine_legacy_assets", "local_id"),
+)
+
+
+def _reference_count(db: Session, references: tuple[tuple[str, str], ...], row_id: int) -> int:
+    """Nombre d'objets qui pointent vers cette ligne, toutes tables confondues."""
+    total = 0
+    for table, column in references:
+        total += db.scalar(text(f"SELECT count(*) FROM {table} WHERE {column} = :id"), {"id": row_id}) or 0
+    return total
+
+
+def _building_identity(building: Building) -> tuple:
+    """Ce qui fait qu'un bâtiment est LE MEME qu'un autre (Q28).
+
+    Le nom seul ne suffit pas : deux `WC PUBLIC` sont deux edicules a deux bouts de la
+    ville. La parcelle seule ne suffit pas non plus : une ecole, sa cantine et son
+    gymnase partagent normalement une parcelle — 19 parcelles portent 2 a 4 batiments en
+    prod. Il faut donc les trois : nom, position et parcelle.
+
+    La position est arrondie a 6 decimales, soit ~11 cm : en dessous, deux copies
+    strictement issues du meme import ne se reconnaitraient pas a cause du flottant.
+    """
+    return (
+        _normalize_lookup(building.nom_batiment),
+        None if building.latitude is None else round(building.latitude, 6),
+        None if building.longitude is None else round(building.longitude, 6),
+        _normalize_lookup(building.dgfip_reference_norm),
+    )
+
+
+def _local_identity(local: Local) -> tuple:
+    """Ce qui fait qu'un local est LE MEME qu'un autre (Q28).
+
+    Le niveau en fait partie, et ce n'est pas theorique : `LOCAL 343010345389` existe
+    deux fois dans le batiment 1223, aux niveaux 2 et 3. Ce sont deux etages, pas un
+    doublon — les confondre effacerait un local reel.
+    """
+    return (
+        local.building_id,
+        _normalize_lookup(local.nom_local),
+        _normalize_lookup(local.niveau),
+        local.surface_m2,
+        _normalize_lookup(local.usage),
+        _normalize_lookup(local.statut_occupation),
+        _normalize_lookup(local.adresse_reconstituee),
+        _normalize_lookup(local.dgfip_reference_norm),
+    )
+
+
+def purge_duplicates(db: Session, current_user: User, *, dry_run: bool = False) -> dict:
+    """Supprime les doublons stricts du référentiel Po2 (Q28/Q29).
+
+    Deux garde-fous, parce que l'operation est irreversible :
+    - l'identite est **stricte** : deux entites homonymes mais situees ailleurs, ou a un
+      autre etage, ne sont pas des doublons ;
+    - on garde l'exemplaire qui **porte des liens** (biens ASTECH, locaux, equipements,
+      compteurs, factures gaz…) et on ne supprime que des exemplaires qui ne portent
+      rien. Un doublon qui porte quelque chose est **signale**, pas efface : le fusionner
+      serait un autre chantier.
+    """
+    city_id = current_user.city_id
+
+    building_statement = select(Building)
+    if city_id is not None:
+        building_statement = building_statement.where(Building.city_id == city_id)
+    groups: dict[tuple, list[Building]] = {}
+    for building in db.scalars(building_statement):
+        groups.setdefault(_building_identity(building), []).append(building)
+
+    removed_buildings: list[dict] = []
+    kept_with_links: list[dict] = []
+    for identity, members in groups.items():
+        if len(members) < 2:
+            continue
+        scored = sorted(
+            members,
+            key=lambda b: (-_reference_count(db, BUILDING_REFERENCES, b.id), b.id),
+        )
+        survivor = scored[0]
+        for duplicate in scored[1:]:
+            links = _reference_count(db, BUILDING_REFERENCES, duplicate.id)
+            entry = {
+                "id": duplicate.id,
+                "nom": duplicate.nom_batiment,
+                "conserve_id": survivor.id,
+                "liens": links,
+            }
+            if links > 0:
+                # Deux exemplaires identiques portant chacun des liens : on ne choisit
+                # pas a la place de l'utilisateur, on le lui dit.
+                kept_with_links.append(entry)
+                continue
+            removed_buildings.append(entry)
+            if not dry_run:
+                db.delete(duplicate)
+
+    local_statement = select(Local)
+    if city_id is not None:
+        local_statement = local_statement.join(Building, Local.building_id == Building.id).where(
+            Building.city_id == city_id
+        )
+    local_groups: dict[tuple, list[Local]] = {}
+    for local in db.scalars(local_statement):
+        local_groups.setdefault(_local_identity(local), []).append(local)
+
+    removed_locals: list[dict] = []
+    for identity, members in local_groups.items():
+        if len(members) < 2:
+            continue
+        scored = sorted(
+            members,
+            key=lambda l: (-_reference_count(db, LOCAL_REFERENCES, l.id), l.id),
+        )
+        survivor = scored[0]
+        for duplicate in scored[1:]:
+            links = _reference_count(db, LOCAL_REFERENCES, duplicate.id)
+            entry = {
+                "id": duplicate.id,
+                "nom": duplicate.nom_local,
+                "conserve_id": survivor.id,
+                "liens": links,
+            }
+            if links > 0:
+                kept_with_links.append(entry)
+                continue
+            removed_locals.append(entry)
+            if not dry_run:
+                db.delete(duplicate)
+
+    if not dry_run:
+        db.commit()
+    return {
+        "dry_run": dry_run,
+        "batiments_supprimes": removed_buildings,
+        "locaux_supprimes": removed_locals,
+        "conserves_car_lies": kept_with_links,
+    }
