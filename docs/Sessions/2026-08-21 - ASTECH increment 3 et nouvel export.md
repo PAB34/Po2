@@ -64,6 +64,14 @@ compteur d'avancement, filtres d'affinage, disposition en araignée sur la carte
    2026-08-21, l'option coupée à l'import. Voir §21 du doc de rapprochement (Q23/Q24) —
    qui apporte aussi le statut **« disparu chez ASTECH »** pour les biens que la
    collectivité a retirés de sa base : hors parcours, hors réexport, réversible.
+10. **La carte absente au premier chargement n'était pas un problème de taille.** Le
+    composant rend un état vide **sans conteneur** tant qu'aucun bâtiment n'est
+    géolocalisé ; au premier chargement les données arrivent après, l'effet d'init
+    (deps `[]`) tournait sans conteneur et n'était jamais rejoué. Diagnostiqué sur la
+    page de prod : conteneur bien dimensionné, **aucun `.leaflet-container`**, aucune
+    erreur console, instanciation manuelle fonctionnelle. Le conteneur passe par un
+    **état** et non une ref. Le correctif précédent (`invalidateSize` + `ResizeObserver`)
+    corrigeait la taille d'une carte qui n'existait pas.
 
 ## Reprise prochaine session
 
