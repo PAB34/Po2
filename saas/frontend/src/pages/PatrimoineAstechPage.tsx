@@ -269,6 +269,20 @@ export default function PatrimoineAstechPage() {
   // champ partait au moindre clic ailleurs, sans qu'on sache si elle avait eu lieu.
   const [assetNameDraft, setAssetNameDraft] = useState("");
   const [buildingNameDraft, setBuildingNameDraft] = useState("");
+  /**
+   * Rattachement PROPOSÉ par un dépôt sur la carte, en attente de décision (Q25).
+   *
+   * Déposer un point à portée d'une entité Po2 rattachait aussitôt : le bien prenait le
+   * nom de la cible, son adresse et son cadastre, pour un simple déplacement de
+   * quelques mètres. Rien n'est plus écrit tant que ce n'est pas validé — et refuser
+   * enregistre le déplacement seul, qui était l'intention de départ.
+   *
+   * La position lâchée est mémorisée : elle sert à tenir le point là où l'utilisateur
+   * l'a posé pendant qu'il décide, sans rien enregistrer.
+   */
+  const [pendingLink, setPendingLink] = useState<
+    { assetId: number; buildingId: number; localId: number | null; lat: number; lon: number } | null
+  >(null);
 
   const countsQuery = useQuery({
     queryKey: ["legacy-counts"],
@@ -587,6 +601,45 @@ export default function PatrimoineAstechPage() {
     setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte.");
   };
 
+  /** Valide le rattachement proposé par un dépôt sur la carte (Q25). */
+  const confirmPendingLink = () => {
+    if (!pendingLink) return;
+    const building = buildingsById.get(pendingLink.buildingId);
+    const local = pendingLink.localId != null ? localsById.get(pendingLink.localId) : null;
+    updateMutation.mutate({
+      id: pendingLink.assetId,
+      payload:
+        pendingLink.localId != null
+          ? { local_id: pendingLink.localId }
+          : { building_id: pendingLink.buildingId },
+    });
+    setFlash(
+      local
+        ? `Rattaché au local « ${local.nom_local} » de « ${building?.nom_batiment ?? pendingLink.buildingId} ». ` +
+          "L'adresse et le cadastre restent ceux du bâtiment."
+        : `Rattaché à « ${building?.nom_batiment ?? pendingLink.buildingId} » : le bien reprend son ` +
+          "adresse et sa position. « Détacher » lui rendra son nom ASTECH.",
+    );
+    setPendingLink(null);
+  };
+
+  /**
+   * Refuse le rattachement proposé : on enregistre le seul déplacement.
+   *
+   * C'est l'intention de départ dans le cas qui a motivé Q25 — déplacer un point qui se
+   * trouve passer près d'un bâtiment. Le bien garde son nom, son statut et son absence
+   * de rattachement ; seule sa position change.
+   */
+  const rejectPendingLink = () => {
+    if (!pendingLink) return;
+    updateMutation.mutate({
+      id: pendingLink.assetId,
+      payload: { latitude: pendingLink.lat, longitude: pendingLink.lon },
+    });
+    setFlash("Point déplacé, sans rattachement. Recherche de l'adresse correspondante…");
+    setPendingLink(null);
+  };
+
   const toLocalMutation = useMutation({
     mutationFn: (assetId: number) => convertLegacyAssetToLocal(token!, assetId),
     onSuccess: (asset) => {
@@ -902,6 +955,10 @@ export default function PatrimoineAstechPage() {
     // l'écran la fiche d'une entité sans rapport avec le bien en cours.
     setInspectedBuildingId(null);
     setInspectedLocalId(null);
+    // Une proposition de rattachement ne survit pas au changement de bien : elle porte
+    // sur le bien qu'on vient de quitter. Rien n'ayant été écrit, l'abandonner ne coûte
+    // que le déplacement — et le point retrouve sa position enregistrée.
+    setPendingLink((current) => (current && current.assetId === selectedId ? current : null));
   }, [selectedId]);
 
   // Le champ de saisie suit le bien affiché : sans cela, changer de bien laisserait le
@@ -999,8 +1056,13 @@ export default function PatrimoineAstechPage() {
   const legacyPoints = useMemo<LegacyMapPoint[]>(() => {
     const toPoint = (asset: LegacyAsset): LegacyMapPoint | null => {
       const building = asset.building_id != null ? buildingsById.get(asset.building_id) : null;
-      const latitude = asset.latitude ?? building?.latitude ?? null;
-      const longitude = asset.longitude ?? building?.longitude ?? null;
+      // Rattachement en attente de décision : le point reste là où l'utilisateur vient
+      // de le lâcher, alors que RIEN n'est encore enregistré. Sans cela, le moindre
+      // rendu le ferait sauter à son ancienne position et la question posée dans le
+      // panneau ne désignerait plus rien de visible.
+      const held = pendingLink?.assetId === asset.id ? pendingLink : null;
+      const latitude = held?.lat ?? asset.latitude ?? building?.latitude ?? null;
+      const longitude = held?.lon ?? asset.longitude ?? building?.longitude ?? null;
       // Un bien sans position ET sans batiment localise n'a rien a faire sur la carte :
       // l'empiler au centre de Sete creerait un tas de points faussement precis.
       if (latitude == null || longitude == null) {
@@ -1063,7 +1125,7 @@ export default function PatrimoineAstechPage() {
       if (point) byId.set(point.id, point);
     }
     return [...byId.values()];
-  }, [buildingsById, linkedAssetsQuery.data, mapFollowsFilter, selected, visibleAssets]);
+  }, [buildingsById, linkedAssetsQuery.data, mapFollowsFilter, pendingLink, selected, visibleAssets]);
 
   const counts = countsQuery.data ?? {};
   // Des biens importés mais aucun candidat ni rattachement : l'utilisateur n'a pas
@@ -1620,24 +1682,13 @@ export default function PatrimoineAstechPage() {
                   : "Position enregistrée, recherche de l'adresse correspondante…",
               );
             }}
-            onDropLegacyOnBuilding={(id, buildingId, localId) => {
-              // Déposer le point ASTECH sur une entité Po2 vaut rattachement. Le dépôt
-              // reconnaît désormais aussi les LOCAUX : c'est la cible la plus fréquente
-              // d'un CODE_BIEN, et il fallait auparavant viser le bâtiment puis
-              // corriger dans le panneau.
-              const building = buildingsById.get(buildingId);
-              const local = localId != null ? localsById.get(localId) : null;
-              updateMutation.mutate({
-                id,
-                payload: localId != null ? { local_id: localId } : { building_id: buildingId },
-              });
-              setFlash(
-                local
-                  ? `Rattaché au local « ${local.nom_local} » de « ${building?.nom_batiment ?? buildingId} ». ` +
-                    "L'adresse et le cadastre restent ceux du bâtiment."
-                  : `Rattaché à « ${building?.nom_batiment ?? buildingId} » : le bien reprend son ` +
-                    "adresse et sa position. Utilise « Détacher » si ce n'est pas le bon.",
-              );
+            onDropLegacyOnBuilding={(id, buildingId, localId, lat, lon) => {
+              // Le dépôt PROPOSE, il ne rattache plus (Q25). Rien n'est envoyé au
+              // serveur : ni le rattachement, ni même la nouvelle position. Le panneau
+              // pose la question, et c'est la réponse qui écrit.
+              setPendingLink({ assetId: id, buildingId, localId, lat, lon });
+              setSelectedId(id);
+              setFlash(null);
             }}
             attachMode={attachMode ? "ign" : "none"}
             attachLat={attachLookupQuery.data?.lat ?? pointCenter?.lat ?? null}
@@ -1757,6 +1808,59 @@ export default function PatrimoineAstechPage() {
 
         {/* --- Panneau d'action (colonne de droite) -------------------------- */}
         <div className="astech-panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Rattachement proposé par un dépôt sur la carte : RIEN n'est encore écrit
+              (Q25). En tête du panneau et en ambre, parce que c'est la seule chose à
+              faire tant qu'on n'a pas répondu. */}
+          {pendingLink && (
+            <div
+              style={{
+                ...card,
+                borderColor: "rgba(251, 191, 36, 0.6)",
+                background: "rgba(251, 191, 36, 0.08)",
+              }}
+            >
+              <div style={{ fontSize: 11, color: "#fbbf24", textTransform: "uppercase" }}>
+                Rattachement proposé — rien n'est enregistré
+              </div>
+              <div style={{ margin: "6px 0 4px", fontSize: 14 }}>
+                Rattacher{" "}
+                <strong style={{ color: "#c4b5fd" }}>
+                  {(() => {
+                    const asset = knownAssets.get(pendingLink.assetId);
+                    return asset ? assetLabel(asset) : `bien #${pendingLink.assetId}`;
+                  })()}
+                </strong>{" "}
+                à{" "}
+                <strong style={{ color: "#7dd3fc" }}>
+                  {pendingLink.localId != null
+                    ? `« ${localsById.get(pendingLink.localId)?.nom_local ?? pendingLink.localId} »`
+                    : `« ${buildingsById.get(pendingLink.buildingId)?.nom_batiment ?? pendingLink.buildingId} »`}
+                </strong>
+                {pendingLink.localId != null ? " (local)" : " (bâtiment entier)"} ?
+              </div>
+              <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 8 }}>
+                Le bien prendra le nom de la cible Po2, son adresse et son cadastre.
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  style={{ ...btnPrimary, fontSize: 12, padding: "5px 12px" }}
+                  onClick={confirmPendingLink}
+                >
+                  Valider le rattachement
+                </button>
+                <button
+                  type="button"
+                  style={{ ...btnSecondary, fontSize: 12, padding: "5px 12px" }}
+                  title="Enregistre seulement le déplacement du point. Le bien garde son nom, son statut et son absence de rattachement."
+                  onClick={rejectPendingLink}
+                >
+                  Non — juste déplacer le point
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Panneau du LOCAL consulté — symétrique de celui du bâtiment. Un CODE_BIEN
               ASTECH désigne souvent un local : il lui fallait les mêmes prises. */}
           {inspectedLocal && (

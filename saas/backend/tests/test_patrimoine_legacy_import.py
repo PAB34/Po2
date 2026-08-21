@@ -1202,3 +1202,43 @@ def test_rejouer_le_meme_fichier_ne_declenche_pas_l_alerte(db_session: Session):
     assert result["codes_disjoints"] is False
     assert result["updated"] == 2
     assert result["created"] == 0
+
+
+def test_detachement_rend_le_nom_astech_d_origine(db_session: Session):
+    """Q26 : le rattachement fait adopter le nom Po2, détacher doit le rendre.
+
+    Un point déplacé qui accrochait le bâtiment d'à côté laissait sinon un nom Po2 collé
+    au bien pour de bon, alors que le libellé ASTECH est conservé dans la ligne source.
+    """
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(Building(id=42, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    origine = asset.designation
+
+    update_asset(db_session, asset, building_id=42)
+    assert asset.designation == "MAIRIE"  # Q11 : le nom Po2 gagne tant que le lien existe
+
+    update_asset(db_session, asset, clear_building=True, status="a_traiter")
+    assert asset.designation == origine
+    assert asset.nomcourt == origine
+
+
+def test_detachement_ne_defait_pas_une_correction_manuelle(db_session: Session):
+    """Un nom corrigé à la main dans le même appel prime sur la restitution."""
+    from app.services.patrimoine_legacy import update_asset
+
+    db_session.add(Building(id=42, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete"))
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    update_asset(db_session, asset, building_id=42)
+
+    update_asset(db_session, asset, clear_building=True, designation="NOM CHOISI A LA MAIN")
+    assert asset.designation == "NOM CHOISI A LA MAIN"
