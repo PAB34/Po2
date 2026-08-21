@@ -291,7 +291,7 @@ def _reason_not_exportable(asset: PatrimoineLegacyAsset) -> str | None:
     if asset.status == "ignore":
         return "bien écarté du parcours"
     if asset.status == STATUS_GONE:
-        return "à supprimer de AS-TECH : ce bien n'a plus lieu d'être dans le référentiel"
+        return "réformé : ce bien est sorti du parc de la collectivité"
     return "aucun rattachement à un bâtiment Po2"
 
 

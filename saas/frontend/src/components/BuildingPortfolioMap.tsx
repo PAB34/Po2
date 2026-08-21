@@ -18,6 +18,8 @@ type RuntimeLayer = {
   addTo: (target: RuntimeMap | RuntimeFeatureGroup) => RuntimeLayer;
   remove?: () => void;
   bindPopup?: (html: string) => RuntimeLayer;
+  /** Étiquette permanente posée à côté du marqueur (dénomination affichée au zoom). */
+  bindTooltip?: (content: string, options?: Record<string, unknown>) => RuntimeLayer;
   on?: (event: string, handler: () => void) => void;
 };
 
@@ -28,6 +30,7 @@ type RuntimeBounds = {
 };
 
 type RuntimeMap = {
+  getZoom?: () => number;
   setView: (coords: [number, number], zoom: number) => RuntimeMap;
   fitBounds: (bounds: RuntimeBounds, options?: Record<string, unknown>) => void;
   remove: () => void;
@@ -164,6 +167,8 @@ type MappableBuilding = Building & { latitude: number; longitude: number };
 /** Zoom de travail sur un bien : assez pres pour distinguer les batiments, mais dans
     la plage ou OpenStreetMap fournit encore des tuiles nettes. */
 const FOCUS_ZOOM = 18;
+/** Zoom à partir duquel les dénominations s'affichent d'elles-mêmes sur la carte. */
+const LABEL_MIN_ZOOM = 17;
 // Rayon des pattes d'araignee : ~15 m. Assez pour separer les pastilles et laisser voir
 // le batiment au centre, assez peu pour qu'on lise l'appartenance au meme batiment.
 const SPIDER_RADIUS_DEG = 15 / 111_320;
@@ -533,6 +538,17 @@ export function BuildingPortfolioMap({
   // reparait — en remontant le composant alors que les donnees sont deja en cache.
   // Une ref ne declenche pas de rendu : c'est un etat qu'il faut, pour que l'effet
   // rejoue le jour ou le conteneur apparait enfin.
+  /**
+   * Les dénominations s'affichent d'elles-mêmes à partir de ce niveau de zoom.
+   *
+   * En dessous, la ville entière tient à l'écran et 700 étiquettes se chevaucheraient en
+   * une bouillie illisible. Au-delà, on est à l'échelle du quartier : les noms sont ce
+   * qui permet de reconnaître une entité sans la cliquer une par une.
+   *
+   * On ne garde que le franchissement du seuil, pas le zoom lui-même : les couches se
+   * reconstruisent alors une seule fois, au passage, et non à chaque cran de molette.
+   */
+  const [labelsVisible, setLabelsVisible] = useState(false);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const attachContainer = useCallback((node: HTMLDivElement | null) => {
     containerRef.current = node;
@@ -782,6 +798,12 @@ export function BuildingPortfolioMap({
       };
       map.on?.("moveend", emitCenter);
       emitCenter();
+      const syncLabels = () => {
+        const level = map.getZoom?.();
+        if (typeof level === "number") setLabelsVisible(level >= LABEL_MIN_ZOOM);
+      };
+      map.on?.("zoomend", syncLabels);
+      syncLabels();
       mapRef.current = map;
       setMapReady(true);
       window.setTimeout(() => map.invalidateSize?.(), 0);
@@ -876,6 +898,14 @@ export function BuildingPortfolioMap({
             (point.buildingLabel ? `<br/>dans : ${point.buildingLabel}` : "") +
             (onSelectLocalId ? "<br/><em>Clic : en faire la cible du bien sélectionné</em>" : ""),
         );
+        if (labelsVisible) {
+          marker.bindTooltip?.(point.label, {
+            permanent: true,
+            direction: "right",
+            offset: [6, 0],
+            className: "map-label map-label--local",
+          });
+        }
         marker.on?.("click", () => {
           markerClickAtRef.current = Date.now();
           onSelectLocalId?.(point.id, point.buildingId);
@@ -889,7 +919,7 @@ export function BuildingPortfolioMap({
     return () => {
       layerGroup.clearLayers();
     };
-  }, [attachMode, localPoints, mapReady, onSelectLocalId]);
+  }, [attachMode, labelsVisible, localPoints, mapReady, onSelectLocalId]);
 
   // ------------------------------------------------------------------
   // Couche « biens historiques ASTECH » — couleur dédiée, marqueur déplaçable
@@ -960,6 +990,14 @@ export function BuildingPortfolioMap({
             : ""
         }`,
       );
+      if (labelsVisible) {
+        marker.bindTooltip?.(point.label, {
+          permanent: true,
+          direction: "right",
+          offset: [8, 0],
+          className: "map-label map-label--astech",
+        });
+      }
       marker.on?.("click", () => {
         markerClickAtRef.current = Date.now();
         onSelectLegacyId?.(point.id);
@@ -1022,7 +1060,7 @@ export function BuildingPortfolioMap({
   }, [
     activeLegacyId, buildingDisplay, legacyDropRadiusM, legacyMarkers, localPoints,
     mappableBuildings, mapReady, onDropLegacyOnBuilding, onMoveLegacyPoint,
-    onSelectLegacyId, spiderLegs,
+    labelsVisible, onSelectLegacyId, spiderLegs,
   ]);
 
   // ------------------------------------------------------------------
@@ -1130,6 +1168,14 @@ export function BuildingPortfolioMap({
       marker.bindPopup?.(
         `<strong>${building.nom_batiment || `Bâtiment #${building.id}`}</strong><br/>${buildAddressLine(building)}${hasIgn ? "<br/><em>IGN attaché</em>" : ""}`,
       );
+      if (labelsVisible) {
+        marker.bindTooltip?.(building.nom_batiment || `Bâtiment #${building.id}`, {
+          permanent: true,
+          direction: "right",
+          offset: [8, 0],
+          className: "map-label map-label--po2",
+        });
+      }
       marker.on?.("click", () => {
         markerClickAtRef.current = Date.now();
         if (attachMode === "none") onSelectBuildingId(building.id);
@@ -1201,7 +1247,7 @@ export function BuildingPortfolioMap({
     return () => { layerGroup.clearLayers(); };
   }, [
     activeBuildingId, attachMode, buildingDisplay, draggableBuildingId, focusLatLon,
-    highlightedSet, mapReady, mappableBuildings, onMoveBuilding, onSelectBuildingId,
+    highlightedSet, labelsVisible, mapReady, mappableBuildings, onMoveBuilding, onSelectBuildingId,
     selectedBuilding,
   ]);
 

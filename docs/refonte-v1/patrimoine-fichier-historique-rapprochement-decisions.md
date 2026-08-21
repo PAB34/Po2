@@ -1065,3 +1065,12 @@ niveau 2 et niveau 3 — à ne surtout pas fusionner.
 **Effet attendu de Q28+Q29 sur la prod du 2026-08-21** : 1 bâtiment (1214) et 5 locaux
 supprimés ; les 2 WC publics, les 2 Lakanal, le Conservatoire, le Passage du dauphin et
 les deux étages du Lakanal sont épargnés.
+
+## 24. Confort de l'écran — décisions 2026-08-21 (3e lot)
+
+| # | Sujet | Décision |
+|---|---|---|
+| Q31 | Dénominations sur la carte | **Affichées d'elles-mêmes à partir du zoom 17** (`LABEL_MIN_ZOOM`), pour les trois familles : biens ASTECH (violet), bâtiments Po2 (bleu), locaux (indigo). En dessous, la ville tient à l'écran et 700 étiquettes se chevaucheraient. Techniquement des tooltips Leaflet permanents, `pointer-events: none` — une étiquette qui capte le clic rendrait inatteignable le point qu'elle nomme. Les couches ne se reconstruisent qu'au **franchissement du seuil**, pas à chaque cran de molette. |
+| Q32 | Passage automatique au bien suivant | **Retiré**, ainsi que l'option. Après une décision, la sélection **reste** sur le bien traité : on voit ce qu'on vient de faire et on peut le corriger dans la foulée. Sauter au suivant obligeait à revenir en arrière dès qu'une décision demandait vérification. |
+| Q33 | « A SUPPRIMER DE AS-TECH » | Devient **« REFORMER »** (arbitrage de la collègue référente). Le sens change une seconde fois : ce n'est plus une consigne de suppression adressée à AS-TECH, c'est un **état du bien** — il sort du parc. D'où son **déplacement dans le bloc ASTECH** (violet) : il décrit le bien, pas la cible Po2. Il y était d'ailleurs invisible tant qu'aucun bâtiment n'était visé, alors qu'un bien réformé n'a pas besoin d'être rattaché pour l'être. Bouton inverse : « Annuler la réforme ». Motif du réexport : « réformé : ce bien est sorti du parc de la collectivité ». **La valeur stockée reste `disparu`** — troisième libellé sur la même clé, la renommer imposerait une migration pour un affichage. |
+| Q34 | Aller à une adresse | **Champ de recherche au-dessus de la carte** : on saisit une adresse, la carte s'y rend au zoom du bâtiment (donc avec les dénominations). Même géocodeur que « Sur l'adresse ASTECH ». **Rien n'est enregistré** : cela déplace le regard, aucun bien n'est touché. Le besoin est souvent l'inverse du parcours prévu — on connaît l'adresse et on cherche ce qu'il y a dessus. |

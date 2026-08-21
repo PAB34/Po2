@@ -284,7 +284,7 @@ def test_un_bien_a_supprimer_ne_repart_pas_dans_le_fichier(db_session: Session):
     assert sheets["Feuil1"][2:] == []
     review = sheets["À vérifier"][1:]
     assert [row[0] for row in review] == ["ADMICIMET02"]
-    assert "à supprimer de AS-TECH" in review[0][2]
+    assert "réformé" in review[0][2]
 
 
 def test_annuler_la_consigne_rend_le_statut_reel(db_session: Session):
