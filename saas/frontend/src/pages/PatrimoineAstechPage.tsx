@@ -32,6 +32,8 @@ import {
   deleteLegacyImports,
   downloadLegacyExport,
   previewLegacyExport,
+  reclassifyBuildingRequest,
+  reclassifyLocalRequest,
   fetchFreeAddressLookup,
   fetchIgnBuildingsAtPoint,
   fetchLegacyAssets,
@@ -243,6 +245,10 @@ export default function PatrimoineAstechPage() {
   // aucune position et le filtre initial est « À traiter », donc la carte se retrouvait
   // vide au chargement — au point de passer pour une panne.
   const [mapFollowsFilter, setMapFollowsFilter] = useState(false);
+  // Passer au bien suivant apres chaque decision. Sur 380 biens, c'est le geste qu'on
+  // repete le plus : sans cela il faut revenir cliquer la ligne suivante dans la file
+  // apres chaque validation.
+  const [autoAdvance, setAutoAdvance] = useState(true);
   // Les locaux Po2 sont affichés par défaut : 505 sur 626 ont des coordonnées et la
   // carte les ignorait complètement, alors qu'un CODE_BIEN ASTECH désigne souvent un
   // local. La bascule reste offerte, un parc dense pouvant devenir illisible.
@@ -351,6 +357,40 @@ export default function PatrimoineAstechPage() {
       );
       setStatusFilter("a_creer");
       setSelectedId(asset.id);
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /**
+   * Change la TYPOLOGIE d'une entité Po2 : un local devient un bâtiment, ou l'inverse.
+   *
+   * L'import du patrimoine a classé en « local » des entités qui sont en réalité des
+   * bâtiments. Le service transporte désormais adresse, position, cadastre ET les biens
+   * ASTECH rattachés — sans quoi le reclassement dépouillait l'entité et orphelinait
+   * les rattachements.
+   */
+  const reclassifyMutation = useMutation({
+    mutationFn: (variables:
+      | { kind: "localToBuilding"; local: Local }
+      | { kind: "buildingToLocal"; building: Building; parentId: number }) =>
+      variables.kind === "localToBuilding"
+        ? reclassifyLocalRequest(token!, variables.local.building_id, variables.local.id, {
+            target_type: "building",
+          })
+        : reclassifyBuildingRequest(token!, variables.building.id, {
+            target_type: "local",
+            target_building_id: variables.parentId,
+          }),
+    onSuccess: (result) => {
+      setFlash(
+        result.entity_type === "building"
+          ? "Local promu en bâtiment Po2. Son adresse, sa position et ses biens ASTECH l'ont suivi."
+          : "Bâtiment devenu un local. Son adresse, sa position et ses biens ASTECH l'ont suivi.",
+      );
+      setInspectedLocalId(result.entity_type === "local" ? result.entity_id : null);
+      setInspectedBuildingId(result.entity_type === "building" ? result.entity_id : null);
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
       invalidate();
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
@@ -515,6 +555,21 @@ export default function PatrimoineAstechPage() {
     const value = buildingNameDraft.trim();
     if (!inspectedBuilding || !value || value === (inspectedBuilding.nom_batiment ?? "")) return;
     renameBuildingMutation.mutate({ id: inspectedBuilding.id, nom: value });
+  };
+
+  /**
+   * Passe au bien suivant de la file, si l'option est active.
+   *
+   * Appelé après une décision (valider, écarter, ignorer). Le bien traité vient de
+   * quitter le filtre courant : « suivant » est donc celui qui occupe désormais sa
+   * place, sinon le précédent quand on était en fin de liste.
+   */
+  const goToNextAsset = (fromId: number) => {
+    if (!autoAdvance) return;
+    const index = visibleAssets.findIndex((asset) => asset.id === fromId);
+    if (index < 0) return;
+    const next = visibleAssets[index + 1] ?? visibleAssets[index - 1] ?? null;
+    setSelectedId(next ? next.id : null);
   };
 
   const detachAsset = (assetId: number) => {
@@ -1198,6 +1253,57 @@ export default function PatrimoineAstechPage() {
         </div>
       )}
 
+      {/* Avancement : additionner les cartes de statut de tete etait la seule facon de
+          savoir ou l'on en etait sur 380 biens. */}
+      {(counts.total ?? 0) > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: 10,
+            fontSize: 13,
+          }}
+        >
+          <strong>
+            {(counts.lie ?? 0) + (counts.a_creer ?? 0)} traité(s) sur {counts.total ?? 0}
+          </strong>
+          <div
+            style={{
+              flex: 1,
+              minWidth: 160,
+              height: 8,
+              borderRadius: 999,
+              background: "rgba(148, 163, 184, 0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.round((100 * ((counts.lie ?? 0) + (counts.a_creer ?? 0))) / Math.max(1, counts.total ?? 1))}%`,
+                height: "100%",
+                background: "#22c55e",
+              }}
+            />
+          </div>
+          <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
+            {counts.propose ?? 0} à confirmer · {counts.a_traiter ?? 0} à traiter
+          </span>
+          <label
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: TEXT_MUTED }}
+            title="Après chaque décision, sélectionne automatiquement le bien suivant de la file."
+          >
+            <input
+              type="checkbox"
+              checked={autoAdvance}
+              onChange={(event) => setAutoAdvance(event.target.checked)}
+            />
+            Passer au suivant après chaque décision
+          </label>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginBottom: 16 }}>
         {STATUS_ORDER.map((status) => (
           <button
@@ -1477,18 +1583,23 @@ export default function PatrimoineAstechPage() {
                   : "Position enregistrée, recherche de l'adresse correspondante…",
               );
             }}
-            onDropLegacyOnBuilding={(id, buildingId) => {
-              // Déposer le point ASTECH sur un point Po2 vaut rattachement : le bien
-              // reprend l'adresse et la position du bâtiment.
+            onDropLegacyOnBuilding={(id, buildingId, localId) => {
+              // Déposer le point ASTECH sur une entité Po2 vaut rattachement. Le dépôt
+              // reconnaît désormais aussi les LOCAUX : c'est la cible la plus fréquente
+              // d'un CODE_BIEN, et il fallait auparavant viser le bâtiment puis
+              // corriger dans le panneau.
               const building = buildingsById.get(buildingId);
+              const local = localId != null ? localsById.get(localId) : null;
               updateMutation.mutate({
                 id,
-                payload: { building_id: buildingId },
+                payload: localId != null ? { local_id: localId } : { building_id: buildingId },
               });
               setFlash(
-                `Rattaché à « ${building?.nom_batiment ?? buildingId} » : le bien reprend son ` +
-                  "adresse et sa position, et le bâtiment porte désormais le nom ASTECH. " +
-                  "Utilise « Détacher » si ce n'est pas le bon.",
+                local
+                  ? `Rattaché au local « ${local.nom_local} » de « ${building?.nom_batiment ?? buildingId} ». ` +
+                    "L'adresse et le cadastre restent ceux du bâtiment."
+                  : `Rattaché à « ${building?.nom_batiment ?? buildingId} » : le bien reprend son ` +
+                    "adresse et sa position. Utilise « Détacher » si ce n'est pas le bon.",
               );
             }}
             attachMode={attachMode ? "ign" : "none"}
@@ -1757,6 +1868,39 @@ export default function PatrimoineAstechPage() {
                   </p>
                 </div>
               )}
+              {/* Typologie : l'import a classé en « local » des entités qui sont en
+                  réalité des bâtiments. Le geste doit être disponible là où on le
+                  constate, pas dans un autre écran. */}
+              <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10 }}>
+                <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", marginBottom: 6 }}>
+                  Typologie
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 13 }}>Local</span>
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                    disabled={reclassifyMutation.isPending}
+                    title="En faire un bâtiment Po2 à part entière. Adresse, position, cadastre et biens ASTECH le suivent."
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Faire de « ${inspectedLocal.nom_local} » un BÂTIMENT Po2 ?
+
+` +
+                            "Son adresse, sa position, son cadastre et ses biens ASTECH le suivent. " +
+                            "Il quitte son bâtiment porteur et devient autonome.",
+                        )
+                      ) {
+                        return;
+                      }
+                      reclassifyMutation.mutate({ kind: "localToBuilding", local: inspectedLocal });
+                    }}
+                  >
+                    {reclassifyMutation.isPending ? "Reclassement…" : "→ En faire un bâtiment"}
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 style={{ ...btnSecondary, marginTop: 10 }}
@@ -1895,6 +2039,87 @@ export default function PatrimoineAstechPage() {
                   </p>
                 </div>
               )}
+
+              {/* Les LOCAUX de ce bâtiment. Ils n'apparaissaient nulle part depuis le
+                  bâtiment : impossible de voir sa structure sans cliquer ses pastilles
+                  une par une sur la carte. */}
+              {locals.filter((local) => local.building_id === inspectedBuilding.id).length > 0 && (
+                <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10, fontSize: 12 }}>
+                  <div style={{ color: TEXT_MUTED, marginBottom: 4 }}>
+                    {locals.filter((local) => local.building_id === inspectedBuilding.id).length} local(aux) dans ce bâtiment :
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 160, overflowY: "auto" }}>
+                    {locals
+                      .filter((local) => local.building_id === inspectedBuilding.id)
+                      .map((local) => {
+                        const biens = [...knownAssets.values()].filter(
+                          (asset) => asset.local_id === local.id,
+                        ).length;
+                        return (
+                          <button
+                            key={local.id}
+                            type="button"
+                            style={{
+                              ...btnSecondary,
+                              textAlign: "left",
+                              padding: "3px 8px",
+                              fontSize: 12,
+                              borderColor: "rgba(129, 140, 248, 0.4)",
+                            }}
+                            onClick={() => {
+                              setInspectedBuildingId(null);
+                              setInspectedLocalId(local.id);
+                            }}
+                          >
+                            › {local.nom_local}
+                            {biens > 0 && (
+                              <span style={{ color: "#86efac" }}> — {biens} bien(s) ASTECH</span>
+                            )}
+                            {local.latitude == null && (
+                              <span style={{ color: TEXT_MUTED }}> · position héritée</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {/* Typologie : le pendant du bouton présent sur le panneau du local. Un
+                  bâtiment mal classé se ramène sous son vrai porteur. */}
+              {targetBuilding && targetBuilding.id !== inspectedBuilding.id && (
+                <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10 }}>
+                  <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", marginBottom: 6 }}>
+                    Typologie
+                  </div>
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                    disabled={reclassifyMutation.isPending}
+                    title="Ce bâtiment est en réalité un local : le ramener sous le bâtiment actuellement ciblé."
+                    onClick={() => {
+                      if (
+                        !window.confirm(
+                          `Faire de « ${inspectedBuilding.nom_batiment} » un LOCAL de ` +
+                            `« ${targetBuilding.nom_batiment} » ?
+
+` +
+                            "Son adresse, sa position, son cadastre et ses biens ASTECH le suivent.",
+                        )
+                      ) {
+                        return;
+                      }
+                      reclassifyMutation.mutate({
+                        kind: "buildingToLocal",
+                        building: inspectedBuilding,
+                        parentId: targetBuilding.id,
+                      });
+                    }}
+                  >
+                    → En faire un local de « {targetBuilding.nom_batiment} »
+                  </button>
+                </div>
+              )}
               {selected && selected.building_id !== inspectedBuilding.id && (
                 <div style={{ marginTop: 10 }}>
                   <button
@@ -2001,65 +2226,6 @@ export default function PatrimoineAstechPage() {
                   ))}
                 </dl>
 
-                {/* Le géocodage d'adresse ne servait QUE l'adresse du bâtiment Po2 :
-                    quand c'est l'adresse ASTECH qui est la bonne, elle n'était jamais
-                    exploitée et il fallait chercher la rue à la main depuis le centre
-                    de Sète. */}
-                {assetAddress(selected) && (
-                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                    <button
-                      type="button"
-                      style={btnSecondary}
-                      disabled={geocodeAstechMutation.isPending}
-                      onClick={() => geocodeAstechMutation.mutate(selected)}
-                    >
-                      {geocodeAstechMutation.isPending
-                        ? "Recherche…"
-                        : "Placer le point sur l'adresse ASTECH"}
-                    </button>
-                    <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
-                      Utilise l'adresse du fichier de la collectivité. Sans numéro de voirie,
-                      le point se pose au milieu de la voie : fais-le ensuite glisser sur le
-                      bon bâtiment, puis « Attribuer IGN » relèvera le numéro exact.
-                    </p>
-                  </div>
-                )}
-
-                {/* Placement entièrement manuel. Indispensable pour les biens que le
-                    moteur ne rapproche de rien, et pour ceux dont Po2 n'a aucune
-                    contrepartie : leur point n'apparaissait qu'au centre de Sète, à
-                    aller chercher hors écran avant de pouvoir le déplacer. */}
-                <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                  <button
-                    type="button"
-                    style={btnSecondary}
-                    disabled={mapCenter === null || updateMutation.isPending}
-                    title="Pose le point du bien au centre de la vue actuelle, puis affine en le faisant glisser."
-                    onClick={() => {
-                      if (!mapCenter) return;
-                      updateMutation.mutate(
-                        {
-                          id: selected.id,
-                          payload: { latitude: mapCenter.lat, longitude: mapCenter.lon },
-                        },
-                        {
-                          onSuccess: () =>
-                            setFlash(
-                              `Point de « ${assetLabel(selected)} » posé au centre de la vue. ` +
-                                "Fais-le glisser pour l'ajuster, ou dépose-le sur un bâtiment Po2 pour le rattacher.",
-                            ),
-                        },
-                      );
-                    }}
-                  >
-                    Poser le point ici (centre de la carte)
-                  </button>
-                  <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
-                    Pour les biens sans rapprochement possible : zoome sur l'endroit voulu,
-                    pose le point, puis affine en le faisant glisser. Déposé sur un bâtiment
-                    Po2, il s'y rattache.
-                  </p>
-                </div>
 
                 {selected.candidate_label && selected.status !== "lie" && (
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
@@ -2089,10 +2255,12 @@ export default function PatrimoineAstechPage() {
                               },
                             },
                             {
-                              onSuccess: () =>
+                              onSuccess: () => {
                                 setFlash(
                                   `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
-                                ),
+                                );
+                                goToNextAsset(selected.id);
+                              },
                             },
                           )
                         }
@@ -2114,8 +2282,8 @@ export default function PatrimoineAstechPage() {
                               onSuccess: () =>
                                 setFlash(
                                   "Proposition écartée. Le bien reste à traiter : fais glisser son point violet " +
-                                    "à la bonne place sur la carte, puis dépose-le sur un bâtiment Po2 — ou " +
-                                    "utilise « Choisir un bâtiment Po2… ».",
+                                    "à la bonne place sur la carte, puis dépose-le sur un bâtiment ou un local Po2 — " +
+                                    "ou utilise « Choisir un bâtiment Po2… ».",
                                 ),
                             },
                           )
@@ -2131,11 +2299,13 @@ export default function PatrimoineAstechPage() {
                           updateMutation.mutate(
                             { id: selected.id, payload: { status: "ignore" } },
                             {
-                              onSuccess: () =>
+                              onSuccess: () => {
                                 setFlash(
                                   `« ${assetLabel(selected)} » ignoré : il sort du parcours. ` +
                                     "Tu le retrouveras avec le filtre « Ignoré ».",
-                                ),
+                                );
+                                goToNextAsset(selected.id);
+                              },
                             },
                           )
                         }
@@ -2414,6 +2584,57 @@ export default function PatrimoineAstechPage() {
                     </div>
                   )}
                 </div>
+
+                {/* --- OÙ EST-IL ? Les deux gestes de positionnement, réunis ---------
+                    Ils occupaient deux blocs séparés avec chacun son paragraphe, soit la
+                    moitié de la colonne pour une action ponctuelle. Un seul bloc, deux
+                    boutons côte à côte, une ligne d'aide. */}
+                <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", marginBottom: 6 }}>
+                    Positionner le point
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {assetAddress(selected) && (
+                      <button
+                        type="button"
+                        style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                        disabled={geocodeAstechMutation.isPending}
+                        title="Géocode l'adresse du fichier ASTECH. Sans numéro de voirie, le point se pose au milieu de la voie."
+                        onClick={() => geocodeAstechMutation.mutate(selected)}
+                      >
+                        {geocodeAstechMutation.isPending ? "Recherche…" : "Sur l'adresse ASTECH"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                      disabled={mapCenter === null || updateMutation.isPending}
+                      title="Pose le point au centre de la vue actuelle, puis affine en le faisant glisser."
+                      onClick={() => {
+                        if (!mapCenter) return;
+                        updateMutation.mutate(
+                          {
+                            id: selected.id,
+                            payload: { latitude: mapCenter.lat, longitude: mapCenter.lon },
+                          },
+                          {
+                            onSuccess: () =>
+                              setFlash(
+                                `Point de « ${assetLabel(selected)} » posé au centre de la vue. ` +
+                                  "Fais-le glisser, ou dépose-le sur un bâtiment ou un local Po2 pour le rattacher.",
+                              ),
+                          },
+                        );
+                      }}
+                    >
+                      Au centre de la carte
+                    </button>
+                  </div>
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: TEXT_MUTED }}>
+                    Puis fais glisser le point : déposé sur un bâtiment ou un local Po2, il s'y rattache.
+                  </p>
+                </div>
+
 
                 <div
                   style={{

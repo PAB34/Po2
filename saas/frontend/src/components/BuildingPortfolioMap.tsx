@@ -206,7 +206,11 @@ type BuildingPortfolioMapProps = {
    * `legacyDropRadiusM` metres). Le geste « je depose le point sur le batiment »
    * vaut rattachement : le bien herite alors des informations du batiment.
    */
-  onDropLegacyOnBuilding?: (legacyId: number, buildingId: number) => void;
+  onDropLegacyOnBuilding?: (
+    legacyId: number,
+    buildingId: number,
+    localId?: number | null,
+  ) => void;
   /** Rayon d'accrochage du depot, en metres. */
   legacyDropRadiusM?: number;
   /**
@@ -765,11 +769,12 @@ export function BuildingPortfolioMap({
           radius: 4,
           color: "#a5b4fc",
           fillColor: "#6366f1",
-          // Position heritee du batiment : pastille en creux et contour pointille.
-          // Le local est bien la, mais personne n'a releve SA position propre.
-          fillOpacity: point.isInherited ? 0.15 : 0.9,
+          // TOUS les locaux ont la meme couleur, y compris ceux dont la position est
+          // heritee du batiment. Les dessiner en creux les faisait passer pour des
+          // points de second rang, illisibles sur fond de carte. L'information reste
+          // dans la bulle et dans le panneau du local, ou elle ne gene personne.
+          fillOpacity: 0.9,
           weight: 1,
-          dashArray: point.isInherited ? "2 2" : undefined,
         });
         marker.bindPopup?.(
           `<strong>${point.label}</strong><br/><em>Local Po2${
@@ -884,19 +889,31 @@ export function BuildingPortfolioMap({
             lat: dropped.lat - entry.offsetLat,
             lng: dropped.lng - entry.offsetLon,
           };
-          // Depot sur un batiment Po2 : on cherche le plus proche dans le rayon
-          // d'accrochage. C'est le geste « ce bien ASTECH, c'est ce batiment-la ».
-          let nearest: { id: number; distance: number } | null = null;
+          // Depot sur une entite Po2 : on cherche la plus proche dans le rayon
+          // d'accrochage, batiment OU LOCAL. Le geste ne connaissait que les batiments,
+          // alors qu'un CODE_BIEN ASTECH designe tres souvent un local — il fallait
+          // rattacher au batiment puis corriger dans le panneau.
+          let nearest: { id: number; distance: number; localId: number | null } | null = null;
           for (const building of mappableBuildings) {
+            const shown = buildingDisplay.get(building.id);
             const distance = distanceMeters(
-              position.lat, position.lng, building.latitude, building.longitude,
+              position.lat, position.lng,
+              shown?.lat ?? building.latitude, shown?.lon ?? building.longitude,
             );
             if (distance <= legacyDropRadiusM && (nearest === null || distance < nearest.distance)) {
-              nearest = { id: building.id, distance };
+              nearest = { id: building.id, distance, localId: null };
+            }
+          }
+          for (const local of localPoints ?? []) {
+            const distance = distanceMeters(
+              position.lat, position.lng, local.latitude, local.longitude,
+            );
+            if (distance <= legacyDropRadiusM && (nearest === null || distance < nearest.distance)) {
+              nearest = { id: local.buildingId, distance, localId: local.id };
             }
           }
           if (nearest !== null && onDropLegacyOnBuilding) {
-            onDropLegacyOnBuilding(point.id, nearest.id);
+            onDropLegacyOnBuilding(point.id, nearest.id, nearest.localId);
             return;
           }
           onMoveLegacyPoint?.(point.id, position.lat, position.lng);
@@ -911,8 +928,9 @@ export function BuildingPortfolioMap({
       layerGroup.clearLayers();
     };
   }, [
-    activeLegacyId, legacyDropRadiusM, legacyMarkers, mappableBuildings, mapReady,
-    onDropLegacyOnBuilding, onMoveLegacyPoint, onSelectLegacyId, spiderLegs,
+    activeLegacyId, buildingDisplay, legacyDropRadiusM, legacyMarkers, localPoints,
+    mappableBuildings, mapReady, onDropLegacyOnBuilding, onMoveLegacyPoint,
+    onSelectLegacyId, spiderLegs,
   ]);
 
   // ------------------------------------------------------------------
