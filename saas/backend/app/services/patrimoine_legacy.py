@@ -903,7 +903,33 @@ def _override_with_local_address(asset: PatrimoineLegacyAsset, local: Local) -> 
         asset.resolved_name = local.nom_local[:255]
 
 
-def _refresh_inherited_address(db: Session, asset: PatrimoineLegacyAsset) -> None:
+def refresh_assets_of_building(db: Session, building_id: int) -> int:
+    """Réaligne tous les biens ASTECH visant ce bâtiment, après un changement du bâtiment.
+
+    Appelée après une attribution IGN : c'est elle qui fait descendre le cadastre et
+    l'adresse fraîchement obtenus jusqu'au bien ASTECH, donc jusqu'au fichier de retour.
+    Sans elle, « Attribuer IGN » enrichissait le bâtiment Po2 et le bien ASTECH gardait
+    ses anciennes valeurs — l'action semblait sans effet sur l'export.
+
+    `force` : une attribution IGN est un geste explicite et fait autorité, elle prime
+    donc sur une adresse issue d'un point posé à la main.
+    """
+    statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.building_id == building_id
+    )
+    refreshed = 0
+    for asset in db.scalars(statement):
+        _refresh_inherited_address(db, asset, force=True)
+        db.add(asset)
+        refreshed += 1
+    if refreshed:
+        db.commit()
+    return refreshed
+
+
+def _refresh_inherited_address(
+    db: Session, asset: PatrimoineLegacyAsset, force: bool = False
+) -> None:
     """Réaligne les champs résolus du bien sur son bâtiment porteur.
 
     Sûr à rejouer : quand `resolved_source` vaut `building`, les champs résolus ne sont
@@ -917,7 +943,7 @@ def _refresh_inherited_address(db: Session, asset: PatrimoineLegacyAsset) -> Non
     """
     if asset.building_id is None:
         return
-    if asset.resolved_source == RESOLVED_FROM_REVERSE:
+    if asset.resolved_source == RESOLVED_FROM_REVERSE and not force:
         return
     building = db.get(Building, asset.building_id)
     if building is None:

@@ -386,6 +386,13 @@ def attach_building_ign(
     db.add(building)
     db.commit()
     db.refresh(building)
+    # Le cadastre et l'adresse que l'IGN vient de donner au batiment doivent DESCENDRE
+    # jusqu'aux biens ASTECH qui le visent, sinon ils n'atteindront jamais le fichier
+    # de retour : l'attribution enrichissait Po2 et le bien gardait ses anciennes
+    # valeurs. Import local pour ne pas creer de dependance au chargement du module.
+    from app.services.patrimoine_legacy import refresh_assets_of_building
+
+    refresh_assets_of_building(db, building.id)
     return building
 
 

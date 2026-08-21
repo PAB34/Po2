@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.db import Base
 from app.models.building import Building
 from app.models.city import City
+from app.models.local import Local  # noqa: F401
 from app.schemas.building import BuildingIgnAttachmentPayload
 from app.services.buildings import attach_building_ign
 
@@ -119,3 +120,49 @@ def test_un_batiment_sans_nom_accepte_le_toponyme_de_zone(db_session: Session):
         ),
     )
     assert updated.nom_batiment == "École Élémentaire Anatole France"
+
+
+def test_l_attribution_ign_descend_jusqu_au_bien_astech(db_session: Session):
+    """Le cadastre obtenu par l'IGN doit atteindre le fichier de retour ASTECH.
+
+    Les attributs IGN sont écrits sur le **bâtiment Po2** — c'est le référentiel de
+    vérité, et c'est voulu. Mais le bien ASTECH ne les récupérait jamais : il gardait
+    les valeurs héritées AVANT l'attribution. « Attribuer IGN » enrichissait donc Po2
+    sans que rien n'atteigne l'export.
+    """
+    from app.models.patrimoine_legacy import PatrimoineLegacyAsset
+
+    building = _building(db_session, "STADE FRANCOIS MAILLOL")
+    building.adresse_reconstituee = "12 RUE DES CAPECHADES"
+    building.dgfip_reference_norm = "34301000AK0149"
+    db_session.add(building)
+    asset = PatrimoineLegacyAsset(
+        city_id=1,
+        code_bien="BATI00450",
+        designation="STADE FRANCOIS MAILLOL",
+        building_id=building.id,
+        target_type="building",
+        status="lie",
+        # Valeurs héritées d'AVANT : elles doivent être remplacées.
+        resolved_street="ANCIENNE VOIE",
+        resolved_refcad="ZZ001",
+        resolved_source="building",
+    )
+    db_session.add(asset)
+    db_session.commit()
+
+    attach_building_ign(
+        db_session,
+        building,
+        BuildingIgnAttachmentPayload(
+            selected_features=[_feature("STADE FRANCOIS MAILLOL", "batiment")]
+        ),
+    )
+
+    db_session.refresh(asset)
+    # Le bien a bien recupere ce que le batiment porte desormais.
+    assert asset.resolved_refcad == "AK149"
+    assert asset.resolved_street == "RUE DES CAPECHADES"
+    assert asset.resolved_housenumber == "12"
+    # Les attributs IGN eux-memes restent sur le batiment Po2, pas sur le bien.
+    assert building.statut_geocodage == "IGN_VALIDE"
