@@ -33,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.patrimoine_legacy import (
+    STATUS_GONE,
     STATUS_LINKED,
     STATUS_TO_CREATE,
     PatrimoineLegacyAsset,
@@ -289,6 +290,8 @@ def _reason_not_exportable(asset: PatrimoineLegacyAsset) -> str | None:
         return "hors périmètre (bien situé hors de la commune)"
     if asset.status == "ignore":
         return "bien écarté du parcours"
+    if asset.status == STATUS_GONE:
+        return "supprimé de la base ASTECH : plus de destinataire pour ce CODE_BIEN"
     return "aucun rattachement à un bâtiment Po2"
 
 

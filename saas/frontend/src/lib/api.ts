@@ -6209,6 +6209,23 @@ export async function convertLegacyAssetToLocal(
 }
 
 /**
+ * Signale qu'un bien n'existe **plus dans la base ASTECH**, ou l'y réintègre.
+ * La ligne est conservée : elle sort du parcours et du réexport, et reste consultable
+ * sous le filtre « Disparu chez ASTECH ».
+ */
+export async function markLegacyAssetGone(
+  token: string,
+  assetId: number,
+  gone: boolean,
+): Promise<LegacyAsset> {
+  const response = await fetch(
+    `${apiBaseUrl}/patrimoine/legacy/${assetId}/gone?gone=${gone ? "true" : "false"}`,
+    { method: "POST", headers: buildHeaders(token) },
+  );
+  return parseResponse<LegacyAsset>(response);
+}
+
+/**
  * Supprime TOUS les rapprochements ASTECH ↔ Po2 et remet les biens à traiter.
  * Les biens « à créer », « ignoré » et « hors périmètre » sont préservés.
  */

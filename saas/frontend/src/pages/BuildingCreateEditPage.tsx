@@ -704,11 +704,6 @@ export function BuildingCreateEditPage() {
         }
       }
     }
-    const localParentKeys = new Set(
-      localRowsToCreate
-        .map((row) => normalizeHierarchyKey(row.source_parent || row.editableName))
-        .filter(Boolean),
-    );
     for (const row of siteRowsToCreate) {
       try {
         const site = await createSiteRequest(token, buildImportedSitePayload(row, importPreview?.filename));
@@ -730,11 +725,15 @@ export function BuildingCreateEditPage() {
       try {
         const rowKey = normalizeHierarchyKey(row.editableName || row.source_name);
         const siteId = siteIds.get(normalizeHierarchyKey(row.source_parent)) ?? siteIds.get(rowKey);
-        const hasChildLocal = localParentKeys.has(rowKey);
-        const createDefaultLocal = row.asset_type === "building" && !hasChildLocal;
+        // Aucun local par défaut (Q24). Il portait le NOM DU BÂTIMENT
+        // (`_build_default_local_name`, backend) : l'import fabriquait donc un jumeau
+        // homonyme et vide pour chaque bâtiment sans local dans le fichier. Mesuré en
+        // prod le 2026-08-21 : 121 de ces coquilles — sans surface, sans équipement,
+        // invisibles dans l'arbre replié, mais dessinées comme un second point sur la
+        // carte ASTECH. Un bâtiment sans local dans le fichier n'a pas de local.
         const building = await createBuildingRequest(
           token,
-          buildImportedBuildingPayload(row, user, createDefaultLocal, importPreview?.filename, siteId),
+          buildImportedBuildingPayload(row, user, false, importPreview?.filename, siteId),
         );
         createdCount += 1;
         for (const candidate of [row.editableName, row.source_name, row.source_short_name]) {

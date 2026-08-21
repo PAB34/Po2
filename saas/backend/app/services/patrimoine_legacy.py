@@ -34,6 +34,7 @@ from app.models.local import Local
 from app.models.patrimoine_legacy import (
     ORIGIN_AUTO,
     ORIGIN_MANUAL,
+    STATUS_GONE,
     STATUS_IGNORED,
     STATUS_LINKED,
     STATUS_PROPOSED,
@@ -1196,6 +1197,29 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
     asset.link_origin = ORIGIN_MANUAL
     _inherit_building_address(asset, building)
     _override_with_local_address(asset, local)
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def set_asset_gone(db: Session, asset: PatrimoineLegacyAsset, gone: bool) -> PatrimoineLegacyAsset:
+    """Marque un bien comme **disparu de la base ASTECH**, ou l'y réintègre (Q23).
+
+    La collectivité supprime des entités de son côté après nous avoir livré l'export :
+    ces biens n'ont plus de destinataire. Les effacer serait irréversible — retrouver un
+    bien supprimé à tort imposerait de recharger tout le fichier, donc de perdre les
+    rattachements validés. On conserve donc la ligne, avec un statut qui la sort du
+    parcours et du réexport.
+
+    Réintégrer rend le statut **déduit de l'état réel** du bien : `lie` s'il a un
+    bâtiment porteur, `a_traiter` sinon. Le statut antérieur n'est pas mémorisé, ce
+    serait une donnée de plus à tenir à jour sans usage.
+    """
+    if gone:
+        asset.status = STATUS_GONE
+    elif asset.status == STATUS_GONE:
+        asset.status = STATUS_LINKED if asset.building_id is not None else STATUS_TODO
     db.add(asset)
     db.commit()
     db.refresh(asset)
