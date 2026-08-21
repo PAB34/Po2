@@ -6192,3 +6192,11 @@ button:disabled {
   color: #a5b4fc;
   font-weight: 500;
 }
+
+/* Pastille de famille devant une dénomination Po2 : ▪ bâtiment, ◇ local.
+   Volontairement discrète — elle doit se lire d'un coup d'œil sans concurrencer
+   le nom, qui est l'information utile. */
+.map-label-glyph {
+  opacity: 0.75;
+  margin-right: 3px;
+}

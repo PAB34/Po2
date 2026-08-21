@@ -167,8 +167,16 @@ type MappableBuilding = Building & { latitude: number; longitude: number };
 /** Zoom de travail sur un bien : assez pres pour distinguer les batiments, mais dans
     la plage ou OpenStreetMap fournit encore des tuiles nettes. */
 const FOCUS_ZOOM = 18;
-/** Zoom à partir duquel les dénominations s'affichent d'elles-mêmes sur la carte. */
-const LABEL_MIN_ZOOM = 17;
+/**
+ * Zoom à partir duquel les dénominations s'affichent d'elles-mêmes sur la carte.
+ *
+ * Relevé de 17 à 19 le 2026-08-21 : à 17 les noms arrivaient trop tôt, alors qu'on
+ * cherche encore son quartier. Il faut donc deux crans de molette de plus. Le fond OSM
+ * n'a pas de tuiles au-delà de 19 (`maxNativeZoom`), mais la carte va jusqu'à 21 en
+ * agrandissant la dernière : sans cela les étiquettes n'existeraient qu'au tout dernier
+ * niveau, sans marge pour s'approcher davantage.
+ */
+const LABEL_MIN_ZOOM = 19;
 /** Plafond d'étiquettes dessinées d'un coup, quoi qu'il arrive. */
 const MAX_LABELS = 120;
 
@@ -776,7 +784,7 @@ export function BuildingPortfolioMap({
           // OpenStreetMap ne publie pas de tuiles au-dela du niveau 19 : au-dela,
           // Leaflet reclamait des tuiles inexistantes et la carte devenait blanche.
           // `maxNativeZoom` lui fait agrandir la derniere tuile disponible.
-          maxZoom: 19,
+          maxZoom: 21,
           maxNativeZoom: 19,
           attribution: "&copy; OpenStreetMap contributors",
         })
@@ -957,7 +965,13 @@ export function BuildingPortfolioMap({
 
     const group = runtime.featureGroup();
     let posees = 0;
-    const poser = (lat: number, lon: number, text: string | null, variant: string) => {
+    const poser = (
+      lat: number,
+      lon: number,
+      text: string | null,
+      variant: string,
+      glyph = "",
+    ) => {
       // Plafond de sûreté : un parc dense, ou des points empilés, ne doivent pas
       // ramener le problème qu'on vient de corriger.
       if (!text || posees >= MAX_LABELS || !visible(lat, lon)) return;
@@ -968,7 +982,9 @@ export function BuildingPortfolioMap({
           keyboard: false,
           icon: runtime.divIcon({
             className: "map-label-icon",
-            html: `<span class="map-label map-label--${variant}">${escapeHtml(text)}</span>`,
+            html: `<span class="map-label map-label--${variant}">${
+              glyph ? `<span class="map-label-glyph">${glyph}</span>` : ""
+            }${escapeHtml(text)}</span>`,
             iconSize: [0, 0],
             // Ancre négative en x : l'étiquette se pose À DROITE du point, sans le couvrir.
             iconAnchor: [-9, 7],
@@ -980,6 +996,10 @@ export function BuildingPortfolioMap({
     for (const entry of legacyMarkers) {
       poser(entry.latitude, entry.longitude, entry.points[0]?.label ?? null, "astech");
     }
+    // Un seul caractere devant le nom pour distinguer les deux niveaux Po2 : la couleur
+    // seule ne suffisait pas, le bleu du batiment et l'indigo du local se ressemblent
+    // trop sur un fond de carte. Meme signe que dans l'arbre du patrimoine et dans le
+    // selecteur de cible, pour ne pas avoir deux langages a apprendre.
     for (const building of mappableBuildings) {
       const shown = buildingDisplay.get(building.id);
       poser(
@@ -987,11 +1007,12 @@ export function BuildingPortfolioMap({
         shown?.lon ?? building.longitude,
         building.nom_batiment || `Bâtiment #${building.id}`,
         "po2",
+        "▪",
       );
     }
     if (attachMode !== "ign") {
       for (const point of localPoints ?? []) {
-        poser(point.latitude, point.longitude, point.label, "local");
+        poser(point.latitude, point.longitude, point.label, "local", "◇");
       }
     }
 
