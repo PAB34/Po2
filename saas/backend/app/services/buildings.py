@@ -8,6 +8,7 @@ from app.models.building_meter import BuildingMeterLink
 from app.models.city import City
 from app.models.cvc import CvcInventoryItem, CvcRefrigerantItem, CvcSourceBuildingMapping
 from app.models.local import Local
+from app.models.patrimoine_legacy import PatrimoineLegacyAsset
 from app.models.site import Site
 from app.models.user import User
 from app.schemas.building import BuildingCreate, BuildingIgnAttachmentPayload, BuildingMeterLinkCreate, BuildingNamingSelectionPayload, BuildingUpdate, LocalCreate, LocalUpdate, PatrimonyReclassifyPayload, PatrimonyReclassifyResult, SiteCreate, SiteUpdate
@@ -625,6 +626,42 @@ def _assert_building_can_be_removed(db: Session, building: Building) -> None:
             )
 
 
+def _move_astech_assets(
+    db: Session,
+    *,
+    from_building_id: int | None = None,
+    from_local_id: int | None = None,
+    to_building_id: int | None = None,
+    to_local_id: int | None = None,
+) -> int:
+    """Reporte les biens ASTECH sur l'entite nee du reclassement.
+
+    Un reclassement SUPPRIME l'entite et en recree une avec un nouvel identifiant. Les
+    biens du referentiel historique qui la visaient seraient donc orphelins : la cle
+    etrangere est en `ON DELETE SET NULL`, le rattachement disparaitrait en silence.
+
+    Le garde-fou `_assert_building_can_be_removed` verifie les compteurs et le CVC mais
+    ignorait les biens ASTECH. Plutot que de bloquer le reclassement, on transporte le
+    rattachement : c'est la meme realite qui change de niveau, pas un lien a rompre.
+    """
+    statement = select(PatrimoineLegacyAsset)
+    if from_local_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.local_id == from_local_id)
+    else:
+        statement = statement.where(
+            PatrimoineLegacyAsset.building_id == from_building_id,
+            PatrimoineLegacyAsset.local_id.is_(None),
+        )
+    moved = 0
+    for asset in db.scalars(statement):
+        asset.building_id = to_building_id
+        asset.local_id = to_local_id
+        asset.target_type = "local" if to_local_id is not None else "building"
+        db.add(asset)
+        moved += 1
+    return moved
+
+
 def reclassify_site(
     db: Session, site: Site, payload: PatrimonyReclassifyPayload, current_user: User
 ) -> PatrimonyReclassifyResult:
@@ -701,8 +738,24 @@ def reclassify_building(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent invalide.")
         if current_user.city_id is not None and parent.city_id != current_user.city_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Batiment parent hors perimetre.")
-        local = Local(building_id=parent.id, nom_local=name, type_local="RECLASSEMENT")
+        local = Local(
+            building_id=parent.id,
+            nom_local=name,
+            type_local="RECLASSEMENT",
+            # Le batiment emporte tout ce qui le situait : un local sait porter adresse,
+            # position et cadastre depuis la migration 0074.
+            adresse_reconstituee=building.adresse_reconstituee,
+            code_postal=building.code_postal,
+            nom_commune=building.nom_commune,
+            latitude=building.latitude,
+            longitude=building.longitude,
+            dgfip_reference_norm=building.dgfip_reference_norm,
+        )
         db.add(local)
+        db.flush()
+        _move_astech_assets(
+            db, from_building_id=building.id, to_building_id=parent.id, to_local_id=local.id
+        )
         db.delete(building)
         db.commit()
         db.refresh(local)
@@ -736,15 +789,27 @@ def reclassify_local(
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent introuvable.")
             if current_user.city_id is not None and target_site.city_id != current_user.city_id:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Site parent hors perimetre.")
+        # Le local emporte son adresse, sa position et son cadastre — a defaut ceux de
+        # son batiment porteur. Sans ce transport, promouvoir un local le depouillait
+        # de tout ce qui permettait de le situer.
+        latitude = local.latitude if local.latitude is not None else (parent.latitude if parent else None)
+        longitude = local.longitude if local.longitude is not None else (parent.longitude if parent else None)
         building = Building(
             city_id=parent.city_id if parent else current_user.city_id,
             site_id=target_site_id,
             nom_batiment=name,
-            nom_commune=parent.nom_commune if parent else _default_city_name(db, current_user),
+            nom_commune=local.nom_commune or (parent.nom_commune if parent else _default_city_name(db, current_user)),
+            adresse_reconstituee=local.adresse_reconstituee or (parent.adresse_reconstituee if parent else None),
+            code_postal=local.code_postal or (parent.code_postal if parent else None),
+            latitude=latitude,
+            longitude=longitude,
+            dgfip_reference_norm=local.dgfip_reference_norm or (parent.dgfip_reference_norm if parent else None),
             source_creation="RECLASSEMENT",
-            statut_geocodage="NON_FAIT",
+            statut_geocodage="A_VERIFIER" if latitude is not None else "NON_FAIT",
         )
         db.add(building)
+        db.flush()
+        _move_astech_assets(db, from_local_id=local.id, to_building_id=building.id)
         db.delete(local)
         db.commit()
         db.refresh(building)
