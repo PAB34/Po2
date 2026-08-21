@@ -27,6 +27,7 @@ import {
   fetchBuildings,
   convertLegacyAssetToLocal,
   markLegacyAssetGone,
+  purgePatrimonyDuplicates,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
   createLegacyAssetFromLocal,
@@ -437,11 +438,6 @@ export default function PatrimoineAstechPage() {
     return id != null ? buildingsById.get(id) ?? null : null;
   }, [buildingsById, selected]);
 
-  const localsOfTarget = useMemo(
-    () => (targetBuilding ? locals.filter((local) => local.building_id === targetBuilding.id) : []),
-    [locals, targetBuilding],
-  );
-
   // Les autres biens ASTECH qui visent le même bâtiment porteur. Un bâtiment peut en
   // héberger plusieurs (le club et ses salles, l'école et son restaurant) : montrer la
   // fratrie est le seul moyen de voir si la structure est juste — un seul bien doit
@@ -495,19 +491,60 @@ export default function PatrimoineAstechPage() {
     return result;
   }, [buildings]);
 
-  const buildingMatches = useMemo(() => {
+  /**
+   * Cibles proposées par le sélecteur : bâtiments **et** locaux (Q30).
+   *
+   * La liste ne connaissait que les bâtiments, alors qu'un CODE_BIEN ASTECH désigne très
+   * souvent un local — un logement de fonction, une salle, des WC publics. Il fallait
+   * viser le bâtiment, puis corriger dans un second menu « Niveau » dont le rôle
+   * n'était pas lisible. Les locaux apparaissent donc ici, indentés sous leur bâtiment,
+   * et la recherche porte sur les deux.
+   */
+  const targetMatches = useMemo(() => {
     const needle = buildingSearch.trim().toLowerCase();
-    const pool = needle
-      ? buildings.filter((building) =>
-          `${building.nom_batiment ?? ""} ${building.adresse_reconstituee ?? ""}`
-            .toLowerCase()
-            .includes(needle),
-        )
-      : buildings;
-    return [...pool]
-      .sort((a, b) => (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? ""))
-      .slice(0, 40);
-  }, [buildingSearch, buildings]);
+    const matches = (text: string) => !needle || text.toLowerCase().includes(needle);
+    const localsByBuilding = new Map<number, Local[]>();
+    for (const local of locals) {
+      localsByBuilding.set(local.building_id, [...(localsByBuilding.get(local.building_id) ?? []), local]);
+    }
+    const rows: {
+      key: string;
+      buildingId: number;
+      localId: number | null;
+      label: string;
+      address: string | null;
+    }[] = [];
+    for (const building of [...buildings].sort((a, b) =>
+      (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? ""),
+    )) {
+      const buildingText = `${building.nom_batiment ?? ""} ${building.adresse_reconstituee ?? ""}`;
+      const children = (localsByBuilding.get(building.id) ?? []).filter((local) =>
+        matches(`${local.nom_local} ${local.adresse_reconstituee ?? ""}`),
+      );
+      // Un bâtiment est montré s'il correspond lui-même OU si l'un de ses locaux
+      // correspond : sinon chercher le nom d'un local ferait disparaître son parent et
+      // la hiérarchie deviendrait illisible.
+      if (!matches(buildingText) && children.length === 0) continue;
+      rows.push({
+        key: `b-${building.id}`,
+        buildingId: building.id,
+        localId: null,
+        label: building.nom_batiment ?? `Bâtiment #${building.id}`,
+        address: building.adresse_reconstituee ?? null,
+      });
+      const shown = matches(buildingText) ? localsByBuilding.get(building.id) ?? [] : children;
+      for (const local of [...shown].sort((a, b) => a.nom_local.localeCompare(b.nom_local))) {
+        rows.push({
+          key: `l-${local.id}`,
+          buildingId: building.id,
+          localId: local.id,
+          label: local.nom_local + (local.niveau ? ` · niv. ${local.niveau}` : ""),
+          address: local.adresse_reconstituee ?? null,
+        });
+      }
+    }
+    return rows.slice(0, 60);
+  }, [buildingSearch, buildings, locals]);
 
   const importMutation = useMutation({
     mutationFn: (file: File) => importLegacyAstechFile(token!, file),
@@ -600,6 +637,66 @@ export default function PatrimoineAstechPage() {
     });
     setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte.");
   };
+
+  /**
+   * Nettoie les doublons du référentiel Po2 (§23, Q28/Q29).
+   *
+   * En deux temps volontairement : un premier appel à blanc dit exactement ce qui
+   * partirait, on l'annonce, et rien n'est supprimé sans un oui. L'opération est
+   * irréversible et le critère est contre-intuitif — deux `WC PUBLIC` à deux bouts de la
+   * ville ne sont pas des doublons, ni deux étages du même local — donc l'utilisateur
+   * doit voir les noms avant, pas après.
+   */
+  const dedupeMutation = useMutation({
+    mutationFn: async () => {
+      const preview = await purgePatrimonyDuplicates(token!, true);
+      const total = preview.batiments_supprimes.length + preview.locaux_supprimes.length;
+      if (total === 0) {
+        return { ...preview, skipped: true as const };
+      }
+      const lignes = [
+        ...preview.batiments_supprimes.map((entry) => `  bâtiment #${entry.id} ${entry.nom ?? ""}`),
+        ...preview.locaux_supprimes.map((entry) => `  local #${entry.id} ${entry.nom ?? ""}`),
+      ];
+      const signales = preview.conserves_car_lies.length
+        ? `\n\n${preview.conserves_car_lies.length} doublon(s) sont CONSERVÉS car ils portent ` +
+          "des données (biens ASTECH, équipements, compteurs) : à traiter à la main."
+        : "";
+      if (
+        !window.confirm(
+          `Supprimer ${total} doublon(s) strict(s) du référentiel Po2 ?\n\n` +
+            `${lignes.slice(0, 25).join("\n")}` +
+            (lignes.length > 25 ? `\n  … et ${lignes.length - 25} autre(s)` : "") +
+            "\n\nSeules des entités identiques en tout — même nom, même position, même " +
+            "parcelle, et pour un local mêmes niveau, surface et usage — sont concernées, " +
+            "et uniquement celles qui ne portent aucun lien." +
+            signales +
+            "\n\nIrréversible.",
+        )
+      ) {
+        return { ...preview, skipped: true as const };
+      }
+      return { ...(await purgePatrimonyDuplicates(token!, false)), skipped: false as const };
+    },
+    onSuccess: (result) => {
+      const total = result.batiments_supprimes.length + result.locaux_supprimes.length;
+      if (result.skipped) {
+        setFlash(
+          total === 0
+            ? "Aucun doublon strict à supprimer dans le référentiel Po2."
+            : "Nettoyage annulé : rien n'a été supprimé.",
+        );
+        return;
+      }
+      setFlash(
+        `${result.batiments_supprimes.length} bâtiment(s) et ${result.locaux_supprimes.length} ` +
+          "local/locaux en doublon supprimés du référentiel Po2.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
 
   /** Valide le rattachement proposé par un dépôt sur la carte (Q25). */
   const confirmPendingLink = () => {
@@ -1308,6 +1405,15 @@ export default function PatrimoineAstechPage() {
               : "3 · Supprimer les biens ASTECH (pour réimporter)"}
           </button>
         )}
+        <button
+          type="button"
+          style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+          title="Supprime les bâtiments et locaux Po2 rigoureusement identiques à un autre. Deux entités homonymes situées ailleurs, ou à un autre étage, ne sont PAS des doublons et ne sont pas touchées."
+          disabled={dedupeMutation.isPending}
+          onClick={() => dedupeMutation.mutate()}
+        >
+          {dedupeMutation.isPending ? "Analyse…" : "4 · Nettoyer les doublons Po2"}
+        </button>
       </div>
 
       {flash && (
@@ -2460,36 +2566,10 @@ export default function PatrimoineAstechPage() {
                       </div>
                     )}
 
-                    {/* Niveau visé : tout le bâtiment, ou l'un de ses locaux. */}
-                    {localsOfTarget.length > 0 && (
-                      <label
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: TEXT_MUTED, marginTop: 8 }}
-                        title="L'adresse et le cadastre restent toujours ceux du bâtiment porteur."
-                      >
-                        Niveau
-                        <select
-                          value={selected.target_type === "local" ? String(selected.local_id ?? "") : ""}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            updateMutation.mutate({
-                              id: selected.id,
-                              payload: value
-                                ? { local_id: Number(value) }
-                                : { building_id: targetBuilding.id },
-                            });
-                          }}
-                          style={{ ...input, width: "auto", padding: "3px 8px", fontSize: 12 }}
-                        >
-                          <option value="">— tout le bâtiment —</option>
-                          {localsOfTarget.map((local) => (
-                            <option key={local.id} value={local.id}>
-                              {local.nom_local}
-                              {local.niveau ? ` (${local.niveau})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
+                    {/* Le sélecteur « Niveau » vivait ici (Q30). Supprimé : il faisait
+                        doublon avec la liste de cibles, qui propose désormais bâtiments ET
+                        locaux, et son rôle n'était pas lisible — d'autant moins depuis que
+                        la plupart des bâtiments n'ont plus de local (§21). */}
 
                     {/* Toutes les actions à la suite, plutôt qu'éparpillées en trois blocs. */}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
@@ -2547,7 +2627,7 @@ export default function PatrimoineAstechPage() {
                         style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
                         onClick={() => setPickerOpen((open) => !open)}
                       >
-                        {pickerOpen ? "Fermer la liste" : "Changer de bâtiment…"}
+                        {pickerOpen ? "Fermer la liste" : "Changer de cible (bâtiment ou local)…"}
                       </button>
                       {selected.building_id != null && selected.target_type !== "local" && (
                         <button
@@ -2678,7 +2758,7 @@ export default function PatrimoineAstechPage() {
                         style={btnSecondary}
                         onClick={() => setPickerOpen((open) => !open)}
                       >
-                        {pickerOpen ? "Fermer la liste" : "Choisir un bâtiment Po2…"}
+                        {pickerOpen ? "Fermer la liste" : "Choisir une entité Po2 (bâtiment ou local)…"}
                       </button>
                       <span style={{ fontSize: 12, color: TEXT_MUTED }}>
                         ou clique un point bleu sur la carte
@@ -2691,7 +2771,7 @@ export default function PatrimoineAstechPage() {
                       <input
                         type="search"
                         style={input}
-                        placeholder="Filtrer les bâtiments Po2 par nom ou adresse…"
+                        placeholder="Filtrer bâtiments et locaux Po2 par nom ou adresse…"
                         value={buildingSearch}
                         onChange={(event) => setBuildingSearch(event.target.value)}
                       />
@@ -2705,49 +2785,62 @@ export default function PatrimoineAstechPage() {
                           marginTop: 6,
                         }}
                       >
-                        {buildingMatches.length === 0 && (
+                        {targetMatches.length === 0 && (
                           <span style={{ fontSize: 12, color: TEXT_MUTED }}>
-                            Aucun bâtiment Po2 ne correspond.
+                            Aucun bâtiment ni local Po2 ne correspond.
                           </span>
                         )}
-                        {buildingMatches.map((building) => (
+                        {targetMatches.map((target) => (
                           <button
-                            key={building.id}
+                            key={target.key}
                             type="button"
                             style={{
                               ...btnSecondary,
                               textAlign: "left",
                               padding: "6px 10px",
                               fontSize: 12,
+                              // Les locaux sont décalés sous leur bâtiment : la hiérarchie
+                              // se lit sans avoir à comparer les noms.
+                              marginLeft: target.localId != null ? 16 : 0,
+                              borderColor:
+                                target.localId != null
+                                  ? "rgba(129, 140, 248, 0.35)"
+                                  : "rgba(148, 163, 184, 0.35)",
                             }}
                             onClick={() => {
                               updateMutation.mutate({
                                 id: selected.id,
-                                payload: { building_id: building.id },
+                                payload:
+                                  target.localId != null
+                                    ? { local_id: target.localId }
+                                    : { building_id: target.buildingId },
                               });
                               setPickerOpen(false);
                               setFlash(
-                                `« ${assetLabel(selected)} » rattaché — le bâtiment Po2 porte désormais ce nom.`,
+                                target.localId != null
+                                  ? `« ${assetLabel(selected)} » rattaché au local « ${target.label} ». ` +
+                                    "L'adresse et le cadastre restent ceux du bâtiment."
+                                  : `« ${assetLabel(selected)} » rattaché — le bâtiment Po2 porte désormais ce nom.`,
                               );
                             }}
                           >
-                            <strong>{building.nom_batiment}</strong>
-                            {building.adresse_reconstituee && (
-                              <span style={{ color: TEXT_MUTED }}>
-                                {" "}
-                                — {building.adresse_reconstituee}
-                              </span>
+                            {target.localId != null && <span style={{ color: "#a5b4fc" }}>◇ </span>}
+                            <strong>{target.label}</strong>
+                            {target.address && (
+                              <span style={{ color: TEXT_MUTED }}> — {target.address}</span>
                             )}
-                            {(buildingAmbiguities.get(building.id)?.sameName ?? 1) > 1 && (
-                              <span style={{ color: "#fbbf24" }}>
-                                {" "}
-                                ⚠ {buildingAmbiguities.get(building.id)!.sameName} bâtiments portent
-                                ce nom — c'est l'adresse qui les distingue
-                              </span>
-                            )}
-                            {(buildingAmbiguities.get(building.id)?.sameIgn ?? 1) > 1 && (
-                              <span style={{ color: "#fbbf24" }}> ⚠ même empreinte IGN qu'un autre</span>
-                            )}
+                            {target.localId == null &&
+                              (buildingAmbiguities.get(target.buildingId)?.sameName ?? 1) > 1 && (
+                                <span style={{ color: "#fbbf24" }}>
+                                  {" "}
+                                  ⚠ {buildingAmbiguities.get(target.buildingId)!.sameName} bâtiments
+                                  portent ce nom — c'est l'adresse qui les distingue
+                                </span>
+                              )}
+                            {target.localId == null &&
+                              (buildingAmbiguities.get(target.buildingId)?.sameIgn ?? 1) > 1 && (
+                                <span style={{ color: "#fbbf24" }}> ⚠ même empreinte IGN qu'un autre</span>
+                              )}
                           </button>
                         ))}
                       </div>

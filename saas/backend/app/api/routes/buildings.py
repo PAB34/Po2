@@ -64,6 +64,7 @@ from app.services.buildings import (
     list_building_meter_links,
     list_buildings,
     list_sites,
+    purge_duplicates,
     reclassify_building,
     reclassify_local,
     reclassify_site,
@@ -250,6 +251,22 @@ def get_all_locals(
 ) -> list[LocalRead]:
     """Bulk endpoint : tous les locaux visibles par l'utilisateur (filtres par city via building)."""
     return [LocalRead.model_validate(local) for local in list_all_locals(db, current_user)]
+
+
+@router.post("/duplicates/purge")
+def purge_patrimony_duplicates(
+    dry_run: bool = Query(default=False, description="Ne supprime rien, renvoie ce qui partirait."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Supprime les doublons **stricts** du référentiel Po2 (§23, Q28/Q29).
+
+    Strict veut dire identiques en tout : deux entités homonymes situées ailleurs, ou à
+    un autre étage, ne sont pas des doublons — supprimer sur le nom seul effacerait
+    4 bâtiments réels sur 5 en prod. Et seuls les exemplaires qui ne portent **aucun
+    lien** sont effacés ; les autres sont signalés.
+    """
+    return purge_duplicates(db, current_user, dry_run=dry_run)
 
 
 @router.post("/sites", response_model=SiteRead, status_code=status.HTTP_201_CREATED)

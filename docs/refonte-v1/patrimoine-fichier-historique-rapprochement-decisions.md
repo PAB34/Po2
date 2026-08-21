@@ -1008,3 +1008,60 @@ ne fait donc pas suivre la liaison : elle disparaît.
 **Ce que Q25 ne change pas.** Le rattachement par le sélecteur du panneau (« Changer de
 bâtiment… ») reste immédiat : c'est un geste explicite, pas un effet de bord d'un
 déplacement.
+
+## 23. Doublons Po2, cible locale et confirmation — audit 2026-08-21
+
+Quatre points remontés depuis l'écran. Deux étaient des malentendus, deux sont des manques.
+
+### 23.1 « Reconnaître les noms » confirme-t-il tout seul ? Non
+
+`patrimoine_legacy.py:571` : le moteur met les biens en `propose` (« à confirmer »),
+jamais en `lie`. Le commentaire d'origine le dit — « Le moteur PROPOSE, il ne valide
+pas ». La confirmation se fait **un par un** (boutons « Valider » / « Écarter » du
+panneau) ou **en bloc** (bouton « 3. Confirmer les N rattachement(s) proposé(s) », qui
+porte le compte des propositions en attente). Rien n'a disparu.
+
+### 23.2 Le sélecteur « Niveau » n'était plus lisible
+
+Il choisit si le bien désigne **tout le bâtiment** ou **un local précis**, et ne liste
+que les locaux du bâtiment déjà rattaché. Depuis la suppression des 121 locaux jumeaux
+(§21), la plupart des bâtiments n'ont plus aucun local : la liste ne contient plus que
+« — tout le bâtiment — » et son rôle devient indevinable. Même manque que 23.3.
+
+### 23.3 Le sélecteur de cible ignore les locaux
+
+« Changer de bâtiment… » ne liste que des bâtiments (`buildings.filter(...)`), alors
+qu'un `CODE_BIEN` ASTECH désigne très souvent un local.
+
+### 23.4 ⚠ « Supprimer tous les doublons » sur le nom détruirait de vrais bâtiments
+
+Mesuré en prod le 2026-08-21 — **5 paires de bâtiments homonymes, une seule est un
+doublon** :
+
+| Homonymes | Verdict |
+|---|---|
+| `ECOLE ELEMENTAIRE PAUL BERT` 1214 / 1215 | **vrai doublon** : mêmes coordonnées, même parcelle AP0116. 1214 est vide, 1215 porte 1 local et 1 bien ASTECH |
+| `WC PUBLIC` 1194 / 1292 | Corniche de Neuburg **et** Quai d'Alger — deux édicules distincts |
+| `ECOLE MATERNELLE LAKANAL` 1222 / 1223 | parcelles AI0197 / AI0198, adresses différentes |
+| `CONSERVATOIRE … MANITAS DE PLATA` 1191 / 1192 | parcelles AE0048 / AE0054 |
+| `Passage du dauphin` 1279 / 1280 | positions et parcelles différentes |
+
+**Le critère « même parcelle » ne marche pas davantage** : 19 parcelles portent 2 à 4
+bâtiments. Une école, sa cantine et son gymnase partagent normalement une parcelle —
+`34301000BI0553` en porte 4, `34301000AP0190` en porte 3.
+
+Côté locaux, 6 groupes d'homonymes dans un même bâtiment : **5 sont identiques champ pour
+champ**, le 6e (`LOCAL 343010345389`, bâtiment 1223) est **deux étages différents**,
+niveau 2 et niveau 3 — à ne surtout pas fusionner.
+
+### 23.5 Décisions
+
+| # | Question | Décision |
+|---|---|---|
+| Q28 | Critère de suppression d'un doublon | **Strict : identiques en tout.** Bâtiment — même nom normalisé **et** même position **et** même parcelle (deux absences de parcelle valent égalité). Local — même bâtiment, même nom, et mêmes niveau, surface, usage, statut d'occupation, adresse et parcelle. Le nom seul, ou la parcelle seule, ne suffisent jamais. |
+| Q29 | Que garde-t-on, que supprime-t-on ? | On **garde l'exemplaire qui porte des liens** (biens ASTECH, locaux, équipements) ; à égalité, le plus ancien identifiant. On ne supprime **que des exemplaires qui ne portent rien** : un doublon qui porte quelque chose est signalé, pas effacé. Aucune fusion de données — ce serait un autre chantier. |
+| Q30 | Cible d'un bien ASTECH | **Une seule liste** bâtiments **et** locaux, les locaux indentés sous leur bâtiment, la recherche portant sur les deux. Le sélecteur « Niveau » disparaît : il faisait doublon et son rôle n'était pas lisible. |
+
+**Effet attendu de Q28+Q29 sur la prod du 2026-08-21** : 1 bâtiment (1214) et 5 locaux
+supprimés ; les 2 WC publics, les 2 Lakanal, le Conservatoire, le Passage du dauphin et
+les deux étages du Lakanal sont épargnés.
