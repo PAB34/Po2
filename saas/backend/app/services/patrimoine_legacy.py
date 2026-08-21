@@ -1204,16 +1204,15 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
 
 
 def set_asset_gone(db: Session, asset: PatrimoineLegacyAsset, gone: bool) -> PatrimoineLegacyAsset:
-    """Marque un bien comme **disparu de la base ASTECH**, ou l'y réintègre (Q23).
+    """Marque un bien comme **à supprimer de AS-TECH**, ou annule cette consigne (Q23).
 
-    La collectivité supprime des entités de son côté après nous avoir livré l'export :
-    ces biens n'ont plus de destinataire. Les effacer serait irréversible — retrouver un
-    bien supprimé à tort imposerait de recharger tout le fichier, donc de perdre les
-    rattachements validés. On conserve donc la ligne, avec un statut qui la sort du
-    parcours et du réexport.
+    Le bien n'a plus lieu d'être dans le référentiel de la collectivité. L'effacer de Po2
+    serait irréversible — revenir sur une suppression à tort imposerait de recharger tout
+    le fichier, donc de perdre les rattachements validés. On conserve donc la ligne, avec
+    un statut qui la sort du parcours et du réexport.
 
-    Réintégrer rend le statut **déduit de l'état réel** du bien : `lie` s'il a un
-    bâtiment porteur, `a_traiter` sinon. Le statut antérieur n'est pas mémorisé, ce
+    Annuler la consigne rend le statut **déduit de l'état réel** du bien : `lie` s'il a
+    un bâtiment porteur, `a_traiter` sinon. Le statut antérieur n'est pas mémorisé, ce
     serait une donnée de plus à tenir à jour sans usage.
     """
     if gone:

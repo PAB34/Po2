@@ -61,7 +61,9 @@ const STATUS_LABEL: Record<string, string> = {
   hors_perimetre: "Hors périmètre",
   a_creer: "À créer",
   ignore: "Ignoré",
-  disparu: "Disparu chez ASTECH",
+  // La valeur stockee reste `disparu` : renommer la cle imposerait une migration de
+  // donnees pour un simple libellé. Seul l'affichage change.
+  disparu: "A SUPPRIMER DE AS-TECH",
 };
 
 // « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
@@ -135,7 +137,7 @@ const STATUS_PILL: Record<string, { label: string; color: string; background: st
   hors_perimetre: { label: "hors périmètre", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
   // Le bien n'existe plus chez ASTECH. Distinct d'« ignoré » (qui existe toujours,
   // mais qu'on ne traite pas) : la pastille doit se lire autrement, d'où le rouge sourd.
-  disparu: { label: "disparu chez ASTECH", color: "#e879a6", background: "rgba(232, 121, 166, 0.16)" },
+  disparu: { label: "à supprimer de AS-TECH", color: "#e879a6", background: "rgba(232, 121, 166, 0.16)" },
 };
 
 const pillStyle: CSSProperties = {
@@ -602,12 +604,12 @@ export default function PatrimoineAstechPage() {
   });
 
   /**
-   * Signale qu'un bien a disparu de la base ASTECH, ou l'y réintègre (Q23).
+   * Marque un bien comme **à supprimer de AS-TECH**, ou annule cette consigne (Q23).
    *
-   * La collectivité supprime des entités de son côté après nous avoir livré l'export :
-   * ces CODE_BIEN n'ont plus de destinataire. On ne les efface pas — retrouver un bien
-   * supprimé à tort imposerait de recharger tout le fichier, donc de perdre les
-   * rattachements validés. La ligne reste, hors parcours et hors réexport.
+   * Le bien n'a plus lieu d'être dans le référentiel de la collectivité. On ne l'efface
+   * pas de Po2 pour autant — revenir sur une suppression à tort imposerait de recharger
+   * tout le fichier, donc de perdre les rattachements validés. La ligne reste, hors
+   * parcours et hors réexport.
    */
   const goneMutation = useMutation({
     mutationFn: (variables: { assetId: number; gone: boolean }) =>
@@ -615,9 +617,9 @@ export default function PatrimoineAstechPage() {
     onSuccess: (asset, variables) => {
       setFlash(
         variables.gone
-          ? `« ${assetLabel(asset)} » marqué disparu chez ASTECH : il sort du parcours et ` +
-            "ne repartira pas dans le réexport. Filtre « Disparu chez ASTECH » pour le revoir."
-          : `« ${assetLabel(asset)} » réintégré : il repasse « ${STATUS_LABEL[asset.status] ?? asset.status} ».`,
+          ? `« ${assetLabel(asset)} » marqué à supprimer de AS-TECH : il sort du parcours et ` +
+            "ne repartira pas dans le réexport. Filtre « A SUPPRIMER DE AS-TECH » pour le revoir."
+          : `« ${assetLabel(asset)} » gardé dans AS-TECH : il repasse « ${STATUS_LABEL[asset.status] ?? asset.status} ».`,
       );
       invalidate();
       if (variables.gone) goToNextAsset(variables.assetId);
@@ -1042,10 +1044,10 @@ export default function PatrimoineAstechPage() {
     // Le mode « suit le filtre » ne peut pas être le défaut : 338 biens sur 444 n'ont
     // aucune position, et le filtre initial est « À traiter » — la carte se retrouvait
     // donc vide au chargement, ce qui ressemblait à une panne.
-    // Un bien disparu de la base ASTECH n'a plus rien à faire sur la vue d'ensemble :
-    // il continuerait de désigner un bâtiment Po2 pour un CODE_BIEN sans destinataire.
-    // En mode « suit le filtre » on ne l'écarte pas : c'est le seul moyen de revoir les
-    // disparus sur la carte, en choisissant leur filtre.
+    // Un bien à supprimer de AS-TECH n'a plus rien à faire sur la vue d'ensemble : il
+    // continuerait de désigner un bâtiment Po2 pour un CODE_BIEN voué à disparaître.
+    // En mode « suit le filtre » on ne l'écarte pas : c'est le seul moyen de les revoir
+    // sur la carte, en choisissant leur filtre.
     const source = mapFollowsFilter
       ? visibleAssets
       : (linkedAssetsQuery.data ?? []).filter((asset) => asset.status !== "disparu");
@@ -2475,28 +2477,28 @@ export default function PatrimoineAstechPage() {
                       >
                         Ignorer ce bien
                       </button>
-                      {/* « Disparu » ≠ « ignoré » : le bien n'existe PLUS chez ASTECH, il
-                          n'a plus de destinataire. Réversible, d'où l'absence de
-                          confirmation bloquante. */}
+                      {/* « À supprimer » ≠ « ignoré » : c'est une consigne adressée à
+                          AS-TECH, pas un bien qu'on met de côté. Réversible, d'où
+                          l'absence de confirmation bloquante. */}
                       {selected.status === "disparu" ? (
                         <button
                           type="button"
                           style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
                           disabled={goneMutation.isPending}
-                          title="Ce bien existe finalement toujours dans ASTECH : le remettre dans le parcours."
+                          title="Ce bien doit finalement rester dans AS-TECH : annuler la consigne et le remettre dans le parcours."
                           onClick={() => goneMutation.mutate({ assetId: selected.id, gone: false })}
                         >
-                          {goneMutation.isPending ? "…" : "Réintégrer ce bien"}
+                          {goneMutation.isPending ? "…" : "Le garder dans AS-TECH"}
                         </button>
                       ) : (
                         <button
                           type="button"
                           style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px", color: "#e879a6" }}
                           disabled={goneMutation.isPending}
-                          title="Ce bien n'existe plus dans la base ASTECH. Il sort du parcours et du réexport, sans être effacé : le geste est réversible."
+                          title="Ce bien n'a plus lieu d'être dans AS-TECH. Il sort du parcours et du réexport, sans être effacé de Po2 : le geste est réversible."
                           onClick={() => goneMutation.mutate({ assetId: selected.id, gone: true })}
                         >
-                          {goneMutation.isPending ? "…" : "Disparu chez ASTECH"}
+                          {goneMutation.isPending ? "…" : "A SUPPRIMER DE AS-TECH"}
                         </button>
                       )}
                     </div>

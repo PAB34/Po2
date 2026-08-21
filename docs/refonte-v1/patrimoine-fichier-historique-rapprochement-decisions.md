@@ -932,10 +932,16 @@ plus chez ASTECH ». État prod : 310 `a_traiter` · 68 `propose` · 1 `lie` ·
 
 | # | Question | Décision |
 |---|---|---|
-| Q23 | Supprimer un bien disparu : effacement définitif ou statut dédié ? | **Statut dédié `disparu`.** La ligne reste en base : exclue du réexport et du parcours, visible sous le filtre « Disparu chez ASTECH », réversible d'un clic. On garde la trace de ce qu'ASTECH a perdu — utile le jour du test de réinjection — et un ré-import du même fichier ne la ressuscite pas en silence. L'effacement définitif obligerait, en cas d'erreur, à recharger tout le fichier, donc à perdre les rattachements validés. |
+| Q23 | Supprimer un bien disparu : effacement définitif ou statut dédié ? | **Statut dédié `disparu`.** La ligne reste en base : exclue du réexport et du parcours, visible sous le filtre **« A SUPPRIMER DE AS-TECH »**, réversible d'un clic. On garde la trace de ce qui doit sortir du référentiel — utile le jour du test de réinjection — et un ré-import du même fichier ne la ressuscite pas en silence. L'effacement définitif obligerait, en cas d'erreur, à recharger tout le fichier, donc à perdre les rattachements validés. |
 | Q24 | Les 121 locaux jumeaux ? | **Supprimés**, et la cause coupée : plus de local par défaut à l'import. Aucun ne porte de donnée, d'équipement ni de bien ASTECH — ce sont des coquilles. La liste complète est sauvegardée avant suppression. |
 
-**Réversibilité de Q23.** Réintégrer un bien lui rend le statut déduit de son état :
+**Libellé (2026-08-21, après coup).** L'écran dit **« A SUPPRIMER DE AS-TECH »** et non
+plus « Disparu chez ASTECH » : c'est une consigne adressée à la collectivité, pas un
+constat. La **valeur stockée reste `disparu`** — renommer la clé imposerait une migration
+de données pour un simple affichage. Le motif écrit en feuille « À vérifier » suit le
+même libellé.
+
+**Réversibilité de Q23.** Annuler la consigne rend au bien le statut déduit de son état :
 `lie` s'il a un bâtiment porteur, `a_traiter` sinon. On ne mémorise pas le statut
 antérieur, qui serait une donnée de plus à tenir à jour pour rien.
 

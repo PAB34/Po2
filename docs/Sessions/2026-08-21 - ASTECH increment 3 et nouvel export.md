@@ -62,7 +62,7 @@ compteur d'avancement, filtres d'affinage, disposition en araignée sur la carte
    homonyme et vide par bâtiment : invisible dans l'arbre replié, mais dessiné comme un
    second point sur la carte ASTECH dont il hérite la position. 121 supprimés en prod le
    2026-08-21, l'option coupée à l'import. Voir §21 du doc de rapprochement (Q23/Q24) —
-   qui apporte aussi le statut **« disparu chez ASTECH »** pour les biens que la
+   qui apporte aussi le statut **« A SUPPRIMER DE AS-TECH »** pour les biens que la
    collectivité a retirés de sa base : hors parcours, hors réexport, réversible.
 10. **La carte absente au premier chargement n'était pas un problème de taille.** Le
     composant rend un état vide **sans conteneur** tant qu'aucun bâtiment n'est
