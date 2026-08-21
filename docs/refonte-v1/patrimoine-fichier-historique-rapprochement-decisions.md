@@ -876,3 +876,72 @@ La règle §13 dit : recopiés à l'octet près depuis le fichier importé, donc
 **Q22 — Où écrire le cadastre et les coordonnées ?** Le nouveau fichier n'a plus ni
 `REFCAD`, ni `LATITUDE`, ni `LONGITUDE`. Soit on les ajoute en colonnes supplémentaires
 (au risque du refus à l'import), soit l'enrichissement se limite à l'adresse.
+
+## 21. Locaux jumeaux et biens disparus d'ASTECH — audit 2026-08-21
+
+Deux constats rapportés depuis l'écran de prod `/patrimoine/astech`, mesurés en base
+avant toute modification.
+
+### 21.1 Le « local fantôme » n'est pas un fantôme : c'est un jumeau du bâtiment
+
+Cliquer le point `ANTENNE DU ST CLAIR` propose **deux** entités Po2 : le bâtiment
+attendu, et un local introuvable dans l'inventaire.
+
+| Entité | Id | Nom | Type |
+|---|---|---|---|
+| Bâtiment | 1197 | `ANTENNE DU ST CLAIR` | — |
+| Local | 2462 | `ANTENNE DU ST CLAIR` | `PRINCIPAL` |
+
+**Cause vérifiée dans le code** : `create_building()` crée un « local principal » dès que
+`create_default_local` est vrai (`services/buildings.py:168`), et
+`_build_default_local_name()` (ligne 109) lui donne **le nom du bâtiment**. L'écran
+d'import ne coupe cette création que si le fichier porte déjà des locaux enfants
+(`BuildingCreateEditPage.tsx:734`) — un bâtiment sans local dans le fichier reçoit donc
+un homonyme.
+
+**Ampleur mesurée en prod (2026-08-21)** :
+
+| | |
+|---|---|
+| Locaux en base | 627 — `IMPORT` 505 · `PRINCIPAL` 122 |
+| Homonymes exacts de leur bâtiment | **121**, tous de type `PRINCIPAL` |
+| Bâtiments dont le jumeau est le seul local | 118 |
+| Jumeaux portant une donnée (surface, niveau, usage, commentaire, occupation) | **0** |
+| Jumeaux portant un équipement CVC (`cvc_inventory_items`) | **0** |
+| Jumeaux visés par un bien ASTECH | **0** (aucun des 380) |
+
+Les 505 locaux `IMPORT` sont de vrais locaux distincts (3 homonymes seulement) : ils ne
+sont pas concernés.
+
+**Pourquoi on le voit sur la carte et pas dans l'inventaire.** Sur la carte ASTECH, un
+local sans coordonnées propres hérite du point de son bâtiment
+(`PatrimoineAstechPage.tsx:948`) : le jumeau se pose exactement sur lui, et la
+disposition en araignée les sépare en deux points. Dans `/buildings/list` il est bien
+présent, mais **replié dans le nœud du bâtiment sous un libellé identique** — chercher
+son nom remonte le bâtiment, pas lui. Rien ne le distingue à l'œil.
+
+### 21.2 Aucun moyen de supprimer un bien ASTECH disparu de la base source
+
+Le service offre `delete_all_imports` (tout l'import) et `reset_all_links`, mais **aucune
+suppression unitaire**. Le seul geste proche est « Ignorer » (`status = ignore`), déjà
+exclu du réexport — mais il signifie « je ne traite pas ce bien », pas « ce bien n'existe
+plus chez ASTECH ». État prod : 310 `a_traiter` · 68 `propose` · 1 `lie` ·
+1 `hors_perimetre` · **0 `ignore`**.
+
+### 21.3 Décisions
+
+| # | Question | Décision |
+|---|---|---|
+| Q23 | Supprimer un bien disparu : effacement définitif ou statut dédié ? | **Statut dédié `disparu`.** La ligne reste en base : exclue du réexport et du parcours, visible sous le filtre « Disparu chez ASTECH », réversible d'un clic. On garde la trace de ce qu'ASTECH a perdu — utile le jour du test de réinjection — et un ré-import du même fichier ne la ressuscite pas en silence. L'effacement définitif obligerait, en cas d'erreur, à recharger tout le fichier, donc à perdre les rattachements validés. |
+| Q24 | Les 121 locaux jumeaux ? | **Supprimés**, et la cause coupée : plus de local par défaut à l'import. Aucun ne porte de donnée, d'équipement ni de bien ASTECH — ce sont des coquilles. La liste complète est sauvegardée avant suppression. |
+
+**Réversibilité de Q23.** Réintégrer un bien lui rend le statut déduit de son état :
+`lie` s'il a un bâtiment porteur, `a_traiter` sinon. On ne mémorise pas le statut
+antérieur, qui serait une donnée de plus à tenir à jour pour rien.
+
+**Ce que Q23 ne change pas.** `compute_candidates()` ne balaie que les biens `a_traiter`
+(`patrimoine_legacy.py:529`) : un bien disparu n'est jamais reproposé. Le bloc
+d'auto-réparation (ligne 490) ne vise que `lie` et `propose` : il ne le réveille pas non
+plus. `EXPORTABLE_STATUSES` ne retient que `lie` et `a_creer` : il ne part pas dans le
+fichier de la collectivité — conformément à la contrainte « on n'écrit jamais une valeur
+qu'on n'a pas su produire proprement ».

@@ -26,6 +26,7 @@ import {
   fetchAllLocals,
   fetchBuildings,
   convertLegacyAssetToLocal,
+  markLegacyAssetGone,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
   createLegacyAssetFromLocal,
@@ -60,11 +61,12 @@ const STATUS_LABEL: Record<string, string> = {
   hors_perimetre: "Hors périmètre",
   a_creer: "À créer",
   ignore: "Ignoré",
+  disparu: "Disparu chez ASTECH",
 };
 
 // « » = aucun filtre : indispensable, sinon la liste semble incomplète alors qu'elle
 // est simplement filtrée sur « À traiter ».
-const STATUS_ORDER = ["", "a_traiter", "propose", "lie", "a_creer", "hors_perimetre", "ignore"] as const;
+const STATUS_ORDER = ["", "a_traiter", "propose", "lie", "a_creer", "hors_perimetre", "ignore", "disparu"] as const;
 
 // Centre de Sète : point de départ d'un bien jamais localisé, que l'utilisateur
 // fait ensuite glisser à la bonne place.
@@ -131,6 +133,9 @@ const STATUS_PILL: Record<string, { label: string; color: string; background: st
   a_creer: { label: "à créer dans ASTECH", color: "#7dd3fc", background: "rgba(56, 189, 248, 0.16)" },
   ignore: { label: "ignoré", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
   hors_perimetre: { label: "hors périmètre", color: "#94a3b8", background: "rgba(148, 163, 184, 0.16)" },
+  // Le bien n'existe plus chez ASTECH. Distinct d'« ignoré » (qui existe toujours,
+  // mais qu'on ne traite pas) : la pastille doit se lire autrement, d'où le rouge sourd.
+  disparu: { label: "disparu chez ASTECH", color: "#e879a6", background: "rgba(232, 121, 166, 0.16)" },
 };
 
 const pillStyle: CSSProperties = {
@@ -597,6 +602,30 @@ export default function PatrimoineAstechPage() {
   });
 
   /**
+   * Signale qu'un bien a disparu de la base ASTECH, ou l'y réintègre (Q23).
+   *
+   * La collectivité supprime des entités de son côté après nous avoir livré l'export :
+   * ces CODE_BIEN n'ont plus de destinataire. On ne les efface pas — retrouver un bien
+   * supprimé à tort imposerait de recharger tout le fichier, donc de perdre les
+   * rattachements validés. La ligne reste, hors parcours et hors réexport.
+   */
+  const goneMutation = useMutation({
+    mutationFn: (variables: { assetId: number; gone: boolean }) =>
+      markLegacyAssetGone(token!, variables.assetId, variables.gone),
+    onSuccess: (asset, variables) => {
+      setFlash(
+        variables.gone
+          ? `« ${assetLabel(asset)} » marqué disparu chez ASTECH : il sort du parcours et ` +
+            "ne repartira pas dans le réexport. Filtre « Disparu chez ASTECH » pour le revoir."
+          : `« ${assetLabel(asset)} » réintégré : il repasse « ${STATUS_LABEL[asset.status] ?? asset.status} ».`,
+      );
+      invalidate();
+      if (variables.gone) goToNextAsset(variables.assetId);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /**
    * Pose le point du bien sur SON adresse ASTECH, celle du fichier de la collectivité.
    *
    * Cas visé : l'adresse ASTECH est la bonne et celle du bâtiment Po2 est fausse. Le
@@ -1013,7 +1042,13 @@ export default function PatrimoineAstechPage() {
     // Le mode « suit le filtre » ne peut pas être le défaut : 338 biens sur 444 n'ont
     // aucune position, et le filtre initial est « À traiter » — la carte se retrouvait
     // donc vide au chargement, ce qui ressemblait à une panne.
-    const source = mapFollowsFilter ? visibleAssets : linkedAssetsQuery.data ?? [];
+    // Un bien disparu de la base ASTECH n'a plus rien à faire sur la vue d'ensemble :
+    // il continuerait de désigner un bâtiment Po2 pour un CODE_BIEN sans destinataire.
+    // En mode « suit le filtre » on ne l'écarte pas : c'est le seul moyen de revoir les
+    // disparus sur la carte, en choisissant leur filtre.
+    const source = mapFollowsFilter
+      ? visibleAssets
+      : (linkedAssetsQuery.data ?? []).filter((asset) => asset.status !== "disparu");
     const byId = new Map<number, LegacyMapPoint>();
     for (const asset of source) {
       const point = toPoint(asset);
@@ -2440,6 +2475,30 @@ export default function PatrimoineAstechPage() {
                       >
                         Ignorer ce bien
                       </button>
+                      {/* « Disparu » ≠ « ignoré » : le bien n'existe PLUS chez ASTECH, il
+                          n'a plus de destinataire. Réversible, d'où l'absence de
+                          confirmation bloquante. */}
+                      {selected.status === "disparu" ? (
+                        <button
+                          type="button"
+                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                          disabled={goneMutation.isPending}
+                          title="Ce bien existe finalement toujours dans ASTECH : le remettre dans le parcours."
+                          onClick={() => goneMutation.mutate({ assetId: selected.id, gone: false })}
+                        >
+                          {goneMutation.isPending ? "…" : "Réintégrer ce bien"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px", color: "#e879a6" }}
+                          disabled={goneMutation.isPending}
+                          title="Ce bien n'existe plus dans la base ASTECH. Il sort du parcours et du réexport, sans être effacé : le geste est réversible."
+                          onClick={() => goneMutation.mutate({ assetId: selected.id, gone: true })}
+                        >
+                          {goneMutation.isPending ? "…" : "Disparu chez ASTECH"}
+                        </button>
+                      )}
                     </div>
 
                     {/* La fratrie : qui d'autre vise ce bâtiment, et à quel niveau. */}

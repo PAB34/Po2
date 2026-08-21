@@ -257,6 +257,24 @@ def convert_asset_to_local(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.post("/{asset_id}/gone", response_model=LegacyAssetOut)
+def mark_asset_gone(
+    asset_id: int,
+    gone: bool = Query(default=True, description="Vrai = disparu d'ASTECH ; faux = réintégré."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LegacyAssetOut:
+    """Signale que le bien **n'existe plus dans la base ASTECH**, ou l'y réintègre.
+
+    La ligne est conservée : elle sort du parcours et du réexport, reste consultable
+    sous le filtre « Disparu chez ASTECH », et le geste est réversible (Q23).
+    """
+    asset = svc.get_asset_or_none(db, svc.resolve_city_id(db, current_user.city_id), asset_id)
+    if asset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bien historique introuvable.")
+    return LegacyAssetOut.model_validate(svc.set_asset_gone(db, asset, gone))
+
+
 @router.patch("/{asset_id}", response_model=LegacyAssetOut)
 def update_asset(
     asset_id: int,
