@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Leaflet from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -511,6 +511,21 @@ export function BuildingPortfolioMap({
   viewCenterRef.current = onViewCenterChange;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  // Le conteneur de la carte vit dans un ETAT, pas seulement dans une ref.
+  //
+  // Ce composant rend un etat vide — sans conteneur — tant qu'aucun batiment n'est
+  // geolocalise (voir le rendu). Au premier chargement de la page, les batiments sont
+  // encore en cours de requete : l'effet d'initialisation tournait donc avec
+  // `containerRef.current` a null, sortait aussitot, et n'etait JAMAIS rejoue (deps
+  // `[]`). La carte restait vide pour de bon, et seul un aller-retour de navigation la
+  // reparait — en remontant le composant alors que les donnees sont deja en cache.
+  // Une ref ne declenche pas de rendu : c'est un etat qu'il faut, pour que l'effet
+  // rejoue le jour ou le conteneur apparait enfin.
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const attachContainer = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    setContainerEl(node);
+  }, []);
 
   const mappableBuildings = useMemo(
     () =>
@@ -757,7 +772,9 @@ export function BuildingPortfolioMap({
       legacyLayerRef.current = null;
       localsLayerRef.current = null;
     };
-  }, []);
+    // `containerEl` et non `[]` : le conteneur peut n'apparaitre qu'apres l'arrivee des
+    // donnees, et c'est alors qu'il faut monter la carte.
+  }, [containerEl]);
 
   // ------------------------------------------------------------------
   // Couche « locaux Po2 » — pastilles subordonnées aux bâtiments
@@ -1314,7 +1331,7 @@ export function BuildingPortfolioMap({
 
       {/* Carte Leaflet */}
       <div style={{ position: "relative" }}>
-        <div ref={containerRef} className="map-canvas" />
+        <div ref={attachContainer} className="map-canvas" />
         {showOverlay ? (
           <div className="map-loading-overlay">
             <div className="map-loading-spinner" />
