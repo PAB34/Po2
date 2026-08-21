@@ -202,14 +202,20 @@ type BuildingPortfolioMapProps = {
   onSelectLegacyId?: (legacyId: number) => void;
   onMoveLegacyPoint?: (legacyId: number, lat: number, lon: number) => void;
   /**
-   * Appele quand le point ASTECH est lache SUR un batiment Po2 (a moins de
-   * `legacyDropRadiusM` metres). Le geste « je depose le point sur le batiment »
-   * vaut rattachement : le bien herite alors des informations du batiment.
+   * Appele quand le point ASTECH est lache SUR une entite Po2 (a moins de
+   * `legacyDropRadiusM` metres).
+   *
+   * La carte ne fait que SIGNALER le geste, elle ne rattache pas : c'est l'appelant qui
+   * decide, et depuis Q25 il en fait une proposition a valider. La position lachee est
+   * transmise avec, pour que refuser le rattachement puisse valoir « je voulais
+   * seulement deplacer ce point ».
    */
   onDropLegacyOnBuilding?: (
     legacyId: number,
     buildingId: number,
-    localId?: number | null,
+    localId: number | null,
+    lat: number,
+    lon: number,
   ) => void;
   /** Rayon d'accrochage du depot, en metres. */
   legacyDropRadiusM?: number;
@@ -287,12 +293,18 @@ function spreadCoLocatedMarkers(markers: LegacyRenderMarker[]): LegacyRenderMark
     const radiusDeg = 14 / 111_320;
     others.forEach((marker, index) => {
       const angle = (2 * Math.PI * index) / others.length;
+      const shiftLat = radiusDeg * Math.cos(angle);
+      const shiftLon =
+        (radiusDeg * Math.sin(angle)) / Math.max(0.2, Math.cos((marker.latitude * Math.PI) / 180));
       spread.push({
         ...marker,
-        latitude: marker.latitude + radiusDeg * Math.cos(angle),
-        longitude:
-          marker.longitude +
-          (radiusDeg * Math.sin(angle)) / Math.max(0.2, Math.cos((marker.latitude * Math.PI) / 180)),
+        latitude: marker.latitude + shiftLat,
+        longitude: marker.longitude + shiftLon,
+        // L'ecartement est PUREMENT visuel : il doit rejoindre le decalage que
+        // `dragend` retranche avant d'enregistrer. Sans cela, saisir puis reposer un
+        // point ecarte inscrivait les 14 m de l'ecartement dans ses coordonnees.
+        offsetLat: marker.offsetLat + shiftLat,
+        offsetLon: marker.offsetLon + shiftLon,
       });
     });
   }
@@ -591,6 +603,10 @@ export function BuildingPortfolioMap({
     const perBuilding = new Map<number, LegacyMapPoint[]>();
     const loose: LegacyMapPoint[] = [];
 
+    // Les biens rattachés mais posés AILLEURS que sur leur bâtiment : ils gardent leur
+    // position propre, et c'est le trait qui va les chercher, à l'angle qu'il faut.
+    const linkedAway: { point: LegacyMapPoint; building: MappableBuilding }[] = [];
+
     for (const point of legacyPoints ?? []) {
       const building =
         point.isLinked && point.buildingId != null
@@ -605,6 +621,7 @@ export function BuildingPortfolioMap({
       if (building && onBuilding) {
         perBuilding.set(building.id, [...(perBuilding.get(building.id) ?? []), point]);
       } else {
+        if (building) linkedAway.push({ point, building });
         loose.push(point);
       }
     }
@@ -625,7 +642,13 @@ export function BuildingPortfolioMap({
       // etait juste, mais elle enlevait toute prise des qu'un rattachement etait faux :
       // impossible de designer, ni de detacher, un bien parmi ceux qui se superposaient.
       points.forEach((point, index) => {
-        const angle = (2 * Math.PI * index) / points.length - Math.PI / 2;
+        // `cos` pilote la LATITUDE (le nord), `sin` la LONGITUDE (l'est) : l'angle 0
+        // vise donc deja le nord. L'ancien `- PI/2` faisait pivoter toute l'araignee
+        // d'un quart de tour vers l'OUEST — d'ou des traits systematiquement
+        // horizontaux avec 1 bien (ouest) comme avec 2 (ouest + est), c'est-a-dire
+        // 68 batiments rattaches sur 69 en prod. Le depart en diagonale (PI/4,
+        // nord-est) evite en plus de s'aligner sur un axe quel que soit le nombre.
+        const angle = (2 * Math.PI * index) / points.length + Math.PI / 4;
         const latitude = center.lat + SPIDER_RADIUS_DEG * Math.cos(angle);
         const longitude =
           center.lon +
@@ -651,6 +674,25 @@ export function BuildingPortfolioMap({
           isLocalTarget: point.isLocalTarget === true,
           isProposal: point.isProposal === true,
         });
+      });
+    }
+
+    // Un bien rattaché puis déplacé gardait son lien... mais plus aucun trait : il
+    // sortait de l'araignée et rien ne le reliait plus à son bâtiment. Le rattachement
+    // devenait invisible au moment précis où on avait le plus besoin de le voir. Le
+    // trait part donc du bâtiment vers la position REELLE du point, à n'importe quelle
+    // distance et sous n'importe quel angle (Q27).
+    for (const { point, building } of linkedAway) {
+      const center = buildingDisplay.get(building.id) ?? {
+        lat: building.latitude, lon: building.longitude,
+      };
+      legs.push({
+        fromLat: center.lat,
+        fromLon: center.lon,
+        toLat: point.latitude,
+        toLon: point.longitude,
+        isLocalTarget: point.isLocalTarget === true,
+        isProposal: point.isProposal === true,
       });
     }
 
@@ -963,7 +1005,7 @@ export function BuildingPortfolioMap({
             }
           }
           if (nearest !== null && onDropLegacyOnBuilding) {
-            onDropLegacyOnBuilding(point.id, nearest.id, nearest.localId);
+            onDropLegacyOnBuilding(point.id, nearest.id, nearest.localId, position.lat, position.lng);
             return;
           }
           onMoveLegacyPoint?.(point.id, position.lat, position.lng);

@@ -951,3 +951,60 @@ d'auto-réparation (ligne 490) ne vise que `lie` et `propose` : il ne le réveil
 plus. `EXPORTABLE_STATUSES` ne retient que `lie` et `a_creer` : il ne part pas dans le
 fichier de la collectivité — conformément à la contrainte « on n'écrit jamais une valeur
 qu'on n'a pas su produire proprement ».
+
+## 22. Mobilité des points et trait de liaison — audit 2026-08-21
+
+Deux gênes rapportées depuis l'écran de prod, toutes deux reproduites dans le code.
+
+### 22.1 Déplacer un point rattache tout seul, et écrase
+
+`BuildingPortfolioMap.tsx:932` — au `dragend`, si le point atterrit à moins de **30 m**
+(`legacyDropRadiusM`) d'un bâtiment **ou d'un local** Po2, le rattachement part
+immédiatement, sans rien demander.
+
+Ce n'est pas un geste anodin : le bien **prend le nom de la cible Po2**
+(`_adopt_target_name`, décision Q11), hérite de son adresse, de sa position et de son
+cadastre, et passe en « rattaché ». Vouloir décaler un point de dix mètres suffit donc à
+créer un rattachement et à perdre le libellé ASTECH d'origine.
+
+**Ce qui est récupérable** : la ligne source complète est conservée
+(`source_payload_json`, clés = en-têtes bruts du fichier). Le nom d'origine est donc
+restituable — mais rien ne le restitue aujourd'hui, pas même « Détacher ».
+
+### 22.2 Le trait de liaison est toujours horizontal
+
+`BuildingPortfolioMap.tsx:628` :
+
+```
+const angle = (2 * Math.PI * index) / points.length - Math.PI / 2;
+```
+
+Le `cos` pilote la **latitude** (nord) et le `sin` la **longitude** (est) : l'angle 0
+signifie déjà « vers le nord ». Le `− π/2` fait donc pivoter toute l'araignée d'un quart
+de tour vers l'**ouest**. Conséquence mécanique :
+
+| Biens sur le bâtiment | Angles obtenus | Rendu |
+|---|---|---|
+| 1 | ouest | trait horizontal |
+| 2 | ouest + est | deux traits horizontaux |
+| 3 et + | éventail réel | correct |
+
+Mesuré en prod le 2026-08-21 : **68 bâtiments rattachés sur 69 portent exactement 1
+bien**, le dernier en porte 2. **100 % des traits sont donc horizontaux** — aucun cas
+réel n'atteint la branche qui fonctionne.
+
+**Second effet, plus gênant** : un bien rattaché mais posé à plus de **5 m** de son
+bâtiment sort du calcul d'araignée (`ligne 604`) et **perd tout trait**. Déplacer un point
+ne fait donc pas suivre la liaison : elle disparaît.
+
+### 22.3 Décisions
+
+| # | Question | Décision |
+|---|---|---|
+| Q25 | Comment valider un rattachement créé par dépôt ? | **Rien n'est écrit avant validation.** Le dépôt à portée d'une entité Po2 ne fait que **proposer** : un encart « Rattacher X à Y ? » attend Valider ou Annuler. Aucune donnée touchée entre-temps — ni nom, ni adresse, ni statut. **Annuler = simplement déplacer** : la nouvelle position est enregistrée, sans rattachement. C'est le geste que l'utilisateur voulait au départ. Un dépôt hors rayon reste un déplacement direct, comme aujourd'hui. |
+| Q26 | Que devient le nom au détachement ? | **Le nom ASTECH d'origine est rendu**, relu depuis `source_payload_json` via la table d'alias (les deux générations de fichier n'ont pas les mêmes en-têtes). Détacher rend au bien son libellé, comme il lui rend déjà son absence de position. Q11 reste vraie **au rattachement** : le nom Po2 gagne tant que le lien existe. |
+| Q27 | Le trait de liaison | **Tracé quelle que soit la distance et quel que soit l'angle** : du bâtiment vers la position réelle du point. L'écartement en araignée ne sert plus qu'à séparer les biens réellement empilés sur le bâtiment, avec un départ en diagonale (nord-est) pour n'être jamais aligné sur un axe. |
+
+**Ce que Q25 ne change pas.** Le rattachement par le sélecteur du panneau (« Changer de
+bâtiment… ») reste immédiat : c'est un geste explicite, pas un effet de bord d'un
+déplacement.

@@ -661,6 +661,10 @@ def update_asset(
         asset.target_type = TARGET_BUILDING
         asset.link_origin = None
         _clear_resolved_address(asset)
+        # Le bien redevient ce qu'ASTECH en dit : son nom d'origine lui revient (Q26).
+        # Une correction manuelle passée dans le même appel reste prioritaire.
+        if designation is None:
+            _restore_source_name(asset)
     elif local_id is not None:
         # Cible « local » : le bâtiment porteur reste renseigné, c'est lui qui porte
         # l'adresse, le cadastre et la position — un local n'a rien de tout cela.
@@ -784,6 +788,39 @@ def _adopt_target_name(
         return
     asset.designation = cleaned
     asset.nomcourt = cleaned
+
+
+def _restore_source_name(asset: PatrimoineLegacyAsset) -> None:
+    """Rend au bien son libellé ASTECH d'origine (Q26).
+
+    Le rattachement fait adopter le nom Po2 (Q11) : c'est voulu tant que le lien existe.
+    Mais détacher devait rendre au bien ce qu'il était, comme cela lui rend déjà son
+    absence de position. Sans quoi un rattachement fait par erreur — un point deplacé qui
+    accroche le bâtiment d'à côté — laissait un nom Po2 collé pour de bon.
+
+    La source est `source_payload_json`, dont les clés sont les **en-têtes bruts** du
+    fichier importé. Les deux générations d'export n'ont pas les mêmes (`NOMCOURT` contre
+    `Nom court`) : on repasse donc par la table d'alias, exactement comme à la lecture.
+    Un bien créé depuis Po2 n'a pas de payload — on ne touche alors à rien.
+    """
+    if not asset.source_payload_json:
+        return
+    try:
+        payload = json.loads(asset.source_payload_json)
+    except (ValueError, TypeError):
+        return
+    if not isinstance(payload, dict):
+        return
+    by_header = {_header_key(key): value for key, value in payload.items()}
+    for field in ("designation", "nomcourt"):
+        original = next(
+            (by_header[alias] for alias in _COLUMN_ALIASES[field] if alias in by_header),
+            None,
+        )
+        original = _text(original)
+        # Une source vide ne vide pas le libellé : mieux vaut le nom Po2 que rien.
+        if original:
+            setattr(asset, field, original[:255])
 
 
 def _clear_resolved_address(asset: PatrimoineLegacyAsset) -> None:
