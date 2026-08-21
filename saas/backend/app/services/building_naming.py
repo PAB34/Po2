@@ -772,15 +772,29 @@ def _resolve_building_name(
     }
 
 
+# Nombre maximal d'objets IGN renvoyes pour un point. Voir la coupe en fin de fonction.
+IGN_POINT_MAX_FEATURES = 900
+
+
 def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]:
     cache_key = f"{round(lat, 6)}|{round(lon, 6)}|{radius_m}|batiments"
     cached = _APP_STATE["cache_ign_features"].get(cache_key)
     if isinstance(cached, dict) and cached.get("type") == "FeatureCollection":
         return cached
     bbox = _bbox_around(lat, lon, radius_m=radius_m)
+    # Le patrimoine d'une collectivite n'est pas fait que de batiments. Un stade, un
+    # terrain de sport, un parking, un cimetiere ou un reservoir sont des objets IGN a
+    # part entiere, dans d'AUTRES couches — ils n'etaient jamais proposes.
+    # Mesure sur « Stade Francois Maillol » (43.4122, 3.6735), rayon 300 m :
+    # batiment 500 (plafond atteint), construction_surfacique 0, terrain_de_sport 8,
+    # zone_d_activite_ou_d_interet 11 dont le stade lui-meme, parkings 2.
     layer_specs = [
         ("BDTOPO_V3:batiment", "batiment"),
         ("BDTOPO_V3:construction_surfacique", "construction_surfacique"),
+        ("BDTOPO_V3:terrain_de_sport", "terrain_de_sport"),
+        ("BDTOPO_V3:equipement_de_transport", "equipement_de_transport"),
+        ("BDTOPO_V3:cimetiere", "cimetiere"),
+        ("BDTOPO_V3:reservoir", "reservoir"),
     ]
     nearby_toponymy = _ign_toponymy(lat, lon, radius_m=max(200, radius_m * 4))
     nearby_named_areas = _ign_named_areas(lat, lon, radius_m=max(220, radius_m * 4))
@@ -788,7 +802,11 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
     seen: set[tuple[str, str]] = set()
     for type_name, short_layer in layer_specs:
         try:
-            data = _wfs_layer_features(type_name, bbox, count=500)
+            # 500 etait exactement le nombre renvoye sur un quartier dense : le
+            # resultat etait donc tronque, et rien ne garantissait que les objets les
+            # plus PROCHES en fassent partie. On remonte le plafond, puis on filtre par
+            # distance reelle plus bas.
+            data = _wfs_layer_features(type_name, bbox, count=2000)
         except Exception:
             continue
         for feature in data.get("features", []) or []:
@@ -848,14 +866,39 @@ def _ign_buildings(lat: float, lon: float, radius_m: int = 50) -> dict[str, Any]
                     },
                 }
             )
+    # La bbox est un CARRE : ses coins portent jusqu'a 1,41 x le rayon demande. On
+    # ecarte donc ce qui est hors du cercle, et on note la distance de chaque objet.
+    center = {"type": "Point", "coordinates": [lon, lat]}
+    within: list[dict[str, Any]] = []
+    for feature in features:
+        distance = _min_distance_between_geometries_m(center, feature.get("geometry", {}) or {})
+        if distance > radius_m:
+            continue
+        feature["properties"]["distance_m"] = round(float(distance), 1)
+        within.append(feature)
+    features = within
+
     features.sort(
         key=lambda feature: (
+            # La DISTANCE d'abord : sur un quartier dense, l'objet cherche est celui
+            # qu'on a sous le curseur, pas celui dont le libelle vient en tete d'ordre
+            # alphabetique. Arrondie a 25 m pour que les criteres suivants departagent
+            # des objets a distance comparable.
+            round(float((feature.get("properties", {}) or {}).get("distance_m") or 0.0) / 25.0),
             0 if (feature.get("properties", {}) or {}).get("resolved_name") or (feature.get("properties", {}) or {}).get("name") else 1,
             0 if (feature.get("geometry", {}) or {}).get("type") in {"Polygon", "MultiPolygon"} else 1,
             0 if (feature.get("properties", {}) or {}).get("ign_layer") == "batiment" else 1,
             str((feature.get("properties", {}) or {}).get("resolved_label") or (feature.get("properties", {}) or {}).get("label") or ""),
         )
     )
+    # Borne de securite : au rayon maximal (1,5 km) une zone dense produirait plusieurs
+    # milliers de polygones, que le navigateur devrait tous dessiner. Le tri par
+    # distance garantit qu'on coupe la queue, jamais ce qui entoure le point : au rayon
+    # par defaut de 300 m, la coupe n'intervient pas (736 objets mesures sur le quartier
+    # le plus dense du parc).
+    if len(features) > IGN_POINT_MAX_FEATURES:
+        features = features[:IGN_POINT_MAX_FEATURES]
+
     collection = {"type": "FeatureCollection", "features": features}
     _store_in_bounded_cache("cache_ign_features", cache_key, collection)
     return collection
