@@ -370,6 +370,37 @@ function ensureLeafletRuntime(): Promise<LeafletRuntime> {
 }
 
 /** ID d'un feature IGN (serveur ou brut WFS). */
+/**
+ * Surface approchée d'une géométrie, en degrés carrés (boîte englobante).
+ *
+ * Sert uniquement à ORDONNER le dessin : dans Leaflet, la dernière couche ajoutée est
+ * au-dessus et capte les clics. Les grands polygones — un terrain de sport, un parking
+ * de complexe sportif — recouvrent des dizaines de bâtiments : dessinés en dernier, ils
+ * rendaient tout ce qui est dessous inatteignable, y compris pour le désélectionner.
+ */
+function geometryBoxArea(geometry: unknown): number {
+  const geom = (geometry ?? {}) as { type?: string; coordinates?: unknown };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const walk = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    if (typeof node[0] === "number" && typeof node[1] === "number") {
+      const [x, y] = node as [number, number];
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      return;
+    }
+    for (const child of node) walk(child);
+  };
+  walk(geom.coordinates);
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return 0;
+  return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+}
+
 function wfsFeatureId(feature: RuntimeFeature): string {
   // Les features serveur ont ign_id dans properties (priorité absolue).
   // Les features bruts WFS ont l'id dans feature.id ou properties.cleabs.
@@ -1138,7 +1169,14 @@ export function BuildingPortfolioMap({
         interactive: false,
       }),
     });
-    geoLayer.addData({ type: "FeatureCollection", features });
+    // Du plus GRAND au plus petit : le dernier ajouté est au-dessus dans Leaflet, donc
+    // les petits objets restent cliquables par-dessus les grands qui les recouvrent.
+    // Sans cet ordre, un terrain de sport ou un parking captait tous les clics de la
+    // zone — impossible de sélectionner un bâtiment dessous, ni de le désélectionner.
+    const ordered = [...features].sort(
+      (a, b) => geometryBoxArea(b.geometry) - geometryBoxArea(a.geometry),
+    );
+    geoLayer.addData({ type: "FeatureCollection", features: ordered });
     geoLayer.addTo(map);
     portfolioIgnLayerRef.current = geoLayer;
   }, [portfolioIgnFeatures, attachMode, mapReady]);
