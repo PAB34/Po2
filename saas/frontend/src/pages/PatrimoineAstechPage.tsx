@@ -71,6 +71,13 @@ const STATUS_LABEL: Record<string, string> = {
 // est simplement filtrée sur « À traiter ».
 const STATUS_ORDER = ["", "a_traiter", "propose", "lie", "a_creer", "hors_perimetre", "ignore", "disparu"] as const;
 
+/**
+ * Nom de local réduit à son identifiant DGFIP : « LOCAL 343010563805 ».
+ *
+ * L'espace est souple — le fichier en met parfois deux (« LOCAL  343010351481 »).
+ */
+const CODED_LOCAL_NAME = /^LOCAL\s+\d/i;
+
 // Centre de Sète : point de départ d'un bien jamais localisé, que l'utilisateur
 // fait ensuite glisser à la bonne place.
 const DEFAULT_LAT = 43.4028;
@@ -1139,6 +1146,12 @@ export default function PatrimoineAstechPage() {
   const localPoints = useMemo<LocalMapPoint[]>(() => {
     if (!showLocals) return [];
     return locals.flatMap((local) => {
+      // Les locaux dont le nom n'est qu'un identifiant DGFIP — « LOCAL 343010563805 » —
+      // ne disent rien à personne : ils encombraient la carte et son étiquetage sans
+      // rien apprendre. 445 des 502 locaux sont dans ce cas (mesuré le 2026-08-21). Ils
+      // restent dans l'inventaire et dans le sélecteur de cible, où on peut encore les
+      // viser : c'est la CARTE qu'ils saturaient.
+      if (CODED_LOCAL_NAME.test(local.nom_local)) return [];
       const building = buildingsById.get(local.building_id);
       // Un local est DANS son bâtiment : hériter de sa position n'invente rien, c'est la
       // meilleure vérité disponible — et c'est déjà ce qu'on fait pour les biens ASTECH.
@@ -1875,7 +1888,7 @@ export default function PatrimoineAstechPage() {
             </span>
             <label
               style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
-              title="Un CODE_BIEN ASTECH désigne souvent un local (logement de fonction, salle, WC publics). Clique un local pour en faire la cible du bien sélectionné."
+              title="Un CODE_BIEN ASTECH désigne souvent un local (logement de fonction, salle, WC publics). Clique un local pour en faire la cible du bien sélectionné. Les locaux dont le nom n'est qu'un identifiant DGFIP (« LOCAL 343010563805 ») ne sont pas dessinés : ils saturaient la carte sans rien apprendre. Ils restent visibles dans l'inventaire et dans le sélecteur de cible."
             >
               <input
                 type="checkbox"
