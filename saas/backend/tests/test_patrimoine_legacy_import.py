@@ -1242,3 +1242,96 @@ def test_detachement_ne_defait_pas_une_correction_manuelle(db_session: Session):
 
     update_asset(db_session, asset, clear_building=True, designation="NOM CHOISI A LA MAIN")
     assert asset.designation == "NOM CHOISI A LA MAIN"
+
+
+# --- §25 Q35 : poser en masse les biens sans position -------------------------
+
+def _pending_asset(db: Session, code: str, voie: str | None = "RUE DES ECOLES", **kwargs):
+    from app.models.patrimoine_legacy import PatrimoineLegacyAsset as Asset
+
+    asset = Asset(
+        city_id=1, code_bien=code, designation=code, nomcourt=code,
+        source_libelvoie=voie, source_ville="SETE", **kwargs,
+    )
+    db.add(asset)
+    db.commit()
+    return asset
+
+
+def test_les_biens_sans_position_sont_poses_sur_leur_adresse(db_session: Session, monkeypatch):
+    from app.services import patrimoine_legacy as svc
+
+    monkeypatch.setattr(
+        svc, "lookup_free_address_candidates",
+        lambda *a, **k: {"lat": 43.4, "lon": 3.69},
+    )
+    a = _pending_asset(db_session, "BATI00001")
+    b = _pending_asset(db_session, "BATI00002")
+    # Celui-ci a deja un point : on n'y touche pas.
+    deja = _pending_asset(db_session, "BATI00003", latitude=43.1, longitude=3.1)
+
+    result = svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert result["positionnes"] == 2
+    assert result["restants"] == 0
+    assert (a.latitude, b.latitude) == (43.4, 43.4)
+    assert deja.latitude == 43.1
+
+
+def test_un_bien_sans_adresse_ou_hors_perimetre_est_ignore(db_session: Session, monkeypatch):
+    from app.services import patrimoine_legacy as svc
+
+    monkeypatch.setattr(svc, "lookup_free_address_candidates", lambda *a, **k: {"lat": 43.4, "lon": 3.69})
+    _pending_asset(db_session, "BATI00001", voie=None)
+    _pending_asset(db_session, "BATI00002", status="hors_perimetre")
+    _pending_asset(db_session, "BATI00003", status="disparu")
+
+    result = svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert result["traites"] == 0
+    assert result["positionnes"] == 0
+
+
+def test_un_echec_n_est_pas_rejoue_grace_au_decalage(db_session: Session, monkeypatch):
+    """Un bien introuvable reste sans position, donc dans le lot : sans le décalage,
+    chaque appel rejouerait les mêmes échecs et la boucle ne finirait jamais."""
+    from app.services import patrimoine_legacy as svc
+
+    appels: list[str] = []
+
+    def geocodeur(address, **kwargs):
+        appels.append(address)
+        if "INTROUVABLE" in address:
+            return {"lat": None, "lon": None}
+        return {"lat": 43.4, "lon": 3.69}
+
+    monkeypatch.setattr(svc, "lookup_free_address_candidates", geocodeur)
+    _pending_asset(db_session, "BATI00001", voie="VOIE INTROUVABLE")
+    _pending_asset(db_session, "BATI00002")
+    _pending_asset(db_session, "BATI00003")
+
+    premier = svc.geocode_pending_assets(db_session, 1, "Sete", limit=1, offset=0)
+    assert premier["positionnes"] == 0
+    assert len(premier["echecs"]) == 1
+    assert premier["restants"] == 2
+
+    # L'appelant cumule les échecs dans `offset` : le suivant saute l'introuvable.
+    second = svc.geocode_pending_assets(db_session, 1, "Sete", limit=1, offset=1)
+    assert second["positionnes"] == 1
+    assert appels.count("VOIE INTROUVABLE, SETE") == 1
+
+
+def test_le_numero_de_voirie_a_zero_n_est_pas_geocode(db_session: Session, monkeypatch):
+    """`NORUE` vaut 0 sur 285 lignes sur 378 : c'est un défaut du fichier, pas un numéro."""
+    from app.services import patrimoine_legacy as svc
+
+    vues: list[str] = []
+    monkeypatch.setattr(
+        svc, "lookup_free_address_candidates",
+        lambda address, **k: (vues.append(address), {"lat": 43.4, "lon": 3.69})[1],
+    )
+    _pending_asset(db_session, "BATI00001", source_norue="0")
+
+    svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert vues == ["RUE DES ECOLES, SETE"]

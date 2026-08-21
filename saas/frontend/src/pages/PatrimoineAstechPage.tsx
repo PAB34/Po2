@@ -26,6 +26,7 @@ import {
   fetchAllLocals,
   fetchBuildings,
   convertLegacyAssetToLocal,
+  geocodePendingLegacyAssets,
   markLegacyAssetGone,
   purgePatrimonyDuplicates,
   createBuildingRequest,
@@ -635,6 +636,53 @@ export default function PatrimoineAstechPage() {
     });
     setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte.");
   };
+
+  /**
+   * Pose sur leur adresse ASTECH tous les biens qui n'ont aucune position (§25, Q35).
+   *
+   * Mesuré le 2026-08-21 : 294 biens à traiter, dont **2 seulement sur la carte**, alors
+   * que 292 portent une adresse exploitable. La carte montrait donc ce qui était fini et
+   * cachait ce qui restait à faire — rendant impossible le travail à la carte.
+   *
+   * Le serveur travaille par lots ; on rappelle jusqu'à épuisement en cumulant les échecs
+   * dans `offset`, sans quoi les biens introuvables seraient rejoués sans fin.
+   */
+  const geocodePendingMutation = useMutation({
+    mutationFn: async () => {
+      let offset = 0;
+      let positionnes = 0;
+      let traites = 0;
+      const echecs: { code_bien: string; motif: string }[] = [];
+      // Garde-fou : sur un lot de 25, 60 tours couvrent 1500 biens. Au-delà, quelque
+      // chose ne va pas et mieux vaut rendre la main que boucler.
+      for (let tour = 0; tour < 60; tour += 1) {
+        const lot = await geocodePendingLegacyAssets(token!, 25, offset);
+        positionnes += lot.positionnes;
+        traites += lot.traites;
+        echecs.push(...lot.echecs);
+        offset += lot.echecs.length;
+        setFlash(
+          `Positionnement en cours… ${positionnes} bien(s) posé(s), ${lot.restants} restant(s).`,
+        );
+        if (lot.restants === 0 || lot.traites === 0) break;
+      }
+      return { positionnes, traites, echecs };
+    },
+    onSuccess: (result) => {
+      setFlash(
+        `${result.positionnes} bien(s) posé(s) sur leur adresse ASTECH` +
+          (result.echecs.length
+            ? ` · ${result.echecs.length} introuvable(s) : ${result.echecs
+                .slice(0, 3)
+                .map((e) => e.code_bien)
+                .join(", ")}${result.echecs.length > 3 ? "…" : ""}. ` +
+              "Ceux-là se posent à la main sur la carte."
+            : ". Ils sont tous sur la carte."),
+      );
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
 
   /**
    * Nettoie les doublons du référentiel Po2 (§23, Q28/Q29).
@@ -1432,6 +1480,17 @@ export default function PatrimoineAstechPage() {
               : "3 · Supprimer les biens ASTECH (pour réimporter)"}
           </button>
         )}
+        <button
+          type="button"
+          style={btnPrimary}
+          title="Géocode l'adresse ASTECH de tous les biens qui n'ont aucune position, pour qu'ils apparaissent sur la carte. Sans numéro de voirie, le point se pose au milieu de la voie : à vérifier ensuite."
+          disabled={geocodePendingMutation.isPending}
+          onClick={() => geocodePendingMutation.mutate()}
+        >
+          {geocodePendingMutation.isPending
+            ? "Positionnement…"
+            : "5 · Poser les biens sans position sur leur adresse"}
+        </button>
         <button
           type="button"
           style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
