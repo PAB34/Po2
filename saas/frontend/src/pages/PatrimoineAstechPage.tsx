@@ -2235,7 +2235,18 @@ export default function PatrimoineAstechPage() {
                     Un seul bloc : l'entité visée, son niveau, son adresse, son état, et
                     toutes les actions à la suite. */}
                 {targetBuilding && (
-                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
+                  <div
+                    style={{
+                      borderTop: BORDER,
+                      // Liseré bleu Po2 : tout ce bloc décrit l'entité Po2 visée, pas le
+                      // bien ASTECH. La carte parle déjà ce langage — violet = ASTECH,
+                      // bleu = Po2 — le panneau doit le parler aussi.
+                      borderLeft: "3px solid #38bdf8",
+                      paddingTop: 10,
+                      paddingLeft: 10,
+                      marginBottom: 10,
+                    }}
+                  >
                     <div
                       style={{
                         display: "flex",
@@ -2245,8 +2256,8 @@ export default function PatrimoineAstechPage() {
                         marginBottom: 4,
                       }}
                     >
-                      <span style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase" }}>
-                        Rattachement
+                      <span style={{ fontSize: 11, color: "#7dd3fc", textTransform: "uppercase", fontWeight: 600 }}>
+                        Rattachement à une entité Po2
                       </span>
                       <span
                         style={{
@@ -2277,7 +2288,7 @@ export default function PatrimoineAstechPage() {
                       </span>
                     </div>
 
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: "#7dd3fc" }}>
                       {selected.target_type === "local"
                         ? localsById.get(selected.local_id ?? -1)?.nom_local ?? "Local"
                         : targetBuilding.nom_batiment}
