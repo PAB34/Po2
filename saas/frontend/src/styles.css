@@ -6160,15 +6160,19 @@ button:disabled {
 }
 
 /* Dénominations affichées sur la carte à partir du zoom 17 (LABEL_MIN_ZOOM).
-   Ce sont des tooltips Leaflet permanents : on neutralise donc son habillage
-   (fond blanc, flèche, ombre) pour ne garder qu'un texte lisible sur la carte.
-   `pointer-events: none` est indispensable — une étiquette qui capte le clic
+   Ce sont des marqueurs à icône HTML, dans une couche à part, limitée au cadre
+   visible : la première version accrochait un tooltip permanent à CHAQUE marqueur,
+   soit 775 éléments repositionnés à chaque déplacement — l'écran ramait.
+   `pointer-events: none` est indispensable : une étiquette qui capte le clic
    rendrait inatteignable le point qu'elle nomme. */
-.leaflet-tooltip.map-label {
+.map-label-icon {
+  pointer-events: none;
+}
+
+.map-label {
+  display: inline-block;
   background: rgba(15, 23, 42, 0.82);
-  border: none;
   border-radius: 4px;
-  box-shadow: none;
   padding: 1px 5px;
   font-size: 11px;
   font-weight: 600;
@@ -6176,19 +6180,15 @@ button:disabled {
   pointer-events: none;
 }
 
-.leaflet-tooltip.map-label::before {
-  display: none; /* la flèche du tooltip n'a pas de sens pour une étiquette */
-}
-
-.leaflet-tooltip.map-label--astech {
+.map-label--astech {
   color: #d8b4fe; /* violet = ASTECH, comme les pastilles */
 }
 
-.leaflet-tooltip.map-label--po2 {
+.map-label--po2 {
   color: #7dd3fc; /* bleu = Po2 */
 }
 
-.leaflet-tooltip.map-label--local {
+.map-label--local {
   color: #a5b4fc;
   font-weight: 500;
 }
