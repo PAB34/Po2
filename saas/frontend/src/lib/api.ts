@@ -6209,9 +6209,9 @@ export async function convertLegacyAssetToLocal(
 }
 
 /**
- * Signale qu'un bien n'existe **plus dans la base ASTECH**, ou l'y réintègre.
- * La ligne est conservée : elle sort du parcours et du réexport, et reste consultable
- * sous le filtre « Disparu chez ASTECH ».
+ * Marque un bien **à supprimer de AS-TECH**, ou annule cette consigne.
+ * La ligne est conservée dans Po2 : elle sort du parcours et du réexport, et reste
+ * consultable sous le filtre « A SUPPRIMER DE AS-TECH ».
  */
 export async function markLegacyAssetGone(
   token: string,

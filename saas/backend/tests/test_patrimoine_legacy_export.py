@@ -265,14 +265,14 @@ def test_sans_import_le_gabarit_ne_peut_pas_etre_invente(db_session: Session):
         build_astech_workbook(db_session, 1)
 
 
-# --- Q23 : les biens disparus de la base ASTECH -------------------------------
+# --- Q23 : les biens à supprimer de AS-TECH -----------------------------------
 
-def test_un_bien_disparu_ne_repart_pas_dans_le_fichier(db_session: Session):
-    """Un CODE_BIEN supprimé chez ASTECH n'a plus de destinataire.
+def test_un_bien_a_supprimer_ne_repart_pas_dans_le_fichier(db_session: Session):
+    """Un CODE_BIEN que Po2 demande de supprimer ne doit pas etre remis a jour.
 
-    Il ne doit donc pas figurer dans la feuille réinjectable — mais il est nommé en
-    « À vérifier » avec son motif, pour que la référente sache ce que Po2 considère
-    comme perdu de son côté.
+    Il ne figure donc pas dans la feuille réinjectable — mais il est nommé en
+    « À vérifier » avec son motif, pour que la référente sache ce que Po2 lui demande
+    de retirer.
     """
     db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
     db_session.commit()
@@ -284,11 +284,11 @@ def test_un_bien_disparu_ne_repart_pas_dans_le_fichier(db_session: Session):
     assert sheets["Feuil1"][2:] == []
     review = sheets["À vérifier"][1:]
     assert [row[0] for row in review] == ["ADMICIMET02"]
-    assert "ASTECH" in review[0][2]
+    assert "à supprimer de AS-TECH" in review[0][2]
 
 
-def test_marquer_disparu_puis_reintegrer_rend_le_statut_reel(db_session: Session):
-    """Réintégrer ne restaure pas un statut mémorisé : il se déduit de l'état du bien."""
+def test_annuler_la_consigne_rend_le_statut_reel(db_session: Session):
+    """Annuler ne restaure pas un statut mémorisé : il se déduit de l'état du bien."""
     db_session.add(Building(id=1, city_id=1, nom_batiment="X", nom_commune="Sete"))
     db_session.commit()
 
@@ -305,8 +305,8 @@ def test_marquer_disparu_puis_reintegrer_rend_le_statut_reel(db_session: Session
     assert orphelin.status == STATUS_TODO
 
 
-def test_un_bien_disparu_n_est_jamais_repropose_par_le_moteur(db_session: Session):
-    """`compute_candidates` ne balaie que les biens « à traiter » : le disparu dort."""
+def test_un_bien_a_supprimer_n_est_jamais_repropose_par_le_moteur(db_session: Session):
+    """`compute_candidates` ne balaie que les biens « à traiter » : celui-ci dort."""
     db_session.add(Building(id=1, city_id=1, nom_batiment="CIMETIERE LE PY", nom_commune="Sete"))
     db_session.commit()
     asset = _asset(db_session, code_bien="ADMICIMET02", building_id=None, status=STATUS_GONE)

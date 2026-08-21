@@ -44,11 +44,14 @@ STATUS_LINKED = "lie"
 STATUS_IGNORED = "ignore"
 STATUS_OUT_OF_SCOPE = "hors_perimetre"
 STATUS_TO_CREATE = "a_creer"
-# Le bien n'existe **plus** dans la base ASTECH : la collectivite l'a supprime de son
-# cote depuis l'export. A ne pas confondre avec `ignore`, qui dit « je ne traite pas ce
-# bien » alors qu'il existe toujours. On conserve la ligne plutot que de l'effacer :
-# elle garde la trace de ce qu'ASTECH a perdu, un re-import du meme fichier ne la
-# ressuscite pas en silence, et l'operatrice peut revenir sur sa decision (Q23).
+# Le bien n'a plus lieu d'etre dans AS-TECH : Po2 demande sa suppression cote
+# collectivite. Affiche « A SUPPRIMER DE AS-TECH ». A ne pas confondre avec `ignore`,
+# qui dit « je ne traite pas ce bien » alors qu'il reste au referentiel. On conserve la
+# ligne plutot que de l'effacer : un re-import du meme fichier ne la ressuscite pas en
+# silence, et l'operatrice peut revenir sur sa decision (Q23).
+#
+# La VALEUR reste `disparu` : le libelle a change apres coup (2026-08-21), renommer la
+# cle imposerait une migration de donnees pour un simple affichage.
 STATUS_GONE = "disparu"
 
 # Cibles autorisées. Le site n'en est pas une : il regroupe plusieurs bâtiments et ne

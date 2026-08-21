@@ -260,14 +260,14 @@ def convert_asset_to_local(
 @router.post("/{asset_id}/gone", response_model=LegacyAssetOut)
 def mark_asset_gone(
     asset_id: int,
-    gone: bool = Query(default=True, description="Vrai = disparu d'ASTECH ; faux = réintégré."),
+    gone: bool = Query(default=True, description="Vrai = à supprimer de AS-TECH ; faux = à garder."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LegacyAssetOut:
-    """Signale que le bien **n'existe plus dans la base ASTECH**, ou l'y réintègre.
+    """Marque le bien **à supprimer de AS-TECH**, ou annule cette consigne.
 
-    La ligne est conservée : elle sort du parcours et du réexport, reste consultable
-    sous le filtre « Disparu chez ASTECH », et le geste est réversible (Q23).
+    La ligne est conservée dans Po2 : elle sort du parcours et du réexport, reste
+    consultable sous le filtre « A SUPPRIMER DE AS-TECH », et le geste est réversible (Q23).
     """
     asset = svc.get_asset_or_none(db, svc.resolve_city_id(db, current_user.city_id), asset_id)
     if asset is None:
