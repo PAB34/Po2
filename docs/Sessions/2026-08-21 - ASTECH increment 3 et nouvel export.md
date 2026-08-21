@@ -58,6 +58,12 @@ compteur d'avancement, filtres d'affinage, disposition en araignée sur la carte
    (1 sur 444 dans le fichier). Détacher lui rend son absence de position.
 8. **67 bâtiments Po2 sur 184 partagent leurs coordonnées** avec un autre (héritées de la
    parcelle). Écartés à l'affichage — le fond du problème reste la donnée.
+9. **Le local par défaut portait le nom du bâtiment.** L'import fabriquait un jumeau
+   homonyme et vide par bâtiment : invisible dans l'arbre replié, mais dessiné comme un
+   second point sur la carte ASTECH dont il hérite la position. 121 supprimés en prod le
+   2026-08-21, l'option coupée à l'import. Voir §21 du doc de rapprochement (Q23/Q24) —
+   qui apporte aussi le statut **« disparu chez ASTECH »** pour les biens que la
+   collectivité a retirés de sa base : hors parcours, hors réexport, réversible.
 
 ## Reprise prochaine session
 
