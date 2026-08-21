@@ -2227,73 +2227,181 @@ export default function PatrimoineAstechPage() {
                 </dl>
 
 
-                {selected.candidate_label && selected.status !== "lie" && (
+                {/* --- RATTACHEMENT : un seul bloc -------------------------------
+                    « Candidat proposé » et « Cible » affichaient LE MÊME bâtiment sous
+                    deux étiquettes différentes — `targetBuilding` retombe sur le
+                    candidat tant qu'aucun lien n'existe. On lisait donc deux fois le
+                    même nom, avec deux blocs d'actions séparés.
+                    Un seul bloc : l'entité visée, son niveau, son adresse, son état, et
+                    toutes les actions à la suite. */}
+                {targetBuilding && (
                   <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                    <p style={{ margin: "0 0 4px", fontSize: 13 }}>
-                      Candidat proposé : <strong>{selected.candidate_label}</strong>{" "}
-                      <span style={{ color: scoreColor(selected.candidate_score) }}>
-                        {selected.candidate_score != null
-                          ? `${Math.round(selected.candidate_score * 100)} %`
-                          : ""}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                        gap: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase" }}>
+                        Rattachement
                       </span>
-                    </p>
-                    {selected.candidate_reason && (
-                      <p style={{ margin: "0 0 8px", fontSize: 12, color: TEXT_MUTED }}>
-                        Motif : {selected.candidate_reason}
-                      </p>
+                      <span
+                        style={{
+                          ...pillStyle,
+                          color:
+                            selected.building_id == null
+                              ? "#93c5fd"
+                              : selected.status === "propose"
+                                ? "#fbbf24"
+                                : "#4ade80",
+                          background:
+                            selected.building_id == null
+                              ? "rgba(147, 197, 253, 0.16)"
+                              : selected.status === "propose"
+                                ? "rgba(251, 191, 36, 0.16)"
+                                : "rgba(34, 197, 94, 0.18)",
+                        }}
+                      >
+                        {selected.building_id == null
+                          ? `proposé par le moteur${
+                              selected.candidate_score != null
+                                ? ` · ${Math.round(selected.candidate_score * 100)} %`
+                                : ""
+                            }`
+                          : selected.status === "propose"
+                            ? "à confirmer"
+                            : "validé"}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>
+                      {selected.target_type === "local"
+                        ? localsById.get(selected.local_id ?? -1)?.nom_local ?? "Local"
+                        : targetBuilding.nom_batiment}
+                      <span style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: 400 }}>
+                        {" · "}
+                        {selected.target_type === "local"
+                          ? `local de ${targetBuilding.nom_batiment}`
+                          : "bâtiment entier"}
+                      </span>
+                    </div>
+                    {targetBuilding.adresse_reconstituee && (
+                      <div style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        {targetBuilding.adresse_reconstituee}
+                      </div>
                     )}
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        style={btnPrimary}
-                        onClick={() =>
-                          updateMutation.mutate(
-                            {
+                    {selected.building_id == null && selected.candidate_reason && (
+                      <div style={{ fontSize: 12, color: "#fbbf24", marginTop: 2 }}>
+                        ⚠ {selected.candidate_reason}
+                      </div>
+                    )}
+
+                    {/* Niveau visé : tout le bâtiment, ou l'un de ses locaux. */}
+                    {localsOfTarget.length > 0 && (
+                      <label
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: TEXT_MUTED, marginTop: 8 }}
+                        title="L'adresse et le cadastre restent toujours ceux du bâtiment porteur."
+                      >
+                        Niveau
+                        <select
+                          value={selected.target_type === "local" ? String(selected.local_id ?? "") : ""}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            updateMutation.mutate({
                               id: selected.id,
-                              payload: {
-                                building_id: selected.candidate_building_id,
-                              },
-                            },
-                            {
-                              onSuccess: () => {
-                                setFlash(
-                                  `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
-                                );
-                                goToNextAsset(selected.id);
-                              },
-                            },
-                          )
-                        }
-                      >
-                        Valider ce rattachement
-                      </button>
-                      {/* « Écarter » mettait le BIEN au statut « ignoré », ce qui le
-                          sortait du parcours — pas du tout l'intention de « cette
-                          suggestion est fausse ». Le bien reste donc à traiter, sans
-                          candidat, et son point devient posable à la main sur la carte. */}
+                              payload: value
+                                ? { local_id: Number(value) }
+                                : { building_id: targetBuilding.id },
+                            });
+                          }}
+                          style={{ ...input, width: "auto", padding: "3px 8px", fontSize: 12 }}
+                        >
+                          <option value="">— tout le bâtiment —</option>
+                          {localsOfTarget.map((local) => (
+                            <option key={local.id} value={local.id}>
+                              {local.nom_local}
+                              {local.niveau ? ` (${local.niveau})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {/* Toutes les actions à la suite, plutôt qu'éparpillées en trois blocs. */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                      {selected.building_id == null && selected.candidate_building_id != null && (
+                        <>
+                          <button
+                            type="button"
+                            style={btnPrimary}
+                            onClick={() =>
+                              updateMutation.mutate(
+                                { id: selected.id, payload: { building_id: selected.candidate_building_id } },
+                                {
+                                  onSuccess: () => {
+                                    setFlash(`« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`);
+                                    goToNextAsset(selected.id);
+                                  },
+                                },
+                              )
+                            }
+                          >
+                            Valider
+                          </button>
+                          <button
+                            type="button"
+                            style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                            title="Rejette la suggestion. Le bien reste à traiter : pose son point puis rattache-le."
+                            onClick={() =>
+                              updateMutation.mutate(
+                                { id: selected.id, payload: { clear_candidate: true } },
+                                {
+                                  onSuccess: () =>
+                                    setFlash(
+                                      "Proposition écartée. Le bien reste à traiter : pose son point sur la carte, " +
+                                        "puis dépose-le sur un bâtiment ou un local Po2.",
+                                    ),
+                                },
+                              )
+                            }
+                          >
+                            Écarter
+                          </button>
+                        </>
+                      )}
+                      {selected.building_id != null && (
+                        <button
+                          type="button"
+                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                          onClick={() => detachAsset(selected.id)}
+                        >
+                          Détacher
+                        </button>
+                      )}
                       <button
                         type="button"
-                        style={btnSecondary}
-                        title="Rejette la suggestion du moteur. Le bien reste à traiter : pose son point sur la carte, puis rattache-le."
-                        onClick={() =>
-                          updateMutation.mutate(
-                            { id: selected.id, payload: { clear_candidate: true } },
-                            {
-                              onSuccess: () =>
-                                setFlash(
-                                  "Proposition écartée. Le bien reste à traiter : fais glisser son point violet " +
-                                    "à la bonne place sur la carte, puis dépose-le sur un bâtiment ou un local Po2 — " +
-                                    "ou utilise « Choisir un bâtiment Po2… ».",
-                                ),
-                            },
-                          )
-                        }
+                        style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                        onClick={() => setPickerOpen((open) => !open)}
                       >
-                        Écarter cette proposition
+                        {pickerOpen ? "Fermer la liste" : "Changer de bâtiment…"}
                       </button>
+                      {selected.building_id != null && selected.target_type !== "local" && (
+                        <button
+                          type="button"
+                          style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                          disabled={toLocalMutation.isPending}
+                          title="Crée le local dans Po2 et y rattache ce bien. Il garde l'adresse et le cadastre du bâtiment."
+                          onClick={() => toLocalMutation.mutate(selected.id)}
+                        >
+                          {toLocalMutation.isPending ? "Création…" : "En faire un local"}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        style={{ ...btnSecondary, color: TEXT_MUTED }}
+                        style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px", color: TEXT_MUTED }}
                         title="Sort ce bien du parcours de rapprochement."
                         onClick={() =>
                           updateMutation.mutate(
@@ -2313,115 +2421,16 @@ export default function PatrimoineAstechPage() {
                         Ignorer ce bien
                       </button>
                     </div>
-                  </div>
-                )}
 
-                {/* Cible du rattachement. Le site n'est pas proposé (décision Q15) :
-                    il n'a ni position ni cadastre à transmettre à ASTECH. */}
-                {targetBuilding && (
-                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                    <p style={{ margin: "0 0 6px", fontSize: 13 }}>
-                      Cible :{" "}
-                      <strong>
-                        {selected.target_type === "local"
-                          ? localsById.get(selected.local_id ?? -1)?.nom_local ?? "Local"
-                          : targetBuilding.nom_batiment}
-                      </strong>{" "}
-                      <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
-                        ({selected.target_type === "local" ? "local" : "bâtiment"}
-                        {selected.target_type === "local"
-                          ? ` de ${targetBuilding.nom_batiment}`
-                          : ""}
-                        )
-                      </span>
-                      {/* Le nom seul ne suffit pas à identifier un bâtiment : plusieurs
-                          peuvent le partager. L'adresse tranche. */}
-                      {targetBuilding.adresse_reconstituee && (
-                        <span style={{ color: TEXT_MUTED, fontSize: 12 }}>
-                          {" "}
-                          — {targetBuilding.adresse_reconstituee}
-                        </span>
-                      )}
-                    </p>
-                    {localsOfTarget.length > 0 && (
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <label style={{ fontSize: 12, color: TEXT_MUTED }}>
-                          Préciser un local&nbsp;
-                          <select
-                            value={selected.target_type === "local" ? String(selected.local_id ?? "") : ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              updateMutation.mutate({
-                                id: selected.id,
-                                payload: value
-                                  ? { local_id: Number(value) }
-                                  : { building_id: targetBuilding.id },
-                              });
-                            }}
-                            style={{ ...input, width: "auto", padding: "4px 8px" }}
-                          >
-                            <option value="">— tout le bâtiment —</option>
-                            {localsOfTarget.map((local) => (
-                              <option key={local.id} value={local.id}>
-                                {local.nom_local}
-                                {local.niveau ? ` (${local.niveau})` : ""}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <span style={{ fontSize: 12, color: TEXT_MUTED }}>
-                          L'adresse et le cadastre restent ceux du bâtiment.
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Le chaînon qui manquait : le menu ci-dessus ne propose que les
-                        locaux DÉJÀ existants. Quand plusieurs biens ASTECH désignent le
-                        même bâtiment, le second est presque toujours un local qui n'est
-                        pas encore dans Po2 — sans ce bouton, impossible de le dire. */}
-                    {selected.building_id != null && selected.target_type !== "local" && (
-                      <div style={{ marginTop: 8 }}>
-                        <button
-                          type="button"
-                          style={btnSecondary}
-                          disabled={toLocalMutation.isPending}
-                          onClick={() => toLocalMutation.mutate(selected.id)}
-                        >
-                          {toLocalMutation.isPending
-                            ? "Création…"
-                            : "En faire un local de ce bâtiment"}
-                        </button>
-                        <p style={{ margin: "6px 0 0", fontSize: 12, color: TEXT_MUTED }}>
-                          Crée le local dans Po2 et y rattache ce bien. Il garde l'adresse et
-                          le cadastre du bâtiment, donc ce qu'il renverra à ASTECH ne change pas.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Structure du bâtiment porteur : qui d'autre le vise, et à quel
-                        niveau. C'est ce que le compteur de la carte ne disait pas. */}
+                    {/* La fratrie : qui d'autre vise ce bâtiment, et à quel niveau. */}
                     {siblingAssets.length > 1 && (
-                      <div
-                        style={{
-                          marginTop: 10,
-                          padding: "8px 10px",
-                          border: BORDER,
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                      >
-                        <div style={{ color: TEXT_MUTED, marginBottom: 4 }}>
+                      <div style={{ marginTop: 10, padding: "6px 8px", border: BORDER, borderRadius: 8, fontSize: 12 }}>
+                        <div style={{ color: TEXT_MUTED, marginBottom: 3 }}>
                           {siblingAssets.length} biens ASTECH désignent ce bâtiment :
                         </div>
-                        {/* Détacher depuis la fratrie : quand plusieurs biens partagent
-                            un point fusionné sur la carte, aller les chercher un par un
-                            sur la carte est pénible. Ici chacun a son bouton. */}
                         {siblingAssets.map((sibling) => (
-                          <div
-                            key={sibling.id}
-                            style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}
-                          >
-                            <span>{sibling.target_type === "local" ? "  ›" : "▪"}</span>
+                          <div key={sibling.id} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <span>{sibling.target_type === "local" ? "  ›" : "▪"}</span>
                             <button
                               type="button"
                               onClick={() => setSelectedId(sibling.id)}
@@ -2439,13 +2448,11 @@ export default function PatrimoineAstechPage() {
                               {assetLabel(sibling)}
                             </button>
                             <span style={{ color: TEXT_MUTED }}>
-                              {sibling.target_type === "local"
-                                ? `local « ${localsById.get(sibling.local_id ?? -1)?.nom_local ?? "?"} »`
-                                : "bâtiment entier"}
+                              {sibling.target_type === "local" ? "local" : "bâtiment entier"}
                             </span>
                             <button
                               type="button"
-                              title="Détacher ce bien du bâtiment"
+                              title="Détacher ce bien"
                               onClick={() => detachAsset(sibling.id)}
                               style={{
                                 marginLeft: "auto",
@@ -2456,19 +2463,16 @@ export default function PatrimoineAstechPage() {
                                 padding: "1px 7px",
                                 fontSize: 11,
                                 cursor: "pointer",
-                                whiteSpace: "nowrap",
                               }}
                             >
                               Détacher
                             </button>
                           </div>
                         ))}
-                        {siblingAssets.filter((sibling) => sibling.target_type !== "local").length >
-                          1 && (
-                          <div style={{ marginTop: 6, color: "#fbbf24" }}>
-                            ⚠ Plusieurs visent le <strong>bâtiment entier</strong>. En principe un
-                            seul le désigne, les autres sont des locaux — ou l'un d'eux est mal
-                            rattaché.
+                        {siblingAssets.filter((s) => s.target_type !== "local").length > 1 && (
+                          <div style={{ marginTop: 5, color: "#fbbf24" }}>
+                            ⚠ Plusieurs visent le <strong>bâtiment entier</strong>. En principe un seul
+                            le désigne, les autres sont des locaux.
                           </div>
                         )}
                       </div>
@@ -2476,45 +2480,26 @@ export default function PatrimoineAstechPage() {
                   </div>
                 )}
 
-                {/* Le détachement ne dépendait que du statut « lié » : un bien seulement
-                    PROPOSÉ par le moteur ne pouvait pas être détaché, alors que c'est
-                    précisément celui dont le rattachement est le moins sûr. La seule
-                    condition qui compte est qu'il y ait un lien à couper. */}
-                {selected.building_id != null && targetBuilding && (
-                  <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                    <p style={{ margin: "0 0 8px", fontSize: 13 }}>
-                      Rattaché à <strong>{targetBuilding.nom_batiment}</strong>
-                      {targetBuilding.adresse_reconstituee
-                        ? ` — ${targetBuilding.adresse_reconstituee}`
-                        : ""}
-                      {selected.link_origin === "auto" ? " (reconnaissance automatique)" : ""}
-                    </p>
-                    <button
-                      type="button"
-                      style={btnSecondary}
-                      onClick={() => detachAsset(selected.id)}
-                    >
-                      Détacher
-                    </button>
-                  </div>
-                )}
 
                 {/* Rapprochement manuel : le moteur ne propose rien pour environ un
-                    quart des biens, et sa proposition peut être fausse. Sans ce
-                    sélecteur, il n'y a aucun moyen de rattacher ces biens-là. */}
-                <div style={{ borderTop: BORDER, paddingTop: 10, marginBottom: 10 }}>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      style={btnSecondary}
-                      onClick={() => setPickerOpen((open) => !open)}
-                    >
-                      {pickerOpen ? "Fermer la liste" : "Choisir un bâtiment Po2…"}
-                    </button>
-                    <span style={{ fontSize: 12, color: TEXT_MUTED }}>
-                      ou clique directement un point bleu sur la carte
-                    </span>
-                  </div>
+                    quart des biens, et sa proposition peut être fausse.
+                    Le bouton qui ouvrait cette liste vit désormais dans le bloc
+                    « Rattachement » avec les autres actions — il était ici en double. */}
+                <div style={{ marginBottom: 10 }}>
+                  {!targetBuilding && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderTop: BORDER, paddingTop: 10 }}>
+                      <button
+                        type="button"
+                        style={btnSecondary}
+                        onClick={() => setPickerOpen((open) => !open)}
+                      >
+                        {pickerOpen ? "Fermer la liste" : "Choisir un bâtiment Po2…"}
+                      </button>
+                      <span style={{ fontSize: 12, color: TEXT_MUTED }}>
+                        ou clique un point bleu sur la carte
+                      </span>
+                    </div>
+                  )}
 
                   {pickerOpen && (
                     <div style={{ marginTop: 8 }}>
