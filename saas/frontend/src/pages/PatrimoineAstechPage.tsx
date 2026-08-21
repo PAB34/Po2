@@ -2146,9 +2146,17 @@ export default function PatrimoineAstechPage() {
             {!selected && <p style={{ color: TEXT_MUTED, margin: 0 }}>Sélectionne un bien dans la liste.</p>}
             {selected && (
               <>
-                {/* Nom éditable : le fichier historique contient des libellés fautifs
-                    ou tronqués, et c'est ce nom qui repartira dans ASTECH. Le CODE_BIEN
-                    reste affiché mais jamais modifiable : c'est la clé de réinjection. */}
+                {/* Bloc ASTECH, en miroir du bloc Po2 : lisere et titre violets, la
+                    couleur des points ASTECH sur la carte. Les deux referentiels se
+                    lisent ainsi de la meme facon partout — violet = ASTECH, bleu = Po2.
+
+                    Nom editable : le fichier historique contient des libelles fautifs ou
+                    tronques, et c'est ce nom qui repartira dans ASTECH. Le CODE_BIEN
+                    reste affiche mais jamais modifiable : c'est la cle de reinjection. */}
+                <div style={{ borderLeft: "3px solid #a855f7", paddingLeft: 10 }}>
+                  <div style={{ fontSize: 11, color: "#c4b5fd", textTransform: "uppercase", fontWeight: 600, marginBottom: 6 }}>
+                    Bien ASTECH
+                  </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "0 0 10px" }}>
                   <span
                     title="Code bien ASTECH — clé de réinjection, jamais modifiable"
@@ -2225,6 +2233,7 @@ export default function PatrimoineAstechPage() {
                     </div>
                   ))}
                 </dl>
+                </div>
 
 
                 {/* --- RATTACHEMENT : un seul bloc -------------------------------
