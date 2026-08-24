@@ -1148,3 +1148,38 @@ d'interroger « 0 RUE X ». Les biens hors périmètre et réformés ne sont pas
 
 ⚠️ **Sans numéro de voirie, le géocodeur rend le milieu de la voie** (§11.2) : les points
 posés sont un point de départ à vérifier, pas une position exacte.
+
+### 25.5 Incident du 2026-08-24 — le géocodage en masse a abîmé la carte
+
+Premier passage du lot : 283 biens posés… et deux dégâts, signalés aussitôt par
+l'utilisateur (« avant c'était mieux, maintenant y'a des traits dans tous les sens »).
+
+**1. Les biens déjà rattachés ont été géocodés.** Leur position est celle de leur
+bâtiment, **empruntée et non propre** (§19 ; 1 bien sur 444 en porte une dans le
+fichier). Leur en donner une propre les a décollés de leur bâtiment : **53 biens
+déplacés**, et autant de traits de liaison partant dans toutes les directions — le trait
+« à n'importe quel angle » de Q27 faisait exactement son travail, sur des données
+devenues fausses.
+
+**2. Dix positions hors de la commune.** Le géocodeur national retombe sur une adresse
+homonyme ailleurs quand il ne trouve rien sur place, **même avec le code commune** :
+
+| Bien | Adresse ASTECH | Atterri à |
+|---|---|---|
+| `BATI00251` BAINS DOUCHES | PLACE STALINGRAD | 49,25 / 4,02 — Reims |
+| `BATI00329` CHATEAU VERT | CENTRE COMMERCIAL - LE CHATEAU VERT | 43,65 / 5,10 — près d'Aix |
+| `BATI00423` CENTRE F.J. RIGAL | Le Globe - Ancienne mosquée | −12,74 / 45,14 — **Mayotte** |
+
+**Corrections apportées** (PR #162) : les biens rattachés sont exclus du lot ; tout point
+tombant hors du cadre de la commune — déduit des bâtiments Po2 positionnés, marge 0,15°
+— est refusé, le bien restant sans position. Faute de dix bâtiments pour calibrer, le
+garde-fou ne refuse rien.
+
+**Réparation des données** : 63 positions annulées, sauvegardées dans
+`patrimoine-positions-annulees-2026-08-24.csv`. État après réparation — 227 biens à
+traiter sur la carte (contre **2** avant le lot), 0 point hors commune, et les biens
+rattachés de nouveau sur leur bâtiment (18 positions propres, exactement l'état d'avant).
+
+**La leçon, à ne pas réintroduire** : une position fausse est pire qu'une absence de
+position — elle a l'air d'une donnée. Et un traitement en masse doit exclure ce qui est
+déjà traité, pas seulement ce qui est vide.
