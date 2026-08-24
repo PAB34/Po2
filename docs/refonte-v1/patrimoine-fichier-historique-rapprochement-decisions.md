@@ -1074,3 +1074,77 @@ les deux étages du Lakanal sont épargnés.
 | Q32 | Passage automatique au bien suivant | **Retiré**, ainsi que l'option. Après une décision, la sélection **reste** sur le bien traité : on voit ce qu'on vient de faire et on peut le corriger dans la foulée. Sauter au suivant obligeait à revenir en arrière dès qu'une décision demandait vérification. |
 | Q33 | « A SUPPRIMER DE AS-TECH » | Devient **« REFORMER »** (arbitrage de la collègue référente). Le sens change une seconde fois : ce n'est plus une consigne de suppression adressée à AS-TECH, c'est un **état du bien** — il sort du parc. D'où son **déplacement dans le bloc ASTECH** (violet) : il décrit le bien, pas la cible Po2. Il y était d'ailleurs invisible tant qu'aucun bâtiment n'était visé, alors qu'un bien réformé n'a pas besoin d'être rattaché pour l'être. Bouton inverse : « Annuler la réforme ». Motif du réexport : « réformé : ce bien est sorti du parc de la collectivité ». **La valeur stockée reste `disparu`** — troisième libellé sur la même clé, la renommer imposerait une migration pour un affichage. |
 | Q34 | Aller à une adresse | **Champ de recherche au-dessus de la carte** : on saisit une adresse, la carte s'y rend au zoom du bâtiment (donc avec les dénominations). Même géocodeur que « Sur l'adresse ASTECH ». **Rien n'est enregistré** : cela déplace le regard, aucun bien n'est touché. Le besoin est souvent l'inverse du parcours prévu — on connaît l'adresse et on cherche ce qu'il y a dessus. |
+
+## 25. Refonte de l'interaction carte — audit 2026-08-21
+
+> « J'aimerais gérer beaucoup plus facilement les relations entre bâtiment / local
+> principal Po2 et ceux d'ASTECH, directement sur la carte. Je trouve toujours ça moyen. »
+
+### 25.1 Le vrai obstacle : la carte ne contient pas le travail à faire
+
+Mesuré en prod le 2026-08-21, sur les 381 biens :
+
+| | |
+|---|---|
+| Biens ayant une **position propre** | **22** |
+| Biens **à traiter** | **294** — dont **2** positionnés |
+| Biens sans position **mais avec une adresse ASTECH** | **292** |
+
+Les biens rattachés (83) s'affichent parce qu'ils **héritent du point de leur bâtiment**.
+La carte montre donc environ 85 points, dont 83 sont déjà traités.
+
+**La carte affiche ce qui est fini et cache ce qui reste à faire.** Aucune refonte des
+gestes ne corrigera cela : 292 des 294 biens à traiter ne sont pas sur la carte. C'est la
+cause première du « moyen ».
+
+Or **292 de ces biens portent une adresse ASTECH exploitable**, et le bouton « Sur
+l'adresse ASTECH » sait déjà les géocoder — un par un.
+
+### 25.2 Ce que l'interaction sait faire aujourd'hui
+
+| Geste | Effet |
+|---|---|
+| Clic sur un point ASTECH | Le sélectionne (ouvre le panneau) |
+| Clic sur un bâtiment Po2 | **Consulte** seulement |
+| Clic sur un local Po2 | **Consulte** seulement |
+| Glisser le point sélectionné sur une entité Po2 | Propose un rattachement (Q25) |
+| Glisser un bâtiment consulté | Le déplace |
+
+Frictions relevées dans le code et à l'usage :
+
+1. **Seul le point sélectionné est déplaçable** (`isDraggable = isActive`). Rattacher
+   demande donc toujours deux temps : sélectionner, puis glisser.
+2. **Le sens du travail est à sens unique** — ASTECH → Po2. On ne peut pas partir d'un
+   bâtiment Po2 et demander « quels biens ASTECH le désignent, ou pourraient le
+   désigner ? », alors que c'est souvent la question réelle.
+3. **La hiérarchie bâtiment / local ne se règle pas sur la carte.** L'araignée montre la
+   fratrie, mais décider « celui-ci est le bâtiment entier, ceux-là sont ses locaux »
+   passe par le panneau, bien par bien.
+
+### 25.3 Questions ouvertes
+
+### 25.4 Décisions
+
+| # | Question | Décision |
+|---|---|---|
+| Q35 | Dans quel ordre ? | **Poser les 292 biens d'abord.** Toute refonte des gestes s'appliquerait sinon à une carte qui ne contient pas le travail. Bouton « 5 · Poser les biens sans position sur leur adresse », même moteur (BAN) que le bouton unitaire existant. |
+| Q36 | Modèle d'interaction | **Le bâtiment comme point de départ.** Cliquer un bâtiment Po2 montrera ses locaux ET les biens ASTECH proches non rattachés, chacun avec « rattacher au bâtiment » / « en faire un local » / « écarter ». C'est le sens de travail qui manque — aujourd'hui tout va d'ASTECH vers Po2. **À construire après Q35.** |
+
+**Ce que Q35 livre.** Traitement **par lots** côté serveur (25 par appel), l'écran
+rappelle jusqu'à épuisement en affichant l'avancement : une seule requête de 292
+géocodages expirerait.
+
+Un piège traité : un bien introuvable **reste sans position**, donc dans le lot à
+traiter. Sans décalage, chaque appel rejouerait les mêmes échecs et la boucle ne
+finirait jamais. L'écran cumule donc les échecs dans un `offset` que le serveur saute.
+
+Le **géocodage inverse n'est pas rejoué** ici, contrairement au bouton unitaire : on part
+de l'adresse ASTECH, la redemander au point qu'elle vient de produire serait circulaire
+et doublerait les appels réseau. Les champs résolus se remplissent au rattachement,
+depuis le bâtiment porteur.
+
+`NORUE` valant `0` sur 285 lignes sur 378, il est écarté de l'adresse géocodée plutôt que
+d'interroger « 0 RUE X ». Les biens hors périmètre et réformés ne sont pas traités.
+
+⚠️ **Sans numéro de voirie, le géocodeur rend le milieu de la voie** (§11.2) : les points
+posés sont un point de départ à vérifier, pas une position exacte.

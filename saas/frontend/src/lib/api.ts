@@ -6208,6 +6208,30 @@ export async function convertLegacyAssetToLocal(
   return parseResponse<LegacyAsset>(response);
 }
 
+export type LegacyGeocodeBatch = {
+  traites: number;
+  positionnes: number;
+  echecs: { code_bien: string; motif: string }[];
+  restants: number;
+};
+
+/**
+ * Pose sur leur adresse ASTECH les biens sans position, par lots.
+ * L'appelant rappelle jusqu'à `restants === 0`, en cumulant les échecs dans `offset` —
+ * un bien introuvable reste sans position et serait sinon rejoué indéfiniment.
+ */
+export async function geocodePendingLegacyAssets(
+  token: string,
+  limit: number,
+  offset: number,
+): Promise<LegacyGeocodeBatch> {
+  const response = await fetch(
+    `${apiBaseUrl}/patrimoine/legacy/geocode-pending?limit=${limit}&offset=${offset}`,
+    { method: "POST", headers: buildHeaders(token) },
+  );
+  return parseResponse<LegacyGeocodeBatch>(response);
+}
+
 export type PatrimonyDuplicateEntry = {
   id: number;
   nom: string | null;

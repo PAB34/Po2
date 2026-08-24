@@ -15,6 +15,7 @@ from app.schemas.patrimoine_legacy import (
     LegacyCandidatesResult,
     LegacyImportResult,
 )
+from app.services.cities import get_city_by_id
 from app.services import patrimoine_legacy as svc
 from app.services import patrimoine_legacy_export as export_svc
 
@@ -255,6 +256,25 @@ def convert_asset_to_local(
         return LegacyAssetOut.model_validate(svc.convert_asset_to_local(db, asset))
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.post("/geocode-pending")
+def geocode_pending_assets(
+    limit: int = Query(default=25, ge=1, le=100, description="Biens traités par appel."),
+    offset: int = Query(default=0, ge=0, description="Échecs déjà constatés, à passer."),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Pose sur leur adresse ASTECH les biens qui n'ont aucune position (§25, Q35).
+
+    Par lots : l'écran rappelle jusqu'à épuisement et affiche l'avancement, là où une
+    seule requête de 292 géocodages expirerait.
+    """
+    city_id = svc.resolve_city_id(db, current_user.city_id)
+    city = get_city_by_id(db, city_id) if city_id is not None else None
+    return svc.geocode_pending_assets(
+        db, city_id, city.nom_commune if city is not None else None, limit=limit, offset=offset
+    )
 
 
 @router.post("/{asset_id}/gone", response_model=LegacyAssetOut)

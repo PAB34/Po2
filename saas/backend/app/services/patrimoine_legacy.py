@@ -46,7 +46,7 @@ from app.models.patrimoine_legacy import (
     PatrimoineLegacyAsset,
     PatrimoineLegacyImport,
 )
-from app.services.building_naming import reverse_geocode_point
+from app.services.building_naming import lookup_free_address_candidates, reverse_geocode_point
 from app.services.cvc import _site_similarity
 
 # --- Périmètre par défaut ----------------------------------------------------
@@ -1423,3 +1423,97 @@ def list_locals_for_building(db: Session, building_id: int) -> list[Local]:
             select(Local).where(Local.building_id == building_id).order_by(Local.nom_local.asc())
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Géocodage en masse des biens sans position (§25, décision Q35)
+# ---------------------------------------------------------------------------
+
+def _astech_address(asset: PatrimoineLegacyAsset) -> str | None:
+    """L'adresse du fichier ASTECH, composée comme à l'écran.
+
+    `NORUE` vaut `0` sur 285 lignes sur 378 : c'est un défaut connu du fichier, pas un
+    numéro. On l'écarte plutôt que de géocoder « 0 RUE X », qui ne rend rien.
+    """
+    parts = [
+        asset.source_norue if asset.source_norue and asset.source_norue != "0" else None,
+        asset.source_libelvoie,
+    ]
+    line = " ".join(part for part in parts if part)
+    if not line.strip():
+        return None
+    return f"{line}, {asset.source_ville}" if asset.source_ville else line
+
+
+def geocode_pending_assets(
+    db: Session, city_id: int | None, city_name: str | None, *, limit: int = 25, offset: int = 0
+) -> dict[str, Any]:
+    """Pose sur leur adresse ASTECH les biens qui n'ont aucune position.
+
+    Pourquoi en masse : mesure du 2026-08-21 — **294 biens à traiter, dont 2 seulement
+    sur la carte**, alors que 292 portent une adresse exploitable. La carte montrait donc
+    ce qui était fini et cachait ce qui restait à faire. Le geste existait déjà (« Sur
+    l'adresse ASTECH »), mais un par un sur 292 biens.
+
+    Même moteur que le bouton unitaire (`lookup_free_address_candidates`, BAN).
+
+    On s'arrête à `limit` biens par appel : l'écran rappelle jusqu'à épuisement et peut
+    afficher l'avancement, là où une seule requête de 292 géocodages expirerait.
+
+    `offset` sert à **passer les échecs déjà constatés**. Un bien introuvable reste sans
+    position, donc dans le lot à traiter : sans ce décalage, chaque appel rejouerait les
+    mêmes échecs et la boucle ne finirait jamais. L'appelant y met le nombre d'échecs
+    cumulés depuis le début.
+
+    Le géocodage inverse du point n'est **pas** rejoué ici, contrairement au bouton
+    unitaire : on vient de partir de l'adresse ASTECH, la redemander au point qu'elle a
+    produit serait circulaire et doublerait les appels réseau. Les champs résolus se
+    remplissent au rattachement, depuis le bâtiment porteur.
+    """
+    statement = select(PatrimoineLegacyAsset).where(
+        PatrimoineLegacyAsset.latitude.is_(None),
+        PatrimoineLegacyAsset.source_libelvoie.is_not(None),
+        PatrimoineLegacyAsset.source_libelvoie != "",
+        PatrimoineLegacyAsset.status.notin_([STATUS_OUT_OF_SCOPE, STATUS_GONE]),
+    )
+    if city_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.city_id == city_id)
+
+    # Ordre stable : le decalage des echecs n'a de sens que si le lot ne se reordonne pas
+    # d'un appel a l'autre.
+    pending = list(db.scalars(statement.order_by(PatrimoineLegacyAsset.code_bien.asc())))
+    batch = pending[offset : offset + limit]
+
+    positioned = 0
+    failures: list[dict[str, str]] = []
+    for asset in batch:
+        address = _astech_address(asset)
+        if not address:
+            failures.append({"code_bien": asset.code_bien, "motif": "aucune adresse exploitable"})
+            continue
+        try:
+            lookup = lookup_free_address_candidates(
+                address,
+                city_name=city_name,
+                citycode=asset.source_commune,
+                skip_ign_buildings=True,
+            )
+        except Exception as error:  # le géocodeur est un service externe : jamais bloquant
+            failures.append({"code_bien": asset.code_bien, "motif": str(error)[:180]})
+            continue
+        latitude, longitude = lookup.get("lat"), lookup.get("lon")
+        if latitude is None or longitude is None:
+            failures.append({"code_bien": asset.code_bien, "motif": f"introuvable : « {address} »"})
+            continue
+        asset.latitude = latitude
+        asset.longitude = longitude
+        db.add(asset)
+        positioned += 1
+
+    db.commit()
+    return {
+        "traites": len(batch),
+        "positionnes": positioned,
+        "echecs": failures,
+        "restants": max(0, len(pending) - offset - len(batch)),
+    }
