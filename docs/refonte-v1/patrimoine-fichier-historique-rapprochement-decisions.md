@@ -1199,3 +1199,33 @@ alors que sa pastille était dessinée écartée — et l'écartement ne compara
 entre eux, si bien qu'un local seul posé sur son bâtiment n'était pas écarté du tout.
 39 des 57 locaux affichables étaient dans ce cas. La position dessinée est désormais
 calculée une fois et partagée entre pastilles et dénominations.
+
+
+### 26.1 Incident du 2026-08-24 — la confirmation en bloc n'attribuait pas le nom Po2
+
+Un bien rattaché **à la main** adoptait le nom de sa cible Po2 (Q11) ; un bien confirmé
+par « 3. Confirmer les rattachement(s) proposé(s) » **gardait le sien** :
+`confirm_proposed` rafraîchissait l'adresse héritée mais n'appelait jamais
+`_adopt_target_name`. **49 biens « liés » portaient encore leur libellé ASTECH.**
+
+**Ce n'était pas cosmétique.** Le réexport écrit `nomcourt` — et à défaut `designation` —
+dans les colonnes DESIGNATION et NOMCOURT, et non `resolved_name`, qui lui était bien
+renseigné. Or `nomcourt` porte le nom **court** d'ASTECH : le fichier serait reparti avec
+« A.P.P. » au lieu de « ATELIER DE PEDAGOGIE PERSONNALISEE A.P.P. », ou « 3 DIGUES » au
+lieu de « POSTE DE SECOURS 3 DIGUES ».
+
+Le moteur appariant sur le nom, `designation` coïncidait souvent déjà avec le nom Po2 —
+c'est `nomcourt` qui trahissait, et c'est justement celui que l'export préfère. Le défaut
+était donc invisible à l'écran sur la plupart des lignes.
+
+**Corrections** (PR #166) : l'adoption a lieu à la **confirmation**, jamais au moment où
+le moteur propose — une suggestion ne doit pas réécrire un libellé avant validation
+humaine. 49 noms réalignés en prod, sauvegardés dans
+`patrimoine-noms-realignes-2026-08-24.csv`. Le libellé ASTECH d'origine reste
+récupérable : « Détacher » le restitue depuis la ligne source (Q26).
+
+**Aussi** : la coche ✓ marque désormais l'**état** et non la géométrie. Elle ne se posait
+que sur les points fusionnés, alors que 3 biens appariés gardent une position propre à
+l'écart de leur bâtiment et restent reliés par un trait — eux aussi sont traités. Une
+proposition du moteur (ambre) ne la porte pas. Répartition réelle : 83 bâtiments portent
+1 bien (fusionné), 1 en porte 2 (araignée), 3 biens sont posés à l'écart (trait + ✓).
