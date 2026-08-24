@@ -867,6 +867,63 @@ export function BuildingPortfolioMap({
     // donnees, et c'est alors qu'il faut monter la carte.
   }, [containerEl]);
 
+  /**
+   * Position REELLEMENT dessinée de chaque local, écartement compris.
+   *
+   * Deux empilements à défaire, pas un seul :
+   *
+   * - plusieurs locaux sur un même point — ils héritent tous de la position de leur
+   *   bâtiment à l'import ;
+   * - **un local seul, posé exactement sur son bâtiment**. C'était le cas oublié :
+   *   l'écartement ne comparait que les locaux entre eux, si bien qu'un local unique
+   *   restait pile sous la pastille de son bâtiment, invisible. Mesuré le 2026-08-24 :
+   *   39 des 57 locaux affichables sont dans ce cas.
+   *
+   * Un local qui porte une position propre et distincte n'est PAS déplacé : on ne
+   * déforme pas une donnée juste pour la commodité de l'affichage.
+   *
+   * Le calcul est partagé avec la couche des dénominations : une étiquette posée
+   * ailleurs que sa pastille désignerait le mauvais point.
+   */
+  const localMarkers = useMemo(() => {
+    const points = localPoints ?? [];
+    // ~9 m : plus serré que les pattes d'araignée ASTECH (15 m) et que l'écartement des
+    // bâtiments (22 m), pour que les trois familles restent distinctes à l'œil.
+    const radiusDeg = 9 / 111_320;
+    const groups = new Map<string, LocalMapPoint[]>();
+    for (const point of points) {
+      groups.set(
+        `${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`,
+        [...(groups.get(`${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`) ?? []), point],
+      );
+    }
+    const drawn: { point: LocalMapPoint; latitude: number; longitude: number }[] = [];
+    for (const group of groups.values()) {
+      group.forEach((point, index) => {
+        const anchorPoint = buildingDisplay.get(point.buildingId);
+        const onItsBuilding =
+          anchorPoint != null &&
+          distanceMeters(point.latitude, point.longitude, anchorPoint.lat, anchorPoint.lon) <= 2;
+        if (group.length === 1 && !onItsBuilding) {
+          drawn.push({ point, latitude: point.latitude, longitude: point.longitude });
+          return;
+        }
+        // Départ décalé d'un quart de tour par rapport à l'araignée ASTECH (qui part au
+        // nord-est) : les deux familles ne se superposent pas autour d'un même bâtiment.
+        const angle = (2 * Math.PI * index) / group.length - Math.PI / 4;
+        drawn.push({
+          point,
+          latitude: point.latitude + radiusDeg * Math.cos(angle),
+          longitude:
+            point.longitude +
+            (radiusDeg * Math.sin(angle)) /
+              Math.max(0.2, Math.cos((point.latitude * Math.PI) / 180)),
+        });
+      });
+    }
+    return drawn;
+  }, [buildingDisplay, localPoints]);
+
   // ------------------------------------------------------------------
   // Couche « locaux Po2 » — pastilles subordonnées aux bâtiments
   // ------------------------------------------------------------------
@@ -878,32 +935,11 @@ export function BuildingPortfolioMap({
     localsLayerRef.current?.remove?.();
     localsLayerRef.current = null;
 
-    const points = localPoints ?? [];
-    if (points.length === 0 || attachMode === "ign") return;
-
-    // Beaucoup de locaux partagent le point de leur bâtiment (ils héritent de sa
-    // position à l'import) : sans écartement, un seul serait visible — le même piège
-    // que pour les bâtiments empilés.
-    const groups = new Map<string, LocalMapPoint[]>();
-    for (const point of points) {
-      const key = `${point.latitude.toFixed(6)}|${point.longitude.toFixed(6)}`;
-      groups.set(key, [...(groups.get(key) ?? []), point]);
-    }
+    if (localMarkers.length === 0 || attachMode === "ign") return;
 
     const layerGroup = runtime.featureGroup();
-    for (const group of groups.values()) {
-      // ~9 m : plus serré que les pattes d'araignée ASTECH (15 m) et que l'écartement
-      // des bâtiments (22 m), pour que les trois familles restent distinctes à l'œil.
-      const radiusDeg = 9 / 111_320;
-      group.forEach((point, index) => {
-        const angle = group.length === 1 ? 0 : (2 * Math.PI * index) / group.length;
-        const latitude = group.length === 1 ? point.latitude : point.latitude + radiusDeg * Math.cos(angle);
-        const longitude =
-          group.length === 1
-            ? point.longitude
-            : point.longitude +
-              (radiusDeg * Math.sin(angle)) /
-                Math.max(0.2, Math.cos((point.latitude * Math.PI) / 180));
+    {
+      localMarkers.forEach(({ point, latitude, longitude }) => {
         const marker = runtime.circleMarker([latitude, longitude], {
           radius: 4,
           color: "#a5b4fc",
@@ -936,7 +972,7 @@ export function BuildingPortfolioMap({
     return () => {
       layerGroup.clearLayers();
     };
-  }, [attachMode, localPoints, mapReady, onSelectLocalId]);
+  }, [attachMode, localMarkers, mapReady, onSelectLocalId]);
 
   // ------------------------------------------------------------------
   // Couche « dénominations » — une couche À PART, et seulement ce qui est à l'écran
@@ -1011,8 +1047,11 @@ export function BuildingPortfolioMap({
       );
     }
     if (attachMode !== "ign") {
-      for (const point of localPoints ?? []) {
-        poser(point.latitude, point.longitude, point.label, "local", "◇");
+      // La position DESSINEE, pas la position brute : 39 des 57 locaux affichables
+      // partagent le point de leur batiment, leur etiquette se posait donc exactement
+      // sous celle du batiment et restait invisible.
+      for (const { point, latitude, longitude } of localMarkers) {
+        poser(latitude, longitude, point.label, "local", "◇");
       }
     }
 
@@ -1022,7 +1061,7 @@ export function BuildingPortfolioMap({
       group.clearLayers();
     };
   }, [
-    attachMode, buildingDisplay, labelsVisible, legacyMarkers, localPoints, mapReady,
+    attachMode, buildingDisplay, labelsVisible, legacyMarkers, localMarkers, mapReady,
     mappableBuildings, viewportTick,
   ]);
 
