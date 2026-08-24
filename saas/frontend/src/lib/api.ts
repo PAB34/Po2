@@ -6243,6 +6243,8 @@ export type PatrimonyDuplicatesResult = {
   dry_run: boolean;
   batiments_supprimes: PatrimonyDuplicateEntry[];
   locaux_supprimes: PatrimonyDuplicateEntry[];
+  /** Locaux qui ne font que redire le nom du bâtiment qui les contient. */
+  locaux_homonymes_supprimes: PatrimonyDuplicateEntry[];
   conserves_car_lies: PatrimonyDuplicateEntry[];
 };
 

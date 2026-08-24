@@ -997,7 +997,7 @@ def _local_identity(local: Local) -> tuple:
 
 
 def purge_duplicates(db: Session, current_user: User, *, dry_run: bool = False) -> dict:
-    """Supprime les doublons stricts du référentiel Po2 (Q28/Q29).
+    """Supprime les doublons stricts du référentiel Po2, et les locaux homonymes (Q28/Q29/Q40).
 
     Deux garde-fous, parce que l'operation est irreversible :
     - l'identite est **stricte** : deux entites homonymes mais situees ailleurs, ou a un
@@ -1076,11 +1076,41 @@ def purge_duplicates(db: Session, current_user: User, *, dry_run: bool = False) 
             if not dry_run:
                 db.delete(duplicate)
 
+    # Troisième catégorie : le local HOMONYME DE SON BÂTIMENT.
+    #
+    # Ce n'est pas un doublon au sens des deux précédents — il est seul de son nom dans
+    # son bâtiment — mais il n'apporte rien : il redit le bâtiment qui le contient. C'est
+    # ce que fabriquait le local par défaut de l'import (§21), et un ré-import en
+    # refabriquerait. 121 supprimés à la main le 2026-08-21 ; le geste devient un bouton
+    # pour ne plus avoir à y revenir.
+    homonym_statement = select(Local, Building).join(Building, Local.building_id == Building.id)
+    if city_id is not None:
+        homonym_statement = homonym_statement.where(Building.city_id == city_id)
+    removed_homonyms: list[dict] = []
+    for local, building in db.execute(homonym_statement):
+        name = _normalize_lookup(local.nom_local)
+        if not name or name != _normalize_lookup(building.nom_batiment):
+            continue
+        links = _reference_count(db, LOCAL_REFERENCES, local.id)
+        entry = {
+            "id": local.id,
+            "nom": local.nom_local,
+            "conserve_id": building.id,
+            "liens": links,
+        }
+        if links > 0:
+            kept_with_links.append(entry)
+            continue
+        removed_homonyms.append(entry)
+        if not dry_run:
+            db.delete(local)
+
     if not dry_run:
         db.commit()
     return {
         "dry_run": dry_run,
         "batiments_supprimes": removed_buildings,
         "locaux_supprimes": removed_locals,
+        "locaux_homonymes_supprimes": removed_homonyms,
         "conserves_car_lies": kept_with_links,
     }

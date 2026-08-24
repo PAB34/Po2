@@ -708,13 +708,19 @@ export default function PatrimoineAstechPage() {
   const dedupeMutation = useMutation({
     mutationFn: async () => {
       const preview = await purgePatrimonyDuplicates(token!, true);
-      const total = preview.batiments_supprimes.length + preview.locaux_supprimes.length;
+      const total =
+        preview.batiments_supprimes.length +
+        preview.locaux_supprimes.length +
+        preview.locaux_homonymes_supprimes.length;
       if (total === 0) {
         return { ...preview, skipped: true as const };
       }
       const lignes = [
         ...preview.batiments_supprimes.map((entry) => `  bâtiment #${entry.id} ${entry.nom ?? ""}`),
         ...preview.locaux_supprimes.map((entry) => `  local #${entry.id} ${entry.nom ?? ""}`),
+        ...preview.locaux_homonymes_supprimes.map(
+          (entry) => `  local #${entry.id} ${entry.nom ?? ""} — redit le nom de son bâtiment`,
+        ),
       ];
       const signales = preview.conserves_car_lies.length
         ? `\n\n${preview.conserves_car_lies.length} doublon(s) sont CONSERVÉS car ils portent ` +
@@ -722,12 +728,13 @@ export default function PatrimoineAstechPage() {
         : "";
       if (
         !window.confirm(
-          `Supprimer ${total} doublon(s) strict(s) du référentiel Po2 ?\n\n` +
+          `Supprimer ${total} entité(s) redondante(s) du référentiel Po2 ?\n\n` +
             `${lignes.slice(0, 25).join("\n")}` +
             (lignes.length > 25 ? `\n  … et ${lignes.length - 25} autre(s)` : "") +
-            "\n\nSeules des entités identiques en tout — même nom, même position, même " +
-            "parcelle, et pour un local mêmes niveau, surface et usage — sont concernées, " +
-            "et uniquement celles qui ne portent aucun lien." +
+            "\n\nSont concernées : les entités identiques en tout — même nom, même position, " +
+            "même parcelle, et pour un local mêmes niveau, surface et usage — et les locaux " +
+            "qui ne font que redire le nom du bâtiment qui les contient. " +
+            "Uniquement celles qui ne portent aucun lien." +
             signales +
             "\n\nIrréversible.",
         )
@@ -737,18 +744,20 @@ export default function PatrimoineAstechPage() {
       return { ...(await purgePatrimonyDuplicates(token!, false)), skipped: false as const };
     },
     onSuccess: (result) => {
-      const total = result.batiments_supprimes.length + result.locaux_supprimes.length;
+      const homonymes = result.locaux_homonymes_supprimes.length;
+      const total = result.batiments_supprimes.length + result.locaux_supprimes.length + homonymes;
       if (result.skipped) {
         setFlash(
           total === 0
-            ? "Aucun doublon strict à supprimer dans le référentiel Po2."
+            ? "Rien à nettoyer : aucun doublon strict ni local homonyme de son bâtiment."
             : "Nettoyage annulé : rien n'a été supprimé.",
         );
         return;
       }
       setFlash(
-        `${result.batiments_supprimes.length} bâtiment(s) et ${result.locaux_supprimes.length} ` +
-          "local/locaux en doublon supprimés du référentiel Po2.",
+        `${result.batiments_supprimes.length} bâtiment(s) et ` +
+          `${result.locaux_supprimes.length + homonymes} local/locaux supprimés du référentiel ` +
+          `Po2, dont ${homonymes} qui ne faisai(en)t que redire le nom de leur bâtiment.`,
       );
       void queryClient.invalidateQueries({ queryKey: ["buildings"] });
       invalidate();
@@ -1508,11 +1517,13 @@ export default function PatrimoineAstechPage() {
         <button
           type="button"
           style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
-          title="Supprime les bâtiments et locaux Po2 rigoureusement identiques à un autre. Deux entités homonymes situées ailleurs, ou à un autre étage, ne sont PAS des doublons et ne sont pas touchées."
+          title="Supprime les bâtiments et locaux Po2 rigoureusement identiques à un autre, et les locaux qui ne font que redire le nom du bâtiment qui les contient. Deux entités homonymes situées ailleurs, ou à un autre étage, ne sont PAS des doublons et ne sont pas touchées. Rien qui porte un lien n'est effacé."
           disabled={dedupeMutation.isPending}
           onClick={() => dedupeMutation.mutate()}
         >
-          {dedupeMutation.isPending ? "Analyse…" : "4 · Nettoyer les doublons Po2"}
+          {dedupeMutation.isPending
+            ? "Analyse…"
+            : "4 · Nettoyer les doublons Po2 (dont locaux homonymes)"}
         </button>
       </div>
 
