@@ -76,6 +76,12 @@ const STATUS_ORDER = ["", "a_traiter", "propose", "lie", "a_creer", "hors_perime
  * Nom de local réduit à son identifiant DGFIP : « LOCAL 343010563805 ».
  *
  * L'espace est souple — le fichier en met parfois deux (« LOCAL  343010351481 »).
+ *
+ * Ces locaux ne sont pas ÉTIQUETÉS sur la carte : 445 des 502 sont dans ce cas, et
+ * afficher 445 codes illisibles la saturait. Mais ils y sont bien DESSINÉS et restent
+ * rattachables : les retirer de la carte, comme on l'avait d'abord fait, privait
+ * l'utilisateur de 445 cibles — or déposer un point ASTECH sur un local est justement
+ * un geste attendu.
  */
 const CODED_LOCAL_NAME = /^LOCAL\s+\d/i;
 
@@ -527,8 +533,10 @@ export default function PatrimoineAstechPage() {
       (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? ""),
     )) {
       const buildingText = `${building.nom_batiment ?? ""} ${building.adresse_reconstituee ?? ""}`;
-      const children = (localsByBuilding.get(building.id) ?? []).filter((local) =>
-        matches(`${local.nom_local} ${local.adresse_reconstituee ?? ""}`),
+      const children = (localsByBuilding.get(building.id) ?? []).filter(
+        (local) =>
+          !CODED_LOCAL_NAME.test(local.nom_local) &&
+          matches(`${local.nom_local} ${local.adresse_reconstituee ?? ""}`),
       );
       // Un bâtiment est montré s'il correspond lui-même OU si l'un de ses locaux
       // correspond : sinon chercher le nom d'un local ferait disparaître son parent et
@@ -541,7 +549,11 @@ export default function PatrimoineAstechPage() {
         label: building.nom_batiment ?? `Bâtiment #${building.id}`,
         address: building.adresse_reconstituee ?? null,
       });
-      const shown = matches(buildingText) ? localsByBuilding.get(building.id) ?? [] : children;
+      const shown = matches(buildingText)
+        ? (localsByBuilding.get(building.id) ?? []).filter(
+            (local) => !CODED_LOCAL_NAME.test(local.nom_local),
+          )
+        : children;
       for (const local of [...shown].sort((a, b) => a.nom_local.localeCompare(b.nom_local))) {
         rows.push({
           key: `l-${local.id}`,
@@ -1194,11 +1206,13 @@ export default function PatrimoineAstechPage() {
   const localPoints = useMemo<LocalMapPoint[]>(() => {
     if (!showLocals) return [];
     return locals.flatMap((local) => {
-      // Les locaux dont le nom n'est qu'un identifiant DGFIP — « LOCAL 343010563805 » —
-      // ne disent rien à personne : ils encombraient la carte et son étiquetage sans
-      // rien apprendre. 445 des 502 locaux sont dans ce cas (mesuré le 2026-08-21). Ils
-      // restent dans l'inventaire et dans le sélecteur de cible, où on peut encore les
-      // viser : c'est la CARTE qu'ils saturaient.
+      // Un local dont le nom n'est qu'un identifiant DGFIP n'est pas une cible
+      // utilisable : quand un bâtiment en porte plusieurs — 332 rien que pour les
+      // HALLES CENTRALES — rien ne permet de dire auquel rattacher un bien ASTECH.
+      // Il sort donc du parcours ASTECH (carte et sélecteur de cible), mais RESTE dans
+      // l'inventaire Po2 : ce sont de vrais lots fiscaux, avec statut d'occupation,
+      // niveau et référence cadastrale. Les supprimer détruirait l'inventaire des
+      // emplacements des Halles (décision du 2026-08-24).
       if (CODED_LOCAL_NAME.test(local.nom_local)) return [];
       const building = buildingsById.get(local.building_id);
       // Un local est DANS son bâtiment : hériter de sa position n'invente rien, c'est la
@@ -1947,7 +1961,7 @@ export default function PatrimoineAstechPage() {
             </span>
             <label
               style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}
-              title="Un CODE_BIEN ASTECH désigne souvent un local (logement de fonction, salle, WC publics). Clique un local pour en faire la cible du bien sélectionné. Les locaux dont le nom n'est qu'un identifiant DGFIP (« LOCAL 343010563805 ») ne sont pas dessinés : ils saturaient la carte sans rien apprendre. Ils restent visibles dans l'inventaire et dans le sélecteur de cible."
+              title="Un CODE_BIEN ASTECH désigne souvent un local (logement de fonction, salle, WC publics). Clique un local pour en faire la cible du bien sélectionné. Les locaux dont le nom n'est qu'un identifiant DGFIP (« LOCAL 343010563805 ») sont écartés du parcours ASTECH — carte et sélecteur : quand un bâtiment en porte plusieurs, rien ne dit auquel rattacher. Ils restent intacts dans l'inventaire Po2, avec leur statut d'occupation et leur cadastre."
             >
               <input
                 type="checkbox"

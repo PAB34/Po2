@@ -1183,3 +1183,19 @@ rattachés de nouveau sur leur bâtiment (18 positions propres, exactement l'ét
 **La leçon, à ne pas réintroduire** : une position fausse est pire qu'une absence de
 position — elle a l'air d'une donnée. Et un traitement en masse doit exclure ce qui est
 déjà traité, pas seulement ce qui est vide.
+
+
+## 26. Lecture de la carte — décisions 2026-08-24
+
+| # | Sujet | Décision |
+|---|---|---|
+| Q37 | Locaux au nom codé DGFIP | **Écartés du parcours ASTECH — carte ET sélecteur de cible — mais jamais supprimés.** Quand un bâtiment en porte plusieurs, rien ne permet de dire auquel rattacher un bien : ce sont de mauvaises cibles. Ce ne sont pas pour autant des coquilles — audit du 2026-08-24 : les 445 portent un statut d'occupation (397 *Propriétaire*, 38 *gestionnaire d'un bien de l'État*), une référence cadastrale, un niveau et la trace de leur origine DGFIP. **332 des 445 sont les emplacements des HALLES CENTRALES**, 41 le QUAI DE LA CONSIGNE — 32 bâtiments en tout. Les supprimer détruirait un inventaire que personne ne saurait reconstituer, pour un problème qui n'est pas de la donnée mais de la cible. Ils restent intacts dans l'inventaire Po2. |
+| Q38 | Un bien et son bâtiment appariés | **Fondus en un seul point** quand le bâtiment n'en porte **qu'un** : plus gros (26 px contre 18), vert, marqué d'un ✓, sans trait. Le trait entre deux pastilles voisines n'apprend rien quand la relation est simple. **L'araignée reste dès qu'ils sont plusieurs** : la fusion avait déjà été essayée puis abandonnée (§19) parce qu'elle rendait impossible de désigner ou de détacher un bien parmi ceux qui se superposaient. On fusionne donc là où il n'y a rien à démêler, et on démêle là où il y a de quoi. |
+| Q39 | Pastille d'un local | **Losange indigo de 14 px** au lieu d'un disque de 4 px à peine visible. La **forme** distingue un local d'un bâtiment sans dépendre de la couleur — le bleu et l'indigo se ressemblent trop sur un fond de carte. Même signe ◇ que dans l'arbre du patrimoine, le sélecteur de cible et les étiquettes. Plus petit qu'un bâtiment : la hiérarchie se lit dans la taille. |
+
+**Rappel de l'incident d'étiquetage** (§25.5 pour le géocodage, celui-ci pour l'affichage) :
+les étiquettes de locaux existaient mais étaient posées à la position **brute** du local
+alors que sa pastille était dessinée écartée — et l'écartement ne comparait que les locaux
+entre eux, si bien qu'un local seul posé sur son bâtiment n'était pas écarté du tout.
+39 des 57 locaux affichables étaient dans ce cas. La position dessinée est désormais
+calculée une fois et partagée entre pastilles et dénominations.
