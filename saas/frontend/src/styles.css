@@ -6200,3 +6200,41 @@ button:disabled {
   opacity: 0.75;
   margin-right: 3px;
 }
+
+/* Point ASTECH et bâtiment Po2 FONDUS : la relation est simple (un seul bien sur ce
+   bâtiment), il n'y a rien à démêler. Un point plus gros, marqué d'un ✓, plutôt que
+   deux pastilles reliées par un trait qui n'apprenait rien. */
+.legacy-marker-dot.is-merged {
+  width: 26px;
+  height: 26px;
+  border-width: 3px;
+}
+
+.legacy-marker-dot.is-merged::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Local Po2 : un LOSANGE, pour se distinguer du disque d'un bâtiment sans dépendre de
+   la couleur — le bleu et l'indigo se ressemblent trop sur un fond de carte. Même signe
+   ◇ que dans l'arbre du patrimoine, le sélecteur de cible et les étiquettes.
+   Plus gros que l'ancien disque de 4 px, à peine visible, mais plus petit qu'un
+   bâtiment : la hiérarchie se lit dans la taille. */
+.local-marker-diamond {
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin: 2px;
+  transform: rotate(45deg);
+  background: #6366f1;
+  border: 2px solid #c7d2fe;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.45);
+}

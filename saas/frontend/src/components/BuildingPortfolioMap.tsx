@@ -113,6 +113,8 @@ type LegacyRenderMarker = {
   buildingLabel: string | null;
   /** `true` quand ce marqueur tient lieu de bâtiment : il ne doit pas être décalé. */
   isBuildingAnchor: boolean;
+  /** Bien et bâtiment fondus en un seul point : relation simple, rien à démêler. */
+  isMerged?: boolean;
   /** Décalage visuel appliqué (patte d'araignée), à retrancher au déplacement. */
   offsetLat: number;
   offsetLon: number;
@@ -680,6 +682,26 @@ export function BuildingPortfolioMap({
       // et relie par un trait. La fusion en un point unique se lisait bien tant que tout
       // etait juste, mais elle enlevait toute prise des qu'un rattachement etait faux :
       // impossible de designer, ni de detacher, un bien parmi ceux qui se superposaient.
+      // UN SEUL bien sur ce bâtiment : les deux ne font plus qu'un point, plus gros et
+      // marqué d'un ✓. Le trait entre deux pastilles voisines n'apprend rien quand la
+      // relation est simple — il ne sert qu'à démêler plusieurs biens. L'araignée reste
+      // donc dès qu'ils sont plusieurs : c'est elle qui permet de désigner et de
+      // détacher un bien parmi d'autres (§19).
+      if (points.length === 1) {
+        const only = points[0];
+        markers.push({
+          points: [only],
+          latitude: center.lat,
+          longitude: center.lon,
+          buildingId,
+          buildingLabel: building.nom_batiment ?? only.buildingLabel ?? null,
+          isBuildingAnchor: false,
+          isMerged: true,
+          offsetLat: center.lat - only.latitude,
+          offsetLon: center.lon - only.longitude,
+        });
+        continue;
+      }
       points.forEach((point, index) => {
         // `cos` pilote la LATITUDE (le nord), `sin` la LONGITUDE (l'est) : l'angle 0
         // vise donc deja le nord. L'ancien `- PI/2` faisait pivoter toute l'araignee
@@ -940,17 +962,20 @@ export function BuildingPortfolioMap({
     const layerGroup = runtime.featureGroup();
     {
       localMarkers.forEach(({ point, latitude, longitude }) => {
-        const marker = runtime.circleMarker([latitude, longitude], {
-          radius: 4,
-          color: "#a5b4fc",
-          fillColor: "#6366f1",
-          // TOUS les locaux ont la meme couleur, y compris ceux dont la position est
-          // heritee du batiment. Les dessiner en creux les faisait passer pour des
-          // points de second rang, illisibles sur fond de carte. L'information reste
-          // dans la bulle et dans le panneau du local, ou elle ne gene personne.
-          fillOpacity: 0.9,
-          weight: 1,
-        });
+        // Un LOSANGE, et non un disque : la forme distingue un local d'un batiment sans
+        // dependre de la couleur — le bleu et l'indigo se ressemblent trop sur un fond
+        // de carte. C'est le meme signe ◇ que dans l'arbre du patrimoine, le selecteur
+        // de cible et les etiquettes. Et il est plus gros que l'ancien disque de 4 px,
+        // qui etait a peine visible, tout en restant sous la taille du batiment : la
+        // hierarchie se lit dans la taille.
+        const marker = runtime.marker([latitude, longitude], {
+          icon: runtime.divIcon({
+            className: "local-marker",
+            html: '<span class="local-marker-diamond"></span>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7],
+          }),
+        }) as RuntimeLayer;
         marker.bindPopup?.(
           `<strong>${point.label}</strong><br/><em>Local Po2${
             point.isInherited ? ", position héritée du bâtiment" : ""
@@ -1116,9 +1141,9 @@ export function BuildingPortfolioMap({
             point.isLinked ? " is-linked" : ""
           }${point.isProposal ? " is-proposal" : ""}${point.isLocalTarget ? " is-local" : ""}${
             point.isProvisional ? " is-provisional" : ""
-          }"></span>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 9],
+          }${entry.isMerged ? " is-merged" : ""}"></span>`,
+          iconSize: entry.isMerged ? [26, 26] : [18, 18],
+          iconAnchor: entry.isMerged ? [13, 13] : [9, 9],
         }),
       });
       marker.bindPopup?.(
