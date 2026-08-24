@@ -1335,3 +1335,67 @@ def test_le_numero_de_voirie_a_zero_n_est_pas_geocode(db_session: Session, monke
     svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
 
     assert vues == ["RUE DES ECOLES, SETE"]
+
+
+def test_un_bien_deja_rattache_n_est_pas_geocode(db_session: Session, monkeypatch):
+    """Sa position est celle de son bâtiment, empruntée et non propre (§19).
+
+    Lui en donner une propre le décolle de son bâtiment : la carte s'est couverte de
+    traits partant dans tous les sens, un par bien éloigné de sa cible.
+    """
+    from app.services import patrimoine_legacy as svc
+
+    monkeypatch.setattr(svc, "lookup_free_address_candidates", lambda *a, **k: {"lat": 43.4, "lon": 3.69})
+    db_session.add(Building(id=7, city_id=1, nom_batiment="MAIRIE", nom_commune="Sete"))
+    db_session.commit()
+    rattache = _pending_asset(db_session, "BATI00001", building_id=7, status="lie")
+    libre = _pending_asset(db_session, "BATI00002")
+
+    result = svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert result["positionnes"] == 1
+    assert rattache.latitude is None
+    assert libre.latitude == 43.4
+
+
+def test_une_adresse_trouvee_hors_de_la_commune_est_refusee(db_session: Session, monkeypatch):
+    """Le géocodeur national retombe sur une homonyme ailleurs, même avec le code commune.
+
+    Constaté le 2026-08-24 : « PLACE STALINGRAD » à Reims, « LE CHATEAU VERT » près
+    d'Aix, « Le Globe » à Mayotte. Une position fausse est pire qu'une absence.
+    """
+    from app.services import patrimoine_legacy as svc
+
+    # Dix bâtiments Po2 à Sète : de quoi calibrer le cadre de la commune.
+    for index in range(10):
+        db_session.add(
+            Building(
+                city_id=1, nom_batiment=f"B{index}", nom_commune="Sete",
+                latitude=43.40 + index * 0.001, longitude=3.69 + index * 0.001,
+            )
+        )
+    db_session.commit()
+    monkeypatch.setattr(
+        svc, "lookup_free_address_candidates",
+        lambda *a, **k: {"lat": 49.2516, "lon": 4.0235},  # Reims
+    )
+    egare = _pending_asset(db_session, "BATI00251", voie="PLACE STALINGRAD")
+
+    result = svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert result["positionnes"] == 0
+    assert egare.latitude is None
+    assert "hors de la commune" in result["echecs"][0]["motif"]
+
+
+def test_sans_batiments_po2_le_garde_fou_ne_refuse_rien(db_session: Session, monkeypatch):
+    """On ne refuse pas tout sur la foi d'un cadre qu'on n'a pas pu calibrer."""
+    from app.services import patrimoine_legacy as svc
+
+    monkeypatch.setattr(svc, "lookup_free_address_candidates", lambda *a, **k: {"lat": 49.25, "lon": 4.02})
+    asset = _pending_asset(db_session, "BATI00001")
+
+    result = svc.geocode_pending_assets(db_session, 1, "Sete", limit=25)
+
+    assert result["positionnes"] == 1
+    assert asset.latitude == 49.25

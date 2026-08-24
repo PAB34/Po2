@@ -1445,6 +1445,35 @@ def _astech_address(asset: PatrimoineLegacyAsset) -> str | None:
     return f"{line}, {asset.source_ville}" if asset.source_ville else line
 
 
+def _commune_bounds(db: Session, city_id: int | None) -> tuple[float, float, float, float] | None:
+    """Cadre géographique de la commune, déduit des bâtiments Po2 déjà positionnés.
+
+    Sert de garde-fou au géocodage : le géocodeur national retombe sur une adresse
+    homonyme ailleurs en France quand il ne trouve rien sur place, **même avec le code
+    commune**. Constaté le 2026-08-24 sur 10 des 283 biens posés : `PLACE STALINGRAD`
+    atterrissait à Reims, `LE CHATEAU VERT` près d'Aix, et `Le Globe - Ancienne mosquée`
+    à Mayotte. Une position fausse est pire qu'une absence de position : elle a l'air
+    d'une donnée.
+
+    La marge de 0,15° (~16 km) tient compte de l'étirement d'une commune littorale — Sète
+    et son lido font une douzaine de kilomètres — sans laisser passer un département
+    voisin. Renvoie `None` s'il n'y a pas de quoi calibrer : on ne refuse pas tout sur la
+    foi d'un cadre qu'on n'a pas.
+    """
+    statement = select(Building.latitude, Building.longitude).where(
+        Building.latitude.is_not(None), Building.longitude.is_not(None)
+    )
+    if city_id is not None:
+        statement = statement.where(Building.city_id == city_id)
+    points = [(lat, lon) for lat, lon in db.execute(statement)]
+    if len(points) < 10:
+        return None
+    margin = 0.15
+    lats = [lat for lat, _ in points]
+    lons = [lon for _, lon in points]
+    return (min(lats) - margin, max(lats) + margin, min(lons) - margin, max(lons) + margin)
+
+
 def geocode_pending_assets(
     db: Session, city_id: int | None, city_name: str | None, *, limit: int = 25, offset: int = 0
 ) -> dict[str, Any]:
@@ -1472,6 +1501,13 @@ def geocode_pending_assets(
     """
     statement = select(PatrimoineLegacyAsset).where(
         PatrimoineLegacyAsset.latitude.is_(None),
+        # Un bien DEJA RATTACHE n'a pas a etre geocode : sa position est celle de son
+        # batiment, empruntee et non propre (§19, et « les positions ASTECH sont
+        # empruntees » — 1 bien sur 444 en porte une dans le fichier). Lui en donner une
+        # propre le decolle de son batiment : la carte s'est couverte de traits partant
+        # dans tous les sens, un par bien eloigne de sa cible. Constate le 2026-08-24,
+        # 53 biens rattaches deplaces par erreur.
+        PatrimoineLegacyAsset.building_id.is_(None),
         PatrimoineLegacyAsset.source_libelvoie.is_not(None),
         PatrimoineLegacyAsset.source_libelvoie != "",
         PatrimoineLegacyAsset.status.notin_([STATUS_OUT_OF_SCOPE, STATUS_GONE]),
@@ -1483,6 +1519,7 @@ def geocode_pending_assets(
     # d'un appel a l'autre.
     pending = list(db.scalars(statement.order_by(PatrimoineLegacyAsset.code_bien.asc())))
     batch = pending[offset : offset + limit]
+    bounds = _commune_bounds(db, city_id)
 
     positioned = 0
     failures: list[dict[str, str]] = []
@@ -1504,6 +1541,17 @@ def geocode_pending_assets(
         latitude, longitude = lookup.get("lat"), lookup.get("lon")
         if latitude is None or longitude is None:
             failures.append({"code_bien": asset.code_bien, "motif": f"introuvable : « {address} »"})
+            continue
+        if bounds is not None and not (
+            bounds[0] <= latitude <= bounds[1] and bounds[2] <= longitude <= bounds[3]
+        ):
+            # Le géocodeur a trouvé une adresse homonyme AILLEURS. On n'écrit pas une
+            # position qu'on n'a pas su produire proprement : le bien reste sans point,
+            # il se posera à la main.
+            failures.append({
+                "code_bien": asset.code_bien,
+                "motif": f"trouvé hors de la commune ({latitude:.4f}, {longitude:.4f}) : « {address} »",
+            })
             continue
         asset.latitude = latitude
         asset.longitude = longitude
