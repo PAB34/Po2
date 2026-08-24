@@ -1399,3 +1399,45 @@ def test_sans_batiments_po2_le_garde_fou_ne_refuse_rien(db_session: Session, mon
 
     assert result["positionnes"] == 1
     assert asset.latitude == 49.25
+
+
+def test_confirmer_en_bloc_attribue_le_nom_po2(db_session: Session):
+    """Q11 : le nom Po2 gagne au rattachement — y compris confirmé en bloc.
+
+    Il manquait là. Un bien rattaché à la main adoptait le nom Po2, un bien confirmé en
+    bloc gardait le sien. Ce n'est pas cosmétique : c'est `nomcourt`/`designation` que le
+    réexport écrit dans DESIGNATION et NOMCOURT, donc c'est le nom ASTECH qui repartait
+    dans le fichier de la collectivité.
+    """
+    from app.services.patrimoine_legacy import confirm_proposed
+
+    db_session.add(Building(id=42, city_id=1, nom_batiment="ECOLE PAUL BERT", nom_commune="Sete"))
+    db_session.commit()
+    asset = _pending_asset(db_session, "BATI00001", building_id=42, status="propose")
+    asset.designation = "NOM ASTECH"
+    asset.nomcourt = "NOM ASTECH"
+    db_session.commit()
+
+    result = confirm_proposed(db_session, 1)
+
+    assert result["confirmed"] == 1
+    db_session.refresh(asset)
+    assert asset.status == "lie"
+    assert asset.nomcourt == "ECOLE PAUL BERT"
+    assert asset.designation == "ECOLE PAUL BERT"
+
+
+def test_confirmer_ne_vide_pas_le_libelle_si_la_cible_n_a_pas_de_nom(db_session: Session):
+    """Mieux vaut l'ancien libellé que rien : garde-fou de `_adopt_target_name`."""
+    from app.services.patrimoine_legacy import confirm_proposed
+
+    db_session.add(Building(id=42, city_id=1, nom_batiment=None, nom_commune="Sete"))
+    db_session.commit()
+    asset = _pending_asset(db_session, "BATI00001", building_id=42, status="propose")
+    asset.nomcourt = "NOM ASTECH"
+    db_session.commit()
+
+    confirm_proposed(db_session, 1)
+
+    db_session.refresh(asset)
+    assert asset.nomcourt == "NOM ASTECH"

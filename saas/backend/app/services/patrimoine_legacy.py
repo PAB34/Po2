@@ -1157,6 +1157,19 @@ def confirm_proposed(
         if asset.building_id is None:
             continue
         asset.status = STATUS_LINKED
+        # Le bien prend le nom de sa cible Po2 (Q11) — au moment de la CONFIRMATION, et
+        # pas quand le moteur propose : une proposition ne doit pas réécrire le libellé
+        # ASTECH avant qu'un humain l'ait validée.
+        #
+        # Il manquait ici. Un bien rattaché à la main adoptait le nom Po2, un bien
+        # confirmé en bloc gardait le sien : constaté le 2026-08-24, 49 biens « liés »
+        # portaient encore leur libellé ASTECH. Ce n'était pas cosmétique — c'est
+        # `nomcourt`/`designation` que le réexport écrit dans DESIGNATION et NOMCOURT
+        # (`patrimoine_legacy_export.py`), donc c'est le nom ASTECH qui serait reparti
+        # dans le fichier de la collectivité, à rebours de Q11.
+        target = db.get(Building, asset.building_id)
+        if target is not None:
+            _adopt_target_name(asset, target.nom_batiment, None)
         # Filet de sécurité : c'est le dernier passage avant que le bien ne devienne
         # exportable vers ASTECH. On réaligne l'adresse héritée sur le bâtiment tel
         # qu'il est AUJOURD'HUI, pour ne pas réinjecter un nom ou une adresse périmés.

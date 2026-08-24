@@ -6210,7 +6210,12 @@ button:disabled {
   border-width: 3px;
 }
 
-.legacy-marker-dot.is-merged::after {
+/* Le ✓ marque l'ETAT — rattachement valide par un humain — et non la geometrie.
+   Il se pose donc sur TOUT bien apparie, y compris celui qui garde une position
+   propre a l'ecart de son batiment et reste relie par un trait : lui aussi est
+   traite, et rien ne le disait. Une proposition du moteur (ambre) ne le porte pas :
+   elle n'a ete validee par personne. */
+.legacy-marker-dot.is-linked:not(.is-proposal)::after {
   content: "✓";
   position: absolute;
   inset: 0;
@@ -6218,9 +6223,13 @@ button:disabled {
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1;
+}
+
+.legacy-marker-dot.is-merged.is-linked:not(.is-proposal)::after {
+  font-size: 15px;
 }
 
 /* Local Po2 : un LOSANGE, pour se distinguer du disque d'un bâtiment sans dépendre de
