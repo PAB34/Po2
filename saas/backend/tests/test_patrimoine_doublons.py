@@ -189,3 +189,44 @@ def test_la_liste_des_references_couvre_tout_le_schema():
 
     assert declared("buildings") == set(BUILDING_REFERENCES)
     assert declared("locals") == set(LOCAL_REFERENCES)
+
+
+# --- Q40 : le local qui ne fait que redire son bâtiment ----------------------
+
+def test_un_local_homonyme_de_son_batiment_est_supprime(db_session: Session, user: User):
+    """Il n'apporte rien : il redit le bâtiment qui le contient.
+
+    C'est ce que fabriquait le local par défaut de l'import (§21) — 121 supprimés à la
+    main le 2026-08-21 ; un ré-import en refabriquerait.
+    """
+    building = _building(db_session, id=1, nom_batiment="ECOLE PAUL BERT")
+    db_session.add(Local(id=10, building_id=building.id, nom_local="ecole  Paul Bert", type_local="IMPORT"))
+    db_session.add(Local(id=11, building_id=building.id, nom_local="SALLE DE CLASSE", type_local="IMPORT"))
+    db_session.commit()
+
+    result = purge_duplicates(db_session, user)
+
+    assert [entry["id"] for entry in result["locaux_homonymes_supprimes"]] == [10]
+    assert db_session.get(Local, 10) is None
+    assert db_session.get(Local, 11) is not None
+
+
+def test_un_local_homonyme_qui_porte_un_bien_astech_est_signale(db_session: Session, user: User):
+    """On ne supprime jamais ce qui porte un lien, homonyme ou non."""
+    building = _building(db_session, id=1, nom_batiment="MAIRIE")
+    local = Local(id=10, building_id=building.id, nom_local="MAIRIE", type_local="IMPORT")
+    db_session.add(local)
+    db_session.flush()
+    db_session.add(
+        PatrimoineLegacyAsset(
+            city_id=1, code_bien="BATI00001", designation="MAIRIE",
+            building_id=building.id, local_id=local.id,
+        )
+    )
+    db_session.commit()
+
+    result = purge_duplicates(db_session, user)
+
+    assert result["locaux_homonymes_supprimes"] == []
+    assert [entry["id"] for entry in result["conserves_car_lies"]] == [10]
+    assert db_session.get(Local, 10) is not None
