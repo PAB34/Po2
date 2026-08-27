@@ -492,6 +492,17 @@ export default function PatrimoineAstechPage() {
     // violette de la carte se met a jour des qu'un rattachement change.
     void queryClient.invalidateQueries({ queryKey: ["legacy-assets"] });
     void queryClient.invalidateQueries({ queryKey: ["legacy-counts"] });
+    // Le patrimoine Po2 AUSSI : une action sur un bien en modifie souvent un bout.
+    //
+    // Deplacer un point apparie deplace le batiment avec lui (c'est le sens du point
+    // unique) et recalcule son adresse ; le rattachement fait adopter des valeurs
+    // heritees ; le reclassement change la hierarchie. Sans ce rafraichissement,
+    // l'ecran gardait l'ANCIENNE position du batiment : le bien s'affichait a son
+    // nouveau point, le batiment restait a l'ancien, et le point fusionne se dedoublait
+    // en deux pastilles reliees par un trait — alors que la base, elle, etait juste.
+    // Constate le 2026-08-27 sur ECOLE MATERNELLE SUZANNE LACORE, et seul un
+    // rechargement de la page remettait les choses en place.
+    void queryClient.invalidateQueries({ queryKey: ["buildings"] });
   };
 
   // --- Bâtiments Po2 indistinguables ------------------------------------------
