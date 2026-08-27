@@ -258,6 +258,29 @@ def convert_asset_to_local(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
+@router.post("/at-point", response_model=LegacyAssetOut, status_code=status.HTTP_201_CREATED)
+def create_asset_at_point(
+    name: str = Query(..., min_length=1, max_length=255, description="Nom du bien à créer."),
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LegacyAssetOut:
+    """Crée un bien ASTECH de toutes pièces, à un point posé sur la carte.
+
+    Les deux entrées existantes partent d'une entité Po2 déjà connue ; il manquait le
+    cas où il n'y a rien de préexistant. Statut « à créer » : le CODE_BIEN sortira vide
+    du réexport, c'est ASTECH qui l'attribuera (Q13).
+    """
+    try:
+        asset = svc.create_asset_at_point(
+            db, svc.resolve_city_id(db, current_user.city_id), name=name, latitude=lat, longitude=lon
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    return LegacyAssetOut.model_validate(asset)
+
+
 @router.post("/geocode-pending")
 def geocode_pending_assets(
     limit: int = Query(default=25, ge=1, le=100, description="Biens traités par appel."),

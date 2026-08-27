@@ -1062,6 +1062,49 @@ def create_asset_from_building(
     return asset
 
 
+def create_asset_at_point(
+    db: Session, city_id: int | None, *, name: str, latitude: float, longitude: float
+) -> PatrimoineLegacyAsset:
+    """Crée un bien ASTECH **de toutes pièces**, à un point posé sur la carte.
+
+    Cas visé : un bien que la collectivité n'a ni dans ASTECH ni dans Po2 — on le voit
+    sur le terrain ou sur le fond de carte, et il faut qu'il remonte dans le réexport
+    pour y être créé. Les deux entrées existantes partent d'une entité Po2 déjà connue
+    (`create_asset_from_building`, `create_asset_from_local`) ; il manquait le cas où il
+    n'y a rien de préexistant.
+
+    Statut « à créer » : le `CODE_BIEN` sortira **vide** du réexport, c'est ASTECH qui
+    l'attribuera (Q13). Le code porté ici n'est qu'une clé interne, préfixée pour être
+    reconnaissable et ne jamais être confondue avec un code de la collectivité.
+
+    L'adresse n'est pas devinée : elle se remplira au rattachement à un bâtiment Po2, ou
+    par le géocodage inverse si l'utilisateur déplace le point.
+    """
+    label = (name or "").strip()[:255]
+    if not label:
+        raise ValueError("Un nom est nécessaire pour créer un bien.")
+    asset = PatrimoineLegacyAsset(
+        city_id=city_id,
+        code_bien=f"{NEW_ASSET_CODE_PREFIX}TMP",
+        designation=label,
+        nomcourt=label,
+        genre="BATI",
+        horsparc="N",
+        status=STATUS_TO_CREATE,
+        link_origin=ORIGIN_MANUAL,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    db.add(asset)
+    db.flush()
+    # La clé interne ne peut être formée qu'une fois l'identifiant attribué.
+    asset.code_bien = f"{NEW_ASSET_CODE_PREFIX}P{asset.id}"
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
 def create_asset_from_local(
     db: Session, city_id: int | None, local: Local
 ) -> PatrimoineLegacyAsset:
