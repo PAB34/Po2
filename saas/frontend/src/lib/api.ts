@@ -6208,6 +6208,27 @@ export async function convertLegacyAssetToLocal(
   return parseResponse<LegacyAsset>(response);
 }
 
+/**
+ * Crée un bien ASTECH **de toutes pièces**, au point donné.
+ *
+ * Les deux autres entrées partent d'une entité Po2 déjà connue ; celle-ci sert au cas
+ * où il n'y a rien de préexistant. Statut « à créer » : le CODE_BIEN sortira vide du
+ * réexport, c'est ASTECH qui l'attribuera.
+ */
+export async function createLegacyAssetAtPoint(
+  token: string,
+  name: string,
+  lat: number,
+  lon: number,
+): Promise<LegacyAsset> {
+  const query = new URLSearchParams({ name, lat: String(lat), lon: String(lon) });
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/at-point?${query}`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyAsset>(response);
+}
+
 export type LegacyGeocodeBatch = {
   traites: number;
   positionnes: number;

@@ -31,6 +31,7 @@ import {
   purgePatrimonyDuplicates,
   createBuildingRequest,
   createLegacyAssetFromBuilding,
+  createLegacyAssetAtPoint,
   createLegacyAssetFromLocal,
   deleteLegacyImports,
   downloadLegacyExport,
@@ -291,6 +292,22 @@ export default function PatrimoineAstechPage() {
    * La position lâchée est mémorisée : elle sert à tenir le point là où l'utilisateur
    * l'a posé pendant qu'il décide, sans rien enregistrer.
    */
+  /**
+   * Menu du clic droit sur la carte.
+   *
+   * La carte signale ce qui est sous le curseur ; c'est ici qu'on décide ce qu'on en
+   * propose. Un menu dessiné par la page plutôt qu'un greffon Leaflet : il doit
+   * connaître les mutations, les noms et l'état de la sélection.
+   */
+  const [contextMenu, setContextMenu] = useState<
+    { kind: "map" | "building" | "local" | "legacy"; id: number | null; lat: number; lon: number; x: number; y: number } | null
+  >(null);
+  /**
+   * Bâtiment en attente d'un parent : « en faire un local de… » demande de désigner
+   * lequel, et c'est le prochain clic sur un bâtiment qui répond. On ne devine pas le
+   * parent — le plus proche n'est pas forcément le bon.
+   */
+  const [awaitingParentFor, setAwaitingParentFor] = useState<number | null>(null);
   const [addressSearch, setAddressSearch] = useState("");
   // Point sur lequel la carte est priée de se rendre. Une NOUVELLE référence à chaque
   // recherche, même pour la même adresse : la carte ne recadre que si l'intention de
@@ -604,10 +621,16 @@ export default function PatrimoineAstechPage() {
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
 
+  // Sans identifiants, confirme tout ce qui est en attente ; avec, un seul bien — le
+  // panneau valide au coup par coup, le bouton 3 valide en bloc.
   const confirmMutation = useMutation({
-    mutationFn: () => confirmLegacyProposals(token!),
-    onSuccess: (result) => {
-      setFlash(`${result.confirmed} rattachement(s) confirmé(s).`);
+    mutationFn: (assetIds?: number[]) => confirmLegacyProposals(token!, assetIds),
+    onSuccess: (result, assetIds) => {
+      setFlash(
+        assetIds?.length === 1
+          ? "Rattachement validé — le bien prend le nom du bâtiment Po2."
+          : `${result.confirmed} rattachement(s) confirmé(s).`,
+      );
       invalidate();
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
@@ -785,6 +808,70 @@ export default function PatrimoineAstechPage() {
     onSuccess: (result) => {
       setMapFocus({ lat: result.lat, lon: result.lon });
       setFlash(`Carte centrée sur « ${result.label} ».`);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /** Crée un bâtiment Po2 au point cliqué. */
+  const createBuildingAtPointMutation = useMutation({
+    mutationFn: (variables: { nom: string; lat: number; lon: number }) =>
+      createBuildingRequest(token!, {
+        nom_batiment: variables.nom,
+        latitude: variables.lat,
+        longitude: variables.lon,
+        // Pas de local par défaut : il porterait le nom du bâtiment et referait le
+        // jumeau homonyme qu'on passe notre temps à nettoyer (§21).
+        create_default_local: false,
+      }),
+    onSuccess: (building) => {
+      setFlash(`Bâtiment Po2 « ${building.nom_batiment} » créé. Précise son adresse dans le panneau.`);
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      setInspectedLocalId(null);
+      setInspectedBuildingId(building.id);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /** Crée un bien ASTECH de toutes pièces, au point cliqué. */
+  const createAssetAtPointMutation = useMutation({
+    mutationFn: (variables: { nom: string; lat: number; lon: number }) =>
+      createLegacyAssetAtPoint(token!, variables.nom, variables.lat, variables.lon),
+    onSuccess: (asset) => {
+      setFlash(
+        `Bien ASTECH « ${assetLabel(asset)} » créé, statut « à créer » : il partira dans le ` +
+          "réexport avec un CODE_BIEN vide, qu'ASTECH attribuera.",
+      );
+      invalidate();
+      setSelectedId(asset.id);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /** Change la typologie d'une entité Po2 : un local devient bâtiment, ou l'inverse. */
+  const typologyMutation = useMutation({
+    mutationFn: (
+      variables:
+        | { kind: "localToBuilding"; local: Local }
+        | { kind: "buildingToLocal"; buildingId: number; parentId: number },
+    ) =>
+      variables.kind === "localToBuilding"
+        ? reclassifyLocalRequest(token!, variables.local.building_id, variables.local.id, {
+            target_type: "building",
+          })
+        : reclassifyBuildingRequest(token!, variables.buildingId, {
+            target_type: "local",
+            target_building_id: variables.parentId,
+          }),
+    onSuccess: (result, variables) => {
+      setFlash(
+        variables.kind === "localToBuilding"
+          ? "Local promu en bâtiment Po2. Son adresse, sa position et ses biens ASTECH l'ont suivi."
+          : "Bâtiment devenu un local. Son adresse, sa position et ses biens ASTECH l'ont suivi.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+      setInspectedBuildingId(result.entity_type === "building" ? result.entity_id : null);
+      setInspectedLocalId(result.entity_type === "local" ? result.entity_id : null);
     },
     onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
   });
@@ -1330,6 +1417,23 @@ export default function PatrimoineAstechPage() {
     (counts.lie ?? 0) === 0 &&
     assets.every((asset) => asset.candidate_building_id === null);
 
+  /**
+   * Beaucoup de biens ne sont sur la carte NI par eux-mêmes, NI par leur bâtiment.
+   *
+   * C'est l'état normal d'un import frais : le fichier ASTECH ne porte qu'une position
+   * sur 444, et un bien non rattaché n'a donc rien à emprunter. Rien ne le disait, et la
+   * carte semblait avoir perdu des points — constaté après un ré-import complet le
+   * 2026-08-24 : 320 biens à traiter, aucun sur la carte.
+   *
+   * Un ré-import de la base Po2 produit le même effet sur les biens déjà traités : les
+   * bâtiments changent d'identifiant, `building_id` est remis à NULL en cascade, et les
+   * biens perdent le point qu'ils empruntaient.
+   */
+  const withoutMapPoint = assets.filter(
+    (asset) => asset.latitude == null && asset.building_id == null,
+  ).length;
+  const needsPositioning = !needsRecognition && withoutMapPoint >= 10;
+
   return (
     <section>
       <p style={{ fontSize: 12, letterSpacing: ".05em", textTransform: "uppercase", color: "#94a3b8", margin: 0 }}>
@@ -1373,7 +1477,7 @@ export default function PatrimoineAstechPage() {
           <button
             type="button"
             style={btnSecondary}
-            onClick={() => confirmMutation.mutate()}
+            onClick={() => confirmMutation.mutate(undefined)}
             disabled={confirmMutation.isPending}
           >
             {confirmMutation.isPending
@@ -1566,6 +1670,18 @@ export default function PatrimoineAstechPage() {
           reconnaissance des noms n'a pas encore été lancée. Clique «&nbsp;2. Reconnaître les
           noms&nbsp;» ci-dessus : la plateforme rattachera seule les évidences et proposera un
           candidat pour le reste.
+        </div>
+      )}
+
+      {needsPositioning && (
+        <div
+          style={{ ...card, marginBottom: 12, borderColor: "rgba(56, 189, 248, 0.5)", fontSize: 13 }}
+        >
+          <strong>{withoutMapPoint} bien(s) ne sont pas sur la carte.</strong> C'est normal :
+          le fichier ASTECH ne porte quasiment aucune coordonnée, et un bien non rattaché n'a
+          pas de bâtiment dont emprunter la position. Clique «&nbsp;5. Poser les biens sans
+          position sur leur adresse&nbsp;» ci-dessus pour les y faire apparaître — les points
+          seront à vérifier, une adresse sans numéro de voirie donnant le milieu de la voie.
         </div>
       )}
 
@@ -1850,6 +1966,7 @@ export default function PatrimoineAstechPage() {
           </form>
           <BuildingPortfolioMap
             focusLatLon={mapFocus}
+            onContextMenu={(payload) => setContextMenu(payload)}
             buildings={buildings}
             activeBuildingId={targetBuilding?.id ?? null}
             onSelectBuildingId={(buildingId) => {
@@ -1858,6 +1975,16 @@ export default function PatrimoineAstechPage() {
               // les données, c'était la source de confusion (le point bleu passait
               // au vert sans qu'on l'ait demandé).
               if (attachMode) return;
+              // Un bâtiment attend un parent : ce clic désigne lequel.
+              if (awaitingParentFor != null && awaitingParentFor !== buildingId) {
+                typologyMutation.mutate({
+                  kind: "buildingToLocal",
+                  buildingId: awaitingParentFor,
+                  parentId: buildingId,
+                });
+                setAwaitingParentFor(null);
+                return;
+              }
               setInspectedLocalId(null);
               setInspectedBuildingId(buildingId);
             }}
@@ -1949,6 +2076,37 @@ export default function PatrimoineAstechPage() {
               moveBuildingMutation.mutate({ buildingId, lat, lon })
             }
           />
+
+          {/* Bandeau « désigne le parent » : un bâtiment attend qu'on lui dise de quel
+              bâtiment il devient un local. Sans ce rappel à l'écran, le clic suivant
+              aurait un effet que rien n'annonçait. */}
+          {awaitingParentFor != null && (
+            <div
+              style={{
+                ...card,
+                borderColor: "rgba(251, 191, 36, 0.6)",
+                background: "rgba(251, 191, 36, 0.08)",
+                fontSize: 13,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <span>
+                Clique le <strong>bâtiment parent</strong> de «{" "}
+                {buildingsById.get(awaitingParentFor)?.nom_batiment ?? awaitingParentFor} » sur la
+                carte — il en deviendra un local.
+              </span>
+              <button
+                type="button"
+                style={{ ...btnSecondary, fontSize: 12, padding: "4px 10px" }}
+                onClick={() => setAwaitingParentFor(null)}
+              >
+                Annuler
+              </button>
+            </div>
+          )}
 
           {/* Légende : sans elle, les trois états du point violet sont indevinables. */}
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: TEXT_MUTED }}>
@@ -2730,23 +2888,42 @@ export default function PatrimoineAstechPage() {
 
                     {/* Toutes les actions à la suite, plutôt qu'éparpillées en trois blocs. */}
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                      {selected.building_id == null && selected.candidate_building_id != null && (
+                      {/* Deux situations, un seul geste attendu : « valider ».
+                          - le moteur a PROPOSÉ (statut `propose`) : le bâtiment est déjà
+                            renseigné, il ne manque que la validation humaine ;
+                          - le moteur a trouvé un candidat sans oser le rattacher — cas
+                            où plusieurs biens visaient le même bâtiment : il faut alors
+                            poser le rattachement.
+                          La condition ne couvrait QUE le second, si bien que les biens
+                          réellement proposés — l'immense majorité, 59 sur 59 en prod le
+                          2026-08-24 — n'avaient aucun bouton de validation dans le
+                          panneau. Il ne restait que la confirmation en bloc, tout ou
+                          rien. */}
+                      {(selected.status === "propose" ||
+                        (selected.building_id == null && selected.candidate_building_id != null)) && (
                         <>
                           <button
                             type="button"
                             style={btnPrimary}
                             onClick={() =>
-                              updateMutation.mutate(
-                                { id: selected.id, payload: { building_id: selected.candidate_building_id } },
-                                {
-                                  onSuccess: () => {
-                                    setFlash(`« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`);
-                                  },
-                                },
-                              )
+                              selected.status === "propose"
+                                ? confirmMutation.mutate([selected.id])
+                                : updateMutation.mutate(
+                                    {
+                                      id: selected.id,
+                                      payload: { building_id: selected.candidate_building_id },
+                                    },
+                                    {
+                                      onSuccess: () => {
+                                        setFlash(
+                                          `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
+                                        );
+                                      },
+                                    },
+                                  )
                             }
                           >
-                            Valider
+                            Valider ce rattachement
                           </button>
                           <button
                             type="button"
@@ -2754,7 +2931,16 @@ export default function PatrimoineAstechPage() {
                             title="Rejette la suggestion. Le bien reste à traiter : pose son point puis rattache-le."
                             onClick={() =>
                               updateMutation.mutate(
-                                { id: selected.id, payload: { clear_candidate: true } },
+                                {
+                                  id: selected.id,
+                                  // Un bien PROPOSÉ porte déjà son bâtiment : oublier le
+                                  // candidat ne suffirait pas, il resterait rattaché et
+                                  // « à confirmer ». Il faut le détacher pour de bon.
+                                  payload:
+                                    selected.status === "propose"
+                                      ? { clear_building: true, clear_candidate: true, status: "a_traiter" }
+                                      : { clear_candidate: true },
+                                },
                                 {
                                   onSuccess: () =>
                                     setFlash(
@@ -3107,6 +3293,128 @@ export default function PatrimoineAstechPage() {
           </div>
         </div>
       </div>
+
+      {/* --- Menu du clic droit -------------------------------------------
+          Posé sur toute la page en position fixe, à l'endroit cliqué : un menu
+          rendu DANS la carte serait rogné par son cadre. Un clic n'importe où
+          le referme, comme n'importe quel menu contextuel. */}
+      {contextMenu && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 900 }}
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setContextMenu(null);
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: Math.min(contextMenu.x, window.innerWidth - 260),
+              top: Math.min(contextMenu.y, window.innerHeight - 200),
+              zIndex: 901,
+              minWidth: 240,
+              padding: 4,
+              borderRadius: 10,
+              border: BORDER,
+              background: "rgba(15, 23, 42, 0.97)",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
+            }}
+          >
+            {(() => {
+              const item = (label: string, action: () => void, tone?: string) => (
+                <button
+                  key={label}
+                  type="button"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    border: "none",
+                    background: "transparent",
+                    color: tone ?? TEXT,
+                    padding: "7px 10px",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    borderRadius: 6,
+                  }}
+                  onClick={() => {
+                    setContextMenu(null);
+                    action();
+                  }}
+                >
+                  {label}
+                </button>
+              );
+              const titre = (texte: string) => (
+                <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", padding: "6px 10px 2px" }}>
+                  {texte}
+                </div>
+              );
+              const { kind, id, lat, lon } = contextMenu;
+
+              if (kind === "local") {
+                const local = id != null ? localsById.get(id) : null;
+                if (!local) return titre("Local introuvable");
+                return (
+                  <>
+                    {titre(`Local · ${local.nom_local}`)}
+                    {item("En faire un bâtiment Po2", () =>
+                      typologyMutation.mutate({ kind: "localToBuilding", local }),
+                    )}
+                  </>
+                );
+              }
+
+              if (kind === "building") {
+                const building = id != null ? buildingsById.get(id) : null;
+                if (!building) return titre("Bâtiment introuvable");
+                return (
+                  <>
+                    {titre(`Bâtiment · ${building.nom_batiment ?? id}`)}
+                    {item("En faire un local d'un autre bâtiment…", () => setAwaitingParentFor(building.id))}
+                    {item("L'ajouter à la liste ASTECH", () => addToAstechMutation.mutate(building.id))}
+                  </>
+                );
+              }
+
+              if (kind === "legacy") {
+                const asset = id != null ? knownAssets.get(id) : null;
+                if (!asset) return titre("Bien introuvable");
+                return (
+                  <>
+                    {titre(`Bien ASTECH · ${assetLabel(asset)}`)}
+                    {item("Le sélectionner", () => setSelectedId(asset.id))}
+                    {asset.building_id != null &&
+                      asset.target_type !== "local" &&
+                      item("En faire un local de son bâtiment", () => toLocalMutation.mutate(asset.id))}
+                    {asset.building_id != null && item("Détacher", () => detachAsset(asset.id))}
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  {titre("Créer ici")}
+                  {item("Un bâtiment Po2", () => {
+                    const nom = window.prompt("Nom du bâtiment Po2 à créer ici :", "");
+                    if (nom && nom.trim()) {
+                      createBuildingAtPointMutation.mutate({ nom: nom.trim(), lat, lon });
+                    }
+                  })}
+                  {item("Un bien ASTECH (à créer dans AS-TECH)", () => {
+                    const nom = window.prompt("Nom du bien ASTECH à créer ici :", "");
+                    if (nom && nom.trim()) {
+                      createAssetAtPointMutation.mutate({ nom: nom.trim(), lat, lon });
+                    }
+                  })}
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </section>
   );
 }

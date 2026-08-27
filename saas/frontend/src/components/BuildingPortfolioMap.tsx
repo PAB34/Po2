@@ -20,7 +20,9 @@ type RuntimeLayer = {
   bindPopup?: (html: string) => RuntimeLayer;
   /** Étiquette permanente posée à côté du marqueur (dénomination affichée au zoom). */
   bindTooltip?: (content: string, options?: Record<string, unknown>) => RuntimeLayer;
-  on?: (event: string, handler: () => void) => void;
+  // Le payload est optionnel : la plupart des abonnements l'ignorent, seuls le clic
+  // droit et le clic dans le vide en ont besoin.
+  on?: (event: string, handler: (payload?: unknown) => void) => void;
 };
 
 type RuntimeBounds = {
@@ -245,6 +247,21 @@ type BuildingPortfolioMapProps = {
   ) => void;
   /** Rayon d'accrochage du depot, en metres. */
   legacyDropRadiusM?: number;
+  /**
+   * Clic droit sur la carte ou sur une entite : la carte SIGNALE, elle ne decide rien.
+   *
+   * `kind` dit ce qui est sous le curseur — `map` pour le fond de carte. Les
+   * coordonnees ecran servent a poser le menu la ou l'utilisateur a clique ; les
+   * coordonnees geographiques, a creer une entite a cet endroit precis.
+   */
+  onContextMenu?: (payload: {
+    kind: "map" | "building" | "local" | "legacy";
+    id: number | null;
+    lat: number;
+    lon: number;
+    x: number;
+    y: number;
+  }) => void;
   /**
    * Bâtiment Po2 rendu déplaçable. Un seul à la fois — comme pour les points ASTECH,
    * cela évite de déplacer un voisin par mégarde en naviguant sur la carte.
@@ -514,6 +531,7 @@ export function BuildingPortfolioMap({
   onMoveLegacyPoint,
   onDropLegacyOnBuilding,
   legacyDropRadiusM = 30,
+  onContextMenu,
   draggableBuildingId = null,
   onMoveBuilding,
   onBackgroundClick,
@@ -547,6 +565,10 @@ export function BuildingPortfolioMap({
   backgroundClickRef.current = onBackgroundClick;
   const viewCenterRef = useRef(onViewCenterChange);
   viewCenterRef.current = onViewCenterChange;
+  // Comme `backgroundClickRef` : le handler vit dans une ref pour que l'abonnement
+  // Leaflet soit pose une seule fois, a l'initialisation.
+  const contextMenuRef = useRef(onContextMenu);
+  contextMenuRef.current = onContextMenu;
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [mapReady, setMapReady] = useState(false);
   // Le conteneur de la carte vit dans un ETAT, pas seulement dans une ref.
@@ -843,6 +865,34 @@ export function BuildingPortfolioMap({
       };
       map.on?.("moveend", emitCenter);
       emitCenter();
+      map.on?.("contextmenu", (payload) => {
+        const event = payload as {
+          latlng?: { lat: number; lng: number };
+          containerPoint?: { x: number; y: number };
+          originalEvent?: MouseEvent;
+        };
+        if (!event.latlng) return;
+        event.originalEvent?.preventDefault();
+        // Leaflet fait remonter l'evenement depuis les marqueurs jusqu'au fond de carte.
+        // Meme garde que pour le clic dans le vide : seul un clic sur les tuiles est un
+        // clic « sur la carte » — sinon le menu du fond ecraserait celui de l'entite.
+        const target = event.originalEvent?.target as HTMLElement | undefined;
+        if (
+          target?.closest?.(
+            ".leaflet-marker-pane, .leaflet-overlay-pane, .leaflet-popup-pane, .leaflet-control-container",
+          )
+        ) {
+          return;
+        }
+        contextMenuRef.current?.({
+          kind: "map",
+          id: null,
+          lat: event.latlng.lat,
+          lon: event.latlng.lng,
+          x: event.originalEvent?.clientX ?? 0,
+          y: event.originalEvent?.clientY ?? 0,
+        });
+      });
       const syncLabels = () => {
         const level = map.getZoom?.();
         if (typeof level === "number") setLabelsVisible(level >= LABEL_MIN_ZOOM);
@@ -987,6 +1037,18 @@ export function BuildingPortfolioMap({
         marker.on?.("click", () => {
           markerClickAtRef.current = Date.now();
           onSelectLocalId?.(point.id, point.buildingId);
+        });
+        marker.on?.("contextmenu", (payload) => {
+          const event = payload as { latlng?: { lat: number; lng: number }; originalEvent?: MouseEvent };
+          event.originalEvent?.preventDefault();
+          contextMenuRef.current?.({
+            kind: "local",
+            id: point.id,
+            lat: event.latlng?.lat ?? latitude,
+            lon: event.latlng?.lng ?? longitude,
+            x: event.originalEvent?.clientX ?? 0,
+            y: event.originalEvent?.clientY ?? 0,
+          });
         });
         layerGroup.addLayer(marker);
       });
@@ -1163,6 +1225,18 @@ export function BuildingPortfolioMap({
         markerClickAtRef.current = Date.now();
         onSelectLegacyId?.(point.id);
       });
+      marker.on?.("contextmenu", (payload) => {
+        const event = payload as { latlng?: { lat: number; lng: number }; originalEvent?: MouseEvent };
+        event.originalEvent?.preventDefault();
+        contextMenuRef.current?.({
+          kind: "legacy",
+          id: point.id,
+          lat: event.latlng?.lat ?? entry.latitude,
+          lon: event.latlng?.lng ?? entry.longitude,
+          x: event.originalEvent?.clientX ?? 0,
+          y: event.originalEvent?.clientY ?? 0,
+        });
+      });
       if (isDraggable && (onMoveLegacyPoint || onDropLegacyOnBuilding)) {
         // Leaflet fait suivre un glisser-deposer d'un `click` qui remonte jusqu'au fond
         // de carte. Sans ce marquage, lacher le point declenchait la deselection — et
@@ -1332,6 +1406,18 @@ export function BuildingPortfolioMap({
       marker.on?.("click", () => {
         markerClickAtRef.current = Date.now();
         if (attachMode === "none") onSelectBuildingId(building.id);
+      });
+      marker.on?.("contextmenu", (payload) => {
+        const event = payload as { latlng?: { lat: number; lng: number }; originalEvent?: MouseEvent };
+        event.originalEvent?.preventDefault();
+        contextMenuRef.current?.({
+          kind: "building",
+          id: building.id,
+          lat: event.latlng?.lat ?? shown.lat,
+          lon: event.latlng?.lng ?? shown.lon,
+          x: event.originalEvent?.clientX ?? 0,
+          y: event.originalEvent?.clientY ?? 0,
+        });
       });
       layerGroup.addLayer(marker);
     }

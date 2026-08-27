@@ -1229,3 +1229,39 @@ que sur les points fusionnés, alors que 3 biens appariés gardent une position 
 l'écart de leur bâtiment et restent reliés par un trait — eux aussi sont traités. Une
 proposition du moteur (ambre) ne la porte pas. Répartition réelle : 83 bâtiments portent
 1 bien (fusionné), 1 en porte 2 (araignée), 3 biens sont posés à l'écart (trait + ✓).
+
+## 27. Menu du clic droit, homonymes, et validation au coup par coup — 2026-08-24
+
+| # | Sujet | Décision |
+|---|---|---|
+| Q40 | Local homonyme de son bâtiment | **Troisième catégorie du bouton de nettoyage**, et non un sixième bouton dans une barre qui en compte déjà huit : même famille — des entités redondantes — et même mécanique, appel à blanc puis liste nominative. Un tel local ne fait que redire le bâtiment qui le contient ; c'est ce que fabriquait le local par défaut de l'import (§21), et un ré-import en refabriquerait. Rien qui porte un lien n'est effacé, seulement signalé. |
+| Q41 | Clic droit sur la carte | **Menu contextuel dessiné par la page**, la carte se contentant de signaler ce qui est sous le curseur. Sur le fond de carte : créer un bâtiment Po2 ou un bien ASTECH **à ce point précis**. Sur une entité : les gestes qui la concernent. Le menu est posé en position fixe sur la page — rendu dans la carte, il serait rogné par son cadre. |
+| Q42 | Changer la typologie | Un **local devient bâtiment** d'un clic. Un **bâtiment devient local** en deux temps : le menu arme l'action, le clic suivant désigne le bâtiment parent, avec un bandeau qui l'annonce. On ne devine pas le parent — le plus proche n'est pas forcément le bon, et se tromper déplacerait toute une branche du patrimoine. |
+
+**Création d'un bien ASTECH de toutes pièces** : il manquait cette entrée. Les deux
+existantes partent d'une entité Po2 déjà connue (`from-building`, `from-local`) ; le cas
+où il n'y a rien de préexistant n'était pas couvert. Statut « à créer », donc `CODE_BIEN`
+**vide** au réexport — c'est ASTECH qui l'attribuera (Q13). Le bâtiment créé par le menu
+n'a **pas** de local par défaut : il porterait son nom et referait le jumeau homonyme que
+Q40 passe son temps à nettoyer.
+
+### 27.1 Deux défauts constatés après un ré-import complet (2026-08-24)
+
+**Aucun bouton pour valider UN rattachement proposé.** La condition d'affichage était
+`building_id == null && candidate_building_id != null` — or un bien *proposé* porte
+**déjà** son bâtiment (`compute_candidates` le renseigne). Elle ne couvrait donc que le
+cas résiduel où le moteur a trouvé un candidat sans oser le rattacher, plusieurs biens
+visant le même bâtiment. Mesure du jour : **59 biens proposés sur 59** n'avaient aucun
+bouton dans le panneau ; il ne restait que la confirmation en bloc, tout ou rien.
+Le bouton apparaît désormais dès que le statut est `propose`, et « Écarter » **détache**
+un bien proposé au lieu de se contenter d'oublier le candidat — sans quoi il restait
+rattaché et « à confirmer ».
+
+**Les biens n'apparaissent pas sur la carte après un import.** C'est l'état normal, et
+rien ne le disait : le fichier ASTECH ne porte qu'une position sur 444, et un bien non
+rattaché n'a aucun bâtiment dont emprunter le point. État mesuré après le ré-import
+Po2 + ASTECH + reconnaissance : **320 biens à traiter, 0 sur la carte** ; seuls les 59
+proposés s'affichaient, par emprunt. Un ré-import de la base Po2 produit le même effet
+sur les biens déjà traités — les bâtiments changent d'identifiant et `building_id` est
+remis à NULL en cascade. Un bandeau annonce désormais le compte et renvoie au bouton
+« 5 · Poser les biens sans position sur leur adresse ».
