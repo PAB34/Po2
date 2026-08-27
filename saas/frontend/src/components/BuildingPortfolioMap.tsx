@@ -18,6 +18,8 @@ type RuntimeLayer = {
   addTo: (target: RuntimeMap | RuntimeFeatureGroup) => RuntimeLayer;
   remove?: () => void;
   bindPopup?: (html: string) => RuntimeLayer;
+  /** Restyle un cercle a chaud. Absent d'un marqueur a icone HTML : appel optionnel. */
+  setStyle?: (style: Record<string, unknown>) => void;
   /** Étiquette permanente posée à côté du marqueur (dénomination affichée au zoom). */
   bindTooltip?: (content: string, options?: Record<string, unknown>) => RuntimeLayer;
   // Le payload est optionnel : la plupart des abonnements l'ignorent, seuls le clic
@@ -596,6 +598,14 @@ export function BuildingPortfolioMap({
   // cadre VISIBLE seulement (cf. la couche dediee plus bas).
   const [viewportTick, setViewportTick] = useState(0);
   const labelsLayerRef = useRef<RuntimeFeatureGroup | null>(null);
+  /**
+   * Marqueur dessine de chaque batiment, avec le style qu'on lui a donne.
+   *
+   * Sert a l'effacer le temps qu'on tire le point apparie qui le recouvre : sinon la
+   * pastille du batiment se decouvre a mesure que le point s'en eloigne, et le point
+   * unique semble se dedoubler pendant le glisser — alors qu'il ne fait que bouger.
+   */
+  const buildingMarkersRef = useRef(new Map<number, { layer: RuntimeLayer; style: Record<string, unknown> }>());
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const attachContainer = useCallback((node: HTMLDivElement | null) => {
     containerRef.current = node;
@@ -1243,9 +1253,26 @@ export function BuildingPortfolioMap({
         // la carte se recadrait aussitot sur tout le parc.
         marker.on?.("dragstart", () => {
           markerClickAtRef.current = Date.now();
+          // Point apparie : la pastille du batiment est EXACTEMENT dessous. La laisser
+          // en place la ferait apparaitre a mesure qu'on tire le point, et le point
+          // unique semblerait se dedoubler le temps du glisser. On l'efface, et le
+          // redessin qui suit le lacher la remet — a la nouvelle position, puisque le
+          // batiment suit son bien.
+          if (entry.isMerged && entry.buildingId != null) {
+            buildingMarkersRef.current
+              .get(entry.buildingId)
+              ?.layer.setStyle?.({ opacity: 0, fillOpacity: 0 });
+          }
         });
         marker.on?.("dragend", () => {
           markerClickAtRef.current = Date.now();
+          // Rendre sa pastille au batiment : le rafraichissement qui suit la redessinera
+          // au bon endroit, mais un lacher sans effet — ou en echec — la laisserait
+          // invisible.
+          if (entry.isMerged && entry.buildingId != null) {
+            const registered = buildingMarkersRef.current.get(entry.buildingId);
+            registered?.layer.setStyle?.(registered.style);
+          }
           const dropped = marker.getLatLng();
           // Le marqueur est dessine DECALE (patte d'araignee) : ce decalage est
           // purement visuel. On le retranche avant d'enregistrer, sinon deplacer un
@@ -1322,6 +1349,9 @@ export function BuildingPortfolioMap({
 
     buildingsLayerRef.current?.remove?.();
     buildingsLayerRef.current = null;
+    // Le registre pointe vers les marqueurs qu'on vient de retirer : le vider evite de
+    // restyler des couches mortes au glisser suivant.
+    buildingMarkersRef.current.clear();
 
     if (mappableBuildings.length === 0) {
       // Meme garde que le cadrage plus bas : ne recentrer qu'au premier passage.
@@ -1381,6 +1411,13 @@ export function BuildingPortfolioMap({
       }
 
       const isDraggable = building.id === draggableBuildingId && attachMode === "none";
+      const buildingStyle = {
+        radius: isActive ? 9 : dimInAttach ? 5 : isHighlighted ? 8 : 7,
+        color,
+        fillColor,
+        fillOpacity: dimInAttach && !isActive ? 0.45 : 0.92,
+        weight: isActive ? 3 : 2,
+      };
       // `circleMarker` n'est pas deplaçable : le batiment que l'on veut bouger passe
       // donc en marqueur classique, avec la meme apparence.
       const marker = isDraggable
@@ -1394,13 +1431,7 @@ export function BuildingPortfolioMap({
               iconAnchor: [10, 10],
             }),
           })
-        : runtime.circleMarker([shown.lat, shown.lon], {
-            radius: isActive ? 9 : dimInAttach ? 5 : isHighlighted ? 8 : 7,
-            color,
-            fillColor,
-            fillOpacity: dimInAttach && !isActive ? 0.45 : 0.92,
-            weight: isActive ? 3 : 2,
-          });
+        : runtime.circleMarker([shown.lat, shown.lon], buildingStyle);
       if (isDraggable && onMoveBuilding) {
         const draggableMarker = marker as RuntimeMarker;
         draggableMarker.on?.("dragend", () => {
@@ -1433,6 +1464,7 @@ export function BuildingPortfolioMap({
           y: event.originalEvent?.clientY ?? 0,
         });
       });
+      buildingMarkersRef.current.set(building.id, { layer: marker, style: buildingStyle });
       layerGroup.addLayer(marker);
     }
 
