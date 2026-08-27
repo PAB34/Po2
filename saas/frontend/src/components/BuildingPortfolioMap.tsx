@@ -1277,7 +1277,21 @@ export function BuildingPortfolioMap({
               nearest = { id: local.buildingId, distance, localId: local.id };
             }
           }
-          if (nearest !== null && onDropLegacyOnBuilding) {
+          // Lâché sur la cible qu'il a DÉJÀ : c'est un déplacement, pas un
+          // rattachement. Sans ce test, nudger un point apparié de quelques mètres
+          // rouvrait la question « Rattacher X à Y ? » pour le lien existant — et le
+          // temps qu'on réponde, le point restait retenu à l'endroit lâché pendant que
+          // le bâtiment demeurait en place : le point fusionné se dédoublait à l'écran.
+          //
+          // Viser un LOCAL du même bâtiment reste une vraie décision (on précise le
+          // niveau), tout comme repasser d'un local au bâtiment entier : ces deux cas
+          // continuent de passer par la validation.
+          const sameTargetAsNow =
+            nearest !== null &&
+            nearest.id === point.buildingId &&
+            nearest.localId == null &&
+            point.isLocalTarget !== true;
+          if (nearest !== null && !sameTargetAsNow && onDropLegacyOnBuilding) {
             onDropLegacyOnBuilding(point.id, nearest.id, nearest.localId, position.lat, position.lng);
             return;
           }
