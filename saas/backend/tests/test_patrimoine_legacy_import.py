@@ -1441,3 +1441,34 @@ def test_confirmer_ne_vide_pas_le_libelle_si_la_cible_n_a_pas_de_nom(db_session:
 
     db_session.refresh(asset)
     assert asset.nomcourt == "NOM ASTECH"
+
+
+def test_le_local_cree_prend_le_nom_astech_pas_celui_du_batiment(db_session: Session):
+    """Q43 : rattacher d'abord au bâtiment fait adopter son nom (Q11).
+
+    Créer le local ensuite lui donnait donc le nom du BÂTIMENT — « ECOLE MATERNELLE
+    LOUISE MICHEL » pour ce qui est en réalité le restaurant scolaire. On fabriquait un
+    local homonyme de son bâtiment, exactement ce que le nettoyage supprime, et
+    l'identité du bien disparaissait de l'écran.
+    """
+    from app.services.patrimoine_legacy import convert_asset_to_local, update_asset
+
+    db_session.add(
+        Building(id=42, city_id=1, nom_batiment="ECOLE MATERNELLE LOUISE MICHEL", nom_commune="Sete")
+    )
+    db_session.commit()
+    import_astech_file(db_session, city_id=1, filename="export.xlsx", raw_bytes=_build_workbook())
+    asset = db_session.scalar(
+        _all_assets().where(PatrimoineLegacyAsset.code_bien == "ADMICIMET02")
+    )
+    origine = asset.designation
+
+    update_asset(db_session, asset, building_id=42)
+    assert asset.designation == "ECOLE MATERNELLE LOUISE MICHEL"  # Q11 a joué
+
+    convert_asset_to_local(db_session, asset)
+
+    local = db_session.get(Local, asset.local_id)
+    assert local.nom_local == origine
+    # Le bien reprend le nom de sa cible réelle : le local, pas le bâtiment.
+    assert asset.nomcourt == origine

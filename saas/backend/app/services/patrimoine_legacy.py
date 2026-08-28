@@ -790,6 +790,33 @@ def _adopt_target_name(
     asset.nomcourt = cleaned
 
 
+def _source_names(asset: PatrimoineLegacyAsset) -> dict[str, str]:
+    """Libellés ASTECH d'ORIGINE du bien, relus depuis sa ligne source.
+
+    Les clés de `source_payload_json` sont les **en-têtes bruts** du fichier importé, et
+    les deux générations d'export n'ont pas les mêmes (`NOMCOURT` contre `Nom court`) :
+    on repasse donc par la table d'alias, exactement comme à la lecture. Un bien créé
+    depuis Po2 n'a pas de payload et renvoie un dictionnaire vide.
+    """
+    if not asset.source_payload_json:
+        return {}
+    try:
+        payload = json.loads(asset.source_payload_json)
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    by_header = {_header_key(key): value for key, value in payload.items()}
+    found: dict[str, str] = {}
+    for field in ("designation", "nomcourt"):
+        original = _text(
+            next((by_header[alias] for alias in _COLUMN_ALIASES[field] if alias in by_header), None)
+        )
+        if original:
+            found[field] = original[:255]
+    return found
+
+
 def _restore_source_name(asset: PatrimoineLegacyAsset) -> None:
     """Rend au bien son libellé ASTECH d'origine (Q26).
 
@@ -803,24 +830,9 @@ def _restore_source_name(asset: PatrimoineLegacyAsset) -> None:
     `Nom court`) : on repasse donc par la table d'alias, exactement comme à la lecture.
     Un bien créé depuis Po2 n'a pas de payload — on ne touche alors à rien.
     """
-    if not asset.source_payload_json:
-        return
-    try:
-        payload = json.loads(asset.source_payload_json)
-    except (ValueError, TypeError):
-        return
-    if not isinstance(payload, dict):
-        return
-    by_header = {_header_key(key): value for key, value in payload.items()}
-    for field in ("designation", "nomcourt"):
-        original = next(
-            (by_header[alias] for alias in _COLUMN_ALIASES[field] if alias in by_header),
-            None,
-        )
-        original = _text(original)
-        # Une source vide ne vide pas le libellé : mieux vaut le nom Po2 que rien.
-        if original:
-            setattr(asset, field, original[:255])
+    # Une source vide ne vide pas le libellé : mieux vaut le nom Po2 que rien.
+    for field, original in _source_names(asset).items():
+        setattr(asset, field, original)
 
 
 def _clear_resolved_address(asset: PatrimoineLegacyAsset) -> None:
@@ -1255,7 +1267,25 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
     if building is None:
         raise ValueError("Le bâtiment porteur est introuvable.")
 
-    name = (asset.nomcourt or asset.designation or asset.code_bien).strip()[:255]
+    # Le local prend le nom ASTECH D'ORIGINE du bien, pas son libellé courant.
+    #
+    # Piège constaté le 2026-08-27 : rattacher d'abord au bâtiment fait adopter le nom
+    # du bâtiment (Q11). Créer le local ensuite lui donnait donc le nom du BÂTIMENT —
+    # « ECOLE MATERNELLE LOUISE MICHEL » pour ce qui est en réalité le restaurant
+    # scolaire. On fabriquait ainsi un local homonyme de son bâtiment, exactement ce que
+    # le nettoyage des doublons passe son temps à supprimer, et l'identité du bien
+    # disparaissait de l'écran.
+    #
+    # Le bien reprend ensuite le nom du local : c'est sa cible Po2 réelle, et c'est ce
+    # nom-là qui repartira dans ASTECH.
+    source = _source_names(asset)
+    name = (
+        source.get("designation")
+        or source.get("nomcourt")
+        or asset.nomcourt
+        or asset.designation
+        or asset.code_bien
+    ).strip()[:255]
     # Un local du meme nom existe deja dans ce batiment : on le reutilise plutot que
     # d'en creer un doublon. C'est le cas du TENNIS CLUB DU BARROU, dont le local
     # « SALLE TENNIS CLUB DU BARROU » etait deja en base.
@@ -1286,6 +1316,7 @@ def convert_asset_to_local(db: Session, asset: PatrimoineLegacyAsset) -> Patrimo
 
     asset.local_id = local.id
     asset.target_type = TARGET_LOCAL
+    _adopt_target_name(asset, local.nom_local, None)
     asset.status = STATUS_LINKED
     asset.link_origin = ORIGIN_MANUAL
     _inherit_building_address(asset, building)
