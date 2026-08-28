@@ -689,6 +689,11 @@ def update_asset(
                 asset.latitude = latitude_source
                 asset.longitude = longitude_source
                 latitude = longitude = None
+        # Le bien prend le nom de sa cible, ici le LOCAL (Q11). Cette branche l'oubliait,
+        # alors que la branche « bâtiment » juste en dessous l'a toujours fait : viser un
+        # local depuis le sélecteur, ou y déposer le point, laissait le bien sous son
+        # ancien libellé — et c'est ce libellé-là que le réexport écrit.
+        _adopt_target_name(asset, local.nom_local, designation)
     elif building_id is not None:
         building = db.get(Building, building_id)
         # Le batiment vise peut avoir disparu : `candidate_building_id` n'a pas de cle

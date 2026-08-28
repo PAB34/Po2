@@ -678,11 +678,27 @@ def _move_astech_assets(
             PatrimoineLegacyAsset.building_id == from_building_id,
             PatrimoineLegacyAsset.local_id.is_(None),
         )
+    # Nom de la cible d'arrivee : un reclassement peut RENOMMER au passage
+    # (`payload.name`). Sans ce realignement, le bien resterait sous l'ancien libelle
+    # alors que sa cible Po2 en porte un nouveau — et c'est le libelle du bien que le
+    # reexport ecrit, pas celui de la cible.
+    target_name: str | None = None
+    if to_local_id is not None:
+        target = db.get(Local, to_local_id)
+        target_name = target.nom_local if target is not None else None
+    elif to_building_id is not None:
+        target = db.get(Building, to_building_id)
+        target_name = target.nom_batiment if target is not None else None
+
     moved = 0
     for asset in db.scalars(statement):
         asset.building_id = to_building_id
         asset.local_id = to_local_id
         asset.target_type = "local" if to_local_id is not None else "building"
+        cleaned = (target_name or "").strip()[:255]
+        if cleaned:
+            asset.designation = cleaned
+            asset.nomcourt = cleaned
         db.add(asset)
         moved += 1
     return moved
