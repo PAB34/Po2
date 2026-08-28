@@ -910,6 +910,36 @@ export default function PatrimoineAstechPage() {
   };
 
   /**
+   * Valide le rattachement proposé, mais **au niveau du local** (Q43).
+   *
+   * Il manquait. Déposer un bien sur un bâtiment ne proposait que « tout le bâtiment » :
+   * pour en faire un local il fallait valider, puis rouvrir le panneau et cliquer « En
+   * faire un local ». Or c'est le cas courant dès qu'un bâtiment porte plusieurs biens —
+   * l'école et son restaurant scolaire.
+   *
+   * En deux appels enchaînés parce que la création du local exige un bâtiment porteur
+   * déjà renseigné. Le nom du local vient de la ligne ASTECH d'origine, côté serveur :
+   * enchaîner ferait sinon adopter le nom du bâtiment, et le local naîtrait homonyme de
+   * son parent.
+   */
+  const confirmPendingAsLocalMutation = useMutation({
+    mutationFn: async (link: { assetId: number; buildingId: number }) => {
+      await updateLegacyAsset(token!, link.assetId, { building_id: link.buildingId });
+      return convertLegacyAssetToLocal(token!, link.assetId);
+    },
+    onSuccess: (asset) => {
+      setFlash(
+        `« ${assetLabel(asset)} » rattaché comme un LOCAL du bâtiment. ` +
+          "L'adresse et le cadastre restent ceux du bâtiment porteur.",
+      );
+      void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+      invalidate();
+      setPendingLink(null);
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /**
    * Refuse le rattachement proposé : on enregistre le seul déplacement.
    *
    * C'est l'intention de départ dans le cas qui a motivé Q25 — déplacer un point qui se
@@ -2243,6 +2273,8 @@ export default function PatrimoineAstechPage() {
               </div>
               <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 8 }}>
                 Le bien prendra le nom de la cible Po2, son adresse et son cadastre.
+                {pendingLink.localId == null &&
+                  " S'il ne désigne qu'une partie du bâtiment — un restaurant scolaire, une salle — rattache-le plutôt comme un local."}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button
@@ -2252,6 +2284,22 @@ export default function PatrimoineAstechPage() {
                 >
                   Valider le rattachement
                 </button>
+                {pendingLink.localId == null && (
+                  <button
+                    type="button"
+                    style={{ ...btnSecondary, fontSize: 12, padding: "5px 12px" }}
+                    title="Crée un local portant le nom ASTECH du bien dans ce bâtiment, et l'y rattache. L'adresse et le cadastre restent ceux du bâtiment porteur."
+                    disabled={confirmPendingAsLocalMutation.isPending}
+                    onClick={() =>
+                      confirmPendingAsLocalMutation.mutate({
+                        assetId: pendingLink.assetId,
+                        buildingId: pendingLink.buildingId,
+                      })
+                    }
+                  >
+                    {confirmPendingAsLocalMutation.isPending ? "…" : "Rattacher comme un local"}
+                  </button>
+                )}
                 <button
                   type="button"
                   style={{ ...btnSecondary, fontSize: 12, padding: "5px 12px" }}
