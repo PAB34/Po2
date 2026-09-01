@@ -33,8 +33,12 @@ import {
   createLegacyAssetFromBuilding,
   createLegacyAssetAtPoint,
   createLegacyAssetFromLocal,
+  deleteBuildingRequest,
   deleteLegacyImports,
+  deleteLocalRequest,
   downloadLegacyExport,
+  peekLegacyUndo,
+  undoLegacyLastAction,
   previewLegacyExport,
   reclassifyBuildingRequest,
   reclassifyLocalRequest,
@@ -394,10 +398,8 @@ export default function PatrimoineAstechPage() {
     [inspectedLocalId, localsById],
   );
 
-  // Le brouillon suit le local consulté, sinon on éditerait le nom du précédent.
-  useEffect(() => {
-    setLocalNameDraft(inspectedLocal?.nom_local ?? "");
-  }, [inspectedLocal]);
+  // Le brouillon de nom du local est recalé plus bas, avec ceux du bien et du bâtiment :
+  // tous trois sur l'IDENTIFIANT de l'entité consultée, jamais sur ses données (Q50).
 
   // Pendant de `addToAstechMutation` pour un local : une entite Po2 absente du
   // referentiel de la collectivite doit remonter dans le fichier de retour, sinon les
@@ -503,6 +505,9 @@ export default function PatrimoineAstechPage() {
     // Constate le 2026-08-27 sur ECOLE MATERNELLE SUZANNE LACORE, et seul un
     // rechargement de la page remettait les choses en place.
     void queryClient.invalidateQueries({ queryKey: ["buildings"] });
+    // Et le bouton d'annulation, qui NOMME la dernière action : sans cela il resterait
+    // sur la précédente, et proposerait de défaire autre chose que ce qu'il annonce.
+    void queryClient.invalidateQueries({ queryKey: ["legacy-undo"] });
   };
 
   // --- Bâtiments Po2 indistinguables ------------------------------------------
@@ -675,12 +680,17 @@ export default function PatrimoineAstechPage() {
   // qu'on a fait, et on peut le corriger dans la foulee — sauter ailleurs obligeait a
   // revenir en arriere des que la decision demandait une verification.
 
+  // Le message d'issue part APRÈS la réponse du serveur. Il était affiché dès le clic :
+  // en cas d'échec, l'écran affirmait le succès puis se contredisait une seconde plus
+  // tard — de quoi douter de tout ce qu'il annonce.
   const detachAsset = (assetId: number) => {
-    updateMutation.mutate({
-      id: assetId,
-      payload: { clear_building: true, status: "a_traiter" },
-    });
-    setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte.");
+    updateMutation.mutate(
+      { id: assetId, payload: { clear_building: true, status: "a_traiter" } },
+      {
+        onSuccess: () =>
+          setFlash("Bien détaché : il repasse « à traiter » et s'écarte du bâtiment sur la carte."),
+      },
+    );
   };
 
   /**
@@ -1056,6 +1066,62 @@ export default function PatrimoineAstechPage() {
   });
 
   /**
+   * Retour arrière sur la dernière action (Q46).
+   *
+   * Le serveur a relevé l'état d'avant des lignes écrites : annuler les réécrit telles
+   * qu'elles étaient, effets de bord compris. Rien n'est reconstitué à la main ici — un
+   * « défaire » approximatif côté écran serait pire que pas de défaire du tout.
+   */
+  const undoQuery = useQuery({
+    queryKey: ["legacy-undo"],
+    queryFn: () => peekLegacyUndo(token!),
+    enabled: !!token,
+  });
+
+  const undoMutation = useMutation({
+    mutationFn: () => undoLegacyLastAction(token!),
+    onSuccess: (result) => {
+      setFlash(
+        result.annule
+          ? `Annulé : « ${result.libelle} » — ${result.lignes} ligne(s) remises dans leur état d'avant.`
+          : result.motif === "trop_vaste"
+            ? `« ${result.libelle} » ne peut pas être annulée : l'action a touché trop de lignes. ` +
+              "Les annulations plus anciennes sont bloquées derrière elle."
+            : "Rien à annuler.",
+      );
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const deleteBuildingMutation = useMutation({
+    mutationFn: (buildingId: number) => deleteBuildingRequest(token!, buildingId),
+    onSuccess: (_result, buildingId) => {
+      if (inspectedBuildingId === buildingId) setInspectedBuildingId(null);
+      setFlash(
+        "Bâtiment Po2 supprimé, avec ses locaux. Les biens ASTECH qui le visaient repassent " +
+          "« à traiter ». « Annuler » rend tout en l'état.",
+      );
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  const deleteLocalMutation = useMutation({
+    mutationFn: (variables: { buildingId: number; localId: number }) =>
+      deleteLocalRequest(token!, variables.buildingId, variables.localId),
+    onSuccess: (_result, variables) => {
+      if (inspectedLocalId === variables.localId) setInspectedLocalId(null);
+      setFlash(
+        "Local Po2 supprimé. Les biens ASTECH qui le visaient retombent sur le bâtiment " +
+          "porteur. « Annuler » rend tout en l'état.",
+      );
+      invalidate();
+    },
+    onError: (error) => setFlash(`Erreur : ${(error as Error).message}`),
+  });
+
+  /**
    * Télécharge le classeur de retour ASTECH.
    *
    * Le fichier ne contient que les rattachements **validés par un humain** : une
@@ -1276,15 +1342,51 @@ export default function PatrimoineAstechPage() {
     setPendingLink((current) => (current && current.assetId === selectedId ? current : null));
   }, [selectedId]);
 
-  // Le champ de saisie suit le bien affiché : sans cela, changer de bien laisserait le
-  // nom du précédent dans la case, et « Enregistrer » l'écrirait sur le mauvais.
+  /**
+   * Le champ de saisie suit l'ENTITÉ AFFICHÉE, pas les données qui la décrivent (Q50).
+   *
+   * La dépendance était l'objet `selected` lui-même. Or il est reconstruit à chaque
+   * rafraîchissement de la liste — et toute action de l'écran en déclenche un. Une frappe
+   * en cours au mauvais moment était donc effacée, le bouton « Enregistrer » disparaissait
+   * avec elle, et rien ne le disait : vu du poste, « le renommage n'a pas été enregistré ».
+   *
+   * Avec `selectedId`, le champ ne se recale qu'en changeant de bien — le seul moment où
+   * garder la saisie précédente serait dangereux.
+   */
   useEffect(() => {
     setAssetNameDraft(selected ? assetLabel(selected) : "");
-  }, [selected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   useEffect(() => {
     setBuildingNameDraft(inspectedBuilding?.nom_batiment ?? "");
-  }, [inspectedBuilding]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectedBuildingId]);
+
+  useEffect(() => {
+    setLocalNameDraft(inspectedLocal?.nom_local ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspectedLocalId]);
+
+  /**
+   * Ctrl+Z annule la dernière action, comme partout ailleurs.
+   *
+   * Sauf pendant une saisie : dans un champ, Ctrl+Z doit défaire la frappe, pas le
+   * rattachement d'il y a deux minutes.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      if (!undoQuery.data?.disponible || undoMutation.isPending) return;
+      event.preventDefault();
+      undoMutation.mutate();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undoQuery.data?.disponible, undoMutation]);
 
   // Biens réellement affichables sur la carte : ceux qui ont une position propre, ou
   // un bâtiment rattaché qui en a une. Les autres ne sont visibles QUE dans la file de
@@ -1669,6 +1771,35 @@ export default function PatrimoineAstechPage() {
           {dedupeMutation.isPending
             ? "Analyse…"
             : "4 · Nettoyer les doublons Po2 (dont locaux homonymes)"}
+        </button>
+        {/* Retour arrière (Q46). Le bouton NOMME ce qu'il va défaire : « annuler » sans
+            savoir quoi est aussi inquiétant que ne pas pouvoir annuler du tout. Il reste
+            visible et grisé quand l'action est trop vaste, plutôt que de disparaître. */}
+        <button
+          type="button"
+          style={{
+            ...btnSecondary,
+            borderColor: undoQuery.data?.disponible
+              ? "rgba(251, 191, 36, 0.6)"
+              : "rgba(148, 163, 184, 0.3)",
+            color: undoQuery.data?.disponible ? "#fcd34d" : TEXT_MUTED,
+            marginLeft: "auto",
+          }}
+          title={
+            undoQuery.data?.libelle
+              ? undoQuery.data.disponible
+                ? `Remet exactement l'état d'avant : ${undoQuery.data.libelle} (${undoQuery.data.lignes} ligne(s)). Raccourci : Ctrl+Z.`
+                : `« ${undoQuery.data.libelle} » a touché trop de lignes pour être annulée.`
+              : "Aucune action à annuler."
+          }
+          disabled={!undoQuery.data?.disponible || undoMutation.isPending}
+          onClick={() => undoMutation.mutate()}
+        >
+          {undoMutation.isPending
+            ? "Annulation…"
+            : undoQuery.data?.libelle
+              ? `↶ Annuler : ${undoQuery.data.libelle}`
+              : "↶ Annuler (rien à défaire)"}
         </button>
       </div>
 
@@ -2077,11 +2208,16 @@ export default function PatrimoineAstechPage() {
             onMoveLegacyPoint={(id, lat, lon) => {
               // Le serveur géocode le point à l'envers et renseigne l'adresse
               // trouvée, à côté de l'adresse ASTECH d'origine (jamais à sa place).
-              updateMutation.mutate({ id, payload: { latitude: lat, longitude: lon } });
-              setFlash(
-                selected?.building_id != null
-                  ? "Point fusionné déplacé : le bâtiment Po2 suit, adresse recalculée pour les deux."
-                  : "Position enregistrée, recherche de l'adresse correspondante…",
+              updateMutation.mutate(
+                { id, payload: { latitude: lat, longitude: lon } },
+                {
+                  onSuccess: () =>
+                    setFlash(
+                      selected?.building_id != null
+                        ? "Point fusionné déplacé : le bâtiment Po2 suit, adresse recalculée pour les deux."
+                        : "Position enregistrée, adresse correspondante recherchée.",
+                    ),
+                },
               );
             }}
             onDropLegacyOnBuilding={(id, buildingId, localId, lat, lon) => {
@@ -2493,16 +2629,54 @@ export default function PatrimoineAstechPage() {
                   </button>
                 </div>
               </div>
-              <button
-                type="button"
-                style={{ ...btnSecondary, marginTop: 10 }}
-                onClick={() => {
-                  setInspectedLocalId(null);
-                  setInspectedBuildingId(inspectedLocal.building_id);
-                }}
-              >
-                Voir le bâtiment porteur
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <button
+                  type="button"
+                  style={btnSecondary}
+                  onClick={() => {
+                    setInspectedLocalId(null);
+                    setInspectedBuildingId(inspectedLocal.building_id);
+                  }}
+                >
+                  Voir le bâtiment porteur
+                </button>
+                {/* Suppression (Q48) : la route existait, seul le bouton manquait. Le
+                    compte des biens ASTECH concernés est ANNONCÉ, parce qu'une
+                    suppression qui détache silencieusement du travail déjà fait est la
+                    définition même d'une mauvaise surprise. */}
+                <button
+                  type="button"
+                  style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+                  disabled={deleteLocalMutation.isPending}
+                  title="Supprime ce local du patrimoine Po2. Les biens ASTECH qui le visaient retombent sur le bâtiment porteur."
+                  onClick={() => {
+                    const attaches = [...knownAssets.values()].filter(
+                      (asset) => asset.local_id === inspectedLocal.id,
+                    ).length;
+                    if (
+                      !window.confirm(
+                        `Supprimer le local « ${inspectedLocal.nom_local} » ?
+
+` +
+                          (attaches > 0
+                            ? `${attaches} bien(s) ASTECH le visent : ils retomberont sur le bâtiment porteur.
+
+`
+                            : "") +
+                          "« Annuler » le rendra tel quel, identifiant compris.",
+                      )
+                    ) {
+                      return;
+                    }
+                    deleteLocalMutation.mutate({
+                      buildingId: inspectedLocal.building_id,
+                      localId: inspectedLocal.id,
+                    });
+                  }}
+                >
+                  {deleteLocalMutation.isPending ? "Suppression…" : "Supprimer ce local"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -2677,53 +2851,102 @@ export default function PatrimoineAstechPage() {
                 </div>
               )}
 
-              {/* Typologie : le pendant du bouton présent sur le panneau du local. Un
-                  bâtiment mal classé se ramène sous son vrai porteur. */}
-              {targetBuilding && targetBuilding.id !== inspectedBuilding.id && (
-                <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10 }}>
-                  <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", marginBottom: 6 }}>
-                    Typologie
-                  </div>
+              {/* Typologie : le pendant du bouton présent sur le panneau du local.
+                  Le geste ne dépend PLUS du bien sélectionné (Q47). Il était conditionné
+                  à `targetBuilding` — le bâtiment visé par le bien en cours — si bien
+                  qu'un bâtiment qu'on venait de créer, sans bien en face, n'offrait
+                  jamais l'option. Le raccourci reste quand la cible est évidente ; sinon
+                  on désigne le parent, et on ne le devine pas. */}
+              <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10 }}>
+                <div style={{ fontSize: 11, color: TEXT_MUTED, textTransform: "uppercase", marginBottom: 6 }}>
+                  Typologie
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 13 }}>Bâtiment</span>
+                  {targetBuilding && targetBuilding.id !== inspectedBuilding.id && (
+                    <button
+                      type="button"
+                      style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
+                      disabled={reclassifyMutation.isPending}
+                      title="Ce bâtiment est en réalité un local : le ramener sous le bâtiment actuellement ciblé."
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Faire de « ${inspectedBuilding.nom_batiment} » un LOCAL de ` +
+                              `« ${targetBuilding.nom_batiment} » ?
+
+` +
+                              "Son adresse, sa position, son cadastre et ses biens ASTECH le suivent.",
+                          )
+                        ) {
+                          return;
+                        }
+                        reclassifyMutation.mutate({
+                          kind: "buildingToLocal",
+                          building: inspectedBuilding,
+                          parentId: targetBuilding.id,
+                        });
+                      }}
+                    >
+                      → En faire un local de « {targetBuilding.nom_batiment} »
+                    </button>
+                  )}
                   <button
                     type="button"
                     style={{ ...btnSecondary, fontSize: 12, padding: "5px 10px" }}
-                    disabled={reclassifyMutation.isPending}
-                    title="Ce bâtiment est en réalité un local : le ramener sous le bâtiment actuellement ciblé."
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          `Faire de « ${inspectedBuilding.nom_batiment} » un LOCAL de ` +
-                            `« ${targetBuilding.nom_batiment} » ?
-
-` +
-                            "Son adresse, sa position, son cadastre et ses biens ASTECH le suivent.",
-                        )
-                      ) {
-                        return;
-                      }
-                      reclassifyMutation.mutate({
-                        kind: "buildingToLocal",
-                        building: inspectedBuilding,
-                        parentId: targetBuilding.id,
-                      });
-                    }}
+                    disabled={reclassifyMutation.isPending || awaitingParentFor != null}
+                    title="Désigner le bâtiment porteur en cliquant dessus sur la carte, ou le choisir dans la liste ci-dessous."
+                    onClick={() => setAwaitingParentFor(inspectedBuilding.id)}
                   >
-                    → En faire un local de « {targetBuilding.nom_batiment} »
+                    → En faire un local d'un autre bâtiment…
                   </button>
                 </div>
-              )}
+                {awaitingParentFor === inspectedBuilding.id && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 4 }}>
+                      Clique le bâtiment parent sur la carte, ou choisis-le ici :
+                    </div>
+                    <select
+                      style={{ ...input, width: "100%", fontSize: 13 }}
+                      defaultValue=""
+                      onChange={(event) => {
+                        const parentId = Number(event.target.value);
+                        if (!parentId) return;
+                        typologyMutation.mutate({
+                          kind: "buildingToLocal",
+                          buildingId: inspectedBuilding.id,
+                          parentId,
+                        });
+                        setAwaitingParentFor(null);
+                      }}
+                    >
+                      <option value="">— choisir un bâtiment porteur —</option>
+                      {[...buildings]
+                        .filter((candidate) => candidate.id !== inspectedBuilding.id)
+                        .sort((a, b) => (a.nom_batiment ?? "").localeCompare(b.nom_batiment ?? ""))
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {candidate.nom_batiment ?? `Bâtiment #${candidate.id}`}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               {selected && selected.building_id !== inspectedBuilding.id && (
                 <div style={{ marginTop: 10 }}>
                   <button
                     type="button"
                     style={btnPrimary}
                     onClick={() => {
-                      updateMutation.mutate({
-                        id: selected.id,
-                        payload: { building_id: inspectedBuilding.id },
-                      });
-                      setFlash(
-                        `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
+                      updateMutation.mutate(
+                        { id: selected.id, payload: { building_id: inspectedBuilding.id } },
+                        {
+                          onSuccess: () =>
+                            setFlash(
+                              `« ${assetLabel(selected)} » rattaché — il prend le nom du bâtiment Po2.`,
+                            ),
+                        },
                       );
                     }}
                   >
@@ -2731,6 +2954,45 @@ export default function PatrimoineAstechPage() {
                   </button>
                 </div>
               )}
+              {/* Suppression (Q48). Le compte des locaux et des biens ASTECH est annoncé :
+                  supprimer un bâtiment emporte ses locaux et détache le travail déjà fait,
+                  et cela doit se lire AVANT de cliquer, pas se découvrir après. */}
+              <div style={{ marginTop: 10, borderTop: BORDER, paddingTop: 10 }}>
+                <button
+                  type="button"
+                  style={{ ...btnSecondary, borderColor: "rgba(248, 113, 113, 0.5)", color: "#fca5a5" }}
+                  disabled={deleteBuildingMutation.isPending}
+                  title="Supprime ce bâtiment du patrimoine Po2, avec ses locaux. Les biens ASTECH qui le visaient repassent « à traiter »."
+                  onClick={() => {
+                    const locauxPortes = locals.filter(
+                      (local) => local.building_id === inspectedBuilding.id,
+                    ).length;
+                    const attaches = [...knownAssets.values()].filter(
+                      (asset) => asset.building_id === inspectedBuilding.id,
+                    ).length;
+                    if (
+                      !window.confirm(
+                        `Supprimer le bâtiment « ${inspectedBuilding.nom_batiment} » ?
+
+` +
+                          (locauxPortes > 0 ? `Ses ${locauxPortes} local(aux) seront supprimés avec lui.
+` : "") +
+                          (attaches > 0
+                            ? `${attaches} bien(s) ASTECH le visent : ils repasseront « à traiter ».
+`
+                            : "") +
+                          `
+« Annuler » rendra tout en l'état, identifiants compris.`,
+                      )
+                    ) {
+                      return;
+                    }
+                    deleteBuildingMutation.mutate(inspectedBuilding.id);
+                  }}
+                >
+                  {deleteBuildingMutation.isPending ? "Suppression…" : "Supprimer ce bâtiment Po2"}
+                </button>
+              </div>
             </div>
           )}
 

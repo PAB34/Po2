@@ -763,12 +763,40 @@ def update_asset(
         cleaned = designation.strip()[:255] or None
         asset.designation = cleaned
         asset.nomcourt = cleaned
+        # Et la cible Po2 suit (Q49). Sans cela, renommer un bien rattaché était sans
+        # lendemain : la prochaine action de rattachement lui réappliquait le nom Po2
+        # inchangé, ce qui se lisait à l'écran comme « mon renommage n'a pas été
+        # enregistré ». Un objet, un nom — des deux côtés.
+        _propagate_name_to_target(db, asset, cleaned)
     if notes is not None:
         asset.notes = notes.strip() or None
     db.add(asset)
     db.commit()
     db.refresh(asset)
     return asset
+
+
+def _propagate_name_to_target(
+    db: Session, asset: PatrimoineLegacyAsset, name: str | None
+) -> None:
+    """Le renommage d'un bien rattaché renomme aussi l'entité Po2 qu'il désigne (Q49).
+
+    La cible est le LOCAL quand le bien en vise un, le bâtiment sinon : un bien qui
+    désigne une salle n'a pas à rebaptiser tout l'établissement.
+    """
+    if not name:
+        return
+    if asset.local_id is not None:
+        local = db.get(Local, asset.local_id)
+        if local is not None and local.nom_local != name:
+            local.nom_local = name
+            db.add(local)
+        return
+    if asset.building_id is not None:
+        building = db.get(Building, asset.building_id)
+        if building is not None and building.nom_batiment != name:
+            building.nom_batiment = name
+            db.add(building)
 
 
 def _adopt_target_name(
