@@ -6253,6 +6253,41 @@ export async function geocodePendingLegacyAssets(
   return parseResponse<LegacyGeocodeBatch>(response);
 }
 
+/**
+ * Retour arrière sur la dernière action du rapprochement (décision Q46).
+ *
+ * `disponible` dit qu'elle est défaisable ; `libelle` la nomme même quand elle ne l'est
+ * pas — un geste de masse (import, purge) pose une borne et laisse `lignes` à zéro.
+ */
+export type LegacyUndoState = {
+  disponible: boolean;
+  libelle: string | null;
+  lignes: number;
+  date: string | null;
+};
+
+export type LegacyUndoResult = {
+  annule: boolean;
+  libelle: string | null;
+  lignes: number;
+  motif: string | null;
+};
+
+export async function peekLegacyUndo(token: string): Promise<LegacyUndoState> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/undo`, {
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyUndoState>(response);
+}
+
+export async function undoLegacyLastAction(token: string): Promise<LegacyUndoResult> {
+  const response = await fetch(`${apiBaseUrl}/patrimoine/legacy/undo`, {
+    method: "POST",
+    headers: buildHeaders(token),
+  });
+  return parseResponse<LegacyUndoResult>(response);
+}
+
 export type PatrimonyDuplicateEntry = {
   id: number;
   nom: string | null;

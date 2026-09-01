@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.undo import undo_journal
 from app.core.db import get_db
 from app.models.user import User
 from app.schemas.patrimoine_legacy import (
@@ -18,8 +19,15 @@ from app.schemas.patrimoine_legacy import (
 from app.services.cities import get_city_by_id
 from app.services import patrimoine_legacy as svc
 from app.services import patrimoine_legacy_export as export_svc
+from app.services import patrimoine_undo as undo_svc
 
-router = APIRouter(prefix="/patrimoine/legacy", tags=["patrimoine-historique"])
+# `undo_journal` en dépendance de routeur : toute écriture est relevée, sans exception à
+# maintenir route par route (décision Q46).
+router = APIRouter(
+    prefix="/patrimoine/legacy",
+    tags=["patrimoine-historique"],
+    dependencies=[Depends(undo_journal)],
+)
 
 
 @router.post("/import", response_model=LegacyImportResult)
@@ -158,6 +166,29 @@ def preview_astech_export(
         "missing_columns": result["missing_columns"],
         "sheet_name": result["sheet_name"],
     }
+
+
+@router.get("/undo")
+def peek_last_action(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Ce que « Annuler » défera, pour que le bouton puisse le nommer."""
+    city_id = svc.resolve_city_id(db, current_user.city_id)
+    return undo_svc.describe(undo_svc.last_entry(db, city_id))
+
+
+@router.post("/undo")
+def undo_last_action(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Réécrit l'état d'avant la dernière action (décision Q46).
+
+    Ce n'est pas une action inverse reconstituée : c'est la ligne telle qu'elle était,
+    effets de bord compris — adresse héritée, position recopiée, suppressions en cascade.
+    """
+    return undo_svc.undo_last(db, svc.resolve_city_id(db, current_user.city_id))
 
 
 @router.post("/reset-all")

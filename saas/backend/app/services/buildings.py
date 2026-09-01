@@ -471,9 +471,45 @@ def update_building(db: Session, building: Building, payload: BuildingUpdate) ->
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le site cible n'appartient pas a la meme ville.")
         building.site_id = payload.site_id
     db.add(building)
+    if "nom_batiment" in fields_set:
+        _rename_linked_astech_assets(db, building_id=building.id, local_id=None, name=building.nom_batiment)
     db.commit()
     db.refresh(building)
     return building
+
+
+def _rename_linked_astech_assets(
+    db: Session, *, building_id: int | None, local_id: int | None, name: str | None
+) -> int:
+    """Un rattachement lie aussi les NOMS : renommer la cible Po2 renomme ses biens ASTECH.
+
+    Décision Q49, prolongement direct de Q11. Le rattachement fait déjà adopter au bien le
+    nom de sa cible ; sans cette propagation, un renommage ultérieur les fait diverger, et
+    c'est le libellé du bien — donc l'ancien — qui repart dans le fichier de la
+    collectivité. Deux libellés pour un même objet finissent toujours par se contredire.
+
+    Un bien visant un LOCAL ne suit pas le nom du bâtiment porteur : sa cible est le local.
+    """
+    cleaned = (name or "").strip()[:255]
+    if not cleaned:
+        return 0
+    statement = select(PatrimoineLegacyAsset)
+    if local_id is not None:
+        statement = statement.where(PatrimoineLegacyAsset.local_id == local_id)
+    else:
+        statement = statement.where(
+            PatrimoineLegacyAsset.building_id == building_id,
+            PatrimoineLegacyAsset.local_id.is_(None),
+        )
+    renamed = 0
+    for asset in db.scalars(statement):
+        if asset.designation == cleaned and asset.nomcourt == cleaned:
+            continue
+        asset.designation = cleaned
+        asset.nomcourt = cleaned
+        db.add(asset)
+        renamed += 1
+    return renamed
 
 
 def list_building_locals(db: Session, building: Building) -> list[Local]:
@@ -552,6 +588,8 @@ def update_local(db: Session, local: Local, payload: LocalUpdate) -> Local:
             )
         local.building_id = payload.building_id
     db.add(local)
+    if payload.nom_local is not None:
+        _rename_linked_astech_assets(db, building_id=None, local_id=local.id, name=local.nom_local)
     db.commit()
     db.refresh(local)
     return local
@@ -589,13 +627,55 @@ def delete_all_buildings(
     return {"deleted": len(buildings), "deleted_sites": deleted_sites}
 
 
+def _detach_assets_from_local(db: Session, local: Local) -> None:
+    """Les biens ASTECH qui visaient ce local retombent sur le bâtiment porteur."""
+    for asset in db.scalars(
+        select(PatrimoineLegacyAsset).where(PatrimoineLegacyAsset.local_id == local.id)
+    ):
+        asset.local_id = None
+        asset.target_type = "building"
+        asset.niveau = None
+        db.add(asset)
+
+
+def _detach_assets_from_building(db: Session, building: Building) -> None:
+    """Les biens ASTECH qui visaient ce bâtiment repassent « à traiter »."""
+    for asset in db.scalars(
+        select(PatrimoineLegacyAsset).where(PatrimoineLegacyAsset.building_id == building.id)
+    ):
+        asset.building_id = None
+        asset.local_id = None
+        asset.target_type = "building"
+        asset.niveau = None
+        asset.link_origin = None
+        if asset.status in ("lie", "propose"):
+            asset.status = "a_traiter"
+        db.add(asset)
+
+
 def delete_local(db: Session, local: Local) -> None:
+    _detach_assets_from_local(db, local)
     db.delete(local)
     db.commit()
 
 
 def delete_building(db: Session, building: Building) -> None:
-    """Supprime un batiment et ses locaux (CASCADE DB)."""
+    """Supprime un bâtiment, ses locaux, et détache les biens ASTECH qui le visaient.
+
+    Ces dépendances étaient jusqu'ici traitées par les cascades de la base
+    (`ON DELETE CASCADE` sur les locaux, `SET NULL` sur les biens). Deux raisons de les
+    rendre explicites :
+
+    - **cohérence** : un `SET NULL` laissait des biens au statut « lié » sans aucun
+      bâtiment — un état que l'écran ne sait pas représenter, et que seule la
+      reconnaissance des noms finissait par réparer, plus tard ;
+    - **retour arrière** : ce que la base fait toute seule est invisible à la session,
+      donc absent du journal. Annuler une suppression aurait rendu le bâtiment sans ses
+      locaux ni ses rattachements — une restauration partielle, c'est-à-dire fausse (Q46).
+    """
+    _detach_assets_from_building(db, building)
+    for local in db.scalars(select(Local).where(Local.building_id == building.id)):
+        db.delete(local)
     db.delete(building)
     db.commit()
 

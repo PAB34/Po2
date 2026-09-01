@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.undo import undo_journal
 from app.core.db import get_db
 from app.models.user import User
 from app.schemas.building import (
@@ -75,7 +76,11 @@ from app.services.buildings import (
 from app.services.cities import get_city_by_id
 from app.services.meter_matching import apply_meter_mappings, list_meter_matches
 
-router = APIRouter(prefix="/buildings", tags=["buildings"])
+# Le journal d'annulation couvre AUSSI le patrimoine Po2 : sur l'écran de rapprochement,
+# une même action touche les deux côtés (un rattachement recopie une position, un
+# reclassement déplace des locaux). Journaliser un seul côté rendrait le retour arrière
+# partiel — donc faux (décision Q46).
+router = APIRouter(prefix="/buildings", tags=["buildings"], dependencies=[Depends(undo_journal)])
 
 
 def _raise_naming_http_error(error: ValueError) -> None:

@@ -1302,3 +1302,66 @@ lit une horizontale comme « la » liaison. Ce qui n'a, lui, aucune exception es
 pour tout effectif : deux biens ne partent jamais dans la même direction.
 
 `npm test` est branché sur la CI, à côté de `npm run build`.
+
+## 29. Fiabilité de l'écran : retour arrière, suppression, renommage — 2026-09-01
+
+Retour d'usage : « j'ai l'impression qu'il y a plein de micro-problèmes du genre, que tout
+n'est pas fiable ». Cinq demandes, et une racine commune à trois d'entre elles : **l'écran
+ne dit pas la vérité sur ce qu'il a écrit**. On ne sait pas si une saisie est partie, on ne
+peut pas revenir dessus, et deux noms censés désigner la même chose divergent.
+
+### Ce que l'audit a trouvé avant de coder
+
+**Le nom ASTECH saisi pouvait disparaître sans être enregistré.** Le champ est un brouillon
+local (`assetNameDraft`) recalé sur le bien affiché par un `useEffect` dont la dépendance
+est **l'objet** `selected`. Or cet objet est reconstruit à chaque rafraîchissement de la
+liste — et toute action sur l'écran en déclenche un. Une frappe en cours au mauvais moment
+était donc effacée, le bouton « Enregistrer » disparaissait avec elle, et rien ne le disait.
+Même schéma pour le nom de bâtiment et celui de local.
+
+**Renommer d'un côté ne renomme pas l'autre.** Le rattachement fait adopter au bien ASTECH
+le nom de sa cible Po2 (Q11), mais ensuite les deux libellés vivent leur vie. Renommer le
+bien ASTECH seul est même sans lendemain : la prochaine action de rattachement lui
+réappliquera le nom Po2. Vu de l'écran, « le renommage n'a pas été sauvegardé ».
+
+**Un bâtiment Po2 fraîchement créé ne pouvait pas devenir un local.** Le bouton existait,
+mais sous condition d'un `targetBuilding` — le bâtiment visé par le bien ASTECH sélectionné.
+Créer un bâtiment puis vouloir le ranger sous un autre ne remplit jamais cette condition.
+
+**Aucune suppression d'entité Po2 depuis cet écran.** Les routes existent
+(`DELETE /buildings/{id}` et `/buildings/{id}/locals/{id}`), le client aussi
+(`deleteBuildingRequest`, `deleteLocalRequest`) : seul le branchement manquait.
+
+**Plusieurs messages de succès partent AVANT la réponse du serveur** (détachement,
+déplacement, rattachement depuis le panneau). L'erreur finit par s'afficher, mais après
+avoir affirmé le contraire.
+
+### Décisions
+
+**Q46 — un vrai retour arrière, pas une compensation.** *Journal côté serveur.* Chaque
+requête qui touche un bien ASTECH, un bâtiment ou un local enregistre l'état **avant et
+après** des lignes modifiées, y compris celles touchées en cascade. « Annuler » réécrit
+l'état d'avant : ce n'est pas une action inverse approximative, c'est la ligne telle
+qu'elle était. Une création s'annule en supprimant, une suppression en réinsérant la ligne
+**avec son identifiant d'origine** — sans quoi les biens ASTECH qui la désignaient
+pointeraient dans le vide.
+
+*Limite assumée :* au-delà de 300 lignes touchées, l'action n'est pas journalisée et
+l'écran le dit. Les gestes de masse (import d'un fichier, remise à zéro, suppression de
+tout le référentiel) restent non annulables — ils ont déjà leur propre confirmation, et
+journaliser 444 payloads ASTECH à chaque import coûterait plus cher que le service rendu.
+
+**Q47 — choisir le parent librement.** Le bouton « en faire un local » ne dépend plus du
+bien sélectionné : on désigne le bâtiment porteur dans une liste, ou en cliquant sur la
+carte.
+
+**Q48 — supprimer une entité Po2 depuis son panneau**, avec le compte des biens ASTECH
+rattachés annoncé dans la confirmation, et le retour arrière disponible juste après.
+
+**Q49 — un rattachement lie aussi les noms.** Renommer le bien ASTECH renomme sa cible Po2,
+et renommer la cible Po2 renomme le bien. C'est la conséquence de Q11 : deux libellés pour
+un même objet finissent toujours par diverger, et c'est cette divergence qui repartait dans
+le fichier de la collectivité.
+
+**Q50 — un brouillon de saisie ne se fait plus écraser.** Le champ ne se recale que lorsque
+l'**entité affichée change**, pas à chaque rafraîchissement de données.
