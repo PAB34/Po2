@@ -1265,3 +1265,40 @@ proposés s'affichaient, par emprunt. Un ré-import de la base Po2 produit le m�
 sur les biens déjà traités — les bâtiments changent d'identifiant et `building_id` est
 remis à NULL en cascade. Un bandeau annonce désormais le compte et renvoie au bouton
 « 5 · Poser les biens sans position sur leur adresse ».
+
+## 28. Le second filet : la géométrie de la carte, enfin vérifiable — 2026-09-01
+
+Le filet posé côté backend (§27, `tests/test_patrimoine_invariants.py`) ne couvrait que la
+moitié du problème. **L'autre moitié des mauvaises surprises est sortie de l'écran**, pas du
+service : traits systématiquement horizontaux, étiquettes de locaux cachées sous celles de
+leur bâtiment, point apparié qui se dédouble au déplacement. Trois défauts de **géométrie**,
+tous découverts à l'œil, aucun vérifiable autrement — le calcul vivait au milieu de
+`BuildingPortfolioMap`, mêlé à Leaflet, au DOM et à React, donc intestable.
+
+**Q43 — extraire le calcul du dessin ?** *Oui.* `src/components/mapLayout.ts` tient
+désormais toute la décision — où poser chaque bien, quels traits tracer, où écarter les
+locaux, ce que vaut un point lâché — sans importer Leaflet ni React. Le composant garde le
+dessin. Ce n'est pas une élégance d'architecture : c'est la condition pour que ce code
+puisse être mis en défaut ailleurs que sur la carte de production.
+
+**Q44 — le code testé doit-il être le code qui tourne ?** *Oui, sans copie.* Le `dragend`
+du composant appelle `decideDrop`, il ne redéroule pas la même recherche en parallèle. Un
+test qui vérifierait une seconde implémentation ne vérifierait rien. Effet de bord accepté
+au passage : l'accrochage vise maintenant la position **dessinée** des locaux et non leurs
+coordonnées brutes — on lâche sur ce qu'on voit.
+
+**Q45 — que fige-t-on ?** *Les défauts constatés, un par un.* Les 17 cas de
+`mapLayout.test.ts` ne couvrent pas du code au hasard : chacun est la trace d'un défaut
+remonté en prod cette semaine. Bien unique fondu avec son bâtiment ; araignée conservée à
+plusieurs ; aucune branche rabattue sur un axe ; bien rattaché mais déplacé gardant sa
+position ; écart visuel reporté dans l'`offset` pour ne jamais s'inscrire en base ; local
+seul posé sur son parent malgré tout écarté ; local à position propre jamais déplacé ;
+lâcher sur la cible déjà tenue traité comme un simple déplacement.
+
+**Une limite assumée.** Le test « aucune branche sur un axe » ne vaut que de 2 à 6 biens.
+Au-delà (8, 12, 16…), un partage régulier repose forcément deux branches sur les axes :
+c'est de la trigonométrie, pas un défaut, et dans une étoile à huit branches personne ne
+lit une horizontale comme « la » liaison. Ce qui n'a, lui, aucune exception est vérifié
+pour tout effectif : deux biens ne partent jamais dans la même direction.
+
+`npm test` est branché sur la CI, à côté de `npm run build`.
