@@ -1,7 +1,7 @@
 # SIG de l'agglo — récupérer les propriétaires : audit, cadre, décisions
 
-> Créé le **2026-09-03** (session Claude). Statut : **étape 1 (reconnaissance) FAITE et exécutée.**
-> Rien n'est encore écrit en base Po2 — questions §7 à trancher avant l'étape 3.
+> Créé le **2026-09-03** (session Claude). Statut : **étapes 1 (reconnaissance) et 2 (extraction) FAITES.**
+> Rien n'est encore écrit en base Po2 : reste l'étape 3 (connecteur produit).
 > Portail : `https://sig.agglopole.fr/vmap2/` (vMap 2026.06, éditeur Veremes).
 > Inventaire détaillé → `sig-agglo-inventaire-couches-foncieres.md`.
 
@@ -74,9 +74,12 @@ celle qu'utilise l'application elle-même. On reste donc strictement dans l'usag
 
 ### 4.2 Le point qui oriente tout
 
-La couche **474** (nominative, personnes physiques comprises) porte `id_uf` mais **pas `id_par`** :
-la jointure parcelle → propriétaire nominatif passe par l'unité foncière, elle demande un travail
-de rapprochement.
+La couche **474** (nominative, personnes physiques comprises) n'a pas de colonne nommée `id_par`.
+> **Corrigé le 2026-09-03 après extraction** : son `id_uf` **porte en fait un identifiant de
+> parcelle** (même format sur 14 caractères), et se joint directement au cadastre pour **97,7 %**
+> des lignes. La crainte d'un « travail de rapprochement » exprimée ici lors de l'audit était
+> infondée — voir §9. Reste la maille *unité foncière*, qui laisse 26 % des parcelles de l'agglo
+> sans propriétaire direct.
 
 La couche **317** porte **`id_par` ET `ddenom`** : jointure **directe** avec le cadastre de Po2 —
 et elle ne contient **que des personnes morales publiques**. Typologie mesurée sur 1 000 lignes :
@@ -127,7 +130,14 @@ SIG_AGGLO_PASSWORD=...
 python saas/backend/scripts/sig_agglo_recon.py --out sig_recon --sample
 ```
 
-**Étape 2 — décision.** Trancher §7, en particulier Q1 (317 seule vs 474 nominative).
+**Étape 2 — extraction et analyse. ✅ FAITE (2026-09-03).**
+`sig_agglo_extract.py` (510 284 lignes, 6 couches, dossier hors git + manifeste daté) puis
+`sig_agglo_analyse.py` (rapport `rapport-proprietaires.md`). Résultats → §9.
+
+```bash
+python saas/backend/scripts/sig_agglo_extract.py --out sig_agglo_data
+python saas/backend/scripts/sig_agglo_analyse.py --data sig_agglo_data
+```
 
 **Étape 3 — connecteur produit.** Service `app/services/sig_agglo.py` + table de rapprochement
 parcelle → propriété, branchés sur l'écran bâtiment qui attend déjà cette donnée. Là seulement on
@@ -135,16 +145,15 @@ parcelle → propriété, branchés sur l'écran bâtiment qui attend déjà cet
 
 ---
 
-## 7. Questions ouvertes (à trancher avant l'étape 3)
+## 7. Questions — Q1 à Q3 tranchées le 2026-09-03
 
-- **Q1 — Quelle couche ?** (a) **317 seule** — `id_par` + propriétaire public, jointure directe,
-  zéro donnée personnelle ; (b) 317 **+ 474 filtrée sur les personnes morales** ; (c) 474 entière,
-  personnes physiques comprises. *Proposition : (a) d'abord, (b) si un besoin le justifie.*
-- **Q2 — Périmètre géographique ?** Sète seule (`id_com = 34301`, 1 624 parcelles publiques) ou
-  les 14 communes de l'agglo (17 040) ?
-- **Q3 — Périmètre parcellaire ?** Uniquement les parcelles des ~184 bâtiments Po2, ou **toutes**
-  les parcelles publiques de la commune ? La seconde permet de découvrir du patrimoine **absent**
-  de Po2 — c'est souvent là qu'est la valeur.
+- **Q1 — Quelle couche ? → (c) TOUT, personnes physiques comprises.** Décision de l'utilisateur,
+  prise après exposé des trois options et du cadre juridique. La proposition initiale (317 seule,
+  sans donnée personnelle) n'est pas retenue : le besoin porte sur l'ensemble de la donnée
+  propriétaire. **Conséquence assumée** : Po2 manipule des données à caractère personnel, ce qui
+  engage §5 (information de l'admin SIG, non-rediffusion, durée de conservation).
+- **Q2 / Q3 — Périmètre ? → toute l'agglo, toutes les parcelles.** 14 communes, sans restriction
+  aux bâtiments déjà connus de Po2 : l'objectif inclut la découverte de patrimoine absent de Po2.
 - **Q4 — Rafraîchissement ?** Extraction ponctuelle ou synchronisation ? Les fichiers fonciers sont
   millésimés annuellement (`dtmajic`) : un rafraîchissement annuel suffit sans doute.
 - **Q5 — Compte utilisé ?** Nominatif (immédiat) ou compte de service demandé à l'agglo (propre) ?
@@ -164,3 +173,36 @@ parcelle → propriété, branchés sur l'écran bâtiment qui attend déjà cet
 | 2026-09-03 | API ciblée = `rest_vmap2/v2`, **pas de scraping** de l'interface | Route confirmée ; un client HTTP est stable, un scraping ne l'est pas |
 | 2026-09-03 | On passe par **l'API métier de consultation** (`/vmap/layers/{id}/query`) | WFS désactivé et SQL générique interdit au compte : on reste dans l'usage prévu de l'outil |
 | 2026-09-03 | **Cible pressentie = couche 317** (foncier présumé public) | Seule couche qui porte à la fois `id_par` et le propriétaire ; et elle ne contient aucune personne physique |
+| 2026-09-03 | **Périmètre retenu : TOUT, toute l'agglo** (couche 474 comprise, particuliers inclus) | Choix de l'utilisateur après exposé des options et du cadre RGPD ; la recommandation « 317 seule » n'est pas retenue |
+| 2026-09-03 | Le dossier d'extraction porte **son propre `.gitignore` à `*`** | La donnée personnelle ne doit pas pouvoir entrer dans git, même par `git add -A` — protection câblée, pas procédurale |
+| 2026-09-03 | Un **`MANIFESTE.md`** daté accompagne toute extraction | Origine, finalité, volumétrie : répondre dans six mois à « d'où vient ce fichier » |
+| 2026-09-03 | Les rapports de synthèse **nomment les personnes morales, agrègent les particuliers** (`--noms-particuliers` pour lever) | Le CSV porte la donnée complète comme décidé ; un rapport de synthèse n'a pas besoin de désigner des particuliers |
+
+---
+
+## 9. Étape 2 exécutée — ce que l'extraction a donné (2026-09-03)
+
+**510 284 lignes extraites** en 6 couches (`sig_agglo_extract.py`), **93 Mo**, dans `sig_agglo_data/`
+(hors git). Analyse → `sig_agglo_data/rapport-proprietaires.md` (`sig_agglo_analyse.py`).
+
+**Découverte structurante** : `id_uf` de la couche 474 **porte un identifiant de parcelle**.
+La jointure au cadastre est donc **directe** — 62 367 lignes sur 63 809 (**97,7 %**) — contrairement
+à ce que laissait craindre l'audit initial. Il n'y a pas de rapprochement à construire.
+
+| Mesure | Valeur |
+| --- | --- |
+| Propriétaires distincts | 43 802 (32 039 comptes communaux) |
+| Personnes physiques / morales | 80 % / 20 % des lignes — mais 39 % de la surface aux morales |
+| Couverture (14 communes agglo) | 62 367 parcelles sur 84 248 = **74 %** |
+| Propriétaires hors Hérault | 9 300 lignes (15 %) |
+| Foncier public | 72,5 km² aux communes, 31,9 km² au Conservatoire du littoral, 30,8 km² à l'État |
+| Ville de Sète | **599 parcelles, 1,3 km²** (+ agglo 316 parcelles, + Sète Thau Habitat 218) |
+
+**Limite mesurée** : la couche est à la maille **unité foncière**. 63 811 UF couvrent 86 154
+parcelles, dont 10 664 UF en regroupent plusieurs (jusqu'à 125) ; seule la parcelle « tête » porte
+l'identifiant. Passer de 74 % à ~100 % suppose de rattacher les parcelles secondaires, via
+`id_dnupro` (jointure simple, à tenter d'abord) ou par intersection géométrique (`--avec-geom`).
+
+**Piège écarté** : le fond cadastral couvre **27 communes** (les 14 de l'agglo + les limitrophes).
+Rapporter la couverture à ses 170 383 parcelles donne un taux faussement bas de 36,6 % ; le bon
+dénominateur est le périmètre agglo.
