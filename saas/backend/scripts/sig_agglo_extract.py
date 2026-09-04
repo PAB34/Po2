@@ -82,6 +82,22 @@ COUCHES = {
         "attendu": 91537,
         "personnel": False,
     },
+    # Adresse des BIENS (à ne pas confondre avec l'adresse du propriétaire, qui
+    # est dans la couche 474). 226 porte section/parcelle : rattachement exact,
+    # mais Sète seule. 397 (BAN) couvre tout le territoire, en géométrie seule :
+    # le rattachement y est géographique, donc approché.
+    226: {
+        "table": "adresse.v_sete_adresse",
+        "libelle": "Sète — gestion adresse (n° + voie + parcelle)",
+        "attendu": 9974,
+        "personnel": False,
+    },
+    397: {
+        "table": "referentiels.vmp_ban",
+        "libelle": "Numéro adresse (Base Adresse Nationale)",
+        "attendu": 80514,
+        "personnel": False,
+    },
 }
 
 PAGE_SIZE = 5000

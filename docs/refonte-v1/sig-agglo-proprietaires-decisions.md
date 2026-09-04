@@ -206,3 +206,38 @@ l'identifiant. Passer de 74 % à ~100 % suppose de rattacher les parcelles secon
 **Piège écarté** : le fond cadastral couvre **27 communes** (les 14 de l'agglo + les limitrophes).
 Rapporter la couverture à ses 170 383 parcelles donne un taux faussement bas de 36,6 % ; le bon
 dénominateur est le périmètre agglo.
+
+---
+
+## 10. Classeur unique et adresse des biens (2026-09-03)
+
+Demande : tout dans **un seul fichier, une seule feuille**, avec l'adresse **du bien** en plus de
+celle du propriétaire. → `sig_agglo_classeur.py` produit `foncier-agglo.xlsx` (63 809 lignes ×
+34 colonnes, une ligne = un propriétaire sur un bien).
+
+**L'adresse du propriétaire n'est pas celle du bien.** `dlign3`→`dlign6` donnent le *domicile*
+du propriétaire (pour la Ville de Sète : l'Hôtel de Ville). L'adresse du bien vient d'ailleurs :
+
+| Source | Couverture | Rattachement |
+| --- | --- | --- |
+| `adresse.v_sete_adresse` (couche **226**, 9 974 adresses) | Sète | **exact** : la couche porte `section` + `parcelle` (jusqu'à 3 parcelles par adresse) |
+| `referentiels.vmp_ban` (couche **397**, 80 514 adresses) | tout le territoire | **approché** : points seuls, on prend le plus proche du centroïde de parcelle |
+
+Résultat : **6 812 exactes + 40 181 approchées = 73,6 %** des lignes adressées. Qualité des
+approchées : **médiane 14 m**, 75ᵉ centile 23 m, 8 % au-delà de 50 m. Sète est couverte à **99 %**.
+Les 15 374 parcelles sans adresse sont à plus de 100 m de tout point adresse (surface médiane
+2 561 m² : du foncier rural, sans adresse postale) ; s'y ajoutent les 1 442 lignes sans parcelle.
+
+**Obstacle technique traité** : les centroïdes de parcelle sont en **degrés WGS84**, la BAN en
+**Lambert-93**. `pyproj` n'est pas installé sur le poste → la projection conique conforme est
+implémentée dans le script et **vérifiée sur les données réelles avant usage** : l'écart médian
+parcelle ↔ adresse la plus proche vaut 31 m (une projection fausse donnerait des kilomètres). Le
+script refuse de produire les adresses au-delà de 500 m d'écart médian.
+
+**Détail d'import** : MAJIC cale le numéro de voie sur 4 chiffres (`0007 RUE PAUL VALERY`). Le
+script le dépouille — sans quoi tout rapprochement d'adresse échouerait, comme sur ASTECH.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-03 | Adresse du bien = **exact (226) d'abord, BAN (397) en repli**, source et distance affichées ligne à ligne | Aucune source ne couvre tout ; l'utilisateur doit pouvoir juger une adresse approchée, pas la subir |
+| 2026-09-03 | Projection Lambert-93 **implémentée et validée sur les données**, pas supposée juste | `pyproj` absent du poste entreprise ; une projection fausse est silencieuse et contamine tout |
