@@ -241,3 +241,39 @@ script le dépouille — sans quoi tout rapprochement d'adresse échouerait, com
 | --- | --- | --- |
 | 2026-09-03 | Adresse du bien = **exact (226) d'abord, BAN (397) en repli**, source et distance affichées ligne à ligne | Aucune source ne couvre tout ; l'utilisateur doit pouvoir juger une adresse approchée, pas la subir |
 | 2026-09-03 | Projection Lambert-93 **implémentée et validée sur les données**, pas supposée juste | `pyproj` absent du poste entreprise ; une projection fausse est silencieuse et contamine tout |
+
+---
+
+## 11. Hors agglo (Agde…) : ce qu'on peut et ne peut pas obtenir — testé le 2026-09-04
+
+Question posée : le SIG donne-t-il la même chose sur des communes hors du territoire de l'agglo ?
+**Réponse mesurée : le cadastre et le foncier public oui, les propriétaires nominatifs non.**
+
+Le SIG couvre **27 communes** en cadastre (les 14 de l'agglo + 13 voisines), mais seulement
+**14 en MAJIC nominatif**. Vérifié commune par commune :
+
+| Périmètre | Parcelles | Propriétaires nominatifs | Foncier public | Adresses BAN |
+| --- | ---: | ---: | ---: | ---: |
+| 14 communes de l'agglo | 84 248 | **63 809** | 9 777 | oui |
+| 13 communes voisines (dont **Agde : 18 799 parcelles**) | 86 135 | **0** | **7 263** (Agde : 1 490) | oui |
+| Au-delà (Montpellier, Pézenas, Lattes…) | **0** | 0 | 0 | non |
+
+**Contrôle d'exhaustivité** : les **8 couches** du SIG portant un champ propriétaire (`ddenom`,
+`dnuper`, `dnupro`…) ont été interrogées une à une sur Agde. **Seule la couche 317 répond** ;
+474 et 532 renvoient 0, les autres sont bornées à l'agglo par construction. Il n'y a donc pas
+d'autre porte d'entrée dans le SIG.
+
+**Interprétation** : ce n'est pas une limite technique mais un **périmètre de convention**. Les
+fichiers MAJIC sont délivrés par la DGFiP à un EPCI pour son territoire ; Agde relève d'Hérault
+Méditerranée, pas de Sète Agglopôle. Aucun contournement à chercher côté SIG — obtenir Agde en
+nominatif suppose une démarche auprès de la DGFiP ou d'Hérault Méditerranée, ce qui est une
+question de convention, pas de code.
+
+**Livrable** : `sig_agglo_classeur.py --source public` produit
+`foncier-public-27-communes.xlsx` — 17 040 lignes, 23 colonnes, dont **7 263 parcelles publiques
+hors agglo**. Colonne `Dans l'agglo` pour filtrer. **Aucune donnée personnelle** (personnes
+morales publiques uniquement), donc ce classeur-là n'a pas les contraintes du précédent.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-04 | Mode `--source public` ajouté, couvrant les 27 communes | Le foncier public est la seule donnée propriétaire disponible hors agglo, et elle est exploitable telle quelle |

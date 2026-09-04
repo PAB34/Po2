@@ -132,8 +132,102 @@ def valider_projection(parcelles: pd.DataFrame, ban_xy: pd.DataFrame) -> float:
     return float(np.median(distances))
 
 
+COMMUNES_AGGLO = {
+    "34023", "34024", "34039", "34108", "34113", "34143", "34150",
+    "34157", "34159", "34165", "34213", "34301", "34333", "34341",
+}
+
+
+def joindre_adresses(
+    id_par: pd.Series,
+    exactes: pd.DataFrame,
+    proches: pd.DataFrame,
+    compte: pd.Series,
+) -> dict[str, pd.Series]:
+    """Résout l'adresse du bien pour une série de références cadastrales.
+
+    Exact d'abord (Sète), BAN en repli, et toujours la source et la distance :
+    une adresse approchée doit pouvoir être jugée, pas subie.
+    """
+
+    ex_lib = id_par.map(exactes["libelle"])
+    pr_lib = id_par.map(proches["libelle"])
+    return {
+        "libelle": ex_lib.fillna(pr_lib),
+        "code_postal": id_par.map(exactes["code_post"]).fillna(id_par.map(proches["code_postal"])),
+        "source": pd.Series(
+            np.where(
+                ex_lib.notna(), "Exacte (cadastre Sète)",
+                np.where(pr_lib.notna(), "Approchée (BAN)", "Non trouvée"),
+            ),
+            index=id_par.index,
+        ),
+        "distance": id_par.map(proches["distance"]).where(ex_lib.isna()),
+        "nb": id_par.map(compte),
+    }
+
+
+def construire_public(
+    public: pd.DataFrame,
+    parcelles: pd.DataFrame,
+    exactes: pd.DataFrame,
+    proches: pd.DataFrame,
+    compte: pd.Series,
+) -> pd.DataFrame:
+    """Feuille « foncier public », disponible sur les 27 communes du SIG.
+
+    Hors des 14 communes de l'agglo (Agde, Florensac, Montagnac…), la couche
+    nominative MAJIC est absente : seule cette couche-ci porte un propriétaire,
+    et uniquement des personnes morales publiques. C'est donc tout ce qu'on peut
+    obtenir sur ces communes — et cela ne pose aucun problème de donnée personnelle.
+    """
+
+    ligne = public.merge(
+        parcelles[["id_par", "commune", "section", "parcelle", "pre", "sup_m2", "jdatat", "x", "y"]],
+        on="id_par",
+        how="left",
+    )
+    adresse = joindre_adresses(ligne["id_par"], exactes, proches, compte)
+    return pd.DataFrame(
+        {
+            "Propriétaire": ligne["ddenom"].str.strip(),
+            "Type de propriétaire public": ligne["type"].str.strip(),
+            "Nature du droit": ligne["l_ccodro"].str.strip(),
+            "Nb de propriétaires sur la parcelle": pd.to_numeric(ligne["nb_proprio"], errors="coerce"),
+            "Adresse du bien": adresse["libelle"].fillna(""),
+            "Bien — code postal": adresse["code_postal"].fillna(""),
+            "Bien — commune": ligne["commune"].str.strip(),
+            "Source adresse du bien": adresse["source"],
+            "Distance adresse (m)": adresse["distance"].round(0),
+            "Nb adresses sur la parcelle": adresse["nb"],
+            "Dans l'agglo": np.where(ligne["id_com"].isin(COMMUNES_AGGLO), "Oui", "Non"),
+            "Propriétaires nominatifs disponibles": np.where(
+                ligne["id_com"].isin(COMMUNES_AGGLO), "Oui", "Non (hors périmètre MAJIC)"
+            ),
+            "Réf. cadastrale (id_par)": ligne["id_par"],
+            "Code INSEE": ligne["id_com"].str.strip(),
+            "Préfixe": ligne["pre"],
+            "Section": ligne["section"],
+            "N° parcelle": ligne["parcelle"],
+            "Surface cadastrale (m²)": pd.to_numeric(ligne["surfcad_m2"], errors="coerce"),
+            "Surface SIG (m²)": pd.to_numeric(ligne["surfsig_m2"], errors="coerce"),
+            "Date d'acte": ligne["jdatat"].str.strip(),
+            "Millésime MAJIC": ligne["dtmajic"].str.strip(),
+            "Longitude": pd.to_numeric(ligne["x"], errors="coerce"),
+            "Latitude": pd.to_numeric(ligne["y"], errors="coerce"),
+        }
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Classeur unique du foncier de l'agglo.")
+    parser.add_argument(
+        "--source",
+        choices=("proprietaires", "public"),
+        default="proprietaires",
+        help="« proprietaires » = MAJIC nominatif, 14 communes de l'agglo ; "
+        "« public » = foncier public, disponible sur les 27 communes (Agde comprise)",
+    )
     parser.add_argument("--data", default="sig_agglo_data", help="dossier d'extraction")
     parser.add_argument("--sortie", default="foncier-agglo.xlsx", help="nom du classeur")
     parser.add_argument(
@@ -222,6 +316,10 @@ def main() -> int:
 
     # --- Assemblage --------------------------------------------------------- #
     print("[4/6] assemblage de la ligne unique")
+    if args.source == "public":
+        classeur = construire_public(public, parcelles, exactes, proches, compte)
+        return ecrire(classeur, data_dir, args.sortie, "Foncier public")
+
     ligne = proprios.merge(
         parcelles[
             ["id_par", "commune", "section", "parcelle", "pre", "sup_m2", "sup_fiscale", "jdatat", "x", "y"]
@@ -299,13 +397,18 @@ def main() -> int:
         }
     )
 
-    # --- Écriture ----------------------------------------------------------- #
+    return ecrire(classeur, data_dir, args.sortie, "Foncier agglo")
+
+
+def ecrire(classeur: pd.DataFrame, data_dir: Path, sortie: str, titre: str) -> int:
+    """Écrit une feuille unique, à plat, filtrable — pas de second onglet."""
+
     print(f"[5/6] écriture de {len(classeur)} lignes × {len(classeur.columns)} colonnes")
     workbook = Workbook(write_only=True)
     # Police par défaut du classeur : évite d'appliquer un style aux 2 millions
     # de cellules une par une.
     workbook._named_styles["Normal"].font = Font(name="Arial", size=10)
-    feuille = workbook.create_sheet("Foncier agglo")
+    feuille = workbook.create_sheet(titre)
     feuille.freeze_panes = "A2"
 
     entete_police = Font(name="Arial", size=10, bold=True, color="FFFFFF")
@@ -336,7 +439,7 @@ def main() -> int:
     feuille.auto_filter.ref = (
         f"A1:{get_column_letter(len(classeur.columns))}{len(classeur) + 1}"
     )
-    cible = data_dir / args.sortie
+    cible = data_dir / sortie
     workbook.save(cible)
 
     print("[6/6] terminé")
