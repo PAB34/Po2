@@ -158,13 +158,40 @@ def extraire_table(client: Client, nom: str, route: str, out_dir: Path, commune:
     return ecrites
 
 
-def deja_faites(chemin: Path) -> set[str]:
-    """Relit un CSV partiel pour reprendre là où l'extraction s'était arrêtée."""
+def _ids(chemin: Path, avec_contenu: str | None = None) -> set[str]:
+    """Lit les id_par d'un CSV partiel, éventuellement ceux qui ont du contenu."""
 
     if not chemin.is_file():
         return set()
     with chemin.open(encoding="utf-8-sig", newline="") as handle:
-        return {row["id_par"] for row in csv.DictReader(handle) if row.get("id_par")}
+        return {
+            row["id_par"]
+            for row in csv.DictReader(handle)
+            if row.get("id_par") and (avec_contenu is None or (row.get(avec_contenu) or "").strip())
+        }
+
+
+def index_reprise(out_dir: Path) -> Path:
+    """Construit — ou reconstruit — l'index des parcelles réellement traitées.
+
+    Une parcelle a toujours au moins un propriétaire : une ligne sans local NI
+    propriétaire est donc un échec, pas un résultat vide. Ces parcelles-là sont
+    volontairement laissées hors de l'index pour être rejouées à la reprise.
+    """
+
+    index = out_dir / "fiche_parcelles_ok.csv"
+    if index.is_file():
+        return index
+    reussies = _ids(out_dir / "fiche_locaux.csv", "ID_BAT") | _ids(
+        out_dir / "fiche_proprietaires.csv", "DNUPRO"
+    )
+    with index.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["id_par"])
+        writer.writerows([[p] for p in sorted(reussies)])
+    if reussies:
+        print(f"    index de reprise reconstruit : {len(reussies)} parcelles deja traitees")
+    return index
 
 
 def extraire_fiches(
@@ -185,18 +212,21 @@ def extraire_fiches(
 
     f_locaux = out_dir / "fiche_locaux.csv"
     f_prop = out_dir / "fiche_proprietaires.csv"
-    faites = deja_faites(f_locaux) | deja_faites(f_prop)
+    f_index = index_reprise(out_dir)
+    faites = _ids(f_index)
     restantes = [p for p in parcelles if p not in faites]
     print(f"    {len(parcelles)} parcelles, {len(faites)} deja faites, {len(restantes)} a traiter")
 
     mode = "a" if faites else "w"
-    n_loc = n_prop = 0
+    n_loc = n_prop = n_echec = 0
     debut = time.time()
 
     with f_locaux.open(mode, encoding="utf-8-sig", newline="") as hl, \
-         f_prop.open(mode, encoding="utf-8-sig", newline="") as hp:
+         f_prop.open(mode, encoding="utf-8-sig", newline="") as hp, \
+         f_index.open("a", encoding="utf-8-sig", newline="") as hi:
         w_loc = csv.DictWriter(hl, fieldnames=["id_par"] + COLS_BATI, extrasaction="ignore")
         w_prop = csv.DictWriter(hp, fieldnames=["id_par"] + COLS_PROP, extrasaction="ignore")
+        w_index = csv.writer(hi)
         if mode == "w":
             w_loc.writeheader()
             w_prop.writeheader()
@@ -218,12 +248,14 @@ def extraire_fiches(
                         if isinstance(prop, dict):
                             w_prop.writerow({"id_par": id_par, **prop})
                             n_prop += 1
+                    w_index.writerow([id_par])
                 else:
-                    # Trace la parcelle pour ne pas la rejouer indéfiniment.
-                    w_loc.writerow({"id_par": id_par})
+                    # Pas d'index : la parcelle sera rejouee a la prochaine reprise.
+                    n_echec += 1
                 if index % 500 == 0:
                     hl.flush()
                     hp.flush()
+                    hi.flush()
                     vitesse = index / max(time.time() - debut, 1)
                     reste = (len(restantes) - index) / max(vitesse, 0.01) / 60
                     print(
@@ -231,7 +263,8 @@ def extraire_fiches(
                         f"{vitesse:.1f}/s | reste ~{reste:.0f} min",
                         end="\r",
                     )
-    print(f"    {n_loc} locaux et {n_prop} proprietaires ecrits" + " " * 24)
+    print(f"    {n_loc} locaux et {n_prop} proprietaires ecrits"
+          + (f", {n_echec} parcelles en echec a rejouer" if n_echec else "") + " " * 20)
     return n_loc, n_prop
 
 
