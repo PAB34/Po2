@@ -443,3 +443,47 @@ n'est pas un défaut d'extraction, c'est le périmètre de la vue servie à un c
 | --- | --- | --- |
 | 2026-09-08 | Pas de demande de privilège au SIG (choix utilisateur), plafond assumé à 45,3 % | Toutes les portes alternatives ont été testées et sont fermées |
 | 2026-09-08 | Couche 474 ajoutée en renfort de l'annuaire | +1 398 comptes adressés pour aucun coût d'extraction |
+
+### 6.8 Classeur agrégé — « tout ce que le SIG sait de chaque bien » (2026-09-08)
+
+`sig_agglo_inventaire.py` sonde les **1 069 couches** du catalogue et relève leurs
+colonnes. Résultat : **559 lisibles** par ce compte, et **23 seulement portent un
+identifiant de parcelle**. Le reste (réseaux d'eau, routes, fonds de plan, BD TOPO)
+n'a aucune clé cadastrale et ne décrit pas les biens.
+
+`sig_agglo_classeur_total.py` produit `locaux-agglo-complet.xlsx` :
+**176 695 lignes × 191 colonnes**, plus une feuille `Dictionnaire` donnant pour
+chaque colonne son origine, son mode de rattachement et son taux de remplissage.
+
+Apports principaux, mesurés en nombre de locaux touchés :
+
+| Bloc | Locaux | Rattachement |
+| --- | ---: | --- |
+| Historique cadastral (604) | 175 753 | id_par |
+| Surface réelle, coordonnées GPS (943) | 171 173 | id_par |
+| Unité foncière (532) | 164 308 | id_par |
+| **Adresse fine de Sète** (226) | **62 119** | clé reconstituée |
+| Terrain > 50 m² / > 200 m² (442, 128) | 54 670 / 44 369 | id_par |
+| **Copropriété + syndic** (1461) | 53 049 | parcelle la plus proche ≤ 60 m |
+| Foncier public (317) | 14 445 | id_par |
+| Ravalement, ORI, zones A, signalements | < 5 000 | id_par |
+
+**Quatre défauts corrigés après contrôle**, tous silencieux :
+1. **La vacance salissait 30 470 lignes pour 710 logements.** Le rattachement se fait
+   à la parcelle : marquer « vacant » tous les lots d'un immeuble parce qu'un seul
+   l'est était faux. Les colonnes sont renommées « Parcelle — vacance » et un
+   compteur dit combien de logements vacants porte la parcelle. Pour la copropriété
+   le même mécanisme est juste — tous les lots en font partie — et il est conservé.
+2. **Trois couches (320, 104, 230) redupliquaient le fond cadastral 943** déjà joint :
+   écartées.
+3. **La couche des adresses de Sète ne portait que `section` + `parcelle`.** Clé
+   reconstituée au format MAJIC : 0 → **62 119 locaux** rattachés.
+4. **63 colonnes étaient entièrement vides** (couches dont la clé `idu` n'est pas
+   renseignée à la source). Retirées de la feuille, conservées au dictionnaire :
+   ce qui a été tenté sans succès reste tracé.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Agrégation limitée aux couches portant une clé parcellaire | Les autres exigeraient un calcul d'intersection, impossible sans `shapely` sur ce poste, et ne décrivent pas les biens |
+| 2026-09-08 | Rattachement géographique borné à 60 m, distance écrite dans le classeur | Un rapprochement approché doit pouvoir être jugé, pas subi |
+| 2026-09-08 | Colonnes vides retirées de la feuille, tracées au dictionnaire | 63 colonnes de décor sur 176 695 lignes nuisent à l'exploitation |
