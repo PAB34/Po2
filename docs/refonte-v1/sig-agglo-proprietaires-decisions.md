@@ -397,3 +397,49 @@ Deux pièges corrigés au passage, tous deux silencieux :
 - MAJIC sépare le type de voie (`RUE` dans `L_NATURE_VOIE`) du nom (`DUNOIS` dans
   `DVOILIB`) là où la BAN les écrit d'un tenant : le rapprochement ne rendait que 3,4 %
   de codes postaux avant recollage, 73,5 % après.
+
+### 6.7 Contre-enquête : peut-on éviter la demande de privilège ? (2026-09-08)
+
+La première conclusion reposait sur six routes devinées. Reprise avec une méthode.
+
+**Le module ne s'appelle pas `cadastre` mais `openmajic`** (trouvé dans le bundle
+Angular `/vmap2/main.*.js`, config publique sur
+`/vmap2/modules/vmap/forms/configuration/openmajic.json`).
+
+**Inventaire exhaustif de ses routes.** Un nom de route inexistant renvoie `500`,
+un nom réel mais interdit renvoie `401 ERROR_INSUFFICIENT_PRIVILEGE` : ce contraste
+permet de balayer sans deviner. Sur ~60 noms testés, le module expose **cinq** routes :
+
+| Route | État |
+| --- | --- |
+| `invariants`, `proprietaires`, `adresses`, `descriptionparcelles`, `fichedescriptiveparcelle` | ouvertes |
+| **`fichedescriptiveinvariant/{INVAR}`** | **401 privilège** — seule porte vers l'adresse par local |
+
+**Les vues ouvertes ont été sondées colonne par colonne.** Le paramètre `attributs`
+est reconnu par l'API : une colonne existante revient valorisée, une colonne absente
+renvoie `[]`. Testé sur `proprietaires` et `invariants` pour `DLIGN3/4/5/6`, `JDATNSS`,
+`DNOMLP`, `DSUPOT`, `DCAPEC`, `DTELOC`… : **aucune adresse, aucune surface**. Les vues
+sont volontairement réduites aux colonnes affichées par le client.
+
+**Autres portes fermées** : `vitis/tables` sur `s_majic` et `s_openmajic` (500),
+les couches `s_openmajic` 1382/1383 (500), `vitis/privileges` et `vitis/users` (401).
+
+**Une porte réellement ouverte, au gain limité** : sur les 1 069 couches du SIG, la
+couche **474 `agglo_s_cadastre.vmp_uf_proprietaire`** porte `dlign3/4/5/6` pour 63 809
+parcelles. Déjà extraite. Croisée à l'annuaire des fiches, elle apporte **1 398 comptes
+nouveaux** : la couverture passe de 44,2 % à **45,3 %**. Intégrée au classeur.
+
+**Conclusion** : non, sans élévation de privilège on ne dépasse pas ~45 %. Le plafond
+n'est pas un défaut d'extraction, c'est le périmètre de la vue servie à un compte
+`vmap_cadastre_medium_user`. Toutes les autres pistes sont épuisées et documentées.
+
+**Trouvailles collatérales, accessibles sans privilège supplémentaire** :
+- couche **1461 `logement.vmp_cerema_coproff`** — 2 773 copropriétés avec **nom du
+  syndic, e-mail et téléphone**. Contact direct des gestionnaires, là où le cadastre
+  ne donne que des noms de copropriétaires sans adresse ;
+- couche **1162 `logement.vmp_vacance_lovac`** — 710 logements vacants localisés.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Pas de demande de privilège au SIG (choix utilisateur), plafond assumé à 45,3 % | Toutes les portes alternatives ont été testées et sont fermées |
+| 2026-09-08 | Couche 474 ajoutée en renfort de l'annuaire | +1 398 comptes adressés pour aucun coût d'extraction |

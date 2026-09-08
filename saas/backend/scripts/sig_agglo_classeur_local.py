@@ -51,6 +51,7 @@ FICHIERS = {
     "comptes": "cadastre_proprietaires_comptes.csv",
     "proprietaires": "fiche_proprietaires.csv",
     "ban": "397_referentiels_vmp_ban.csv",
+    "uf": "474_agglo_s_cadastre_vmp_uf_proprietaire.csv",
 }
 
 
@@ -110,6 +111,30 @@ def annuaire_comptes(proprietaires: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def annuaire_couche_uf(uf: pd.DataFrame) -> pd.DataFrame:
+    """Second annuaire, tiré de la couche SIG 474 « Propriétaire parcelle ».
+
+    Même nature que le précédent — des comptes propriétaires de parcelles — mais
+    constitué autrement, et il apporte 1 398 comptes que les fiches n'avaient
+    pas. Gain mesuré : +1,1 point de couverture. Modeste, mais gratuit.
+    """
+
+    adresses = uf[(uf["dlign4"].str.strip() != "") | (uf["dlign6"].str.strip() != "")].copy()
+    adresses["DNUPRO"] = adresses["dnupro"].str.strip()
+    return (
+        adresses.drop_duplicates(subset=["id_com", "DNUPRO"])
+        .set_index(["id_com", "DNUPRO"])[["dlign3", "dlign4", "dlign6", "ddenom"]]
+        .rename(
+            columns={
+                "dlign3": "DLIGN3",
+                "dlign4": "DLIGN4",
+                "dlign6": "DLIGN6",
+                "ddenom": "DDENOM",
+            }
+        )
+    )
+
+
 def codes_postaux_ban(ban: pd.DataFrame) -> tuple[pd.Series, set[str]]:
     """Code postal par (commune, voie) et l'ensemble des codes postaux de l'agglo."""
 
@@ -146,6 +171,10 @@ def construire(data_dir: Path) -> pd.DataFrame:
     comptes["DNUPRO"] = comptes["DNUPRO"].str.strip()
     comptes = comptes.drop_duplicates(subset=["ID_COM", "DNUPRO"]).set_index(["ID_COM", "DNUPRO"])
     annuaire = annuaire_comptes(charger(data_dir, "proprietaires"))
+    renfort = annuaire_couche_uf(charger(data_dir, "uf"))
+    manquants = renfort.index.difference(annuaire.index)
+    annuaire = pd.concat([annuaire, renfort.loc[manquants].reindex(columns=annuaire.columns)])
+    print(f"      {len(annuaire)} comptes adressés, dont {len(manquants)} venus de la couche 474")
 
     print("[4/5] assemblage")
     cle_compte = pd.MultiIndex.from_arrays(
