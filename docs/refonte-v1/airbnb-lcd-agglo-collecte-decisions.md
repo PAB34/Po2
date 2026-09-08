@@ -314,7 +314,73 @@ de collecte. Toute analyse de revenus devra requalifier ce champ.
 
 ---
 
-## 7. Ce que je ne ferai pas
+## 7. DATAtourisme Occitanie : audit de la ressource (2026-09-08)
+
+Piste soumise : le CSV `datatourisme-reg-occ.csv` (ressource data.gouv
+`0c463ef6-c00a-48e2-b50a-d17cfe998b84`), présenté comme permettant « de
+récupérer tout ce qui est numéro RNE ». Téléchargé et audité intégralement.
+
+**La ressource est réelle** : 42,9 Mo, **53 281 lignes**, 15 colonnes, licence
+ouverte. L'identifiant est le bon. Ce n'est pas l'API Meublés mais le flux
+DATAtourisme, alimenté par les offices de tourisme.
+
+**Elle ne contient aucun numéro d'enregistrement.** Mesuré sur les 53 281
+lignes :
+
+- chaînes au format d'un NER héraultais (`34xxx` + 8 caractères) : **0** ;
+- lignes mentionnant « enregistrement », « NER » ou « RNE » où que ce soit :
+  **3**, sur toute la région.
+
+Les 15 colonnes sont : nom, catégories, latitude, longitude, adresse postale,
+code postal + commune, périodes, mesures Covid, créateur, SIT diffuseur, date de
+mise à jour, contacts, classements, description, URI du POI. Le classement porte
+les étoiles, pas le numéro de déclaration.
+
+### Ce que la ressource apporte réellement
+
+| Mesure | Valeur |
+|---|---|
+| POI sur les 14 communes | 2 137 |
+| Hébergements meublés / locatifs | **918** |
+| Avec adresse postale | 1 014 / 1 017 |
+| Avec coordonnées | 1 017 / 1 017 |
+
+Répartition très déséquilibrée : **Balaruc-les-Bains 594**, Sète 134,
+Frontignan 58, Marseillan 39. DATAtourisme reflète l'activité des offices de
+tourisme, pas le parc réel — Balaruc (station thermale) déclare beaucoup, Sète
+presque pas.
+
+### Pourquoi ça ne rapproche pas Airbnb
+
+À Sète : **134 hébergements DATAtourisme contre 2 499 annonces Airbnb**, soit
+5 % du parc. Et le rapprochement par distance ne discrimine pas :
+
+| Rayon | Hébergements ayant un voisin Airbnb | Candidats dans le rayon (médiane) |
+|---|---:|---:|
+| 25 m | 69 % | 1 (moyenne 2,6) |
+| 50 m | 90 % | 5 |
+| 100 m | 100 % | **18** |
+| 200 m | 100 % | 65 |
+
+Le « 100 % à 100 m » n'est pas un succès : c'est la densité du parc sétois. Avec
+18 candidats dans le rayon, la proximité ne prouve rien. Un appariement
+exigerait un critère supplémentaire (nom, type, capacité) et resterait probabiliste.
+
+### Décision
+
+DATAtourisme **n'est pas la clé du rapprochement Airbnb**. En revanche ses 918
+hébergements portent une **adresse postale exacte**, donc rattachable au
+cadastre par adresse (avec la règle de normalisation éprouvée). C'est un
+livrable complémentaire à part entière — surtout sur Balaruc-les-Bains — et non
+un substitut au NER.
+
+Le piège n°4 s'est d'ailleurs vérifié à nouveau : filtrer sur le seul nom de
+commune capturait Mireval-Lauragais (Aude), Mézerville (Aude) et un Marseillan
+du Gers. Le filtre retenu croise **code postal ET nom**.
+
+---
+
+## 8. Ce que je ne ferai pas
 
 - Aucune tentative de contournement d'un blocage, d'une authentification ou d'un
   CAPTCHA Airbnb (le POC s'en abstenait déjà, la V2 aussi).
