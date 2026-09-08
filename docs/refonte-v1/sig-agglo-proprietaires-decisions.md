@@ -487,3 +487,40 @@ Apports principaux, mesurés en nombre de locaux touchés :
 | 2026-09-08 | Agrégation limitée aux couches portant une clé parcellaire | Les autres exigeraient un calcul d'intersection, impossible sans `shapely` sur ce poste, et ne décrivent pas les biens |
 | 2026-09-08 | Rattachement géographique borné à 60 m, distance écrite dans le classeur | Un rapprochement approché doit pouvoir être jugé, pas subi |
 | 2026-09-08 | Colonnes vides retirées de la feuille, tracées au dictionnaire | 63 colonnes de décor sur 176 695 lignes nuisent à l'exploitation |
+
+### 6.9 Correction : les copropriétés avaient une clé exacte (2026-09-08)
+
+La §6.8 annonçait le rattachement des copropriétés « à la parcelle la plus proche,
+≤ 60 m ». **C'était une approximation inutile.** La couche COPROFF porte un champ
+`idtup` dont les valeurs sont des références de parcelle en bonne et due forme
+(`34301000AN0097`). L'inventaire l'avait manqué parce qu'il cherchait des **noms**
+de colonnes connus (`id_par`, `id_uf`…), et `idtup` n'en fait pas partie.
+
+**Correction de méthode** : `sig_agglo_inventaire.py` détecte désormais une clé
+aussi par la **forme des valeurs** — commune (5) + préfixe (3) + section (2) +
+numéro (4). Un premier essai confondait les SIRET, qui font également 14
+caractères ; deux garde-fous les écartent (code commune de l'Hérault, section
+portant au moins une lettre).
+
+Bilan du rebalayage : **35 couches** portent une clé parcellaire au lieu de 33, dont
+deux vraies découvertes — **COPROFF** (rattachement exact) et **758
+`environnement.cdl_espaces_proteges`** (Conservatoire du littoral, 2 238 parcelles).
+
+| Couche | Avant | Après |
+| --- | --- | --- |
+| Copropriétés (1461) | 53 049 locaux, ≤ 60 m, approché | **100 997 locaux, exact** |
+| Logements vacants (1162) | 30 470, ≤ 60 m | 29 100, dont 295 par adresse exacte |
+
+**LOVAC reste approché** : la couche ne porte ni référence de parcelle ni adresse
+structurée, seulement un libellé de voie (`0005   AV   RAOUL BONNECAZE`) et un
+point. Le rapprochement se fait d'abord sur l'adresse exacte (commune + numéro +
+voie, les adresses ambiguës étant écartées), puis sur la parcelle la plus proche.
+Deux colonnes disent, ligne par ligne, **quelle méthode** a été employée et **à
+quelle distance** — un rapprochement approché doit pouvoir être jugé.
+
+Classeur final : **176 695 lignes × 205 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Détection des clés par la forme des valeurs, pas seulement par le nom | Une clé exacte se cachait derrière un nom de colonne non standard ; chercher par nom l'avait rendue invisible |
+| 2026-09-08 | Copropriétés rattachées par `idtup`, sans approximation | La donnée exacte existait ; l'approximation était un défaut de reconnaissance, pas une limite de la source |

@@ -7,11 +7,17 @@ toutes les couches du SIG qui peuvent l'être. Deux mécanismes, et deux seuleme
      sondé les 1 069 couches du catalogue : 559 sont lisibles par ce compte, et
      **23 portent un identifiant de parcelle**. Ce sont les seules qui se
      joignent sans approximation ;
-  2. **par proximité géographique** — deux couches précieuses (copropriétés
-     COPROFF, logements vacants LOVAC) ne portent qu'un point. Elles sont
-     rattachées à la parcelle dont le centre est le plus proche, sous un seuil
-     explicite, et la distance retenue est écrite dans le classeur pour que le
-     rapprochement puisse être jugé plutôt que subi.
+  2. **par adresse, puis par proximité en dernier recours** — les logements
+     vacants (LOVAC) ne portent ni référence de parcelle ni adresse structurée,
+     seulement un libellé de voie et un point. On rapproche d'abord sur
+     l'adresse exacte (commune + numéro + voie), et on ne retombe sur « la
+     parcelle dont le centre est le plus proche » que pour le reste, en
+     inscrivant la méthode et la distance dans le classeur.
+
+La couche des copropriétés, elle, **n'a pas besoin d'approximation** : son champ
+`idtup` est une référence de parcelle en bonne et due forme. C'est le nom de la
+colonne qui trompe, pas la donnée — d'où la détection par forme des valeurs dans
+`sig_agglo_inventaire.py`.
 
 Le reste du catalogue (réseaux d'eau, routes, fonds de plan) n'a aucune clé
 parcellaire : le rattacher supposerait un calcul d'intersection de polygones,
@@ -83,9 +89,19 @@ LIBELLES = {
     "694": "Gestion foncière",
     "964": "ORI",
     "1370": "Sans info foncière",
+    "1461": "Copropriété",
+    "758": "Espace protégé",
     "320": "Couche 320",
     "104": "Couche 104",
     "230": "Couche 230",
+}
+
+# Colonnes conservées pour les couches très larges, afin que le classeur ne se
+# remplisse pas d'identifiants internes du Cerema.
+RETENUES = {
+    "1461": ["nom_usage", "nom_syndic", "typ_syndic", "email_syndic", "telephone_standard",
+             "telephone_portable", "contact_nom", "num_immat", "date_immat", "mandat",
+             "adress_ref", "com_rl"],
 }
 
 # Fonds cadastraux : trois vues du même fond que la couche 943, déjà jointe.
@@ -158,7 +174,8 @@ def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]
         base[f"{libelle} — présent"] = id_par.isin(cadre.index).map({True: "Oui", False: ""})
         if (occurrences > 1).any():
             base[f"{libelle} — occurrences"] = id_par.map(occurrences).fillna("")
-        for colonne in colonnes_utiles(cadre.reset_index(), cle):
+        gardees = RETENUES.get(layer_id) or colonnes_utiles(cadre.reset_index(), cle)
+        for colonne in [c for c in gardees if c in cadre.columns]:
             nom = f"{libelle} — {colonne}"
             base[nom] = id_par.map(cadre[colonne]).fillna("")
             journal.append(
@@ -170,6 +187,35 @@ def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]
             )
         print(f"    {libelle:26} {int(id_par.isin(cadre.index).sum()):>7} locaux touchés")
     return base
+
+
+def adresses_parcelles(data_dir: Path) -> pd.Series | None:
+    """Index (commune, numéro, voie) → référence de parcelle.
+
+    Sert à rattacher par l'adresse ce qui ne porte pas de référence cadastrale.
+    Les adresses ambiguës — une même voie et un même numéro sur deux parcelles —
+    sont écartées : mieux vaut retomber sur le rapprochement géographique que
+    d'attribuer un bien à la mauvaise parcelle.
+    """
+
+    chemin = data_dir / "cadastre_description_parcelles.csv"
+    if not chemin.is_file():
+        return None
+    cadre = lire(chemin)
+    cle = pd.DataFrame(
+        {
+            "com": cadre["ID_COM"].str.strip(),
+            "num": cadre["DNVOIRI"].str.strip().str.lstrip("0"),
+            "voie": sans_accent(cadre["DVOILIB"]),
+            "id_par": cadre["ID_PAR"],
+        }
+    )
+    cle = cle[(cle["num"] != "") & (cle["voie"] != "")]
+    unique = cle.groupby(["com", "num", "voie"])["id_par"].nunique()
+    cle = cle[cle.set_index(["com", "num", "voie"]).index.map(unique).fillna(0) == 1]
+    return cle.drop_duplicates(subset=["com", "num", "voie"]).set_index(
+        ["com", "num", "voie"]
+    )["id_par"]
 
 
 def centres_parcelles(data_dir: Path) -> pd.DataFrame:
@@ -206,9 +252,6 @@ def joindre_par_proximite(
     # appartement vide n'en rend pas 1 480 autres vacants. La vacance est donc
     # comptée au niveau de la parcelle, et nommée comme telle.
     for fichier, libelle, garder in [
-        (COPROFF, "Copropriété", ["nom_usage", "nom_syndic", "typ_syndic", "email_syndic",
-                                  "telephone_standard", "telephone_portable", "contact_nom",
-                                  "num_immat", "date_immat", "mandat", "adress_ref"]),
         (LOVAC, "Parcelle — vacance", ["nature", "annee", "debutvacan", "ff_jannath",
                                        "ff_stoth", "ff_npiece_", "libvoie", "libcom"]),
     ]:
@@ -222,16 +265,38 @@ def joindre_par_proximite(
         cadre = cadre.loc[valides.index].copy()
         cadre["id_par"] = centres["id_par"].to_numpy()[indices]
         cadre["distance"] = distances.round(1)
-        cadre = cadre[cadre["distance"] <= seuil]
+        cadre["methode"] = f"parcelle la plus proche (≤ {seuil:.0f} m)"
+
+        # L'adresse d'abord : `0005   AV   RAOUL BONNECAZE` porte le numéro et le
+        # nom de la voie, que le cadastre range dans DNVOIRI et DVOILIB. Quand
+        # les deux concordent dans la même commune, le rattachement est exact et
+        # remplace celui du plus proche voisin.
+        exact = adresses_parcelles(data_dir)
+        if "libvoie" in cadre.columns and exact is not None:
+            morceaux = cadre["libvoie"].str.strip().str.split(r"\s+", n=2, regex=True)
+            numero = morceaux.str[0].fillna("").str.lstrip("0")
+            voie = sans_accent(morceaux.str[2].fillna(""))
+            cle = pd.MultiIndex.from_arrays([cadre["ff_idcom"].str.strip(), numero, voie])
+            trouve = pd.Series(exact.reindex(cle).to_numpy(), index=cadre.index)
+            cadre.loc[trouve.notna(), "methode"] = "adresse exacte (numéro + voie)"
+            cadre.loc[trouve.notna(), "distance"] = ""
+            cadre["id_par"] = trouve.fillna(cadre["id_par"])
+            print(f"      {int(trouve.notna().sum())} rapprochements par adresse exacte")
+
+        approche = cadre["methode"] != "adresse exacte (numéro + voie)"
+        cadre = cadre[~approche | (pd.to_numeric(cadre["distance"], errors="coerce") <= seuil)]
         # Combien de points tombent sur la parcelle : pour la vacance, c'est
         # l'information utile — « cette parcelle compte 3 logements vacants ».
         occurrences = cadre.groupby("id_par").size()
-        # Le point le plus proche gagne : deux copropriétés sur une même parcelle
-        # ne peuvent pas remplir la même colonne.
-        cadre = cadre.sort_values("distance").drop_duplicates(subset=["id_par"]).set_index("id_par")
+        # Quand plusieurs points tombent sur une parcelle, le meilleur gagne :
+        # un rattachement par adresse exacte d'abord (rang 0), puis le plus
+        # proche géographiquement.
+        cadre["rang"] = pd.to_numeric(cadre["distance"], errors="coerce").fillna(0)
+        cadre = cadre.sort_values("rang").drop_duplicates(subset=["id_par"]).set_index("id_par")
 
         base[f"{libelle} — nombre"] = id_par.map(occurrences).fillna("")
         base[f"{libelle} — rattachée"] = id_par.isin(cadre.index).map({True: "Oui", False: ""})
+        base[f"{libelle} — méthode"] = id_par.map(cadre["methode"]).fillna("")
         base[f"{libelle} — distance (m)"] = id_par.map(cadre["distance"]).fillna("")
         for colonne in garder:
             if colonne not in cadre.columns:

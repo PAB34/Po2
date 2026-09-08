@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -36,6 +37,16 @@ from sig_agglo_recon import DEFAULT_BASE_URL, fetch, load_env, login, rows_of  #
 CLES = ["id_par", "idpar", "id_parcelle", "parcelle", "geo_parcelle", "id_uf", "idu", "ref_cad"]
 CLES_FAIBLES = ["id_com", "insee", "code_insee", "commune", "libcom"]
 
+# Chercher la clé par le nom de colonne ne suffit pas : la couche des
+# copropriétés range une référence de parcelle parfaitement valide dans une
+# colonne nommée `idtup`. On teste donc aussi la *forme* des valeurs —
+# commune (5) + préfixe (3) + section (2) + numéro (4), ex. 34301000AN0097.
+# Un SIRET fait lui aussi 14 caractères : sans plus de contrainte, la détection
+# par forme confond les deux. Deux garde-fous tirés du format cadastral —
+# le code commune de l'Hérault, et une section qui porte au moins une lettre.
+FORME_ID_PAR = re.compile(r"^34\d{3}[0-9A-Z]{3}(?=[0-9A-Z]{2}\d{4}$)[0-9A-Z]*[A-Z][0-9A-Z]*$")
+COLONNES_INTERDITES = {"siret", "siren", "num_pdl", "code_ape"}
+
 
 def sonder(session: requests.Session, base_url: str, couche: dict) -> dict:
     layer_id = couche.get("layer_id")
@@ -44,6 +55,19 @@ def sonder(session: requests.Session, base_url: str, couche: dict) -> dict:
     colonnes = list(lignes[0]) if lignes else []
     minuscules = {c.lower(): c for c in colonnes}
     cle = next((minuscules[c] for c in CLES if c in minuscules), "")
+    par_forme = ""
+    if lignes:
+        par_forme = next(
+            (
+                c
+                for c, v in lignes[0].items()
+                if c.lower() not in COLONNES_INTERDITES
+                and isinstance(v, str)
+                and FORME_ID_PAR.match(v.strip())
+            ),
+            "",
+        )
+    cle = cle or par_forme
     cle_faible = next((minuscules[c] for c in CLES_FAIBLES if c in minuscules), "")
     total = payload.get("total_row_number") if isinstance(payload, dict) else None
     return {
@@ -54,6 +78,7 @@ def sonder(session: requests.Session, base_url: str, couche: dict) -> dict:
         "lignes": total if total is not None else "",
         "nb_colonnes": len(colonnes),
         "cle_parcelle": cle,
+        "cle_detectee_par": "forme des valeurs" if cle and cle == par_forme else ("nom" if cle else ""),
         "cle_commune": cle_faible,
         "colonnes": "|".join(colonnes),
     }
