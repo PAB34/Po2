@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -190,9 +191,13 @@ def traiter(sortie: Path, communes: list[str] | None, toutes: bool,
     echecs: list[dict] = []
 
     chemin_lignes = dossier2 / "annonces_details.jsonl"
+    # On écrit dans un fichier temporaire renommé à la fin : sans quoi le
+    # fichier de sortie reste tronqué pendant toute la durée du passage, et
+    # une analyse lancée en parallèle lit un jeu partiel sans s'en douter.
+    chemin_tmp = dossier2 / "annonces_details.jsonl.tmp"
     debut = datetime.now(timezone.utc)
 
-    with chemin_lignes.open("w", encoding="utf-8") as sortie_jsonl:
+    with chemin_tmp.open("w", encoding="utf-8") as sortie_jsonl:
         for i, annonce in enumerate(a_traiter, 1):
             rid = str(annonce["room_id"])
             try:
@@ -223,6 +228,8 @@ def traiter(sortie: Path, communes: list[str] | None, toutes: bool,
                       f"~{reste / 60:.1f} min restantes "
                       f"(cache {client.stats['cache_hits']}, "
                       f"réseau {client.stats['details']})")
+
+    os.replace(chemin_tmp, chemin_lignes)
 
     _ecrire_json(dossier2 / "equipements_long.json", equipements_longs)
     _ecrire_json(dossier2 / "calendrier_mensuel.json", calendriers)
