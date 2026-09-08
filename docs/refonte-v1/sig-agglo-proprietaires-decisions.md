@@ -277,3 +277,99 @@ morales publiques uniquement), donc ce classeur-là n'a pas les contraintes du p
 | Date | Décision | Motif |
 | --- | --- | --- |
 | 2026-09-04 | Mode `--source public` ajouté, couvrant les 27 communes | Le foncier public est la seule donnée propriétaire disponible hors agglo, et elle est exploitable telle quelle |
+
+---
+
+## 6. Classeur à la maille LOCAL — existant vérifié et décisions (2026-09-08)
+
+### 6.1 Ce qui est vérifié, pas supposé
+
+Toutes les lignes ci-dessous ont été mesurées sur les fichiers de `sig_agglo_data/`
+et par appels réels à l'API, le 2026-09-08.
+
+| Constat | Mesure |
+| --- | ---: |
+| Locaux dans la table en masse (`cadastre_locaux.csv`) | 181 064 lignes / **176 695 invariants** |
+| Locaux détaillés par les fiches (`fiche_locaux.csv`) | 172 664 |
+| Local → compte propriétaire, via `INVAR` puis `(ID_COM, DNUPRO)` | **173 581 / 176 695 = 98,2 %** |
+| Local → **adresse postale** du propriétaire | **76 783 / 172 664 = 44,5 %** |
+| Parcelles dont la fiche est refusée par le serveur | **378** |
+| dont parcelles portant réellement des locaux | 21 (950 locaux, **0,5 %** du parc) |
+
+### 6.2 Les 378 parcelles en échec ne sont pas récupérables
+
+Le rattrapage a été relancé : il **boucle sur des `401`**. Diagnostic fait à la main —
+la réponse est `ERROR_GENERIC_CONTROLLER_GET`, pas une expiration de jeton ni un refus
+de privilège. Le serveur échoue sur ces parcelles-là, quel que soit le jeton. Le client
+interprète tout `401` comme un jeton mort et se ré-authentifie en boucle : d'où
+1 500 authentifications pour 0 ligne écrite.
+
+**Décision** : ne plus les rejouer. 357 sont des parcelles nues (aucun local connu) ;
+les 21 restantes portent 950 locaux dont on garde le **nom** du propriétaire par la
+table en masse — seuls le type, l'occupation et l'année de construction manquent.
+Un correctif du script est proposé en 6.5.
+
+### 6.3 L'adresse des copropriétaires est verrouillée par un privilège
+
+C'est le point qui décide de la forme du classeur.
+
+La fiche d'une parcelle en copropriété ne nomme qu'**un** propriétaire — le syndicat —
+avec son adresse. Les 1 480 appartements d'une même parcelle ont chacun leur
+propriétaire dans `aBatis`, mais **avec son seul nom** (`DDENOM`), sans adresse.
+
+Trois portes ont été essayées :
+
+1. `GET /cadastre/proprietaires` — ne renvoie que `DDENOM`, `DNUPRO`, `COMMUNE`. Pas d'adresse. Vérifié.
+2. Reconstituer un annuaire de comptes depuis `fiche_proprietaires.csv` (un compte qui
+   possède une parcelle en propre ailleurs y a son adresse) : **47 941 comptes adressés**,
+   ce qui ne couvre que **44,5 %** des locaux. Mesuré.
+3. `GET /cadastre/fichedescriptiveinvariant/{INVAR}` — **la route existe** : elle répond
+   `401 ERROR_INSUFFICIENT_PRIVILEGE`, là où une route inconnue répond `500`. Notre compte
+   est `vmap_cadastre_medium_user` ; il lui faudrait vraisemblablement le niveau `high`.
+
+**Conséquence directe pour le projet d'intendance** : sur les ~55 % de locaux en
+copropriété, on connaît le **nom** du propriétaire mais pas où lui écrire. Le levier
+n'est pas technique — c'est une demande d'élévation de privilège auprès du SIG de l'agglo.
+
+### 6.4 Ce que le classeur peut contenir, et ce qu'il ne peut pas
+
+Contrôlé sur le payload brut d'une fiche : `aBatis` ne porte que 9 champs, tous déjà
+capturés. **Aucune surface de local n'existe dans la source** — la seule surface est la
+contenance de la parcelle (`DCNTPA`, `sup_fiscale`). Rien à réextraire.
+
+Schéma retenu, une ligne par local :
+
+| Colonne | Source | Couverture |
+| --- | --- | ---: |
+| Invariant, réf. cadastrale, commune | `cadastre_locaux` | 100 % |
+| Type, nature, occupation, mutation, année | `fiche_locaux` | 95,3 % |
+| **Propriétaire du local** (nom) | `fiche_locaux.DDENOM` puis repli sur les comptes | 98,2 % |
+| Adresse postale du propriétaire | annuaire des comptes | **44,5 %** |
+| **Adresse du bien** (n°, indice, voie) | `cadastre_description_parcelles` | maille parcelle |
+| Contenance de la parcelle | `DCNTPA` | 100 % |
+| Rapprochement BAN | `397_referentiels_vmp_ban` | approché |
+| `Adresse fiable` (booléen) | calculé | — |
+
+L'adresse du bien est **à la maille parcelle** : les 1 480 appartements d'une résidence
+partagent la même. C'est une limite de la source, pas du traitement — elle sera écrite
+telle quelle, sans laisser croire à une précision qui n'existe pas.
+
+### 6.5 Questions ouvertes
+
+1. **Adresse des copropriétaires** : demande-t-on au SIG l'élévation en
+   `vmap_cadastre_high_user` pour ouvrir `fichedescriptiveinvariant` ? Sans elle,
+   la prospection par courrier se limite à 44,5 % du parc.
+2. **Périmètre du classeur** : les 172 664 locaux, ou seulement les communes du bassin
+   de Thau utiles au projet d'intendance ?
+3. **Données personnelles** : le classeur portera noms et adresses de personnes physiques.
+   Confirmer qu'il reste dans `sig_agglo_data/` (hors git) et n'est jamais commité.
+4. **`COMPLET.xlsx` / `COMPLET_FUSION.xlsx`** : ils ne viennent pas de l'agent. Contenu à
+   confirmer avant de les intégrer ou de les écarter.
+5. **Correctif du script** : distinguer les trois `401` (jeton mort / privilège insuffisant /
+   erreur serveur) et tenir une liste d'échecs définitifs, pour ne plus reboucler.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Abandon des 378 parcelles en échec | Erreur serveur reproductible, 0,5 % du parc, nom du propriétaire conservé par ailleurs |
+| 2026-09-08 | Pas de réextraction des fiches | `aBatis` ne contient aucun champ non capturé ; aucune surface de local n'existe dans la source |
+| 2026-09-08 | Classeur écrit avec 44,5 % d'adresses propriétaires, colonne de fiabilité explicite | Le manque est un verrou de privilège, pas un défaut de traitement — il doit se voir |
