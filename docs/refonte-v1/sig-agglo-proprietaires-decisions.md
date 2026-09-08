@@ -373,3 +373,27 @@ telle quelle, sans laisser croire à une précision qui n'existe pas.
 | 2026-09-08 | Abandon des 378 parcelles en échec | Erreur serveur reproductible, 0,5 % du parc, nom du propriétaire conservé par ailleurs |
 | 2026-09-08 | Pas de réextraction des fiches | `aBatis` ne contient aucun champ non capturé ; aucune surface de local n'existe dans la source |
 | 2026-09-08 | Classeur écrit avec 44,5 % d'adresses propriétaires, colonne de fiabilité explicite | Le manque est un verrou de privilège, pas un défaut de traitement — il doit se voir |
+
+### 6.6 Livré (2026-09-08)
+
+`sig_agglo_classeur_local.py` produit `locaux-agglo.xlsx` — **176 695 lignes × 25 colonnes**,
+une par local, sur les 14 communes. Le classeur reste dans `sig_agglo_data/`, hors git.
+
+| Colonne | Renseignée |
+| --- | ---: |
+| Propriétaire (nom) | 176 546 — **99,9 %** |
+| Adresse du bien (cadastrale, exacte) | 169 377 — **95,9 %** |
+| Code postal (rapproché BAN) | 129 813 — **73,5 %** |
+| **Adresse postale du propriétaire** | 78 169 — **44,2 %** |
+| dont propriétaires hors agglo (prospects non résidents) | **19 502** |
+
+Copropriété : 105 113 locaux (59 %). Le classeur part de la table en masse et non des
+fiches : les 950 locaux des 21 parcelles refusées (§6.2) y figurent donc, avec leur
+propriétaire, seul leur type manquant.
+
+Deux pièges corrigés au passage, tous deux silencieux :
+- `.map` laisse `NaN` pour une parcelle absente, et `NaN != ""` est vrai — sans `fillna`,
+  les 7 318 locaux sans adresse étaient comptés comme adressés ;
+- MAJIC sépare le type de voie (`RUE` dans `L_NATURE_VOIE`) du nom (`DUNOIS` dans
+  `DVOILIB`) là où la BAN les écrit d'un tenant : le rapprochement ne rendait que 3,4 %
+  de codes postaux avant recollage, 73,5 % après.

@@ -443,8 +443,11 @@ def ecrire(classeur: pd.DataFrame, data_dir: Path, sortie: str, titre: str) -> i
     workbook.save(cible)
 
     print("[6/6] terminé")
-    exact_n = int((classeur["Source adresse du bien"] == "Exacte (cadastre Sète)").sum())
-    appro_n = int((classeur["Source adresse du bien"] == "Approchée (BAN)").sum())
+    # Le libellé précise la source (« cadastre Sète », « cadastre ») selon le
+    # classeur : ne comparer que le préfixe, sinon le résumé annonce zéro.
+    source = classeur["Source adresse du bien"]
+    exact_n = int(source.str.startswith("Exacte").sum())
+    appro_n = int(source.str.startswith("Approchée").sum())
     absent = len(classeur) - exact_n - appro_n
     print(f"\nClasseur : {cible.resolve()}")
     print(f"  {len(classeur)} lignes, une par couple propriétaire × bien")
