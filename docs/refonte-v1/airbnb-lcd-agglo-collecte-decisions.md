@@ -366,7 +366,41 @@ Le « 100 % à 100 m » n'est pas un succès : c'est la densité du parc sétois
 18 candidats dans le rayon, la proximité ne prouve rien. Un appariement
 exigerait un critère supplémentaire (nom, type, capacité) et resterait probabiliste.
 
+### Contre-épreuve sur Balaruc-les-Bains
+
+Hypothèse formulée puis **réfutée** : on supposait que DATAtourisme et Airbnb
+décrivaient des parcs disjoints (meublés de cure loués en direct d'un côté,
+plateformes de l'autre). Collecte Airbnb lancée sur Balaruc pour vérifier :
+
+- **749 annonces Airbnb** à Balaruc-les-Bains, pour 594 entrées DATAtourisme ;
+- rapporté à la population, **10,5 % du nombre d'habitants contre 5,5 % à Sète** :
+  Balaruc est la commune la plus intensive en location courte durée, pas une
+  commune hors plateformes.
+
+Les parcs ne sont donc pas disjoints. L'écart Sète/Balaruc dans DATAtourisme
+(134 contre 594) mesure la pratique des offices de tourisme, rien d'autre.
+
+Et l'appariement géographique y est **encore moins discriminant** qu'à Sète :
+
+| Rayon | Hébergements avec ≥1 voisin | Candidats (médiane) | Avec un candidat **unique** |
+|---|---:|---:|---:|
+| 25 m | 76,8 % | 2 | **17,5 %** |
+| 50 m | 91,2 % | 9 | 4,9 % |
+| 100 m | 96,1 % | **29** | 2,5 % |
+
+À 25 m, seuls 17,5 % des hébergements ont un candidat unique — et même ceux-là
+ne sont pas sûrs, puisque le flou des coordonnées Airbnb dépasse ce rayon : le
+bon logement peut être hors du cercle et un voisin dedans.
+
 ### Décision
+
+**L'appariement géographique DATAtourisme ↔ Airbnb est abandonné.** Mesuré sur
+deux communes aux profils opposés, il ne discrimine dans aucune. Les deux
+sources seront exploitées séparément :
+
+- **Airbnb** → volume, équipements, hôtes multi-annonces, densité par secteur ;
+- **DATAtourisme** → adresses exactes, rattachement au cadastre par adresse
+  normalisée (et non par géométrie), donc accès au propriétaire.
 
 DATAtourisme **n'est pas la clé du rapprochement Airbnb**. En revanche ses 918
 hébergements portent une **adresse postale exacte**, donc rattachable au
