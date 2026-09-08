@@ -135,17 +135,34 @@ def annuaire_couche_uf(uf: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def codes_postaux_ban(ban: pd.DataFrame) -> tuple[pd.Series, set[str]]:
-    """Code postal par (commune, voie) et l'ensemble des codes postaux de l'agglo."""
+def codes_postaux_ban(ban: pd.DataFrame) -> pd.Series:
+    """Code postal par (commune, voie)."""
 
     ban = ban.copy()
     ban["cle_com"] = sans_accent(ban["nom_commune"])
     ban["cle_voie"] = sans_accent(ban["nom_voie"])
-    table = (
+    return (
         ban.drop_duplicates(subset=["cle_com", "cle_voie"])
         .set_index(["cle_com", "cle_voie"])["code_postal"]
     )
-    return table, set(ban["code_postal"].str.strip())
+
+
+def hors_agglo(ligne6: pd.Series, communes: set[str]) -> pd.Series:
+    """Le propriétaire habite-t-il hors des 14 communes de l'agglo ?
+
+    Le code postal ne peut pas servir d'arbitre : le référentiel d'adresses du
+    SIG couvre 27 communes, dont Agde, Pézenas ou Fabrègues qui ne sont pas dans
+    l'agglo. Les classer « dedans » parce que leur code postal figure au
+    référentiel faussait la colonne qui sert justement à repérer les
+    propriétaires non résidents. On compare donc les noms de communes.
+    """
+
+    nom = sans_accent(ligne6.astype(str).str.replace(r"^\d{5}\s*", "", regex=True))
+    return nom.map(
+        lambda valeur: ""
+        if not valeur.strip()
+        else ("Non" if any(valeur.startswith(c) for c in communes) else "Oui")
+    )
 
 
 def construire(data_dir: Path) -> pd.DataFrame:
@@ -185,7 +202,8 @@ def construire(data_dir: Path) -> pd.DataFrame:
     postale = annuaire.reindex(cle_compte)
 
     nom_commune = comptes.reset_index().groupby("ID_COM")["COMMUNE"].first()
-    ban, cp_agglo = codes_postaux_ban(charger(data_dir, "ban"))
+    communes_agglo = set(sans_accent(pd.Series(nom_commune.loc[list(COMMUNES_AGGLO)].unique())))
+    ban = codes_postaux_ban(charger(data_dir, "ban"))
     commune_norm = sans_accent(locaux["ID_COM"].map(nom_commune).fillna(""))
 
     def cp_par_voie(colonne: str) -> pd.Series:
@@ -201,8 +219,7 @@ def construire(data_dir: Path) -> pd.DataFrame:
     comptes_par_parcelle = locaux.groupby("ID_PAR")["DNUPRO"].nunique()
 
     ligne6 = postale["DLIGN6"].fillna("").to_numpy()
-    cp_proprietaire = pd.Series(ligne6, index=locaux.index).str.extract(r"(\d{5})")[0].fillna("")
-    hors_agglo = cp_proprietaire.map(lambda cp: "" if not cp else ("Non" if cp in cp_agglo else "Oui"))
+    non_resident = hors_agglo(pd.Series(ligne6, index=locaux.index), communes_agglo)
 
     # `.map` laisse un NaN pour une parcelle absente, et `NaN != ""` est vrai :
     # sans ce fillna, tout local passerait pour adressé.
@@ -239,7 +256,7 @@ def construire(data_dir: Path) -> pd.DataFrame:
             "Adresse propriétaire — connue": pd.Series(
                 postale["DLIGN4"].notna().to_numpy(), index=locaux.index
             ).map({True: "Oui", False: "Non"}),
-            "Propriétaire hors agglo": hors_agglo,
+            "Propriétaire hors agglo": non_resident,
             "Copropriété": locaux["ID_PAR"]
             .map(comptes_par_parcelle)
             .map(lambda n: "Oui" if n and n > 1 else "Non"),

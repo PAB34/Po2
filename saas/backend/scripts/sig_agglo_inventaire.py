@@ -54,7 +54,16 @@ def sonder(session: requests.Session, base_url: str, couche: dict) -> dict:
     lignes = rows_of(payload)
     colonnes = list(lignes[0]) if lignes else []
     minuscules = {c.lower(): c for c in colonnes}
-    cle = next((minuscules[c] for c in CLES if c in minuscules), "")
+    # Le nom seul ne prouve rien : la couche des départs de feu a bien une
+    # colonne `idu`, mais elle contient « 20190915_FABREGUES_1254_ef4 ». Une clé
+    # trouvée par son nom n'est retenue que si sa valeur en a aussi la forme —
+    # sauf `parcelle`/`section`, volontairement partiels et reconstruits ailleurs.
+    par_nom = next((minuscules[c] for c in CLES if c in minuscules), "")
+    if par_nom and par_nom.lower() not in {"parcelle", "section"} and lignes:
+        valeur = str(lignes[0].get(par_nom) or "").strip()
+        if valeur and not FORME_ID_PAR.match(valeur):
+            par_nom = ""
+    cle = par_nom
     par_forme = ""
     if lignes:
         par_forme = next(
@@ -78,7 +87,7 @@ def sonder(session: requests.Session, base_url: str, couche: dict) -> dict:
         "lignes": total if total is not None else "",
         "nb_colonnes": len(colonnes),
         "cle_parcelle": cle,
-        "cle_detectee_par": "forme des valeurs" if cle and cle == par_forme else ("nom" if cle else ""),
+        "cle_detectee_par": "nom + forme" if par_nom else ("forme des valeurs" if cle else ""),
         "cle_commune": cle_faible,
         "colonnes": "|".join(colonnes),
     }

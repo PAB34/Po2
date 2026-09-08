@@ -89,6 +89,7 @@ LIBELLES = {
     "694": "Gestion foncière",
     "964": "ORI",
     "1370": "Sans info foncière",
+    "474": "Propriétaire de la parcelle",
     "1461": "Copropriété",
     "758": "Espace protégé",
     "320": "Couche 320",
@@ -102,6 +103,12 @@ RETENUES = {
     "1461": ["nom_usage", "nom_syndic", "typ_syndic", "email_syndic", "telephone_standard",
              "telephone_portable", "contact_nom", "num_immat", "date_immat", "mandat",
              "adress_ref", "com_rl"],
+    # Le classeur local porte déjà nom et adresse du propriétaire. Cette couche
+    # n'est gardée que pour ce qu'elle ajoute : civilité, nom et prénom séparés
+    # — de quoi adresser un courrier — et la quatrième ligne d'adresse.
+    # Attention : c'est le propriétaire de la PARCELLE, donc le syndicat quand
+    # il s'agit d'une copropriété.
+    "474": ["dqualp", "dnomlp", "dprnlp", "dnomus", "dprnus", "dlign5"],
 }
 
 # Fonds cadastraux : trois vues du même fond que la couche 943, déjà jointe.
@@ -133,9 +140,14 @@ def reconstruire_id_par(cadre: pd.DataFrame, commune: str) -> pd.Series:
     """
 
     insee = cadre[commune] if commune in cadre.columns else pd.Series(commune, index=cadre.index)
-    section = cadre["section"].str.strip().str.upper().str.rjust(2, "0")
-    numero = cadre["parcelle"].str.strip().str.zfill(4)
-    return insee.str.strip() + "000" + section + numero
+    if "section" in cadre.columns:
+        section = cadre["section"].str.strip().str.upper()
+        numero = cadre["parcelle"].str.strip()
+    else:
+        # Section et numéro collés dans un seul champ : `AO690` → `AO` + `690`.
+        decoupe = cadre["parcelle"].str.strip().str.upper().str.extract(r"^([A-Z]{1,2})(\d{1,4})$")
+        section, numero = decoupe[0].fillna(""), decoupe[1].fillna("")
+    return insee.str.strip() + "000" + section.str.rjust(2, "0") + numero.str.zfill(4)
 
 
 def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.DataFrame:
@@ -159,7 +171,7 @@ def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]
             continue
         cadre = lire(fichiers[0])
         cle = couche["cle_parcelle"]
-        if layer_id in RECONSTRUCTIBLES and {"section", "parcelle"} <= set(cadre.columns):
+        if layer_id in RECONSTRUCTIBLES and "parcelle" in cadre.columns:
             cadre["id_par_reconstruit"] = reconstruire_id_par(cadre, RECONSTRUCTIBLES[layer_id])
             cle = "id_par_reconstruit"
         if cle not in cadre.columns or (cadre[cle].str.strip() == "").all():
@@ -186,6 +198,39 @@ def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]
                 }
             )
         print(f"    {libelle:26} {int(id_par.isin(cadre.index).sum()):>7} locaux touchés")
+    return base
+
+
+def joindre_jardins(base: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.DataFrame:
+    """Surface de jardin, déduite des couches « composteurs ».
+
+    Ces couches servent à repérer où distribuer des composteurs, mais elles
+    portent en réalité trois mesures par parcelle : le nombre de maisons, la
+    surface de la parcelle et la surface bâtie. Leur différence est la surface
+    non bâtie — le jardin. C'est autrement plus utile qu'un « oui » de présence.
+    """
+
+    fichiers = sorted(data_dir.glob("442_*.csv")) or sorted(data_dir.glob("128_*.csv"))
+    if not fichiers:
+        return base
+    cadre = lire(fichiers[0]).drop_duplicates(subset=["id_par"]).set_index("id_par")
+    surface = pd.to_numeric(cadre["surf_parcelle"], errors="coerce")
+    bati = pd.to_numeric(cadre["surf_bati_dans_parcelle"], errors="coerce")
+    cadre["jardin"] = (surface - bati).round(0)
+
+    id_par = base["Réf. cadastrale (id_par)"]
+    for source, nom in [
+        ("jardin", "Jardin — surface estimée (m²)"),
+        ("nb_maisons", "Jardin — maisons sur la parcelle"),
+        ("surf_bati_dans_parcelle", "Parcelle — surface bâtie (m²)"),
+    ]:
+        base[nom] = id_par.map(cadre[source]).fillna("")
+        journal.append(
+            {"Colonne": nom, "Origine": "couches 442/128 (composteurs)",
+             "Rattachement": "référence de parcelle (id_par)"}
+        )
+    touches = int(id_par.isin(cadre.index).sum())
+    print(f"    {'Jardin (surface calculée)':26} {touches:>7} locaux touchés")
     return base
 
 
@@ -397,6 +442,7 @@ def main() -> int:
         )
 
     print("[+] couches rattachées par référence de parcelle")
+    base = joindre_jardins(base, data_dir, journal)
     centres = centres_parcelles(data_dir)
     base = joindre_parcelle_xy(base, centres, data_dir, journal)
     base = joindre_par_parcelle(base, data_dir, journal)

@@ -524,3 +524,54 @@ Classeur final : **176 695 lignes × 205 colonnes**.
 | --- | --- | --- |
 | 2026-09-08 | Détection des clés par la forme des valeurs, pas seulement par le nom | Une clé exacte se cachait derrière un nom de colonne non standard ; chercher par nom l'avait rendue invisible |
 | 2026-09-08 | Copropriétés rattachées par `idtup`, sans approximation | La donnée exacte existait ; l'approximation était un défaut de reconnaissance, pas une limite de la source |
+
+### 6.10 Audit systématique des rattachements (2026-09-08)
+
+Après la découverte de §6.9, tous les rattachements ont été repris un par un.
+**Quatre défauts de plus**, dont un qui touchait la colonne la plus utile.
+
+**1. « Propriétaire hors agglo » classait Agde dans l'agglo.** La colonne comparait
+le code postal du propriétaire à ceux du référentiel d'adresses du SIG — lequel
+couvre **27 communes**, dont 13 qui ne sont pas dans l'agglo (Agde, Pézenas,
+Fabrègues, Florensac, Cournonterral…). **1 375 propriétaires non résidents étaient
+comptés comme locaux.** La comparaison se fait désormais sur le **nom de commune**
+contre les 14 véritables. Cible corrigée : 19 931 → **21 306**.
+
+**2. Deux couches n'avaient pas de clé du tout.** Les départs et contours de feux
+(77, 346) ont bien une colonne nommée `idu`, mais elle contient
+`20190915_FABREGUES_1254_ef4` : un identifiant d'incendie, pas une parcelle.
+L'inventaire les retenait sur la foi du **nom** de la colonne. Une clé trouvée par
+son nom n'est désormais retenue que si sa valeur en a aussi la **forme**. Le
+nombre de couches joignables retombe de 35 à **33**, et les 53 colonnes de décor
+qu'elles produisaient disparaissent (70 colonnes vides → 17).
+
+**3. L'ORI ne se rattachait pas.** Sa colonne `parcelle` vaut `AO690` — section et
+numéro collés, sans zéros. Le découpage est ajouté : 0 → **788 locaux**.
+
+**4. Les couches « composteurs » valaient mieux qu'un booléen.** Elles portent la
+surface de la parcelle, la surface bâtie et le nombre de maisons. Leur différence
+donne la **surface de jardin**, désormais calculée et exposée.
+
+**Redondance corrigée** : la couche 474 était jointe en entier alors que le
+classeur porte déjà nom et adresse du propriétaire. Elle est réduite à ce qu'elle
+ajoute — civilité, nom et prénom séparés, 4ᵉ ligne d'adresse — sous un libellé qui
+dit ce qu'elle est vraiment : le propriétaire **de la parcelle**, donc le syndicat
+en copropriété.
+
+**Nuance documentée, pas un défaut** : l'unité foncière (532) est jointe par
+`id_uf`, qui a la forme d'une référence de parcelle. Mais **10 664 unités
+regroupent plusieurs parcelles** : la ligne ne décrit alors que la parcelle
+principale.
+
+**Hors agglo, vérifié cette fois sur le module MAJIC lui-même** : les fiches de
+parcelles d'Agde, Aumelas, Aumes et Castelnau-de-Guers répondent toutes `401`. Le
+constat de §5 tient, et pour la même raison — un périmètre de convention DGFiP.
+Hors agglo, il reste **87 239 parcelles** avec surface et coordonnées, et
+**7 263 parcelles de foncier public** nominatives ; aucun propriétaire privé.
+
+Classeur final : **176 695 lignes × 212 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Une clé n'est retenue que si le nom **et** la forme concordent | Deux couches passaient sur la foi du seul nom et produisaient 53 colonnes vides |
+| 2026-09-08 | Appartenance à l'agglo jugée sur le nom de commune, jamais sur le code postal | Le référentiel d'adresses déborde l'agglo de 13 communes |
