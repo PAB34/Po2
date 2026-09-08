@@ -201,6 +201,154 @@ def joindre_par_parcelle(base: pd.DataFrame, data_dir: Path, journal: list[dict]
     return base
 
 
+PARTICULES = re.compile(r"\b(DE|DU|DES|LA|LE|LES|L|D|AU|AUX)\b")
+
+
+def cle_voie(serie: pd.Series) -> pd.Series:
+    """Normalise un libellé de voie pour comparer cadastre et BAN.
+
+    Le cadastre écrit `Boulevard` + `VERDUN` en deux champs, la BAN
+    `Boulevard de Verdun` d'un tenant. Sans recoller les deux et sans
+    neutraliser les particules, le rapprochement tombe à 0,6 % ; avec, à 37 %.
+    """
+
+    return (
+        sans_accent(serie)
+        .str.replace(PARTICULES, "", regex=True)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
+
+def joindre_dpe(
+    base: pd.DataFrame, data_dir: Path, centres: pd.DataFrame, journal: list[dict], seuil: float
+) -> pd.DataFrame:
+    """Rattache les DPE de l'ADEME, agrégés à la maille parcelle.
+
+    Le DPE ne porte aucune référence cadastrale : on rapproche par l'adresse
+    exacte, puis par les coordonnées pour les seuls DPE réellement géocodés à
+    l'adresse — les autres portent un point approximatif qui n'apprendrait rien.
+
+    L'agrégation est **par parcelle** et assumée comme telle : rien ne dit
+    lequel des 200 appartements d'un immeuble porte le DPE relevé. Pour une
+    maison individuelle, la colonne vaut le DPE du bien ; pour un appartement,
+    c'est une statistique d'immeuble.
+    """
+
+    chemin = data_dir / "dpe_ademe.csv"
+    if not chemin.is_file():
+        print("    [!] dpe_ademe.csv absent — lancer sig_agglo_dpe.py")
+        return base
+    dpe = lire(chemin)
+
+    parcelles = lire(data_dir / "cadastre_description_parcelles.csv")
+    parcelles["num"] = parcelles["DNVOIRI"].str.strip().str.lstrip("0")
+    parcelles["voie"] = cle_voie(
+        parcelles["L_NATURE_VOIE"].str.strip() + " " + parcelles["DVOILIB"].str.strip()
+    )
+    parcelles = parcelles[(parcelles["num"] != "") & (parcelles["voie"] != "")]
+    unique = parcelles.groupby(["ID_COM", "num", "voie"])["ID_PAR"].nunique()
+    parcelles = parcelles[
+        parcelles.set_index(["ID_COM", "num", "voie"]).index.map(unique) == 1
+    ].drop_duplicates(subset=["ID_COM", "num", "voie"])
+    index = parcelles.set_index(["ID_COM", "num", "voie"])["ID_PAR"]
+
+    cle = pd.MultiIndex.from_arrays(
+        [
+            dpe["code_insee_ban"].str.strip(),
+            dpe["numero_voie_ban"].str.strip().str.lstrip("0"),
+            cle_voie(dpe["nom_rue_ban"]),
+        ]
+    )
+    dpe["id_par"] = pd.Series(index.reindex(cle).to_numpy(), index=dpe.index)
+    dpe["methode"] = np.where(dpe["id_par"].notna(), "adresse exacte", "")
+    dpe["distance"] = np.nan
+
+    # Coordonnées, pour les seuls DPE que la BAN a placés à l'adresse.
+    geocode = sans_accent(dpe["statut_geocodage"]).str.contains(
+        "GEOCODEE BAN A L ADRESSE", na=False
+    )
+    reste = dpe["id_par"].isna() & geocode
+    x = pd.to_numeric(dpe.loc[reste, "coordonnee_cartographique_x_ban"], errors="coerce")
+    y = pd.to_numeric(dpe.loc[reste, "coordonnee_cartographique_y_ban"], errors="coerce")
+    utilisables = x.notna() & y.notna()
+    if utilisables.any():
+        arbre = cKDTree(centres[["x", "y"]].to_numpy())
+        distances, indices = arbre.query(np.c_[x[utilisables], y[utilisables]], k=1)
+        cibles = utilisables[utilisables].index
+        proche = pd.Series(centres["id_par"].to_numpy()[indices], index=cibles)
+        garde = pd.Series(distances, index=cibles) <= seuil
+        dpe.loc[cibles[garde], "id_par"] = proche[garde]
+        dpe.loc[cibles[garde], "distance"] = pd.Series(distances, index=cibles)[garde].round(1)
+        dpe.loc[cibles[garde], "methode"] = f"coordonnées (≤ {seuil:.0f} m)"
+
+    rattaches = dpe[dpe["id_par"].notna()].copy()
+    print(f"    {len(rattaches)} DPE rattachés sur {len(dpe)} "
+          f"({(dpe['methode'] == 'adresse exacte').sum()} par adresse exacte)")
+
+    surface = pd.to_numeric(rattaches["surface_habitable_logement"], errors="coerce")
+    annee = pd.to_numeric(rattaches["annee_construction"], errors="coerce")
+    cout = pd.to_numeric(rattaches["cout_total_5_usages"], errors="coerce")
+    conso = pd.to_numeric(rattaches["conso_5_usages_par_m2_ep"], errors="coerce")
+    rattaches = rattaches.assign(surface=surface, annee=annee, cout=cout, conso=conso)
+    rattaches["passoire"] = rattaches["etiquette_dpe"].isin(["F", "G"])
+
+    groupes = rattaches.groupby("id_par")
+    agrege = pd.DataFrame(
+        {
+            "DPE — nombre sur la parcelle": groupes.size(),
+            "DPE — étiquette dominante": groupes["etiquette_dpe"].agg(
+                lambda s: s.mode().iat[0] if not s.mode().empty else ""
+            ),
+            "DPE — part F ou G (%)": (100 * groupes["passoire"].mean()).round(0),
+            "DPE — surface habitable moyenne (m²)": groupes["surface"].mean().round(1),
+            "DPE — année de construction (médiane)": groupes["annee"].median().round(0),
+            "DPE — conso moyenne (kWh/m²)": groupes["conso"].mean().round(0),
+            "DPE — coût énergie moyen (€/an)": groupes["cout"].mean().round(0),
+            "DPE — chauffage": groupes["type_installation_chauffage"].agg(
+                lambda s: s.mode().iat[0] if not s.mode().empty else ""
+            ),
+            "DPE — date la plus récente": groupes["date_etablissement_dpe"].max(),
+            "DPE — méthode de rattachement": groupes["methode"].agg(
+                lambda s: s.mode().iat[0] if not s.mode().empty else ""
+            ),
+            "DPE — distance médiane (m)": groupes["distance"].median().round(1),
+        }
+    )
+
+    id_par = base["Réf. cadastrale (id_par)"]
+    for colonne in agrege.columns:
+        base[colonne] = id_par.map(agrege[colonne]).fillna("")
+        journal.append(
+            {"Colonne": colonne, "Origine": "ADEME — DPE logements existants",
+             "Rattachement": "adresse exacte, sinon coordonnées ; agrégé par parcelle"}
+        )
+
+    # Un DPE ne vaut celui du bien que si la parcelle n'en porte qu'un et que
+    # le local est un logement individuel. Ailleurs c'est une moyenne
+    # d'immeuble — utile, mais qu'il ne faut pas lire comme le DPE du lot.
+    nombre = pd.to_numeric(base["DPE — nombre sur la parcelle"], errors="coerce")
+    base["DPE — fiabilité"] = np.select(
+        [
+            nombre.isna(),
+            (nombre == 1) & (base["Type de local"] == "Maison")
+            & (base["DPE — méthode de rattachement"] == "adresse exacte"),
+            (nombre == 1) & (base["Type de local"] == "Maison"),
+            nombre == 1,
+        ],
+        ["", "élevée — maison, DPE unique, adresse exacte",
+         "moyenne — maison, DPE unique, position approchée",
+         "moyenne — DPE unique sur la parcelle"],
+        default="faible — moyenne de plusieurs logements",
+    )
+    journal.append(
+        {"Colonne": "DPE — fiabilité", "Origine": "calculé",
+         "Rattachement": "croise le nombre de DPE, le type de local et la méthode"}
+    )
+    print(f"    {'DPE (ADEME)':26} {int(id_par.isin(agrege.index).sum()):>7} locaux touchés")
+    return base
+
+
 def joindre_jardins(base: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.DataFrame:
     """Surface de jardin, déduite des couches « composteurs ».
 
@@ -418,7 +566,14 @@ def ecrire(base: pd.DataFrame, journal: pd.DataFrame, cible: Path) -> None:
     for valeurs in journal.itertuples(index=False, name=None):
         dico.append(list(valeurs))
 
-    workbook.save(cible)
+    try:
+        workbook.save(cible)
+    except PermissionError:
+        # Le classeur est ouvert dans Excel : plutôt que de perdre plusieurs
+        # minutes de calcul, on écrit à côté et on le dit.
+        secours = cible.with_name(f"{cible.stem}-nouveau{cible.suffix}")
+        workbook.save(secours)
+        print(f"\n[!] {cible.name} est ouvert dans Excel — écrit dans {secours.name}")
 
 
 def main() -> int:
@@ -449,6 +604,9 @@ def main() -> int:
 
     print(f"[+] couches rattachées par proximité (seuil {args.seuil:.0f} m)")
     base = joindre_par_proximite(base, data_dir, centres, journal, args.seuil)
+
+    print("[+] DPE de l'ADEME")
+    base = joindre_dpe(base, data_dir, centres, journal, args.seuil)
 
     remplissage = {
         c: int((base[c].astype(str).str.strip() != "").sum()) for c in base.columns

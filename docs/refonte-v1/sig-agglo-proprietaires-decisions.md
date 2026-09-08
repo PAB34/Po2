@@ -575,3 +575,70 @@ Classeur final : **176 695 lignes × 212 colonnes**.
 | --- | --- | --- |
 | 2026-09-08 | Une clé n'est retenue que si le nom **et** la forme concordent | Deux couches passaient sur la foi du seul nom et produisaient 53 colonnes vides |
 | 2026-09-08 | Appartenance à l'agglo jugée sur le nom de commune, jamais sur le code postal | Le référentiel d'adresses déborde l'agglo de 13 communes |
+
+## 7. Croisement avec les DPE de l'ADEME (2026-09-08)
+
+**Aucune clé n'est nécessaire** : `data.ademe.fr` est une API ouverte. Rien du
+classeur n'est envoyé — seul le code INSEE de la commune demandée sort.
+
+Jeu retenu : `meg-83tjwtg8dyz4vv7h1dqe`, « DPE Logements existants depuis juillet
+2021 » (15,5 M lignes en France). `sig_agglo_dpe.py` en extrait **34 156 DPE** sur
+les 14 communes — 15 770 à Sète, 5 384 à Frontignan, 2 841 à Mèze.
+
+### 7.1 Ce que le DPE apporte, et ce qu'il ne porte pas
+
+Il apporte ce que le cadastre n'a pas : étiquette DPE et GES, **surface habitable**,
+coût annuel des cinq usages, consommation au m², type de chauffage, année de
+construction, date du diagnostic.
+
+Il ne porte **aucune référence cadastrale** — les 230 champs ont été passés en
+revue : ni parcelle, ni section, ni invariant. Le rattachement est donc indirect.
+
+### 7.2 Rattachement : deux voies, mesurées
+
+| Voie | Résultat |
+| --- | ---: |
+| Adresse exacte (commune + numéro + voie) | **12 600 DPE (36,9 %)** |
+| Coordonnées Lambert-93, DPE géocodés à l'adresse, ≤ 60 m | + 18 168 |
+| **Total rattaché** | **30 768 / 34 156 (90 %)** |
+
+La normalisation des voies est ce qui décide de tout : le cadastre range
+`Boulevard` dans `L_NATURE_VOIE` et `VERDUN` dans `DVOILIB`, la BAN écrit
+`Boulevard de Verdun` d'un tenant. Sans recoller les deux champs et sans
+neutraliser les particules (`de`, `du`, `des`…), le rapprochement par adresse
+tombe à **0,6 %** ; avec, il atteint **36,9 %**.
+
+Les 5 280 DPE que la BAN n'a pas géocodés sont écartés du rapprochement
+géographique : leur point est approximatif et n'apprendrait rien. Distance
+médiane des rattachements retenus : **14 m** ; 95 % sont sous 40 m.
+
+### 7.3 L'agrégation est à la maille parcelle, et c'est assumé
+
+Rien ne dit lequel des 200 appartements d'un immeuble porte le DPE relevé — et le
+classeur ne contient aucune surface de local pour départager. Les colonnes DPE
+sont donc des **agrégats de parcelle** : nombre de DPE, étiquette dominante, part
+de F–G, surface habitable moyenne, coût moyen, année médiane, chauffage dominant.
+
+Une colonne **`DPE — fiabilité`** dit ligne par ligne ce que vaut la donnée :
+
+| Niveau | Sens |
+| --- | --- |
+| élevée | maison, un seul DPE sur la parcelle, rattaché par adresse exacte |
+| moyenne | maison ou DPE unique, mais position approchée |
+| faible | moyenne de plusieurs logements — statistique d'immeuble |
+
+Le garde-fou n'est pas théorique : sur les parcelles portant une maison, la
+médiane est bien de **1 DPE**, mais la moyenne monte à 8,3 et le maximum à 173 —
+des rattachements géographiques qui ramassent l'immeuble voisin. Sans cette
+colonne, ces valeurs se liraient comme le DPE de la maison.
+
+Couverture : **84 122 locaux** touchés (47,6 %) — 21,7 % des maisons (tous les
+logements n'ont pas de DPE, il s'en établit à la vente ou à la location) et 61 %
+des appartements, mais en statistique d'immeuble.
+
+Classeur final : **176 695 lignes × 224 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | DPE agrégés par parcelle, jamais attribués à un logement | Aucune clé ne relie un DPE à un lot ; l'attribuer serait refaire l'erreur de la vacance |
+| 2026-09-08 | Colonne `DPE — fiabilité` plutôt qu'un filtre en amont | L'utilisateur choisit son niveau d'exigence ; la donnée d'immeuble reste un signal commercial |
