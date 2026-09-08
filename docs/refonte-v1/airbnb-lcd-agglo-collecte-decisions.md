@@ -273,7 +273,30 @@ avoir à migrer si le suivi devient récurrent.
 | Requêtes de recherche | 236 tuiles, dont 202 interrogées, **0 échec** |
 | Zones encore saturées | **1** (contre 17 au plancher 197 m) |
 | `host_id` récupéré | **12/12** sur le premier lot de fiches |
-| Débit du passage 2 | ~7 s/annonce → **~5 h pour Sète** |
+| Passage 2 (fiches détaillées) | **2 499 / 2 501**, 2 échecs, en **2 h 44** |
+| Hôtes distincts | **1 754**, dont **199 multi-annonces** |
+| `host_id` manquant | 259 / 2 499 (**10,4 %** — annonces sans avis) |
+| Volumétrie | 0,29 Go de cache, 8,3 Mo d'équipements, 0,86 Mo d'annonces |
+
+Têtes de liste des hôtes multi-annonces : ConciLogis (58), Guilhem (33),
+Sebastien (22), Poplidays (21), **Thau Conciergerie (16)** — cette dernière est
+précisément l'un des concurrents identifiés dans la note de concept. La colonne
+`host_id` fait donc ce qu'on lui demandait : elle distingue le particulier du
+professionnel.
+
+### Faux positifs du lexique, relevés et corrigés
+
+Vérification sur les 93 490 lignes d'équipements réelles (et non sur un
+échantillon) :
+
+- « Vue sur la piscine » (58 occurrences) était compté comme une piscine —
+  corrigé, `piscine` passe de 362 à **338** ;
+- « Chauffage : système split sans évacuation » (135) tombait dans `clim` —
+  sorti vers une colonne `split_reversible` dédiée, pour que le doute reste
+  visible plutôt que fondu dans le total.
+
+Le contrôle inverse est bon : les 968 « stationnement dans la rue » sont bien
+exclus de `parking` et rangés dans `parking_rue`. Autotest du lexique : 17/17.
 
 Le gain sur le POC v1 est direct : sa grille fixe 5×5 plafonnait à 1 000 annonces
 avant dédup. Le tuilage adaptatif en trouve **2 501** — et sait dire où il reste

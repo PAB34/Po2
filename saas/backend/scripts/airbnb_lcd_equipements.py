@@ -29,15 +29,22 @@ import unicodedata
 LEXIQUE: dict[str, tuple[list[str], list[str]]] = {
     "clim": (
         [r"\bclimatis", r"\bclimatiseur", r"\bair conditionn", r"\bac\b.*split",
-         r"\bsplit\b", r"pompe a chaleur.*(froid|reversible)"],
-        # un ventilateur n'est pas une climatisation
-        [r"ventilateur"],
+         r"pompe a chaleur.*(froid|reversible)"],
+        # un ventilateur n'est pas une climatisation ; et « Chauffage : système
+        # split sans évacuation » est rangé par Airbnb dans le chauffage — ces
+        # 135 libellés gonflaient la colonne clim de 8 %. Un split est souvent
+        # réversible, mais on ne le suppose pas : voir "split_reversible".
+        [r"ventilateur", r"^chauffage"],
     ),
+    # Split annoncé comme chauffage : probablement réversible, donc probablement
+    # climatisant, mais Airbnb ne le dit pas. Colonne séparée pour que ce doute
+    # reste visible au lieu d'être fondu dans `clim`.
+    "split_reversible": ([r"\bsplit\b"], [r"\bclimatis"]),
     "piscine": (
         [r"\bpiscine"],
-        # une piscine du voisinage ou payante n'est pas la piscine du logement ;
-        # elle est conservée à part dans "piscine_partagee"
-        [r"piscine.*(partage|commun|voisinage|payant)"],
+        # « Vue sur la piscine » n'est pas une piscine (58 occurrences) ; une
+        # piscine du voisinage ou payante non plus — voir "piscine_partagee".
+        [r"vue sur", r"piscine.*(partage|commun|voisinage|payant)"],
     ),
     "piscine_partagee": (
         [r"piscine.*(partage|commun|voisinage)"],
@@ -207,6 +214,13 @@ if __name__ == "__main__":
         ("Stationnement gratuit dans la rue", "parking_rue", True),
         ("Parking gratuit sur place", "parking", True),
         ("Wifi", "wifi", True),
+        # faux positifs relevés sur les 93 490 lignes d'équipements de Sète
+        ("Chauffage : système split sans évacuation", "clim", False),
+        ("Chauffage : système split sans évacuation", "split_reversible", True),
+        ("Climatisation : système split sans évacuation", "clim", True),
+        ("Vue sur la piscine", "piscine", False),
+        ("Piscine privée", "piscine", True),
+        ("Climatisation centrale", "clim", True),
     ]
     echecs = 0
     for libelle, cat, attendu in cas:
