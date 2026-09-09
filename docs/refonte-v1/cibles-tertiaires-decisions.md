@@ -247,3 +247,77 @@ elle est là — de quoi préparer l'appel.
 | 2026-09-09 | Pas de ciblage par âge du bâti | Les données montrent l'absence de corrélation avec la consommation |
 | 2026-09-09 | Score de qualification **et** de négligence, pas seulement de gisement | Une cible négligée sans exploitation réelle ne vaut pas un appel |
 | 2026-09-09 | Signal OPERAT retenu à la maille communale | Le nominatif n'existe pas ; le ratio par commune reste discriminant |
+
+---
+
+## 9. Surface des bâtiments — pourquoi seulement 168 présomptions (2026-09-09)
+
+### 9.1 Le goulot
+
+L'assujettissement était présumé sur la `surface_shon` du **DPE tertiaire**. Or il
+n'existe que **1 480 DPE tertiaires** sur le territoire, rattachés à 11 976
+établissements, dont une partie sans surface renseignée : d'où **168 présomptions
+sur 33 455 établissements**.
+
+La surface de parcelle ne peut pas y suppléer — c'est celle du **terrain**. Un
+camping de trois hectares a une parcelle immense et quelques centaines de mètres
+carrés bâtis ; le seuil du décret porte sur la surface de plancher d'activité.
+
+### 9.2 La BD TOPO comble le trou
+
+L'IGN publie chaque bâtiment avec son usage, sa hauteur, son nombre d'étages et
+son emprise. API Géoplateforme (WFS), ouverte, sans clé. `sig_agglo_batiments.py`
+en extrait **7 865 bâtiments d'activité** sur le bassin et Agde :
+
+| Usage | Bâtiments | dont ≥ 1 000 m² estimés |
+| --- | ---: | ---: |
+| Commercial et services | 5 090 | 621 |
+| Industriel | 1 489 | 472 |
+| Agricole | 980 | 151 |
+| Religieux | 170 | 69 |
+| Sportif | 136 | 67 |
+
+Surface de plancher estimée = emprise au sol × nombre d'étages, avec la hauteur
+divisée par trois en repli. Les aires sont calculées par la formule du lacet sur
+des géométries demandées directement en Lambert-93 — pas de `shapely` sur ce
+poste. **12 590 établissements** sont rattachés à un bâtiment (≤ 40 m, seuil plus
+serré que pour la parcelle : un bâtiment est un objet précis), dont **2 477
+au-delà de 1 000 m²**.
+
+### 9.3 Le contrôle qui a changé le nom de la colonne
+
+Sur les **7 610 établissements où DPE et estimation coexistent** :
+
+| Mesure | Résultat |
+| --- | ---: |
+| Ratio médian estimation / DPE | **3,36** |
+| Estimation dans un facteur 2 du DPE | 26 % |
+| Même verdict sur le seuil de 1 000 m² | 81 % |
+| **Faux positifs** (estimé ≥ 1 000, DPE < 1 000) | **1 390** |
+| Faux négatifs | 85 |
+
+**Ce n'est pas une erreur de calcul, c'est un changement d'objet** : le DPE mesure
+un **local** — une boutique de 80 m² dans un immeuble — quand l'estimation mesure
+le **bâtiment entier**. Les deux sont justes, ils ne répondent pas à la même
+question.
+
+**Décision 6 — la colonne ne s'appelle pas « présomption ».** Avec 1 390 faux
+positifs sur 2 477, la nommer ainsi aurait conduit à annoncer une obligation
+inexistante à un prospect. Elle devient `Bâtiment — grand volume`, et le DPE garde
+le mot « présomption » quand il existe.
+
+**Décision 7 — une colonne `Cumul tertiaire possible`.** Le seuil du décret
+s'apprécie **par site en cumulant les activités** : un immeuble de 1 200 m²
+abritant plusieurs commerces peut être assujetti alors qu'aucun local ne dépasse
+le seuil. La colonne croise donc le grand volume et le nombre d'établissements
+recensés dans le même bâtiment — c'est la lecture correcte du décret, et elle
+récupère une partie des « faux positifs » comme vraies cibles.
+
+Le score conserve ce signal à **2 points** (contre 3 pour la surface DPE), et
+seulement quand le DPE est muet.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-09 | BD TOPO ajoutée comme source de surface | 1 480 DPE ne couvraient pas le parc ; 7 865 bâtiments d'activité le couvrent |
+| 2026-09-09 | « Grand volume » et non « présomption » | 1 390 faux positifs sur 2 477 : le mot aurait fait annoncer une obligation inexistante |
+| 2026-09-09 | Colonne de cumul tertiaire | Le décret s'apprécie au cumul par site, pas par local |

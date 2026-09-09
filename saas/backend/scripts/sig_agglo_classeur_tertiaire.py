@@ -327,6 +327,10 @@ def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.Data
     )
 
     surface = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
+    plancher = pd.to_numeric(
+        cibles.get("Bâtiment — surface de plancher estimée (m²)", pd.Series(dtype=object)),
+        errors="coerce",
+    ).reindex(cibles.index)
     etiquette = cibles["DPE — étiquette"].astype(str).str.strip()
     annee_dpe = pd.to_numeric(cibles["DPE — année de construction"], errors="coerce")
     nb_parc = pd.to_numeric(cibles["Parc du propriétaire (locaux)"], errors="coerce")
@@ -341,6 +345,9 @@ def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.Data
     # d'exploitation ne vaut pas un appel.
     criteres = {
         "surface > 1 000 m²": ((surface > 1000).fillna(False), 3),
+        "grand bâtiment (estimé)": (
+            (surface.isna() & (plancher > 1000)).fillna(False), 2
+        ),
         "détention > 20 ans": (((2026 - mutation) > 20).fillna(False), 2),
         "propriétaire de 5 locaux ou plus": ((nb_parc >= 5).fillna(False), 2),
         "bâti récent mal classé": (
@@ -369,7 +376,7 @@ def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.Data
     for nom, origine in [
         ("Détention depuis (années)", "cadastre — date de mutation"),
         ("Parc du propriétaire (locaux)", "cadastre — locaux détenus par le propriétaire"),
-        ("Score de non-pilotage", "calculé — dix signaux pondérés"),
+        ("Score de non-pilotage", "calculé — onze signaux pondérés"),
         ("Signaux retenus", "calculé"),
         ("Priorité d'appel", "calculé — seuils 9 / 7 / 5"),
     ]:
@@ -380,6 +387,103 @@ def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.Data
           f"({int(((score >= 9) & actifs).sum())} actifs)")
     print(f"    score ≥ 7 : {int((score >= 7).sum())} "
           f"({int(((score >= 7) & actifs).sum())} actifs)")
+    return cibles
+
+
+def rattacher_batiment(
+    cibles: pd.DataFrame, data_dir: Path, journal: list[dict], seuil: float = 40.0
+) -> pd.DataFrame:
+    """Bâtiment de la BD TOPO le plus proche, et surface de plancher estimée.
+
+    Le DPE tertiaire ne couvrait que 1 480 bâtiments, d'où 168 présomptions
+    d'assujettissement. La BD TOPO en porte 7 865 d'activité sur le territoire,
+    dont **1 380 dépassent 1 000 m² de plancher estimé**.
+
+    L'estimation vaut emprise au sol × nombre d'étages, avec la hauteur divisée
+    par trois en repli quand les étages manquent. Elle ne remplace pas une
+    surface d'activité tertiaire au sens du décret — le seuil s'apprécie par
+    site en cumulant les activités, et un bâtiment peut mêler logement et
+    activité. C'est un tri d'appels, pas une obligation opposable.
+
+    Le seuil de 40 m est plus serré que pour la parcelle : un bâtiment est un
+    objet précis, et un rattachement large collerait la halle voisine.
+    """
+
+    chemin = data_dir / "batiments_activite.csv"
+    if not chemin.is_file():
+        print("    [!] batiments_activite.csv absent — lancer sig_agglo_batiments.py")
+        return cibles
+    batiments = lire(chemin)
+    bx = pd.to_numeric(batiments["x_l93"], errors="coerce")
+    by = pd.to_numeric(batiments["y_l93"], errors="coerce")
+    emprise = pd.to_numeric(batiments["emprise_m2"], errors="coerce")
+    etages = pd.to_numeric(batiments["nombre_d_etages"], errors="coerce")
+    hauteur = pd.to_numeric(batiments["hauteur"], errors="coerce")
+    niveaux = etages.where(etages >= 1).fillna((hauteur / 3).round().clip(lower=1)).fillna(1)
+    batiments = batiments.assign(plancher=(emprise * niveaux).round(), niveaux=niveaux)
+
+    valides = bx.notna() & by.notna() & (emprise > 0)
+    lon = pd.to_numeric(cibles["longitude"], errors="coerce")
+    lat = pd.to_numeric(cibles["latitude"], errors="coerce")
+    utilisables = lon.notna() & lat.notna()
+
+    for nom in ["Bâtiment — usage", "Bâtiment — emprise au sol (m²)", "Bâtiment — niveaux",
+                "Bâtiment — surface de plancher estimée (m²)", "Bâtiment — distance (m)"]:
+        cibles[nom] = ""
+
+    if valides.any() and utilisables.any():
+        arbre = cKDTree(np.c_[bx[valides], by[valides]])
+        ex, ey = wgs84_vers_lambert93(lon[utilisables].to_numpy(), lat[utilisables].to_numpy())
+        distances, indices = arbre.query(np.c_[ex, ey], k=1)
+        lignes = utilisables[utilisables].index
+        garde = distances <= seuil
+        source = batiments[valides].iloc[indices[garde]]
+        cibles.loc[lignes[garde], "Bâtiment — usage"] = source["usage_1"].to_numpy()
+        cibles.loc[lignes[garde], "Bâtiment — emprise au sol (m²)"] = emprise[valides].to_numpy()[
+            indices[garde]
+        ]
+        cibles.loc[lignes[garde], "Bâtiment — niveaux"] = source["niveaux"].to_numpy()
+        cibles.loc[lignes[garde], "Bâtiment — surface de plancher estimée (m²)"] = source[
+            "plancher"
+        ].to_numpy()
+        cibles.loc[lignes[garde], "Bâtiment — distance (m)"] = distances[garde].round(1)
+
+    plancher = pd.to_numeric(
+        cibles["Bâtiment — surface de plancher estimée (m²)"], errors="coerce"
+    )
+    surface_dpe = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
+    # Contrôle sur les 7 610 établissements où DPE et estimation coexistent :
+    # le ratio médian est de 3,36 et 1 390 « grands bâtiments » ont un DPE
+    # inférieur à 1 000 m². L'écart n'est pas une erreur, c'est un changement
+    # d'objet — le DPE mesure un LOCAL, l'estimation mesure le BÂTIMENT entier.
+    # La colonne ne peut donc pas s'appeler présomption d'assujettissement :
+    # elle dit que le bâtiment est grand, ce qui reste un signal de ciblage.
+    occupants = cibles.groupby(
+        cibles["Bâtiment — surface de plancher estimée (m²)"].astype(str)
+        + "|" + cibles["Bâtiment — distance (m)"].astype(str)
+    )["siret"].transform("size").where(plancher.notna(), "")
+    cibles["Bâtiment — établissements recensés"] = occupants
+    cibles["Bâtiment — grand volume"] = np.select(
+        [plancher.isna(), plancher >= SEUIL_EET],
+        ["", "Oui — bâtiment de plus de 1 000 m² estimés"],
+        default="Non",
+    )
+    cibles["Cumul tertiaire possible"] = np.where(
+        (plancher >= SEUIL_EET) & (pd.to_numeric(occupants, errors="coerce") > 1),
+        "À vérifier — grand bâtiment partagé, le seuil s'apprécie au cumul",
+        np.where(surface_dpe.notna(), "— voir la présomption DPE, plus sûre", ""),
+    )
+    for nom in ["Bâtiment — usage", "Bâtiment — emprise au sol (m²)", "Bâtiment — niveaux",
+                "Bâtiment — surface de plancher estimée (m²)", "Bâtiment — distance (m)",
+                "Bâtiment — établissements recensés", "Bâtiment — grand volume",
+                "Cumul tertiaire possible"]:
+        journal.append(
+            {"Colonne": nom, "Origine": "BD TOPO IGN — bâtiments d'activité",
+             "Rattachement": f"bâtiment le plus proche (≤ {seuil:.0f} m) ; surface estimée"}
+        )
+    touches = int((cibles["Bâtiment — usage"].astype(str).str.strip() != "").sum())
+    larges = int((plancher >= SEUIL_EET).sum())
+    print(f"    bâtiment rattaché : {touches} / {len(cibles)} — dont {larges} au-delà de 1 000 m²")
     return cibles
 
 
@@ -520,10 +624,13 @@ def main() -> int:
     print("[3/4] propriétaire du bâtiment")
     cibles = rattacher_proprietaire(cibles, data_dir, journal)
 
-    print("[4/5] DPE tertiaire")
+    print("[4/6] DPE tertiaire")
     cibles = rattacher_dpe(cibles, data_dir, centres, journal, args.seuil)
 
-    print("[5/5] score de non-pilotage")
+    print("[5/6] bâtiment et surface estimée")
+    cibles = rattacher_batiment(cibles, data_dir, journal)
+
+    print("[6/6] score de non-pilotage")
     cibles = scorer(cibles, data_dir, journal)
 
     # Les actifs d'abord : à priorité égale, un établissement fermé n'est pas un
