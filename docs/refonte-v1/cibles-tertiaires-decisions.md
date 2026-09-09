@@ -102,3 +102,64 @@ forme de leurs valeurs, jamais sur le nom de la colonne.
 | 2026-09-09 | API Recherche d'entreprises plutôt que la couche SIG 60 | La couche s'arrête à l'agglo et n'a ni coordonnées ni état administratif |
 | 2026-09-09 | Périmètre = 14 communes + Agde | Agde est le premier gisement touristique, malgré l'absence de propriétaires |
 | 2026-09-09 | Aucun filtre d'effectif ; la priorité est une colonne | Une SCI sans salarié peut détenir plusieurs bâtiments |
+
+---
+
+## 7. Livré (2026-09-09)
+
+`cibles-tertiaires-agglo.xlsx` — trois feuilles.
+
+### 7.1 Feuille « Cibles tertiaires » — 33 455 lignes × 42 colonnes
+
+| Enrichissement | Couverture |
+| --- | ---: |
+| Établissements collectés (15 communes) | **33 455** — dont 18 263 actifs, 15 192 fermés |
+| Parcelle cadastrale rattachée | 31 651 (94,6 %) |
+| Propriétaire des murs | 19 744 (59 %) — nul à Agde par construction |
+| DPE tertiaire rattaché | 11 976 (35,8 %) |
+| **Présomption Éco Énergie Tertiaire** | **168** |
+
+Agde pèse **11 607 établissements**, Sète 8 494, Frontignan 2 915.
+
+**Décision 5 — les fermés sont conservés, avec une colonne `Activité`** (Actif /
+Fermé) en tête de feuille. L'état brut de l'API vaut `A` ou `F`, illisible dans
+un filtre Excel. Un établissement fermé n'est pas un prospect mais signale un
+local vacant, donc un propriétaire à démarcher. Le tri place les actifs d'abord.
+
+### 7.2 Feuille « Partenaires RGE » — 93 entreprises
+
+Le vivier du §6 du business model, obtenu par le filtre `est_rge` de l'API : des
+entreprises qualifiées, donc assurées pour ce qu'elles annoncent. Constituer
+cette liste à la main aurait pris des jours.
+
+### 7.3 Deux défauts corrigés avant livraison
+
+**1. Sur-attribution massive des DPE.** Premier passage : 21 468 lignes
+rattachées pour **1 480 DPE existants**, un même DPE attribué jusqu'à
+**6 968 fois**. Cause : les adresses sans numéro ni voie produisaient une clé
+vide des deux côtés, qui appariait tout avec tout. Les clés incomplètes sont
+désormais exclues.
+
+**2. Le découpage d'adresse ne rendait presque rien.** L'annuaire des entreprises
+livre l'adresse d'un bloc, complément compris — `BATIPAUME VILLAGE VACANCES 20
+CHEMIN RAYMOND FAGES 34300 AGDE` : le numéro n'est ni au début ni isolé, et la
+fin porte le code postal. Le découpage retire d'abord le code postal et ce qui
+suit, puis cherche le dernier couple « numéro + type de voie » : **25 718
+adresses structurées** sur 33 455, contre quasiment aucune auparavant.
+
+### 7.4 Fiabilité du DPE, dite ligne par ligne
+
+| Niveau | Lignes |
+| --- | ---: |
+| élevée — un seul établissement à cette adresse | 36 |
+| moyenne — bâtiment partagé, le DPE décrit le bâtiment | 2 411 |
+| faible — position approchée | 9 529 |
+
+Une colonne compte les établissements partageant le même DPE. Plusieurs
+occupants d'un immeuble de bureaux partagent légitimement un diagnostic : le
+classeur le dit au lieu de le taire.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-09 | Fermés conservés, colonne `Activité` explicite | Un local fermé est un indice de vacance, pas un déchet ; le tri suffit |
+| 2026-09-09 | Clés d'adresse incomplètes exclues du rapprochement | Une clé vide appariait 6 968 établissements à un seul DPE |

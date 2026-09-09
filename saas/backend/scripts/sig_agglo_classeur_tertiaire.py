@@ -30,6 +30,7 @@ Usage :
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -122,6 +123,31 @@ def rattacher_proprietaire(
     return cibles
 
 
+TYPES_VOIE = (
+    r"RUE|AVENUE|AV|BOULEVARD|BD|CHEMIN|CHE|QUAI|IMPASSE|IMP|ALLEE|ALLEES|ROUTE|RTE|"
+    r"PLACE|PL|COURS|TRAVERSE|MONTEE|SENTIER|SENTE|SQUARE|ESPLANADE|PROMENADE|RESIDENCE|"
+    r"LOTISSEMENT|ZONE|ZA|ZAC|ZI|PARC|VOIE|RAMPE|PASSAGE|CORNICHE|PONT|PORT|MAS|DOMAINE"
+)
+ADRESSE = re.compile(rf"\b(\d+)\s+(?:BIS|TER|B|A)?\s*((?:{TYPES_VOIE})\b.*)$")
+
+
+def decouper_adresse(adresses: pd.Series) -> pd.DataFrame:
+    """Extrait numéro et voie d'une adresse non structurée.
+
+    L'annuaire des entreprises livre l'adresse d'un bloc, complément compris :
+    « BATIPAUME VILLAGE VACANCES 20 CHEMIN RAYMOND FAGES 34300 AGDE ». Le numéro
+    n'est ni au début ni seul, et la fin porte le code postal et la ville. On
+    retire d'abord le code postal et ce qui suit, puis on cherche le dernier
+    couple « numéro + type de voie ». Sans cela, le découpage ne rendait rien
+    dans la quasi-totalité des cas.
+    """
+
+    nettoyees = (
+        adresses.astype(str).str.upper().str.replace(r"\s+\d{5}\s+.*$", "", regex=True).str.strip()
+    )
+    return nettoyees.str.extract(ADRESSE)
+
+
 def rattacher_dpe(
     cibles: pd.DataFrame, data_dir: Path, centres: pd.DataFrame,
     journal: list[dict], seuil: float
@@ -134,8 +160,7 @@ def rattacher_dpe(
         return cibles
     dpe = lire(chemin)
 
-    # Voie de l'établissement : « 10 QUAI FRANCOIS MAILLOL » → numéro + voie.
-    decoupe = cibles["adresse"].str.strip().str.extract(r"^(\d+)\s*(?:BIS|TER)?\s+(.*)$")
+    decoupe = decouper_adresse(cibles["adresse"])
     cle_etab = pd.MultiIndex.from_arrays(
         [
             cibles["code_commune"].str.strip(),
@@ -143,14 +168,20 @@ def rattacher_dpe(
             cle_voie(decoupe[1].fillna("")),
         ]
     )
-    index_dpe = (
-        dpe.assign(
-            com=dpe["code_insee_ban"].str.strip(),
-            num=dpe["numero_voie_ban"].str.strip().str.lstrip("0"),
-            voie=cle_voie(dpe["nom_rue_ban"]),
-        )
-        .drop_duplicates(subset=["com", "num", "voie"])
-        .set_index(["com", "num", "voie"])
+    # Une clé vide des deux côtés matcherait tout : sans ce filtre, un DPE dont
+    # l'adresse n'a ni numéro ni voie se retrouvait attribué à 6 968
+    # établissements. On n'apparie que des adresses réellement renseignées.
+    plein = dpe.assign(
+        com=dpe["code_insee_ban"].str.strip(),
+        num=dpe["numero_voie_ban"].str.strip().str.lstrip("0"),
+        voie=cle_voie(dpe["nom_rue_ban"]),
+    )
+    plein = plein[(plein["com"] != "") & (plein["num"] != "") & (plein["voie"] != "")]
+    index_dpe = plein.drop_duplicates(subset=["com", "num", "voie"]).set_index(
+        ["com", "num", "voie"]
+    )
+    cle_valide = pd.Series(
+        [bool(c and n and v) for c, n, v in cle_etab], index=cibles.index
     )
 
     colonnes = {
@@ -166,9 +197,10 @@ def rattacher_dpe(
     }
     for source, nom in colonnes.items():
         if source in index_dpe.columns:
-            cibles[nom] = pd.Series(
+            valeurs = pd.Series(
                 index_dpe[source].reindex(cle_etab).to_numpy(), index=cibles.index
             ).fillna("")
+            cibles[nom] = valeurs.where(cle_valide, "")
         else:
             cibles[nom] = ""
     cibles["DPE — méthode"] = np.where(
@@ -202,6 +234,33 @@ def rattacher_dpe(
              "Rattachement": "adresse exacte, sinon coordonnées"}
         )
 
+    # Plusieurs établissements peuvent légitimement occuper le même bâtiment —
+    # un immeuble de bureaux, une galerie marchande. Le DPE décrit alors le
+    # bâtiment, pas l'établissement : la colonne le dit au lieu de le taire.
+    signature = (
+        cibles["DPE — date"].astype(str) + "|" + cibles["DPE — surface SHON (m²)"].astype(str)
+    ).where(cibles["DPE — méthode"] != "", "")
+    partage = signature[signature != ""].groupby(signature[signature != ""]).transform("size")
+    cibles["DPE — établissements sur ce bâtiment"] = partage.reindex(cibles.index).fillna("")
+    cibles["DPE — fiabilité"] = np.where(
+        cibles["DPE — méthode"] == "", "",
+        np.where(
+            (partage.reindex(cibles.index).fillna(0) == 1)
+            & (cibles["DPE — méthode"] == "adresse exacte"),
+            "élevée — un seul établissement à cette adresse",
+            np.where(
+                cibles["DPE — méthode"] == "adresse exacte",
+                "moyenne — bâtiment partagé, DPE du bâtiment",
+                "faible — position approchée",
+            ),
+        ),
+    )
+    for nom in ["DPE — établissements sur ce bâtiment", "DPE — fiabilité"]:
+        journal.append(
+            {"Colonne": nom, "Origine": "calculé",
+             "Rattachement": "compte les établissements partageant le même DPE"}
+        )
+
     surface = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
     utile = pd.to_numeric(cibles["DPE — surface utile (m²)"], errors="coerce")
     retenue = surface.fillna(utile)
@@ -216,6 +275,79 @@ def rattacher_dpe(
     touches = int((cibles["DPE — méthode"] != "").sum())
     print(f"    DPE tertiaire rattaché : {touches} / {len(cibles)}")
     return cibles
+
+
+def feuille_partenaires(data_dir: Path) -> pd.DataFrame:
+    """Vivier de partenaires : les entreprises RGE du territoire.
+
+    §6 du business model — la société garde la relation client et confie
+    l'exécution à des spécialistes qualifiés et assurés. Le marqueur RGE est un
+    filtre officiel de qualification, pas un annuaire commercial.
+    """
+
+    chemin = data_dir / "tertiaire_partenaires_rge.csv"
+    if not chemin.is_file():
+        print("    [!] partenaires RGE absents — lancer sig_agglo_tertiaire.py --rge")
+        return pd.DataFrame()
+    rge = lire(chemin)
+    rge["Activité"] = np.where(
+        rge["etat_administratif"].str.strip().str.upper() == "A", "Actif", "Fermé"
+    )
+    colonnes = [
+        "nom_entreprise", "enseigne", "Activité", "naf", "libelle_naf",
+        "qualifications_rge", "adresse", "commune", "tranche_effectif",
+        "categorie_entreprise", "date_creation", "siret", "siren",
+    ]
+    return rge[[c for c in colonnes if c in rge.columns]].sort_values(
+        ["Activité", "commune", "nom_entreprise"]
+    )
+
+
+def ecrire_trois_feuilles(
+    cibles: pd.DataFrame, dictionnaire: pd.DataFrame, partenaires: pd.DataFrame, chemin: Path
+) -> None:
+    """Cibles, partenaires et dictionnaire dans un seul classeur."""
+
+    from openpyxl import Workbook
+    from openpyxl.cell import WriteOnlyCell
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    workbook = Workbook(write_only=True)
+    workbook._named_styles["Normal"].font = Font(name="Arial", size=10)
+    police = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+    fond = PatternFill("solid", fgColor="1F4E79")
+
+    def feuille(titre: str, cadre: pd.DataFrame, largeur: int = 20) -> None:
+        if cadre.empty:
+            return
+        onglet = workbook.create_sheet(titre)
+        onglet.freeze_panes = "A2"
+        entete = []
+        for nom in cadre.columns:
+            cellule = WriteOnlyCell(onglet, value=nom)
+            cellule.font, cellule.fill = police, fond
+            cellule.alignment = Alignment(vertical="center", wrap_text=True)
+            entete.append(cellule)
+        onglet.append(entete)
+        for index in range(1, len(cadre.columns) + 1):
+            onglet.column_dimensions[get_column_letter(index)].width = largeur
+        for valeurs in cadre.itertuples(index=False, name=None):
+            onglet.append(
+                ["" if v is None or (isinstance(v, float) and pd.isna(v)) else v for v in valeurs]
+            )
+        onglet.auto_filter.ref = f"A1:{get_column_letter(len(cadre.columns))}{len(cadre) + 1}"
+
+    feuille("Cibles tertiaires", cibles)
+    feuille("Partenaires RGE", partenaires, largeur=24)
+    feuille("Dictionnaire", dictionnaire, largeur=40)
+
+    try:
+        workbook.save(chemin)
+    except PermissionError:
+        secours = chemin.with_name(f"{chemin.stem}-nouveau{chemin.suffix}")
+        workbook.save(secours)
+        print(f"\n[!] {chemin.name} est ouvert dans Excel — écrit dans {secours.name}")
 
 
 def main() -> int:
@@ -237,6 +369,22 @@ def main() -> int:
              "Rattachement": "source directe"}
         )
 
+    # `etat_administratif` vaut A ou F : illisible dans un filtre Excel. La
+    # colonne explicite permet de trier sans rien exclure en amont — un
+    # établissement fermé signale un local vacant, donc un propriétaire à
+    # démarcher.
+    cibles.insert(
+        0, "Activité",
+        np.where(cibles["etat_administratif"].str.strip().str.upper() == "A",
+                 "Actif", "Fermé"),
+    )
+    journal.append(
+        {"Colonne": "Activité", "Origine": "API Recherche d'entreprises",
+         "Rattachement": "état administratif A/F, rendu lisible"}
+    )
+    actifs = int((cibles["Activité"] == "Actif").sum())
+    print(f"      {actifs} actifs, {len(cibles) - actifs} fermés")
+
     print("[2/4] rattachement à la parcelle")
     centres = centres_parcelles(data_dir)
     cibles = rattacher_parcelle(cibles, centres, journal, args.seuil)
@@ -247,13 +395,10 @@ def main() -> int:
     print("[4/4] DPE tertiaire")
     cibles = rattacher_dpe(cibles, data_dir, centres, journal, args.seuil)
 
+    # Les actifs d'abord : à priorité égale, un établissement fermé n'est pas un
+    # prospect, seulement l'indice d'un local vacant.
     cibles = cibles.sort_values(
-        ["priorite", "segment", "commune", "nom_entreprise"], kind="stable"
-    )
-    # `ecrire` résume la colonne de source d'adresse : le classeur tertiaire n'en
-    # a pas, on lui en donne une qui décrit ce qu'il sait du bâtiment.
-    cibles["Source adresse du bien"] = np.where(
-        cibles["Parcelle (id_par)"] != "", "Exacte (parcelle rattachée)", "Non trouvée"
+        ["Activité", "priorite", "segment", "commune", "nom_entreprise"], kind="stable"
     )
 
     dictionnaire = pd.DataFrame(journal).drop_duplicates(subset=["Colonne"])
@@ -263,9 +408,13 @@ def main() -> int:
     dictionnaire = dictionnaire.sort_values("Lignes remplies", ascending=False)
 
     cible = data_dir / args.sortie
-    ecrire(cibles, dictionnaire, cible)
+    partenaires = feuille_partenaires(data_dir)
+    ecrire_trois_feuilles(cibles, dictionnaire, partenaires, cible)
+
     print(f"\nClasseur : {cible.resolve()}")
-    print(f"  {len(cibles)} lignes × {len(cibles.columns)} colonnes")
+    print(f"  « Cibles tertiaires » : {len(cibles)} lignes × {len(cibles.columns)} colonnes")
+    print(f"  « Partenaires RGE »   : {len(partenaires)} entreprises qualifiées")
+    print("  « Dictionnaire »      : origine et remplissage de chaque colonne")
     return 0
 
 

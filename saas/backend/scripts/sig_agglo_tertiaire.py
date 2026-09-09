@@ -84,23 +84,25 @@ COLONNES = [
 ]
 
 
-def collecter(session: requests.Session, insee: str, naf: str) -> list[dict]:
-    """Pagine un couple (commune, activité). L'API plafonne à 25 par page."""
+def collecter(
+    session: requests.Session, insee: str, naf: str | None = None, rge: bool = False
+) -> list[dict]:
+    """Pagine une recherche (commune, activité ou RGE). L'API plafonne à 25/page."""
 
     resultats, page = [], 1
     while True:
         for tentative in range(4):
             try:
-                reponse = session.get(
-                    API,
-                    params={
-                        "code_commune": insee,
-                        "activite_principale": naf,
-                        "per_page": PAGE,
-                        "page": page,
-                    },
-                    timeout=TIMEOUT,
-                )
+                criteres: dict[str, object] = {
+                    "code_commune": insee,
+                    "per_page": PAGE,
+                    "page": page,
+                }
+                if naf:
+                    criteres["activite_principale"] = naf
+                if rge:
+                    criteres["est_rge"] = "true"
+                reponse = session.get(API, params=criteres, timeout=TIMEOUT)
                 break
             except requests.RequestException:
                 time.sleep(1 + tentative * 2)
@@ -155,16 +157,53 @@ def aplatir(entreprise: dict, etablissement: dict, segment: str, priorite: int) 
     }
 
 
+def collecter_rge(session: requests.Session, communes: dict[str, str], out_dir: Path) -> int:
+    """Entreprises qualifiées RGE du territoire — le vivier de partenaires.
+
+    §6 du business model : la société garde la relation client et confie
+    l'exécution à des spécialistes qualifiés et assurés. L'API expose le
+    marqueur RGE, ce qui donne cette liste sans la constituer à la main. Ici on
+    ne filtre pas sur l'activité : un RGE est par construction une entreprise du
+    bâtiment ou de l'étude.
+    """
+
+    cible = out_dir / "tertiaire_partenaires_rge.csv"
+    vus: set[str] = set()
+    total = 0
+    with cible.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=COLONNES, extrasaction="ignore")
+        writer.writeheader()
+        for insee, nom in communes.items():
+            for entreprise in collecter(session, insee, rge=True):
+                for etablissement in entreprise.get("matching_etablissements") or []:
+                    siret = etablissement.get("siret", "")
+                    if not siret or siret in vus:
+                        continue
+                    vus.add(siret)
+                    writer.writerow(aplatir(entreprise, etablissement, "Partenaire RGE", 0))
+                    total += 1
+            print(f"    {nom:22} {total:>5} au total")
+    print(f"\n{total} entreprises RGE écrites dans {cible.resolve()}")
+    return total
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Collecte des cibles tertiaires.")
     parser.add_argument("--out", default="sig_agglo_data")
     parser.add_argument("--commune", help="un seul code INSEE")
+    parser.add_argument(
+        "--rge", action="store_true",
+        help="collecte les entreprises qualifiées RGE (vivier de partenaires)",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out)
     proteger_dossier(out_dir)
     session = requests.Session()
     communes = {args.commune: COMMUNES.get(args.commune, args.commune)} if args.commune else COMMUNES
+
+    if args.rge:
+        return 0 if collecter_rge(session, communes, out_dir) >= 0 else 1
 
     cible = out_dir / "tertiaire_etablissements.csv"
     vus: set[tuple[str, str]] = set()
