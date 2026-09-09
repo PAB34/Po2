@@ -163,3 +163,87 @@ classeur le dit au lieu de le taire.
 | --- | --- | --- |
 | 2026-09-09 | Fermés conservés, colonne `Activité` explicite | Un local fermé est un indice de vacance, pas un déchet ; le tri suffit |
 | 2026-09-09 | Clés d'adresse incomplètes exclues du rapprochement | Une clé vide appariait 6 968 établissements à un seul DPE |
+
+---
+
+## 8. Repérer les propriétaires sans pilotage (2026-09-09)
+
+### 8.1 OPERAT : les déclarants ne sont pas publics
+
+Recherche faite dans le catalogue de l'ADEME. **Aucun jeu nominatif n'existe** :
+les données issues d'OPERAT sont publiées **agrégées**, sans SIRET ni adresse. Le
+grain le plus fin est la commune (`9uk1jf62hz215jablj6tvn71` — nombre de
+déclarations, surface et consommation déclarées).
+
+Impossible, donc, de nommer un non-déclarant. Mais le ratio *déclarations /
+établissements actifs* dit **où** le décret est le moins appliqué :
+
+| Commune | Déclarations | Surface déclarée | 1 déclaration pour |
+| --- | ---: | ---: | ---: |
+| Frontignan | 60 | 129 169 m² | 55 étab. |
+| Sète | 94 | 348 392 m² | 90 |
+| Agde | 93 | 206 264 m² | 125 |
+| **Marseillan** | **11** | 30 996 m² | **219** |
+| **Mèze** | **8** | 16 476 m² | **255** |
+| Bouzigues, Loupian, Montbazin, Villeveyrac | **0** | — | — |
+
+Marseillan et Mèze sont deux à trois fois moins déclarés que Frontignan à parc
+comparable ; quatre communes n'ont aucune déclaration. Intégré au score.
+
+### 8.2 Deux idées reçues démenties par les données
+
+**L'âge du bâti ne prédit pas la consommation.** Médianes par époque, en
+kWh EP/m²/an : 151 avant 1975, 120 entre 1975 et 1989, 163 entre 1990 et 2004,
+157 entre 2005 et 2012, **132 après 2013**. Aucune tendance. Et **28 % des
+bâtiments postérieurs à 2005 sont classés D à G** — sur du récent, la
+performance tient à la conduite, pas à l'enveloppe. C'est précisément ce que
+l'offre vend, et cela invalide le ciblage par ancienneté du bâti.
+*(échantillon de 244 bâtiments — à consolider)*
+
+**L'écart au benchmark est un outil de conversion, pas de ciblage.** Il n'est
+calculable que sur les 572 bâtiments à consommation renseignée, soit une
+fraction des 33 455 établissements. Il sert en rendez-vous, pas pour bâtir une
+liste d'appels.
+
+### 8.3 Le score de non-pilotage
+
+Dix signaux pondérés, mêlant assumément **négligence** et **qualification** :
+une cible négligée qui n'est pas un vrai site d'exploitation ne vaut pas un appel.
+
+| Signal | Points |
+| --- | ---: |
+| Surface DPE > 1 000 m² (présomption décret tertiaire) | 3 |
+| Détention de la parcelle depuis plus de 20 ans | 2 |
+| Propriétaire détenant 5 locaux ou plus | 2 |
+| Bâti postérieur à 2005 classé D à G | 2 |
+| Établissement employeur | 2 |
+| Segment prioritaire 1 ou 2 | 2 |
+| Secteur à fort écart interquartile | 1 |
+| Entreprise créée avant 2011 | 1 |
+| Entreprise de 3 établissements ou plus | 1 |
+| Commune peu déclarante à OPERAT | 1 |
+
+**Première calibration abandonnée** : elle cherchait la date de mutation sur les
+seuls *locaux professionnels*, ce qui ne renseignait que 22 % des cibles — un
+hôtel ou un commerce en pied d'immeuble n'est pas toujours cadastré ainsi. En
+élargissant à tous les locaux de la parcelle, la couverture passe à **40 009
+parcelles**. Le critère « aucun DPE rattaché » a été retiré : à 67 %, il ne
+discriminait rien.
+
+### 8.4 Livré : feuille « Liste d'appels »
+
+**214 cibles** notées 7 et plus, actives, sur les segments prioritaires 1 à 3 —
+dont 52 au-delà de 9. Par commune : Sète 65, **Marseillan 48**, Balaruc-les-Bains
+28, Mèze 19, Frontignan 16, Agde 11. Marseillan et Mèze remontent, conformément
+au signal OPERAT.
+
+Noms de tête : Vacantel, la SEM d'aménagement du Bassin de Thau, Goélia Gestion,
+Miléade, Indivision Vataire (7 022 m²), S'Antoni Immobilier, Human Immobilier,
+Gesim. Chaque ligne porte la colonne **« Signaux retenus »**, qui dit pourquoi
+elle est là — de quoi préparer l'appel.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-09 | Pas de ciblage par âge du bâti | Les données montrent l'absence de corrélation avec la consommation |
+| 2026-09-09 | Score de qualification **et** de négligence, pas seulement de gisement | Une cible négligée sans exploitation réelle ne vaut pas un appel |
+| 2026-09-09 | Signal OPERAT retenu à la maille communale | Le nominatif n'existe pas ; le ratio par commune reste discriminant |

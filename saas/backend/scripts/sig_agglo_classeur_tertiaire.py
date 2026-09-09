@@ -277,6 +277,132 @@ def rattacher_dpe(
     return cibles
 
 
+# Déclarations OPERAT relevées par commune sur le jeu ADEME
+# `9uk1jf62hz215jablj6tvn71` (agrégé — l'ADEME ne publie rien de nominatif).
+# Rapporté au nombre d'établissements actifs, ce ratio dit où le décret
+# tertiaire est le moins appliqué, donc où les non-déclarants se concentrent.
+OPERAT_COMMUNE = {
+    "34301": 94, "34003": 93, "34108": 60, "34023": 24, "34213": 28,
+    "34024": 15, "34150": 11, "34157": 8, "34113": 5, "34333": 5,
+    "34159": 4, "34039": 0, "34143": 0, "34165": 0, "34341": 0,
+}
+# Secteurs où l'écart interquartile de consommation est le plus large : c'est
+# là que la dispersion — donc le gisement — est la plus forte.
+SEGMENTS_DISPERSES = {"Restauration", "Hôtellerie de plein air et hébergement touristique",
+                      "Grandes et moyennes surfaces"}
+
+
+def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.DataFrame:
+    """Note l'absence probable de pilotage technique, établissement par établissement.
+
+    Aucun de ces signaux ne prouve quoi que ce soit isolément. Leur cumul
+    désigne un propriétaire qui réunit un gisement et personne pour s'en
+    occuper — ce qui est très exactement la cible.
+
+    Les données ont tranché deux idées reçues au passage : l'âge du bâti ne
+    prédit pas la consommation (médiane de 132 kWh/m² pour le bâti postérieur à
+    2013 contre 151 pour l'avant-1975), et 28 % des bâtiments d'après 2005 sont
+    classés D à G — sur du récent, c'est la conduite, pas l'enveloppe.
+    """
+
+    # Sur tous les locaux de la parcelle, et non les seuls locaux professionnels :
+    # un hôtel ou un commerce en pied d'immeuble n'est pas toujours cadastré en
+    # « local professionnel », et s'y limiter ne renseignait que 22 % des cibles.
+    locaux = lire(data_dir / "fiche_locaux.csv")
+    annee = pd.to_numeric(locaux["JDATAT"].str[4:8], errors="coerce")
+    locaux = locaux.assign(mutation=annee.where(annee.between(1900, 2026)))
+    detention = locaux.groupby("id_par")["mutation"].min()
+
+    parc = locaux[locaux["DDENOM"].str.strip() != ""].groupby("DDENOM").size()
+    proprietaire = (
+        locaux[locaux["DDENOM"].str.strip() != ""]
+        .drop_duplicates(subset=["id_par"]).set_index("id_par")["DDENOM"]
+    )
+
+    id_par = cibles["Parcelle (id_par)"]
+    mutation = id_par.map(detention)
+    cibles["Détention depuis (années)"] = (2026 - mutation).where(mutation.notna(), "")
+    cibles["Parc du propriétaire (locaux)"] = (
+        id_par.map(proprietaire).fillna("").map(parc).fillna("")
+    )
+
+    surface = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
+    etiquette = cibles["DPE — étiquette"].astype(str).str.strip()
+    annee_dpe = pd.to_numeric(cibles["DPE — année de construction"], errors="coerce")
+    nb_parc = pd.to_numeric(cibles["Parc du propriétaire (locaux)"], errors="coerce")
+    creation = pd.to_numeric(cibles["date_creation"].astype(str).str[:4], errors="coerce")
+    etablissements = pd.to_numeric(cibles["nombre_etablissements"], errors="coerce")
+    operat = cibles["code_commune"].map(OPERAT_COMMUNE)
+    actifs_commune = cibles.groupby("code_commune")["siret"].transform("size")
+    densite = operat / actifs_commune.replace(0, np.nan)
+
+    # Le score mêle deux choses assumées : des signaux de négligence, et des
+    # critères de qualification. Une cible négligée qui n'est pas un vrai site
+    # d'exploitation ne vaut pas un appel.
+    criteres = {
+        "surface > 1 000 m²": ((surface > 1000).fillna(False), 3),
+        "détention > 20 ans": (((2026 - mutation) > 20).fillna(False), 2),
+        "propriétaire de 5 locaux ou plus": ((nb_parc >= 5).fillna(False), 2),
+        "bâti récent mal classé": (
+            ((annee_dpe >= 2005) & etiquette.isin(["D", "E", "F", "G"])).fillna(False), 2
+        ),
+        "établissement employeur": (cibles["caractere_employeur"].str.upper() == "O", 2),
+        "segment prioritaire": (cibles["priorite"].isin(["1", "2"]), 2),
+        "secteur dispersé": (cibles["segment"].isin(SEGMENTS_DISPERSES), 1),
+        "entreprise installée (avant 2011)": ((creation < 2011).fillna(False), 1),
+        "3 établissements ou plus": ((etablissements >= 3).fillna(False), 1),
+        "commune peu déclarante": ((densite < 0.006) | densite.isna(), 1),
+    }
+    score = pd.Series(0, index=cibles.index)
+    detail = pd.Series("", index=cibles.index)
+    for nom, (masque, poids) in criteres.items():
+        score = score + masque.astype(int) * poids
+        detail = detail.where(~masque, (detail + " · " + nom).str.strip(" ·"))
+
+    cibles["Score de non-pilotage"] = score
+    cibles["Signaux retenus"] = detail
+    cibles["Priorité d'appel"] = np.select(
+        [score >= 9, score >= 7, score >= 5],
+        ["1 — à appeler en premier", "2 — bonne cible", "3 — à qualifier"],
+        default="4 — réserve",
+    )
+    for nom, origine in [
+        ("Détention depuis (années)", "cadastre — date de mutation"),
+        ("Parc du propriétaire (locaux)", "cadastre — locaux détenus par le propriétaire"),
+        ("Score de non-pilotage", "calculé — dix signaux pondérés"),
+        ("Signaux retenus", "calculé"),
+        ("Priorité d'appel", "calculé — seuils 9 / 7 / 5"),
+    ]:
+        journal.append({"Colonne": nom, "Origine": origine, "Rattachement": "par la parcelle"})
+
+    actifs = cibles["Activité"] == "Actif"
+    print(f"    score ≥ 9 : {int((score >= 9).sum())} établissements "
+          f"({int(((score >= 9) & actifs).sum())} actifs)")
+    print(f"    score ≥ 7 : {int((score >= 7).sum())} "
+          f"({int(((score >= 7) & actifs).sum())} actifs)")
+    return cibles
+
+
+def feuille_appels(cibles: pd.DataFrame) -> pd.DataFrame:
+    """Liste d'appels : les mieux notés, actifs, sur les segments prioritaires."""
+
+    liste = cibles[
+        (cibles["Activité"] == "Actif")
+        & (cibles["priorite"].isin(["1", "2", "3"]))
+        & (cibles["Score de non-pilotage"] >= 7)
+    ].copy()
+    colonnes = [
+        "Score de non-pilotage", "Priorité d'appel", "nom_entreprise", "enseigne", "segment",
+        "commune", "adresse", "tranche_effectif", "nombre_etablissements",
+        "Détention depuis (années)", "Parc du propriétaire (locaux)",
+        "Propriétaire du bâtiment", "DPE — surface SHON (m²)", "DPE — étiquette",
+        "Présomption Éco Énergie Tertiaire", "Signaux retenus", "siret",
+    ]
+    return liste[[c for c in colonnes if c in liste.columns]].sort_values(
+        ["Score de non-pilotage", "segment", "commune"], ascending=[False, True, True]
+    )
+
+
 def feuille_partenaires(data_dir: Path) -> pd.DataFrame:
     """Vivier de partenaires : les entreprises RGE du territoire.
 
@@ -304,9 +430,10 @@ def feuille_partenaires(data_dir: Path) -> pd.DataFrame:
 
 
 def ecrire_trois_feuilles(
-    cibles: pd.DataFrame, dictionnaire: pd.DataFrame, partenaires: pd.DataFrame, chemin: Path
+    cibles: pd.DataFrame, dictionnaire: pd.DataFrame, partenaires: pd.DataFrame,
+    appels: pd.DataFrame, chemin: Path
 ) -> None:
-    """Cibles, partenaires et dictionnaire dans un seul classeur."""
+    """Liste d'appels, cibles, partenaires et dictionnaire dans un seul classeur."""
 
     from openpyxl import Workbook
     from openpyxl.cell import WriteOnlyCell
@@ -338,6 +465,7 @@ def ecrire_trois_feuilles(
             )
         onglet.auto_filter.ref = f"A1:{get_column_letter(len(cadre.columns))}{len(cadre) + 1}"
 
+    feuille("Liste d'appels", appels, largeur=22)
     feuille("Cibles tertiaires", cibles)
     feuille("Partenaires RGE", partenaires, largeur=24)
     feuille("Dictionnaire", dictionnaire, largeur=40)
@@ -392,8 +520,11 @@ def main() -> int:
     print("[3/4] propriétaire du bâtiment")
     cibles = rattacher_proprietaire(cibles, data_dir, journal)
 
-    print("[4/4] DPE tertiaire")
+    print("[4/5] DPE tertiaire")
     cibles = rattacher_dpe(cibles, data_dir, centres, journal, args.seuil)
+
+    print("[5/5] score de non-pilotage")
+    cibles = scorer(cibles, data_dir, journal)
 
     # Les actifs d'abord : à priorité égale, un établissement fermé n'est pas un
     # prospect, seulement l'indice d'un local vacant.
@@ -409,9 +540,11 @@ def main() -> int:
 
     cible = data_dir / args.sortie
     partenaires = feuille_partenaires(data_dir)
-    ecrire_trois_feuilles(cibles, dictionnaire, partenaires, cible)
+    appels = feuille_appels(cibles)
+    ecrire_trois_feuilles(cibles, dictionnaire, partenaires, appels, cible)
 
     print(f"\nClasseur : {cible.resolve()}")
+    print(f"  « Liste d'appels »    : {len(appels)} cibles notées 6 et plus")
     print(f"  « Cibles tertiaires » : {len(cibles)} lignes × {len(cibles.columns)} colonnes")
     print(f"  « Partenaires RGE »   : {len(partenaires)} entreprises qualifiées")
     print("  « Dictionnaire »      : origine et remplissage de chaque colonne")
