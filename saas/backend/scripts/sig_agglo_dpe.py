@@ -36,9 +36,27 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
 JEU = "meg-83tjwtg8dyz4vv7h1dqe"
-BASE = f"https://data.ademe.fr/data-fair/api/v1/datasets/{JEU}/lines"
+JEU_TERTIAIRE = "j9ol0fwjqckyf49vr29nknbu"
 PAGE = 5000
 TIMEOUT = 120
+
+# Agde n'est pas dans l'agglo, mais elle est dans le périmètre commercial du
+# tertiaire (cf. cibles-tertiaires-decisions.md) : le DPE, lui, la couvre.
+AGDE = "34003"
+
+# Le jeu tertiaire a son propre schéma : surfaces, secteur d'activité et
+# catégorie ERP à la place des caractéristiques de logement.
+CHAMPS_TERTIAIRE = [
+    "numero_dpe", "date_etablissement_dpe",
+    "identifiant_ban", "adresse_ban", "numero_voie_ban", "nom_rue_ban",
+    "code_postal_ban", "code_insee_ban", "statut_geocodage",
+    "coordonnee_cartographique_x_ban", "coordonnee_cartographique_y_ban",
+    "etiquette_dpe", "etiquette_ges",
+    "surface_shon", "surface_utile", "secteur_activite", "categorie_erp",
+    "annee_construction", "conso_kwhep_m2_an", "conso_ep_energie_n1",
+    "annee_releve_conso_energie_n1", "type_energie_principale_chauffage",
+    "complement_adresse_batiment", "numero_immatriculation_copropriete",
+]
 
 # Sur 230 champs, ceux qui décrivent le logement ou permettent de le situer.
 CHAMPS = [
@@ -55,7 +73,9 @@ CHAMPS = [
 ]
 
 
-def extraire_commune(session: requests.Session, insee: str, writer, champs: list[str]) -> int:
+def extraire_commune(
+    session: requests.Session, insee: str, writer, champs: list[str], base: str
+) -> int:
     """Pagine les DPE d'une commune. data-fair fournit le lien suivant lui-même."""
 
     params = {
@@ -63,11 +83,11 @@ def extraire_commune(session: requests.Session, insee: str, writer, champs: list
         "size": PAGE,
         "select": ",".join(champs),
     }
-    url, ecrites = BASE, 0
+    url, ecrites = base, 0
     while url:
         for tentative in range(4):
             try:
-                reponse = session.get(url, params=params if url == BASE else None, timeout=TIMEOUT)
+                reponse = session.get(url, params=params if url == base else None, timeout=TIMEOUT)
                 break
             except requests.RequestException:
                 time.sleep(1 + tentative * 2)
@@ -93,31 +113,42 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Extraction des DPE ADEME sur l'agglo.")
     parser.add_argument("--out", default="sig_agglo_data", help="dossier de sortie")
     parser.add_argument("--commune", help="un seul code INSEE (défaut : les 14)")
+    parser.add_argument(
+        "--tertiaire", action="store_true",
+        help="jeu DPE Tertiaire au lieu des logements, et Agde en plus",
+    )
     args = parser.parse_args()
 
     out_dir = Path(args.out)
     proteger_dossier(out_dir)
     session = requests.Session()
 
+    jeu = JEU_TERTIAIRE if args.tertiaire else JEU
+    voulus = CHAMPS_TERTIAIRE if args.tertiaire else CHAMPS
+    base = f"https://data.ademe.fr/data-fair/api/v1/datasets/{jeu}/lines"
+
     # Le schéma évolue : ne demander que les champs réellement servis, sinon
     # l'API rejette la requête entière pour un seul nom inconnu.
     schema = session.get(
-        f"https://data.ademe.fr/data-fair/api/v1/datasets/{JEU}/schema", timeout=TIMEOUT
+        f"https://data.ademe.fr/data-fair/api/v1/datasets/{jeu}/schema", timeout=TIMEOUT
     )
     disponibles = {c.get("key") for c in schema.json()} if schema.status_code == 200 else set()
-    champs = [c for c in CHAMPS if c in disponibles] or CHAMPS
-    manquants = [c for c in CHAMPS if c not in disponibles]
+    champs = [c for c in voulus if c in disponibles] or voulus
+    manquants = [c for c in voulus if c not in disponibles]
     if manquants:
         print(f"[schema] champs absents du jeu, ignorés : {', '.join(manquants)}")
 
-    communes = [args.commune] if args.commune else sorted(COMMUNES_AGGLO)
-    cible = out_dir / "dpe_ademe.csv"
+    if args.commune:
+        communes = [args.commune]
+    else:
+        communes = sorted(COMMUNES_AGGLO) + ([AGDE] if args.tertiaire else [])
+    cible = out_dir / ("dpe_tertiaire.csv" if args.tertiaire else "dpe_ademe.csv")
     total = 0
     with cible.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=champs, extrasaction="ignore")
         writer.writeheader()
         for insee in communes:
-            total += extraire_commune(session, insee, writer, champs)
+            total += extraire_commune(session, insee, writer, champs, base)
             print(f"    {insee} : {total:>6} au total")
 
     print(f"\n{total} DPE écrits dans {cible.resolve()}")
