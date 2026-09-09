@@ -507,6 +507,90 @@ def feuille_appels(cibles: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+NOM_COMMUNE = {
+    "34301": "Sète", "34003": "Agde", "34108": "Frontignan", "34023": "Balaruc-les-Bains",
+    "34024": "Balaruc-le-Vieux", "34039": "Bouzigues", "34113": "Gigean", "34143": "Loupian",
+    "34150": "Marseillan", "34157": "Mèze", "34159": "Mireval", "34165": "Montbazin",
+    "34213": "Poussan", "34333": "Vic-la-Gardiole", "34341": "Villeveyrac",
+}
+# Déclarations et surfaces déclarées relevées sur le jeu agrégé de l'ADEME.
+OPERAT_SURFACE = {
+    "34301": 348392, "34003": 206264, "34108": 129169, "34023": 56022, "34213": 23751,
+    "34024": 24394, "34150": 30996, "34157": 16476, "34113": 14919, "34333": 9586,
+    "34159": 8341, "34039": 0, "34143": 0, "34165": 0, "34341": 0,
+}
+# Usages de la BD TOPO qui relèvent du champ tertiaire du décret.
+USAGES_TERTIAIRES = {"Commercial et services", "Sportif", "Religieux"}
+
+
+def feuille_operat(cibles: pd.DataFrame, data_dir: Path) -> pd.DataFrame:
+    """Couverture du décret tertiaire, commune par commune.
+
+    L'ADEME ne publie rien de nominatif : impossible de nommer un non-déclarant.
+    Mais en rapportant les surfaces déclarées au parc de bâtiments d'activité de
+    plus de 1 000 m², on obtient un **taux de couverture** qui dit où le décret
+    passe à la trappe.
+
+    À lire en relatif, jamais en absolu&nbsp;: Balaruc-les-Bains dépasse 100 %,
+    preuve que l'estimation sous-estime autant qu'elle surestime. C'est l'écart
+    entre communes à parc comparable qui porte l'information.
+    """
+
+    chemin = data_dir / "batiments_activite.csv"
+    if not chemin.is_file():
+        return pd.DataFrame()
+    batiments = lire(chemin)
+    x = pd.to_numeric(batiments["x_l93"], errors="coerce")
+    y = pd.to_numeric(batiments["y_l93"], errors="coerce")
+    emprise = pd.to_numeric(batiments["emprise_m2"], errors="coerce")
+    etages = pd.to_numeric(batiments["nombre_d_etages"], errors="coerce")
+    hauteur = pd.to_numeric(batiments["hauteur"], errors="coerce")
+    niveaux = etages.where(etages >= 1).fillna((hauteur / 3).round().clip(lower=1)).fillna(1)
+    batiments = batiments.assign(plancher=emprise * niveaux, x=x, y=y)
+
+    centres = centres_parcelles(data_dir)
+    utilisables = batiments["x"].notna() & batiments["y"].notna()
+    arbre = cKDTree(centres[["x", "y"]].to_numpy())
+    _, indices = arbre.query(np.c_[batiments.loc[utilisables, "x"],
+                                   batiments.loc[utilisables, "y"]], k=1)
+    batiments.loc[utilisables, "insee"] = pd.Series(
+        centres["id_par"].to_numpy()[indices], index=batiments.index[utilisables]
+    ).str[:5]
+
+    grands = batiments[
+        batiments["usage_1"].isin(USAGES_TERTIAIRES)
+        & (batiments["plancher"] >= SEUIL_EET)
+        & batiments["insee"].notna()
+    ]
+    parc = grands.groupby("insee").agg(batiments=("plancher", "size"),
+                                       surface=("plancher", "sum"))
+
+    actifs = cibles[cibles["Activité"] == "Actif"].groupby("code_commune").size()
+    appels = cibles[
+        (cibles["Activité"] == "Actif") & (cibles["Score de non-pilotage"] >= 7)
+    ].groupby("code_commune").size()
+
+    lignes = []
+    for insee, nom in NOM_COMMUNE.items():
+        surface_estimee = int(parc["surface"].get(insee, 0))
+        declaree = OPERAT_SURFACE.get(insee, 0)
+        lignes.append({
+            "Commune": nom,
+            "Code INSEE": insee,
+            "Bâtiments d'activité > 1 000 m² (estimés)": int(parc["batiments"].get(insee, 0)),
+            "Surface tertiaire estimée (m²)": surface_estimee,
+            "Surface déclarée à OPERAT (m²)": declaree,
+            "Taux de couverture (%)": (
+                round(100 * declaree / surface_estimee) if surface_estimee else ""
+            ),
+            "Surface non déclarée (m²)": max(surface_estimee - declaree, 0),
+            "Établissements actifs": int(actifs.get(insee, 0)),
+            "Cibles notées 7 et plus": int(appels.get(insee, 0)),
+        })
+    tableau = pd.DataFrame(lignes)
+    return tableau.sort_values("Surface non déclarée (m²)", ascending=False)
+
+
 def feuille_partenaires(data_dir: Path) -> pd.DataFrame:
     """Vivier de partenaires : les entreprises RGE du territoire.
 
@@ -533,9 +617,9 @@ def feuille_partenaires(data_dir: Path) -> pd.DataFrame:
     )
 
 
-def ecrire_trois_feuilles(
+def ecrire_classeur(
     cibles: pd.DataFrame, dictionnaire: pd.DataFrame, partenaires: pd.DataFrame,
-    appels: pd.DataFrame, chemin: Path
+    appels: pd.DataFrame, operat: pd.DataFrame, chemin: Path
 ) -> None:
     """Liste d'appels, cibles, partenaires et dictionnaire dans un seul classeur."""
 
@@ -570,6 +654,7 @@ def ecrire_trois_feuilles(
         onglet.auto_filter.ref = f"A1:{get_column_letter(len(cadre.columns))}{len(cadre) + 1}"
 
     feuille("Liste d'appels", appels, largeur=22)
+    feuille("Décret tertiaire", operat, largeur=20)
     feuille("Cibles tertiaires", cibles)
     feuille("Partenaires RGE", partenaires, largeur=24)
     feuille("Dictionnaire", dictionnaire, largeur=40)
@@ -648,10 +733,12 @@ def main() -> int:
     cible = data_dir / args.sortie
     partenaires = feuille_partenaires(data_dir)
     appels = feuille_appels(cibles)
-    ecrire_trois_feuilles(cibles, dictionnaire, partenaires, appels, cible)
+    operat = feuille_operat(cibles, data_dir)
+    ecrire_classeur(cibles, dictionnaire, partenaires, appels, operat, cible)
 
     print(f"\nClasseur : {cible.resolve()}")
-    print(f"  « Liste d'appels »    : {len(appels)} cibles notées 6 et plus")
+    print(f"  « Liste d'appels »    : {len(appels)} cibles notées 7 et plus")
+    print(f"  « Décret tertiaire »  : couverture OPERAT des {len(operat)} communes")
     print(f"  « Cibles tertiaires » : {len(cibles)} lignes × {len(cibles.columns)} colonnes")
     print(f"  « Partenaires RGE »   : {len(partenaires)} entreprises qualifiées")
     print("  « Dictionnaire »      : origine et remplissage de chaque colonne")

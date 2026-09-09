@@ -321,3 +321,49 @@ seulement quand le DPE est muet.
 | 2026-09-09 | BD TOPO ajoutée comme source de surface | 1 480 DPE ne couvraient pas le parc ; 7 865 bâtiments d'activité le couvrent |
 | 2026-09-09 | « Grand volume » et non « présomption » | 1 390 faux positifs sur 2 477 : le mot aurait fait annoncer une obligation inexistante |
 | 2026-09-09 | Colonne de cumul tertiaire | Le décret s'apprécie au cumul par site, pas par local |
+
+### 9.4 Feuille « Décret tertiaire » — la couverture par commune
+
+Les non-déclarants ne sont pas nommables, mais ils sont **localisables** : en
+rapportant les surfaces déclarées à OPERAT au parc de bâtiments d'activité de
+plus de 1 000 m² estimés par la BD TOPO, on obtient un taux de couverture.
+
+| Commune | Bât. > 1 000 m² | Surface estimée | Déclaré | Couverture | Non déclaré |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Agde | 175 | 664 798 | 206 264 | **31 %** | **458 534** |
+| Sète | 167 | 637 991 | 348 392 | 55 % | 289 599 |
+| Marseillan | 25 | 96 581 | 30 996 | 32 % | 65 585 |
+| Balaruc-le-Vieux | 14 | 70 639 | 24 394 | 35 % | 46 245 |
+| Mèze | 25 | 61 900 | 16 476 | 27 % | 45 424 |
+| Mireval | 22 | 53 589 | 8 341 | **16 %** | 45 248 |
+| Villeveyrac | 9 | 33 472 | 0 | **0 %** | 33 472 |
+| Poussan | 22 | 52 342 | 23 751 | 45 % | 28 591 |
+| Gigean | 21 | 43 209 | 14 919 | 35 % | 28 290 |
+| Frontignan | 58 | 155 401 | 129 169 | 83 % | 26 232 |
+| Loupian, Bouzigues, Montbazin | 16 | 38 087 | 0 | **0 %** | 38 087 |
+| Vic-la-Gardiole | 6 | 14 062 | 9 586 | 68 % | 4 476 |
+| Balaruc-les-Bains | 26 | 52 758 | 56 022 | **106 %** | 0 |
+
+**Environ 1,1 million de m² tertiaires non déclarés** sur le périmètre.
+
+**Décision 8 — le tableau se lit en relatif, jamais en absolu.** Balaruc-les-Bains
+dépasse 100 %, ce qui prouve que l'estimation sous-estime autant qu'elle
+surestime : un bâtiment de plus de 1 000 m² n'est pas toujours assujetti, et le
+périmètre OPERAT capte des surfaces que la BD TOPO ne voit pas (bureaux en
+immeuble mixte). C'est **l'écart entre communes à parc comparable** qui porte
+l'information — Frontignan à 83 % contre Mèze à 27 % ne s'explique guère
+autrement que par un retard de déclaration.
+
+**La donnée nominative n'existe pas, et la question se pose au téléphone.** Le
+script d'appel intègre&nbsp;: « Votre bâtiment dépasse probablement 1 000 m², il
+est donc sans doute assujetti. Avez-vous un compte OPERAT à jour ? » Les trois
+réponses possibles qualifient toutes le prospect.
+
+**Piste non vérifiée** : le dispositif de sanction prévoit la publication des
+mises en demeure restées sans effet. Si cette publication est effective, elle
+constituerait la seule liste nominative légale de non-déclarants. À rechercher.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-09 | Feuille « Décret tertiaire » ajoutée au classeur | Le nominatif n'existe pas ; la couverture communale oriente l'effort |
+| 2026-09-09 | Lecture relative imposée dans la feuille | Balaruc à 106 % montre que l'estimation n'est pas un absolu |
