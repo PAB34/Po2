@@ -328,7 +328,7 @@ def scorer(cibles: pd.DataFrame, data_dir: Path, journal: list[dict]) -> pd.Data
 
     surface = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
     plancher = pd.to_numeric(
-        cibles.get("Bâtiment — surface de plancher estimée (m²)", pd.Series(dtype=object)),
+        cibles.get("Bâtiment — plancher, ordre de grandeur (m²)", pd.Series(dtype=object)),
         errors="coerce",
     ).reindex(cibles.index)
     etiquette = cibles["DPE — étiquette"].astype(str).str.strip()
@@ -419,7 +419,28 @@ def rattacher_batiment(
     emprise = pd.to_numeric(batiments["emprise_m2"], errors="coerce")
     etages = pd.to_numeric(batiments["nombre_d_etages"], errors="coerce")
     hauteur = pd.to_numeric(batiments["hauteur"], errors="coerce")
-    niveaux = etages.where(etages >= 1).fillna((hauteur / 3).round().clip(lower=1)).fillna(1)
+    # La BD TOPO déclare parfois « 1 étage » sur un immeuble de 20 m — 953
+    # bâtiments sont dans ce cas, dont le Grand Hôtel de Sète (734 m² au sol,
+    # 20,5 m de haut, 1 étage annoncé). On retient la hauteur quand elle
+    # contredit franchement les étages, mais **seulement sur une emprise
+    # modeste** : un hangar ou une grande surface de 12 m de haut reste un
+    # bâtiment d'un seul niveau, et diviser sa hauteur par trois le
+    # quadruplerait à tort.
+    # Deux corrections successives, la seconde venue du terrain. La hauteur de
+    # la BD TOPO est mesurée au faîtage, toiture comprise : diviser par 3
+    # surestimait de 75 % sur le seul cas vérifié — le Grand Hôtel de Sète,
+    # 734 m² au sol et 20,5 m de haut, compte 4 niveaux réels et non 7.
+    # On retranche donc environ 3 m de toiture avant de compter 4 m par niveau,
+    # hauteur d'étage des bâtiments anciens du centre. Le repli ne s'applique
+    # qu'aux emprises modestes : un hangar de 12 m reste un bâtiment à un seul
+    # niveau. Calibrage à un seul point de mesure — l'ordre de grandeur vaut,
+    # la valeur exacte non.
+    immeuble = (hauteur >= 9) & (emprise <= 1500)
+    niveaux = etages.where(etages >= 2)
+    niveaux = niveaux.fillna(
+        pd.Series(np.where(immeuble, ((hauteur - 3) / 4).round(), np.nan), index=etages.index)
+    )
+    niveaux = niveaux.fillna(etages).fillna(1).clip(lower=1)
     batiments = batiments.assign(plancher=(emprise * niveaux).round(), niveaux=niveaux)
 
     valides = bx.notna() & by.notna() & (emprise > 0)
@@ -428,7 +449,7 @@ def rattacher_batiment(
     utilisables = lon.notna() & lat.notna()
 
     for nom in ["Bâtiment — usage", "Bâtiment — emprise au sol (m²)", "Bâtiment — niveaux",
-                "Bâtiment — surface de plancher estimée (m²)", "Bâtiment — distance (m)"]:
+                "Bâtiment — plancher, ordre de grandeur (m²)", "Bâtiment — distance (m)"]:
         cibles[nom] = ""
 
     if valides.any() and utilisables.any():
@@ -443,13 +464,13 @@ def rattacher_batiment(
             indices[garde]
         ]
         cibles.loc[lignes[garde], "Bâtiment — niveaux"] = source["niveaux"].to_numpy()
-        cibles.loc[lignes[garde], "Bâtiment — surface de plancher estimée (m²)"] = source[
+        cibles.loc[lignes[garde], "Bâtiment — plancher, ordre de grandeur (m²)"] = source[
             "plancher"
         ].to_numpy()
         cibles.loc[lignes[garde], "Bâtiment — distance (m)"] = distances[garde].round(1)
 
     plancher = pd.to_numeric(
-        cibles["Bâtiment — surface de plancher estimée (m²)"], errors="coerce"
+        cibles["Bâtiment — plancher, ordre de grandeur (m²)"], errors="coerce"
     )
     surface_dpe = pd.to_numeric(cibles["DPE — surface SHON (m²)"], errors="coerce")
     # Contrôle sur les 7 610 établissements où DPE et estimation coexistent :
@@ -459,7 +480,7 @@ def rattacher_batiment(
     # La colonne ne peut donc pas s'appeler présomption d'assujettissement :
     # elle dit que le bâtiment est grand, ce qui reste un signal de ciblage.
     occupants = cibles.groupby(
-        cibles["Bâtiment — surface de plancher estimée (m²)"].astype(str)
+        cibles["Bâtiment — plancher, ordre de grandeur (m²)"].astype(str)
         + "|" + cibles["Bâtiment — distance (m)"].astype(str)
     )["siret"].transform("size").where(plancher.notna(), "")
     cibles["Bâtiment — établissements recensés"] = occupants
@@ -474,7 +495,7 @@ def rattacher_batiment(
         np.where(surface_dpe.notna(), "— voir la présomption DPE, plus sûre", ""),
     )
     for nom in ["Bâtiment — usage", "Bâtiment — emprise au sol (m²)", "Bâtiment — niveaux",
-                "Bâtiment — surface de plancher estimée (m²)", "Bâtiment — distance (m)",
+                "Bâtiment — plancher, ordre de grandeur (m²)", "Bâtiment — distance (m)",
                 "Bâtiment — établissements recensés", "Bâtiment — grand volume",
                 "Cumul tertiaire possible"]:
         journal.append(
@@ -545,7 +566,28 @@ def feuille_operat(cibles: pd.DataFrame, data_dir: Path) -> pd.DataFrame:
     emprise = pd.to_numeric(batiments["emprise_m2"], errors="coerce")
     etages = pd.to_numeric(batiments["nombre_d_etages"], errors="coerce")
     hauteur = pd.to_numeric(batiments["hauteur"], errors="coerce")
-    niveaux = etages.where(etages >= 1).fillna((hauteur / 3).round().clip(lower=1)).fillna(1)
+    # La BD TOPO déclare parfois « 1 étage » sur un immeuble de 20 m — 953
+    # bâtiments sont dans ce cas, dont le Grand Hôtel de Sète (734 m² au sol,
+    # 20,5 m de haut, 1 étage annoncé). On retient la hauteur quand elle
+    # contredit franchement les étages, mais **seulement sur une emprise
+    # modeste** : un hangar ou une grande surface de 12 m de haut reste un
+    # bâtiment d'un seul niveau, et diviser sa hauteur par trois le
+    # quadruplerait à tort.
+    # Deux corrections successives, la seconde venue du terrain. La hauteur de
+    # la BD TOPO est mesurée au faîtage, toiture comprise : diviser par 3
+    # surestimait de 75 % sur le seul cas vérifié — le Grand Hôtel de Sète,
+    # 734 m² au sol et 20,5 m de haut, compte 4 niveaux réels et non 7.
+    # On retranche donc environ 3 m de toiture avant de compter 4 m par niveau,
+    # hauteur d'étage des bâtiments anciens du centre. Le repli ne s'applique
+    # qu'aux emprises modestes : un hangar de 12 m reste un bâtiment à un seul
+    # niveau. Calibrage à un seul point de mesure — l'ordre de grandeur vaut,
+    # la valeur exacte non.
+    immeuble = (hauteur >= 9) & (emprise <= 1500)
+    niveaux = etages.where(etages >= 2)
+    niveaux = niveaux.fillna(
+        pd.Series(np.where(immeuble, ((hauteur - 3) / 4).round(), np.nan), index=etages.index)
+    )
+    niveaux = niveaux.fillna(etages).fillna(1).clip(lower=1)
     batiments = batiments.assign(plancher=emprise * niveaux, x=x, y=y)
 
     centres = centres_parcelles(data_dir)
