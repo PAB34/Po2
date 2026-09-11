@@ -10,6 +10,8 @@ export type SheetCalibration = {
   length_pt: number;
   real_length_m: number;
   denominator_from_cote: number;
+  // Échelle usuelle à moins de 1 % de celle déduite de la cote (ex. 99,97 → 100), sinon null.
+  standard_scale: number | null;
   measured_m: number | null;
   ecart_pct: number | null;
 };

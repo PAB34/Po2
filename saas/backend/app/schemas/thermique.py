@@ -9,6 +9,8 @@ class SheetCalibration(BaseModel):
     length_pt: float
     real_length_m: float
     denominator_from_cote: float
+    # Échelle usuelle à moins de 1 % de celle déduite de la cote (ex. 99,97 → 100), sinon null.
+    standard_scale: float | None
     measured_m: float | None
     ecart_pct: float | None
 

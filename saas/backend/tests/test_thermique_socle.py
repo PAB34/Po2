@@ -262,3 +262,23 @@ def test_suppression_fichier_efface_le_pdf_et_ses_tuiles(db_session, storage):
     assert not path.exists()
     assert not any(folder.exists() for folder in tile_dirs)
     assert serialize_project_detail(project)["sheet_count"] == 0
+
+
+def test_echelle_de_la_cote_ramenee_a_l_echelle_usuelle(db_session, storage):
+    # Cas constaté en prod : sans échelle déclarée, la cote donnait 1/99,97 au lieu de 1/100.
+    user = _user(db_session, "agent@ville.fr")
+    project = create_project(db_session, user, "Projet", None)
+    sheet = add_document(db_session, project, "PC04-FRONT-NIVEAU1.pdf", _pdf(), user).sheets[0]
+    cote_m = 3.04
+    clic_pt = cote_m * 1000 / 99.97 / (25.4 / 72)  # clic légèrement trop long
+
+    calibrate_sheet(db_session, sheet, [0.0, 0.0], [clic_pt, 0.0], cote_m, apply=False)
+    assert (sheet.scale_denominator, sheet.scale_source) == (100, "cote")
+    calibration = serialize_project_detail(project)["documents"][0]["sheets"][0]["calibration"]
+    assert calibration["denominator_from_cote"] == pytest.approx(99.97, abs=0.01)
+    assert calibration["standard_scale"] == 100
+
+    # Loin de toute échelle usuelle (1/141,7) : la valeur déduite est gardée telle quelle.
+    calibrate_sheet(db_session, sheet, [0.0, 0.0], [0.0, 1000.0], 50.0, apply=True)
+    assert sheet.scale_denominator == pytest.approx(141.73, abs=0.01)
+    assert serialize_project_detail(project)["documents"][0]["sheets"][0]["calibration"]["standard_scale"] is None
