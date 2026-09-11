@@ -133,3 +133,29 @@ class RasterManifest(BaseModel):
     tiles: dict[str, list[str]]
     build_seconds: float
     tile_url: str
+
+
+class ComponentCreate(BaseModel):
+    categorie: str
+    nom: str | None = Field(default=None, max_length=200)
+    code: str | None = Field(default=None, max_length=20)
+    statut: str | None = None
+    composition: dict | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class ComponentUpdate(BaseModel):
+    nom: str | None = Field(default=None, max_length=200)
+    code: str | None = Field(default=None, max_length=20)
+    statut: str | None = None
+    composition: dict | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class ComponentImport(BaseModel):
+    modele_id: int
+
+
+class ComponentEvaluate(BaseModel):
+    categorie: str
+    composition: dict

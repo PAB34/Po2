@@ -3,6 +3,7 @@ import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigat
 import { useAuth } from "../providers/AuthProvider";
 import { LibraryPage } from "./pages/LibraryHomePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
+import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SheetPage } from "./pages/SheetPage";
@@ -76,6 +77,7 @@ export function ThermiqueApp() {
         <Route element={<Shell />}>
           <Route index element={<ProjectsPage />} />
           <Route path="projets/:projectId" element={<ProjectPage />} />
+          <Route path="projets/:projectId/bibliotheque" element={<ProjectLibraryPage />} />
           <Route path="bibliotheque" element={<LibraryPage />} />
         </Route>
         <Route element={<Shell fullWidth />}>

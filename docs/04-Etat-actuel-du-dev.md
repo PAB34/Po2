@@ -56,8 +56,16 @@ do_not_auto_read:
     1 074 valeurs, 7 tableaux imprimés en image transcrits (Q32), 0 erreur, 5 alertes (anomalies du
     document) ; onglet « Éléments tabulés » et couche « élément » dans « Composer une paroi ».
     Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>" --lot elements`.
-  - **▶️ Prochain : B2b-2** (U tabulés : ossature bois, combles, rampants, béton cellulaire T15-17),
-    **B2b-3** (ponts intégrés ψ, χ, ΔU), puis **B2c** (planchers sur sol et vide sanitaire, ΔU3).
+  - **Recadrage utilisateur (2026-09-11)** : la bibliothèque doit être celle **du projet** (composants
+    par catégorie, réutilisables comme modèles), pas seulement un référentiel consultable. Cadrage :
+    `thermique/bibliotheque-projet-decisions.md` (Q33-Q38 répondues).
+  - **Lots L1 + L2 faits** (branche `docs/thermique-bibliotheque-projet`, migration **0077**) :
+    table `thermique_components` (composant de projet ou modèle du compte), moteur
+    `thermique_moteur/composants.py`, API (créer, modifier, dupliquer, importer un modèle, enregistrer
+    comme modèle), onglet « Bibliothèque » de chaque projet et « Mes modèles » : cartes repliables par
+    catégorie, éditeur de paroi intégré avec recherche unique, épaisseur d'isolant appliquée en un clic.
+  - **▶️ Prochain : L3** (menuiseries composées depuis le référentiel B1, ponts thermiques), **L4**
+    (bibliothèque par défaut, export des préconisations), puis référentiel B2b-2, B2b-3, B2c.
     Fascicules « méthodes » dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
 - Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
   Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.

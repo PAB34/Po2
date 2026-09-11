@@ -80,7 +80,7 @@ export type CalibrationPayload = {
   apply: boolean;
 };
 
-async function request<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) {

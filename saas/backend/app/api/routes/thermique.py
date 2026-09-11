@@ -19,6 +19,10 @@ from app.models.thermique import ThermiqueDocument, ThermiqueProject, ThermiqueS
 from app.models.user import User
 from app.schemas.thermique import (
     CalibrationRequest,
+    ComponentCreate,
+    ComponentEvaluate,
+    ComponentImport,
+    ComponentUpdate,
     ExternalAccountCreate,
     ExternalAccountRead,
     ProjectCreate,
@@ -49,6 +53,16 @@ from app.services.thermique import (
     update_project,
     update_sheet,
 )
+from app.services.thermique_composants import (
+    copy_component,
+    create_component,
+    delete_component,
+    evaluate,
+    get_component_for_user,
+    list_components,
+    serialize_component,
+    update_component,
+)
 from app.services.thermique_raster import (
     check_tile_signature,
     ensure_raster,
@@ -58,6 +72,7 @@ from app.services.thermique_raster import (
     white_tile_png,
 )
 
+from thermique_moteur import composants as moteur_composants
 from thermique_moteur import parois
 from thermique_moteur.bibliotheque import elements as bibliotheque_elements
 from thermique_moteur.bibliotheque import materiaux as bibliotheque_materiaux
@@ -139,6 +154,127 @@ def _sheet_or_404(db: Session, user: User, sheet_id: int) -> ThermiqueSheet:
     if sheet is None or get_project_for_user(db, user, sheet.project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planche introuvable.")
     return sheet
+
+
+# --- Bibliothèque de projet et modèles (docs/thermique/bibliotheque-projet-decisions.md) ---------
+
+
+def _component_or_404(db: Session, user: User, component_id: int):
+    component = get_component_for_user(db, user, component_id)
+    if component is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Composant introuvable.")
+    return component
+
+
+def _bad_request(exc: ThermiqueError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.get("/composants/categories")
+def read_component_categories(user: User = Depends(get_authenticated_user)) -> dict:
+    """Catégories de la bibliothèque (murs, planchers, menuiseries, ponts thermiques) et statuts."""
+    return {"categories": moteur_composants.CATEGORIES, "statuts": moteur_composants.STATUTS}
+
+
+@router.post("/composants/evaluer")
+def evaluate_component(payload: ComponentEvaluate, user: User = Depends(get_authenticated_user)) -> dict:
+    """Résultat d'une composition sans l'enregistrer (aperçu pendant la saisie)."""
+    try:
+        return evaluate(payload.categorie, payload.composition)
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.get("/projects/{project_id}/composants")
+def read_project_components(
+    project_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> list[dict]:
+    project = _project_or_404(db, user, project_id)
+    return [serialize_component(c) for c in list_components(db, user, project)]
+
+
+@router.post("/projects/{project_id}/composants", status_code=status.HTTP_201_CREATED)
+def create_project_component(
+    project_id: int, payload: ComponentCreate, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    try:
+        return serialize_component(create_component(db, user, project, payload.model_dump()))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.post("/projects/{project_id}/composants/importer", status_code=status.HTTP_201_CREATED)
+def import_model_into_project(
+    project_id: int, payload: ComponentImport, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    """Copie un modèle du compte dans le projet (copie indépendante)."""
+    project = _project_or_404(db, user, project_id)
+    model = _component_or_404(db, user, payload.modele_id)
+    if model.project_id is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce composant n'est pas un modèle.")
+    try:
+        return serialize_component(copy_component(db, user, model, project))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.get("/modeles")
+def read_models(db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> list[dict]:
+    """Modèles réutilisables du compte (« Ma bibliothèque »)."""
+    return [serialize_component(c) for c in list_components(db, user, None)]
+
+
+@router.post("/modeles", status_code=status.HTTP_201_CREATED)
+def create_model(payload: ComponentCreate, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    try:
+        return serialize_component(create_component(db, user, None, payload.model_dump()))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.patch("/composants/{component_id}")
+def update_component_route(
+    component_id: int, payload: ComponentUpdate, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    component = _component_or_404(db, user, component_id)
+    try:
+        return serialize_component(update_component(db, user, component, payload.model_dump(exclude_unset=True)))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.delete("/composants/{component_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_component_route(
+    component_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> Response:
+    delete_component(db, _component_or_404(db, user, component_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/composants/{component_id}/dupliquer", status_code=status.HTTP_201_CREATED)
+def duplicate_component_route(
+    component_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    """Copie dans la même bibliothèque (projet ou modèles), avec le code suivant libre."""
+    component = _component_or_404(db, user, component_id)
+    project = db.get(ThermiqueProject, component.project_id) if component.project_id else None
+    try:
+        return serialize_component(copy_component(db, user, component, project, suffix=" (copie)"))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.post("/composants/{component_id}/modele", status_code=status.HTTP_201_CREATED)
+def save_component_as_model(
+    component_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    """« Enregistrer comme modèle » : copie du composant d'un projet dans les modèles du compte."""
+    component = _component_or_404(db, user, component_id)
+    try:
+        return serialize_component(copy_component(db, user, component, None))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
 
 
 def _prebuild_rasters(jobs: list[tuple[Path, int, Path]]) -> None:
