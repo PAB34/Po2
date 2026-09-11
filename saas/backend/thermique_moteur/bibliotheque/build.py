@@ -6,8 +6,10 @@ Usage (depuis saas/backend) :
 Le dossier doit contenir :
 - les applications du fascicule « parois vitrées » (archive officielle décompressée) et le
   tableau officiel de suivi des mises à jour (suivi_maj_applications_th-bat.xlsx) ;
-- les fascicules « méthodes » matériaux et parois opaques.
-Écrit `donnees/menuiseries_<édition>.json` et `donnees/materiaux_<édition>.json`.
+- les fascicules « méthodes » matériaux et parois opaques ;
+- les applications du fascicule « parois opaques » (murs, planchers bas, toitures, cloisons).
+Écrit `donnees/menuiseries_<édition>.json`, `donnees/materiaux_<édition>.json` et
+`donnees/elements_<édition>.json`.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 from .. import parois
-from . import materiaux, menuiseries
+from . import elements, materiaux, menuiseries
 
 SOURCES_MENUISERIES = {
     "fenetres": "USTL",
@@ -52,8 +54,8 @@ def _source(chemin: Path, pages: int) -> dict:
     return {"document": chemin.name, "sha256": hashlib.sha256(chemin.read_bytes()).hexdigest(), "pages": pages}
 
 
-def _edition_menuiseries(dossier: Path) -> tuple[str, list[str]]:
-    """Date de la dernière mise à jour officielle concernant les parois vitrées."""
+def _edition_suivi(dossier: Path, mot: str) -> tuple[str, list[str]]:
+    """Date de la dernière mise à jour officielle d'un fascicule (tableau de suivi)."""
     import openpyxl
 
     classeur = openpyxl.load_workbook(_trouver(dossier, "suivi_maj_applications", ".xlsx"), data_only=True)
@@ -64,12 +66,12 @@ def _edition_menuiseries(dossier: Path) -> tuple[str, list[str]]:
             cellules = [c for c in ligne if c is not None]
             date = next((c for c in cellules if isinstance(c, (dt.date, dt.datetime))), None)
             texte = " ".join(str(c) for c in cellules if not isinstance(c, (dt.date, dt.datetime)))
-            if date and "vitr" in texte.lower():
+            if date and mot in texte.lower():
                 jour = date.date() if isinstance(date, dt.datetime) else date
                 dates.append(jour)
                 historique.append(f"{jour.isoformat()} : {texte}")
     if not dates:
-        raise ValueError("Aucune mise à jour « parois vitrées » dans le tableau de suivi.")
+        raise ValueError(f"Aucune mise à jour « {mot} » dans le tableau de suivi.")
     return max(dates).isoformat(), historique
 
 
@@ -112,7 +114,7 @@ def construire_menuiseries(dossier: Path) -> dict:
         chemin = _trouver(dossier, motif)
         pages[cle] = _pages(chemin)
         sources[cle] = _source(chemin, len(pages[cle]))
-    edition, historique = _edition_menuiseries(dossier)
+    edition, historique = _edition_suivi(dossier, "vitr")
     return menuiseries.assembler_edition(pages, sources, edition, historique, dt.date.today().isoformat())
 
 
@@ -131,6 +133,25 @@ def construire_materiaux(dossier: Path) -> dict:
         return materiaux.assembler_edition(pdf, sources, edition, dt.date.today().isoformat(), verification)
 
 
+def construire_elements(dossier: Path) -> dict:
+    import pdfplumber
+
+    pdfs: dict = {}
+    sources: dict[str, dict] = {}
+    try:
+        for cle, fascicule in elements.FASCICULES.items():
+            chemin = _trouver(dossier, fascicule["document"])
+            pdfs[cle] = pdfplumber.open(str(chemin))
+            sources[cle] = _source(chemin, len(pdfs[cle].pages))
+        edition, historique = _edition_suivi(dossier, "opaques")
+        resultat = elements.assembler_edition(pdfs, sources, edition, dt.date.today().isoformat())
+        resultat["historique"] = historique
+        return resultat
+    finally:
+        for pdf in pdfs.values():
+            pdf.close()
+
+
 def _ecrire(resultat: dict, prefixe: str) -> int:
     sortie = menuiseries.DONNEES_DIR / f"{prefixe}_{resultat['edition']}.json"
     sortie.parent.mkdir(parents=True, exist_ok=True)
@@ -147,13 +168,15 @@ def _ecrire(resultat: dict, prefixe: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     parseur = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parseur.add_argument("dossier", type=Path)
-    parseur.add_argument("--lot", choices=("tout", "menuiseries", "materiaux"), default="tout")
+    parseur.add_argument("--lot", choices=("tout", "menuiseries", "materiaux", "elements"), default="tout")
     arguments = parseur.parse_args(argv)
     erreurs = 0
     if arguments.lot in ("tout", "menuiseries"):
         erreurs += _ecrire(construire_menuiseries(arguments.dossier), "menuiseries")
     if arguments.lot in ("tout", "materiaux"):
         erreurs += _ecrire(construire_materiaux(arguments.dossier), "materiaux")
+    if arguments.lot in ("tout", "elements"):
+        erreurs += _ecrire(construire_elements(arguments.dossier), "elements")
     return 1 if erreurs else 0
 
 

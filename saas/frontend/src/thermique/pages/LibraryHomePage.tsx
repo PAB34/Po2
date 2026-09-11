@@ -1,14 +1,16 @@
 import { useState } from "react";
 
+import { ElementsPanel } from "./ElementsPanel";
 import { MaterialsPanel } from "./MaterialsPanel";
 import { WallCalculatorPanel } from "./WallCalculatorPanel";
 import { WindowsLibraryPanel } from "./LibraryPage";
 
-type Section = "menuiseries" | "materiaux" | "paroi";
+type Section = "menuiseries" | "materiaux" | "elements" | "paroi";
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "menuiseries", label: "Menuiseries" },
   { id: "materiaux", label: "Matériaux" },
+  { id: "elements", label: "Éléments tabulés" },
   { id: "paroi", label: "Composer une paroi" },
 ];
 
@@ -26,6 +28,7 @@ export function LibraryPage() {
       </div>
       {section === "menuiseries" && <WindowsLibraryPanel />}
       {section === "materiaux" && <MaterialsPanel />}
+      {section === "elements" && <ElementsPanel />}
       {section === "paroi" && <WallCalculatorPanel />}
     </>
   );

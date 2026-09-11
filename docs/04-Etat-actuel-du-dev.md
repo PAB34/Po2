@@ -51,8 +51,13 @@ do_not_auto_read:
     document) ; calcul d'une paroi en couches (`thermique_moteur/parois.py`) et épaisseur
     d'isolant pour un U cible ; constantes recoupées avec le fascicule méthodes ; onglets
     « Matériaux » et « Composer une paroi ». Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>"`.
-  - **▶️ Prochain : B2b** (tableaux d'applications : murs maçonnés, toitures, planchers sur
-    extérieur) puis **B2c** (planchers sur sol et vide sanitaire, toitures inversées ΔU3).
+  - **Lot B2b-1 fait** (branche `feat/thermique-bibliotheque-b2b`) : 40 tableaux de résistances R
+    (briques, blocs, béton cellulaire, entrevous, dalles alvéolées, isolants en vrac, cloisons),
+    1 074 valeurs, 7 tableaux imprimés en image transcrits (Q32), 0 erreur, 5 alertes (anomalies du
+    document) ; onglet « Éléments tabulés » et couche « élément » dans « Composer une paroi ».
+    Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>" --lot elements`.
+  - **▶️ Prochain : B2b-2** (U tabulés : ossature bois, combles, rampants, béton cellulaire T15-17),
+    **B2b-3** (ponts intégrés ψ, χ, ΔU), puis **B2c** (planchers sur sol et vide sanitaire, ΔU3).
     Fascicules « méthodes » dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
 - Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
   Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.

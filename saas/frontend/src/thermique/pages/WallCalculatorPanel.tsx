@@ -4,8 +4,12 @@ import { useAuth } from "../../providers/AuthProvider";
 import {
   DELTA_U2_LABELS,
   WALL_TYPE_LABELS,
+  elementCellLabel,
+  elementSignals,
+  elementTableLabel,
   materialLabel,
   wallApi,
+  type ElementTable,
   type Material,
   type ThicknessResult,
   type WallFacing,
@@ -15,15 +19,20 @@ import {
   type WallType,
 } from "../library";
 import { parseDecimal } from "../scale";
+import { useElements } from "./ElementsPanel";
 import { useMaterials } from "./MaterialsPanel";
 
-type LayerKind = "materiau" | "lambda" | "resistance" | "lame_air" | "lame_air_ventilee";
+type LayerKind = "materiau" | "element" | "lambda" | "resistance" | "lame_air" | "lame_air_ventilee";
 
 type Layer = {
   key: number;
   type: LayerKind;
   family: string;
   materialId: string;
+  tableId: string;
+  // Case du tableau d'éléments, « ligne:colonne ».
+  cell: string;
+  variant: string;
   lambda: string;
   thicknessCm: string;
   thicknessMm: string;
@@ -34,6 +43,7 @@ type Layer = {
 
 const KIND_LABELS: Record<LayerKind, string> = {
   materiau: "Matériau de la bibliothèque",
+  element: "Élément à résistance tabulée (brique, bloc, plancher…)",
   lambda: "Matériau à λ connue (fabricant)",
   resistance: "Élément à résistance connue",
   lame_air: "Lame d'air non ventilée",
@@ -47,7 +57,34 @@ let nextKey = 1;
 
 function newLayer(type: LayerKind): Layer {
   nextKey += 1;
-  return { key: nextKey, type, family: "", materialId: "", lambda: "", thicknessCm: "", thicknessMm: "", r: "", label: "", insulation: false };
+  return {
+    key: nextKey,
+    type,
+    family: "",
+    materialId: "",
+    tableId: "",
+    cell: "",
+    variant: "",
+    lambda: "",
+    thicknessCm: "",
+    thicknessMm: "",
+    r: "",
+    label: "",
+    insulation: false,
+  };
+}
+
+function cellOptions(table: ElementTable): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [];
+  table.lignes.forEach((line, row) =>
+    line.valeurs.forEach((value, column) => {
+      if (value !== null) {
+        const warning = elementSignals(table, row, column).length ? " · à vérifier" : "";
+        options.push({ value: `${row}:${column}`, label: `${elementCellLabel(table, row, column)} · R ${value.toLocaleString("fr-FR")}${warning}` });
+      }
+    }),
+  );
+  return options;
 }
 
 function toRequest(layer: Layer, index: number): WallLayerRequest {
@@ -67,6 +104,13 @@ function toRequest(layer: Layer, index: number): WallLayerRequest {
         throw new Error(`Couche ${index + 1} : saisissez λ et l'épaisseur.`);
       }
       return { type: "lambda", lambda, epaisseur_m: thickness / 100, isolant: layer.insulation, libelle: label };
+    }
+    case "element": {
+      if (!layer.tableId || !layer.cell) {
+        throw new Error(`Couche ${index + 1} : choisissez un tableau et une case.`);
+      }
+      const [row, column] = layer.cell.split(":").map(Number);
+      return { type: "element", tableau_id: layer.tableId, ligne: row, colonne: column, variante: layer.variant || undefined };
     }
     case "resistance": {
       const r = parseDecimal(layer.r);
@@ -90,6 +134,8 @@ function toRequest(layer: Layer, index: number): WallLayerRequest {
 export function WallCalculatorPanel() {
   const { token } = useAuth();
   const { data: library } = useMaterials();
+  const { data: elementLibrary } = useElements();
+  const elementTables = elementLibrary?.tableaux ?? [];
   const [wallType, setWallType] = useState<WallType>("mur");
   const [facing, setFacing] = useState<WallFacing>("exterieur");
   const [level, setLevel] = useState(1);
@@ -254,6 +300,72 @@ export function WallCalculatorPanel() {
                           </select>
                         </div>
                       )}
+                      {layer.type === "element" && (() => {
+                        const table = elementTables.find((item) => item.id === layer.tableId);
+                        const [row, column] = layer.cell ? layer.cell.split(":").map(Number) : [-1, -1];
+                        const variants = table && row >= 0
+                          ? Object.entries(table.variantes).filter(([key]) => (table.lignes[row].variantes[key] ?? [])[column] != null)
+                          : [];
+                        const signals = table && row >= 0 ? elementSignals(table, row, column) : [];
+                        return (
+                          <>
+                            <div className="th-inline">
+                              <select value={layer.family} onChange={(event) => update(layer.key, { family: event.target.value, tableId: "", cell: "", variant: "" })}>
+                                <option value="">Famille…</option>
+                                {(elementLibrary?.familles ?? []).map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {item.libelle}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={layer.tableId}
+                                disabled={!layer.family}
+                                onChange={(event) => update(layer.key, { tableId: event.target.value, cell: "", variant: "" })}
+                                style={{ maxWidth: "22rem" }}
+                              >
+                                <option value="">Tableau…</option>
+                                {elementTables
+                                  .filter((item) => item.famille === layer.family)
+                                  .map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {elementTableLabel(item)}
+                                    </option>
+                                  ))}
+                              </select>
+                              <select
+                                value={layer.cell}
+                                disabled={!table}
+                                onChange={(event) => update(layer.key, { cell: event.target.value, variant: "" })}
+                                style={{ maxWidth: "26rem" }}
+                              >
+                                <option value="">Élément…</option>
+                                {table &&
+                                  cellOptions(table).map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                              </select>
+                              {variants.length > 0 && (
+                                <select value={layer.variant} onChange={(event) => update(layer.key, { variant: event.target.value })} aria-label="Variante">
+                                  <option value="">Valeur du tableau</option>
+                                  {variants.map(([key, label]) => (
+                                    <option key={key} value={key}>
+                                      {label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+                            {signals.map((message) => (
+                              <p key={message} className="th-alert th-alert--error" style={{ margin: "0.25rem 0 0" }}>
+                                {message}
+                              </p>
+                            ))}
+                          </>
+                        );
+                      })()}
                       {layer.type === "lambda" && (
                         <div className="th-inline">
                           <input placeholder="Nom (ex. PSE graphité)" value={layer.label} onChange={(event) => update(layer.key, { label: event.target.value })} />
@@ -358,7 +470,13 @@ export function WallCalculatorPanel() {
                       <td>
                         {layer.libelle || KIND_LABELS[layer.type as LayerKind]}
                         {layer.ignoree && " (ignorée : au-delà d'une lame fortement ventilée)"}
-                        {layer.source && <span className="th-muted"> · §{layer.source}</span>}
+                        {layer.source && (
+                          <span className="th-muted">
+                            {" "}
+                            · {layer.type === "materiau" ? "§" : ""}
+                            {layer.source}
+                          </span>
+                        )}
                       </td>
                       <td>
                         {layer.epaisseur_m !== undefined && `${decimal2.format(layer.epaisseur_m * 100)} cm`}
