@@ -35,8 +35,12 @@ do_not_auto_read:
   **thermiciens privés en bureau d'études** ; priorité à une **géométrie irréprochable** (murs,
   cloisons, menuiseries, planchers), entités thermiques Th-Bât ensuite ; export vers **Pléiades**
   et **Perrenoud** ; MVP en ligne, « logiciel » à terme (conséquences : décisions §3, Q20).
+- **Retour d'usage 2026-09-11** (10 planches contrôlées par cote, 1/100 confirmé à 0,1 %) :
+  échelle « non définie » rendue visible, mesure sans échelle signalée, échelle déduite d'une
+  cote ramenée à l'échelle usuelle si l'écart < 1 % (branche `feat/thermique-echelle-ux`).
 - **▶️ Prochain : étape 2 — géométrie des plans** en moteur autonome (prototype prouvé :
-  `thermique/proto_detection_murs.py`) + import DXF. Questions ouvertes : Q15-Q18, Q20.
+  `thermique/proto_detection_murs.py`) + import DXF. Plan et questions Q21-Q25 :
+  `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.
 
