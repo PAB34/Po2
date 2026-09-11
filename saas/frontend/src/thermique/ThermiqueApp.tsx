@@ -1,7 +1,7 @@
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
-import { LibraryPage } from "./pages/LibraryPage";
+import { LibraryPage } from "./pages/LibraryHomePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";

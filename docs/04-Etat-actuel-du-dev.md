@@ -46,9 +46,14 @@ do_not_auto_read:
     datée par le suivi officiel (2021-12-16), 168 lignes fenêtres + correctifs + portes +
     fermetures + Ujour-nuit/Uws, 0 erreur, 1 alerte (coquille du document, corrigée et signalée),
     page « Bibliothèque ». Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>"`.
-  - **▶️ Prochain : lot B2 parois opaques** (λ du fascicule matériaux, calcul d'U en couches,
-    épaisseur d'isolant pour un U cible). Fascicules « méthodes » téléchargés dans
-    `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
+  - **Lot B2a fait** (branche `feat/thermique-bibliotheque-b2`) : 294 matériaux (λ, ρ, Cp, μ)
+    lus d'après la géométrie des tableaux du fascicule matériaux, 0 erreur, 3 alertes (notes du
+    document) ; calcul d'une paroi en couches (`thermique_moteur/parois.py`) et épaisseur
+    d'isolant pour un U cible ; constantes recoupées avec le fascicule méthodes ; onglets
+    « Matériaux » et « Composer une paroi ». Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>"`.
+  - **▶️ Prochain : B2b** (tableaux d'applications : murs maçonnés, toitures, planchers sur
+    extérieur) puis **B2c** (planchers sur sol et vide sanitaire, toitures inversées ΔU3).
+    Fascicules « méthodes » dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
 - Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
   Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec

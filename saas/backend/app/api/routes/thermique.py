@@ -58,6 +58,8 @@ from app.services.thermique_raster import (
     white_tile_png,
 )
 
+from thermique_moteur import parois
+from thermique_moteur.bibliotheque import materiaux as bibliotheque_materiaux
 from thermique_moteur.bibliotheque import menuiseries as bibliotheque_menuiseries
 
 LOG = logging.getLogger(__name__)
@@ -78,6 +80,35 @@ def compute_library_closure(uw: float, r: float, user: User = Depends(get_authen
     try:
         return bibliotheque_menuiseries.calcul_fermeture(uw, r)
     except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/bibliotheque/materiaux")
+def read_library_materials(user: User = Depends(get_authenticated_user)) -> dict:
+    """Édition en vigueur de la bibliothèque des matériaux (λ utiles par défaut, sources, contrôles)."""
+    return bibliotheque_materiaux.charger_edition()
+
+
+@router.post("/bibliotheque/parois/calcul")
+def compute_wall(paroi: dict, user: User = Depends(get_authenticated_user)) -> dict:
+    """Up d'une paroi opaque en couches, de l'intérieur vers l'extérieur (méthode Th-Bât)."""
+    try:
+        return parois.calculer_paroi(paroi, bibliotheque_materiaux.index_materiaux())
+    except parois.ParoiError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/bibliotheque/parois/epaisseur-isolant")
+def compute_insulation_thickness(demande: dict, user: User = Depends(get_authenticated_user)) -> dict:
+    """Épaisseur minimale de la couche isolante pour atteindre un U cible."""
+    try:
+        return parois.epaisseur_isolant(
+            demande.get("paroi") or {},
+            int(demande.get("index_isolant", -1)),
+            float(demande.get("u_cible", 0)),
+            bibliotheque_materiaux.index_materiaux(),
+        )
+    except (parois.ParoiError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
