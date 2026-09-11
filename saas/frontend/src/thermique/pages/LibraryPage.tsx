@@ -39,7 +39,7 @@ function StatusMark({ statut }: { statut: Statut }) {
   );
 }
 
-export function LibraryPage() {
+export function WindowsLibraryPanel() {
   const { token } = useAuth();
   const [tab, setTab] = useState<Tab>("fenetres");
   const [protection, setProtection] = useState("2.1");
