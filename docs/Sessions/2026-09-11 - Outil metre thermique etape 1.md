@@ -21,7 +21,12 @@ médiathèque de Frontignan (`Thermique/PLAN EXEMPLE PROJET/`, non versionné).
   **31,82 × 33,13 m = cotes imprimées**. Preuve : `docs/thermique/preuve_detection_murs_niveau0.png`.
 - Réponses utilisateur (Q1, Q2, Q3, Q14) : voir `docs/thermique/metre-thermique-decisions.md` §4.
 
-### Étape 1 codée — branche `feat/thermique-socle`
+### Étape 1 — PR #178, mergée et déployée en prod
+
+- Vérifié par SSH après déploiement : migration `0076`, 3 tables, volume `thermique_data`
+  inscriptible, rendu pdfium sous Linux (1,04 s), routes présentes, API sans identifiants en 401,
+  nginx sert « Métré thermique » pour `thermique.*` et Po2 pour l'hôte principal. Caddy attend le
+  DNS (NXDOMAIN, nouvel essai toutes les 5 min) sans gêner les autres sites.
 
 - Backend : rôles (`core/roles.py`), verrou des comptes externes (`api/deps.py`,
   `routes/internal_auth.py`), service + routes `/api/thermique/*`, rendu en tuiles pdfium

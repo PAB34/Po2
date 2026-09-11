@@ -21,8 +21,8 @@ do_not_auto_read:
 
 > Mise à jour : **2026-09-11** (session Claude — outil de métré thermique, étape 1).
 
-- **🆕 Outil de métré thermique — étape 1 (socle)**, branche `feat/thermique-socle`, migration
-  **0076** : sous-domaine **`thermique.patrimoineaucarre.com`** (bloc Caddy), **mêmes comptes Po2**,
+- **✅ EN PROD — Outil de métré thermique, étape 1 (socle)** (PR #178, migration **0076**
+  appliquée, vérifiée par SSH le 2026-09-11) : sous-domaine **`thermique.patrimoineaucarre.com`** (bloc Caddy), **mêmes comptes Po2**,
   comptes **bureaux d'études** (rôle `THERMIQUE_EXTERNE`, refusés partout ailleurs dans Po2),
   projets, import PDF → planches (type et niveau suggérés), **visionneuse en tuiles pdfium**
   (coupe lourde affichée en 0,49 s au lieu de 47 s avec pdf.js), échelle + contrôle par une cote.

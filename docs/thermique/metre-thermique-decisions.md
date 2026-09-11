@@ -84,7 +84,7 @@ related:
 
 | Incrément | Contenu | État |
 |---|---|---|
-| **1 — Socle** | Sous-domaine + connexion Po2 + comptes bureaux d'études · projets · import PDF · visionneuse en tuiles (zoom, déplacement, rotation 90°) · nature de planche · échelle + contrôle par une cote | **Codé** (branche `feat/thermique-socle`, migration `0076`) |
+| **1 — Socle** | Sous-domaine + connexion Po2 + comptes bureaux d'études · projets · import PDF · visionneuse en tuiles (zoom, déplacement, rotation 90°) · nature de planche · échelle + contrôle par une cote | **En prod** (PR #178, migration `0076`, 2026-09-11) — site joignable dès que le DNS existe |
 | **2 — Murs** | Extraction en tâche de fond · murs (axe + épaisseur), poteaux, ouvertures · correction manuelle · classement extérieur / intérieur automatique · import DXF (et DWG selon Q15) | À faire |
 | **3 — Calage** | Point de calage multi-niveaux · superposition visuelle · porteurs par superposition | À faire |
 | **4 — Métré** | Hauteurs lues sur les coupes · surfaces de parois par orientation · linéaires de ponts thermiques Th-Bât · export Excel | À faire |
