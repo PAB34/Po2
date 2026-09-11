@@ -78,6 +78,41 @@
 }
 
 # =====================================================================
+# Outil de metre thermique (sous-domaine dedie), MEMES comptes que Po2.
+# /api/* -> backend Po2 (routes /api/thermique/*, meme JWT, meme table users).
+# Les comptes bureaux d'etudes (role THERMIQUE_EXTERNE) passent la garde de ce
+# site (basic-auth-thermique) mais pas celle du site principal, et l'API Po2
+# leur repond 403. Front = meme conteneur : nginx sert thermique.html selon l'hote.
+# Inscription fermee ici : les comptes bureaux d'etudes sont crees par un admin.
+# =====================================================================
+{$THERMIQUE_SITE_ADDRESS:thermique.patrimoineaucarre.com} {
+    handle /api/auth/register {
+        respond 404
+    }
+
+    handle /api/internal/* {
+        respond 404
+    }
+
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            transport http {
+                response_header_timeout 300s
+            }
+        }
+    }
+
+    handle {
+        route {
+            forward_auth backend:8000 {
+                uri /api/internal/basic-auth-thermique
+            }
+            reverse_proxy frontend:80
+        }
+    }
+}
+
+# =====================================================================
 # PRONO — app privée Ligue 1 (sous-domaine dédié).
 # Conteneurs prono-frontend / prono-backend sur le réseau partagé po2-edge
 # (cf. PRONO/infra/docker-compose.yml). HTTPS auto dès que le DNS pointe ici.
