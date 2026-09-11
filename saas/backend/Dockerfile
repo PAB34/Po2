@@ -17,6 +17,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+# Moteur autonome de l'outil thermique (sans dépendance à Po2) et ses données de bibliothèque.
+COPY thermique_moteur ./thermique_moteur
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 COPY entrypoint.py ./entrypoint.py
