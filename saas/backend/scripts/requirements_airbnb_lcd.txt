@@ -1,0 +1,6 @@
+# Collecte Airbnb - 14 communes de Sete Agglopole
+# pyairbnb est une bibliotheque NON OFFICIELLE : Airbnb peut casser son
+# fonctionnement a tout moment. Version epinglee volontairement.
+pyairbnb==2.2.2
+shapely>=2.0
+requests>=2.31
