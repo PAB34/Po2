@@ -58,10 +58,27 @@ from app.services.thermique_raster import (
     white_tile_png,
 )
 
+from thermique_moteur.bibliotheque import menuiseries as bibliotheque_menuiseries
+
 LOG = logging.getLogger(__name__)
 TILE_CACHE_HEADERS = {"Cache-Control": "private, max-age=43200"}
 
 router = APIRouter(prefix="/thermique", tags=["thermique"])
+
+
+@router.get("/bibliotheque/menuiseries")
+def read_library_windows(user: User = Depends(get_authenticated_user)) -> dict:
+    """Édition en vigueur de la bibliothèque des menuiseries (valeurs, sources, contrôles)."""
+    return bibliotheque_menuiseries.charger_edition()
+
+
+@router.get("/bibliotheque/menuiseries/fermeture")
+def compute_library_closure(uw: float, r: float, user: User = Depends(get_authenticated_user)) -> dict:
+    """Ujour-nuit et Uws d'une fenêtre équipée d'une fermeture (interpolation autorisée)."""
+    try:
+        return bibliotheque_menuiseries.calcul_fermeture(uw, r)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _project_or_404(db: Session, user: User, project_id: int) -> ThermiqueProject:

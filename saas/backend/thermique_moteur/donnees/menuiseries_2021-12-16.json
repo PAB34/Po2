@@ -1,0 +1,5625 @@
+{
+ "bibliotheque": "menuiseries",
+ "regles": "Règles Th-Bât (RE2020), applications du fascicule parois vitrées",
+ "edition": "2021-12-16",
+ "historique_edition": [
+  "2021-12-16 : Parois opaques - parois vitrées - ponts thermiques Première mise en ligne"
+ ],
+ "extrait_le": "2026-09-11",
+ "sources": {
+  "fenetres": {
+   "document": "Coefficient USTL_fenêtre_porte fenetre.pdf",
+   "sha256": "c1252b1bd2072e84479b9a43ba0d24a80e06b4a59eee1e3163ed1960e6b187f1",
+   "pages": 17
+  },
+  "portes": {
+   "document": "Coefficient Ud de portes courantes.pdf",
+   "sha256": "ecd4e08e23afd69c883420544257ea5499ec385e7a4a24330417dc170839623e",
+   "pages": 1
+  },
+  "ujn": {
+   "document": "Coefficient moyen Ujour nuit.pdf",
+   "sha256": "0da1fb4657313bae7a67b26b9607e3fec70a2ce5baf8a1f38a69e2e2436e3f13",
+   "pages": 1
+  },
+  "uws": {
+   "document": "Coefficient Uws de fenêtres equipees de protection mobile.pdf",
+   "sha256": "f2b1480f38c9a6c618933e905761438fd0b02c6f3c4df30afae3be0decb9a810",
+   "pages": 1
+  },
+  "fermetures": {
+   "document": "Résistance additionnelle de protection mobile.pdf",
+   "sha256": "7f4557edc6816054a2df3f1c0b296233f6c7858fdfc32e3099156af130086f42",
+   "pages": 1
+  }
+ },
+ "regles_usage": {
+  "fenetres": "Valeurs par défaut, à retenir en l'absence de données précises sur les baies ; elles ne s'interpolent ni ne s'extrapolent. Les facteurs S et TL se multiplient par les correctifs d'intégration CS et CTL.",
+  "ujn_uws": "Les valeurs intermédiaires s'obtiennent par interpolation."
+ },
+ "protections": [
+  {
+   "section": "2.1",
+   "code": "sans",
+   "libelle": "Sans protection solaire",
+   "opaque": null,
+   "teinte": null,
+   "position": null,
+   "intitule_document": "2.1 Paroi vitrée sans protection solaire",
+   "facteurs": [],
+   "page": 2
+  },
+  {
+   "section": "2.2",
+   "code": "opaque_claire_exterieur",
+   "libelle": "Protection opaque et claire, à l'extérieur",
+   "opaque": true,
+   "teinte": "claire",
+   "position": "exterieur",
+   "intitule_document": "2.2 Paroi vitrée avec protection solaire opaque et claire,  =0 et  = 0,2, située à l’extérieur",
+   "facteurs": [
+    0.0,
+    0.2
+   ],
+   "page": 4
+  },
+  {
+   "section": "2.3",
+   "code": "opaque_sombre_exterieur",
+   "libelle": "Protection opaque et sombre, à l'extérieur",
+   "opaque": true,
+   "teinte": "sombre",
+   "position": "exterieur",
+   "intitule_document": "2.3 AVEC protection solaire opaque et sombre (=0 et =0,8) située à l’extérieur",
+   "facteurs": [
+    0.0,
+    0.8
+   ],
+   "page": 6
+  },
+  {
+   "section": "2.4",
+   "code": "non_opaque_claire_exterieur",
+   "libelle": "Protection non opaque et claire, à l'extérieur",
+   "opaque": false,
+   "teinte": "claire",
+   "position": "exterieur",
+   "intitule_document": "2.4 AVEC protection solaire non-opaque et claire (=0,19 et =0,23) située à l’extérieur",
+   "facteurs": [
+    0.19,
+    0.23
+   ],
+   "page": 8
+  },
+  {
+   "section": "2.5",
+   "code": "non_opaque_sombre_exterieur",
+   "libelle": "Protection non opaque et sombre, à l'extérieur",
+   "opaque": false,
+   "teinte": "sombre",
+   "position": "exterieur",
+   "intitule_document": "2.5 AVEC protection solaire non-opaque et sombre (=0,07 et =0,77) située à l’extérieur",
+   "facteurs": [
+    0.07,
+    0.77
+   ],
+   "page": 10
+  },
+  {
+   "section": "2.6",
+   "code": "non_opaque_claire_interieur",
+   "libelle": "Protection non opaque et claire, à l'intérieur",
+   "opaque": false,
+   "teinte": "claire",
+   "position": "interieur",
+   "intitule_document": "2.6 AVEC protection solaire non-opaque et claire (e=0,19 et e=0,23) située à l’intérieur",
+   "facteurs": [
+    0.19,
+    0.23
+   ],
+   "page": 12
+  },
+  {
+   "section": "2.7",
+   "code": "non_opaque_sombre_interieur",
+   "libelle": "Protection non opaque et sombre, à l'intérieur",
+   "opaque": false,
+   "teinte": "sombre",
+   "position": "interieur",
+   "intitule_document": "2.7 AVEC protection solaire non-opaque et sombre (e=0,07 et e=0,77) située à l’intérieur",
+   "facteurs": [
+    0.07,
+    0.77
+   ],
+   "page": 14
+  }
+ ],
+ "fenetres": [
+  {
+   "id": "2.1.1-triple",
+   "section": "2.1.1",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 2.0,
+   "s_c": [
+    0.32,
+    0.08,
+    0.0
+   ],
+   "s_e": [
+    0.39,
+    0.1,
+    0.0
+   ],
+   "tl": 0.46,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.1-double",
+   "section": "2.1.1",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.3,
+   "s_c": [
+    0.34,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.42,
+    0.09,
+    0.0
+   ],
+   "tl": 0.5,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.1-double_controle_solaire",
+   "section": "2.1.1",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.3,
+   "s_c": [
+    0.18,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.22,
+    0.07,
+    0.0
+   ],
+   "tl": 0.38,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.2-triple",
+   "section": "2.1.2",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 1.9,
+   "s_c": [
+    0.33,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.41,
+    0.1,
+    0.0
+   ],
+   "tl": 0.5,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.2-double",
+   "section": "2.1.2",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.2,
+   "s_c": [
+    0.37,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.45,
+    0.09,
+    0.0
+   ],
+   "tl": 0.54,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.2-double_controle_solaire",
+   "section": "2.1.2",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.2,
+   "s_c": [
+    0.2,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.24,
+    0.07,
+    0.0
+   ],
+   "tl": 0.41,
+   "tl_dif": 0.0,
+   "page": 2,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.3-triple",
+   "section": "2.1.3",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.31,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.37,
+    0.1,
+    0.0
+   ],
+   "tl": 0.45,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.3-double",
+   "section": "2.1.3",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.4,
+   "s_c": [
+    0.33,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.41,
+    0.09,
+    0.0
+   ],
+   "tl": 0.5,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.3-double_controle_solaire",
+   "section": "2.1.3",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.4,
+   "s_c": [
+    0.18,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.22,
+    0.07,
+    0.0
+   ],
+   "tl": 0.38,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.4-triple",
+   "section": "2.1.4",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 1.9,
+   "s_c": [
+    0.34,
+    0.08,
+    0.0
+   ],
+   "s_e": [
+    0.42,
+    0.1,
+    0.0
+   ],
+   "tl": 0.5,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.4-double",
+   "section": "2.1.4",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.3,
+   "s_c": [
+    0.37,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.45,
+    0.09,
+    0.0
+   ],
+   "tl": 0.55,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.4-double_controle_solaire",
+   "section": "2.1.4",
+   "protection": "sans",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.3,
+   "s_c": [
+    0.2,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.24,
+    0.07,
+    0.0
+   ],
+   "tl": 0.41,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.5-triple",
+   "section": "2.1.5",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 2.0,
+   "s_c": [
+    0.31,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.37,
+    0.1,
+    0.0
+   ],
+   "tl": 0.44,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.5-double",
+   "section": "2.1.5",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.3,
+   "s_c": [
+    0.33,
+    0.06,
+    0.0
+   ],
+   "s_e": [
+    0.41,
+    0.09,
+    0.0
+   ],
+   "tl": 0.49,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.5-double_controle_solaire",
+   "section": "2.1.5",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.2,
+   "s_c": [
+    0.18,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.22,
+    0.07,
+    0.0
+   ],
+   "tl": 0.37,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.6-triple",
+   "section": "2.1.6",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 1.7,
+   "s_c": [
+    0.36,
+    0.08,
+    0.0
+   ],
+   "s_e": [
+    0.44,
+    0.1,
+    0.0
+   ],
+   "tl": 0.52,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.6-double",
+   "section": "2.1.6",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.39,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.47,
+    0.09,
+    0.0
+   ],
+   "tl": 0.58,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.6-double_controle_solaire",
+   "section": "2.1.6",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.21,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.25,
+    0.07,
+    0.0
+   ],
+   "tl": 0.43,
+   "tl_dif": 0.0,
+   "page": 3,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.7-triple",
+   "section": "2.1.7",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.3,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.36,
+    0.1,
+    0.0
+   ],
+   "tl": 0.43,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.7-double",
+   "section": "2.1.7",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.4,
+   "s_c": [
+    0.32,
+    0.06,
+    0.0
+   ],
+   "s_e": [
+    0.4,
+    0.09,
+    0.0
+   ],
+   "tl": 0.48,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.7-double_controle_solaire",
+   "section": "2.1.7",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.4,
+   "s_c": [
+    0.17,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.21,
+    0.07,
+    0.0
+   ],
+   "tl": 0.36,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.8-triple",
+   "section": "2.1.8",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": false,
+   "u": 1.8,
+   "s_c": [
+    0.35,
+    0.08,
+    0.0
+   ],
+   "s_e": [
+    0.43,
+    0.1,
+    0.0
+   ],
+   "tl": 0.51,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.8-double",
+   "section": "2.1.8",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.39,
+    0.07,
+    0.0
+   ],
+   "s_e": [
+    0.47,
+    0.09,
+    0.0
+   ],
+   "tl": 0.57,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.1.8-double_controle_solaire",
+   "section": "2.1.8",
+   "protection": "sans",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": false,
+   "u": 2.1,
+   "s_c": [
+    0.21,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.25,
+    0.07,
+    0.0
+   ],
+   "tl": 0.42,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.1-triple",
+   "section": "2.2.1",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.1-double",
+   "section": "2.2.1",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.1-double_controle_solaire",
+   "section": "2.2.1",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.2-triple",
+   "section": "2.2.2",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.4,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.2-double",
+   "section": "2.2.2",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.2-double_controle_solaire",
+   "section": "2.2.2",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 4,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.3-triple",
+   "section": "2.2.3",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.3-double",
+   "section": "2.2.3",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.3-double_controle_solaire",
+   "section": "2.2.3",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.4-triple",
+   "section": "2.2.4",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.4,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.4-double",
+   "section": "2.2.4",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.4-double_controle_solaire",
+   "section": "2.2.4",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.5-triple",
+   "section": "2.2.5",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.5-double",
+   "section": "2.2.5",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.5-double_controle_solaire",
+   "section": "2.2.5",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.6-triple",
+   "section": "2.2.6",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.3,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.6-double",
+   "section": "2.2.6",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.6-double_controle_solaire",
+   "section": "2.2.6",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 5,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.7-triple",
+   "section": "2.2.7",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.7-double",
+   "section": "2.2.7",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.7-double_controle_solaire",
+   "section": "2.2.7",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.8-triple",
+   "section": "2.2.8",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.3,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.8-double",
+   "section": "2.2.8",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.2.8-double_controle_solaire",
+   "section": "2.2.8",
+   "protection": "opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.02,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.1-triple",
+   "section": "2.3.1",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.1-double",
+   "section": "2.3.1",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.1-double_controle_solaire",
+   "section": "2.3.1",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.2-triple",
+   "section": "2.3.2",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.4,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.2-double",
+   "section": "2.3.2",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.2-double_controle_solaire",
+   "section": "2.3.2",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 6,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.3-triple",
+   "section": "2.3.3",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.3-double",
+   "section": "2.3.3",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.3-double_controle_solaire",
+   "section": "2.3.3",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.4-triple",
+   "section": "2.3.4",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.4,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.4-double",
+   "section": "2.3.4",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.4-double_controle_solaire",
+   "section": "2.3.4",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.5-triple",
+   "section": "2.3.5",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.5-double",
+   "section": "2.3.5",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.5-double_controle_solaire",
+   "section": "2.3.5",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.6-triple",
+   "section": "2.3.6",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.3,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.6-double",
+   "section": "2.3.6",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.6-double_controle_solaire",
+   "section": "2.3.6",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 7,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.7-triple",
+   "section": "2.3.7",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.7-double",
+   "section": "2.3.7",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.7-double_controle_solaire",
+   "section": "2.3.7",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.8-triple",
+   "section": "2.3.8",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.3,
+   "s_c": [
+    0.0,
+    0.03,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.8-double",
+   "section": "2.3.8",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.3.8-double_controle_solaire",
+   "section": "2.3.8",
+   "protection": "opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.0,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.0,
+    0.06,
+    0.0
+   ],
+   "tl": 0.0,
+   "tl_dif": 0.0,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.1-triple",
+   "section": "2.4.1",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.07,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.1-double",
+   "section": "2.4.1",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.08,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.1,
+    0.08,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.1-double_controle_solaire",
+   "section": "2.4.1",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.08,
+    0.0
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.2-triple",
+   "section": "2.4.2",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.07,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.2-double",
+   "section": "2.4.2",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.08,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.1,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.2-double_controle_solaire",
+   "section": "2.4.2",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.07,
+    0.0
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 8,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.3-triple",
+   "section": "2.4.3",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.06,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.08,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.3-double",
+   "section": "2.4.3",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.3-double_controle_solaire",
+   "section": "2.4.3",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.08,
+    0.0
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.4-triple",
+   "section": "2.4.4",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.07,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.4-double",
+   "section": "2.4.4",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.08,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.1,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.4-double_controle_solaire",
+   "section": "2.4.4",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.07,
+    0.0
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.5-triple",
+   "section": "2.4.5",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.06,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.08,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.5-double",
+   "section": "2.4.5",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.5-double_controle_solaire",
+   "section": "2.4.5",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.08,
+    0.0
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.6-triple",
+   "section": "2.4.6",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.08,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.1,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.6-double",
+   "section": "2.4.6",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.09,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.11,
+    0.07,
+    0.0
+   ],
+   "tl": 0.1,
+   "tl_dif": 0.03,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.6-double_controle_solaire",
+   "section": "2.4.6",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.07,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 9,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.7-triple",
+   "section": "2.4.7",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.06,
+    0.06,
+    0.0
+   ],
+   "s_e": [
+    0.08,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.7-double",
+   "section": "2.4.7",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.06,
+    0.0
+   ],
+   "s_e": [
+    0.09,
+    0.08,
+    0.0
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.7-double_controle_solaire",
+   "section": "2.4.7",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.04,
+    0.06,
+    0.0
+   ],
+   "s_e": [
+    0.04,
+    0.08,
+    0.0
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.8-triple",
+   "section": "2.4.8",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.08,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.1,
+    0.07,
+    0.0
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.8-double",
+   "section": "2.4.8",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.09,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.11,
+    0.07,
+    0.0
+   ],
+   "tl": 0.1,
+   "tl_dif": 0.03,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.4.8-double_controle_solaire",
+   "section": "2.4.8",
+   "protection": "non_opaque_claire_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.06,
+    0.07,
+    0.0
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.1-triple",
+   "section": "2.5.1",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.1-double",
+   "section": "2.5.1",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.1-double_controle_solaire",
+   "section": "2.5.1",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.01,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.2-triple",
+   "section": "2.5.2",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.03,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.06,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.2-double",
+   "section": "2.5.2",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.2-double_controle_solaire",
+   "section": "2.5.2",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 10,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.3-triple",
+   "section": "2.5.3",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "alerte",
+   "correction": "le document imprime « 18 » sans virgule ; valeur retenue 1,8"
+  },
+  {
+   "id": "2.5.3-double",
+   "section": "2.5.3",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.3-double_controle_solaire",
+   "section": "2.5.3",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.01,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.4-triple",
+   "section": "2.5.4",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.03,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.06,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.4-double",
+   "section": "2.5.4",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.4-double_controle_solaire",
+   "section": "2.5.4",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.5-triple",
+   "section": "2.5.5",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.5-double",
+   "section": "2.5.5",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.5-double_controle_solaire",
+   "section": "2.5.5",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.01,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.6-triple",
+   "section": "2.5.6",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.03,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.06,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.6-double",
+   "section": "2.5.6",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.03,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.05,
+   "tl_dif": 0.03,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.6-double_controle_solaire",
+   "section": "2.5.6",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 11,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.7-triple",
+   "section": "2.5.7",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.7-double",
+   "section": "2.5.7",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.7-double_controle_solaire",
+   "section": "2.5.7",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.01,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.8-triple",
+   "section": "2.5.8",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.03,
+    0.04,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.06,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.03,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.8-double",
+   "section": "2.5.8",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.03,
+    0.07,
+    0.0
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.03,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.5.8-double_controle_solaire",
+   "section": "2.5.8",
+   "protection": "non_opaque_sombre_exterieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.05,
+    0.0
+   ],
+   "s_e": [
+    0.02,
+    0.07,
+    0.0
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.1-triple",
+   "section": "2.6.1",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.07,
+    0.14,
+    0.04
+   ],
+   "s_e": [
+    0.09,
+    0.17,
+    0.06
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.1-double",
+   "section": "2.6.1",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.14,
+    0.03
+   ],
+   "s_e": [
+    0.09,
+    0.17,
+    0.06
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.1-double_controle_solaire",
+   "section": "2.6.1",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.09,
+    0.02
+   ],
+   "s_e": [
+    0.06,
+    0.11,
+    0.03
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.2-triple",
+   "section": "2.6.2",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.07,
+    0.15,
+    0.04
+   ],
+   "s_e": [
+    0.09,
+    0.18,
+    0.07
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.2-double",
+   "section": "2.6.2",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.08,
+    0.15,
+    0.03
+   ],
+   "s_e": [
+    0.1,
+    0.18,
+    0.06
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.2-double_controle_solaire",
+   "section": "2.6.2",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.1,
+    0.02
+   ],
+   "s_e": [
+    0.06,
+    0.12,
+    0.03
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 12,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.3-triple",
+   "section": "2.6.3",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.06,
+    0.14,
+    0.04
+   ],
+   "s_e": [
+    0.08,
+    0.18,
+    0.06
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.3-double",
+   "section": "2.6.3",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.14,
+    0.03
+   ],
+   "s_e": [
+    0.09,
+    0.17,
+    0.04
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.3-double_controle_solaire",
+   "section": "2.6.3",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.09,
+    0.01
+   ],
+   "s_e": [
+    0.06,
+    0.11,
+    0.02
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.4-triple",
+   "section": "2.6.4",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.07,
+    0.16,
+    0.04
+   ],
+   "s_e": [
+    0.09,
+    0.19,
+    0.06
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.4-double",
+   "section": "2.6.4",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.08,
+    0.15,
+    0.03
+   ],
+   "s_e": [
+    0.1,
+    0.19,
+    0.06
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.4-double_controle_solaire",
+   "section": "2.6.4",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.1,
+    0.01
+   ],
+   "s_e": [
+    0.06,
+    0.12,
+    0.03
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.5-triple",
+   "section": "2.6.5",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.06,
+    0.14,
+    0.04
+   ],
+   "s_e": [
+    0.08,
+    0.17,
+    0.06
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.5-double",
+   "section": "2.6.5",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.14,
+    0.03
+   ],
+   "s_e": [
+    0.09,
+    0.17,
+    0.06
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.5-double_controle_solaire",
+   "section": "2.6.5",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.05,
+    0.09,
+    0.02
+   ],
+   "s_e": [
+    0.06,
+    0.11,
+    0.03
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.6-triple",
+   "section": "2.6.6",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.08,
+    0.16,
+    0.05
+   ],
+   "s_e": [
+    0.1,
+    0.19,
+    0.07
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.6-double",
+   "section": "2.6.6",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.09,
+    0.15,
+    0.04
+   ],
+   "s_e": [
+    0.11,
+    0.19,
+    0.07
+   ],
+   "tl": 0.1,
+   "tl_dif": 0.03,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.6-double_controle_solaire",
+   "section": "2.6.6",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.05,
+    0.1,
+    0.02
+   ],
+   "s_e": [
+    0.07,
+    0.12,
+    0.03
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 13,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.7-triple",
+   "section": "2.6.7",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.06,
+    0.14,
+    0.03
+   ],
+   "s_e": [
+    0.08,
+    0.17,
+    0.06
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.7-double",
+   "section": "2.6.7",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.07,
+    0.14,
+    0.03
+   ],
+   "s_e": [
+    0.09,
+    0.17,
+    0.04
+   ],
+   "tl": 0.08,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.7-double_controle_solaire",
+   "section": "2.6.7",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.04,
+    0.09,
+    0.01
+   ],
+   "s_e": [
+    0.04,
+    0.11,
+    0.02
+   ],
+   "tl": 0.06,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.8-triple",
+   "section": "2.6.8",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.08,
+    0.16,
+    0.04
+   ],
+   "s_e": [
+    0.1,
+    0.19,
+    0.06
+   ],
+   "tl": 0.09,
+   "tl_dif": 0.03,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.8-double",
+   "section": "2.6.8",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.09,
+    0.15,
+    0.03
+   ],
+   "s_e": [
+    0.11,
+    0.19,
+    0.06
+   ],
+   "tl": 0.1,
+   "tl_dif": 0.03,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.6.8-double_controle_solaire",
+   "section": "2.6.8",
+   "protection": "non_opaque_claire_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.05,
+    0.1,
+    0.02
+   ],
+   "s_e": [
+    0.07,
+    0.12,
+    0.03
+   ],
+   "tl": 0.07,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.1-triple",
+   "section": "2.7.1",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.03,
+    0.27,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.32,
+    0.08
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.1-double",
+   "section": "2.7.1",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.26,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.33,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.1-double_controle_solaire",
+   "section": "2.7.1",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.7,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.16,
+    0.03
+   ],
+   "s_e": [
+    0.01,
+    0.2,
+    0.03
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.2-triple",
+   "section": "2.7.2",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.03,
+    0.29,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.33,
+    0.08
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.2-double",
+   "section": "2.7.2",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.28,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.35,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.2-double_controle_solaire",
+   "section": "2.7.2",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 1,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.17,
+    0.03
+   ],
+   "s_e": [
+    0.02,
+    0.21,
+    0.04
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 14,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.3-triple",
+   "section": "2.7.3",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.27,
+    0.05
+   ],
+   "s_e": [
+    0.02,
+    0.32,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.3-double",
+   "section": "2.7.3",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.27,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.33,
+    0.06
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.3-double_controle_solaire",
+   "section": "2.7.3",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.69,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.16,
+    0.02
+   ],
+   "s_e": [
+    0.01,
+    0.2,
+    0.03
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.4-triple",
+   "section": "2.7.4",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.03,
+    0.3,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.34,
+    0.08
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.4-double",
+   "section": "2.7.4",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.29,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.36,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.4-double_controle_solaire",
+   "section": "2.7.4",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "fenetre",
+   "vantaux": 2,
+   "sigma": 0.76,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.17,
+    0.03
+   ],
+   "s_e": [
+    0.02,
+    0.21,
+    0.03
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.5-triple",
+   "section": "2.7.5",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.7,
+   "s_c": [
+    0.02,
+    0.26,
+    0.05
+   ],
+   "s_e": [
+    0.02,
+    0.31,
+    0.08
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.5-double",
+   "section": "2.7.5",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.26,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.32,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.5-double_controle_solaire",
+   "section": "2.7.5",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.68,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.15,
+    0.03
+   ],
+   "s_e": [
+    0.01,
+    0.19,
+    0.03
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.6-triple",
+   "section": "2.7.6",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.5,
+   "s_c": [
+    0.03,
+    0.3,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.35,
+    0.09
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.6-double",
+   "section": "2.7.6",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.03,
+    0.3,
+    0.06
+   ],
+   "s_e": [
+    0.03,
+    0.36,
+    0.08
+   ],
+   "tl": 0.05,
+   "tl_dif": 0.03,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.6-double_controle_solaire",
+   "section": "2.7.6",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 1,
+   "sigma": 0.8,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.17,
+    0.03
+   ],
+   "s_e": [
+    0.02,
+    0.21,
+    0.04
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 15,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.7-triple",
+   "section": "2.7.7",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.8,
+   "s_c": [
+    0.02,
+    0.26,
+    0.04
+   ],
+   "s_e": [
+    0.02,
+    0.3,
+    0.07
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 16,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.7-double",
+   "section": "2.7.7",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.03,
+    0.25,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.32,
+    0.06
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 16,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.7-double_controle_solaire",
+   "section": "2.7.7",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.66,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 2.0,
+   "s_c": [
+    0.01,
+    0.15,
+    0.02
+   ],
+   "s_e": [
+    0.01,
+    0.19,
+    0.03
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 16,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.8-triple",
+   "section": "2.7.8",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "triple",
+   "avec_protection": true,
+   "u": 1.6,
+   "s_c": [
+    0.03,
+    0.3,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.35,
+    0.08
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.02,
+   "page": 16,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.8-double",
+   "section": "2.7.8",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.03,
+    0.3,
+    0.05
+   ],
+   "s_e": [
+    0.03,
+    0.36,
+    0.07
+   ],
+   "tl": 0.04,
+   "tl_dif": 0.03,
+   "page": 16,
+   "statut": "valide"
+  },
+  {
+   "id": "2.7.8-double_controle_solaire",
+   "section": "2.7.8",
+   "protection": "non_opaque_sombre_interieur",
+   "menuiserie": "porte_fenetre",
+   "vantaux": 2,
+   "sigma": 0.79,
+   "vitrage": "double_controle_solaire",
+   "avec_protection": true,
+   "u": 1.9,
+   "s_c": [
+    0.02,
+    0.17,
+    0.03
+   ],
+   "s_e": [
+    0.02,
+    0.22,
+    0.04
+   ],
+   "tl": 0.03,
+   "tl_dif": 0.02,
+   "page": 16,
+   "statut": "valide"
+  }
+ ],
+ "correctifs": [
+  {
+   "section": "3.1",
+   "code": "cs_ete",
+   "libelle": "Correctif CS des facteurs solaires, conditions d'été (E)",
+   "colonnes": [
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    }
+   ],
+   "lignes": [
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.56,
+      0.43,
+      0.93,
+      0.93,
+      0.62,
+      0.53,
+      0.95,
+      0.95,
+      0.62,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 16
+    },
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.67,
+      0.43,
+      0.93,
+      0.93,
+      0.7,
+      0.53,
+      0.95,
+      0.95,
+      0.71,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 16
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.61,
+      0.43,
+      0.93,
+      0.93,
+      0.65,
+      0.53,
+      0.95,
+      0.95,
+      0.66,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 16
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.72,
+      0.43,
+      0.93,
+      0.93,
+      0.74,
+      0.52,
+      0.95,
+      0.95,
+      0.75,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 16
+    }
+   ],
+   "page": 16
+  },
+  {
+   "section": "3.2",
+   "code": "cs_conso_non_climatise",
+   "libelle": "Correctif CS, conditions de consommation, bâtiment non climatisé",
+   "colonnes": [
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    }
+   ],
+   "lignes": [
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.72,
+      0.61,
+      0.98,
+      0.98,
+      0.62,
+      0.53,
+      0.95,
+      0.95,
+      0.62,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.8,
+      0.61,
+      0.98,
+      0.98,
+      0.7,
+      0.53,
+      0.95,
+      0.95,
+      0.71,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.76,
+      0.61,
+      0.98,
+      0.98,
+      0.65,
+      0.53,
+      0.95,
+      0.95,
+      0.66,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.85,
+      0.61,
+      0.98,
+      0.98,
+      0.74,
+      0.52,
+      0.95,
+      0.95,
+      0.75,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    }
+   ],
+   "page": 17
+  },
+  {
+   "section": "3.3",
+   "code": "cs_conso_climatise",
+   "libelle": "Correctif CS, conditions de consommation, bâtiment climatisé",
+   "colonnes": [
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    }
+   ],
+   "lignes": [
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.63,
+      0.52,
+      0.95,
+      0.95,
+      0.62,
+      0.53,
+      0.95,
+      0.95,
+      0.62,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.72,
+      0.52,
+      0.95,
+      0.95,
+      0.7,
+      0.53,
+      0.95,
+      0.95,
+      0.71,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.67,
+      0.52,
+      0.95,
+      0.95,
+      0.65,
+      0.53,
+      0.95,
+      0.95,
+      0.66,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.77,
+      0.52,
+      0.95,
+      0.95,
+      0.74,
+      0.52,
+      0.95,
+      0.95,
+      0.75,
+      0.53,
+      0.95,
+      0.95
+     ],
+     "page": 17
+    }
+   ],
+   "page": 17
+  },
+  {
+   "section": "3.4",
+   "code": "ctl",
+   "libelle": "Correctif CTL de la transmission lumineuse, toutes conditions",
+   "colonnes": [
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "sud",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "nord",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_interieur",
+     "epaisseur_cm": 50
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 20
+    },
+    {
+     "orientation": "est_ouest",
+     "position": "nu_exterieur",
+     "epaisseur_cm": 50
+    }
+   ],
+   "lignes": [
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.7,
+      0.5,
+      0.7,
+      0.47,
+      0.68,
+      0.5,
+      0.68,
+      0.48,
+      0.72,
+      0.54,
+      0.72,
+      0.52
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.74,
+      0.58,
+      0.74,
+      0.55,
+      0.73,
+      0.57,
+      0.73,
+      0.55,
+      0.76,
+      0.61,
+      0.76,
+      0.58
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 1,
+     "valeurs": [
+      0.72,
+      0.54,
+      0.72,
+      0.51,
+      0.7,
+      0.54,
+      0.7,
+      0.51,
+      0.74,
+      0.57,
+      0.74,
+      0.55
+     ],
+     "page": 17
+    },
+    {
+     "menuiserie": "porte_fenetre",
+     "vantaux": 2,
+     "valeurs": [
+      0.78,
+      0.61,
+      0.78,
+      0.61,
+      0.76,
+      0.6,
+      0.76,
+      0.6,
+      0.8,
+      0.64,
+      0.8,
+      0.64
+     ],
+     "page": 17
+    }
+   ],
+   "page": 17
+  }
+ ],
+ "portes": [
+  {
+   "id": "bois_opaque_pleine",
+   "nature": "Porte simple en bois",
+   "type": "Opaque, pleine",
+   "ud": 3.5,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "bois_opaque_montants_45",
+   "nature": "Porte simple en bois",
+   "type": "Opaque, pleine avec montants de 45 mm",
+   "ud": 3.3,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "bois_vitrage_simple_moins_30",
+   "nature": "Porte simple en bois",
+   "type": "Vitrage simple, moins de 30 % de vitrage",
+   "ud": 4.0,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "bois_vitrage_simple_30_60",
+   "nature": "Porte simple en bois",
+   "type": "Vitrage simple, 30 à 60 % de vitrage",
+   "ud": 4.5,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "bois_vitrage_double",
+   "nature": "Porte simple en bois",
+   "type": "Vitrage double à lame d'air de 6 mm, toute proportion",
+   "ud": 3.3,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "metal_opaque",
+   "nature": "Porte simple en métal",
+   "type": "Opaque",
+   "ud": 5.8,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "metal_vitrage_simple",
+   "nature": "Porte simple en métal",
+   "type": "Vitrage simple, toute proportion",
+   "ud": 5.8,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "metal_vitrage_double_moins_30",
+   "nature": "Porte simple en métal",
+   "type": "Vitrage double, moins de 30 % de vitrage",
+   "ud": 5.5,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "metal_vitrage_double_30_60",
+   "nature": "Porte simple en métal",
+   "type": "Vitrage double, 30 à 60 % de vitrage",
+   "ud": 4.8,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "verre_sans_menuiserie",
+   "nature": "Porte en verre sans menuiserie",
+   "type": "Vitrage simple",
+   "ud": 5.8,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "element_souple_battant",
+   "nature": "Élément souple battant",
+   "type": "Toutes",
+   "ud": 5.8,
+   "page": 1,
+   "statut": "valide"
+  }
+ ],
+ "fermetures": [
+  {
+   "id": "ajours_lames_orientables",
+   "libelle": "Jalousie accordéon, lames orientables (dont vénitiens extérieurs tout métal), volets battants ou persiennes à ajours fixes",
+   "r": 0.08,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "sans_ajours_volet_roulant_alu",
+   "libelle": "Fermeture sans ajours en position déployée, volet roulant aluminium",
+   "r": 0.15,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "volet_roulant_pvc_mince",
+   "libelle": "Volet roulant PVC, tablier de 12 mm ou moins",
+   "r": 0.19,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "persienne_volet_pvc_bois_mince",
+   "libelle": "Persienne coulissante ou volet battant PVC, volet battant bois, tablier de 22 mm ou moins",
+   "r": 0.19,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "persienne_pvc_volet_bois_epais",
+   "libelle": "Persienne coulissante PVC et volet battant bois, tablier de plus de 22 mm",
+   "r": 0.25,
+   "page": 1,
+   "statut": "valide"
+  },
+  {
+   "id": "volet_roulant_pvc_epais",
+   "libelle": "Volet roulant PVC, tablier de plus de 12 mm",
+   "r": 0.25,
+   "page": 1,
+   "statut": "valide"
+  }
+ ],
+ "ujn": {
+  "r": [
+   0.08,
+   0.14,
+   0.19,
+   0.25
+  ],
+  "lignes": [
+   {
+    "uw": 1.2,
+    "valeurs": [
+     1.1,
+     1.1,
+     1.1,
+     1.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.3,
+    "valeurs": [
+     1.2,
+     1.2,
+     1.2,
+     1.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.4,
+    "valeurs": [
+     1.3,
+     1.3,
+     1.3,
+     1.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.5,
+    "valeurs": [
+     1.4,
+     1.4,
+     1.3,
+     1.3
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.6,
+    "valeurs": [
+     1.5,
+     1.5,
+     1.4,
+     1.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.7,
+    "valeurs": [
+     1.6,
+     1.5,
+     1.5,
+     1.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.8,
+    "valeurs": [
+     1.7,
+     1.6,
+     1.6,
+     1.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.9,
+    "valeurs": [
+     1.8,
+     1.7,
+     1.6,
+     1.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.0,
+    "valeurs": [
+     1.9,
+     1.8,
+     1.7,
+     1.7
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.1,
+    "valeurs": [
+     1.9,
+     1.9,
+     1.8,
+     1.7
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.2,
+    "valeurs": [
+     2.0,
+     1.9,
+     1.9,
+     1.8
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.3,
+    "valeurs": [
+     2.1,
+     2.0,
+     2.0,
+     1.9
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.4,
+    "valeurs": [
+     2.2,
+     2.1,
+     2.0,
+     2.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.5,
+    "valeurs": [
+     2.3,
+     2.2,
+     2.1,
+     2.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.6,
+    "valeurs": [
+     2.4,
+     2.3,
+     2.2,
+     2.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.7,
+    "valeurs": [
+     2.5,
+     2.3,
+     2.2,
+     2.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.8,
+    "valeurs": [
+     2.5,
+     2.4,
+     2.3,
+     2.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.9,
+    "valeurs": [
+     2.6,
+     2.5,
+     2.4,
+     2.3
+    ],
+    "page": 1
+   },
+   {
+    "uw": 3.0,
+    "valeurs": [
+     2.7,
+     2.6,
+     2.5,
+     2.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 3.2,
+    "valeurs": [
+     2.9,
+     2.7,
+     2.6,
+     2.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 3.4,
+    "valeurs": [
+     3.0,
+     2.9,
+     2.7,
+     2.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 3.6,
+    "valeurs": [
+     3.2,
+     3.0,
+     2.9,
+     2.7
+    ],
+    "page": 1
+   },
+   {
+    "uw": 3.8,
+    "valeurs": [
+     3.4,
+     3.1,
+     3.0,
+     2.9
+    ],
+    "page": 1
+   },
+   {
+    "uw": 4.0,
+    "valeurs": [
+     3.5,
+     3.3,
+     3.1,
+     3.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 4.2,
+    "valeurs": [
+     3.7,
+     3.4,
+     3.3,
+     3.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 4.4,
+    "valeurs": [
+     3.8,
+     3.6,
+     3.4,
+     3.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 4.6,
+    "valeurs": [
+     4.0,
+     3.7,
+     3.5,
+     3.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 4.8,
+    "valeurs": [
+     4.1,
+     3.8,
+     3.7,
+     3.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 5.0,
+    "valeurs": [
+     4.3,
+     4.0,
+     3.8,
+     3.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 5.2,
+    "valeurs": [
+     4.4,
+     4.1,
+     3.9,
+     3.7
+    ],
+    "page": 1
+   },
+   {
+    "uw": 5.4,
+    "valeurs": [
+     4.6,
+     4.2,
+     4.0,
+     3.8
+    ],
+    "page": 1
+   },
+   {
+    "uw": 5.6,
+    "valeurs": [
+     4.7,
+     4.4,
+     4.2,
+     4.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 5.8,
+    "valeurs": [
+     4.9,
+     4.5,
+     4.3,
+     4.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 6.0,
+    "valeurs": [
+     5.0,
+     4.6,
+     4.4,
+     4.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 6.2,
+    "valeurs": [
+     5.2,
+     4.8,
+     4.5,
+     4.3
+    ],
+    "page": 1
+   }
+  ]
+ },
+ "uws": {
+  "r": [
+   0.08,
+   0.14,
+   0.19,
+   0.25
+  ],
+  "lignes": [
+   {
+    "uw": 1.2,
+    "valeurs": [
+     1.1,
+     1.0,
+     1.0,
+     0.9
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.3,
+    "valeurs": [
+     1.2,
+     1.1,
+     1.0,
+     1.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.4,
+    "valeurs": [
+     1.3,
+     1.2,
+     1.1,
+     1.0
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.5,
+    "valeurs": [
+     1.3,
+     1.2,
+     1.2,
+     1.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.6,
+    "valeurs": [
+     1.4,
+     1.3,
+     1.2,
+     1.1
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.7,
+    "valeurs": [
+     1.5,
+     1.4,
+     1.3,
+     1.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.8,
+    "valeurs": [
+     1.6,
+     1.4,
+     1.3,
+     1.2
+    ],
+    "page": 1
+   },
+   {
+    "uw": 1.9,
+    "valeurs": [
+     1.6,
+     1.5,
+     1.4,
+     1.3
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.0,
+    "valeurs": [
+     1.7,
+     1.6,
+     1.4,
+     1.3
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.1,
+    "valeurs": [
+     1.8,
+     1.6,
+     1.5,
+     1.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.2,
+    "valeurs": [
+     1.9,
+     1.7,
+     1.6,
+     1.4
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.3,
+    "valeurs": [
+     1.9,
+     1.7,
+     1.6,
+     1.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.4,
+    "valeurs": [
+     2.0,
+     1.8,
+     1.6,
+     1.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.5,
+    "valeurs": [
+     2.1,
+     1.9,
+     1.7,
+     1.5
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.6,
+    "valeurs": [
+     2.2,
+     1.9,
+     1.7,
+     1.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.7,
+    "valeurs": [
+     2.2,
+     2.0,
+     1.8,
+     1.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.8,
+    "valeurs": [
+     2.3,
+     2.0,
+     1.8,
+     1.6
+    ],
+    "page": 1
+   },
+   {
+    "uw": 2.9,
+    "valeurs": [
+     2.4,
+     2.1,
+     1.9,
+     1.7
+    ],
+    "page": 1
+   }
+  ]
+ },
+ "controles": {
+  "methode": "Contrôles automatiques : structure des tableaux, plages de valeurs, cohérence physique.",
+  "erreurs": [],
+  "alertes": [
+   "Fenêtres §2.5.3 triple (p. 11) : le document imprime « 18 » sans virgule ; valeur retenue 1,8"
+  ],
+  "comptes": {
+   "fenetres": 168,
+   "correctifs": 16,
+   "portes": 11,
+   "fermetures": 6,
+   "ujn": 35,
+   "uws": 18
+  }
+ }
+}
