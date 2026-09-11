@@ -103,3 +103,36 @@ PDF Th-Bât ─► extraction automatique des tableaux (texte ; reconnaissance d
   échantillon ?
 - **Q31 — Ordre des lots.** B1 menuiseries puis B2 parois opaques vous convient-il, ou préférez-vous
   commencer par les parois opaques (épaisseurs d'isolant) ?
+
+## 8. Réponses et décisions (2026-09-11)
+
+- **Q26 → vérifié en ligne** : les trois archives de l'utilisateur sont celles de la page
+  officielle RE2020 « Documents d'application » (mêmes noms, tailles 9,9 / 4,4 / 17,9 Mo). Ce sont
+  donc les applications **en vigueur** ; l'en-tête « RT 2012 » vient de fiches reprises telles
+  quelles. Le tableau officiel de suivi date la mise en ligne au **16/12/2021** (parois vitrées :
+  aucune mise à jour depuis). Les méthodes (généralités, matériaux, parois opaques, parois vitrées,
+  ponts thermiques) sont publiées le 20/12/2017.
+- **Q27** : les λ sont dans le fascicule **« matériaux »** (partie méthodes), absent du dossier mais
+  gratuit. Téléchargé avec l'accord de l'utilisateur, avec les autres fascicules « méthodes » et le
+  tableau de suivi, dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
+- **Q28** : chauffage NF EN 12831-1 + complément national NF P 52-612 ; froid NF EN 16798-13 et
+  NF EN ISO 52016-1. Normes payantes : exemplaires de l'utilisateur. Les facteurs solaires en
+  conditions d'été (colonnes E) sont déjà portés par la bibliothèque.
+- **Q30 → validation automatique seulement** (décision utilisateur). Réserve notée : un contrôle
+  automatique ne détecte pas une valeur mal lue mais plausible ; compensé par l'affichage de la
+  **source de chaque valeur** (document, page, paragraphe).
+- **Q31** : B1 menuiseries, puis B2 parois opaques.
+
+### Lot B1 — menuiseries (décisions)
+
+| # | Décision |
+|---|---|
+| B1-D1 | Périmètre : fenêtres et portes-fenêtres (7 cas de protection × 8 menuiseries × 3 vitrages = 168 lignes) et leurs 4 tableaux de correctifs d'intégration ; portes (Ud) ; résistances des fermetures ; Ujour-nuit ; Uws. Vitrines, lanterneaux, vérandas, briques de verre et façades double peau : lot **B1-bis** |
+| B1-D2 | Une édition = un fichier JSON versionné dans le moteur autonome (`thermique_moteur/donnees/menuiseries_<édition>.json`), reconstruit par `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>"` ; l'édition est datée par le tableau officiel de suivi |
+| B1-D3 | Contrôles automatiques : structure (3 vitrages par tableau, mêmes menuiseries dans chaque cas de protection, intitulés concordants), plages (U de 0,5 à 6,5 ; facteurs de 0 à 1), cohérence physique (triple ≤ double ; protection qui n'augmente ni U ni S ; Ujour-nuit et Uws inférieurs au Uw nu et décroissants avec R ; correctif à 50 cm ≤ correctif à 20 cm). Une **erreur** exclut la valeur des calculs ; une **alerte** la signale |
+| B1-D4 | Règles d'usage du document appliquées : fenêtres **ni interpolées ni extrapolées** ; Ujour-nuit et Uws **interpolés** (bilinéaire, sans extrapolation) |
+| B1-D5 | Consultation dans l'outil : page « Bibliothèque » (fenêtres par cas de protection, correctifs, portes, fermetures avec calcul Ujour-nuit / Uws) |
+| B1-D6 | **Coquille du document officiel** : au §2.5.3 (p. 11), le Uws du triple vitrage est imprimé « 18 » (lu à l'identique par deux extracteurs, pypdf et pdfplumber). Règle : un U imprimé en entier à deux chiffres alors que les 8 autres valeurs ont une virgule est divisé par 10, **toujours signalé en alerte** avec le texte du document, puis soumis aux contrôles de cohérence (1,8 ≤ double 2,0 et ≤ Uw sans protection 2,1) |
+
+**Résultat mesuré (2026-09-11)** : 168 lignes de fenêtres, 16 lignes de correctifs, 11 portes, 6
+fermetures, Ujour-nuit (35 lignes) et Uws (18 lignes) ; **0 erreur, 1 alerte** (la coquille B1-D6).

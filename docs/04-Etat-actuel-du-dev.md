@@ -38,10 +38,17 @@ do_not_auto_read:
 - **Retour d'usage 2026-09-11** (10 planches contrôlées par cote, 1/100 confirmé à 0,1 %) :
   échelle « non définie » rendue visible, mesure sans échelle signalée, échelle déduite d'une
   cote ramenée à l'échelle usuelle si l'écart < 1 % (branche `feat/thermique-echelle-ux`).
-- **▶️ Prochain : la bibliothèque de composants** (décision utilisateur du 2026-09-11, avant la
-  détection de géométrie) : une seule bibliothèque pour l'étude thermique **et** le calcul des
-  déperditions CVC, sourcée depuis les 47 PDF Th-Bât (558 pages). Cadrage, lots B1-B4 et
-  questions Q26-Q31 : `thermique/bibliotheque-composants-decisions.md`.
+- **Bibliothèque de composants** (décision utilisateur du 2026-09-11, avant la détection de
+  géométrie) : une seule bibliothèque pour l'étude thermique **et** le calcul des déperditions
+  CVC, sourcée depuis les PDF Th-Bât. Cadrage et décisions : `thermique/bibliotheque-composants-decisions.md`.
+  - **Lot B1 menuiseries fait** (branche `feat/thermique-bibliotheque-b1`) : moteur autonome
+    `saas/backend/thermique_moteur/` (aucune dépendance à Po2, test à l'appui), édition JSON
+    datée par le suivi officiel (2021-12-16), 168 lignes fenêtres + correctifs + portes +
+    fermetures + Ujour-nuit/Uws, 0 erreur, 1 alerte (coquille du document, corrigée et signalée),
+    page « Bibliothèque ». Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>"`.
+  - **▶️ Prochain : lot B2 parois opaques** (λ du fascicule matériaux, calcul d'U en couches,
+    épaisseur d'isolant pour un U cible). Fascicules « méthodes » téléchargés dans
+    `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
 - Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
   Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
