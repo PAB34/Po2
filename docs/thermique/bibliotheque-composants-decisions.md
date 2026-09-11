@@ -136,3 +136,45 @@ PDF Th-Bât ─► extraction automatique des tableaux (texte ; reconnaissance d
 
 **Résultat mesuré (2026-09-11)** : 168 lignes de fenêtres, 16 lignes de correctifs, 11 portes, 6
 fermetures, Ujour-nuit (35 lignes) et Uws (18 lignes) ; **0 erreur, 1 alerte** (la coquille B1-D6).
+
+## 9. Lot B2 — parois opaques (cadrage du 2026-09-11)
+
+### Existant vérifié
+
+- **Fascicule matériaux** (méthodes, 33 pages de texte, publié le 20/12/2017) : **88 tableaux** de
+  λ utiles par défaut, avec masse volumique, capacité thermique et facteurs de diffusion de vapeur,
+  pour les pierres, bétons, plâtres, terre cuite, bois et panneaux, isolants manufacturés (laines,
+  PSE, XPS, polyuréthane…), matières synthétiques, métaux, sols, mortiers… Aucun tableau ne se
+  poursuit sans en-tête sur la page suivante. Mise en page variable (une ligne par matériau, ou
+  colonne par colonne ; cellules sur plusieurs lignes pour les essences de bois) : une lecture du
+  texte ligne à ligne risquerait d'associer une λ à la mauvaise masse volumique.
+- **Fascicule parois opaques** (méthodes, 39 pages) : Up = Uc + ΔU1 + ΔU2 + ΔU3 ; R = e / λ ;
+  résistances superficielles (tableau X) ; lames d'air non ventilées (tableau V, interpolation
+  autorisée) ; lames ventilées ; combles (tableau VI) ; ΔU'' sur trois niveaux ; ΔU3 pour les
+  toitures inversées (précipitations par département, tableau XI) ; méthodes des planchers sur sol
+  et sur vide sanitaire ; arrondis (R à 3 décimales, U à 2 chiffres significatifs).
+
+### Découpage
+
+| Sous-lot | Contenu |
+|---|---|
+| **B2a** | **Matériaux** (λ, ρ, Cp, μ) extraits des 88 tableaux + **calcul d'une paroi en couches** + **épaisseur d'isolant pour un U cible** + écran « Composer une paroi » |
+| B2b | Tableaux d'applications : murs maçonnés (R des blocs et briques, en partie en image), toitures, planchers sur extérieur ou local non chauffé |
+| B2c | Planchers sur sol et sur vide sanitaire (Ue), toitures inversées (ΔU3), combles |
+
+### Décisions B2a
+
+| # | Décision |
+|---|---|
+| B2-D1 | Tableaux matériaux lus **d'après la géométrie de la page** (position des mots, bordures des tableaux), pas ligne à ligne : l'alignement des colonnes est garanti par la page elle-même |
+| B2-D2 | Calcul d'une paroi dans le moteur autonome (`thermique_moteur/parois.py`) : couches de l'intérieur vers l'extérieur ; couche = matériau de la bibliothèque, λ saisie (valeur fabricant), résistance connue, lame d'air non ventilée ou fortement ventilée ; ΔU1 saisi ; ΔU2 par niveau |
+| B2-D3 | Les constantes du fascicule méthodes reprises dans le moteur (résistances superficielles, lames d'air, ΔU'') sont **recoupées automatiquement avec le texte du document** à chaque construction de la bibliothèque |
+| B2-D4 | Épaisseur d'isolant : la plus petite épaisseur telle que Up ≤ U cible (dichotomie, Up décroissant avec l'épaisseur), puis arrondie au centimètre supérieur avec le Up obtenu |
+| B2-D5 | Valeurs par défaut du fascicule : quand la masse volumique d'un matériau est inconnue, le document impose la λ la plus élevée de la famille ; l'écran le rappelle |
+| B2-D6 | Règles d'extraction apprises sur le document : un appel de note (« 0,25* », « 1,3 (*) ») est gardé et **signalé en alerte** avec renvoi à la page ; une cellule fusionnée ne peut couvrir plusieurs lignes que pour Cp et μ, jamais pour λ ni ρ ; plancher de λ à 0,001 (gaz de vitrage : krypton 0,009, xénon 0,0054) |
+
+**Résultat mesuré (2026-09-11)** : **294 matériaux** dans 96 sections, 14 renvois sans valeur
+(« voir l'Avis technique »…), **0 erreur, 3 alertes** (notes du document : ardoises, plaques de
+plâtre, mortiers). **Les 14 constantes** du calcul de paroi sont retrouvées à l'identique dans le
+fascicule méthodes. Calcul de paroi vérifié sur des cas faits à la main (mur béton + 12 cm
+d'isolant λ 0,032 : U = 0,25 ; 15 cm pour U ≤ 0,20).
