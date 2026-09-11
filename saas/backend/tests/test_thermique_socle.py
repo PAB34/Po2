@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_current_user
-from app.api.routes.internal_auth import verify_basic_auth, verify_basic_auth_thermique
+from app.api.routes.internal_auth import verify_basic_auth
 from app.core.config import settings
 from app.core.db import Base
 from app.core.roles import THERMIQUE_EXTERNAL_ROLE
@@ -101,7 +101,9 @@ def test_compte_externe_refuse_sur_po2_mais_accepte_sur_l_outil(db_session):
     assert get_current_user(get_authenticated_user(_bearer(interne), db_session)).id == interne.id
 
 
-def test_garde_navigateur_distincte_selon_le_site(db_session):
+def test_garde_du_site_principal_refuse_les_comptes_de_l_outil(db_session):
+    # thermique.* n'a plus de garde navigateur (une seule connexion, Q6) ; celle du site
+    # principal doit toujours refuser les comptes bureaux d'études.
     _user(db_session, "be@bureau.fr", THERMIQUE_EXTERNAL_ROLE)
     _user(db_session, "agent@ville.fr")
     externe = HTTPBasicCredentials(username="be@bureau.fr", password=PASSWORD)
@@ -111,10 +113,8 @@ def test_garde_navigateur_distincte_selon_le_site(db_session):
         verify_basic_auth(externe, db_session)
     assert exc.value.status_code == 401
     assert verify_basic_auth(interne, db_session).status_code == 204
-    assert verify_basic_auth_thermique(externe, db_session).status_code == 204
-    assert verify_basic_auth_thermique(interne, db_session).status_code == 204
     with pytest.raises(HTTPException):
-        verify_basic_auth_thermique(HTTPBasicCredentials(username="be@bureau.fr", password="faux-mdp"), db_session)
+        verify_basic_auth(HTTPBasicCredentials(username="agent@ville.fr", password="faux-mdp"), db_session)
 
 
 def test_creation_compte_bureau_d_etudes(db_session):

@@ -80,10 +80,11 @@
 # =====================================================================
 # Outil de metre thermique (sous-domaine dedie), MEMES comptes que Po2.
 # /api/* -> backend Po2 (routes /api/thermique/*, meme JWT, meme table users).
-# Les comptes bureaux d'etudes (role THERMIQUE_EXTERNE) passent la garde de ce
-# site (basic-auth-thermique) mais pas celle du site principal, et l'API Po2
-# leur repond 403. Front = meme conteneur : nginx sert thermique.html selon l'hote.
-# Inscription fermee ici : les comptes bureaux d'etudes sont crees par un admin.
+# Une seule connexion (decision utilisateur Q6) : pas de garde navigateur ici,
+# la page de connexion de l'outil suffit ; toute l'API exige le jeton. Les comptes
+# bureaux d'etudes (role THERMIQUE_EXTERNE) restent refuses par l'API Po2 (403)
+# et par la garde du site principal. Front = meme conteneur : nginx sert
+# thermique.html selon l'hote. Inscription fermee : comptes crees par un admin.
 # =====================================================================
 {$THERMIQUE_SITE_ADDRESS:thermique.patrimoineaucarre.com} {
     handle /api/auth/register {
@@ -103,12 +104,7 @@
     }
 
     handle {
-        route {
-            forward_auth backend:8000 {
-                uri /api/internal/basic-auth-thermique
-            }
-            reverse_proxy frontend:80
-        }
+        reverse_proxy frontend:80
     }
 }
 
