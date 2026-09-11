@@ -28,12 +28,17 @@ do_not_auto_read:
   (coupe lourde affichée en 0,49 s au lieu de 47 s avec pdf.js), échelle + contrôle par une cote.
   Docs : `thermique/metre-thermique-decisions.md`, `thermique/00-audit-existant-faisabilite.md`,
   ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]].
-- **⚠️ Action utilisateur** : créer le DNS **A `thermique` → `135.125.152.112`** chez le registrar.
-- **▶️ Prochain : étape 2 — murs** (prototype prouvé : `thermique/proto_detection_murs.py`,
-  squelette des murs du niveau 0 retrouvé à la cote près) + import DXF. Questions à trancher :
-  Q7-Q11, Q15-Q17 du fichier de décisions.
-- Le **réexport ASTECH** (incrément 3) reste ouvert, passé derrière l'outil thermique
-  (décision utilisateur du 2026-09-11).
+- **✅ DNS fait, certificat obtenu** : `https://thermique.patrimoineaucarre.com` en ligne.
+  **Une seule connexion** (Q6) : fenêtre d'identification du navigateur retirée sur ce
+  sous-domaine (branche `feat/thermique-connexion-unique`).
+- **Cadrage précisé par l'utilisateur** : projet **à part** (sans lien avec Po2), pour les
+  **thermiciens privés en bureau d'études** ; priorité à une **géométrie irréprochable** (murs,
+  cloisons, menuiseries, planchers), entités thermiques Th-Bât ensuite ; export vers **Pléiades**
+  et **Perrenoud** ; MVP en ligne, « logiciel » à terme (conséquences : décisions §3, Q20).
+- **▶️ Prochain : étape 2 — géométrie des plans** en moteur autonome (prototype prouvé :
+  `thermique/proto_detection_murs.py`) + import DXF. Questions ouvertes : Q15-Q18, Q20.
+- Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
+  l'outil thermique.
 
 > Reprise précédente : **2026-08-19** (session Claude — référentiel ASTECH : écran, carte, correctifs).
 

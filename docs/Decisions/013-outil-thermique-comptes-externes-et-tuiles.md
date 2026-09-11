@@ -17,9 +17,12 @@ lourds (jusqu'à 650 000 traits par planche).
 2. **Rôle `THERMIQUE_EXTERNE`** pour les bureaux d'études. `get_current_user`, dépendance de
    toutes les routes Po2, refuse ce rôle (403). Les routes de l'outil et du profil utilisent
    `get_authenticated_user`, qui accepte tout compte actif. La garde navigateur du site principal
-   (`/api/internal/basic-auth`) refuse aussi ce rôle ; celle de `thermique.*`
-   (`/api/internal/basic-auth-thermique`) l'accepte. Pas d'inscription libre sur `thermique.*` :
+   (`/api/internal/basic-auth`) refuse aussi ce rôle. Pas d'inscription libre sur `thermique.*` :
    les comptes externes sont créés par un admin (`POST /api/thermique/admin/external-accounts`).
+   - **Amendement 2026-09-11 (Q6, décision utilisateur) : une seule connexion sur `thermique.*`.**
+     La garde navigateur de ce sous-domaine (`basic-auth-thermique`) est supprimée : seule la page
+     de connexion de l'outil demande les identifiants. Le front (pages statiques) devient public ;
+     toutes les données restent derrière le jeton de l'API.
 3. **Planches rendues côté serveur par pdfium en pyramide de tuiles PNG**, servies par adresse
    signée (HMAC, une planche, 12 h). Les mesures sont en points PDF ; la transformation PDF →
    pixels vient de pdfium (`FPDF_PageToDevice`).
