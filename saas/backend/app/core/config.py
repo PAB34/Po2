@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     dgfip_majic_file_path: str = ""
     energie_dir: str = "/workspace/saas/energie/output"
     invoice_storage_dir: str = "/app/storage/invoices"
+    # Outil de métré thermique (thermique.patrimoineaucarre.com) : plans importés.
+    thermique_storage_dir: str = "/app/storage/thermique"
+    thermique_max_upload_mb: int = 80
     # Sync DJU (Open-Meteo, profils Sète + DALKIA Montpellier) planifié automatiquement.
     dju_sync_enabled: bool = True
     dju_sync_interval_hours: int = 24

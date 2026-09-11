@@ -36,6 +36,7 @@ services:
       - ../../:/workspace:ro
       - invoice_data:/app/storage/invoices
       - energie_data:/data/energie
+      - thermique_data:/app/storage/thermique
     networks:
       internal: {}
       edge:
@@ -72,6 +73,7 @@ volumes:
   postgres_data:
   invoice_data:
   energie_data:
+  thermique_data:
 
 networks:
   internal:

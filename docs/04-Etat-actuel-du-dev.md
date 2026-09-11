@@ -19,7 +19,23 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-08-19** (session Claude — référentiel ASTECH : écran, carte, correctifs).
+> Mise à jour : **2026-09-11** (session Claude — outil de métré thermique, étape 1).
+
+- **🆕 Outil de métré thermique — étape 1 (socle)**, branche `feat/thermique-socle`, migration
+  **0076** : sous-domaine **`thermique.patrimoineaucarre.com`** (bloc Caddy), **mêmes comptes Po2**,
+  comptes **bureaux d'études** (rôle `THERMIQUE_EXTERNE`, refusés partout ailleurs dans Po2),
+  projets, import PDF → planches (type et niveau suggérés), **visionneuse en tuiles pdfium**
+  (coupe lourde affichée en 0,49 s au lieu de 47 s avec pdf.js), échelle + contrôle par une cote.
+  Docs : `thermique/metre-thermique-decisions.md`, `thermique/00-audit-existant-faisabilite.md`,
+  ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]].
+- **⚠️ Action utilisateur** : créer le DNS **A `thermique` → `135.125.152.112`** chez le registrar.
+- **▶️ Prochain : étape 2 — murs** (prototype prouvé : `thermique/proto_detection_murs.py`,
+  squelette des murs du niveau 0 retrouvé à la cote près) + import DXF. Questions à trancher :
+  Q7-Q11, Q15-Q17 du fichier de décisions.
+- Le **réexport ASTECH** (incrément 3) reste ouvert, passé derrière l'outil thermique
+  (décision utilisateur du 2026-09-11).
+
+> Reprise précédente : **2026-08-19** (session Claude — référentiel ASTECH : écran, carte, correctifs).
 
 - **✅ EN PROD — Écran ASTECH complet** (`/patrimoine/astech`, migrations **0070 → 0074**,
   PR #98 à #117). Import idempotent avec gabarit conservé, moteur de reconnaissance,
