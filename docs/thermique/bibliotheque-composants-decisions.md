@@ -178,3 +178,75 @@ fermetures, Ujour-nuit (35 lignes) et Uws (18 lignes) ; **0 erreur, 1 alerte** (
 plâtre, mortiers). **Les 14 constantes** du calcul de paroi sont retrouvées à l'identique dans le
 fascicule méthodes. Calcul de paroi vérifié sur des cas faits à la main (mur béton + 12 cm
 d'isolant λ 0,032 : U = 0,25 ; 15 cm pour U ≤ 0,20).
+
+## 10. Lot B2b — tableaux d'applications (cadrage du 2026-09-11)
+
+### Existant vérifié (audit page par page des 4 fascicules « applications » parois opaques)
+
+| Fascicule | Pages | Tableaux | En image | Contenu |
+|---|---|---|---|---|
+| Murs | 48 | 50 | **5** (T1, T4, T5, T6, T8) | R des briques et blocs (terre cuite, béton courant, béton léger, béton cellulaire) ; ITI fixée mécaniquement (ψ, χ) ; bardages sur ossature bois (χ pattes, chevilles) ; ETICS (ψ, χ) ; U des murs à ossature bois ; ΔU des bardages métalliques ; sandwichs |
+| Toitures, rampants, plafonds | 33 | 41 | 0 | R des isolants soufflés ou déversés ; U des combles et rampants (entraits, fermettes, pannes, chevrons) ; caissons chevronnés et sarking (ψ, χ) ; ΔU des toitures métalliques ; U des toitures terrasses bois |
+| Planchers bas sur extérieur ou LNC | 28 | 25 | **1** (T16) | R des planchers à entrevous béton, PSE, moulés, dalles alvéolées ; isolant projeté en sous-face (χ) ; U des planchers bois |
+| Cloisons | 2 | 6 | **1** (T5) | R des carreaux de plâtre, panneaux de bois extrudé, panneaux fibragglo |
+
+- Les tableaux lisibles sont bordés : `find_tables` donne des grilles propres, colonnes alignées
+  (vérifié sur béton cellulaire T12, entrevous PSE T6, combles T5). Le tableau 43 des Murs n'a pas
+  de bordures (lecture par position des mots). Les images des pages Planchers p. 4, 12, 13, 17
+  sont des schémas ; en revanche les dalles alvéolées (Planchers T16, p. 19) et les panneaux de
+  bois extrudé (Cloisons T5, p. 2) sont imprimés en image (constaté à la lecture : seul le titre
+  est dans le texte de la page).
+- Les **7 tableaux en image** portent 64 valeurs, dont les **blocs creux en béton de granulats
+  courants** (T8, le « parpaing ») : le cas le plus courant en France.
+- Les tableaux 15 à 17 du béton cellulaire donnent des **U de murs finis** (valeurs décroissantes
+  avec l'épaisseur), pas des R : ils relèvent de B2b-2.
+- Mentions du document : les Avis Techniques et certificats **priment** sur ces valeurs par défaut ;
+  valeurs entre parenthèses = joint vertical rempli de mortier (application parasismique).
+
+### Découpage
+
+| Sous-lot | Contenu | Usage |
+|---|---|---|
+| **B2b-1** | **R tabulées des éléments** : briques, blocs, béton cellulaire, entrevous, dalles alvéolées, isolants soufflés, cloisons (~42 tableaux) | Nouvelle couche « élément » dans *Composer une paroi* |
+| B2b-2 | **U tabulés de parois complètes** : murs, combles, rampants, toitures terrasses et planchers à ossature bois | Paroi « toute faite » sélectionnable |
+| B2b-3 | **Ponts thermiques intégrés** ψ, χ et ΔU (fixations, pattes, ossatures métalliques) | Calcul de ΔU1 au lieu de le saisir |
+
+### Décisions proposées B2b
+
+| # | Décision |
+|---|---|
+| B2b-D1 | Chaque tableau est décrit par un **descripteur** (grandeur, unité, axes des lignes et des colonnes) ; les valeurs sont lues dans la grille du PDF, jamais recopiées à la main pour un tableau en texte |
+| B2b-D2 | Une R tabulée devient une couche **« élément »** du calcul de paroi (R du tableau à la place de e/λ) ; la valeur entre parenthèses devient la variante « joint vertical rempli (parasismique) » du même élément |
+| B2b-D3 | **Pas d'interpolation** entre les cases, sauf quand le texte du document l'autorise explicitement (ex. languette de 35 à 45 mm des entrevous PSE) |
+| B2b-D4 | Contrôles automatiques : nombre de valeurs attendu par tableau, plages (R 0,01 à 10 m²·K/W ; U 0,05 à 5 W/(m²·K)), **monotonie** (R croissante avec l'épaisseur, U décroissante avec l'isolant), numéros de tableaux continus |
+| B2b-D5 | L'écran rappelle que les Avis Techniques et certificats priment sur ces valeurs par défaut |
+| B2b-D6 | Ordre : B2b-1 (alimente directement le calcul existant), puis B2b-2, puis B2b-3 |
+
+### Question ouverte
+
+- **Q32** — Les 5 tableaux en image (Murs T1, T4, T5, T6, T8 ; ~45 valeurs) ne se lisent pas
+  automatiquement : les transcrire (relus, contrôlés par monotonie et plages, marqués « lu sur
+  image »), ou les laisser en renvoi au document ?
+  **Réponse (2026-09-11) : transcrire.** → B2b-D7 : les valeurs des tableaux en image (7 au final,
+  voir ci-dessus) sont transcrites dans un fichier versionné (`elements_transcrits.py`), relues
+  sur deux rendus agrandis, passent les mêmes contrôles automatiques et restent marquées « lu sur
+  image » avec la page. Les deux lignes « joints minces » du parpaing et la figure 3 (blocs
+  perforés) viennent du texte de la page : elles sont recoupées avec ce texte à chaque construction.
+
+### Résultat B2b-1 (2026-09-11)
+
+- Édition `donnees/elements_2022-01-20.json` (date du tableau officiel de suivi pour les parois
+  opaques), construite par `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>" --lot elements`.
+- **40 tableaux, 1 074 valeurs**, dont 7 tableaux transcrits ; **0 erreur, 5 alertes**, toutes des
+  anomalies du document signalées sans être corrigées, sauf une :
+  - Planchers T2 : 0,26 après 0,27 quand l'entraxe augmente (dalle en argile expansé, 20 cm) ;
+  - Planchers T6 : 2,65 après 2,68 quand l'entraxe augmente (languette 50, entrevous 200 et +) ;
+  - Planchers T6 : 2,90 (languette 60, entrevous 150, talon 125 à 140) supérieur à la ligne suivante
+    et à la ligne du talon plus étroit : probable coquille pour 2,80 (non corrigée) ;
+  - Cloisons T6 : épaisseur imprimée « 20,5 » entre 2,0 et 3,0 cm, lue 2,5 (seule correction,
+    sans ambiguïté) ;
+  - une case signalée reste utilisable : le calcul de paroi reprend le message dans ses remarques.
+- Variante calculée d'après le texte : entrevous terre cuite + dalle en argile expansé = T1 + 0,03
+  (règle retrouvée p. 2 à chaque construction).
+- Calcul de paroi : nouvelle couche « élément » (tableau, ligne, colonne, variante) ; la source
+  affichée cite le fascicule, le tableau, la page et « lu sur image » le cas échéant.

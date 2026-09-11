@@ -44,7 +44,7 @@ NIVEAUX_DELTA_U2: dict[int, dict[str, Any]] = {
     3: {"valeur": 0.04, "libelle": "Cavités communiquant avec des lames d'air côté chaud de l'isolant"},
 }
 
-TYPES_COUCHE = ("materiau", "lambda", "resistance", "lame_air", "lame_air_ventilee")
+TYPES_COUCHE = ("materiau", "lambda", "resistance", "element", "lame_air", "lame_air_ventilee")
 EPAISSEUR_ISOLANT_MAX_M = 1.0
 
 
@@ -84,7 +84,42 @@ def _nombre(couche: dict, cle: str, nom: str, minimum: float = 0.0, strict: bool
     return valeur
 
 
-def calculer_paroi(paroi: dict[str, Any], materiaux: dict[str, dict] | None = None) -> dict[str, Any]:
+def _resistance_element(couche: dict, index: int, elements: dict[str, dict] | None, ligne: dict, remarques: list[str]) -> float:
+    """R lue dans une case d'un tableau d'applications (lot B2b, décision B2b-D2)."""
+    tableau = (elements or {}).get(couche.get("tableau_id"))
+    if tableau is None:
+        raise ParoiError(f"Couche {index + 1} : tableau d'éléments inconnu ({couche.get('tableau_id')}).")
+    try:
+        i, j = int(couche.get("ligne", -1)), int(couche.get("colonne", 0))
+    except (TypeError, ValueError):
+        raise ParoiError(f"Couche {index + 1} : ligne ou colonne du tableau invalide.") from None
+    if not (0 <= i < len(tableau["lignes"]) and 0 <= j < len(tableau["colonnes"])):
+        raise ParoiError(f"Couche {index + 1} : case hors du tableau.")
+    rangee = tableau["lignes"][i]
+    variante = couche.get("variante") or None
+    valeurs = rangee["variantes"].get(variante) if variante else rangee["valeurs"]
+    if valeurs is None or valeurs[j] is None:
+        raise ParoiError(f"Couche {index + 1} : pas de valeur dans cette case du tableau.")
+    colonne = f", {tableau['axe_colonnes'].lower()} {tableau['colonnes'][j]}" if len(tableau["colonnes"]) > 1 else ""
+    libelle = f"{tableau['titre']} : {rangee['libelle']}{colonne}"
+    if variante:
+        libelle += f" — {tableau['variantes'].get(variante, variante)}"
+    ligne["libelle"] = ligne["libelle"] or libelle
+    numero = f"T{tableau['numero']}" if tableau.get("numero") else "figure"
+    lecture = ", lu sur image" if tableau.get("lecture") == "image" else ""
+    ligne["source"] = f"Th-Bât {tableau['fascicule']} {numero} p. {tableau['page']}{lecture}"
+    ligne["tabule"] = True
+    if "isolant" not in couche:
+        ligne["isolant"] = bool(tableau.get("isolant"))
+    for signalement in tableau.get("signalements", []):
+        if signalement["ligne"] == i and signalement.get("colonne") in (None, j):
+            remarques.append(f"Couche {index + 1} : {signalement['message']}")
+    return float(valeurs[j])
+
+
+def calculer_paroi(
+    paroi: dict[str, Any], materiaux: dict[str, dict] | None = None, elements: dict[str, dict] | None = None
+) -> dict[str, Any]:
     """Résistance et coefficient Up d'une paroi, avec le détail couche par couche."""
     type_paroi = paroi.get("type")
     if type_paroi not in RESISTANCES_SUPERFICIELLES:
@@ -132,6 +167,8 @@ def calculer_paroi(paroi: dict[str, Any], materiaux: dict[str, dict] | None = No
             ligne.update({"epaisseur_m": epaisseur, "lambda": conductivite})
         elif genre == "resistance":
             r = _nombre(couche, "r", f"Couche {index + 1} : résistance R", strict=False)
+        elif genre == "element":
+            r = _resistance_element(couche, index, elements, ligne, remarques)
         elif genre == "lame_air":
             epaisseur_mm = _nombre(couche, "epaisseur_mm", f"Couche {index + 1} : épaisseur de la lame d'air", strict=False)
             r = resistance_lame_air(epaisseur_mm, flux)
@@ -186,6 +223,7 @@ def epaisseur_isolant(
     u_cible: float,
     materiaux: dict[str, dict] | None = None,
     epaisseur_max_m: float = EPAISSEUR_ISOLANT_MAX_M,
+    elements: dict[str, dict] | None = None,
 ) -> dict[str, Any]:
     """Épaisseur minimale de la couche isolante pour que Up ne dépasse pas la cible."""
     couches = paroi.get("couches") or []
@@ -200,7 +238,7 @@ def epaisseur_isolant(
     def up_pour(epaisseur: float) -> float:
         essai = copy.deepcopy(paroi)
         essai["couches"][index_isolant] = {**couche, "epaisseur_m": epaisseur, "isolant": True}
-        return calculer_paroi(essai, materiaux)["up"]
+        return calculer_paroi(essai, materiaux, elements)["up"]
 
     if up_pour(epaisseur_max_m) > u_cible:
         raise ParoiError(f"U cible {u_cible:g} inatteignable avec {epaisseur_max_m * 100:.0f} cm d'isolant ou moins.")

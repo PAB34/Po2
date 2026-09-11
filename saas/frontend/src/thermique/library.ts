@@ -149,6 +149,7 @@ export type WallLayerRequest =
   | { type: "materiau"; materiau_id: string; epaisseur_m: number; isolant?: boolean; libelle?: string }
   | { type: "lambda"; lambda: number; epaisseur_m: number; isolant?: boolean; libelle?: string }
   | { type: "resistance"; r: number; libelle?: string }
+  | { type: "element"; tableau_id: string; ligne: number; colonne: number; variante?: string }
   | { type: "lame_air"; epaisseur_mm: number }
   | { type: "lame_air_ventilee" };
 
@@ -215,7 +216,68 @@ async function postJson<T>(token: string, path: string, body: unknown): Promise<
   return (await response.json()) as T;
 }
 
+// --- Éléments à résistance tabulée (lot B2b) -----------------------------------------------
+
+export type ElementRow = {
+  libelle: string;
+  cles: Record<string, string>;
+  valeurs: (number | null)[];
+  // « parentheses » (valeur entre parenthèses du document) ou variante calculée d'après le texte.
+  variantes: Record<string, (number | null)[]>;
+};
+
+export type ElementTable = {
+  id: string;
+  fascicule: string;
+  numero: number | null;
+  page: number;
+  section: string;
+  titre: string;
+  famille: string;
+  isolant: boolean;
+  lecture: "texte" | "image";
+  axe_lignes: string;
+  axe_colonnes: string;
+  colonnes: string[];
+  variantes: Record<string, string>;
+  lignes: ElementRow[];
+  remarques: string[];
+  signalements: { ligne: number; colonne: number | null; message: string }[];
+  statut: Statut;
+  nombre_valeurs: number;
+};
+
+export type ElementsEdition = {
+  regles: string;
+  edition: string;
+  extrait_le: string;
+  sources: Record<string, { document: string; sha256: string; pages: number }>;
+  regles_usage: Record<string, string>;
+  fascicules: Record<string, string>;
+  familles: { id: string; libelle: string }[];
+  tableaux: ElementTable[];
+  controles: { methode: string; erreurs: string[]; alertes: string[]; comptes: Record<string, number> };
+};
+
+export function elementTableLabel(table: ElementTable): string {
+  const number = table.numero ? `tableau ${table.numero}` : "figure";
+  return `${table.titre} (${number}, p. ${table.page})`;
+}
+
+export function elementCellLabel(table: ElementTable, row: number, column: number): string {
+  const line = table.lignes[row];
+  const suffix = table.colonnes.length > 1 ? ` · ${table.colonnes[column]}` : "";
+  return `${line.libelle}${suffix}`;
+}
+
+export function elementSignals(table: ElementTable, row: number, column: number): string[] {
+  return table.signalements
+    .filter((signal) => signal.ligne === row && (signal.colonne === null || signal.colonne === column))
+    .map((signal) => signal.message);
+}
+
 export const wallApi = {
+  elements: (token: string) => getJson<ElementsEdition>(token, "/thermique/bibliotheque/elements"),
   materials: (token: string) => getJson<MaterialsEdition>(token, "/thermique/bibliotheque/materiaux"),
   compute: (token: string, wall: WallRequest) => postJson<WallResult>(token, "/thermique/bibliotheque/parois/calcul", wall),
   thickness: (token: string, wall: WallRequest, index: number, target: number) =>

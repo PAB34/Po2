@@ -1,0 +1,6081 @@
+{
+ "bibliotheque": "elements",
+ "regles": "Règles Th-Bât, fascicules « applications » parois opaques",
+ "edition": "2022-01-20",
+ "extrait_le": "2026-09-11",
+ "sources": {
+  "murs": {
+   "document": "Murs.pdf",
+   "sha256": "f7e1b9d89c0eadc2c49169fb3ee94afe9b6486fded9eafaf530d1f306a8d670e",
+   "pages": 48
+  },
+  "planchers": {
+   "document": "Planchers bas_EXT_LNC.pdf",
+   "sha256": "f8a842d5a37852a91d057083331d7598748edca971eea9c851ba5c85d9fceece",
+   "pages": 28
+  },
+  "toitures": {
+   "document": "Toitures_rampants_plafonds.pdf",
+   "sha256": "5f09acb724fbd31c064eb13b1881616943e43bab6abb153d92e848649b2bea4a",
+   "pages": 33
+  },
+  "cloisons": {
+   "document": "Cloisons.pdf",
+   "sha256": "4d0d661f0040e5778d82f65ab744f5fb286a4e254c0a473dd31cefae9619eebd",
+   "pages": 2
+  }
+ },
+ "regles_usage": {
+  "valeurs": "Valeurs par défaut des règles Th-Bât : les valeurs des Avis Techniques, DTA et certificats (CSTBât, NF…) priment sur elles.",
+  "interpolation": "Pas d'interpolation entre les cases, sauf quand le document l'autorise (signalé sur le tableau) : sinon, saisir la résistance à la main.",
+  "variantes": "Valeur entre parenthèses dans le document : variante du même élément (joint rempli de mortier, application parasismique)."
+ },
+ "fascicules": {
+  "murs": "Murs",
+  "planchers": "Planchers bas sur extérieur ou local non chauffé",
+  "toitures": "Toitures, rampants et plafonds",
+  "cloisons": "Cloisons"
+ },
+ "familles": [
+  {
+   "id": "terre_cuite",
+   "libelle": "Briques et blocs de terre cuite"
+  },
+  {
+   "id": "beton",
+   "libelle": "Blocs en béton"
+  },
+  {
+   "id": "beton_cellulaire",
+   "libelle": "Béton cellulaire"
+  },
+  {
+   "id": "plancher_entrevous",
+   "libelle": "Planchers à entrevous"
+  },
+  {
+   "id": "plancher_beton",
+   "libelle": "Dalles alvéolées"
+  },
+  {
+   "id": "isolant_vrac",
+   "libelle": "Isolants en vrac et projetés"
+  },
+  {
+   "id": "cloison",
+   "libelle": "Cloisons et contre-murs"
+  }
+ ],
+ "tableaux": [
+  {
+   "id": "murs-T1",
+   "fascicule": "murs",
+   "numero": 1,
+   "page": 2,
+   "section": "1.1.1.2",
+   "titre": "Briques pleines de terre cuite (format courant 6 × 10,5 × 22 cm)",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Appareillage (schéma p. 2)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "6",
+    "10,5",
+    "22",
+    "33,5",
+    "45"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Appareillage 1",
+     "cles": {
+      "Appareillage (schéma p. 2)": "Appareillage 1"
+     },
+     "valeurs": [
+      0.06,
+      0.12,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 2",
+     "cles": {
+      "Appareillage (schéma p. 2)": "Appareillage 2"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.22,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 3",
+     "cles": {
+      "Appareillage (schéma p. 2)": "Appareillage 3"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.32,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 4",
+     "cles": {
+      "Appareillage (schéma p. 2)": "Appareillage 4"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      null,
+      0.44
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 5
+  },
+  {
+   "id": "murs-F3",
+   "fascicule": "murs",
+   "numero": null,
+   "page": 3,
+   "section": "1.1.1.4",
+   "titre": "Blocs perforés de terre cuite (format courant 6 × 22 × 22 cm, figure 3)",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Bloc (figure 3 p. 3)",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "8 rangées d'alvéoles",
+     "cles": {
+      "Bloc (figure 3 p. 3)": "8 rangées d'alvéoles"
+     },
+     "valeurs": [
+      0.38
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7 rangées d'alvéoles",
+     "cles": {
+      "Bloc (figure 3 p. 3)": "7 rangées d'alvéoles"
+     },
+     "valeurs": [
+      0.33
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 2
+  },
+  {
+   "id": "murs-T2",
+   "fascicule": "murs",
+   "numero": 2,
+   "page": 3,
+   "section": "1.1.1.3",
+   "titre": "Briques perforées de terre cuite (format courant 6 × 10,5 × 22 cm)",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Appareillage (schéma p. 3)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "10,5",
+    "22",
+    "33,5",
+    "45"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Appareillage 1",
+     "cles": {
+      "Appareillage": "Appareillage 1"
+     },
+     "valeurs": [
+      0.16,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 2",
+     "cles": {
+      "Appareillage": "Appareillage 2"
+     },
+     "valeurs": [
+      null,
+      0.3,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 3",
+     "cles": {
+      "Appareillage": "Appareillage 3"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.44,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Appareillage 4",
+     "cles": {
+      "Appareillage": "Appareillage 4"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.55
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "murs-T3",
+   "fascicule": "murs",
+   "numero": 3,
+   "page": 4,
+   "section": "1.1.2.1.1",
+   "titre": "Briques à perforations verticales de faible épaisseur",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Brique (schéma p. 4)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "8",
+    "10",
+    "12"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Brique de faible épaisseur (hauteur 15 à 25 cm, longueur 25 à 50 cm)",
+     "cles": {
+      "Brique": "Brique de faible épaisseur (hauteur 15 à 25 cm, longueur 25 à 50 cm)"
+     },
+     "valeurs": [
+      0.17,
+      0.22,
+      0.26
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 3
+  },
+  {
+   "id": "murs-T4",
+   "fascicule": "murs",
+   "numero": 4,
+   "page": 5,
+   "section": "1.1.2.1.2",
+   "titre": "Briques à perforations verticales de format moyen",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Brique (schéma p. 5)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "15",
+    "20",
+    "25"
+   ],
+   "variantes": {
+    "parentheses": "Joint vertical rempli de mortier (application parasismique)"
+   },
+   "lignes": [
+    {
+     "libelle": "Brique 1",
+     "cles": {
+      "Brique (schéma p. 5)": "Brique 1"
+     },
+     "valeurs": [
+      0.33,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Brique 2",
+     "cles": {
+      "Brique (schéma p. 5)": "Brique 2"
+     },
+     "valeurs": [
+      null,
+      0.51,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       0.47,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique 3",
+     "cles": {
+      "Brique (schéma p. 5)": "Brique 3"
+     },
+     "valeurs": [
+      null,
+      0.46,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       0.42,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique 4",
+     "cles": {
+      "Brique (schéma p. 5)": "Brique 4"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.56
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       null,
+       0.52
+      ]
+     }
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "murs-T5",
+   "fascicule": "murs",
+   "numero": 5,
+   "page": 6,
+   "section": "1.1.2.2",
+   "titre": "Briques à perforations horizontales (briques classiques)",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Brique (schéma p. 6)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "3,5",
+    "4",
+    "5",
+    "7,5",
+    "10",
+    "15",
+    "20",
+    "22,5",
+    "25",
+    "27"
+   ],
+   "variantes": {
+    "parentheses": "Joint vertical rempli de mortier"
+   },
+   "lignes": [
+    {
+     "libelle": "Brique 1",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 1"
+     },
+     "valeurs": [
+      0.08,
+      0.09,
+      0.11,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Brique 2",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 2"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.16,
+      0.21,
+      0.24,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Planelle",
+     "cles": {
+      "Brique (schéma p. 6)": "Planelle"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.24,
+      0.24,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Brique 4",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 4"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      0.35,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Brique 5",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 5"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      0.5,
+      null,
+      null,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       0.45,
+       null,
+       null,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique 6",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 6"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      0.47,
+      null,
+      null,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       null,
+       null,
+       null,
+       null,
+       null,
+       0.44,
+       null,
+       null,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique 7",
+     "cles": {
+      "Brique (schéma p. 6)": "Brique 7"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      0.56,
+      0.6,
+      0.63,
+      0.65
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Planelle : une seule case fusionnée couvre les épaisseurs 5 et 7,5 cm."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 15
+  },
+  {
+   "id": "murs-T6",
+   "fascicule": "murs",
+   "numero": 6,
+   "page": 7,
+   "section": "1.1.2.2",
+   "titre": "Briques à perforations horizontales de type G",
+   "famille": "terre_cuite",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Brique (schéma p. 7)",
+   "axe_colonnes": "Épaisseur E de l'élément (cm)",
+   "colonnes": [
+    "20",
+    "27",
+    "30"
+   ],
+   "variantes": {
+    "parentheses": "Joint vertical rempli de mortier (application parasismique)"
+   },
+   "lignes": [
+    {
+     "libelle": "Brique G 1",
+     "cles": {
+      "Brique (schéma p. 7)": "Brique G 1"
+     },
+     "valeurs": [
+      0.67,
+      null,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       0.63,
+       null,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique G 2",
+     "cles": {
+      "Brique (schéma p. 7)": "Brique G 2"
+     },
+     "valeurs": [
+      null,
+      0.84,
+      null
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       0.8,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Brique G 3",
+     "cles": {
+      "Brique (schéma p. 7)": "Brique G 3"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.86
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       null,
+       0.81
+      ]
+     }
+    },
+    {
+     "libelle": "Brique G 4",
+     "cles": {
+      "Brique (schéma p. 7)": "Brique G 4"
+     },
+     "valeurs": [
+      null,
+      null,
+      1.0
+     ],
+     "variantes": {
+      "parentheses": [
+       null,
+       null,
+       0.95
+      ]
+     }
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "murs-T7",
+   "fascicule": "murs",
+   "numero": 7,
+   "page": 8,
+   "section": "1.2.1",
+   "titre": "Blocs en béton de granulats courants destinés à rester apparents",
+   "famille": "beton",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Bloc",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Alvéoles borgnes 10 × 20 × 40",
+     "cles": {
+      "Profil": "Alvéoles borgnes",
+      "Dimensions (cm)": "10 x 20 x 40",
+      "Épaisseur (cm)": "9 ± 0,2",
+      "Hauteur (cm)": "19",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.09
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles borgnes 15 × 20 × 40",
+     "cles": {
+      "Profil": "Alvéoles borgnes",
+      "Dimensions (cm)": "15 x 20 x 40",
+      "Épaisseur (cm)": "14 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.13
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles borgnes 20 × 20 × 40",
+     "cles": {
+      "Profil": "Alvéoles borgnes",
+      "Dimensions (cm)": "20 x 20 x 40",
+      "Épaisseur (cm)": "19 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.16
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles borgnes 20 × 20 × 50",
+     "cles": {
+      "Profil": "Alvéoles borgnes",
+      "Dimensions (cm)": "20 x 20 x 50",
+      "Épaisseur (cm)": "19 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "49 ± 0,2"
+     },
+     "valeurs": [
+      0.17
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles débouchants 10 × 20 × 40",
+     "cles": {
+      "Profil": "Alvéoles débouchants",
+      "Dimensions (cm)": "10 x 20 x 40",
+      "Épaisseur (cm)": "9 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.12
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles 15 × 20 × 40",
+     "cles": {
+      "Profil": "Alvéoles",
+      "Dimensions (cm)": "15 x 20 x 40",
+      "Épaisseur (cm)": "14 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.17
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "débouchants 20 × 20 × 40",
+     "cles": {
+      "Profil": "débouchants",
+      "Dimensions (cm)": "20 x 20 x 40",
+      "Épaisseur (cm)": "19 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.2
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 5 × 20 × 40",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "5 x 20 x 40",
+      "Épaisseur (cm)": "4 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.03
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 10 × 20 × 40",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "10 x 20 x 40",
+      "Épaisseur (cm)": "9 ± 0,2",
+      "Hauteur (cm)": "19 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 10 × 10 × 20",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "10 x 10 x 20",
+      "Épaisseur (cm)": "9 ± 0,2",
+      "Hauteur (cm)": "9 ± 0,15",
+      "Longueur (cm)": "19 ± 0,2"
+     },
+     "valeurs": [
+      0.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 10 × 10 × 40",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "10 x 10 x 40",
+      "Épaisseur (cm)": "9 ± 0,2",
+      "Hauteur (cm)": "9 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 20 × 10 × 20",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "20 x 10 x 20",
+      "Épaisseur (cm)": "19 ± 0,2",
+      "Hauteur (cm)": "9 ± 0,15",
+      "Longueur (cm)": "19 ± 0,2"
+     },
+     "valeurs": [
+      0.13
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Blocs pleins 20 × 10 × 40",
+     "cles": {
+      "Profil": "Blocs pleins",
+      "Dimensions (cm)": "20 x 10 x 40",
+      "Épaisseur (cm)": "19 ± 0,2",
+      "Hauteur (cm)": "9 ± 0,15",
+      "Longueur (cm)": "39 ± 0,2"
+     },
+     "valeurs": [
+      0.12
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 13
+  },
+  {
+   "id": "murs-T8",
+   "fascicule": "murs",
+   "numero": 8,
+   "page": 9,
+   "section": "1.2.2",
+   "titre": "Blocs creux en béton de granulats courants (NF EN 771-3)",
+   "famille": "beton",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Bloc (dimensions de coordination modulaire, cm)",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {
+    "parentheses": "Joint central rempli de mortier (application parasismique)"
+   },
+   "lignes": [
+    {
+     "libelle": "5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.07
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7,5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "7,5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.1
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "10 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "10",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.12
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "12,5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "12,5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.13
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 50, une rangée",
+     "cles": {
+      "Épaisseur (cm)": "15",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.14
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 25 × 50, une rangée",
+     "cles": {
+      "Épaisseur (cm)": "15",
+      "Hauteur (cm)": "24",
+      "Rangées d'alvéoles": "1",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.14
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 50, deux rangées",
+     "cles": {
+      "Épaisseur (cm)": "15",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 25 × 50, deux rangées",
+     "cles": {
+      "Épaisseur (cm)": "15",
+      "Hauteur (cm)": "24",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "17,5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.21
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 50, deux rangées",
+     "cles": {
+      "Épaisseur (cm)": "20",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.23
+     ],
+     "variantes": {
+      "parentheses": [
+       0.21
+      ]
+     }
+    },
+    {
+     "libelle": "20 × 25 × 50, deux rangées",
+     "cles": {
+      "Épaisseur (cm)": "20",
+      "Hauteur (cm)": "24",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.23
+     ],
+     "variantes": {
+      "parentheses": [
+       0.21
+      ]
+     }
+    },
+    {
+     "libelle": "20 × 20 × 50, trois rangées",
+     "cles": {
+      "Épaisseur (cm)": "20",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "3",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.29
+     ],
+     "variantes": {
+      "parentheses": [
+       0.26
+      ]
+     }
+    },
+    {
+     "libelle": "22,5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "22,5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.24
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "25 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "25",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "3",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.32
+     ],
+     "variantes": {
+      "parentheses": [
+       0.28
+      ]
+     }
+    },
+    {
+     "libelle": "27,5 × 20 × 50",
+     "cles": {
+      "Épaisseur (cm)": "27,5",
+      "Hauteur (cm)": "19",
+      "Rangées d'alvéoles": "3",
+      "Montage": "joints traditionnels"
+     },
+     "valeurs": [
+      0.34
+     ],
+     "variantes": {
+      "parentheses": [
+       0.3
+      ]
+     }
+    },
+    {
+     "libelle": "20 cm deux rangées, joints minces (≤ 2 mm), avec voiles de pose",
+     "cles": {
+      "Épaisseur (cm)": "20",
+      "Hauteur (cm)": "19 ou 24",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints minces"
+     },
+     "valeurs": [
+      0.27
+     ],
+     "variantes": {
+      "parentheses": [
+       0.26
+      ]
+     }
+    },
+    {
+     "libelle": "20 cm deux rangées, joints minces (≤ 2 mm), sans voiles de pose",
+     "cles": {
+      "Épaisseur (cm)": "20",
+      "Hauteur (cm)": "19 ou 24",
+      "Rangées d'alvéoles": "2",
+      "Montage": "joints minces"
+     },
+     "valeurs": [
+      0.28
+     ],
+     "variantes": {
+      "parentheses": [
+       0.27
+      ]
+     }
+    }
+   ],
+   "remarques": [
+    "Joints minces : blocs marqués NF destinés à la pose collée (lettre « C ») et mortier sous évaluation technique (Avis Technique, DTA, certification)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 17
+  },
+  {
+   "id": "murs-T9",
+   "fascicule": "murs",
+   "numero": 9,
+   "page": 10,
+   "section": "1.2.3",
+   "titre": "Blocs pleins et pleins perforés en béton de granulats courants (NF EN 771-3)",
+   "famille": "beton",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Bloc",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "5 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "5 x 20 x 40",
+      "Épaisseur (cm)": "5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.03
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "5 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "5 x 20 x 50",
+      "Épaisseur (cm)": "5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.03
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "5 × 20 × 40, perforé (Ø 2 cm, 1 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "5 x 20 x 40",
+      "Épaisseur (cm)": "5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "2",
+      "Rangées d'alvéoles": "1",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.04
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "5 × 20 × 50, perforé (Ø 2 cm, 1 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "5 x 20 x 50",
+      "Épaisseur (cm)": "5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "2",
+      "Rangées d'alvéoles": "1",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.04
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7,5 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "7,5 x 20 x 40",
+      "Épaisseur (cm)": "7,5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.05
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7,5 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "7,5 x 20 x 50",
+      "Épaisseur (cm)": "7,5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.05
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7,5 × 20 × 40, perforé (Ø 4 cm, 1 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "7,5 x 20 x 40",
+      "Épaisseur (cm)": "7,5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "1",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.07
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "7,5 × 20 × 50, perforé (Ø 4 cm, 1 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "7,5 x 20 x 50",
+      "Épaisseur (cm)": "7,5 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "1",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.07
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "10 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "10 x 20 x 40",
+      "Épaisseur (cm)": "10 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "10 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "10 x 20 x 50",
+      "Épaisseur (cm)": "10 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "10 × 20 × 40, perforé (Ø 3,5 cm, 2 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "10 x 20 x 40",
+      "Épaisseur (cm)": "10 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "3,5",
+      "Rangées d'alvéoles": "2",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.11
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "10 × 20 × 50, perforé (Ø 3,5 cm, 2 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "10 x 20 x 50",
+      "Épaisseur (cm)": "10 ± 0,4",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "3,5",
+      "Rangées d'alvéoles": "2",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.11
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "12,5 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "12,5 x 20 x 40",
+      "Épaisseur (cm)": "12,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.08
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "12,5 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "12,5 x 20 x 50",
+      "Épaisseur (cm)": "12,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.08
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "12,5 × 20 × 40, perforé (Ø 4 cm, 2 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "12,5 x 20 x 40",
+      "Épaisseur (cm)": "12,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "2",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.13
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "12,5 × 20 × 50, perforé (Ø 4 cm, 2 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "12,5 x 20 x 50",
+      "Épaisseur (cm)": "12,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "2",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.13
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "15 x 20 x 40",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.09
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "15 x 20 x 50",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.09
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 40, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "15 x 20 x 40",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.15
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 20 × 50, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "15 x 20 x 50",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.15
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 20 x 40",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.11
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 20 x 50",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.11
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 20 × 40, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 20 x 40",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 20 × 50, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 20 x 50",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 40, plein",
+     "cles": {
+      "Dimensions (cm)": "20 x 20 x 40",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.12
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 50, plein",
+     "cles": {
+      "Dimensions (cm)": "20 x 20 x 50",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "-",
+      "Rangées d'alvéoles": "-",
+      "Type": "plein"
+     },
+     "valeurs": [
+      0.12
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 40, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "20 x 20 x 40",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "39,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.2
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 50, perforé (Ø 4 cm, 3 rangée(s))",
+     "cles": {
+      "Dimensions (cm)": "20 x 20 x 50",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Diamètre maximal (cm)": "4",
+      "Rangées d'alvéoles": "3",
+      "Type": "perforé"
+     },
+     "valeurs": [
+      0.2
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 28
+  },
+  {
+   "id": "murs-T10",
+   "fascicule": "murs",
+   "numero": 10,
+   "page": 11,
+   "section": "1.2.4",
+   "titre": "Blocs creux en béton de granulats légers (argile ou schiste expansé)",
+   "famille": "beton",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Bloc",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "10 × 30 × 50",
+     "cles": {
+      "Dimensions (cm)": "10 x 30 x 50",
+      "Épaisseur (cm)": "10 ± 0,4",
+      "Hauteur (cm)": "29 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "1"
+     },
+     "valeurs": [
+      0.21
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 30 × 50",
+     "cles": {
+      "Dimensions (cm)": "15 x 30 x 50",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "29 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.32
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 25 × 50",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 25 x 50",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "24 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.37
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "17,5 × 30 × 50",
+     "cles": {
+      "Dimensions (cm)": "17,5 x 30 x 50",
+      "Épaisseur (cm)": "17,5 ± 0,5",
+      "Hauteur (cm)": "29 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.37
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 20 × 50",
+     "cles": {
+      "Dimensions (cm)": "20 x 20 x 50",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "19 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.38
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 30 × 50",
+     "cles": {
+      "Dimensions (cm)": "20 x 30 x 50",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "29 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.38
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "22,5 × 30 × 50",
+     "cles": {
+      "Dimensions (cm)": "22,5 x 30 x 50",
+      "Épaisseur (cm)": "22,5 ± 0,5",
+      "Hauteur (cm)": "29 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5",
+      "Rangées d'alvéoles": "2"
+     },
+     "valeurs": [
+      0.4
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 7
+  },
+  {
+   "id": "murs-T11",
+   "fascicule": "murs",
+   "numero": 11,
+   "page": 11,
+   "section": "1.2.5",
+   "titre": "Blocs perforés en béton de granulats légers (argile ou schiste expansé)",
+   "famille": "beton",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Bloc",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "5 × 22,5 × 50",
+     "cles": {
+      "Dimensions (cm)": "5 x 22,5 x 50",
+      "Épaisseur (cm)": "5 ± 0,4",
+      "Hauteur (cm)": "21,5 ± 0,4",
+      "Longueur (cm)": "49,4 ± 0,5"
+     },
+     "valeurs": [
+      0.11
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "15 × 33 × 60",
+     "cles": {
+      "Dimensions (cm)": "15 x 33 x 60",
+      "Épaisseur (cm)": "15 ± 0,5",
+      "Hauteur (cm)": "32 ± 0,4",
+      "Longueur (cm)": "59,4 ± 0,5"
+     },
+     "valeurs": [
+      0.33
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "20 × 33 × 60",
+     "cles": {
+      "Dimensions (cm)": "20 x 33 x 60",
+      "Épaisseur (cm)": "20 ± 0,5",
+      "Hauteur (cm)": "32 ± 0,4",
+      "Longueur (cm)": "59,4 ± 0,5"
+     },
+     "valeurs": [
+      0.44
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "25 × 33 × 60",
+     "cles": {
+      "Dimensions (cm)": "25 x 33 x 60",
+      "Épaisseur (cm)": "25 ± 0,5",
+      "Hauteur (cm)": "32 ± 0,4",
+      "Longueur (cm)": "59,4 ± 0,5"
+     },
+     "valeurs": [
+      0.55
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "murs-T12",
+   "fascicule": "murs",
+   "numero": 12,
+   "page": 12,
+   "section": "2.1",
+   "titre": "Béton cellulaire : blocs maçonnés",
+   "famille": "beton_cellulaire",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Masse volumique nominale (kg/m³)",
+   "axe_colonnes": "Épaisseur des blocs (cm)",
+   "colonnes": [
+    "15",
+    "17,5",
+    "20",
+    "22,5",
+    "25",
+    "27,5",
+    "30",
+    "32,5",
+    "35",
+    "37,5"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "400 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "400"
+     },
+     "valeurs": [
+      0.75,
+      0.88,
+      1.01,
+      1.13,
+      1.26,
+      1.38,
+      1.51,
+      1.63,
+      1.76,
+      1.89
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "450 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "450"
+     },
+     "valeurs": [
+      0.7,
+      0.82,
+      0.94,
+      1.06,
+      1.17,
+      1.29,
+      1.41,
+      1.53,
+      1.64,
+      1.76
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "500 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "500"
+     },
+     "valeurs": [
+      0.66,
+      0.77,
+      0.88,
+      0.99,
+      1.1,
+      1.21,
+      1.32,
+      1.43,
+      1.54,
+      1.65
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "550 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "550"
+     },
+     "valeurs": [
+      0.62,
+      0.73,
+      0.83,
+      0.93,
+      1.04,
+      1.14,
+      1.24,
+      1.35,
+      1.45,
+      1.55
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "600 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "600"
+     },
+     "valeurs": [
+      0.58,
+      0.67,
+      0.77,
+      0.86,
+      0.96,
+      1.06,
+      1.15,
+      1.25,
+      1.34,
+      1.44
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "650 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "650"
+     },
+     "valeurs": [
+      0.54,
+      0.63,
+      0.72,
+      0.81,
+      0.9,
+      0.99,
+      1.07,
+      1.16,
+      1.25,
+      1.34
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "700 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "700"
+     },
+     "valeurs": [
+      0.5,
+      0.59,
+      0.67,
+      0.75,
+      0.84,
+      0.92,
+      1.01,
+      1.09,
+      1.17,
+      1.26
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "750 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "750"
+     },
+     "valeurs": [
+      0.47,
+      0.55,
+      0.63,
+      0.71,
+      0.79,
+      0.87,
+      0.95,
+      1.02,
+      1.1,
+      1.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "800 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "800"
+     },
+     "valeurs": [
+      0.45,
+      0.52,
+      0.6,
+      0.67,
+      0.74,
+      0.82,
+      0.89,
+      0.97,
+      1.04,
+      1.12
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Valeurs avant 2012 (bâtiments existants)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 90
+  },
+  {
+   "id": "murs-T13",
+   "fascicule": "murs",
+   "numero": 13,
+   "page": 12,
+   "section": "2.1",
+   "titre": "Béton cellulaire : blocs « collés »",
+   "famille": "beton_cellulaire",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Masse volumique nominale (kg/m³)",
+   "axe_colonnes": "Épaisseur des blocs (cm)",
+   "colonnes": [
+    "15",
+    "17,5",
+    "20",
+    "22,5",
+    "25",
+    "27,5",
+    "30",
+    "32,5",
+    "35",
+    "37,5"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "400 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "400"
+     },
+     "valeurs": [
+      0.94,
+      1.1,
+      1.26,
+      1.42,
+      1.57,
+      1.73,
+      1.89,
+      2.05,
+      2.2,
+      2.36
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "450 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "450"
+     },
+     "valeurs": [
+      0.86,
+      1.01,
+      1.15,
+      1.3,
+      1.44,
+      1.58,
+      1.73,
+      1.87,
+      2.01,
+      2.16
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "500 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "500"
+     },
+     "valeurs": [
+      0.8,
+      0.93,
+      1.06,
+      1.19,
+      1.33,
+      1.46,
+      1.59,
+      1.72,
+      1.86,
+      1.99
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "550 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "550"
+     },
+     "valeurs": [
+      0.74,
+      0.86,
+      0.98,
+      1.11,
+      1.23,
+      1.35,
+      1.48,
+      1.6,
+      1.72,
+      1.84
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "600 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "600"
+     },
+     "valeurs": [
+      0.67,
+      0.8,
+      0.9,
+      1.01,
+      1.12,
+      1.23,
+      1.35,
+      1.46,
+      1.57,
+      1.68
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "650 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "650"
+     },
+     "valeurs": [
+      0.62,
+      0.72,
+      0.82,
+      0.93,
+      1.03,
+      1.13,
+      1.24,
+      1.34,
+      1.44,
+      1.54
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "700 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "700"
+     },
+     "valeurs": [
+      0.57,
+      0.67,
+      0.76,
+      0.86,
+      0.95,
+      1.05,
+      1.14,
+      1.24,
+      1.33,
+      1.43
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "750 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "750"
+     },
+     "valeurs": [
+      0.53,
+      0.62,
+      0.71,
+      0.8,
+      0.89,
+      0.98,
+      1.06,
+      1.15,
+      1.24,
+      1.33
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "800 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "800"
+     },
+     "valeurs": [
+      0.5,
+      0.58,
+      0.66,
+      0.75,
+      0.83,
+      0.91,
+      0.99,
+      1.08,
+      1.16,
+      1.24
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Valeurs avant 2012 (bâtiments existants)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 90
+  },
+  {
+   "id": "murs-T14",
+   "fascicule": "murs",
+   "numero": 14,
+   "page": 13,
+   "section": "2.1",
+   "titre": "Béton cellulaire : maçonnerie montée à joints minces ou collés",
+   "famille": "beton_cellulaire",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Masse volumique nominale (kg/m³)",
+   "axe_colonnes": "Épaisseur des blocs (cm)",
+   "colonnes": [
+    "15",
+    "17,5",
+    "20",
+    "22,5",
+    "25",
+    "27,5",
+    "30",
+    "36,5",
+    "40",
+    "50"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "350 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "350"
+     },
+     "valeurs": [
+      1.28,
+      1.5,
+      1.71,
+      1.93,
+      2.14,
+      2.35,
+      2.57,
+      3.12,
+      3.42,
+      4.28
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "400 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "400"
+     },
+     "valeurs": [
+      1.14,
+      1.33,
+      1.52,
+      1.71,
+      1.9,
+      2.09,
+      2.28,
+      2.77,
+      3.04,
+      3.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "450 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "450"
+     },
+     "valeurs": [
+      1.02,
+      1.19,
+      1.36,
+      1.54,
+      1.71,
+      1.88,
+      2.05,
+      2.49,
+      2.73,
+      3.41
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "500 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "500"
+     },
+     "valeurs": [
+      0.9,
+      1.05,
+      1.2,
+      1.35,
+      1.5,
+      1.65,
+      1.8,
+      2.19,
+      2.4,
+      3.01
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "550 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "550"
+     },
+     "valeurs": [
+      0.81,
+      0.94,
+      1.07,
+      1.21,
+      1.34,
+      1.48,
+      1.61,
+      1.96,
+      2.15,
+      2.69
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "600 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "600"
+     },
+     "valeurs": [
+      0.73,
+      0.85,
+      0.97,
+      1.09,
+      1.21,
+      1.34,
+      1.46,
+      1.77,
+      1.94,
+      2.43
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "700 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "700"
+     },
+     "valeurs": [
+      0.65,
+      0.76,
+      0.87,
+      0.98,
+      1.08,
+      1.19,
+      1.3,
+      1.58,
+      1.73,
+      2.17
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "800 kg/m³",
+     "cles": {
+      "Masse volumique nominale (kg/m³)": "800"
+     },
+     "valeurs": [
+      0.59,
+      0.69,
+      0.78,
+      0.88,
+      0.98,
+      1.08,
+      1.17,
+      1.43,
+      1.57,
+      1.96
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Valeurs à partir de la RT 2012."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 80
+  },
+  {
+   "id": "planchers-T1",
+   "fascicule": "planchers",
+   "numero": 1,
+   "page": 1,
+   "section": "1.1.1",
+   "titre": "Plancher à entrevous en terre cuite, sans dalle de compression ou avec dalle en béton de granulats lourds",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Coupe du plancher entre poutrelles (schéma p. 1)",
+   "axe_colonnes": "Hauteur des entrevous (cm)",
+   "colonnes": [
+    "8",
+    "12",
+    "16",
+    "20",
+    "25"
+   ],
+   "variantes": {
+    "dalle_argile_expansee": "Avec dalle de compression en béton d'argile ou de schiste expansé, ≥ 4 cm (§1.1.2 : + 0,03)"
+   },
+   "lignes": [
+    {
+     "libelle": "Coupe 1, entraxe 50 ≤ E ≤ 60 cm",
+     "cles": {
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "50 ≤ E ≤ 60"
+     },
+     "valeurs": [
+      0.16,
+      0.19,
+      null,
+      null,
+      null
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       0.19,
+       0.22,
+       null,
+       null,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Coupe 1, entraxe 60 < E ≤ 70 cm",
+     "cles": {
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      0.17,
+      0.2,
+      null,
+      null,
+      null
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       0.2,
+       0.23,
+       null,
+       null,
+       null
+      ]
+     }
+    },
+    {
+     "libelle": "Coupe 2, entraxe 50 ≤ E ≤ 60 cm",
+     "cles": {
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "50 ≤ E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      0.22,
+      0.26,
+      0.29,
+      0.33
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       null,
+       0.25,
+       0.29,
+       0.32,
+       0.36
+      ]
+     }
+    },
+    {
+     "libelle": "Coupe 2, entraxe 60 < E ≤ 70 cm",
+     "cles": {
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      0.24,
+      0.28,
+      0.31,
+      0.35
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       null,
+       0.27,
+       0.31,
+       0.34,
+       0.38
+      ]
+     }
+    },
+    {
+     "libelle": "Coupe 3, entraxe 50 ≤ E ≤ 60 cm",
+     "cles": {
+      "Coupe": "Coupe 3",
+      "Entraxe des poutrelles E (cm)": "50 ≤ E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.28,
+      0.31,
+      0.35
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       null,
+       null,
+       0.31,
+       0.34,
+       0.38
+      ]
+     }
+    },
+    {
+     "libelle": "Coupe 3, entraxe 60 < E ≤ 70 cm",
+     "cles": {
+      "Coupe": "Coupe 3",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.3,
+      0.33,
+      0.37
+     ],
+     "variantes": {
+      "dalle_argile_expansee": [
+       null,
+       null,
+       0.33,
+       0.36,
+       0.4
+      ]
+     }
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 18
+  },
+  {
+   "id": "planchers-T2",
+   "fascicule": "planchers",
+   "numero": 2,
+   "page": 2,
+   "section": "1.2.1",
+   "titre": "Plancher à entrevous en béton de granulats courants (NF EN 15037-2)",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Coupe du plancher entre poutrelles (schéma p. 2)",
+   "axe_colonnes": "Hauteur des entrevous (cm)",
+   "colonnes": [
+    "8",
+    "12",
+    "16",
+    "20",
+    "25",
+    "30"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Coupe 1, entraxe 50 < E ≤ 60 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      0.11,
+      0.13,
+      0.15,
+      0.17,
+      0.2,
+      0.22
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 60 < E ≤ 70 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      0.12,
+      0.14,
+      0.16,
+      0.18,
+      0.21,
+      0.23
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 50 < E ≤ 60 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.22,
+      0.26,
+      0.3
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 60 < E ≤ 70 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.23,
+      0.27,
+      0.31
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      0.19,
+      0.21,
+      0.23,
+      0.27,
+      0.28,
+      0.3
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      0.2,
+      0.22,
+      0.24,
+      0.26,
+      0.29,
+      0.31
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.31,
+      0.35,
+      0.38
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.32,
+      0.36,
+      0.4
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [
+    {
+     "ligne": 4,
+     "colonne": 3,
+     "message": "Valeur à vérifier : Coupe 1, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé) (20) : 0,26 après 0,27 (Coupe 1, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé), 20), R devrait être croissante selon entraxe des poutrelles E (cm)"
+    },
+    {
+     "ligne": 5,
+     "colonne": 3,
+     "message": "Valeur à vérifier : Coupe 1, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé) (20) : 0,26 après 0,27 (Coupe 1, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé), 20), R devrait être croissante selon entraxe des poutrelles E (cm)"
+    }
+   ],
+   "statut": "alerte",
+   "nombre_valeurs": 36
+  },
+  {
+   "id": "planchers-T3",
+   "fascicule": "planchers",
+   "numero": 3,
+   "page": 3,
+   "section": "1.2.2",
+   "titre": "Plancher à entrevous en béton d'argile expansé ou de schiste expansé",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Coupe du plancher entre poutrelles (schéma p. 2)",
+   "axe_colonnes": "Hauteur des entrevous (cm)",
+   "colonnes": [
+    "8",
+    "12",
+    "16",
+    "20",
+    "25",
+    "30"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Coupe 1, entraxe 50 < E ≤ 60 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      0.21,
+      0.23,
+      0.25,
+      0.27,
+      0.29,
+      0.31
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 60 < E ≤ 70 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      0.22,
+      0.24,
+      0.26,
+      0.28,
+      0.3,
+      0.32
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 50 < E ≤ 60 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.34,
+      0.37,
+      0.4
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 60 < E ≤ 70 cm (sans dalle ou dalle en granulats lourds)",
+     "cles": {
+      "Dalle de compression": "Planchers sans dalle de compression ou avec dalle de compression en béton de granulats lourds",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.35,
+      0.38,
+      0.41
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      0.29,
+      0.31,
+      0.33,
+      0.35,
+      0.37,
+      0.39
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 1, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 1",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      0.3,
+      0.32,
+      0.34,
+      0.36,
+      0.38,
+      0.4
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "50 < E ≤ 60"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.43,
+      0.46,
+      0.49
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Coupe 2, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé)",
+     "cles": {
+      "Dalle de compression": "Planchers avec dalle de compression en béton d’argile expansé ou de schiste expansé de masse volumique comprise entre 1 400 et 1 800 kg/m3. Son épaisseur est égale à 5 cm",
+      "Coupe": "Coupe 2",
+      "Entraxe des poutrelles E (cm)": "60 < E ≤ 70"
+     },
+     "valeurs": [
+      null,
+      null,
+      null,
+      0.45,
+      0.48,
+      0.51
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 36
+  },
+  {
+   "id": "planchers-T4",
+   "fascicule": "planchers",
+   "numero": 4,
+   "page": 6,
+   "section": "2.1.1.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés sans languette, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.48,
+      0.52,
+      0.55
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.43,
+      0.47,
+      0.5
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.51,
+      0.55,
+      0.58
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.45,
+      0.5,
+      0.52
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.52,
+      0.57,
+      0.6
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.47,
+      0.51,
+      0.54
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.55,
+      0.61,
+      0.64
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.49,
+      0.54,
+      0.57
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 24
+  },
+  {
+   "id": "planchers-T5",
+   "fascicule": "planchers",
+   "numero": 5,
+   "page": 7,
+   "section": "2.1.1.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés sans languette, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.54,
+      0.58,
+      0.61
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.47,
+      0.51,
+      0.54
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.6,
+      0.65,
+      0.68
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.52,
+      0.57,
+      0.6
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.63,
+      0.69,
+      0.72
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.55,
+      0.6,
+      0.64
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.68,
+      0.74,
+      0.77
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.59,
+      0.65,
+      0.68
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 24
+  },
+  {
+   "id": "planchers-T6",
+   "fascicule": "planchers",
+   "numero": 6,
+   "page": 8,
+   "section": "2.1.2.1.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés à languette, fond plat, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.84,
+      1.91,
+      1.96
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.75,
+      1.83,
+      1.87
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.91,
+      2.0,
+      2.05
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.81,
+      1.91,
+      1.96
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.94,
+      2.05,
+      2.1
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.85,
+      1.95,
+      2.0
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.99,
+      2.1,
+      2.16
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.85,
+      2.0,
+      2.06
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.09,
+      2.18,
+      2.22
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.01,
+      2.09,
+      2.14
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.17,
+      2.27,
+      2.33
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.08,
+      2.18,
+      2.24
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.21,
+      2.32,
+      2.38
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.11,
+      2.22,
+      2.28
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.3,
+      2.38,
+      2.44
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.16,
+      2.27,
+      2.34
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.35,
+      2.43,
+      2.48
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.27,
+      2.35,
+      2.4
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.43,
+      2.54,
+      2.6
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.34,
+      2.45,
+      2.51
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.47,
+      2.59,
+      2.65
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.38,
+      2.49,
+      2.55
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.68,
+      2.65,
+      2.72
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.42,
+      2.55,
+      2.62
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.58,
+      2.68,
+      2.72
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.51,
+      2.59,
+      2.65
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.67,
+      2.78,
+      2.84
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.58,
+      2.69,
+      2.9
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.72,
+      2.83,
+      2.9
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.62,
+      2.74,
+      2.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.76,
+      2.9,
+      2.97
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.66,
+      2.8,
+      2.87
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [
+    {
+     "ligne": 22,
+     "colonne": 0,
+     "message": "Valeur à vérifier : languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm (600 ≤ le < 630) : 2,65 après 2,68 (languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm, 550 ≤ le < 600), R devrait être croissante selon entraxe des poutrelles le (mm)"
+    },
+    {
+     "ligne": 22,
+     "colonne": 1,
+     "message": "Valeur à vérifier : languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm (600 ≤ le < 630) : 2,65 après 2,68 (languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm, 550 ≤ le < 600), R devrait être croissante selon entraxe des poutrelles le (mm)"
+    },
+    {
+     "ligne": 27,
+     "colonne": 2,
+     "message": "Valeur à vérifier : languette 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,8 après 2,9 (languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm, le ≥ 630), R devrait être croissante selon hauteur des entrevous de (mm)"
+    },
+    {
+     "ligne": 29,
+     "colonne": 2,
+     "message": "Valeur à vérifier : languette 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,8 après 2,9 (languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm, le ≥ 630), R devrait être croissante selon hauteur des entrevous de (mm)"
+    },
+    {
+     "ligne": 26,
+     "colonne": 2,
+     "message": "Valeur à vérifier : languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,9 après 2,84 (languette 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm, le ≥ 630), R devrait être décroissante selon largeur du talon lo (mm)"
+    },
+    {
+     "ligne": 27,
+     "colonne": 2,
+     "message": "Valeur à vérifier : languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,9 après 2,84 (languette 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm, le ≥ 630), R devrait être décroissante selon largeur du talon lo (mm)"
+    }
+   ],
+   "statut": "alerte",
+   "nombre_valeurs": 96
+  },
+  {
+   "id": "planchers-T7",
+   "fascicule": "planchers",
+   "numero": 7,
+   "page": 9,
+   "section": "2.1.2.1.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés à languette, fond plat, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.82,
+      1.9,
+      1.94
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.72,
+      1.8,
+      1.84
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.94,
+      2.03,
+      2.08
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.82,
+      1.89,
+      1.93
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.0,
+      2.11,
+      2.16
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.88,
+      1.98,
+      2.04
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.08,
+      2.19,
+      2.26
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.95,
+      2.06,
+      2.12
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.07,
+      2.15,
+      2.19
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.97,
+      2.05,
+      2.09
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.2,
+      2.29,
+      2.34
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.08,
+      2.17,
+      2.21
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.26,
+      2.37,
+      2.43
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.14,
+      2.24,
+      2.3
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.35,
+      2.46,
+      2.53
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.21,
+      2.33,
+      2.39
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.32,
+      2.4,
+      2.44
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.22,
+      2.3,
+      2.35
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.45,
+      2.55,
+      2.6
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.33,
+      2.43,
+      2.49
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.51,
+      2.62,
+      2.69
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.39,
+      2.5,
+      2.57
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.6,
+      2.73,
+      2.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.47,
+      2.59,
+      2.66
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.55,
+      2.63,
+      2.67
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.45,
+      2.53,
+      2.58
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.69,
+      2.78,
+      2.83
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.57,
+      2.67,
+      2.73
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.75,
+      2.86,
+      2.92
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.63,
+      2.74,
+      2.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.85,
+      2.97,
+      3.04
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.71,
+      2.84,
+      2.91
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 96
+  },
+  {
+   "id": "planchers-T8",
+   "fascicule": "planchers",
+   "numero": 8,
+   "page": 10,
+   "section": "2.1.2.2.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés à languette, fond décaissé, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.49,
+      1.55,
+      1.59
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.44,
+      1.51,
+      1.54
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.57,
+      1.65,
+      1.69
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.51,
+      1.59,
+      1.64
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.61,
+      1.69,
+      1.74
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.55,
+      1.63,
+      1.69
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.65,
+      1.75,
+      1.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.59,
+      1.68,
+      1.74
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.6,
+      1.66,
+      1.7
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.57,
+      1.63,
+      1.67
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.69,
+      1.77,
+      1.81
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.65,
+      1.73,
+      1.77
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.73,
+      1.82,
+      1.87
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.69,
+      1.78,
+      1.83
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.78,
+      1.88,
+      1.93
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.73,
+      1.83,
+      1.89
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 48
+  },
+  {
+   "id": "planchers-T9",
+   "fascicule": "planchers",
+   "numero": 9,
+   "page": 11,
+   "section": "2.1.2.2.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : découpés à languette, fond décaissé, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm)",
+   "colonnes": [
+    "550 ≤ le < 600",
+    "600 ≤ le < 630",
+    "le ≥ 630"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.49,
+      1.55,
+      1.59
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.42,
+      1.48,
+      1.52
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.62,
+      1.69,
+      1.73
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.54,
+      1.61,
+      1.65
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.69,
+      1.77,
+      1.82
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.59,
+      1.68,
+      1.73
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.77,
+      1.86,
+      1.92
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.67,
+      1.76,
+      1.82
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.59,
+      1.65,
+      1.69
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.54,
+      1.6,
+      1.64
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.73,
+      1.81,
+      1.86
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "150",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.67,
+      1.75,
+      1.79
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.81,
+      1.89,
+      1.94
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.73,
+      1.82,
+      1.87
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.9,
+      1.99,
+      2.05
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 200 et + mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "200 et +",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.81,
+      1.91,
+      1.96
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 48
+  },
+  {
+   "id": "planchers-T10",
+   "fascicule": "planchers",
+   "numero": 10,
+   "page": 13,
+   "section": "2.2.1.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés sans languette, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.44,
+      0.46,
+      0.48,
+      0.49,
+      0.51,
+      0.5
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.41,
+      0.43,
+      0.45,
+      0.47,
+      0.47,
+      0.49
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 12
+  },
+  {
+   "id": "planchers-T11",
+   "fascicule": "planchers",
+   "numero": 11,
+   "page": 14,
+   "section": "2.2.1.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés sans languette, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      0.5,
+      0.53,
+      0.54,
+      0.58,
+      0.56,
+      0.61
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      0.44,
+      0.46,
+      0.48,
+      0.51,
+      0.5,
+      0.55
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 12
+  },
+  {
+   "id": "planchers-T12",
+   "fascicule": "planchers",
+   "numero": 12,
+   "page": 15,
+   "section": "2.2.2.1.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés à languette, fond plat, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.42,
+      1.62,
+      1.45,
+      1.68,
+      1.46,
+      1.71
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.4,
+      1.52,
+      1.42,
+      1.56,
+      1.43,
+      1.59
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.68,
+      1.88,
+      1.7,
+      1.94,
+      1.72,
+      1.97
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.65,
+      1.78,
+      1.67,
+      1.82,
+      1.69,
+      1.85
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.91,
+      2.14,
+      1.95,
+      2.2,
+      1.97,
+      2.23
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.9,
+      2.03,
+      1.92,
+      2.08,
+      1.94,
+      2.1
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.15,
+      2.38,
+      2.19,
+      2.44,
+      2.21,
+      2.47
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.14,
+      2.27,
+      2.16,
+      2.32,
+      2.18,
+      2.35
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 48
+  },
+  {
+   "id": "planchers-T13",
+   "fascicule": "planchers",
+   "numero": 13,
+   "page": 16,
+   "section": "2.2.2.1.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés à languette, fond plat, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.45,
+      1.69,
+      1.48,
+      1.74,
+      1.49,
+      1.77
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.41,
+      1.6,
+      1.44,
+      1.65,
+      1.46,
+      1.68
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.7,
+      1.95,
+      1.73,
+      2.0,
+      1.74,
+      2.03
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 40 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.66,
+      1.86,
+      1.69,
+      1.91,
+      1.71,
+      1.94
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.95,
+      2.21,
+      1.97,
+      2.26,
+      1.98,
+      2.29
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 50 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "50",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.91,
+      2.12,
+      1.94,
+      2.17,
+      1.96,
+      2.2
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      2.19,
+      2.45,
+      2.22,
+      2.51,
+      2.24,
+      2.54
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 60 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      2.15,
+      2.36,
+      2.19,
+      2.42,
+      2.2,
+      2.45
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 48
+  },
+  {
+   "id": "planchers-T14",
+   "fascicule": "planchers",
+   "numero": 14,
+   "page": 17,
+   "section": "2.2.2.2.1",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés à languette, fond décaissé, type « dérogation couture »",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.3,
+      1.48,
+      1.34,
+      1.53,
+      1.35,
+      1.57
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.28,
+      1.39,
+      1.31,
+      1.44,
+      1.33,
+      1.47
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.38,
+      1.59,
+      1.41,
+      1.64,
+      1.43,
+      1.67
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.38,
+      1.5,
+      1.4,
+      1.55,
+      1.42,
+      1.58
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 24
+  },
+  {
+   "id": "planchers-T15",
+   "fascicule": "planchers",
+   "numero": 15,
+   "page": 18,
+   "section": "2.2.2.2.2",
+   "titre": "Plancher à entrevous en polystyrène expansé : moulés à languette, fond décaissé, rectangulaires chanfreinés",
+   "famille": "plancher_entrevous",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Entrevous et poutrelle",
+   "axe_colonnes": "Entraxe des poutrelles le (mm) et rangées d'alvéoles",
+   "colonnes": [
+    "550 ≤ le < 600 · 1 rangée",
+    "550 ≤ le < 600 · 2 rangées et plus",
+    "600 ≤ le < 630 · 1 rangée",
+    "600 ≤ le < 630 · 2 rangées et plus",
+    "le ≥ 630 · 1 rangée",
+    "le ≥ 630 · 2 rangées et plus"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.33,
+      1.54,
+      1.36,
+      1.6,
+      1.38,
+      1.63
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 30 à 40 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "30 à 40",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.29,
+      1.47,
+      1.33,
+      1.52,
+      1.35,
+      1.55
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 à 170 mm, talon 95 ≤ lo ≤ 125 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "95 ≤ lo ≤ 125"
+     },
+     "valeurs": [
+      1.41,
+      1.65,
+      1.44,
+      1.7,
+      1.46,
+      1.73
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "languette 45 à 60 mm, entrevous 120 à 170 mm, talon 125 < lo ≤ 140 mm",
+     "cles": {
+      "Épaisseur de la languette dL (mm)": "45 à 60",
+      "Hauteur des entrevous de (mm)": "120 à 170",
+      "Largeur du talon lo (mm)": "125 < lo ≤ 140"
+     },
+     "valeurs": [
+      1.38,
+      1.59,
+      1.42,
+      1.64,
+      1.44,
+      1.67
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Hauteurs d'entrevous et épaisseurs de languette intermédiaires : interpolation linéaire admise par le document (§2)."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 24
+  },
+  {
+   "id": "planchers-T16",
+   "fascicule": "planchers",
+   "numero": 16,
+   "page": 19,
+   "section": "3",
+   "titre": "Dalles alvéolées à base de granulats courants (NF EN 1168)",
+   "famille": "plancher_beton",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "e / l : cloison interne mini sur largeur de l'alvéole",
+   "axe_colonnes": "Épaisseur E du plancher (cm)",
+   "colonnes": [
+    "15",
+    "20",
+    "25",
+    "30",
+    "35",
+    "40"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "e/l ≤ 0,3",
+     "cles": {
+      "e / l : cloison interne mini sur largeur de l'alvéole": "e/l ≤ 0,3"
+     },
+     "valeurs": [
+      0.16,
+      0.18,
+      0.2,
+      0.22,
+      0.24,
+      0.27
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "0,3 < e/l ≤ 0,5",
+     "cles": {
+      "e / l : cloison interne mini sur largeur de l'alvéole": "0,3 < e/l ≤ 0,5"
+     },
+     "valeurs": [
+      null,
+      0.16,
+      0.18,
+      0.2,
+      0.22,
+      0.25
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "0,5 < e/l < 1,0",
+     "cles": {
+      "e / l : cloison interne mini sur largeur de l'alvéole": "0,5 < e/l < 1,0"
+     },
+     "valeurs": [
+      null,
+      null,
+      0.15,
+      0.17,
+      0.19,
+      0.21
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Note du document : des valeurs intermédiaires peuvent être obtenues par interpolation linéaire."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 15
+  },
+  {
+   "id": "planchers-T17",
+   "fascicule": "planchers",
+   "numero": 17,
+   "page": 19,
+   "section": "4.1.1",
+   "titre": "Laines minérales projetées en sous-face (liant hydraulique, DTU 27.1)",
+   "famille": "isolant_vrac",
+   "isolant": true,
+   "lecture": "texte",
+   "axe_lignes": "Isolant et masse volumique en œuvre",
+   "axe_colonnes": "Épaisseur moyenne de la projection (mm)",
+   "colonnes": [
+    "30 mesurés (25 réels)",
+    "40 mesurés (35 réels)",
+    "50 mesurés (45 réels)",
+    "60 mesurés (55 réels)",
+    "70 mesurés (65 réels)",
+    "80 mesurés (75 réels)",
+    "90 mesurés (85 réels)",
+    "100 mesurés (95 réels)",
+    "110 mesurés (105 réels)",
+    "120 mesurés (115 réels)",
+    "130 mesurés (125 réels)"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Laine de laitier ou de roche avec liant hydraulique · Masse volumique en œuvre : 140 à 200 kg/m3",
+     "cles": {
+      "Isolant": "Laine de laitier ou de roche avec liant hydraulique",
+      "Masse volumique en œuvre": "Masse volumique en œuvre : 140 à 200 kg/m3"
+     },
+     "valeurs": [
+      0.55,
+      0.75,
+      1.0,
+      1.2,
+      1.45,
+      1.65,
+      1.85,
+      2.05,
+      2.3,
+      2.5,
+      2.7
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Laine de laitier ou de roche avec liant hydraulique · Masse volumique en œuvre : 200 à 300 kg/m3",
+     "cles": {
+      "Isolant": "Laine de laitier ou de roche avec liant hydraulique",
+      "Masse volumique en œuvre": "Masse volumique en œuvre : 200 à 300 kg/m3"
+     },
+     "valeurs": [
+      0.5,
+      0.7,
+      0.9,
+      1.1,
+      1.3,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Laine de laitier ou de roche avec liant hydraulique · Masse volumique en œuvre : 300 à 500 kg/m3",
+     "cles": {
+      "Isolant": "Laine de laitier ou de roche avec liant hydraulique",
+      "Masse volumique en œuvre": "Masse volumique en œuvre : 300 à 500 kg/m3"
+     },
+     "valeurs": [
+      0.35,
+      0.5,
+      0.65,
+      0.8,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 20
+  },
+  {
+   "id": "toitures-T1",
+   "fascicule": "toitures",
+   "numero": 1,
+   "page": 1,
+   "section": "1.1.1.3.1",
+   "titre": "Isolant en vrac soufflé à la machine sur plancher plat de combles perdus",
+   "famille": "isolant_vrac",
+   "isolant": true,
+   "lecture": "texte",
+   "axe_lignes": "Isolant",
+   "axe_colonnes": "Épaisseur minimale de la couche déposée (cm)",
+   "colonnes": [
+    "20",
+    "30",
+    "40",
+    "50",
+    "60",
+    "70"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Ouate de cellulose",
+     "cles": {
+      "Isolant": "Ouate de cellulose"
+     },
+     "valeurs": [
+      3.0,
+      4.55,
+      6.05,
+      7.6,
+      9.1,
+      10.65
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Fibres de bois",
+     "cles": {
+      "Isolant": "Fibres de bois"
+     },
+     "valeurs": [
+      2.5,
+      3.8,
+      5.05,
+      6.35,
+      7.6,
+      8.9
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Fibres de coton",
+     "cles": {
+      "Isolant": "Fibres de coton"
+     },
+     "valeurs": [
+      2.35,
+      3.5,
+      4.7,
+      5.9,
+      7.05,
+      8.25
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Chanvre et lin",
+     "cles": {
+      "Isolant": "Chanvre et lin"
+     },
+     "valeurs": [
+      2.2,
+      3.35,
+      4.45,
+      5.6,
+      6.7,
+      7.8
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Laines minérales",
+     "cles": {
+      "Isolant": "Laines minérales"
+     },
+     "valeurs": [
+      3.35,
+      5.05,
+      6.75,
+      8.45,
+      10.15,
+      11.85
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 30
+  },
+  {
+   "id": "toitures-T2",
+   "fascicule": "toitures",
+   "numero": 2,
+   "page": 1,
+   "section": "1.1.1.3.2",
+   "titre": "Isolant en vrac déversé manuellement sur plancher plat de combles perdus",
+   "famille": "isolant_vrac",
+   "isolant": true,
+   "lecture": "texte",
+   "axe_lignes": "Isolant",
+   "axe_colonnes": "Épaisseur minimale de la couche déposée (cm)",
+   "colonnes": [
+    "20",
+    "30",
+    "40",
+    "50",
+    "60",
+    "70"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Ouate de cellulose",
+     "cles": {
+      "Isolant": "Ouate de cellulose"
+     },
+     "valeurs": [
+      2.85,
+      4.25,
+      5.7,
+      7.1,
+      8.55,
+      10.0
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Chanvre et lin",
+     "cles": {
+      "Isolant": "Chanvre et lin"
+     },
+     "valeurs": [
+      2.15,
+      3.25,
+      4.3,
+      5.4,
+      6.5,
+      7.55
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Laines minérales",
+     "cles": {
+      "Isolant": "Laines minérales"
+     },
+     "valeurs": [
+      2.9,
+      4.35,
+      5.8,
+      7.3,
+      8.75,
+      10.2
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Vermiculite : classe granulaire 0.5/5",
+     "cles": {
+      "Isolant": "Vermiculite : classe granulaire 0.5/5"
+     },
+     "valeurs": [
+      2.35,
+      3.5,
+      4.7,
+      5.85,
+      7.05,
+      8.2
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 24
+  },
+  {
+   "id": "cloisons-T1",
+   "fascicule": "cloisons",
+   "numero": 1,
+   "page": 1,
+   "section": "1.1",
+   "titre": "Carreaux pleins de plâtre à enduire",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Élément",
+   "axe_colonnes": "Épaisseur (cm)",
+   "colonnes": [
+    "5",
+    "7"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "De mâchefer Masse volumique : 1 000 à 1 400 kg/m3",
+     "cles": {
+      "Élément": "De mâchefer Masse volumique : 1 000 à 1 400 kg/m3"
+     },
+     "valeurs": [
+      0.11,
+      0.15
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "De pouzzolane Masse volumique : 1 200 à 1 300 kg/m3",
+     "cles": {
+      "Élément": "De pouzzolane Masse volumique : 1 200 à 1 300 kg/m3"
+     },
+     "valeurs": [
+      0.12,
+      0.17
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "cloisons-T2",
+   "fascicule": "cloisons",
+   "numero": 2,
+   "page": 1,
+   "section": "1.2",
+   "titre": "Plaques de plâtre à parements de carton",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Élément",
+   "axe_colonnes": "Épaisseur (cm)",
+   "colonnes": [
+    "1,0",
+    "1,25 et 1,5"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Plaque de plâtre (masse volumique 800 à 900 kg/m³)",
+     "cles": {
+      "Élément": "Plaque de plâtre (masse volumique 800 à 900 kg/m³)"
+     },
+     "valeurs": [
+      0.04,
+      0.05
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 2
+  },
+  {
+   "id": "cloisons-T3",
+   "fascicule": "cloisons",
+   "numero": 3,
+   "page": 1,
+   "section": "1.3",
+   "titre": "Carreaux de plâtre pleins à parements lisses",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Élément",
+   "axe_colonnes": "Épaisseur (cm)",
+   "colonnes": [
+    "5",
+    "6 (*)",
+    "7 (*)",
+    "10 (*)"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Carreau plein (masse volumique 900 à 1 000 kg/m³)",
+     "cles": {
+      "Élément": "Carreau plein (masse volumique 900 à 1 000 kg/m³)"
+     },
+     "valeurs": [
+      0.14,
+      0.17,
+      0.2,
+      0.29
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "* Ces carreaux sont conformes à la norme NF P 72-301."
+   ],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "cloisons-T4",
+   "fascicule": "cloisons",
+   "numero": 4,
+   "page": 1,
+   "section": "1.4",
+   "titre": "Carreaux et grands éléments de plâtre alvéolés",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Élément",
+   "axe_colonnes": "Épaisseur (cm)",
+   "colonnes": [
+    "6",
+    "7"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Carreau alvéolé (900 à 1 000 kg/m³, 20 à 35 % de vides)",
+     "cles": {
+      "Élément": "Carreau alvéolé (900 à 1 000 kg/m³, 20 à 35 % de vides)"
+     },
+     "valeurs": [
+      0.2,
+      0.22
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 2
+  },
+  {
+   "id": "cloisons-T5",
+   "fascicule": "cloisons",
+   "numero": 5,
+   "page": 2,
+   "section": "1.5",
+   "titre": "Panneaux de particules de bois extrudé (rangée d'alvéoles parallèle aux faces)",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "image",
+   "axe_lignes": "Coupe du panneau alvéolé (schéma p. 2)",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Alvéoles Ø 1,6 cm, épaisseur 3 cm",
+     "cles": {
+      "Épaisseur (cm)": "3"
+     },
+     "valeurs": [
+      0.16
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles Ø 2,1 cm, épaisseur 3,5 cm",
+     "cles": {
+      "Épaisseur (cm)": "3,5"
+     },
+     "valeurs": [
+      0.18
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles Ø 3,0 cm, épaisseur 5 cm",
+     "cles": {
+      "Épaisseur (cm)": "5"
+     },
+     "valeurs": [
+      0.23
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Alvéoles Ø 4,8 cm, épaisseur 7 cm",
+     "cles": {
+      "Épaisseur (cm)": "7"
+     },
+     "valeurs": [
+      0.31
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [],
+   "signalements": [],
+   "statut": "valide",
+   "nombre_valeurs": 4
+  },
+  {
+   "id": "cloisons-T6",
+   "fascicule": "cloisons",
+   "numero": 6,
+   "page": 2,
+   "section": "2",
+   "titre": "Panneaux fibragglo (fibres de bois et liant hydraulique, NF B 56-010)",
+   "famille": "cloison",
+   "isolant": false,
+   "lecture": "texte",
+   "axe_lignes": "Masse volumique et épaisseur",
+   "axe_colonnes": "Résistance thermique",
+   "colonnes": [
+    "R"
+   ],
+   "variantes": {},
+   "lignes": [
+    {
+     "libelle": "Panneau de 1,5 cm (450 à 550 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "450 à 550",
+      "Épaisseur (cm)": "1,5"
+     },
+     "valeurs": [
+      0.1
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 2,0 cm (350 à 450 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "350 à 450",
+      "Épaisseur (cm)": "2,0"
+     },
+     "valeurs": [
+      0.17
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 2,5 cm (350 à 450 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "350 à 450",
+      "Épaisseur (cm)": "2,5"
+     },
+     "valeurs": [
+      0.21
+     ],
+     "variantes": {},
+     "corrections": [
+      "épaisseur imprimée « 20,5 » entre 2,0 et 3,0 cm : lue 2,5 (R / e cohérent avec les panneaux voisins)"
+     ]
+    },
+    {
+     "libelle": "Panneau de 3,0 cm (350 à 450 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "350 à 450",
+      "Épaisseur (cm)": "3,0"
+     },
+     "valeurs": [
+      0.25
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 3,5 cm (350 à 450 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "350 à 450",
+      "Épaisseur (cm)": "3,5"
+     },
+     "valeurs": [
+      0.29
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 4,0 cm (250 à 350 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "250 à 350",
+      "Épaisseur (cm)": "4,0"
+     },
+     "valeurs": [
+      0.4
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 5,0 cm (250 à 350 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "250 à 350",
+      "Épaisseur (cm)": "5,0"
+     },
+     "valeurs": [
+      0.5
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 7,5 cm (250 à 350 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "250 à 350",
+      "Épaisseur (cm)": "7,5"
+     },
+     "valeurs": [
+      0.75
+     ],
+     "variantes": {}
+    },
+    {
+     "libelle": "Panneau de 10,0 cm (250 à 350 kg/m³)",
+     "cles": {
+      "Masse volumique (kg/m³)": "250 à 350",
+      "Épaisseur (cm)": "10,0"
+     },
+     "valeurs": [
+      1.0
+     ],
+     "variantes": {}
+    }
+   ],
+   "remarques": [
+    "Si la masse volumique ne correspond pas à l'épaisseur, calculer R à partir de la conductivité du fascicule Matériaux pour la masse volumique considérée."
+   ],
+   "signalements": [
+    {
+     "ligne": 2,
+     "colonne": null,
+     "message": "Correction : épaisseur imprimée « 20,5 » entre 2,0 et 3,0 cm : lue 2,5 (R / e cohérent avec les panneaux voisins)"
+    }
+   ],
+   "statut": "alerte",
+   "nombre_valeurs": 9
+  }
+ ],
+ "controles": {
+  "methode": "Contrôles automatiques : nombre de valeurs par tableau, plages de R, sens de variation (épaisseur, entraxe, masse volumique…), recoupement des notes transcrites avec le texte des pages.",
+  "erreurs": [],
+  "alertes": [
+   "Planchers bas sur extérieur ou local non chauffé T2 p. 2 : Coupe 1, entraxe 60 < E ≤ 70 cm (dalle en argile ou schiste expansé) (20) : 0,26 après 0,27 (Coupe 1, entraxe 50 < E ≤ 60 cm (dalle en argile ou schiste expansé), 20), R devrait être croissante selon entraxe des poutrelles E (cm)",
+   "Planchers bas sur extérieur ou local non chauffé T6 p. 8 : languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm (600 ≤ le < 630) : 2,65 après 2,68 (languette 50 mm, entrevous 200 et + mm, talon 95 ≤ lo ≤ 125 mm, 550 ≤ le < 600), R devrait être croissante selon entraxe des poutrelles le (mm)",
+   "Planchers bas sur extérieur ou local non chauffé T6 p. 8 : languette 60 mm, entrevous 170 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,8 après 2,9 (languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm, le ≥ 630), R devrait être croissante selon hauteur des entrevous de (mm)",
+   "Planchers bas sur extérieur ou local non chauffé T6 p. 8 : languette 60 mm, entrevous 150 mm, talon 125 < lo ≤ 140 mm (le ≥ 630) : 2,9 après 2,84 (languette 60 mm, entrevous 150 mm, talon 95 ≤ lo ≤ 125 mm, le ≥ 630), R devrait être décroissante selon largeur du talon lo (mm)",
+   "Cloisons T6 p. 2 : épaisseur imprimée « 20,5 » entre 2,0 et 3,0 cm : lue 2,5 (R / e cohérent avec les panneaux voisins)"
+  ],
+  "comptes": {
+   "tableaux": 40,
+   "tableaux_image": 7,
+   "valeurs": 1074
+  }
+ },
+ "historique": [
+  "2021-12-16 : Parois opaques - parois vitrées - ponts thermiques Première mise en ligne",
+  "2022-01-20 : Parois opaques Ajout fiche isolation inversée"
+ ]
+}
