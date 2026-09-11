@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_authenticated_user, get_current_user  # noqa: F401 (réexporté : d'autres routes l'importent d'ici)
 from app.core.db import get_db
 from app.models.user import User
 from app.schemas.auth import ChangePasswordRequest, LoginRequest, RegisterRequest, TokenResponse
@@ -60,7 +60,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 
 
 @router.get("/me", response_model=UserRead)
-def read_me(current_user: User = Depends(get_current_user)) -> UserRead:
+def read_me(current_user: User = Depends(get_authenticated_user)) -> UserRead:
     return UserRead.model_validate(current_user)
 
 
@@ -68,7 +68,7 @@ def read_me(current_user: User = Depends(get_current_user)) -> UserRead:
 def update_me(
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user),
 ) -> UserRead:
     user = update_user_profile(db, current_user, payload)
     return UserRead.model_validate(user)
@@ -78,7 +78,7 @@ def update_me(
 def change_password(
     payload: ChangePasswordRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_authenticated_user),
 ) -> Response:
     try:
         update_user_password(db, current_user, payload.current_password, payload.new_password)
