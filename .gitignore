@@ -17,6 +17,9 @@
 *.pdf
 *.docx
 define_name.py
+# Plans d'essai et règles Th-Bât de l'outil thermique (documents client, jamais committés).
+# Ancré à la racine : sous Windows git ignore la casse et masquerait src/thermique/.
+/Thermique/
 # Frontend build/dependency artifacts
 saas/frontend/node_modules/
 saas/frontend/dist/
