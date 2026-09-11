@@ -298,6 +298,20 @@ def update_sheet(db: Session, sheet: ThermiqueSheet, changes: dict[str, Any]) ->
     return sheet
 
 
+# Échelles d'impression usuelles. Une échelle déduite d'une cote à moins de 1 % de l'une
+# d'elles y est ramenée : l'écart vient de la précision du clic, pas du plan (constaté en
+# prod le 2026-09-11 : 1/99,97, 1/100,03, 1/100,09 pour des plans au 1/100).
+STANDARD_SCALES = (1, 2, 5, 10, 20, 25, 50, 75, 100, 125, 150, 200, 250, 500, 1000, 2000, 2500, 5000)
+STANDARD_SCALE_TOLERANCE = 0.01
+
+
+def standard_scale_near(denominator: float) -> float | None:
+    nearest = min(STANDARD_SCALES, key=lambda scale: abs(denominator - scale) / scale)
+    if abs(denominator - nearest) / nearest <= STANDARD_SCALE_TOLERANCE:
+        return float(nearest)
+    return None
+
+
 def calibrate_sheet(
     db: Session,
     sheet: ThermiqueSheet,
@@ -309,7 +323,8 @@ def calibrate_sheet(
     """Contrôle l'échelle par une cote : deux points cliqués et la longueur réelle lue.
 
     Sans échelle déclarée, l'échelle déduite de la cote est appliquée d'office. Sinon elle
-    ne remplace l'échelle déclarée que sur demande (`apply`).
+    ne remplace l'échelle déclarée que sur demande (`apply`). Dans les deux cas, elle est
+    ramenée à l'échelle usuelle la plus proche si l'écart est inférieur à 1 %.
     """
     length_pt = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
     if length_pt < 1.0:
@@ -324,7 +339,8 @@ def calibrate_sheet(
         }
     )
     if apply or sheet.scale_denominator is None:
-        sheet.scale_denominator = round(denominator, 2)
+        standard = standard_scale_near(denominator)
+        sheet.scale_denominator = standard if standard is not None else round(denominator, 2)
         sheet.scale_source = "cote"
     db.commit()
     db.refresh(sheet)
@@ -356,6 +372,7 @@ def sheet_calibration(sheet: ThermiqueSheet) -> dict[str, Any] | None:
         "length_pt": length_pt,
         "real_length_m": real_length_m,
         "denominator_from_cote": round(denominator_from_measure(length_pt, real_length_m), 2),
+        "standard_scale": standard_scale_near(denominator_from_measure(length_pt, real_length_m)),
         "measured_m": round(measured_m, 3) if measured_m is not None else None,
         "ecart_pct": round(ecart_pct, 2) if ecart_pct is not None else None,
     }

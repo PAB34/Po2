@@ -7,7 +7,16 @@ import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type Sheet
 import { TileSheetViewer, type ViewerSegment, type ViewerTool } from "../components/TileSheetViewer";
 import { NATURES, NATURE_LABELS, NATURE_ROLES, STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey, replaceSheet } from "../projectCache";
-import { COMMON_SCALES, PT_TO_MM, distancePt, formatMeters, formatScale, paperPtToRealM, parseDecimal } from "../scale";
+import {
+  COMMON_SCALES,
+  PT_TO_MM,
+  QUICK_SCALES,
+  distancePt,
+  formatMeters,
+  formatScale,
+  paperPtToRealM,
+  parseDecimal,
+} from "../scale";
 
 const TOOLS: { id: ViewerTool; label: string; help: string }[] = [
   { id: "pan", label: "Déplacer", help: "Glissez pour déplacer le plan, molette pour zoomer." },
@@ -37,7 +46,7 @@ function ScaleInput({ sheet, onSave }: { sheet: Sheet; onSave: (denominator: num
         className="th-input-xs"
         list="th-sheet-scales"
         value={value}
-        placeholder="100"
+        aria-label="Dénominateur de l'échelle"
         onChange={(event) => setValue(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {
@@ -142,7 +151,9 @@ export function SheetPage() {
     );
   };
 
+  const hasScale = sheet.scale_denominator !== null;
   const lengthPt = points.length === 2 ? distancePt(points[0], points[1]) : null;
+  const paperMm = lengthPt !== null ? Math.round(lengthPt * PT_TO_MM) : null;
   const measuredM = lengthPt !== null && sheet.scale_denominator ? paperPtToRealM(lengthPt, sheet.scale_denominator) : null;
   const segments: ViewerSegment[] = [];
   if (points.length === 2 && lengthPt !== null) {
@@ -150,7 +161,7 @@ export function SheetPage() {
       p1: points[0],
       p2: points[1],
       tone: "measure",
-      label: measuredM !== null ? formatMeters(measuredM) : `${Math.round(lengthPt * PT_TO_MM)} mm sur le papier`,
+      label: measuredM !== null ? formatMeters(measuredM) : `${paperMm} mm papier (échelle non définie)`,
     });
   }
   if (tool === "calibrate" && points.length === 0 && sheet.calibration) {
@@ -162,6 +173,12 @@ export function SheetPage() {
     });
   }
   const calibration = sheet.calibration;
+  const scaleConfirmed = calibration?.standard_scale != null && calibration.standard_scale === sheet.scale_denominator;
+  const scaleOff = calibration?.ecart_pct != null && Math.abs(calibration.ecart_pct) > 1;
+  const roundableTo =
+    calibration?.standard_scale != null && hasScale && calibration.standard_scale !== sheet.scale_denominator
+      ? calibration.standard_scale
+      : null;
   const paperWidthMm = Math.round(sheet.page_width_pt * PT_TO_MM);
   const paperHeightMm = Math.round(sheet.page_height_pt * PT_TO_MM);
 
@@ -251,12 +268,36 @@ export function SheetPage() {
 
         <section>
           <h2>Échelle</h2>
+          {!hasScale && (
+            <div className="th-alert th-alert--warn">
+              <strong>Échelle non définie</strong> : les mesures restent en millimètres sur le papier. Choisissez
+              l'échelle indiquée dans le cartouche :
+              <div className="th-inline" style={{ marginTop: "0.45rem" }}>
+                {QUICK_SCALES.map((scale) => (
+                  <button
+                    key={scale}
+                    type="button"
+                    className="po2-button po2-button--ghost"
+                    disabled={busy}
+                    onClick={() => void save({ scale_denominator: scale })}
+                  >
+                    1/{scale}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <ScaleInput key={`${sheet.id}-${sheet.scale_denominator ?? ""}`} sheet={sheet} onSave={(denominator) => void save({ scale_denominator: denominator })} />
           <p className="th-muted">
-            {sheet.scale_denominator
+            {hasScale
               ? `${formatScale(sheet.scale_denominator)}, ${sheet.scale_source === "cote" ? "déduite d'une cote" : "déclarée"}.`
-              : "Saisissez l'échelle du cartouche (ex. 100), puis vérifiez-la avec une cote."}
+              : "Ou saisissez une autre échelle, puis vérifiez-la avec une cote."}
           </p>
+          {roundableTo !== null && (
+            <button type="button" className="th-chip" disabled={busy} onClick={() => void save({ scale_denominator: roundableTo })}>
+              Ramener à {formatScale(roundableTo)}, l'échelle usuelle confirmée par la cote
+            </button>
+          )}
         </section>
 
         <section>
@@ -270,20 +311,26 @@ export function SheetPage() {
           </div>
           <p className="th-muted">{TOOLS.find((item) => item.id === tool)?.help} Échap efface les points.</p>
 
-          {tool === "measure" && lengthPt !== null && (
-            <p className="th-result">
-              {measuredM !== null ? formatMeters(measuredM) : "Définissez l'échelle pour lire une longueur en mètres."}
-            </p>
-          )}
+          {tool === "measure" &&
+            lengthPt !== null &&
+            (measuredM !== null ? (
+              <p className="th-result">{formatMeters(measuredM)}</p>
+            ) : (
+              <p className="th-alert th-alert--warn">
+                {paperMm} mm mesurés <strong>sur le papier</strong> : l'échelle n'est pas définie. Choisissez-la
+                ci-dessus pour lire des mètres.
+              </p>
+            ))}
 
           {tool === "calibrate" && (
             <div className="th-form">
+              {!hasScale && <p className="th-muted">Sans échelle déclarée, la cote fixera l'échelle de la planche.</p>}
               <label className="th-field">
                 <span>Valeur de la cote (m)</span>
                 <input
                   inputMode="decimal"
                   value={realLength}
-                  placeholder="Ex. 31,82"
+                  placeholder="Ex. 3,04"
                   onChange={(event) => setRealLength(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -301,13 +348,23 @@ export function SheetPage() {
                 </button>
               </div>
               {calibration && (
-                <div className={calibration.ecart_pct !== null && Math.abs(calibration.ecart_pct) > 1 ? "th-alert th-alert--warn" : "th-alert th-alert--ok"}>
+                <div className={scaleOff ? "th-alert th-alert--warn" : "th-alert th-alert--ok"}>
                   Cote {formatMeters(calibration.real_length_m)}
                   {calibration.measured_m !== null && <> · mesurée {formatMeters(calibration.measured_m)} à {formatScale(sheet.scale_denominator)}</>}
                   {calibration.ecart_pct !== null && <> · écart {calibration.ecart_pct.toLocaleString("fr-FR")} %</>}
                   <br />
-                  Échelle déduite de la cote : {formatScale(calibration.denominator_from_cote)}
-                  {calibration.ecart_pct !== null && Math.abs(calibration.ecart_pct) > 1 && (
+                  {scaleConfirmed ? (
+                    <>
+                      <strong>Échelle {formatScale(sheet.scale_denominator)} confirmée</strong> par la cote (
+                      {formatScale(calibration.denominator_from_cote)} mesuré : l'écart vient de la précision du clic).
+                    </>
+                  ) : (
+                    <>
+                      Échelle déduite de la cote : {formatScale(calibration.denominator_from_cote)}
+                      {calibration.standard_scale !== null && <>, soit {formatScale(calibration.standard_scale)} (échelle usuelle)</>}.
+                    </>
+                  )}
+                  {scaleOff && (
                     <>
                       <br />
                       L'échelle déclarée ne correspond pas à la cote : vérifiez les points cliqués ou appliquez l'échelle de la cote.
