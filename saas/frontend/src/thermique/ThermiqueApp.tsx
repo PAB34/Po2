@@ -1,6 +1,7 @@
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
+import { LibraryPage } from "./pages/LibraryPage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -19,6 +20,12 @@ function RequireAuth() {
   return <Outlet />;
 }
 
+const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
+  fontWeight: 750,
+  textDecoration: isActive ? "underline" : "none",
+  textUnderlineOffset: "0.35em",
+});
+
 function Shell({ fullWidth = false }: { fullWidth?: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -30,6 +37,14 @@ function Shell({ fullWidth = false }: { fullWidth?: boolean }) {
           <strong>Métré thermique</strong>
           <span>patrimoine au carré</span>
         </Link>
+        <nav className="th-inline" style={{ gap: "1.2rem" }} aria-label="Navigation principale">
+          <NavLink to="/" end style={navLinkStyle}>
+            Projets
+          </NavLink>
+          <NavLink to="/bibliotheque" style={navLinkStyle}>
+            Bibliothèque
+          </NavLink>
+        </nav>
         <div className="th-header__user">
           <span>
             {user?.prenom} {user?.nom}
@@ -61,6 +76,7 @@ export function ThermiqueApp() {
         <Route element={<Shell />}>
           <Route index element={<ProjectsPage />} />
           <Route path="projets/:projectId" element={<ProjectPage />} />
+          <Route path="bibliotheque" element={<LibraryPage />} />
         </Route>
         <Route element={<Shell fullWidth />}>
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
