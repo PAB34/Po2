@@ -26,6 +26,7 @@ from app.api.routes.internal_auth import router as internal_auth_router
 from app.api.routes.patrimoine_legacy import router as patrimoine_legacy_router
 from app.api.routes.patrimoine_match import router as patrimoine_match_router
 from app.api.routes.pronostics import router as pronostics_router
+from app.api.routes.thermique import router as thermique_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/api")
@@ -54,4 +55,5 @@ api_router.include_router(cpe_dalkia_router, prefix="/api")
 api_router.include_router(cpe_os_avenant_router, prefix="/api")
 api_router.include_router(accounting_matrix_router, prefix="/api")
 api_router.include_router(marches_router, prefix="/api")
+api_router.include_router(thermique_router, prefix="/api")
 api_router.include_router(health_router, prefix="/api")
