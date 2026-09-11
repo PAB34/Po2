@@ -121,9 +121,10 @@ propres tests ; le serveur ne fera que l'appeler. Aucun choix n'est à faire tou
 | Incrément | Contenu | État |
 |---|---|---|
 | **1 — Socle** | Sous-domaine + connexion + comptes bureaux d'études · projets · import PDF · visionneuse en tuiles (zoom, déplacement, rotation 90°) · nature de planche · échelle + contrôle par une cote | **En prod** (PR #178, migration `0076`) ; site en ligne ; connexion unique (Q6) en cours |
-| **2 — Géométrie des plans** | Moteur autonome : murs (axe + épaisseur), cloisons, poteaux, **menuiseries** (portes, fenêtres) · correction manuelle · import DXF (et DWG selon Q15) | À faire — **prochain** |
-| **3 — Niveaux et planchers** | Calage multi-niveaux (Q10) · superposition · **planchers** et hauteurs lus sur les coupes · nord (Q11) | À faire |
-| **4 — Entités thermiques** | Bibliothèque Th-Bât (classes de parois, porteurs, liaisons) · linéaires de ponts thermiques · surfaces par orientation · export vers Pléiades / Perrenoud (Q18) | À faire |
+| **Bibliothèque** | Composants partagés par l'étude thermique et le calcul des déperditions : parois opaques (couches, épaisseur d'isolant), menuiseries, ponts thermiques, sourcés depuis les règles Th-Bât | **En cadrage — prioritaire** (décision utilisateur du 2026-09-11) : `bibliotheque-composants-decisions.md` |
+| **2 — Géométrie des plans** | Moteur autonome : murs (axe + épaisseur), cloisons, poteaux, **menuiseries** (portes, fenêtres) · correction manuelle · import DXF (et DWG selon Q15) | À faire, après la bibliothèque : `etape2-geometrie-decisions.md` |
+| **3 — Niveaux, planchers, pièces** | Calage multi-niveaux (Q10) · superposition · **planchers** et hauteurs lus sur les coupes · nord (Q11) · **pièces et zones** pour les déperditions | À faire |
+| **4 — Calculs** | Rattachement des composants aux éléments · U × surface, ψ × longueur · déperditions par pièce et par zone · export vers Pléiades / Perrenoud (Q18) | À faire |
 | **Plus tard** | Scans : tracé assisté à la main | À faire |
 
 ## 5. Journal des réponses

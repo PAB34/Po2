@@ -71,3 +71,17 @@ PLANCHERS : sur les coupes (épaisseurs, niveaux) → étape 3, avec le calage d
   surfaces chauffées ?
 - **Q25 — DXF de la médiathèque.** Avez-vous le DWG/DXF du même projet ? Il permettrait de
   comparer la détection PDF à la géométrie d'origine.
+
+## 6. Réponses (2026-09-11)
+
+- **Priorité modifiée** : l'utilisateur fait passer la **bibliothèque de composants** avant la
+  détection de la géométrie → `bibliotheque-composants-decisions.md`. L'étape 2 reste le cadre de
+  la géométrie, reprise ensuite.
+- **Q21** : ± 1 cm, d'accord.
+- **Q22** : les menuiseries se définiront avec la bibliothèque (performances Uw, Sw, TLw).
+- **Q23** : pas de métré de référence. C'est l'étude thermique qui détermine les épaisseurs
+  d'isolant et les performances : la géométrie se contrôlera donc par les **cotes du plan**, pas
+  par un métré existant.
+- **Q24** : pas de pièces pour l'étude thermique ; **pièces et zones** (logements, commerces)
+  nécessaires pour le calcul des déperditions et apports.
+- **Q25** : pas de DXF pour l'instant, à tester plus tard.

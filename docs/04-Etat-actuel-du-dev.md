@@ -38,9 +38,12 @@ do_not_auto_read:
 - **Retour d'usage 2026-09-11** (10 planches contrôlées par cote, 1/100 confirmé à 0,1 %) :
   échelle « non définie » rendue visible, mesure sans échelle signalée, échelle déduite d'une
   cote ramenée à l'échelle usuelle si l'écart < 1 % (branche `feat/thermique-echelle-ux`).
-- **▶️ Prochain : étape 2 — géométrie des plans** en moteur autonome (prototype prouvé :
-  `thermique/proto_detection_murs.py`) + import DXF. Plan et questions Q21-Q25 :
-  `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
+- **▶️ Prochain : la bibliothèque de composants** (décision utilisateur du 2026-09-11, avant la
+  détection de géométrie) : une seule bibliothèque pour l'étude thermique **et** le calcul des
+  déperditions CVC, sourcée depuis les 47 PDF Th-Bât (558 pages). Cadrage, lots B1-B4 et
+  questions Q26-Q31 : `thermique/bibliotheque-composants-decisions.md`.
+- Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
+  Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.
 
