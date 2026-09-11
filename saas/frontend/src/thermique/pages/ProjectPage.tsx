@@ -7,6 +7,7 @@ import { thermiqueApi, type ProjectDetail, type Sheet, type SheetChanges, type T
 import { NATURES, NATURE_LABELS, NATURE_ROLES, STATUS_LABELS } from "../natures";
 import { allSheets, formatSize, projectQueryKey, projectsQueryKey, replaceSheet } from "../projectCache";
 import { COMMON_SCALES, formatScale, parseDecimal } from "../scale";
+import { ProjectTabs } from "./ProjectLibraryPage";
 
 function UploadZone({ disabled, onFiles }: { disabled: boolean; onFiles: (files: File[]) => void }) {
   const [isOver, setIsOver] = useState(false);
@@ -188,6 +189,7 @@ export function ProjectPage() {
           Supprimer le projet
         </button>
       </div>
+      <ProjectTabs projectId={project.id} />
 
       <section className="po2-card th-section">
         <div className="po2-card__body">
