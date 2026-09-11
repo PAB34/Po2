@@ -12,93 +12,133 @@ related:
 > Fichier « fil du dev » : on y répond au fil de l'eau. Existant vérifié →
 > `00-audit-existant-faisabilite.md`. Ouvert le **2026-09-11**. Décisions durables →
 > ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]].
+>
+> ⚠️ **Ce fichier est la seule version à jour** (branche `main`). Pour répondre, écrire ici.
 
 ## 1. Décisions prises
 
 | Date | Décision | Raison |
 |---|---|---|
-| 2026-09-11 | Même table `users`, même JWT, routes `/api/thermique/*` sur **le backend Po2 existant** | Seule façon d'avoir réellement « le même compte » ; le modèle `ligue1` (comptes séparés) est écarté |
-| 2026-09-11 | Comptes **bureaux d'études** = rôle `THERMIQUE_EXTERNE` (sans ville). `get_current_user`, utilisé par **toutes** les routes Po2, leur répond **403** ; l'outil et le profil passent par `get_authenticated_user`. Garde navigateur distincte : `basic-auth` (site principal) les refuse, `basic-auth-thermique` les accepte | Réponse Q1 : ils ne voient que l'outil. Verrou posé en un seul point, testé |
-| 2026-09-11 | **Pas d'inscription libre** sur `thermique.*` (Caddy répond 404). Comptes bureaux d'études créés par un admin Po2 : `POST /api/thermique/admin/external-accounts` | Une inscription ouverte créerait un compte `USER`, donc un accès Po2 |
-| 2026-09-11 | Projets **indépendants du patrimoine** (Q2), visibles de leur **seul propriétaire** (pas de partage à l'étape 1) | Réponse Q2 ; un bureau d'études ne doit voir que ses projets |
-| 2026-09-11 | Front : **point d'entrée dédié** `thermique.html` dans le même build. nginx sert l'un ou l'autre selon l'hôte ; l'outil répond aussi sous `/thermique/` (essais sur staging) | Q4 : même conteneur, même design-system, aucun code d'authentification dupliqué |
+| 2026-09-11 | **Projet à part**, sans lien avec Po2 ni le patrimoine de la Ville ; public = **thermiciens privés en bureau d'études** | Réponses Q1 et Q2 |
+| 2026-09-11 | Même table `users`, même JWT, routes `/api/thermique/*` sur **le backend Po2 existant**, pour le MVP | Besoin « même compte que patrimoineaucarre.com » ; séparation possible plus tard (voir §3) |
+| 2026-09-11 | Comptes **bureaux d'études** = rôle `THERMIQUE_EXTERNE` (sans ville). `get_current_user`, utilisé par **toutes** les routes Po2, leur répond **403** ; l'outil et le profil passent par `get_authenticated_user`. La garde navigateur du site principal les refuse | Ils ne voient que l'outil. Verrou posé en un seul point, testé |
+| 2026-09-11 | **Une seule connexion** sur `thermique.*` : plus de fenêtre d'identification du navigateur, seulement la page de connexion de l'outil | Réponse Q6 |
+| 2026-09-11 | **Pas d'inscription libre** sur `thermique.*`. Comptes bureaux d'études créés par un admin : `POST /api/thermique/admin/external-accounts` | Une inscription ouverte créerait un compte `USER`, donc un accès Po2 |
+| 2026-09-11 | Projets visibles de leur **seul propriétaire** (pas de partage pour l'instant) | Un bureau d'études ne doit voir que ses projets |
+| 2026-09-11 | Front : **point d'entrée dédié** `thermique.html` dans le même build (voir Q4 expliquée ci-dessous) | Même conteneur, même design, aucun code de connexion dupliqué |
+| 2026-09-11 | **Priorité de l'étape 2 = une géométrie irréprochable** : murs, cloisons, menuiseries, planchers. La **bibliothèque d'entités thermiques** (classes de parois, porteurs, ponts thermiques) vient **ensuite**, construite sur les règles Th-Bât de `Thermique/REGLES TH BAT` | Réponses Q8 et Q9 |
 | 2026-09-11 | Source v1 = **PDF vectoriel** ; détection des murs par **épaisseur de trait**, seuil ajustable par planche | Mesuré : correspondance exacte avec les cotes 31.82 / 33.13 sur le niveau 0 |
-| 2026-09-11 | La nature d'une planche (plan / coupe / façade / plan masse) est **suggérée** (nom de fichier) puis **validée** par l'utilisateur | Pas de texte lisible dans les PDF ; un classement faux fausserait tout le métré. 11/11 suggestions justes sur le projet d'essai |
-| 2026-09-11 | **Visionneuse = tuiles d'images rendues côté serveur par pdfium**, pas pdf.js dans le navigateur | Mesuré : pdf.js met 10 s (niveau 0) et **46,8 s** (coupe AB) à dessiner, et recommence à chaque zoom. En tuiles, la coupe s'affiche en **0,49 s** ; rendu 2 à 3,6 s, une fois par planche et par rotation ; 4 à 8 Mo par planche |
-| 2026-09-11 | Tuiles servies par **adresse signée** (HMAC, une planche, 12 h) | Une balise `<img>` ne peut pas envoyer d'en-tête d'authentification |
-| 2026-09-11 | Les mesures sont stockées en **points PDF** ; la transformation PDF → pixels est fournie par pdfium (`FPDF_PageToDevice`) | Cohérente avec le rendu par construction ; testée sur 8 combinaisons de rotation (planche et `/Rotate` du PDF) |
-| 2026-09-11 | Toute détection automatique reste **corrigeable à la main** (ajouter, supprimer, reclasser un mur) | Des traits épais ne sont pas des murs (paroi courbe, garde-corps) |
-| 2026-09-11 | Extraction des murs en **tâche de fond** avec cache (étape 2) | 20 à 40 s de lecture brute par plan, beaucoup plus par coupe |
-| 2026-09-11 | **DXF et DWG à l'étape 2** (Q3) : un import DXF/DWG est refusé avec un message explicite | Le DXF garde les calques (meilleure source) ; le DWG demande un convertisseur (Q15) |
-| 2026-09-11 | Les plans d'essai (`Thermique/`, ≈ 50 Mo, documents d'un projet client) **ne sont pas versionnés** (`.gitignore`) | Poids et confidentialité |
+| 2026-09-11 | Formats : **PDF vectoriel, DWG/DXF, et parfois des scans**. DXF/DWG à l'étape 2 ; scans plus tard (tracé assisté à la main, la détection automatique ne s'applique pas à une image) | Réponse Q3 |
+| 2026-09-11 | La nature d'une planche (plan / coupe / façade / plan masse) est **suggérée** (nom de fichier) puis **validée** par l'utilisateur | Pas de texte lisible dans les PDF. 11/11 suggestions justes sur le projet d'essai |
+| 2026-09-11 | **Visionneuse = tuiles d'images rendues côté serveur par pdfium**, pas pdf.js dans le navigateur | Mesuré : pdf.js 10 s (niveau 0) et **46,8 s** (coupe AB) à chaque zoom ; en tuiles, la coupe s'affiche en **0,49 s** |
+| 2026-09-11 | Tuiles servies par **adresse signée** (HMAC, une planche, 12 h) ; mesures stockées en **points PDF**, transformation fournie par pdfium | Une balise `<img>` ne peut pas envoyer d'en-tête ; cohérence testée sur 8 combinaisons de rotation |
+| 2026-09-11 | **Calage** entre niveaux : un croisement d'axes de trame cliqué sur chaque plan + un 2e point pour la rotation | Réponse Q10 (à réajuster à l'usage si besoin) |
+| 2026-09-11 | **Nord** saisi à la main (flèche posée sur un plan) | Réponse Q11 |
+| 2026-09-11 | Le **moteur géométrique** (lecture PDF/DXF, détection) sera écrit comme une **brique autonome**, sans dépendance à la base, au serveur web ni à Po2 | Garder ouvertes les deux voies « logiciel » de Q13 |
+| 2026-09-11 | Toute détection automatique reste **corrigeable à la main** | Des traits épais ne sont pas des murs (paroi courbe, garde-corps) |
+| 2026-09-11 | Les plans d'essai (`Thermique/`) **ne sont pas versionnés** (`.gitignore`) | Poids et confidentialité |
 
-## 2. Questions ouvertes
+## 2. Réponses et questions
 
 ### Produit
 
-- ~~**Q1 — Pour qui ?**~~ → **Répondu** : aussi des bureaux d'études extérieurs (voir §1).
-- ~~**Q2 — Lien avec le patrimoine ?**~~ → **Répondu** : indépendant.
-- ~~**Q3 — Formats d'entrée.**~~ → **Répondu** : PDF vectoriel **et** DWG/DXF (pas de scans).
+- **Q1 — Pour qui ?** → **Répondu** : « Tout thermicien privé en bureau d'étude ».
+- **Q2 — Lien avec le patrimoine ?** → **Répondu** : « Pas du tout aucun rapport, c'est vraiment
+  un autre projet ».
+- **Q3 — Formats d'entrée.** → **Répondu** : PDF vectoriel, **DWG/DXF**, et **parfois des scans**.
   Un DWG ou DXF du projet d'essai permettrait de comparer avec le PDF.
-- **Q7 — Livrable attendu.** Proposition : tableau Excel par paroi (type, orientation, surface
-  brute, surface des baies, surface nette) + linéaires de ponts thermiques **par type de liaison
-  Th-Bât**, niveau par niveau. Faut-il un format d'échange vers un logiciel de calcul
-  (Pléiades, ClimaWin, Perrenoud…) ? Lequel utilisez-vous ?
-- **Q8 — Classes de murs.** Proposition : *extérieur* · *sur local non chauffé* · *intérieur
-  porteur (refend)* · *intérieur non porteur* · *poteau*. Le mur de l'abri containers ou d'un
-  garage doit-il être « sur local non chauffé » plutôt qu'« extérieur » ?
-- **Q9 — Critère « porteur » automatique.** Proposition : épaisseur ≥ **15 cm** ET mur présent au
-  même endroit sur le niveau du dessus ou du dessous. Seuil à confirmer.
-- **Q10 — Point de calage.** Proposition : sur chaque plan, l'utilisateur clique un croisement
-  d'axes de trame (ex. A/1), puis un 2e point pour fixer la rotation. L'échelle étant déjà connue,
-  deux points suffisent. D'accord ?
-- **Q11 — Orientation.** Le nord est saisi à la main (une flèche à poser sur le plan masse ou un
-  plan de niveau), pour ventiler les surfaces par orientation. D'accord ?
-- **Q16 — Partage.** Un projet doit-il pouvoir être partagé entre plusieurs comptes (ex. un agent
-  de la Ville et le bureau d'études) ? Étape 1 : chacun ne voit que ses projets.
-- **Q17 — Création des comptes bureaux d'études.** Aujourd'hui par un appel d'API réservé aux
-  admins (je peux les créer à la demande). Faut-il un écran d'administration ?
+- **Q7 — Livrable attendu.** → **Répondu** : « Pléiades, Perrenoud principalement ». Reste à
+  vérifier ce que chacun sait importer (Q18).
+- **Q8 / Q9 — Classes de murs, critère porteur.** → **Répondu** : d'abord une analyse
+  **irréprochable de la géométrie** (murs, cloisons, menuiseries, planchers) ; la bibliothèque
+  d'entités thermiques viendra ensuite, sur la base réglementaire de `Thermique/REGLES TH BAT`.
+- **Q10 — Point de calage.** → **Répondu** : d'accord, réajustement à l'usage si besoin.
+- **Q11 — Orientation (nord à la main).** → **Répondu** : d'accord.
+- **Q16 — Partage.** Un projet doit-il pouvoir être partagé entre plusieurs comptes (ex. deux
+  thermiciens du même bureau d'études) ? Aujourd'hui : chacun ne voit que ses projets.
+- **Q17 — Création des comptes bureaux d'études.** Aujourd'hui par un appel réservé aux admins
+  (je peux les créer à la demande). Faut-il un écran d'administration, ou une inscription
+  libre (qui supposerait de séparer l'outil de Po2, voir Q13) ?
+- **Q18 — Formats d'échange Pléiades / Perrenoud.** Je dois vérifier ce que chacun importe
+  (maquette BIM au format IFC ou gbXML, fichier propre à l'éditeur, simple tableau). Avez-vous
+  un exemple de fichier que vous importez aujourd'hui dans l'un ou l'autre ?
 
 ### Technique et accès
 
-- ~~**Q4 — Forme du front.**~~ → **Appliqué par défaut** : point d'entrée dédié (voir §1).
-- **Q5 — Connexion.** Appliqué : on se connecte **une fois** sur `thermique.*` avec les mêmes
-  identifiants (le jeton navigateur ne traverse pas les sous-domaines). Session partagée
-  automatique (cookie de domaine) possible plus tard. À confirmer.
-- **Q6 — Fenêtre d'identification du navigateur.** Appliqué : même double verrou que le site
-  principal (fenêtre du navigateur puis page de connexion), mêmes identifiants. À confirmer.
-- **Q12 — DNS (action de votre part).** Créer chez le registrar un enregistrement **A**
-  `thermique` → `135.125.152.112` (même IP que `ligue1`). Tant qu'il manque, Caddy réessaie
-  d'obtenir le certificat sans gêner les autres sites.
-- **Q13 — Conservation des plans.** Stockage sur le VPS (volume `thermique_data`). Durée de
-  conservation à définir ; supprimer un projet efface ses fichiers et ses tuiles.
+- **Q4 — Forme du front.** → **Réponse demandée : « besoin de plus de précision ».** En clair :
+  l'outil thermique et Po2 sont **deux portes d'entrée dans le même programme**. Quand on tape
+  `thermique.patrimoineaucarre.com`, le serveur montre les écrans de l'outil ; quand on tape
+  `patrimoineaucarre.com`, il montre Po2. Pour vous et pour les thermiciens, **rien de
+  visible** : ce sont deux sites distincts. Pour moi : un seul programme à entretenir et à
+  déployer. L'autre option (deux programmes séparés) n'apporte rien tant que l'outil partage les
+  comptes de Po2 ; elle redeviendra utile si l'outil devient un produit à part (Q13).
+- **Q5 — Connexion une fois sur `thermique.*` avec les mêmes identifiants.** → **Répondu** : OK.
+- **Q6 — Double verrou.** → **Répondu** : « Non une seule fois la connexion ». Appliqué : la
+  fenêtre d'identification du navigateur est retirée sur `thermique.*`.
+- **Q12 — DNS.** → **Fait** : `thermique` → `135.125.152.112`, certificat HTTPS obtenu le
+  2026-09-11, site en ligne.
+- **Q13 — Conservation des plans / stratégie.** → **Réponse** : « Je pense qu'en réalité la MVP se
+  fera sur le cloud mais à terme ce sera un logiciel, je ne connais pas les conséquences de cette
+  stratégie. » → explications au §3, question Q20.
 - **Q15 — Conversion DWG.** Le DWG est un format fermé : il faut un convertisseur vers DXF,
   soit ODA File Converter (gratuit, licence propriétaire), soit LibreDWG (libre, GPL, moins
-  fiable sur les versions récentes). À trancher avant l'étape 2.
+  fiable sur les versions récentes). À trancher avant l'import DWG.
+- ~~**Q14 — Priorité face au réexport ASTECH.**~~ → **Sans objet** (« ce sujet n'a pas lieu
+  d'être ») : ce sont deux projets distincts.
 
-### Pilotage
+## 3. MVP en ligne, puis « logiciel » : les conséquences (Q13)
 
-- ~~**Q14 — Priorité.**~~ → **Répondu** : l'outil thermique passe devant le réexport ASTECH.
+**Aujourd'hui (MVP en ligne, sur le serveur de Po2)**
 
-## 3. Découpage
+- ✅ Rien à installer chez les thermiciens, une seule version, mises à jour immédiates ; le
+  travail lourd (rendu des plans, détection) est fait par le serveur.
+- ⚠️ Les plans des clients des bureaux d'études sont **stockés sur votre serveur** : cela
+  engage votre responsabilité (confidentialité, RGPD, sauvegardes, conditions d'utilisation).
+- ⚠️ Le coût du serveur grandit avec l'usage : ≈ 5 à 10 Mo par planche (PDF + tuiles) et du
+  calcul à chaque import.
+- ⚠️ L'outil partage le serveur, la base et les comptes de Po2 : une panne ou un pic de charge de
+  l'un touche l'autre, et des comptes privés côtoient ceux de la Ville (protégés par le verrou
+  testé, mais dans la même base).
+
+**« Logiciel à terme » peut vouloir dire deux choses, aux conséquences différentes (Q20)**
+
+| | (a) Logiciel **en ligne** vendu aux bureaux d'études | (b) Logiciel **installé** sur le poste |
+|---|---|---|
+| Où sont les plans | Sur votre serveur | Chez le thermicien (argument fort de confidentialité) |
+| Ce qu'il faut changer | **Séparer l'outil de Po2** : sa base, ses comptes (inscription, mot de passe oublié, abonnements), éventuellement son nom de domaine, des conditions d'utilisation | **Faire tourner le moteur sans serveur** : empaqueter le moteur (Python + pdfium) dans une application Windows, gérer licences, mises à jour et versions de Windows |
+| Effort | Limité : le code est déjà isolé (tables, routes et écrans à part) ; le gros morceau est la gestion des comptes | Plus lourd : nouvelle application à distribuer et à maintenir sur chaque poste |
+| Mises à jour | Immédiates pour tous | À installer chez chacun |
+
+**Ce que je fais dès maintenant pour garder les deux voies ouvertes** : le moteur géométrique de
+l'étape 2 sera une **brique autonome** (aucun lien avec la base, le serveur web ou Po2), avec ses
+propres tests ; le serveur ne fera que l'appeler. Aucun choix n'est à faire tout de suite.
+
+- **Q20 — Quel « logiciel » visez-vous ?** (a) en ligne vendu aux bureaux d'études, (b) installé
+  sur le poste, (c) pas encore décidé. Réponse utile avant de travailler les comptes (Q17).
+
+## 4. Découpage
 
 | Incrément | Contenu | État |
 |---|---|---|
-| **1 — Socle** | Sous-domaine + connexion Po2 + comptes bureaux d'études · projets · import PDF · visionneuse en tuiles (zoom, déplacement, rotation 90°) · nature de planche · échelle + contrôle par une cote | **En prod** (PR #178, migration `0076`, 2026-09-11) — site joignable dès que le DNS existe |
-| **2 — Murs** | Extraction en tâche de fond · murs (axe + épaisseur), poteaux, ouvertures · correction manuelle · classement extérieur / intérieur automatique · import DXF (et DWG selon Q15) | À faire |
-| **3 — Calage** | Point de calage multi-niveaux · superposition visuelle · porteurs par superposition | À faire |
-| **4 — Métré** | Hauteurs lues sur les coupes · surfaces de parois par orientation · linéaires de ponts thermiques Th-Bât · export Excel | À faire |
+| **1 — Socle** | Sous-domaine + connexion + comptes bureaux d'études · projets · import PDF · visionneuse en tuiles (zoom, déplacement, rotation 90°) · nature de planche · échelle + contrôle par une cote | **En prod** (PR #178, migration `0076`) ; site en ligne ; connexion unique (Q6) en cours |
+| **2 — Géométrie des plans** | Moteur autonome : murs (axe + épaisseur), cloisons, poteaux, **menuiseries** (portes, fenêtres) · correction manuelle · import DXF (et DWG selon Q15) | À faire — **prochain** |
+| **3 — Niveaux et planchers** | Calage multi-niveaux (Q10) · superposition · **planchers** et hauteurs lus sur les coupes · nord (Q11) | À faire |
+| **4 — Entités thermiques** | Bibliothèque Th-Bât (classes de parois, porteurs, liaisons) · linéaires de ponts thermiques · surfaces par orientation · export vers Pléiades / Perrenoud (Q18) | À faire |
+| **Plus tard** | Scans : tracé assisté à la main | À faire |
 
-## 4. Journal des réponses
+## 5. Journal des réponses
 
-- **2026-09-11 — réponses de l'utilisateur** : Q14 on lance l'étape 1 maintenant · Q3 PDF
-  vectoriel + DWG/DXF · Q2 indépendant du patrimoine · Q1 aussi des bureaux d'études.
-- **2026-09-11 — étape 1 codée et vérifiée** :
-  - backend : `app/core/roles.py`, `app/services/thermique.py`, `app/services/thermique_raster.py`,
-    `app/api/routes/thermique.py`, migration `0076` (3 tables) ; `deps.py` sépare
-    `get_authenticated_user` / `get_current_user` ; garde `basic-auth-thermique` ;
-  - front : `thermique.html` + `src/thermique/` (connexion, projets, page projet, visionneuse) ;
-  - infra : bloc Caddy `thermique.*`, volume `thermique_data`, nginx selon l'hôte ;
-  - tests : 34 backend (dont position exacte d'un repère dans 8 combinaisons de rotation) +
-    7 front ; scénario de bout en bout sur les **11 PDF réels** : 19/19 (import, suggestions
-    11/11, cote 31,82 m retrouvée à 31,818 m, verrous des comptes, tuiles signées).
+- **2026-09-11 — premières réponses** (questionnaire en séance) : on lance l'étape 1 · PDF
+  vectoriel + DWG/DXF · indépendant du patrimoine · aussi des bureaux d'études.
+- **2026-09-11 — étape 1 codée, vérifiée et mise en prod** (PR #178) : 35 tests backend + 7 front ;
+  scénario de bout en bout sur les **11 PDF réels** : 19/19.
+- **2026-09-11 — réponses écrites dans le fichier** (reportées ici mot pour mot depuis une copie
+  locale obsolète) : Q1 « Tout thermicien privé en bureau d'étude » · Q2 « Pas du tout aucun
+  rapport, c'est vraiment un autre projet » · Q3 « aussi des DWG/DXF et parfois des scan » ·
+  Q7 « Pleiade Perrenoud principalement » · Q8/Q9 « obtenir un outil qui analyse de manière
+  irréprochable la géométrie du bâtiment et ses composants, murs, cloisons, menuiseries,
+  planchers ; ensuite une bibliothèque d'entités thermiques sur la base réglementaire »
+  · Q10 « Ok, je verrai à l'usage » · Q11 « ok » · Q4 « besoin de plus de précision » ·
+  Q5 « OK » · Q6 « Non une seule fois la connexion » · Q12 « déjà réalisé » ·
+  Q13 « MVP sur le cloud, à terme un logiciel, je ne connais pas les conséquences » ·
+  Q14 « ne pas traiter ce sujet ».
