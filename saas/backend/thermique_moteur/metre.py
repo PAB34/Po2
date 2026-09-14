@@ -14,7 +14,10 @@ import unicodedata
 
 PT_EN_MM = 25.4 / 72.0
 
-TYPES_ZONE = {"contour": "Contour chauffé", "lnc": "Local non chauffé", "patio": "Patio ou cour"}
+TYPES_ZONE = {"contour": "Contour chauffé", "lnc": "Local non chauffé", "patio": "Patio ou cour", "nu_exterieur": "Nu extérieur"}
+# Tracés sans côtés qualifiés : le local non chauffé, et le nu extérieur (face extérieure des murs de façade,
+# lot G1 de docs/thermique/detection-guidee-decisions.md), qui borde le contour au nu intérieur.
+ZONES_SANS_COTES = {"lnc", "nu_exterieur"}
 DONNE_SUR = {
     "exterieur": "Extérieur",
     "lnc": "Local non chauffé",
@@ -273,7 +276,7 @@ def synthese_niveau(
         if croisements:
             alertes_zone.append(f"Le tracé se recoupe ({len(croisements)} croisement{'s' if len(croisements) > 1 else ''}) : déplacez les sommets.")
         incluse = None
-        if zone["type"] != "contour":
+        if zone["type"] not in ("contour", "nu_exterieur"):
             incluse, deborde = _position_dans_contours(points, contours, tolerance)
             if deborde:
                 alertes_zone.append("Déborde du contour : la surface déduite est approchée (calcul exact au lot M2).")
@@ -318,6 +321,7 @@ def synthese_niveau(
         "surface_contour_m2": round(totaux["contour"], 2) if k else None,
         "surface_lnc_m2": round(totaux["lnc"], 2) if k else None,
         "surface_patio_m2": round(totaux["patio"], 2) if k else None,
+        "surface_nu_exterieur_m2": round(totaux["nu_exterieur"], 2) if k else None,
         "surface_chauffee_m2": round(totaux["contour"] - deduit, 2) if k and contours else None,
         "lineaires_m": {cle: round(valeur, 2) for cle, valeur in lineaires.items()} if k else None,
         # Hauteur intérieure = hauteur d'étage − épaisseur du plancher (dimensions intérieures).

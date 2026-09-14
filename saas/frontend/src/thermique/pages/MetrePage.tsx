@@ -8,6 +8,7 @@ import { thermiqueApi, type PdfPoint } from "../api";
 import { componentsApi } from "../components";
 import { TileSheetViewer, type PickEvent, type ToScreen } from "../components/TileSheetViewer";
 import {
+  hasEdges,
   insertVertex,
   metreApi,
   nearestEdge,
@@ -31,7 +32,7 @@ import { formatMeters } from "../scale";
 import { SnapIndex, orthogonal, snapPoint, type SnapResult } from "../snap";
 import { ProjectTabs } from "./ProjectLibraryPage";
 
-type MetreTool = "pan" | "contour" | "lnc" | "patio" | "edit" | "calage" | "nord";
+type MetreTool = "pan" | "contour" | "nu_exterieur" | "lnc" | "patio" | "edit" | "calage" | "nord";
 type Selection = { zoneId: number; edge: number | null };
 type VertexDrag = { zoneId: number; index: number; points: PdfPoint[]; moved: boolean };
 
@@ -42,18 +43,23 @@ const TOOLS: { id: MetreTool; label: string; help: string }[] = [
     label: "Contour",
     help: "Cliquez les sommets au nu intérieur des murs qui entourent les locaux chauffés. Cliquez le premier sommet ou appuyez sur Entrée pour fermer. Retour arrière retire le dernier sommet, Maj force un côté horizontal ou vertical, Alt coupe l'aimantation.",
   },
+  {
+    id: "nu_exterieur",
+    label: "Nu extérieur",
+    help: "Cliquez les sommets sur la face extérieure des murs de façade, comme pour le contour. Cliquez le premier sommet ou appuyez sur Entrée pour fermer.",
+  },
   { id: "lnc", label: "Local non chauffé", help: "Tracez le local (garage, cave, cage d'escalier…) comme un contour. Dans le contour, sa surface est déduite." },
   { id: "patio", label: "Patio", help: "Tracez une cour ou un patio à l'intérieur du contour : ses côtés donnent sur l'extérieur." },
   {
     id: "edit",
     label: "Modifier",
-    help: "Cliquez un côté pour le qualifier, glissez un sommet pour le déplacer. Maj + clic sur un côté ajoute un sommet, Alt + clic sur un sommet le retire.",
+    help: "Cliquez un côté pour le qualifier, glissez un sommet pour le déplacer. Clic droit (ou Maj + clic) sur une ligne ajoute un sommet, Alt + clic sur un sommet le retire.",
   },
   { id: "calage", label: "Caler", help: "Cliquez deux repères communs à tous les niveaux (deux croisements d'axes, deux angles de cage d'escalier…), toujours dans le même ordre : A puis B." },
   { id: "nord", label: "Nord", help: "Cliquez le pied puis la pointe de la flèche du nord dessinée sur le plan." },
 ];
 
-const DRAW_TOOLS: MetreTool[] = ["contour", "lnc", "patio"];
+const DRAW_TOOLS: MetreTool[] = ["contour", "nu_exterieur", "lnc", "patio"];
 const EDGE_COLORS: Record<DonneSur, string> = { exterieur: "#d0342c", lnc: "#2f6fb0", sol: "#8a5a2b", mitoyen: "#7a7f87" };
 // Une couleur par épaisseur, dans l'ordre des linéaires décroissants (légende et plan partagent l'ordre).
 const WALL_PALETTE = ["#d0342c", "#2f6fb0", "#e07b00", "#2e9d4f", "#8a3fc4", "#00939c", "#a0522d", "#c2185b", "#5f6b73", "#b59a00"];
@@ -370,7 +376,7 @@ export function MetrePage() {
         }
         const next = removeVertex(zone.points, zone.cotes, vertex);
         setSelection({ zoneId: zone.id, edge: null });
-        void saveZone(zone.id, zone.type === "lnc" ? { points: next.points } : next);
+        void saveZone(zone.id, hasEdges(zone.type) ? next : { points: next.points });
         return;
       }
     }
@@ -381,9 +387,9 @@ export function MetrePage() {
       }
       if (event.shiftKey) {
         const next = insertVertex(zone.points, zone.cotes, edge.index, edge.point);
-        void saveZone(zone.id, zone.type === "lnc" ? { points: next.points } : next);
+        void saveZone(zone.id, hasEdges(zone.type) ? next : { points: next.points });
       }
-      setSelection({ zoneId: zone.id, edge: zone.type === "lnc" ? null : edge.index });
+      setSelection({ zoneId: zone.id, edge: hasEdges(zone.type) ? edge.index : null });
       return;
     }
     const inside = zonesInOrder.find((zone) => pointInPolygon(point, zone.points));
@@ -415,6 +421,25 @@ export function MetrePage() {
       }
     }
     return false;
+  }
+
+  // Clic droit sur une ligne (contour, nu extérieur, local, patio) : ajoute un sommet à cet endroit, quel que soit l'outil.
+  function handleContextPick(point: PdfPoint, scale: number) {
+    pixelsPerPt.current = scale;
+    if (!level || draft.length) {
+      return;
+    }
+    for (const zone of zonesInOrder) {
+      const edge = nearestEdge(zone.points, point, SNAP_PX / scale);
+      if (!edge) {
+        continue;
+      }
+      const next = insertVertex(zone.points, zone.cotes, edge.index, edge.point);
+      setTool("edit");
+      setSelection({ zoneId: zone.id, edge: null });
+      void saveZone(zone.id, hasEdges(zone.type) ? next : { points: next.points });
+      return;
+    }
   }
 
   function handleGrabMove(point: PdfPoint, event: PickEvent) {
@@ -503,24 +528,26 @@ export function MetrePage() {
     }
   }
 
-  async function detectContour() {
+  async function detectLines() {
     if (!level || !token) {
       return;
     }
-    const handDrawn = level.zones.some((zone) => zone.type === "contour" && zone.source !== "automatique");
-    if (handDrawn && !window.confirm("Ce niveau a déjà un contour tracé ou corrigé à la main. Le remplacer par la détection ?")) {
+    const handDrawn = level.zones.some((zone) => (zone.type === "contour" || zone.type === "nu_exterieur") && zone.source !== "automatique");
+    if (
+      handDrawn &&
+      !window.confirm("Ce niveau a déjà un nu intérieur ou un nu extérieur tracé ou corrigé à la main. Les remplacer par la détection ?")
+    ) {
       return;
     }
     setSelection(null);
-    const data = await perform(() => metreApi.detectContour(token, level.id, handDrawn));
-    const created = data?.niveaux.find((item) => item.id === level.id)?.zones.find((zone) => zone.source === "automatique");
-    if (data?.detection && created) {
-      setSelection({ zoneId: created.id, edge: null });
+    const data = await perform(() => metreApi.detectLines(token, level.id, handDrawn));
+    const found = data?.detection_lignes;
+    if (found) {
       setTool("edit");
       setNotice(
-        `Contour détecté : ${formatArea(data.detection.aire_m2)}, ${data.detection.sommets} sommets${
-          data.detection.zones_exterieures_ecartees ? `, ${data.detection.zones_exterieures_ecartees} zone(s) hachurée(s) laissée(s) dehors` : ""
-        }. Vérifiez-le sur le plan et corrigez avec « Modifier ».`,
+        `Nu intérieur : ${formatArea(found.nu_interieur_m2)} (${found.sommets_interieur} sommets). Nu extérieur : ${formatArea(found.nu_exterieur_m2)} (${found.sommets_exterieur} sommets)${
+          found.epaisseur_typique_m ? `. Murs de façade de ${Math.round(found.epaisseur_typique_m * 100)} cm en majorité` : ""
+        }. Vérifiez les deux lignes : glissez un sommet, clic droit sur une ligne pour en ajouter un.`,
       );
     }
   }
@@ -582,7 +609,7 @@ export function MetrePage() {
             return (
               <g key={key} className={`th-ghost th-ghost--${key}`}>
                 {other.zones
-                  .filter((zone) => zone.type !== "lnc")
+                  .filter((zone) => hasEdges(zone.type))
                   .map((zone) => (
                     <polygon key={zone.id} points={polygonPoints(zone.points.map((point) => transferPoint(otherRepere, current, point)))} />
                   ))}
@@ -599,7 +626,7 @@ export function MetrePage() {
           return (
             <g key={zone.id} className={`th-zone th-zone--${zone.type}${selected ? " is-selected" : ""}`}>
               <polygon points={polygonPoints(points)} />
-              {zone.type !== "lnc" &&
+              {hasEdges(zone.type) &&
                 screen.map(([x1, y1], index) => {
                   const [x2, y2] = screen[(index + 1) % screen.length];
                   const edgeSelected = selected && selection?.edge === index;
@@ -734,6 +761,7 @@ export function MetrePage() {
           onGrab={handleGrab}
           onGrabMove={handleGrabMove}
           onGrabEnd={handleGrabEnd}
+          onContextPick={handleContextPick}
           renderOverlay={renderOverlay}
         />
       ) : (
@@ -926,12 +954,13 @@ export function MetrePage() {
         {level && sheet && (
           <section>
             <h2>Détection automatique</h2>
-            <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => void detectContour()}>
-              Détecter le contour de ce niveau
+            <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => void detectLines()}>
+              Détecter le nu intérieur et le nu extérieur
             </button>
             <p className="th-muted">
-              Propose le contour au nu intérieur des murs extérieurs. Vérifiez-le toujours : terrasses, coursives et bandes plantées peuvent être
-              mal interprétées. Les locaux non chauffés restent à tracer.
+              Deux lignes déduites des murs du plan : le nu extérieur sur la face extérieure des murs de façade, le nu intérieur sur leur face
+              intérieure (doublages compris). Corrigez-les en glissant un sommet ; clic droit sur une ligne pour ajouter un sommet. Les locaux non
+              chauffés restent à tracer.
             </p>
           </section>
         )}
@@ -985,7 +1014,7 @@ export function MetrePage() {
             </p>
             <Alerts messages={zoneSummary?.alertes ?? []} />
 
-            {zone.type !== "lnc" &&
+            {hasEdges(zone.type) &&
               (selection?.edge != null && zone.cotes[selection.edge] ? (
                 <div className="th-edgebox">
                   <strong>
@@ -1049,7 +1078,7 @@ export function MetrePage() {
               ) : (
                 <p className="th-muted">Avec l'outil « Modifier », cliquez un côté sur le plan pour dire sur quoi il donne.</p>
               ))}
-            {zone.type !== "lnc" && (
+            {hasEdges(zone.type) && (
               <div className="th-edgebox">
                 <strong>Types de murs</strong>
                 <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => void detectWalls(zone.id)}>
@@ -1092,7 +1121,7 @@ export function MetrePage() {
                 ))}
               </div>
             )}
-            {zone.type !== "lnc" && (
+            {hasEdges(zone.type) && (
               <label className="th-field">
                 <span>Tous les côtés donnent sur</span>
                 <select
@@ -1235,6 +1264,8 @@ export function MetrePage() {
             <dl className="th-dl">
               <dt>Contour (nu intérieur)</dt>
               <dd>{formatArea(summary.surface_contour_m2)}</dd>
+              <dt>Nu extérieur (hors tout)</dt>
+              <dd>{formatArea(summary.surface_nu_exterieur_m2)}</dd>
               <dt>Locaux non chauffés tracés</dt>
               <dd>{formatArea(summary.surface_lnc_m2)}</dd>
               <dt>Patios tracés</dt>

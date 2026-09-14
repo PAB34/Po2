@@ -132,6 +132,13 @@ def test_synthese_d_un_niveau():
         {"id": 2, "type": "lnc", "points": garage, "cotes": []},
         {"id": 3, "type": "lnc", "points": cave_voisine, "cotes": []},
     ]
+    # Le nu extérieur borde le contour : ni déduit, ni signalé comme débordant.
+    nu_exterieur = [[100 - 0.3 * M, 100 - 0.3 * M], [100 + 10.3 * M, 100 - 0.3 * M], [100 + 10.3 * M, 100 + 8.3 * M], [100 - 0.3 * M, 100 + 8.3 * M]]
+    avec_nu = metre.synthese_niveau(100, 2.8, 0.2, zones + [{"id": 9, "type": "nu_exterieur", "points": nu_exterieur, "cotes": []}])
+    assert avec_nu["surface_nu_exterieur_m2"] == pytest.approx(10.6 * 8.6)
+    assert avec_nu["surface_chauffee_m2"] == pytest.approx(68.0)
+    assert avec_nu["zones"][3]["alertes"] == [] and avec_nu["zones"][3]["incluse_dans_contour"] is None
+
     synthese = metre.synthese_niveau(100, 2.8, 0.2, zones)
     assert synthese["surface_contour_m2"] == pytest.approx(80.0)
     assert synthese["surface_chauffee_m2"] == pytest.approx(68.0)  # le garage est déduit, la cave voisine non
@@ -243,6 +250,13 @@ def test_niveaux_traces_et_synthese(db_session):
         db_session, rdc, {"type": "lnc", "type_lnc": "garage", "points": [[100, 100], [100 + 3 * M, 100], [100 + 3 * M, 100 + 4 * M], [100, 100 + 4 * M]]}
     )
     assert (contour.name, garage.name) == ("Contour chauffé", "Garage, parking")
+    nu_ext = thermique_metre.create_zone(db_session, rdc, {"type": "nu_exterieur", "points": RECTANGLE})
+    assert nu_ext.name == "Nu extérieur" and nu_ext.edges_json == "[]"
+    thermique_metre.update_zone(db_session, nu_ext, {"points": RECTANGLE[:3]})
+    assert nu_ext.edges_json == "[]"
+    with pytest.raises(ThermiqueError, match="contour chauffé"):
+        thermique_metre.detect_walls(db_session, nu_ext)
+    thermique_metre.delete_zone(db_session, nu_ext)
     with pytest.raises(ThermiqueError, match="Composant inconnu"):
         thermique_metre.update_zone(db_session, contour, {"cotes": [{"donne_sur": "exterieur", "composant_id": 9999}]})
     db_session.rollback()

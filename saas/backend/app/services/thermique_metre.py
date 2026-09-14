@@ -19,6 +19,7 @@ from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_raster import raster_root
 from app.services.thermique_composants import create_component
 from thermique_moteur import coupes, detection, enveloppe, metre, traits, vecteurs
+from thermique_moteur import lignes as lignes_murs
 from thermique_moteur import murs as murs_vectoriels
 
 # Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
@@ -239,7 +240,7 @@ def create_zone(db: Session, level: ThermiqueLevel, data: dict[str, Any]) -> The
     if level.sheet_id is None:
         raise ThermiqueError("Associez d'abord une planche de plan à ce niveau.")
     points = metre.nettoyer_points(data.get("points"))
-    cotes = [] if kind == "lnc" else metre.normaliser_cotes(data.get("cotes"), len(points), metre.DONNE_SUR_DEFAUT[kind])
+    cotes = [] if kind in metre.ZONES_SANS_COTES else metre.normaliser_cotes(data.get("cotes"), len(points), metre.DONNE_SUR_DEFAUT[kind])
     _check_components(db, level.project_id, cotes)
     lnc_type = _lnc_type(data.get("type_lnc")) if kind == "lnc" else None
     count = sum(1 for zone in level.zones if zone.kind == kind)
@@ -273,7 +274,7 @@ def update_zone(db: Session, zone: ThermiqueZone, data: dict[str, Any]) -> Therm
         if points != _load(zone.points_json, []) and zone.source == "automatique":
             zone.source = "corrige"  # une correction n'est jamais écrasée par une nouvelle détection
         zone.points_json = _dump(points)
-    if zone.kind != "lnc":
+    if zone.kind not in metre.ZONES_SANS_COTES:
         source = data["cotes"] if data.get("cotes") is not None else _load(zone.edges_json, [])
         cotes = metre.normaliser_cotes(source, len(points), metre.DONNE_SUR_DEFAUT[zone.kind])
         _check_components(db, zone.project_id, cotes)
@@ -411,6 +412,61 @@ def sheet_walls(sheet: ThermiqueSheet) -> dict:
     return _cached(sheet, f"murs_{MURS_VERSION}_{scale_key}", compute)
 
 
+def detect_lines(db: Session, level: ThermiqueLevel, replace: bool = False) -> dict:
+    """Propose le nu intérieur (contour chauffé) et le nu extérieur du niveau, déduits des murs vectoriels
+    (lot G1). Les lignes détectées et non retouchées sont remplacées ; celles tracées ou corrigées à la main ne
+    le sont que sur confirmation (`replace`)."""
+    sheet = _level_sheet(db, level)
+    if sheet is None:
+        raise ThermiqueError("Associez d'abord une planche de plan à ce niveau.")
+    if not sheet.scale_denominator:
+        raise ThermiqueError("Définissez l'échelle de la planche avant la détection.")
+    kinds = ("contour", "nu_exterieur")
+    if not replace and any(zone.kind in kinds and zone.source != "automatique" for zone in level.zones):
+        raise ThermiqueError("Ce niveau a déjà un nu intérieur ou un nu extérieur tracé ou corrigé à la main : confirmez son remplacement.")
+    murs_plan = sheet_walls(sheet)
+    scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
+
+    def compute(path):
+        lus = vecteurs.fusionner_lignes(traits.lire_traits(path, sheet.page_index, avec_couleur=True))
+        barrieres = lignes_murs.traits_barrieres(lus)
+        return {"lignes": lignes_murs.detecter_deux_lignes(murs_plan["murs"], sheet.scale_denominator, barrieres)}
+
+    result = _cached(sheet, f"lignes_{MURS_VERSION}_{scale_key}", compute)
+    found = result.get("lignes")
+    if not found:
+        raise ThermiqueError("Les deux lignes n'ont pas pu être détectées sur ce plan : tracez-les avec les outils « Contour » et « Nu extérieur ».")
+    for zone in [zone for zone in level.zones if zone.kind in kinds]:
+        if zone.source == "automatique" or replace:
+            db.delete(zone)
+    db.flush()
+    sommets = {}
+    for kind, key, name in (("contour", "nu_interieur", "Nu intérieur détecté"), ("nu_exterieur", "nu_exterieur", "Nu extérieur détecté")):
+        points = metre.nettoyer_points(found[key]["points"])
+        sommets[key] = len(points)
+        cotes = [] if kind in metre.ZONES_SANS_COTES else metre.normaliser_cotes(None, len(points), metre.DONNE_SUR_DEFAUT[kind])
+        db.add(
+            ThermiqueZone(
+                project_id=level.project_id,
+                level_id=level.id,
+                kind=kind,
+                name=name,
+                points_json=_dump(points),
+                edges_json=_dump(cotes),
+                source="automatique",
+            )
+        )
+    db.commit()
+    db.refresh(level)
+    return {
+        "nu_interieur_m2": found["nu_interieur"]["aire_m2"],
+        "nu_exterieur_m2": found["nu_exterieur"]["aire_m2"],
+        "sommets_interieur": sommets["nu_interieur"],
+        "sommets_exterieur": sommets["nu_exterieur"],
+        "epaisseur_typique_m": found["epaisseur_typique_m"],
+    }
+
+
 def apply_section_heights(
     db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, drawing: int, upward: bool, first_interval: int
 ) -> int:
@@ -440,7 +496,7 @@ def apply_section_heights(
 
 def detect_walls(db: Session, zone: ThermiqueZone) -> dict:
     """Lit sur le plan l'épaisseur du mur et la position de l'isolant de chaque côté du tracé (lot M4a)."""
-    if zone.kind == "lnc":
+    if zone.kind in metre.ZONES_SANS_COTES:
         raise ThermiqueError("Les types de murs se lisent sur un contour chauffé ou un patio.")
     level = db.get(ThermiqueLevel, zone.level_id)
     sheet = _level_sheet(db, level)
@@ -542,7 +598,9 @@ def serialize_metre(db: Session, project: ThermiqueProject) -> dict[str, Any]:
         synthese = metre.synthese_niveau(scale, level.floor_height_m, level.slab_thickness_m, zones, level.ceiling_height_m)
         for zone, resume in zip(zones, synthese["zones"]):
             zone["types_murs"] = (
-                enveloppe.types_de_murs(zone["cotes"], resume["cotes_m"]) if zone["type"] != "lnc" and resume["cotes_m"] else []
+                enveloppe.types_de_murs(zone["cotes"], resume["cotes_m"])
+                if zone["type"] not in metre.ZONES_SANS_COTES and resume["cotes_m"]
+                else []
             )
         if sheet is None:
             synthese["alertes"].insert(0, "Aucune planche de plan associée à ce niveau.")
