@@ -159,3 +159,47 @@ class ComponentImport(BaseModel):
 class ComponentEvaluate(BaseModel):
     categorie: str
     composition: dict
+
+
+class LevelCreate(BaseModel):
+    nom: str | None = Field(default=None, max_length=80)
+    ordre: int | None = Field(default=None, ge=-50, le=200)
+    altitude_m: float | None = None
+    hauteur_etage_m: float | None = None
+    epaisseur_plancher_m: float | None = None
+    planche_id: int | None = None
+
+
+class LevelCalage(BaseModel):
+    a: list[float] = Field(min_length=2, max_length=2)
+    b: list[float] = Field(min_length=2, max_length=2)
+
+
+class LevelUpdate(LevelCreate):
+    calage: LevelCalage | None = None
+
+
+class NorthRequest(BaseModel):
+    niveau_id: int
+    p1: list[float] = Field(min_length=2, max_length=2)
+    p2: list[float] = Field(min_length=2, max_length=2)
+
+
+class ZoneEdge(BaseModel):
+    donne_sur: str
+    composant_id: int | None = None
+
+
+class ZoneCreate(BaseModel):
+    type: str
+    nom: str | None = Field(default=None, max_length=120)
+    type_lnc: str | None = None
+    points: list[list[float]] = Field(min_length=3, max_length=2000)
+    cotes: list[ZoneEdge] | None = None
+
+
+class ZoneUpdate(BaseModel):
+    nom: str | None = Field(default=None, max_length=120)
+    type_lnc: str | None = None
+    points: list[list[float]] | None = Field(default=None, min_length=3, max_length=2000)
+    cotes: list[ZoneEdge] | None = None

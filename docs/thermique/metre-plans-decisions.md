@@ -248,3 +248,19 @@ La détection **propose**, le thermicien **valide** : chaque objet garde sa sour
   réglementaires hors périmètre, tolérance = épaisseur du mur), à revoir à l'usage.
 - **Prochain : M1** (niveaux, calage, nord, contour tracé avec aimantation, côtés qualifiés, LNC,
   niveaux voisins en fantôme).
+
+## 10. Lot M1 livré (2026-09-14)
+
+| Élément | Réalisation |
+|---|---|
+| Traits d'aimantation | `thermique_moteur/traits.py` : chemins **tracés** lus par pdfium (formulaires imbriqués compris), classes d'épaisseur, seuil proposé = classes ≥ 1,9 × plume médiane pondérée par la longueur. Projet d'essai : seuil 0,96 pt sur les niveaux −1 à 2, 250 à 630 traits, 0,6 s par plan ; cache par planche et seuil |
+| Repère commun | Calage A-B par niveau (points PDF de sa planche) ; origine A, axe x vers B, mètres ; contrôle des distances A-B entre niveaux (alerte au-delà de 5 cm) |
+| Nord | Deux clics sur un niveau calé → angle dans le repère commun, stocké sur le projet |
+| Tracés | Contour chauffé, local non chauffé (type), patio ; stockés en points PDF ; une qualification par côté (donne sur, composant mur) |
+| Synthèse | Surfaces (contour, LNC et patios déduits s'ils sont dedans, par échantillons le long des côtés), linéaires par « donne sur », hauteur intérieure = hauteur d'étage − plancher, surfaces brutes de murs ; alertes : tracé qui se recoupe, local qui déborde, échelle absente |
+| Niveaux | Créés depuis les libellés de planches (« Niveau −1 », « RDC », « R+2 »… ; toiture exclue) ou à la main ; ordre modifiable |
+| Écran | Onglet « Métré » : outils Déplacer, Contour, Local non chauffé, Patio, Modifier (glisser un sommet, Maj + clic ajoute, Alt + clic retire), Caler, Nord ; aimantation (sommets, extrémités, croisements, traits), Maj = orthogonal, Alt = libre ; calques des niveaux voisins ; côtés colorés par « donne sur » |
+| Données | Migration `0078` : `thermique_levels`, `thermique_zones`, `thermique_projects.north_deg` |
+
+Limites connues, traitées plus tard : cadre et cartouche aussi aimantés (zone utile au lot M3) ;
+local qui déborde du contour déduit en entier (opérations exactes sur polygones au lot M2).

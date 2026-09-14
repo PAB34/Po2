@@ -18,6 +18,9 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
       <NavLink to={`/projets/${projectId}/bibliotheque`} className={tabClass}>
         Bibliothèque
       </NavLink>
+      <NavLink to={`/projets/${projectId}/metre`} className={tabClass}>
+        Métré
+      </NavLink>
     </nav>
   );
 }

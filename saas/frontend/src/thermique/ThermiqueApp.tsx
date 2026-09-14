@@ -2,6 +2,7 @@ import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigat
 
 import { useAuth } from "../providers/AuthProvider";
 import { LibraryPage } from "./pages/LibraryHomePage";
+import { MetrePage } from "./pages/MetrePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
 import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -82,6 +83,7 @@ export function ThermiqueApp() {
         </Route>
         <Route element={<Shell fullWidth />}>
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
+          <Route path="projets/:projectId/metre" element={<MetrePage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

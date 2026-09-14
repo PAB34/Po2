@@ -1,0 +1,354 @@
+"""Métré sur les plans, lot M1 : niveaux, calage, nord, contours et locaux non chauffés.
+
+Les tracés sont stockés en points PDF de la planche de leur niveau ; surfaces, longueurs et
+contrôles sont recalculés par le moteur (`thermique_moteur.metre`) à chaque lecture.
+Voir docs/thermique/metre-plans-decisions.md.
+"""
+from __future__ import annotations
+
+import json
+import math
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.thermique import ThermiqueComponent, ThermiqueLevel, ThermiqueProject, ThermiqueSheet, ThermiqueZone
+from app.models.user import User
+from app.services.thermique import ThermiqueError, document_path
+from app.services.thermique_raster import raster_root
+from thermique_moteur import metre, traits
+
+# Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
+TRAITS_VERSION = "v1"
+
+LEVEL_NUMBERS = {
+    "altitude_m": ("altitude_m", "Altitude", -100.0, 1000.0),
+    "hauteur_etage_m": ("floor_height_m", "Hauteur d'étage", 0.5, 30.0),
+    "epaisseur_plancher_m": ("slab_thickness_m", "Épaisseur de plancher", 0.0, 3.0),
+}
+
+
+def _dump(value: Any) -> str:
+    return json.dumps(value, separators=(",", ":"))
+
+
+def _load(text: str | None, default: Any) -> Any:
+    return json.loads(text) if text else default
+
+
+# --- Accès ---------------------------------------------------------------------------------------
+
+
+def _owner_ok(db: Session, user: User, project_id: int) -> bool:
+    project = db.get(ThermiqueProject, project_id)
+    return project is not None and project.owner_user_id == user.id
+
+
+def get_level_for_user(db: Session, user: User, level_id: int) -> ThermiqueLevel | None:
+    level = db.get(ThermiqueLevel, level_id)
+    return level if level is not None and _owner_ok(db, user, level.project_id) else None
+
+
+def get_zone_for_user(db: Session, user: User, zone_id: int) -> ThermiqueZone | None:
+    zone = db.get(ThermiqueZone, zone_id)
+    return zone if zone is not None and _owner_ok(db, user, zone.project_id) else None
+
+
+def _levels(db: Session, project: ThermiqueProject) -> list[ThermiqueLevel]:
+    statement = (
+        select(ThermiqueLevel)
+        .where(ThermiqueLevel.project_id == project.id)
+        .order_by(ThermiqueLevel.position, ThermiqueLevel.id)
+    )
+    return list(db.scalars(statement))
+
+
+# --- Niveaux -------------------------------------------------------------------------------------
+
+
+def _number(value: Any, label: str, minimum: float, maximum: float) -> float | None:
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ThermiqueError(f"{label} : valeur invalide.") from exc
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise ThermiqueError(f"{label} : valeur hors limites ({minimum:g} à {maximum:g} m).")
+    return number
+
+
+def _sheet_id(db: Session, project: ThermiqueProject, value: Any) -> int | None:
+    if value is None:
+        return None
+    sheet = db.get(ThermiqueSheet, int(value))
+    if sheet is None or sheet.project_id != project.id:
+        raise ThermiqueError("Cette planche n'appartient pas au projet.")
+    return sheet.id
+
+
+def _calage(value: Any) -> dict | None:
+    if value is None:
+        return None
+    try:
+        a = [float(v) for v in value["a"]]
+        b = [float(v) for v in value["b"]]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ThermiqueError("Calage invalide : deux points A et B attendus.") from exc
+    if len(a) != 2 or len(b) != 2:
+        raise ThermiqueError("Calage invalide : deux points A et B attendus.")
+    if math.hypot(b[0] - a[0], b[1] - a[1]) < 5.0:
+        raise ThermiqueError("Les deux points de calage sont trop proches : choisissez deux repères éloignés.")
+    return {"a": [round(a[0], 3), round(a[1], 3)], "b": [round(b[0], 3), round(b[1], 3)]}
+
+
+def _apply_level(db: Session, project: ThermiqueProject, level: ThermiqueLevel, data: dict[str, Any]) -> None:
+    if "nom" in data:
+        name = (data["nom"] or "").strip()[:80]
+        if not name:
+            raise ThermiqueError("Le nom du niveau est obligatoire.")
+        level.name = name
+    if data.get("ordre") is not None:
+        level.position = int(data["ordre"])
+    for key, (attribute, label, minimum, maximum) in LEVEL_NUMBERS.items():
+        if key in data:
+            setattr(level, attribute, _number(data[key], label, minimum, maximum))
+    if "planche_id" in data:
+        sheet_id = _sheet_id(db, project, data["planche_id"])
+        if sheet_id != level.sheet_id:
+            level.sheet_id = sheet_id
+            # Le calage est propre à la planche : il ne survit pas à un changement de plan.
+            if "calage" not in data:
+                level.calage_json = None
+    if "calage" in data:
+        calage = _calage(data["calage"])
+        level.calage_json = _dump(calage) if calage else None
+
+
+def create_level(db: Session, project: ThermiqueProject, data: dict[str, Any]) -> ThermiqueLevel:
+    existing = _levels(db, project)
+    level = ThermiqueLevel(
+        project_id=project.id,
+        name=f"Niveau {len(existing)}",
+        position=max((item.position for item in existing), default=-1) + 1,
+    )
+    _apply_level(db, project, level, data)
+    db.add(level)
+    db.commit()
+    return level
+
+
+def update_level(db: Session, project: ThermiqueProject, level: ThermiqueLevel, data: dict[str, Any]) -> ThermiqueLevel:
+    _apply_level(db, project, level, data)
+    db.commit()
+    return level
+
+
+def delete_level(db: Session, level: ThermiqueLevel) -> None:
+    db.delete(level)
+    db.commit()
+
+
+def create_levels_from_sheets(db: Session, project: ThermiqueProject) -> int:
+    """Un niveau par planche de plan au niveau reconnu (« Niveau 0 », « RDC », « R+1 »…)."""
+    existing = _levels(db, project)
+    used_sheets = {item.sheet_id for item in existing}
+    used_positions = {item.position for item in existing}
+    sheets = db.scalars(select(ThermiqueSheet).where(ThermiqueSheet.project_id == project.id).order_by(ThermiqueSheet.id))
+    suggestions = metre.suggestion_niveaux(
+        [{"id": sheet.id, "nature": sheet.nature or sheet.nature_suggested, "niveau": sheet.level_label} for sheet in sheets]
+    )
+    if not suggestions:
+        raise ThermiqueError(
+            "Aucune planche de plan avec un niveau reconnu (ex. « Niveau 0 », « RDC », « R+1 ») : renseignez le "
+            "niveau des planches dans « Plans et planches » ou ajoutez les niveaux à la main."
+        )
+    created = 0
+    for suggestion in suggestions:
+        if suggestion["planche_id"] in used_sheets or suggestion["ordre"] in used_positions:
+            continue
+        db.add(
+            ThermiqueLevel(
+                project_id=project.id,
+                name=suggestion["nom"],
+                position=suggestion["ordre"],
+                sheet_id=suggestion["planche_id"],
+            )
+        )
+        created += 1
+    db.commit()
+    return created
+
+
+def _level_sheet(db: Session, level: ThermiqueLevel) -> ThermiqueSheet | None:
+    return db.get(ThermiqueSheet, level.sheet_id) if level.sheet_id else None
+
+
+def set_north(db: Session, project: ThermiqueProject, level: ThermiqueLevel, p1: list[float], p2: list[float]) -> None:
+    calage = _load(level.calage_json, None)
+    sheet = _level_sheet(db, level)
+    if not calage or sheet is None or not sheet.scale_denominator:
+        raise ThermiqueError(
+            "Calez d'abord ce niveau et vérifiez l'échelle de sa planche : le nord est exprimé dans le repère commun des niveaux."
+        )
+    project.north_deg = metre.angle_nord(metre.repere(calage, sheet.scale_denominator), p1, p2)
+    db.commit()
+
+
+# --- Tracés --------------------------------------------------------------------------------------
+
+
+def _lnc_type(value: Any) -> str:
+    value = value or "autre"
+    if value not in metre.TYPES_LNC:
+        raise ThermiqueError("Type de local non chauffé inconnu.")
+    return value
+
+
+def _check_components(db: Session, project_id: int, cotes: list[dict]) -> None:
+    wanted = {cote["composant_id"] for cote in cotes if cote["composant_id"] is not None}
+    if not wanted:
+        return
+    found = set(
+        db.scalars(
+            select(ThermiqueComponent.id).where(
+                ThermiqueComponent.project_id == project_id, ThermiqueComponent.id.in_(wanted)
+            )
+        )
+    )
+    if wanted - found:
+        raise ThermiqueError("Composant inconnu dans la bibliothèque de ce projet.")
+
+
+def create_zone(db: Session, level: ThermiqueLevel, data: dict[str, Any]) -> ThermiqueZone:
+    kind = data.get("type")
+    if kind not in metre.TYPES_ZONE:
+        raise ThermiqueError("Type de tracé inconnu.")
+    if level.sheet_id is None:
+        raise ThermiqueError("Associez d'abord une planche de plan à ce niveau.")
+    points = metre.nettoyer_points(data.get("points"))
+    cotes = [] if kind == "lnc" else metre.normaliser_cotes(data.get("cotes"), len(points), metre.DONNE_SUR_DEFAUT[kind])
+    _check_components(db, level.project_id, cotes)
+    lnc_type = _lnc_type(data.get("type_lnc")) if kind == "lnc" else None
+    count = sum(1 for zone in level.zones if zone.kind == kind)
+    default_name = metre.TYPES_LNC[lnc_type] if lnc_type and lnc_type != "autre" else metre.TYPES_ZONE[kind]
+    name = (data.get("nom") or "").strip()[:120] or (default_name if count == 0 else f"{default_name} {count + 1}")
+    zone = ThermiqueZone(
+        project_id=level.project_id,
+        level_id=level.id,
+        kind=kind,
+        name=name,
+        lnc_type=lnc_type,
+        points_json=_dump(points),
+        edges_json=_dump(cotes),
+        source="manuel",
+    )
+    db.add(zone)
+    db.commit()
+    return zone
+
+
+def update_zone(db: Session, zone: ThermiqueZone, data: dict[str, Any]) -> ThermiqueZone:
+    if "nom" in data:
+        name = (data["nom"] or "").strip()[:120]
+        if name:
+            zone.name = name
+    if "type_lnc" in data and zone.kind == "lnc":
+        zone.lnc_type = _lnc_type(data["type_lnc"])
+    points = _load(zone.points_json, [])
+    if data.get("points") is not None:
+        points = metre.nettoyer_points(data["points"])
+        zone.points_json = _dump(points)
+    if zone.kind != "lnc":
+        source = data["cotes"] if data.get("cotes") is not None else _load(zone.edges_json, [])
+        cotes = metre.normaliser_cotes(source, len(points), metre.DONNE_SUR_DEFAUT[zone.kind])
+        _check_components(db, zone.project_id, cotes)
+        zone.edges_json = _dump(cotes)
+    db.commit()
+    return zone
+
+
+def delete_zone(db: Session, zone: ThermiqueZone) -> None:
+    db.delete(zone)
+    db.commit()
+
+
+# --- Traits d'aimantation ------------------------------------------------------------------------
+
+
+def sheet_traits(sheet: ThermiqueSheet, seuil: float | None) -> dict:
+    """Traits épais de la planche (faces de murs) pour aimanter le tracé, mis en cache par seuil."""
+    folder = raster_root(sheet.project_id, sheet.id)
+    key = "auto" if seuil is None else f"{seuil:.2f}"
+    cache = folder / f"traits_{TRAITS_VERSION}_{key}.json"
+    if cache.is_file():
+        return json.loads(cache.read_text(encoding="utf-8"))
+    path = document_path(sheet.document)
+    if not path.is_file():
+        raise ThermiqueError("Fichier absent du stockage.")
+    result = traits.extraire_aimantation(path, sheet.page_index, seuil)
+    folder.mkdir(parents=True, exist_ok=True)
+    partial = cache.with_suffix(".part")
+    partial.write_text(_dump(result), encoding="utf-8")
+    partial.replace(cache)
+    return result
+
+
+# --- Lecture -------------------------------------------------------------------------------------
+
+
+def _serialize_zone(zone: ThermiqueZone) -> dict[str, Any]:
+    return {
+        "id": zone.id,
+        "niveau_id": zone.level_id,
+        "type": zone.kind,
+        "nom": zone.name,
+        "type_lnc": zone.lnc_type,
+        "points": _load(zone.points_json, []),
+        "cotes": _load(zone.edges_json, []),
+        "source": zone.source,
+    }
+
+
+def serialize_metre(db: Session, project: ThermiqueProject) -> dict[str, Any]:
+    levels = _levels(db, project)
+    sheets = {sheet.id: sheet for sheet in db.scalars(select(ThermiqueSheet).where(ThermiqueSheet.project_id == project.id))}
+    rows = []
+    for level in levels:
+        sheet = sheets.get(level.sheet_id) if level.sheet_id else None
+        rows.append((level, sheet, sheet.scale_denominator if sheet else None, _load(level.calage_json, None)))
+    checks = metre.controle_calages(
+        [{"id": level.id, "nom": level.name, "echelle": scale, "calage": calage} for level, _sheet, scale, calage in rows]
+    )
+    niveaux = []
+    for level, sheet, scale, calage in rows:
+        zones = [_serialize_zone(zone) for zone in level.zones]
+        synthese = metre.synthese_niveau(scale, level.floor_height_m, level.slab_thickness_m, zones)
+        if sheet is None:
+            synthese["alertes"].insert(0, "Aucune planche de plan associée à ce niveau.")
+        check = checks["par_niveau"].get(level.id, {})
+        niveaux.append(
+            {
+                "id": level.id,
+                "nom": level.name,
+                "ordre": level.position,
+                "altitude_m": level.altitude_m,
+                "hauteur_etage_m": level.floor_height_m,
+                "epaisseur_plancher_m": level.slab_thickness_m,
+                "planche_id": sheet.id if sheet else None,
+                "planche_libelle": sheet.label if sheet else None,
+                "echelle": scale,
+                "calage": calage,
+                "calage_ab_m": check.get("ab_m"),
+                "calage_ecart_m": check.get("ecart_m"),
+                "zones": zones,
+                "synthese": synthese,
+            }
+        )
+    return {
+        "niveaux": niveaux,
+        "nord_deg": project.north_deg,
+        "alertes": checks["alertes"],
+        "listes": {"donne_sur": metre.DONNE_SUR, "types_zone": metre.TYPES_ZONE, "types_lnc": metre.TYPES_LNC},
+    }
