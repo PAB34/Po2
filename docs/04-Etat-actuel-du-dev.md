@@ -74,8 +74,12 @@ do_not_auto_read:
   composant). **Lot M1 fait** (branche `feat/thermique-metre-m1`, migration **0078**) : onglet
   « Métré » (niveaux depuis les planches, calage A-B, nord, contour / local non chauffé / patio avec
   aimantation sur les traits épais, côtés qualifiés, calques des niveaux voisins, synthèse) ;
-  moteur `thermique_moteur/traits.py` et `metre.py`. **▶️ Prochain : M2** (planchers et ponts
-  thermiques déduits par superposition, `shapely`).
+  moteur `thermique_moteur/traits.py` et `metre.py`. **Lot M3 (détection) fait** (branche
+  `feat/thermique-detection-m3`, migration **0079**, `scipy`) : contour au nu intérieur détecté
+  automatiquement, hauteurs lues sur les coupes, hauteur sous plafond. **Retour utilisateur** : il veut
+  une **couche IA** de vérification étape par étape, planche par planche → cadrage
+  `thermique/agent-verification-decisions.md`, **Q46-Q50 en attente** (confidentialité, clé API, coût,
+  autonomie, ordre). Ensuite M2 (planchers et ponts thermiques par superposition).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.

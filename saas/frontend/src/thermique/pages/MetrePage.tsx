@@ -151,6 +151,9 @@ export function MetrePage() {
   const [seuil, setSeuil] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sectionSheetId, setSectionSheetId] = useState<number | null>(null);
+  const [sectionChoice, setSectionChoice] = useState({ dessin: 0, inverse: false, premier: 0 });
   const pixelsPerPt = useRef(1);
 
   const projectQuery = useQuery({
@@ -188,6 +191,12 @@ export function MetrePage() {
     staleTime: Infinity,
   });
   const snapIndex = useMemo(() => (traits.data ? new SnapIndex(traits.data.segments) : null), [traits.data]);
+  const section = useQuery({
+    queryKey: ["thermique", "coupe", sectionSheetId ?? 0],
+    queryFn: () => metreApi.section(token!, sectionSheetId!),
+    enabled: Boolean(token && sectionSheetId),
+    staleTime: Infinity,
+  });
 
   const currentLevelId = level?.id ?? null;
   const currentSheetId = sheet?.id ?? null;
@@ -215,6 +224,7 @@ export function MetrePage() {
   async function perform(action: () => Promise<Metre>): Promise<Metre | null> {
     setBusy(true);
     setActionError(null);
+    setNotice(null);
     try {
       const data = await action();
       queryClient.setQueryData(metreKey, data);
@@ -429,6 +439,28 @@ export function MetrePage() {
     }
   }
 
+  async function detectContour() {
+    if (!level || !token) {
+      return;
+    }
+    const handDrawn = level.zones.some((zone) => zone.type === "contour" && zone.source !== "automatique");
+    if (handDrawn && !window.confirm("Ce niveau a déjà un contour tracé ou corrigé à la main. Le remplacer par la détection ?")) {
+      return;
+    }
+    setSelection(null);
+    const data = await perform(() => metreApi.detectContour(token, level.id, handDrawn));
+    const created = data?.niveaux.find((item) => item.id === level.id)?.zones.find((zone) => zone.source === "automatique");
+    if (data?.detection && created) {
+      setSelection({ zoneId: created.id, edge: null });
+      setTool("edit");
+      setNotice(
+        `Contour détecté : ${formatArea(data.detection.aire_m2)}, ${data.detection.sommets} sommets${
+          data.detection.zones_exterieures_ecartees ? `, ${data.detection.zones_exterieures_ecartees} zone(s) hachurée(s) laissée(s) dehors` : ""
+        }. Vérifiez-le sur le plan et corrigez avec « Modifier ».`,
+      );
+    }
+  }
+
   function removeLevel() {
     if (!level || !window.confirm(`Supprimer le niveau « ${level.nom} » et tous ses tracés ?`)) {
       return;
@@ -589,6 +621,9 @@ export function MetrePage() {
   const helpText = TOOLS.find((item) => item.id === tool)?.help;
   const summary = level?.synthese;
   const referenceLevel = levels.find((item) => item.calage && item.calage_ecart_m === 0);
+  const sectionSheets = sheets.filter((item) => (item.nature ?? item.nature_suggested) === "coupe");
+  const sectionDrawing = section.data?.dessins[sectionChoice.dessin] ?? null;
+  const sectionIntervals = sectionDrawing ? (sectionChoice.inverse ? sectionDrawing.niveaux_descendant : sectionDrawing.niveaux_montant) : [];
 
   function setEdges(edge: number | "all", changes: Partial<ZoneEdge>) {
     if (!zone) {
@@ -635,8 +670,9 @@ export function MetrePage() {
           <h1 className="th-panel__title">Métré{level ? ` · ${level.nom}` : ""}</h1>
         </div>
         <ProjectTabs projectId={projectId} />
-        {busy && <p className="th-muted">Enregistrement…</p>}
+        {busy && <p className="th-muted">Traitement en cours… (la lecture d'un plan prend 10 à 15 s la première fois)</p>}
         {actionError && <p className="th-alert th-alert--error">{actionError}</p>}
+        {notice && <p className="th-alert th-alert--ok">{notice}</p>}
         <Alerts messages={metre.alertes} />
 
         <section>
@@ -699,6 +735,14 @@ export function MetrePage() {
               <NumberField label="Hauteur d'étage (m)" value={level.hauteur_etage_m} onSave={(value) => void saveLevel(level, { hauteur_etage_m: value })} />
               <NumberField label="Plancher (m)" value={level.epaisseur_plancher_m} onSave={(value) => void saveLevel(level, { epaisseur_plancher_m: value })} />
             </div>
+            <NumberField
+              label="Hauteur sous plafond (m) — prime sur étage − plancher"
+              value={level.hauteur_sous_plafond_m}
+              onSave={(value) => void saveLevel(level, { hauteur_sous_plafond_m: value })}
+            />
+            {level.hauteurs_source && (
+              <p className="th-muted">Hauteurs {level.hauteurs_source === "coupe" ? "lues sur une coupe" : "saisies à la main"}.</p>
+            )}
             <p className="th-muted">
               {level.calage
                 ? `Calé : A-B = ${formatLength(level.calage_ab_m)}${
@@ -725,6 +769,19 @@ export function MetrePage() {
 
         {level && sheet && (
           <section>
+            <h2>Détection automatique</h2>
+            <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => void detectContour()}>
+              Détecter le contour de ce niveau
+            </button>
+            <p className="th-muted">
+              Propose le contour au nu intérieur des murs extérieurs. Vérifiez-le toujours : terrasses, coursives et bandes plantées peuvent être
+              mal interprétées. Les locaux non chauffés restent à tracer.
+            </p>
+          </section>
+        )}
+
+        {level && sheet && (
+          <section>
             <h2>Outils</h2>
             <div className="th-segmented th-tools" role="group" aria-label="Outil">
               {TOOLS.map((item) => (
@@ -746,6 +803,13 @@ export function MetrePage() {
         {level && zone && (
           <section>
             <h2>{listes.types_zone[zone.type]}</h2>
+            <p className={zone.source === "automatique" ? "th-alert th-alert--warn" : "th-muted"}>
+              {zone.source === "automatique"
+                ? "Détecté automatiquement : à vérifier."
+                : zone.source === "corrige"
+                  ? "Détecté puis corrigé à la main."
+                  : "Tracé à la main."}
+            </p>
             <TextField label="Nom" value={zone.nom} maxLength={120} onSave={(nom) => void saveZone(zone.id, { nom })} />
             {zone.type === "lnc" && (
               <label className="th-field">
@@ -854,6 +918,106 @@ export function MetrePage() {
             >
               Supprimer ce tracé
             </button>
+          </section>
+        )}
+
+        {levels.length > 0 && (
+          <section>
+            <h2>Hauteurs depuis une coupe</h2>
+            <label className="th-field">
+              <span>Coupe</span>
+              <select
+                value={sectionSheetId ?? ""}
+                onChange={(event) => {
+                  setSectionSheetId(event.target.value ? Number(event.target.value) : null);
+                  setSectionChoice({ dessin: 0, inverse: false, premier: 0 });
+                }}
+              >
+                <option value="">Choisir une coupe…</option>
+                {sectionSheets.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {section.isFetching && <p className="th-muted">Lecture des planchers de la coupe…</p>}
+            {section.error && <p className="th-alert th-alert--error">{section.error.message}</p>}
+            {section.data && section.data.dessins.length === 0 && (
+              <p className="th-alert th-alert--warn">Aucun plancher repéré sur cette coupe : saisissez les hauteurs à la main.</p>
+            )}
+            {sectionDrawing && (
+              <>
+                <label className="th-field">
+                  <span>Dessin</span>
+                  <select
+                    value={sectionChoice.dessin}
+                    onChange={(event) => setSectionChoice({ dessin: Number(event.target.value), inverse: false, premier: 0 })}
+                  >
+                    {section.data!.dessins.map((dessin) => (
+                      <option key={dessin.index} value={dessin.index}>
+                        Dessin {dessin.index + 1} · {dessin.planchers.length} planchers · étages {dessin.hauteurs_etage_m.map(decimalText).join(" / ")} m
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="th-check">
+                  <input
+                    type="checkbox"
+                    checked={sectionChoice.inverse}
+                    onChange={(event) => setSectionChoice({ ...sectionChoice, inverse: event.target.checked, premier: 0 })}
+                  />
+                  Lire les planchers dans l'autre sens (si les hauteurs paraissent inversées)
+                </label>
+                <label className="th-field">
+                  <span>Intervalle du niveau le plus bas ({levels[0].nom})</span>
+                  <select value={sectionChoice.premier} onChange={(event) => setSectionChoice({ ...sectionChoice, premier: Number(event.target.value) })}>
+                    {sectionIntervals.map((interval, index) => (
+                      <option key={index} value={index}>
+                        Intervalle {index + 1} : étage {formatLength(interval.hauteur_etage_m)}, plancher {formatLength(interval.epaisseur_plancher_m)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <dl className="th-dl">
+                  {levels.map((item, offset) => {
+                    const interval = sectionIntervals[sectionChoice.premier + offset];
+                    return (
+                      <div key={item.id} style={{ display: "contents" }}>
+                        <dt>{item.nom}</dt>
+                        <dd>
+                          {interval
+                            ? `étage ${decimalText(interval.hauteur_etage_m)} · plancher ${decimalText(interval.epaisseur_plancher_m)} · HSP ${decimalText(interval.hauteur_sous_plafond_m)} m`
+                            : "—"}
+                        </dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+                <p className="th-muted">Hauteur sous plafond brute : de dalle à dalle, sans faux plafond ni revêtements.</p>
+                <button
+                  type="button"
+                  className="po2-button po2-button--secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void perform(() =>
+                      metreApi.applySectionHeights(token, projectId, {
+                        planche_id: sectionSheetId!,
+                        dessin: sectionChoice.dessin,
+                        sens_montant: !sectionChoice.inverse,
+                        premier_intervalle: sectionChoice.premier,
+                      }),
+                    ).then((data) => {
+                      if (data) {
+                        setNotice("Hauteurs reportées sur les niveaux. Elles restent modifiables niveau par niveau.");
+                      }
+                    })
+                  }
+                >
+                  Appliquer aux niveaux
+                </button>
+              </>
+            )}
           </section>
         )}
 

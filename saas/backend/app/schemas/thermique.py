@@ -167,7 +167,19 @@ class LevelCreate(BaseModel):
     altitude_m: float | None = None
     hauteur_etage_m: float | None = None
     epaisseur_plancher_m: float | None = None
+    hauteur_sous_plafond_m: float | None = None
     planche_id: int | None = None
+
+
+class DetectContourRequest(BaseModel):
+    remplacer: bool = False
+
+
+class SectionHeightsRequest(BaseModel):
+    planche_id: int
+    dessin: int = Field(ge=0)
+    sens_montant: bool = True
+    premier_intervalle: int = Field(default=0, ge=0)
 
 
 class LevelCalage(BaseModel):

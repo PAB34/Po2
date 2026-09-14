@@ -10,8 +10,13 @@ from __future__ import annotations
 
 import ctypes
 import math
+import threading
 from collections import defaultdict
 from pathlib import Path
+
+# pdfium n'est pas prévu pour des appels simultanés : lecture des traits et rendu des tuiles
+# (serveur à plusieurs requêtes) passent par ce verrou, sans quoi le processus peut s'arrêter net.
+VERROU_PDFIUM = threading.RLock()
 
 # Segments plus courts ignorés (points, pointillés serrés).
 LONGUEUR_MIN_PT = 0.5
@@ -37,11 +42,12 @@ def _composer(enfant: Matrice, parent: Matrice) -> Matrice:
     )
 
 
-def _parcourir(brut, objets: list, parent: Matrice, sortie: list[Trait], profondeur: int) -> None:
+def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: int, couleur: bool = False) -> None:
     matrice = brut.FS_MATRIX()
     x, y = ctypes.c_float(), ctypes.c_float()
     largeur = ctypes.c_float()
     remplissage, trace = ctypes.c_int(), ctypes.c_int()
+    rouge, vert, bleu, alpha = (ctypes.c_uint() for _ in range(4))
     for objet in objets:
         genre = brut.FPDFPageObj_GetType(objet)
         if not brut.FPDFPageObj_GetMatrix(objet, ctypes.byref(matrice)):
@@ -50,7 +56,7 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list[Trait], profond
         if genre == brut.FPDF_PAGEOBJ_FORM:
             if profondeur < PROFONDEUR_MAX:
                 enfants = [brut.FPDFFormObj_GetObject(objet, i) for i in range(brut.FPDFFormObj_CountObjects(objet))]
-                _parcourir(brut, enfants, m, sortie, profondeur + 1)
+                _parcourir(brut, enfants, m, sortie, profondeur + 1, couleur)
             continue
         if genre != brut.FPDF_PAGEOBJ_PATH:
             continue
@@ -59,6 +65,11 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list[Trait], profond
         brut.FPDFPageObj_GetStrokeWidth(objet, ctypes.byref(largeur))
         a, b, c, d, e, f = m
         epaisseur = round(largeur.value * math.sqrt(abs(a * d - b * c)), 2)
+        extra: tuple = ()
+        if couleur:
+            brut.FPDFPageObj_GetStrokeColor(objet, ctypes.byref(rouge), ctypes.byref(vert), ctypes.byref(bleu), ctypes.byref(alpha))
+            # Luminance 0 (noir) à 255 (blanc) : sépare traits foncés, hachures grises et trames claires.
+            extra = (round(0.3 * rouge.value + 0.59 * vert.value + 0.11 * bleu.value),)
         precedent = depart = None
         bezier = 0
         for i in range(brut.FPDFPath_CountSegments(objet)):
@@ -76,33 +87,35 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list[Trait], profond
                     if bezier % 3:
                         continue
                 if precedent is not None:
-                    sortie.append((*precedent, *point, epaisseur))
+                    sortie.append((*precedent, *point, epaisseur, *extra))
                 precedent = point
             if brut.FPDFPathSegment_GetClose(segment) and depart is not None and precedent not in (None, depart):
-                sortie.append((*precedent, *depart, epaisseur))
+                sortie.append((*precedent, *depart, epaisseur, *extra))
                 precedent = depart
 
 
-def lire_traits(pdf_path: Path | str, page_index: int) -> list[Trait]:
+def lire_traits(pdf_path: Path | str, page_index: int, avec_couleur: bool = False) -> list[Trait]:
+    """Segments tracés (x1, y1, x2, y2, largeur) ; avec `avec_couleur`, la luminance du trait en plus."""
     import pypdfium2 as pdfium
     import pypdfium2.raw as brut
 
-    document = pdfium.PdfDocument(str(pdf_path))
-    try:
-        page = document[page_index]
-        objets = [brut.FPDFPage_GetObject(page.raw, i) for i in range(brut.FPDFPage_CountObjects(page.raw))]
-        sortie: list[Trait] = []
-        _parcourir(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0)
-        page.close()
-    finally:
-        document.close()
+    with VERROU_PDFIUM:
+        document = pdfium.PdfDocument(str(pdf_path))
+        try:
+            page = document[page_index]
+            objets = [brut.FPDFPage_GetObject(page.raw, i) for i in range(brut.FPDFPage_CountObjects(page.raw))]
+            sortie: list = []
+            _parcourir(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0, avec_couleur)
+            page.close()
+        finally:
+            document.close()
     return sortie
 
 
 def classes_epaisseur(traits: list[Trait]) -> list[dict]:
     """Nombre et longueur cumulée des traits par épaisseur, de la plus épaisse à la plus fine."""
     classes: dict[float, list[float]] = defaultdict(lambda: [0, 0.0])
-    for x1, y1, x2, y2, largeur in traits:
+    for x1, y1, x2, y2, largeur, *_ in traits:
         classe = classes[largeur]
         classe[0] += 1
         classe[1] += math.hypot(x2 - x1, y2 - y1)

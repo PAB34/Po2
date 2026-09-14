@@ -23,6 +23,7 @@ from app.schemas.thermique import (
     ComponentEvaluate,
     ComponentImport,
     ComponentUpdate,
+    DetectContourRequest,
     ExternalAccountCreate,
     ExternalAccountRead,
     LevelCreate,
@@ -33,6 +34,7 @@ from app.schemas.thermique import (
     ProjectRead,
     ProjectUpdate,
     RasterManifest,
+    SectionHeightsRequest,
     SheetRead,
     SheetUpdate,
     UploadResult,
@@ -612,6 +614,63 @@ def delete_zone_route(
     zone = _zone_or_404(db, user, zone_id)
     project = db.get(ThermiqueProject, zone.project_id)
     return _metre_action(db, project, lambda: thermique_metre.delete_zone(db, zone))
+
+
+@router.post("/niveaux/{level_id}/detecter-contour")
+def detect_contour_route(
+    level_id: int,
+    payload: DetectContourRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Propose le contour au nu intérieur du niveau (lecture du plan : 10 à 15 s la première fois)."""
+    level = _level_or_404(db, user, level_id)
+    project = db.get(ThermiqueProject, level.project_id)
+    try:
+        found = thermique_metre.detect_contour(db, level, payload.remplacer)
+    except (ThermiqueError, moteur_metre.MetreError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        LOG.exception("Détection du contour impossible pour le niveau %s", level_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Détection du contour impossible.") from exc
+    return {**thermique_metre.serialize_metre(db, project), "detection": found}
+
+
+@router.get("/sheets/{sheet_id}/coupe")
+def read_sheet_section(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Planchers repérés sur une coupe et hauteurs par niveau dans les deux sens de lecture."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_metre.sheet_section(sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Lecture de la coupe impossible pour la planche %s", sheet_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la coupe impossible.") from exc
+
+
+@router.post("/projects/{project_id}/hauteurs-coupe")
+def apply_section_heights_route(
+    project_id: int,
+    payload: SectionHeightsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    sheet = _sheet_or_404(db, user, payload.planche_id)
+    return _metre_action(
+        db,
+        project,
+        lambda: thermique_metre.apply_section_heights(
+            db, project, sheet, payload.dessin, payload.sens_montant, payload.premier_intervalle
+        ),
+    )
 
 
 @router.get("/sheets/{sheet_id}/traits")
