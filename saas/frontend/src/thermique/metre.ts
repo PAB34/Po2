@@ -48,6 +48,8 @@ export type MetreLevel = {
   altitude_m: number | null;
   hauteur_etage_m: number | null;
   epaisseur_plancher_m: number | null;
+  hauteur_sous_plafond_m: number | null;
+  hauteurs_source: "manuel" | "coupe" | null;
   planche_id: number | null;
   planche_libelle: string | null;
   echelle: number | null;
@@ -63,6 +65,22 @@ export type Metre = {
   nord_deg: number | null;
   alertes: string[];
   listes: { donne_sur: Record<DonneSur, string>; types_zone: Record<ZoneType, string>; types_lnc: Record<string, string> };
+  // Présent après une détection automatique du contour.
+  detection?: { aire_m2: number; perimetre_m: number; sommets: number; zones_exterieures_ecartees: number };
+};
+
+// Hauteurs d'un niveau lues entre deux planchers d'une coupe.
+export type SectionInterval = { epaisseur_plancher_m: number; hauteur_etage_m: number; hauteur_sous_plafond_m: number };
+
+export type SectionDetection = {
+  axe: "horizontal" | "vertical" | null;
+  dessins: {
+    index: number;
+    planchers: { position_m: number; epaisseur_m: number; portee_m: number }[];
+    hauteurs_etage_m: number[];
+    niveaux_montant: SectionInterval[];
+    niveaux_descendant: SectionInterval[];
+  }[];
 };
 
 export type SnapTraits = {
@@ -81,6 +99,7 @@ export type LevelPayload = Partial<{
   altitude_m: number | null;
   hauteur_etage_m: number | null;
   epaisseur_plancher_m: number | null;
+  hauteur_sous_plafond_m: number | null;
   planche_id: number | null;
   calage: Calage | null;
 }>;
@@ -107,6 +126,14 @@ export const metreApi = {
   deleteZone: (token: string, zoneId: number) => request<Metre>(token, `/thermique/zones/${zoneId}`, { method: "DELETE" }),
   traits: (token: string, sheetId: number, seuil: number | null) =>
     request<SnapTraits>(token, `/thermique/sheets/${sheetId}/traits${seuil === null ? "" : `?seuil=${seuil}`}`),
+  detectContour: (token: string, levelId: number, remplacer: boolean) =>
+    request<Metre>(token, `/thermique/niveaux/${levelId}/detecter-contour`, json("POST", { remplacer })),
+  section: (token: string, sheetId: number) => request<SectionDetection>(token, `/thermique/sheets/${sheetId}/coupe`),
+  applySectionHeights: (
+    token: string,
+    projectId: number,
+    payload: { planche_id: number; dessin: number; sens_montant: boolean; premier_intervalle: number },
+  ) => request<Metre>(token, `/thermique/projects/${projectId}/hauteurs-coupe`, json("POST", payload)),
 };
 
 // --- Repère commun des niveaux ----------------------------------------------------------------

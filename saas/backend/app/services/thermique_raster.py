@@ -28,6 +28,7 @@ from typing import Any
 from PIL import Image
 
 from app.core.config import settings
+from thermique_moteur.traits import VERROU_PDFIUM
 
 TILE_SIZE = 256
 # Plus grand côté de l'image rendue : un A1 fait 5063 × 7168 px (≈ 216 dpi), soit
@@ -109,19 +110,21 @@ def build_raster(pdf_path: Path, page_index: int, rotation: int, out_dir: Path) 
     shutil.rmtree(out_dir, ignore_errors=True)
     out_dir.mkdir(parents=True)
 
-    document = pdfium.PdfDocument(str(pdf_path))
-    try:
-        page = document[page_index]
-        width_pt, height_pt = page.get_size()
-        if rotation in (90, 270):
-            width_pt, height_pt = height_pt, width_pt
-        scale = MAX_SIDE_PX / max(width_pt, height_pt)
-        image = page.render(scale=scale, rotation=rotation).to_pil().convert("RGB")
-        width_px, height_px = image.size
-        transform = _page_to_raster_transform(page, width_px, height_px, rotation)
-        page.close()
-    finally:
-        document.close()
+    # Même verrou que la lecture des traits : pdfium ne supporte pas les appels simultanés.
+    with VERROU_PDFIUM:
+        document = pdfium.PdfDocument(str(pdf_path))
+        try:
+            page = document[page_index]
+            width_pt, height_pt = page.get_size()
+            if rotation in (90, 270):
+                width_pt, height_pt = height_pt, width_pt
+            scale = MAX_SIDE_PX / max(width_pt, height_pt)
+            image = page.render(scale=scale, rotation=rotation).to_pil().convert("RGB")
+            width_px, height_px = image.size
+            transform = _page_to_raster_transform(page, width_px, height_px, rotation)
+            page.close()
+        finally:
+            document.close()
 
     max_level = max(0, math.ceil(math.log2(max(width_px, height_px) / TILE_SIZE)))
     levels: list[dict[str, int]] = [{} for _ in range(max_level + 1)]

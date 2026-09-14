@@ -17,16 +17,21 @@ from app.models.thermique import ThermiqueComponent, ThermiqueLevel, ThermiquePr
 from app.models.user import User
 from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_raster import raster_root
-from thermique_moteur import metre, traits
+from thermique_moteur import coupes, detection, metre, traits
 
 # Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
 TRAITS_VERSION = "v1"
+DETECTION_VERSION = "v1"
+# Faces de dalles sur les coupes : traits d'au moins 0,9 pt (1,56 et 0,96 pt sur le projet d'essai).
+SEUIL_COUPE = 0.9
 
 LEVEL_NUMBERS = {
     "altitude_m": ("altitude_m", "Altitude", -100.0, 1000.0),
     "hauteur_etage_m": ("floor_height_m", "Hauteur d'étage", 0.5, 30.0),
     "epaisseur_plancher_m": ("slab_thickness_m", "Épaisseur de plancher", 0.0, 3.0),
+    "hauteur_sous_plafond_m": ("ceiling_height_m", "Hauteur sous plafond", 0.5, 30.0),
 }
+HEIGHT_KEYS = ("hauteur_etage_m", "epaisseur_plancher_m", "hauteur_sous_plafond_m")
 
 
 def _dump(value: Any) -> str:
@@ -114,6 +119,8 @@ def _apply_level(db: Session, project: ThermiqueProject, level: ThermiqueLevel, 
     for key, (attribute, label, minimum, maximum) in LEVEL_NUMBERS.items():
         if key in data:
             setattr(level, attribute, _number(data[key], label, minimum, maximum))
+    if any(key in data for key in HEIGHT_KEYS):
+        level.heights_source = "manuel"
     if "planche_id" in data:
         sheet_id = _sheet_id(db, project, data["planche_id"])
         if sheet_id != level.sheet_id:
@@ -259,6 +266,8 @@ def update_zone(db: Session, zone: ThermiqueZone, data: dict[str, Any]) -> Therm
     points = _load(zone.points_json, [])
     if data.get("points") is not None:
         points = metre.nettoyer_points(data["points"])
+        if points != _load(zone.points_json, []) and zone.source == "automatique":
+            zone.source = "corrige"  # une correction n'est jamais écrasée par une nouvelle détection
         zone.points_json = _dump(points)
     if zone.kind != "lnc":
         source = data["cotes"] if data.get("cotes") is not None else _load(zone.edges_json, [])
@@ -295,6 +304,123 @@ def sheet_traits(sheet: ThermiqueSheet, seuil: float | None) -> dict:
     return result
 
 
+# --- Détection automatique (lot M3) ---------------------------------------------------------------
+
+
+def _cached(sheet: ThermiqueSheet, name: str, compute) -> Any:
+    folder = raster_root(sheet.project_id, sheet.id)
+    cache = folder / f"{name}.json"
+    if cache.is_file():
+        return json.loads(cache.read_text(encoding="utf-8"))
+    path = document_path(sheet.document)
+    if not path.is_file():
+        raise ThermiqueError("Fichier absent du stockage.")
+    result = compute(path)
+    folder.mkdir(parents=True, exist_ok=True)
+    partial = cache.with_suffix(".part")
+    partial.write_text(_dump(result), encoding="utf-8")
+    partial.replace(cache)
+    return result
+
+
+def detect_contour(db: Session, level: ThermiqueLevel, replace: bool = False) -> dict:
+    """Propose le contour au nu intérieur du niveau à partir de son plan.
+
+    Un contour détecté précédemment et non retouché est remplacé ; un contour tracé ou corrigé par le
+    thermicien ne l'est que sur confirmation (`replace`)."""
+    sheet = _level_sheet(db, level)
+    if sheet is None:
+        raise ThermiqueError("Associez d'abord une planche de plan à ce niveau.")
+    if not sheet.scale_denominator:
+        raise ThermiqueError("Définissez l'échelle de la planche avant la détection.")
+    kept = [zone for zone in level.zones if zone.kind == "contour" and zone.source != "automatique"]
+    if kept and not replace:
+        raise ThermiqueError("Ce niveau a déjà un contour tracé ou corrigé à la main : confirmez son remplacement.")
+
+    def compute(path):
+        lus = traits.lire_traits(path, sheet.page_index, avec_couleur=True)
+        seuil = traits.seuil_propose(traits.classes_epaisseur(lus))
+        found = detection.detecter_contour(lus, seuil, sheet.scale_denominator) if seuil else None
+        return {"seuil": seuil, "echelle": sheet.scale_denominator, "contour": found}
+
+    scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
+    result = _cached(sheet, f"contour_{DETECTION_VERSION}_{scale_key}", compute)
+    found = result.get("contour")
+    if not found:
+        raise ThermiqueError("Aucun contour n'a pu être détecté sur ce plan : tracez-le avec l'outil « Contour ».")
+    for zone in [zone for zone in level.zones if zone.kind == "contour"]:
+        if zone.source == "automatique" or replace:
+            db.delete(zone)
+    db.flush()
+    points = metre.nettoyer_points(found["points"])
+    db.add(
+        ThermiqueZone(
+            project_id=level.project_id,
+            level_id=level.id,
+            kind="contour",
+            name="Contour détecté",
+            points_json=_dump(points),
+            edges_json=_dump(metre.normaliser_cotes(None, len(points), "exterieur")),
+            source="automatique",
+        )
+    )
+    db.commit()
+    db.refresh(level)
+    return {key: found[key] for key in ("aire_m2", "perimetre_m", "zones_exterieures_ecartees")} | {"sommets": len(points)}
+
+
+def sheet_section(sheet: ThermiqueSheet) -> dict:
+    """Planchers repérés sur une coupe, avec les hauteurs par niveau dans les deux sens de lecture."""
+
+    def compute(path):
+        found = coupes.detecter_planchers(traits.lire_traits(path, sheet.page_index), SEUIL_COUPE, sheet.scale_denominator)
+        return {
+            "axe": found["axe"],
+            "dessins": [
+                {
+                    "index": index,
+                    "planchers": [{key: p[key] for key in ("position_m", "epaisseur_m", "portee_m")} for p in dessin["planchers"]],
+                    "hauteurs_etage_m": dessin["hauteurs_etage_m"],
+                    "niveaux_montant": coupes.niveaux_depuis_coupe(dessin, found["pt_par_m"], True),
+                    "niveaux_descendant": coupes.niveaux_depuis_coupe(dessin, found["pt_par_m"], False),
+                }
+                for index, dessin in enumerate(found["dessins"])
+            ],
+        }
+
+    if not sheet.scale_denominator:
+        raise ThermiqueError("Définissez l'échelle de la coupe avant de lire les hauteurs.")
+    scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
+    return _cached(sheet, f"coupe_{DETECTION_VERSION}_{scale_key}", compute)
+
+
+def apply_section_heights(
+    db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, drawing: int, upward: bool, first_interval: int
+) -> int:
+    """Reporte les hauteurs lues sur la coupe : le niveau le plus bas reçoit l'intervalle `first_interval`,
+    les suivants les intervalles suivants."""
+    if sheet.project_id != project.id:
+        raise ThermiqueError("Cette planche n'appartient pas au projet.")
+    section = sheet_section(sheet)
+    if not 0 <= drawing < len(section["dessins"]):
+        raise ThermiqueError("Dessin de coupe introuvable.")
+    intervals = section["dessins"][drawing]["niveaux_montant" if upward else "niveaux_descendant"]
+    applied = 0
+    for offset, level in enumerate(_levels(db, project)):
+        index = first_interval + offset
+        if 0 <= index < len(intervals):
+            values = intervals[index]
+            level.floor_height_m = values["hauteur_etage_m"]
+            level.slab_thickness_m = values["epaisseur_plancher_m"]
+            level.ceiling_height_m = values["hauteur_sous_plafond_m"]
+            level.heights_source = "coupe"
+            applied += 1
+    if not applied:
+        raise ThermiqueError("Aucun niveau ne correspond aux intervalles choisis.")
+    db.commit()
+    return applied
+
+
 # --- Lecture -------------------------------------------------------------------------------------
 
 
@@ -324,7 +450,7 @@ def serialize_metre(db: Session, project: ThermiqueProject) -> dict[str, Any]:
     niveaux = []
     for level, sheet, scale, calage in rows:
         zones = [_serialize_zone(zone) for zone in level.zones]
-        synthese = metre.synthese_niveau(scale, level.floor_height_m, level.slab_thickness_m, zones)
+        synthese = metre.synthese_niveau(scale, level.floor_height_m, level.slab_thickness_m, zones, level.ceiling_height_m)
         if sheet is None:
             synthese["alertes"].insert(0, "Aucune planche de plan associée à ce niveau.")
         check = checks["par_niveau"].get(level.id, {})
@@ -336,6 +462,8 @@ def serialize_metre(db: Session, project: ThermiqueProject) -> dict[str, Any]:
                 "altitude_m": level.altitude_m,
                 "hauteur_etage_m": level.floor_height_m,
                 "epaisseur_plancher_m": level.slab_thickness_m,
+                "hauteur_sous_plafond_m": level.ceiling_height_m,
+                "hauteurs_source": level.heights_source,
                 "planche_id": sheet.id if sheet else None,
                 "planche_libelle": sheet.label if sheet else None,
                 "echelle": scale,

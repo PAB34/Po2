@@ -112,6 +112,10 @@ class ThermiqueLevel(Base):
     altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     floor_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     slab_thickness_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Hauteur sous plafond saisie ou lue sur une coupe : prime sur hauteur d'étage − plancher.
+    ceiling_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # "manuel" ou "coupe" (planche et dessin retenus dans le journal de l'étape)
+    heights_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sheet_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("thermique_sheets.id", ondelete="SET NULL"), nullable=True, index=True
     )

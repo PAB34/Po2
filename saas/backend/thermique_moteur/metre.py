@@ -234,7 +234,13 @@ def _position_dans_contours(points: list[list[float]], contours: list[dict], tol
     return dedans > 0, dedans > 0 and dehors > 0
 
 
-def synthese_niveau(echelle: float | None, hauteur_etage_m: float | None, epaisseur_plancher_m: float | None, zones: list[dict]) -> dict:
+def synthese_niveau(
+    echelle: float | None,
+    hauteur_etage_m: float | None,
+    epaisseur_plancher_m: float | None,
+    zones: list[dict],
+    hauteur_sous_plafond_m: float | None = None,
+) -> dict:
     """Surfaces et linéaires d'un niveau. Les locaux non chauffés et patios situés dans un contour
     en sont déduits ; ceux qui le jouxtent restent à part (le contour s'arrête alors à leur mur)."""
     alertes: list[str] = []
@@ -288,7 +294,11 @@ def synthese_niveau(echelle: float | None, hauteur_etage_m: float | None, epaiss
         )
 
     hauteur = None
-    if hauteur_etage_m is not None and epaisseur_plancher_m is not None:
+    if hauteur_sous_plafond_m is not None:
+        hauteur = round(hauteur_sous_plafond_m, 3)
+        if hauteur_etage_m is not None and hauteur_sous_plafond_m > hauteur_etage_m:
+            alertes.append("La hauteur sous plafond dépasse la hauteur d'étage.")
+    elif hauteur_etage_m is not None and epaisseur_plancher_m is not None:
         if hauteur_etage_m > epaisseur_plancher_m:
             hauteur = round(hauteur_etage_m - epaisseur_plancher_m, 3)
         else:
