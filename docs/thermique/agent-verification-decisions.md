@@ -121,7 +121,38 @@ de la précédente, mais les planches avancent en parallèle.
   ensuite). Sur les autres plans à tester, l'utilisateur répond par la demande de couche IA : « il faut
   forcément une couche de type agent IA pour valider automatiquement la détection des parois,
   menuiseries, ponts thermiques […] avoir une méthodologie de détection et de vérification étape par
-  étape, planche par planche » → objet de ce document. Q46 à Q50 en attente.
+  étape, planche par planche » → objet de ce document.
+- **2026-09-14** — **Q46** : « l'agent IA doit être inclus dans Claude Code dans ce compte-ci, pas
+  d'API » → pas d'appel à l'API Anthropic depuis le serveur (architecture §5 remplacée par §10).
+  **Q47/Q48** : sans objet (pas de clé API). **Q49** : l'IA **propose**, le thermicien valide.
+  **Q50** : commencer par **contour + hauteurs**.
+
+## 10. Vérification par Claude Code (remplace l'architecture API du §5)
+
+La vérification est faite par **Claude Code**, sur le compte de l'utilisateur, à sa demande :
+
+1. Dans Claude Code, l'utilisateur lance la vérification d'un niveau ou d'une coupe
+   (commande de projet, par exemple `/verifier-metre`).
+2. Un script **prépare** sur le serveur (accès SSH existant) les pièces à examiner : image recadrée de
+   chaque tronçon du contour et de chaque zone laissée dehors, élément surligné ; pour une coupe, image
+   de chaque plancher repéré avec les cotes et altitudes autour ; plus un fichier des éléments détectés.
+3. Claude Code **examine** chaque image selon une grille écrite (terrasse ? coursive ? bande plantée ?
+   vide ? nu intérieur ? altitude lue ? cote lue ?) et rédige ses **verdicts** (conforme, à corriger avec
+   la correction proposée, non vérifiable) avec une justification courte.
+4. Un script **enregistre** les verdicts comme **propositions** dans la base ; l'onglet Métré les affiche
+   sur le plan (image, justification) avec « Accepter » / « Refuser », un par un ou groupés.
+
+Conséquences :
+
+- **Aucune clé API** ni coût à l'appel : la vérification consomme l'abonnement Claude du compte.
+- La vérification n'est **pas automatique dans le site** : elle a lieu quand l'utilisateur la lance
+  dans Claude Code. Le moteur géométrique, lui, reste disponible dans le site pour tous.
+- **À vérifier avant d'ouvrir l'outil à d'autres bureaux d'études** : un abonnement Claude est
+  personnel ; un service offert à des tiers devra sans doute passer par l'API (conditions d'Anthropic
+  à relire le moment venu). Pour l'étude de l'utilisateur, la voie Claude Code convient.
+
+Décisions : AG-D3 et AG-D4 sont remplacées par **AG-D7** (vérification par Claude Code, scripts de
+préparation et d'enregistrement, propositions stockées) ; AG-D5 confirmé (Q49).
 
 ## 9. Lot M3 — détection géométrique livrée (2026-09-14)
 
