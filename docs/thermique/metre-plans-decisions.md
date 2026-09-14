@@ -237,3 +237,14 @@ La détection **propose**, le thermicien **valide** : chaque objet garde sa sour
   saisies ?
 - **Q45 — Tolérance de superposition.** Un nu intérieur décalé de moins d'une épaisseur de mur est-il
   toujours considéré comme aligné ?
+
+## 9. Réponses (2026-09-14)
+
+- **Q39** : contour d'abord (M1 + M2), détection ensuite (M3).
+- **Q40** : hauteurs saisies par niveau ; lecture des coupes plus tard.
+- **Q41** : 60 / 40 par défaut ; tracé du sens des poutrelles plus tard.
+- **Q42** : une couleur par composant.
+- Q43, Q44, Q45 : valeurs par défaut du document (catalogue §3.3 avec angles comptés, surfaces
+  réglementaires hors périmètre, tolérance = épaisseur du mur), à revoir à l'usage.
+- **Prochain : M1** (niveaux, calage, nord, contour tracé avec aimantation, côtés qualifiés, LNC,
+  niveaux voisins en fantôme).
