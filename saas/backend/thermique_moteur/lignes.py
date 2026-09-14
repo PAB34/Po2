@@ -24,7 +24,16 @@ from thermique_moteur.detection import _bord_exterieur, _cross, _dilater, _erode
 from thermique_moteur.metre import pt_en_m
 
 PX_PAR_PT = 1.5
+# Sans traits fins, la fermeture doit enjamber les baies (jusqu'à 3,2 m) ; avec les vitrages dessinés en traits
+# fins, elle ne bouche que les portes et ne raccroche plus les cotes et repères d'axes voisins.
 FERMETURE_BAIES_M = 1.6
+FERMETURE_AVEC_VITRAGES_M = 0.8
+MARGE_TRAITS_FINS_M = 0.5
+LONGUEUR_TRAIT_FIN_MIN_M = 0.3
+# Traits fins retenus par le service : noirs (les annotations colorées sont écartées), à partir de 0,24 pt.
+LUMINANCE_TRAIT_FIN_MAX = 64
+LARGEUR_TRAIT_FIN_MIN = 0.24
+LARGEUR_FACE_MUR_MIN = 0.9
 TOLERANCE_SIMPLIFICATION_M = 0.08
 # Écart maximal entre un côté de l'emprise et la face de mur sur laquelle on le pose.
 TOLERANCE_CALAGE_M = 0.15
@@ -34,6 +43,20 @@ TOL_PARALLELE_DEG = 3.0
 TOL_PILE_M = 0.04
 PROFONDEUR_MAX_M = 1.2
 TRONCON_MIN_M = 0.10
+
+
+def traits_barrieres(lignes: list[dict]) -> list[tuple]:
+    """Traits fins foncés (0,24 à 0,9 pt, noirs) qui ferment l'emprise : vitrages, menuiseries, cloisons.
+
+    Constaté sur le projet d'essai (niveaux 0 à 2) : les vitrages de façade sont à 0,24 pt, mais la plume
+    d'habillage (0,36 pt : nez de dalle projeté, mobilier, rayures de terrasse) ferme aussi une partie des baies ;
+    l'écarter fait fuir l'emprise (niveau 2 : 31 m² au lieu de 950). Toutes les plumes fines sont donc gardées :
+    l'erreur restante va dans le sens « trop grand » (terrasses, brise-soleil), corrigée par le thermicien."""
+    return [
+        (ligne["x1"], ligne["y1"], ligne["x2"], ligne["y2"])
+        for ligne in lignes
+        if ligne.get("luminance", 0) <= LUMINANCE_TRAIT_FIN_MAX and LARGEUR_TRAIT_FIN_MIN - 1e-6 <= ligne["largeur"] < LARGEUR_FACE_MUR_MIN
+    ]
 
 
 def _aire(points) -> float:
@@ -66,8 +89,32 @@ def _nettoyer(sommets: list, m: float) -> list:
     return propres
 
 
-def _poser_sur_faces(polygone: list, faces: list, m: float) -> list:
-    """Chaque côté prend la droite de la face parallèle qui le couvre le mieux (± 15 cm)."""
+def _meilleure_face(p, u, longueur: float, faces: list, m: float):
+    normale = np.array([-u[1], u[0]])
+    groupes: dict[int, dict] = {}
+    for a, b in faces:
+        w = b - a
+        lw = float(np.hypot(*w))
+        if lw < 0.05 * m or abs(float(_cross(u, w / lw))) > math.sin(math.radians(TOL_PARALLELE_DEG)):
+            continue
+        decalage = float(np.dot((a + b) / 2 - p, normale))
+        if abs(decalage) > TOLERANCE_CALAGE_M * m:
+            continue
+        ta, tb = sorted((float(np.dot(a - p, u)), float(np.dot(b - p, u))))
+        recouvrement = min(tb, longueur) - max(ta, 0.0)
+        if recouvrement <= 0:
+            continue
+        groupe = groupes.setdefault(round(decalage / (0.02 * m)), {"recouvrement": 0.0, "appui": None, "lw": 0.0})
+        groupe["recouvrement"] += recouvrement
+        if lw > groupe["lw"]:
+            groupe["appui"], groupe["lw"] = (a, w / lw), lw
+    candidats = [g for g in groupes.values() if g["recouvrement"] >= 0.3 * longueur]
+    return max(candidats, key=lambda g: g["recouvrement"]) if candidats else None
+
+
+def _poser_sur_faces(polygone: list, faces: list, m: float, vitrages: list | None = None) -> list:
+    """Chaque côté prend la droite de la face de mur parallèle qui le couvre le mieux (± 15 cm) ; à défaut,
+    celle d'un trait fin (vitrage, menuiserie)."""
     n = len(polygone)
     droites, appuis, longueurs = [], [], []
     for i in range(n):
@@ -79,25 +126,8 @@ def _poser_sur_faces(polygone: list, faces: list, m: float) -> list:
             appuis.append(False)
             continue
         u = (q - p) / longueur
-        normale = np.array([-u[1], u[0]])
-        groupes: dict[int, dict] = {}
-        for a, b in faces:
-            w = b - a
-            lw = float(np.hypot(*w))
-            if lw < 0.05 * m or abs(float(_cross(u, w / lw))) > math.sin(math.radians(TOL_PARALLELE_DEG)):
-                continue
-            decalage = float(np.dot((a + b) / 2 - p, normale))
-            if abs(decalage) > TOLERANCE_CALAGE_M * m:
-                continue
-            ta, tb = sorted((float(np.dot(a - p, u)), float(np.dot(b - p, u))))
-            recouvrement = min(tb, longueur) - max(ta, 0.0)
-            if recouvrement <= 0:
-                continue
-            groupe = groupes.setdefault(round(decalage / (0.02 * m)), {"recouvrement": 0.0, "appui": None, "lw": 0.0})
-            groupe["recouvrement"] += recouvrement
-            if lw > groupe["lw"]:
-                groupe["appui"], groupe["lw"] = (a, w / lw), lw
-        candidats = [g for g in groupes.values() if g["recouvrement"] >= 0.3 * longueur]
+        choix = _meilleure_face(p, u, longueur, faces, m) or (_meilleure_face(p, u, longueur, vitrages, m) if vitrages else None)
+        candidats = [choix] if choix else []
         if candidats:
             point, direction = max(candidats, key=lambda g: g["recouvrement"])["appui"]
             droites.append((point, direction if float(np.dot(direction, u)) >= 0 else -direction))
@@ -223,8 +253,11 @@ def _resume(points: list, m: float) -> dict:
     }
 
 
-def detecter_deux_lignes(murs: list[dict], echelle: float) -> dict | None:
-    """Nu extérieur et nu intérieur proposés à partir des murs d'un plan de niveau."""
+def detecter_deux_lignes(murs: list[dict], echelle: float, traits_fins: list | None = None) -> dict | None:
+    """Nu extérieur et nu intérieur proposés à partir des murs d'un plan de niveau.
+
+    `traits_fins` : segments (x1, y1, x2, y2) foncés et fins du plan (vitrages, menuiseries, garde-corps) ;
+    seuls ceux situés dans l'emprise des murs (+ 50 cm) servent de barrière et d'appui."""
     from PIL import Image, ImageDraw
     from scipy import ndimage
 
@@ -234,17 +267,30 @@ def detecter_deux_lignes(murs: list[dict], echelle: float) -> dict | None:
     xs = [p[0] for mur in murs for p in mur["points"]]
     ys = [p[1] for mur in murs for p in mur["points"]]
     x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+    bord = MARGE_TRAITS_FINS_M * m
+    vitrages = [
+        (np.array(s[:2], float), np.array(s[2:4], float))
+        for s in traits_fins or []
+        if math.hypot(s[2] - s[0], s[3] - s[1]) >= LONGUEUR_TRAIT_FIN_MIN_M * m
+        and all(x0 - bord <= x <= x1 + bord and y0 - bord <= y <= y1 + bord for x, y in ((s[0], s[1]), (s[2], s[3])))
+    ]
+    fermeture = FERMETURE_AVEC_VITRAGES_M if vitrages else FERMETURE_BAIES_M
     marge = (FERMETURE_BAIES_M + 1.0) * m
     largeur_px = int((x1 - x0 + 2 * marge) * PX_PAR_PT) + 1
     hauteur_px = int((y1 - y0 + 2 * marge) * PX_PAR_PT) + 1
 
+    def px(x, y):
+        return ((x - x0 + marge) * PX_PAR_PT, (y1 + marge - y) * PX_PAR_PT)
+
     image = Image.new("1", (largeur_px, hauteur_px), 0)
     dessin = ImageDraw.Draw(image)
     for mur in murs:
-        dessin.polygon([((x - x0 + marge) * PX_PAR_PT, (y1 + marge - y) * PX_PAR_PT) for x, y in mur["points"]], fill=1, outline=1)
+        dessin.polygon([px(x, y) for x, y in mur["points"]], fill=1, outline=1)
+    for a, b in vitrages:
+        dessin.line([px(*a), px(*b)], fill=1, width=2)
     masque = np.array(image, dtype=bool)
     r = m * PX_PAR_PT
-    ferme = _eroder(ndimage, _dilater(ndimage, masque, FERMETURE_BAIES_M * r), FERMETURE_BAIES_M * r)
+    ferme = _eroder(ndimage, _dilater(ndimage, masque, fermeture * r), fermeture * r)
     plein = ndimage.binary_fill_holes(ferme | masque)
     etiquettes, nombre = ndimage.label(plein)
     if nombre == 0:
@@ -258,7 +304,7 @@ def detecter_deux_lignes(murs: list[dict], echelle: float) -> dict | None:
 
     droits = [np.array(mur["points"], float) for mur in murs if not mur.get("courbe") and len(mur["points"]) == 4]
     faces = [(points[a], points[b]) for points in droits for a, b in ((0, 1), (2, 3))]
-    exterieur = _poser_sur_faces(polygone, faces, m)
+    exterieur = _poser_sur_faces(polygone, faces, m, vitrages)
     if len(exterieur) < 3:
         return None
     interieur, epaisseur = _nu_interieur(exterieur, droits, m)

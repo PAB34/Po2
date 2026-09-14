@@ -85,6 +85,22 @@
 | D7 | 2026-09-14 | **Murs vectoriels à l'intérieur du nu intérieur = structure intérieure** (refends, cloisons, gaines), classés à part, validés par groupe sur le plan. |
 | D8 | 2026-09-14 | Validation sur un niveau, propagation des règles aux autres ; hauteur des menuiseries par type ; murs avant menuiseries. |
 
+### Constats G1 sur le projet d'essai (2026-09-14)
+
+| Niveau | Nu extérieur / nu intérieur proposés | Écart constaté |
+|---|---|---|
+| −1 | 942,5 / 905,7 m², 4 sommets chacun | Juste : faces des murs de 30 cm, façade oblique comprise. |
+| 0 | ≈ 955 / 910 m² | Trop grand : pointes des brise-soleil et abri vélo inclus. |
+| 1 | ≈ 962 / 914 m² | Trop grand : coursive et terrasse basse incluses ; bosse sur la façade droite. |
+| 2 | ≈ 955 / 914 m² | Trop grand : terrasse de lecture incluse. |
+| 3 (toiture) | ≈ 800 / 750 m² | Plausible, à vérifier. |
+
+- Façades vitrées : les vitrages sont des traits fins (0,24 pt), pas des paires de faces. Sans eux, l'emprise
+  fuit (lignes aberrantes). Avec toutes les plumes fines, l'emprise tient mais inclut terrasses et débords.
+- Écarter la plume d'habillage (0,36 pt) a été essayé : l'emprise fuit de nouveau (niveau 2 : 31 m²). Abandonné.
+- Suite prévue en G2 : terrasses reconnues par leurs rayures (zone dense de traits parallèles hors murs) et
+  brise-soleil (murs saillants hors de la ligne de vitrage) écartés du nu extérieur.
+
 ### Lots
 
 | Lot | Contenu | Livrable visible |

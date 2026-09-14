@@ -426,9 +426,13 @@ def detect_lines(db: Session, level: ThermiqueLevel, replace: bool = False) -> d
         raise ThermiqueError("Ce niveau a déjà un nu intérieur ou un nu extérieur tracé ou corrigé à la main : confirmez son remplacement.")
     murs_plan = sheet_walls(sheet)
     scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
-    result = _cached(
-        sheet, f"lignes_{MURS_VERSION}_{scale_key}", lambda _path: {"lignes": lignes_murs.detecter_deux_lignes(murs_plan["murs"], sheet.scale_denominator)}
-    )
+
+    def compute(path):
+        lus = vecteurs.fusionner_lignes(traits.lire_traits(path, sheet.page_index, avec_couleur=True))
+        barrieres = lignes_murs.traits_barrieres(lus)
+        return {"lignes": lignes_murs.detecter_deux_lignes(murs_plan["murs"], sheet.scale_denominator, barrieres)}
+
+    result = _cached(sheet, f"lignes_{MURS_VERSION}_{scale_key}", compute)
     found = result.get("lignes")
     if not found:
         raise ThermiqueError("Les deux lignes n'ont pas pu être détectées sur ce plan : tracez-les avec les outils « Contour » et « Nu extérieur ».")

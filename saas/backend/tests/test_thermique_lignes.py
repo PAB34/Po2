@@ -41,6 +41,20 @@ def test_deux_lignes_d_un_batiment_avec_porte_refend_et_doublage():
     assert xs[0] == pytest.approx(0.4, abs=0.005) and xs[-1] == pytest.approx(9.7, abs=0.005)
 
 
+def test_traits_barrieres_fins_et_noirs_seulement():
+    def ligne(x1, y1, x2, y2, largeur, luminance=0):
+        return {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "largeur": largeur, "luminance": luminance, "longueur": abs(x2 - x1) + abs(y2 - y1)}
+
+    lignes_plan = [
+        ligne(0, 0, 100, 0, 0.36),  # habillage : gardé (il ferme aussi des baies)
+        ligne(0, 30, 40, 30, 0.24),  # vitrage
+        ligne(0, 40, 90, 40, 1.56),  # face de mur : pas un trait fin
+        ligne(0, 50, 90, 50, 0.12),  # trame grise trop fine
+        ligne(0, 60, 90, 60, 0.48, luminance=166),  # annotation grise
+    ]
+    assert lignes.traits_barrieres(lignes_plan) == [(0, 0, 100, 0), (0, 30, 40, 30)]
+
+
 def test_nu_interieur_suit_un_changement_d_epaisseur():
     # Façade basse : 30 cm sur la moitié gauche, 50 cm sur la moitié droite.
     murs = [
