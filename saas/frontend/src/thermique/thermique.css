@@ -518,6 +518,22 @@ body {
   fill: rgba(46, 139, 87, 0.16);
 }
 
+/* Nu extérieur : face extérieure des murs de façade, trait sombre sans remplissage. */
+.th-zone.th-zone--nu_exterieur polygon {
+  fill: none;
+  stroke: #1c2430;
+  stroke-width: 2.5;
+}
+
+.th-zone.th-zone--nu_exterieur.is-selected polygon {
+  stroke: #0b63c5;
+  stroke-width: 3.5;
+}
+
+.th-zone--nu_exterieur text {
+  display: none;
+}
+
 .th-zone text {
   font: 800 12px var(--po2-font-body);
   fill: #1c2430;

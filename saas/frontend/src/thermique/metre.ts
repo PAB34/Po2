@@ -2,7 +2,10 @@
 import { request, type PdfPoint } from "./api";
 
 export type DonneSur = "exterieur" | "lnc" | "sol" | "mitoyen";
-export type ZoneType = "contour" | "lnc" | "patio";
+export type ZoneType = "contour" | "lnc" | "patio" | "nu_exterieur";
+
+// Seuls le contour (nu intérieur) et le patio ont des côtés qualifiés (donne sur, composant, mur lu).
+export const hasEdges = (type: ZoneType) => type === "contour" || type === "patio";
 
 export type WallInsulation = "interieur" | "exterieur" | "reparti";
 
@@ -41,6 +44,7 @@ export type LevelSummary = {
   surface_contour_m2: number | null;
   surface_lnc_m2: number | null;
   surface_patio_m2: number | null;
+  surface_nu_exterieur_m2?: number | null;
   surface_chauffee_m2: number | null;
   lineaires_m: Record<DonneSur, number> | null;
   hauteur_interieure_m: number | null;
@@ -78,6 +82,14 @@ export type Metre = {
   detection?: { aire_m2: number; perimetre_m: number; sommets: number; zones_exterieures_ecartees: number };
   // Présent après une lecture des murs.
   detection_murs?: { cotes_lues: number; cotes: number; types: number };
+  // Présent après la détection du nu intérieur et du nu extérieur (lot G1).
+  detection_lignes?: {
+    nu_interieur_m2: number;
+    nu_exterieur_m2: number;
+    sommets_interieur: number;
+    sommets_exterieur: number;
+    epaisseur_typique_m: number | null;
+  };
 };
 
 // Hauteurs d'un niveau lues entre deux planchers d'une coupe.
@@ -150,6 +162,8 @@ export const metreApi = {
     request<SnapTraits>(token, `/thermique/sheets/${sheetId}/traits${seuil === null ? "" : `?seuil=${seuil}`}`),
   detectContour: (token: string, levelId: number, remplacer: boolean) =>
     request<Metre>(token, `/thermique/niveaux/${levelId}/detecter-contour`, json("POST", { remplacer })),
+  detectLines: (token: string, levelId: number, remplacer: boolean) =>
+    request<Metre>(token, `/thermique/niveaux/${levelId}/detecter-lignes`, json("POST", { remplacer })),
   section: (token: string, sheetId: number) => request<SectionDetection>(token, `/thermique/sheets/${sheetId}/coupe`),
   walls: (token: string, sheetId: number) => request<SheetWalls>(token, `/thermique/sheets/${sheetId}/murs`),
   detectWalls: (token: string, zoneId: number) => request<Metre>(token, `/thermique/zones/${zoneId}/detecter-murs`, { method: "POST" }),

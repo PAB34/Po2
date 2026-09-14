@@ -37,6 +37,8 @@ type Props = {
   onGrab?: (point: PdfPoint, pixelsPerPt: number, event: PickEvent) => boolean;
   onGrabMove?: (point: PdfPoint, event: PickEvent) => void;
   onGrabEnd?: () => void;
+  // Clic droit : point sous le curseur (le menu du navigateur est alors supprimé).
+  onContextPick?: (point: PdfPoint, pixelsPerPt: number) => void;
   renderOverlay?: (toScreen: ToScreen) => ReactNode;
 };
 
@@ -66,6 +68,7 @@ export function TileSheetViewer({
   onGrab,
   onGrabMove,
   onGrabEnd,
+  onContextPick,
   renderOverlay,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -245,6 +248,16 @@ export function TileSheetViewer({
       }}
       onPointerCancel={() => {
         dragRef.current = null;
+      }}
+      onContextMenu={(event) => {
+        if (!onContextPick) {
+          return;
+        }
+        event.preventDefault();
+        const point = toPdf(event.clientX, event.clientY);
+        if (point) {
+          onContextPick(point, pixelsPerPt);
+        }
       }}
     >
       <div
