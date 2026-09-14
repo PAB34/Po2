@@ -36,7 +36,10 @@ DEMI_VIDE_ENTRE_FACES_M = 0.30
 FERMETURE_M = 0.35
 SURFACE_PIECE_MIN_M2 = 1.0
 TOLERANCE_SIMPLIFICATION_M = 0.12
-TOLERANCE_RECALAGE_M = 0.30
+# Distance maximale entre le contour détecté et la face intérieure du mur sur laquelle on le recale.
+TOLERANCE_RECALAGE_M = 1.5
+EPAISSEUR_MUR_MIN_M = 0.08
+EPAISSEUR_MUR_MAX_M = 0.80
 
 
 def _cross(a, b):
@@ -109,38 +112,103 @@ def _simplifier_ferme(points: list, tolerance: float) -> list:
 
 
 def _recaler(polygone: list, faces: list, m: float) -> list:
-    """Remplace chaque côté par la face de mur parallèle la plus proche qui le recouvre ; les sommets
-    deviennent les intersections des droites consécutives."""
+    """Remplace chaque côté par la ligne de face de mur parallèle qui le recouvre le mieux ; les sommets
+    deviennent les intersections des droites consécutives.
+
+    Une face est souvent dessinée en nombreux petits morceaux : les morceaux alignés (même décalage à
+    1 cm près) sont additionnés. Le côté reste en place s'il repose déjà sur une face ; sinon il est
+    poussé sur la ligne de face la mieux couverte à moins de `TOLERANCE_RECALAGE_M` (constaté au
+    niveau 2 du projet d'essai : contour arrêté sur un trait fin 60 cm avant le mur)."""
     droites = []
+    appuis: list[bool] = []
+    longueurs: list[float] = []
     n = len(polygone)
+    aire_signee = sum(polygone[i - 1][0] * polygone[i][1] - polygone[i][0] * polygone[i - 1][1] for i in range(n))
+    # Normale à gauche du côté : l'intérieur si le polygone tourne dans le sens trigonométrique.
+    vers_exterieur = -1.0 if aire_signee > 0 else 1.0
     for i in range(n):
         p, q = np.array(polygone[i]), np.array(polygone[(i + 1) % n])
         longueur = float(np.hypot(*(q - p)))
+        longueurs.append(longueur)
         if longueur == 0:
             droites.append((p, np.array([1.0, 0.0])))
+            appuis.append(False)
             continue
         u = (q - p) / longueur
         normale = np.array([-u[1], u[0]])
-        meilleur, score = None, None
+        lignes: dict[int, dict] = {}
+        portee = (TOLERANCE_RECALAGE_M + EPAISSEUR_MUR_MAX_M) * m
         for x1, y1, x2, y2 in faces:
             a, w = np.array([x1, y1]), np.array([x2 - x1, y2 - y1])
             lw = float(np.hypot(*w))
-            if lw < 0.2 * m or abs(_cross(u, w / lw)) > math.sin(math.radians(6)):
+            if lw < 0.05 * m or abs(_cross(u, w / lw)) > math.sin(math.radians(6)):
                 continue
-            distance = abs(float(np.dot(a - p, normale)))
-            if distance > TOLERANCE_RECALAGE_M * m:
+            # Décalage compté positivement vers l'extérieur du bâtiment.
+            decalage = float(np.dot(a + w / 2 - p, normale)) * vers_exterieur
+            if abs(decalage) > portee:
                 continue
             ta, tb = sorted((float(np.dot(a - p, u)), float(np.dot(a + w - p, u))))
             recouvrement = min(tb, longueur) - max(ta, 0.0)
-            if recouvrement <= 0.2 * longueur and recouvrement < 1.0 * m:
+            if recouvrement <= 0:
                 continue
-            valeur = distance - 0.001 * recouvrement
-            if score is None or valeur < score:
-                meilleur, score = (a, w / lw), valeur
-        droites.append(meilleur if meilleur is not None else (p, u))
+            ligne = lignes.setdefault(
+                round(decalage / (0.01 * m)), {"recouvrement": 0.0, "decalage": 0.0, "poids": 0.0, "appui": None, "lw": 0.0}
+            )
+            ligne["recouvrement"] += recouvrement
+            ligne["decalage"] += decalage * recouvrement
+            ligne["poids"] += recouvrement
+            if lw > ligne["lw"]:
+                ligne["appui"], ligne["lw"] = (a, w / lw), lw
+        # regroupe les classes voisines (± 1 cm) avant de comparer
+        fusion: list[dict] = []
+        for cle in sorted(lignes):
+            ligne = lignes[cle]
+            if fusion and cle - fusion[-1]["cle"] <= 1:
+                cible = fusion[-1]
+                cible["recouvrement"] += ligne["recouvrement"]
+                cible["decalage"] += ligne["decalage"]
+                cible["poids"] += ligne["poids"]
+                if ligne["lw"] > cible["lw"]:
+                    cible["appui"], cible["lw"] = ligne["appui"], ligne["lw"]
+                cible["cle"] = cle
+            else:
+                fusion.append({**ligne, "cle": cle})
+        # Au moins 30 % du côté : un bout de mur de 4 m sur une façade de 26 m ne suffit pas à le retenir.
+        suffisant = [ligne for ligne in fusion if ligne["recouvrement"] >= 0.3 * longueur]
+        for ligne in suffisant:
+            ligne["d"] = ligne["decalage"] / ligne["poids"]
+        # Face intérieure d'un mur = ligne bien couverte qui a, côté extérieur, sa face extérieure parallèle
+        # à 8-80 cm. On retient la plus proche, vers l'intérieur comme vers l'extérieur : le contour
+        # détecté peut s'arrêter avant le mur (trait fin, niveau 2) ou le dépasser (bande plantée, niveau 0).
+        faces_interieures = [
+            ligne
+            for ligne in suffisant
+            if abs(ligne["d"]) <= TOLERANCE_RECALAGE_M * m
+            and any(EPAISSEUR_MUR_MIN_M * m <= autre["d"] - ligne["d"] <= EPAISSEUR_MUR_MAX_M * m for autre in suffisant)
+        ]
+        if faces_interieures:
+            choix = min(faces_interieures, key=lambda ligne: abs(ligne["d"]))
+        else:
+            en_place = [ligne for ligne in suffisant if abs(ligne["d"]) <= 0.05 * m]
+            dehors = [ligne for ligne in suffisant if 0.03 * m < ligne["d"] <= TOLERANCE_RECALAGE_M * m]
+            choix = en_place[0] if en_place else (min(dehors, key=lambda ligne: ligne["d"]) if dehors else None)
+        if choix is not None:
+            point, direction = choix["appui"]
+            if float(np.dot(direction, u)) < 0:
+                direction = -direction
+            droites.append((point, direction))
+            appuis.append(True)
+        else:
+            droites.append((p, u))
+            appuis.append(False)
+    # Les petits pans sans face (angles coupés par le tracé en pixels) disparaissent : les côtés appuyés
+    # voisins se prolongent jusqu'à leur intersection.
+    gardes = [i for i in range(n) if appuis[i] or longueurs[i] >= 0.3 * m]
+    if len(gardes) < 3:
+        gardes = list(range(n))
     sommets = []
-    for i in range(n):
-        (a1, d1), (a2, d2) = droites[i - 1], droites[i]
+    for j, i in enumerate(gardes):
+        (a1, d1), (a2, d2) = droites[gardes[j - 1]], droites[i]
         denominateur = float(_cross(d1, d2))
         if abs(denominateur) < 1e-6:
             sommets.append((float(polygone[i][0]), float(polygone[i][1])))

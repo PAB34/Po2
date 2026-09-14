@@ -56,6 +56,11 @@ const TOOLS: { id: MetreTool; label: string; help: string }[] = [
 const DRAW_TOOLS: MetreTool[] = ["contour", "lnc", "patio"];
 const EDGE_COLORS: Record<DonneSur, string> = { exterieur: "#d0342c", lnc: "#2f6fb0", sol: "#8a5a2b", mitoyen: "#7a7f87" };
 const SNAP_PX = 12;
+const INSULATION_LABELS: Record<string, string> = {
+  interieur: "isolant intérieur",
+  exterieur: "isolant extérieur",
+  reparti: "isolant réparti",
+};
 const MAX_DRAWN_TRAITS = 12000;
 const RASTER_STALE_MS = 6 * 3600 * 1000;
 
@@ -436,6 +441,28 @@ export function MetrePage() {
     const target = mine === neighbour.ordre ? neighbour.ordre + direction : neighbour.ordre;
     if (await saveLevel(neighbour, { ordre: mine })) {
       await saveLevel(level, { ordre: target });
+    }
+  }
+
+  async function detectWalls(zoneId: number) {
+    const data = await perform(() => metreApi.detectWalls(token!, zoneId));
+    if (data?.detection_murs) {
+      const found = data.detection_murs;
+      setNotice(
+        `Murs lus sur ${found.cotes_lues} côté(s) sur ${found.cotes}, ${found.types} type(s) proposé(s). Rattachez chaque type à un composant ; les parties vitrées restent non lues.`,
+      );
+    }
+  }
+
+  async function acceptWallType(zoneId: number, thickness: number, componentId: number | null) {
+    const data = await perform(() => metreApi.acceptWallType(token!, zoneId, { epaisseur_m: thickness, composant_id: componentId }));
+    if (data) {
+      void componentsQuery.refetch();
+      setNotice(
+        componentId
+          ? "Type de mur rattaché au composant."
+          : "Composant créé dans la bibliothèque du projet (composition à compléter) et rattaché aux côtés de ce type.",
+      );
     }
   }
 
@@ -835,6 +862,15 @@ export function MetrePage() {
                   <strong>
                     Côté {selection.edge + 1} / {zone.cotes.length} · {formatLength(zoneSummary?.cotes_m?.[selection.edge])}
                   </strong>
+                  {zone.cotes[selection.edge].mur && (
+                    <p className="th-muted">
+                      {zone.cotes[selection.edge].mur!.epaisseur_m != null
+                        ? `Mur lu sur le plan : ${Math.round(zone.cotes[selection.edge].mur!.epaisseur_m! * 100)} cm${
+                            zone.cotes[selection.edge].mur!.isolant ? `, ${INSULATION_LABELS[zone.cotes[selection.edge].mur!.isolant!]}` : ""
+                          } (${Math.round(zone.cotes[selection.edge].mur!.part_lue * 100)} % du côté)`
+                        : "Aucun mur lu sur ce côté (vitrage, ouverture ou dessin non reconnu)."}
+                    </p>
+                  )}
                   <label className="th-field">
                     <span>Donne sur</span>
                     <select
@@ -884,6 +920,49 @@ export function MetrePage() {
               ) : (
                 <p className="th-muted">Avec l'outil « Modifier », cliquez un côté sur le plan pour dire sur quoi il donne.</p>
               ))}
+            {zone.type !== "lnc" && (
+              <div className="th-edgebox">
+                <strong>Types de murs</strong>
+                <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => void detectWalls(zone.id)}>
+                  {zone.types_murs?.length ? "Relire les murs sur le plan" : "Détecter les types de murs"}
+                </button>
+                {!zone.types_murs?.length && (
+                  <p className="th-muted">Lit l'épaisseur du mur et la position de l'isolant de chaque côté, puis propose un type par épaisseur.</p>
+                )}
+                {(zone.types_murs ?? []).map((wallType) => (
+                  <div key={wallType.epaisseur_m} className="th-walltype">
+                    <span>
+                      <strong>{Math.round(wallType.epaisseur_m * 100)} cm</strong>
+                      {wallType.isolant ? ` · ${INSULATION_LABELS[wallType.isolant]}` : ""} · {formatLength(wallType.longueur_m)} ·{" "}
+                      {wallType.cotes.length} côté{wallType.cotes.length > 1 ? "s" : ""}
+                    </span>
+                    <div className="th-inline">
+                      <select
+                        value={wallType.composants.length === 1 ? wallType.composants[0] : ""}
+                        disabled={busy}
+                        onChange={(event) => {
+                          if (event.target.value) {
+                            void acceptWallType(zone.id, wallType.epaisseur_m, Number(event.target.value));
+                          }
+                        }}
+                      >
+                        <option value="">{wallType.composants.length > 1 ? "Plusieurs composants" : "Rattacher à…"}</option>
+                        {walls.map((wall) => (
+                          <option key={wall.id} value={wall.id}>
+                            {wall.code} · {wall.nom}
+                          </option>
+                        ))}
+                      </select>
+                      {wallType.composants.length === 0 && (
+                        <button type="button" className="th-link" disabled={busy} onClick={() => void acceptWallType(zone.id, wallType.epaisseur_m, null)}>
+                          Créer le composant
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {zone.type !== "lnc" && (
               <label className="th-field">
                 <span>Tous les côtés donnent sur</span>

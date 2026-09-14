@@ -17,7 +17,8 @@ from app.models.thermique import ThermiqueComponent, ThermiqueLevel, ThermiquePr
 from app.models.user import User
 from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_raster import raster_root
-from thermique_moteur import coupes, detection, metre, traits
+from app.services.thermique_composants import create_component
+from thermique_moteur import coupes, detection, enveloppe, metre, traits
 
 # Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
 TRAITS_VERSION = "v1"
@@ -421,6 +422,78 @@ def apply_section_heights(
     return applied
 
 
+def detect_walls(db: Session, zone: ThermiqueZone) -> dict:
+    """Lit sur le plan l'épaisseur du mur et la position de l'isolant de chaque côté du tracé (lot M4a)."""
+    if zone.kind == "lnc":
+        raise ThermiqueError("Les types de murs se lisent sur un contour chauffé ou un patio.")
+    level = db.get(ThermiqueLevel, zone.level_id)
+    sheet = _level_sheet(db, level)
+    if sheet is None or not sheet.scale_denominator:
+        raise ThermiqueError("Associez une planche à l'échelle définie à ce niveau.")
+    path = document_path(sheet.document)
+    if not path.is_file():
+        raise ThermiqueError("Fichier absent du stockage.")
+    lus = traits.lire_traits(path, sheet.page_index, avec_couleur=True)
+    seuil = traits.seuil_propose(traits.classes_epaisseur(lus))
+    if not seuil:
+        raise ThermiqueError("Aucun trait de mur lisible sur ce plan.")
+    points = _load(zone.points_json, [])
+    analyse = enveloppe.analyser_murs(lus, traits.lire_aplats(path, sheet.page_index), points, seuil, sheet.scale_denominator)
+    cotes = metre.normaliser_cotes(_load(zone.edges_json, []), len(points), metre.DONNE_SUR_DEFAUT[zone.kind])
+    for cote, lu in zip(cotes, analyse["cotes"]):
+        cote["mur"] = {"epaisseur_m": lu["epaisseur_m"], "isolant": lu["isolant"], "part_lue": lu["part_lue"]}
+    zone.edges_json = _dump(cotes)
+    db.commit()
+    longueurs = [longueur * metre.pt_en_m(sheet.scale_denominator) for longueur in metre.longueurs_cotes(points)]
+    return {
+        "cotes_lues": sum(1 for cote in cotes if cote["mur"]["epaisseur_m"]),
+        "cotes": len(cotes),
+        "types": len(enveloppe.types_de_murs(cotes, longueurs)),
+    }
+
+
+def accept_wall_type(db: Session, user: User, zone: ThermiqueZone, thickness_m: float, component_id: int | None) -> int:
+    """Rattache tous les côtés d'un type de mur détecté à un composant ; le crée s'il n'est pas donné."""
+    project = db.get(ThermiqueProject, zone.project_id)
+    level = db.get(ThermiqueLevel, zone.level_id)
+    sheet = _level_sheet(db, level)
+    points = _load(zone.points_json, [])
+    cotes = metre.normaliser_cotes(_load(zone.edges_json, []), len(points), metre.DONNE_SUR_DEFAUT.get(zone.kind, "exterieur"))
+    echelle = sheet.scale_denominator if sheet and sheet.scale_denominator else 100
+    longueurs = [longueur * metre.pt_en_m(echelle) for longueur in metre.longueurs_cotes(points)]
+    wall_type = next(
+        (t for t in enveloppe.types_de_murs(cotes, longueurs) if abs(t["epaisseur_m"] - thickness_m) <= enveloppe.TOLERANCE_TYPE_M + 1e-9),
+        None,
+    )
+    if wall_type is None:
+        raise ThermiqueError("Ce type de mur n'existe plus : relancez la détection des murs.")
+    if component_id is None:
+        label = f"Mur {round(wall_type['epaisseur_m'] * 100)} cm"
+        if wall_type["isolant"]:
+            label += f", {enveloppe.ISOLANTS[wall_type['isolant']]}"
+        component = create_component(
+            db,
+            user,
+            project,
+            {
+                "categorie": "murs",
+                "nom": label,
+                "notes": (
+                    f"Type détecté sur le plan ({zone.name}) : épaisseur {wall_type['epaisseur_m']:.2f} m sur "
+                    f"{wall_type['longueur_m']:.1f} m. Composition à compléter."
+                ).replace(".", ",", 2),
+            },
+        )
+        component_id = component.id
+    else:
+        _check_components(db, zone.project_id, [{"composant_id": component_id}])
+    for index in wall_type["cotes"]:
+        cotes[index]["composant_id"] = component_id
+    zone.edges_json = _dump(cotes)
+    db.commit()
+    return component_id
+
+
 # --- Lecture -------------------------------------------------------------------------------------
 
 
@@ -451,6 +524,10 @@ def serialize_metre(db: Session, project: ThermiqueProject) -> dict[str, Any]:
     for level, sheet, scale, calage in rows:
         zones = [_serialize_zone(zone) for zone in level.zones]
         synthese = metre.synthese_niveau(scale, level.floor_height_m, level.slab_thickness_m, zones, level.ceiling_height_m)
+        for zone, resume in zip(zones, synthese["zones"]):
+            zone["types_murs"] = (
+                enveloppe.types_de_murs(zone["cotes"], resume["cotes_m"]) if zone["type"] != "lnc" and resume["cotes_m"] else []
+            )
         if sheet is None:
             synthese["alertes"].insert(0, "Aucune planche de plan associée à ce niveau.")
         check = checks["par_niveau"].get(level.id, {})

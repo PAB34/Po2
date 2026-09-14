@@ -156,7 +156,17 @@ def normaliser_cotes(cotes, nombre: int, defaut: str) -> list[dict]:
         if donne_sur not in DONNE_SUR:
             raise MetreError(f"« Donne sur » inconnu : {donne_sur}.")
         composant = cote.get("composant_id")
-        resultat.append({"donne_sur": donne_sur, "composant_id": int(composant) if composant not in (None, "") else None})
+        entree = {"donne_sur": donne_sur, "composant_id": int(composant) if composant not in (None, "") else None}
+        mur = cote.get("mur")
+        if isinstance(mur, dict):
+            # Mur lu sur le plan (lot M4a) : conservé tel quel jusqu'à la prochaine détection.
+            epaisseur = mur.get("epaisseur_m")
+            entree["mur"] = {
+                "epaisseur_m": float(epaisseur) if epaisseur is not None else None,
+                "isolant": mur.get("isolant") if mur.get("isolant") in ("interieur", "exterieur", "reparti") else None,
+                "part_lue": float(mur.get("part_lue") or 0.0),
+            }
+        resultat.append(entree)
     return resultat
 
 

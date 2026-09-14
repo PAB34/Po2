@@ -200,6 +200,13 @@ class NorthRequest(BaseModel):
 class ZoneEdge(BaseModel):
     donne_sur: str
     composant_id: int | None = None
+    # Mur lu sur le plan (épaisseur, isolant, part lue), conservé lors des modifications du côté.
+    mur: dict | None = None
+
+
+class WallTypeAccept(BaseModel):
+    epaisseur_m: float = Field(gt=0, le=2)
+    composant_id: int | None = None
 
 
 class ZoneCreate(BaseModel):

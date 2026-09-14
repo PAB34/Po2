@@ -38,6 +38,7 @@ from app.schemas.thermique import (
     SheetRead,
     SheetUpdate,
     UploadResult,
+    WallTypeAccept,
     ZoneCreate,
     ZoneUpdate,
 )
@@ -636,6 +637,41 @@ def detect_contour_route(
         LOG.exception("Détection du contour impossible pour le niveau %s", level_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Détection du contour impossible.") from exc
     return {**thermique_metre.serialize_metre(db, project), "detection": found}
+
+
+@router.post("/zones/{zone_id}/detecter-murs")
+def detect_walls_route(
+    zone_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Lit l'épaisseur des murs et la position de l'isolant le long du tracé (quelques secondes)."""
+    zone = _zone_or_404(db, user, zone_id)
+    project = db.get(ThermiqueProject, zone.project_id)
+    try:
+        found = thermique_metre.detect_walls(db, zone)
+    except (ThermiqueError, moteur_metre.MetreError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        LOG.exception("Lecture des murs impossible pour le tracé %s", zone_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture des murs impossible.") from exc
+    return {**thermique_metre.serialize_metre(db, project), "detection_murs": found}
+
+
+@router.post("/zones/{zone_id}/types-murs")
+def accept_wall_type_route(
+    zone_id: int,
+    payload: WallTypeAccept,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    zone = _zone_or_404(db, user, zone_id)
+    project = db.get(ThermiqueProject, zone.project_id)
+    return _metre_action(
+        db, project, lambda: thermique_metre.accept_wall_type(db, user, zone, payload.epaisseur_m, payload.composant_id)
+    )
 
 
 @router.get("/sheets/{sheet_id}/coupe")

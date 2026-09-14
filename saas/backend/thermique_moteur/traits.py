@@ -112,6 +112,69 @@ def lire_traits(pdf_path: Path | str, page_index: int, avec_couleur: bool = Fals
     return sortie
 
 
+def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profondeur: int) -> None:
+    matrice = brut.FS_MATRIX()
+    x, y = ctypes.c_float(), ctypes.c_float()
+    remplissage, trace = ctypes.c_int(), ctypes.c_int()
+    rouge, vert, bleu, alpha = (ctypes.c_uint() for _ in range(4))
+    for objet in objets:
+        genre = brut.FPDFPageObj_GetType(objet)
+        if not brut.FPDFPageObj_GetMatrix(objet, ctypes.byref(matrice)):
+            continue
+        m = _composer((matrice.a, matrice.b, matrice.c, matrice.d, matrice.e, matrice.f), parent)
+        if genre == brut.FPDF_PAGEOBJ_FORM:
+            if profondeur < PROFONDEUR_MAX:
+                enfants = [brut.FPDFFormObj_GetObject(objet, i) for i in range(brut.FPDFFormObj_CountObjects(objet))]
+                _parcourir_aplats(brut, enfants, m, sortie, profondeur + 1)
+            continue
+        if genre != brut.FPDF_PAGEOBJ_PATH:
+            continue
+        if not brut.FPDFPath_GetDrawMode(objet, ctypes.byref(remplissage), ctypes.byref(trace)) or not remplissage.value:
+            continue
+        brut.FPDFPageObj_GetFillColor(objet, ctypes.byref(rouge), ctypes.byref(vert), ctypes.byref(bleu), ctypes.byref(alpha))
+        luminance = round(0.3 * rouge.value + 0.59 * vert.value + 0.11 * bleu.value)
+        a, b, c, d, e, f = m
+        contour: list = []
+        bezier = 0
+        for i in range(brut.FPDFPath_CountSegments(objet)):
+            segment = brut.FPDFPath_GetPathSegment(objet, i)
+            brut.FPDFPathSegment_GetPoint(segment, ctypes.byref(x), ctypes.byref(y))
+            point = (a * x.value + c * y.value + e, b * x.value + d * y.value + f)
+            if brut.FPDFPathSegment_GetType(segment) == brut.FPDF_SEGMENT_MOVETO:
+                if len(contour) >= 3:
+                    sortie.append((contour, luminance))
+                contour, bezier = [point], 0
+                continue
+            if brut.FPDFPathSegment_GetType(segment) == brut.FPDF_SEGMENT_BEZIERTO:
+                bezier += 1
+                if bezier % 3:
+                    continue
+            contour.append(point)
+        if len(contour) >= 3:
+            sortie.append((contour, luminance))
+
+
+def lire_aplats(pdf_path: Path | str, page_index: int) -> list[tuple[list[tuple[float, float]], int]]:
+    """Contours des chemins remplis (aplats) en points PDF, avec leur luminance (0 noir à 255 blanc).
+
+    Sur les plans d'architecte, les murs coupés sont remplis couche par couche (maçonnerie en gris,
+    isolant en motif) : c'est la masse des murs que les traits seuls ne donnent pas."""
+    import pypdfium2 as pdfium
+    import pypdfium2.raw as brut
+
+    with VERROU_PDFIUM:
+        document = pdfium.PdfDocument(str(pdf_path))
+        try:
+            page = document[page_index]
+            objets = [brut.FPDFPage_GetObject(page.raw, i) for i in range(brut.FPDFPage_CountObjects(page.raw))]
+            sortie: list = []
+            _parcourir_aplats(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0)
+            page.close()
+        finally:
+            document.close()
+    return sortie
+
+
 def classes_epaisseur(traits: list[Trait]) -> list[dict]:
     """Nombre et longueur cumulée des traits par épaisseur, de la plus épaisse à la plus fine."""
     classes: dict[float, list[float]] = defaultdict(lambda: [0, 0.0])

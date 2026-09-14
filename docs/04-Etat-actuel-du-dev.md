@@ -78,8 +78,12 @@ do_not_auto_read:
   `feat/thermique-detection-m3`, migration **0079**, `scipy`) : contour au nu intérieur détecté
   automatiquement, hauteurs lues sur les coupes, hauteur sous plafond. **Retour utilisateur** : il veut
   une **couche IA** de vérification étape par étape, planche par planche → cadrage
-  `thermique/agent-verification-decisions.md`, **Q46-Q50 en attente** (confidentialité, clé API, coût,
-  autonomie, ordre). Ensuite M2 (planchers et ponts thermiques par superposition).
+  `thermique/agent-verification-decisions.md` (réponses : vérification par **Claude Code**, pas d'API ;
+  l'IA propose, le thermicien valide). **Lot M4a (types de murs) fait** (branche
+  `feat/thermique-parois-menuiseries`) : épaisseur et isolant lus côté par côté, types proposés et
+  rattachés à la bibliothèque, recalage du contour sur la face intérieure des murs ; cadrage
+  `thermique/parois-menuiseries-pt-decisions.md` (Q51 : hauteurs des menuiseries lues sur les façades).
+  **▶️ Prochain : M4b menuiseries + façades**, puis M4c ponts thermiques, puis M2.
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.
