@@ -61,6 +61,40 @@ def fins_de_mur(faces: list[dict], murs: list[dict], echelle: float) -> dict[int
     return fins
 
 
+def _distance_segment(x: float, y: float, a: tuple[float, float], b: tuple[float, float]) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    carre = dx * dx + dy * dy
+    t = 0.0 if carre < 1e-12 else max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / carre))
+    return math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)
+
+
+def faces_de_contour(faces: list[dict], anneaux: list[dict], murs: list[dict], tolerance_pt: float = 1.0) -> dict[int, int]:
+    """Faces qui suivent le contour de l'aplat d'un mur détecté sans être appariées : feuillures et encoches en
+    bout de mur (portes, gaines). Une face est retenue si ses extrémités et son milieu sont sur le bord d'un
+    anneau (± 1 pt) qui contient le milieu d'un mur. Renvoie {indice de face : indice du mur}."""
+    porteurs = []
+    for anneau in anneaux:
+        points = anneau["points"]
+        xs, ys = [p[0] for p in points], [p[1] for p in points]
+        boite = (min(xs) - tolerance_pt, min(ys) - tolerance_pt, max(xs) + tolerance_pt, max(ys) + tolerance_pt)
+        for numero, mur in enumerate(murs):
+            mx, my = (mur["x1"] + mur["x2"]) / 2, (mur["y1"] + mur["y2"]) / 2
+            if boite[0] <= mx <= boite[2] and boite[1] <= my <= boite[3] and _dans_anneau(mx, my, points):
+                porteurs.append((boite, points, numero))
+                break
+    contour: dict[int, int] = {}
+    for index, face in enumerate(faces):
+        echantillons = ((face["x1"], face["y1"]), (face["x2"], face["y2"]), ((face["x1"] + face["x2"]) / 2, (face["y1"] + face["y2"]) / 2))
+        for boite, points, numero in porteurs:
+            if not all(boite[0] <= x <= boite[2] and boite[1] <= y <= boite[3] for x, y in echantillons):
+                continue
+            arete = len(points)
+            if all(min(_distance_segment(x, y, points[k], points[(k + 1) % arete]) for k in range(arete)) <= tolerance_pt for x, y in echantillons):
+                contour[index] = numero
+                break
+    return contour
+
+
 def _intervalle(mur: dict, ux: float, uy: float) -> tuple[float, float]:
     return tuple(sorted((ux * mur["x1"] + uy * mur["y1"], ux * mur["x2"] + uy * mur["y2"])))  # type: ignore[return-value]
 

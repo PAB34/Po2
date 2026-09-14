@@ -20,6 +20,7 @@ TOL_ANGLE_DEG = 0.1
 TOL_DECALAGE_PT = 0.05
 TOL_JOINTURE_PT = 0.1
 TOL_SOMMET_PT = 0.01
+CELLULE_SOMMETS = 500  # index spatial des sommets, en unités de TOL_SOMMET_PT (5 pt)
 EPAISSEUR_MUR_MIN_M = 0.05
 EPAISSEUR_MUR_MAX_M = 0.80
 
@@ -116,8 +117,8 @@ def unir_aplats(aplats: list) -> list[dict]:
 
     resultat: list[dict] = []
     for luminance, contours in par_teinte.items():
-        comptes: Counter = Counter()
-        aretes: list[tuple] = []
+        # Facettes nettoyées : sommets consécutifs confondus retirés, facettes d'aire nulle et doublons écartés.
+        facettes: dict[tuple, list] = {}
         for contour in contours:
             sommets = []
             for point in contour:
@@ -126,12 +127,37 @@ def unir_aplats(aplats: list) -> list[dict]:
                     sommets.append(k)
             if len(sommets) > 1 and sommets[0] == sommets[-1]:
                 sommets.pop()
+            if len(sommets) < 3:
+                continue
+            if abs(sum(sommets[i - 1][0] * sommets[i][1] - sommets[i][0] * sommets[i - 1][1] for i in range(len(sommets)))) < 1:
+                continue
+            facettes.setdefault(tuple(sorted(sommets)), sommets)
+        # Maillage non conforme (sommet posé au milieu de l'arête voisine) : chaque arête est coupée aux sommets
+        # qui tombent dessus, sinon les morceaux d'arête partagés ne s'annulent pas et l'union reste en morceaux.
+        grille: dict[tuple, set] = defaultdict(set)
+        for sommets in facettes.values():
+            for s in sommets:
+                grille[(s[0] // CELLULE_SOMMETS, s[1] // CELLULE_SOMMETS)].add(s)
+        comptes: Counter = Counter()
+        aretes: list[tuple] = []
+        for sommets in facettes.values():
             for i, a in enumerate(sommets):
                 b = sommets[(i + 1) % len(sommets)]
-                if a != b:
-                    k = (min(a, b), max(a, b))
-                    comptes[k] += 1
-                    aretes.append(k)
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                carre = dx * dx + dy * dy
+                sur_arete = []
+                for cx in range(min(a[0], b[0]) // CELLULE_SOMMETS, max(a[0], b[0]) // CELLULE_SOMMETS + 1):
+                    for cy in range(min(a[1], b[1]) // CELLULE_SOMMETS, max(a[1], b[1]) // CELLULE_SOMMETS + 1):
+                        for s in grille.get((cx, cy), ()):
+                            t = ((s[0] - a[0]) * dx + (s[1] - a[1]) * dy) / carre
+                            if 0 < t < 1 and abs((s[0] - a[0]) * dy - (s[1] - a[1]) * dx) / math.sqrt(carre) <= 2:
+                                sur_arete.append((t, s))
+                chaine = [a] + [s for _, s in sorted(sur_arete)] + [b]
+                for p, q in zip(chaine, chaine[1:]):
+                    if p != q:
+                        k = (min(p, q), max(p, q))
+                        comptes[k] += 1
+                        aretes.append(k)
         bord = [k for k in dict.fromkeys(aretes) if comptes[k] % 2 == 1]
         voisins: dict[tuple, list] = defaultdict(list)
         for a, b in bord:

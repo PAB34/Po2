@@ -52,6 +52,22 @@ def test_union_exacte_des_facettes():
     assert rectangle["facettes"] == 5
 
 
+def test_union_d_un_maillage_non_conforme():
+    # Rectangle 30 × 10 pt : à gauche deux triangles sur toute la hauteur, à droite deux rectangles empilés dont
+    # le sommet (15, 5) tombe au milieu de l'arête verticale de gauche ; plus une facette plate et un doublon.
+    triangles = [
+        ([(0, 0), (15, 0), (15, 10)], 152),
+        ([(0, 0), (15, 10), (0, 10)], 152),
+        ([(15, 0), (30, 0), (30, 5), (15, 5)], 152),
+        ([(15, 5), (30, 5), (30, 10), (15, 10)], 152),
+        ([(15, 5), (30, 5), (30, 10), (15, 10)], 152),
+        ([(15, 0), (15, 0), (15, 10), (15, 10)], 152),
+    ]
+    anneaux = vecteurs.unir_aplats(triangles)
+    assert len(anneaux) == 1
+    assert abs(anneaux[0]["aire_pt2"]) == pytest.approx(300.0)
+
+
 def test_dictionnaire_des_plumes():
     lignes = vecteurs.fusionner_lignes(
         [

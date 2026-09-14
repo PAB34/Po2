@@ -81,6 +81,20 @@ def test_mur_courbe_non_concentrique():
     assert courbes[0]["epaisseur_m"] == pytest.approx(0.20, abs=0.02)
 
 
+def test_feuillure_en_bout_de_mur_suit_le_contour_de_l_aplat():
+    # Mur rempli de 30 cm sur 3 m, terminé par une feuillure de 10 × 10 cm dans l'angle (porte).
+    e, L, f = 0.30 * M, 3 * M, 0.10 * M
+    contour = [(0, 0), (L, 0), (L, e - f), (L - f, e - f), (L - f, e), (0, e)]
+    segments = [(*contour[k], *contour[(k + 1) % len(contour)]) for k in range(len(contour))]
+    faces = _faces(segments)
+    anneaux = [{"luminance": 153, "points": contour, "aire_pt2": 0.0, "facettes": 1}]
+    trouves = murs.apparier_faces(faces, 100, anneaux)
+    assert [round(t["epaisseur_m"], 2) for t in trouves] == [0.3]
+    appariees = {i for t in trouves for i in t["faces"]} | set(murs.fins_de_mur(faces, trouves, 100))
+    restantes = {i for i in range(len(faces)) if i not in appariees}
+    assert restantes and restantes <= set(murs.faces_de_contour(faces, anneaux, trouves))
+
+
 def test_mesure_contre_la_verite_terrain():
     reference = [
         {"x1": 0, "y1": 0, "x2": 10 * M, "y2": 0, "epaisseur_m": 0.30},
