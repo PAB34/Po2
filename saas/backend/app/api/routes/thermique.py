@@ -691,6 +691,23 @@ def read_sheet_section(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la coupe impossible.") from exc
 
 
+@router.get("/sheets/{sheet_id}/murs")
+def read_sheet_walls(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Murs coupés du plan lus sur les vecteurs du PDF, en polygones, avec les types par épaisseur."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_metre.sheet_walls(sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Détection des murs impossible pour la planche %s", sheet_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Détection des murs impossible.") from exc
+
+
 @router.post("/projects/{project_id}/hauteurs-coupe")
 def apply_section_heights_route(
     project_id: int,

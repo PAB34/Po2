@@ -104,6 +104,17 @@ export type SnapTraits = {
   nombre_total: number;
 };
 
+// Murs coupés lus sur les vecteurs du plan : polygones en points PDF, types par épaisseur.
+export type DetectedWall = { points: PdfPoint[]; epaisseur_m: number; longueur_m: number; rempli: boolean; courbe?: boolean };
+
+export type SheetWalls = {
+  echelle: number;
+  murs: DetectedWall[];
+  types: { epaisseur_m: number; longueur_m: number; nombre: number }[];
+  parois_composees: { epaisseur_m: number; couches_m: number[]; longueur_m: number }[];
+  lineaire_m: number;
+};
+
 export type LevelPayload = Partial<{
   nom: string;
   ordre: number;
@@ -140,6 +151,7 @@ export const metreApi = {
   detectContour: (token: string, levelId: number, remplacer: boolean) =>
     request<Metre>(token, `/thermique/niveaux/${levelId}/detecter-contour`, json("POST", { remplacer })),
   section: (token: string, sheetId: number) => request<SectionDetection>(token, `/thermique/sheets/${sheetId}/coupe`),
+  walls: (token: string, sheetId: number) => request<SheetWalls>(token, `/thermique/sheets/${sheetId}/murs`),
   detectWalls: (token: string, zoneId: number) => request<Metre>(token, `/thermique/zones/${zoneId}/detecter-murs`, { method: "POST" }),
   acceptWallType: (token: string, zoneId: number, payload: { epaisseur_m: number; composant_id: number | null }) =>
     request<Metre>(token, `/thermique/zones/${zoneId}/types-murs`, json("POST", payload)),

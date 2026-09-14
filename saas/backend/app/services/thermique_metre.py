@@ -18,11 +18,14 @@ from app.models.user import User
 from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_raster import raster_root
 from app.services.thermique_composants import create_component
-from thermique_moteur import coupes, detection, enveloppe, metre, traits
+from thermique_moteur import coupes, detection, enveloppe, metre, traits, vecteurs
+from thermique_moteur import murs as murs_vectoriels
 
 # Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
 TRAITS_VERSION = "v1"
 DETECTION_VERSION = "v1"
+# Détection vectorielle des murs (docs/thermique/detection-murs-strategie.md) : à changer à chaque évolution du moteur.
+MURS_VERSION = "v1"
 # Faces de dalles sur les coupes : traits d'au moins 0,9 pt (1,56 et 0,96 pt sur le projet d'essai).
 SEUIL_COUPE = 0.9
 
@@ -393,6 +396,19 @@ def sheet_section(sheet: ThermiqueSheet) -> dict:
         raise ThermiqueError("Définissez l'échelle de la coupe avant de lire les hauteurs.")
     scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
     return _cached(sheet, f"coupe_{DETECTION_VERSION}_{scale_key}", compute)
+
+
+def sheet_walls(sheet: ThermiqueSheet) -> dict:
+    """Murs coupés d'un plan lus sur les vecteurs du PDF (paires de faces), sans contour préalable."""
+    if not sheet.scale_denominator:
+        raise ThermiqueError("Définissez l'échelle de la planche avant la détection des murs.")
+
+    def compute(path):
+        lignes = vecteurs.fusionner_lignes(traits.lire_traits(path, sheet.page_index, avec_couleur=True))
+        return murs_vectoriels.detecter_murs(lignes, traits.lire_aplats(path, sheet.page_index), sheet.scale_denominator)
+
+    scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
+    return _cached(sheet, f"murs_{MURS_VERSION}_{scale_key}", compute)
 
 
 def apply_section_heights(

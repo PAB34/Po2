@@ -579,6 +579,54 @@ body {
   stroke-width: 1.5;
 }
 
+.th-walls polygon {
+  fill-opacity: 0.6;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.th-walls polygon.is-dimmed {
+  fill-opacity: 0.08;
+  stroke-opacity: 0.2;
+}
+
+.th-wall-types {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-wall-types button {
+  display: grid;
+  grid-template-columns: 1.1rem 3.6rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-wall-types button:hover,
+.th-wall-types button.is-active {
+  border-color: var(--po2-color-line);
+  background: rgba(47, 111, 176, 0.06);
+}
+
+.th-wall-types .th-wall-swatch {
+  width: 1.1rem;
+  height: 0.55rem;
+  border-radius: 2px;
+}
+
 .th-calage circle {
   fill: #2f6fb0;
   stroke: #ffffff;
