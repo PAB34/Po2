@@ -25,6 +25,9 @@ from app.schemas.thermique import (
     ComponentUpdate,
     ExternalAccountCreate,
     ExternalAccountRead,
+    LevelCreate,
+    LevelUpdate,
+    NorthRequest,
     ProjectCreate,
     ProjectDetail,
     ProjectRead,
@@ -33,7 +36,10 @@ from app.schemas.thermique import (
     SheetRead,
     SheetUpdate,
     UploadResult,
+    ZoneCreate,
+    ZoneUpdate,
 )
+from app.services import thermique_metre
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -73,6 +79,7 @@ from app.services.thermique_raster import (
 )
 
 from thermique_moteur import composants as moteur_composants
+from thermique_moteur import metre as moteur_metre
 from thermique_moteur import parois
 from thermique_moteur.bibliotheque import elements as bibliotheque_elements
 from thermique_moteur.bibliotheque import materiaux as bibliotheque_materiaux
@@ -474,6 +481,159 @@ def read_sheet_tile(
     if path.is_file():
         return FileResponse(path, media_type="image/png", headers=TILE_CACHE_HEADERS)
     return Response(content=white_tile_png(), media_type="image/png", headers=TILE_CACHE_HEADERS)
+
+
+# --- Métré sur les plans (lot M1) ------------------------------------------------------------------
+
+
+def _level_or_404(db: Session, user: User, level_id: int):
+    level = thermique_metre.get_level_for_user(db, user, level_id)
+    if level is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Niveau introuvable.")
+    return level
+
+
+def _zone_or_404(db: Session, user: User, zone_id: int):
+    zone = thermique_metre.get_zone_for_user(db, user, zone_id)
+    if zone is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracé introuvable.")
+    return zone
+
+
+def _metre_action(db: Session, project: ThermiqueProject, action) -> dict:
+    """Exécute une modification du métré et renvoie le métré complet recalculé."""
+    try:
+        action()
+    except (ThermiqueError, moteur_metre.MetreError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return thermique_metre.serialize_metre(db, project)
+
+
+@router.get("/projects/{project_id}/metre")
+def read_metre(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    return thermique_metre.serialize_metre(db, _project_or_404(db, user, project_id))
+
+
+@router.post("/projects/{project_id}/niveaux", status_code=status.HTTP_201_CREATED)
+def create_level_route(
+    project_id: int,
+    payload: LevelCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    return _metre_action(db, project, lambda: thermique_metre.create_level(db, project, payload.model_dump(exclude_unset=True)))
+
+
+@router.post("/projects/{project_id}/niveaux/depuis-planches")
+def create_levels_from_sheets_route(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    return _metre_action(db, project, lambda: thermique_metre.create_levels_from_sheets(db, project))
+
+
+@router.patch("/niveaux/{level_id}")
+def update_level_route(
+    level_id: int,
+    payload: LevelUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    level = _level_or_404(db, user, level_id)
+    project = db.get(ThermiqueProject, level.project_id)
+    return _metre_action(
+        db, project, lambda: thermique_metre.update_level(db, project, level, payload.model_dump(exclude_unset=True))
+    )
+
+
+@router.delete("/niveaux/{level_id}")
+def delete_level_route(
+    level_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    level = _level_or_404(db, user, level_id)
+    project = db.get(ThermiqueProject, level.project_id)
+    return _metre_action(db, project, lambda: thermique_metre.delete_level(db, level))
+
+
+@router.post("/projects/{project_id}/nord")
+def set_north_route(
+    project_id: int,
+    payload: NorthRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    level = _level_or_404(db, user, payload.niveau_id)
+    if level.project_id != project.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Niveau introuvable.")
+    return _metre_action(db, project, lambda: thermique_metre.set_north(db, project, level, payload.p1, payload.p2))
+
+
+@router.post("/niveaux/{level_id}/zones", status_code=status.HTTP_201_CREATED)
+def create_zone_route(
+    level_id: int,
+    payload: ZoneCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    level = _level_or_404(db, user, level_id)
+    project = db.get(ThermiqueProject, level.project_id)
+    return _metre_action(db, project, lambda: thermique_metre.create_zone(db, level, payload.model_dump()))
+
+
+@router.patch("/zones/{zone_id}")
+def update_zone_route(
+    zone_id: int,
+    payload: ZoneUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    zone = _zone_or_404(db, user, zone_id)
+    project = db.get(ThermiqueProject, zone.project_id)
+    return _metre_action(db, project, lambda: thermique_metre.update_zone(db, zone, payload.model_dump(exclude_unset=True)))
+
+
+@router.delete("/zones/{zone_id}")
+def delete_zone_route(
+    zone_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    zone = _zone_or_404(db, user, zone_id)
+    project = db.get(ThermiqueProject, zone.project_id)
+    return _metre_action(db, project, lambda: thermique_metre.delete_zone(db, zone))
+
+
+@router.get("/sheets/{sheet_id}/traits")
+def read_sheet_traits(
+    sheet_id: int,
+    seuil: float | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Traits épais de la planche (faces de murs), pour aimanter le tracé du métré."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    if seuil is not None and not 0 <= seuil <= 50:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seuil d'épaisseur hors limites.")
+    try:
+        return thermique_metre.sheet_traits(sheet, seuil)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Lecture des traits impossible pour la planche %s", sheet.id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture des traits de la planche impossible."
+        ) from exc
 
 
 @router.post(

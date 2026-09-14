@@ -77,4 +77,11 @@ from app.models.cpe import (
     CpeRevisionIndex,
     CpeSite,
 )
-from app.models.thermique import ThermiqueComponent, ThermiqueDocument, ThermiqueProject, ThermiqueSheet
+from app.models.thermique import (
+    ThermiqueComponent,
+    ThermiqueDocument,
+    ThermiqueLevel,
+    ThermiqueProject,
+    ThermiqueSheet,
+    ThermiqueZone,
+)

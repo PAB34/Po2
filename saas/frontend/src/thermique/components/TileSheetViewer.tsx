@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 
 import type { PdfPoint } from "../api";
 import {
@@ -16,21 +16,34 @@ import {
 
 export type ViewerTool = "pan" | "measure" | "calibrate";
 export type ViewerSegment = { p1: PdfPoint; p2: PdfPoint; label?: string; tone: "measure" | "reference" };
+// Touches enfoncées au clic ou au survol : Maj et Alt modifient l'aimantation du métré.
+export type PickEvent = { shiftKey: boolean; altKey: boolean };
+export type ToScreen = (point: PdfPoint) => [number, number];
 
 type View = { zoom: number; panX: number; panY: number };
-type Drag = { pointerId: number; x: number; y: number; panX: number; panY: number; moved: boolean };
+type Drag = { pointerId: number; x: number; y: number; panX: number; panY: number; moved: boolean; grab: boolean };
 
 type Props = {
   manifest: RasterManifest;
   tileTemplate: string;
-  tool: ViewerTool;
-  points: PdfPoint[];
-  segments: ViewerSegment[];
-  onAddPoint: (point: PdfPoint) => void;
+  // « pan » : glisser déplace le plan ; tout autre outil : un clic pose un point.
+  tool: string;
+  points?: PdfPoint[];
+  segments?: ViewerSegment[];
+  onAddPoint: (point: PdfPoint, event: PickEvent) => void;
+  // Survol : point sous le curseur et pixels écran par point PDF (tolérance d'aimantation).
+  onHover?: (point: PdfPoint | null, pixelsPerPt: number, event: PickEvent) => void;
+  // Clic enfoncé sur un objet : si la fonction renvoie true, le glisser déplace l'objet et non le plan.
+  onGrab?: (point: PdfPoint, pixelsPerPt: number, event: PickEvent) => boolean;
+  onGrabMove?: (point: PdfPoint, event: PickEvent) => void;
+  onGrabEnd?: () => void;
+  renderOverlay?: (toScreen: ToScreen) => ReactNode;
 };
 
 const MAX_ZOOM = 8; // pixels écran par pixel du niveau le plus fin
 const DRAG_THRESHOLD_PX = 4;
+const NO_POINTS: PdfPoint[] = [];
+const NO_SEGMENTS: ViewerSegment[] = [];
 
 function zoomAround(view: View, cx: number, cy: number, factor: number, minZoom: number): View {
   const zoom = Math.min(MAX_ZOOM, Math.max(minZoom, view.zoom * factor));
@@ -38,9 +51,23 @@ function zoomAround(view: View, cx: number, cy: number, factor: number, minZoom:
   return { zoom, panX: cx - (cx - view.panX) * ratio, panY: cy - (cy - view.panY) * ratio };
 }
 
+const modifiers = (event: { shiftKey: boolean; altKey: boolean }): PickEvent => ({ shiftKey: event.shiftKey, altKey: event.altKey });
+
 // Visionneuse de planche en tuiles d'images rendues par le serveur (pdfium).
 // Le zoom et le déplacement ne redessinent rien : on ne change que les images affichées.
-export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments, onAddPoint }: Props) {
+export function TileSheetViewer({
+  manifest,
+  tileTemplate,
+  tool,
+  points = NO_POINTS,
+  segments = NO_SEGMENTS,
+  onAddPoint,
+  onHover,
+  onGrab,
+  onGrabMove,
+  onGrabEnd,
+  renderOverlay,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
   const fitZoomRef = useRef(1);
@@ -100,6 +127,9 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
     return () => element.removeEventListener("wheel", onWheel);
   }, []);
 
+  const [ta, tb, tc, td] = manifest.transform;
+  const pixelsPerPt = view.zoom * Math.sqrt(Math.abs(ta * td - tb * tc));
+
   const toPdf = (clientX: number, clientY: number): PdfPoint | null => {
     const element = containerRef.current;
     if (!element) {
@@ -113,7 +143,7 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
     );
   };
 
-  const toScreen = (point: PdfPoint): [number, number] => {
+  const toScreen: ToScreen = (point) => {
     const [px, py] = pdfToRaster(manifest.transform, point);
     return [px * view.zoom + view.panX, py * view.zoom + view.panY];
   };
@@ -121,6 +151,11 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 && event.button !== 1) {
       return;
+    }
+    let grab = false;
+    if (event.button === 0 && tool !== "pan" && onGrab) {
+      const point = toPdf(event.clientX, event.clientY);
+      grab = point !== null && onGrab(point, pixelsPerPt, modifiers(event));
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
@@ -130,12 +165,21 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
       panX: view.panX,
       panY: view.panY,
       moved: event.button === 1,
+      grab,
     };
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) {
+      onHover?.(toPdf(event.clientX, event.clientY), pixelsPerPt, modifiers(event));
+      return;
+    }
+    if (drag.grab) {
+      const point = toPdf(event.clientX, event.clientY);
+      if (point) {
+        onGrabMove?.(point, modifiers(event));
+      }
       return;
     }
     const dx = event.clientX - drag.x;
@@ -151,12 +195,16 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
+    if (drag?.grab) {
+      onGrabEnd?.();
+      return;
+    }
     if (!drag || drag.moved || tool === "pan" || event.button !== 0) {
       return;
     }
     const point = toPdf(event.clientX, event.clientY);
     if (point) {
-      onAddPoint(point);
+      onAddPoint(point, modifiers(event));
     }
   };
 
@@ -190,6 +238,11 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerLeave={() => {
+        if (!dragRef.current) {
+          onHover?.(null, pixelsPerPt, { shiftKey: false, altKey: false });
+        }
+      }}
       onPointerCancel={() => {
         dragRef.current = null;
       }}
@@ -215,6 +268,7 @@ export function TileSheetViewer({ manifest, tileTemplate, tool, points, segments
       </div>
 
       <svg className="th-viewer__overlay" width={size.width} height={size.height}>
+        {renderOverlay?.(toScreen)}
         {segments.map((segment, index) => {
           const [x1, y1] = toScreen(segment.p1);
           const [x2, y2] = toScreen(segment.p2);

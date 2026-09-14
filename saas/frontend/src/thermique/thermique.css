@@ -392,6 +392,205 @@ body {
   pointer-events: none;
 }
 
+/* --- Métré sur les plans (lot M1) --- */
+
+.th-levels {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-levels button {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-levels button.is-active {
+  background: var(--po2-color-ink);
+  color: var(--po2-color-paper);
+}
+
+.th-levels small {
+  opacity: 0.75;
+}
+
+.th-tools {
+  flex-wrap: wrap;
+}
+
+.th-tools button {
+  flex: 1 1 30%;
+}
+
+.th-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.th-grid3 input,
+.th-grid3 select {
+  width: 100%;
+}
+
+.th-dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.th-dl dt {
+  color: var(--po2-color-muted);
+}
+
+.th-dl dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.th-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.th-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.th-edgebox {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+}
+
+.th-zone polygon {
+  stroke: none;
+}
+
+.th-zone--contour polygon {
+  fill: rgba(208, 52, 44, 0.07);
+}
+
+.th-zone--contour.is-selected polygon {
+  fill: rgba(208, 52, 44, 0.16);
+}
+
+.th-zone--lnc polygon {
+  fill: rgba(47, 111, 176, 0.18);
+  stroke: #2f6fb0;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.th-zone--patio polygon {
+  fill: rgba(46, 139, 87, 0.16);
+}
+
+.th-zone text {
+  font: 800 12px var(--po2-font-body);
+  fill: #1c2430;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4px;
+}
+
+.th-edge {
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.th-edge.is-selected {
+  stroke-width: 8;
+}
+
+.th-vertex {
+  fill: #ffffff;
+  stroke: #1c2430;
+  stroke-width: 2;
+}
+
+.th-ghost polygon {
+  fill: none;
+  stroke-width: 2;
+  stroke-dasharray: 10 6;
+}
+
+.th-ghost--dessous polygon {
+  stroke: #7b3fb2;
+}
+
+.th-ghost--dessus polygon {
+  stroke: #d98a00;
+}
+
+.th-draft polyline {
+  fill: none;
+  stroke: #1c2430;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.th-draft circle {
+  fill: #1c2430;
+}
+
+.th-snap circle,
+.th-snap rect,
+.th-snap path {
+  fill: none;
+  stroke: #e07b00;
+  stroke-width: 2.5;
+}
+
+.th-snaplines line {
+  stroke: rgba(224, 123, 0, 0.55);
+  stroke-width: 1.5;
+}
+
+.th-calage circle {
+  fill: #2f6fb0;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.th-calage text,
+.th-north text {
+  font: 800 13px var(--po2-font-body);
+  fill: #1d4d80;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4px;
+}
+
+.th-north line {
+  stroke: #1d4d80;
+  stroke-width: 2.5;
+}
+
 .th-seg line {
   stroke-width: 2.5;
 }
