@@ -461,3 +461,66 @@ def apparier_faces(faces: list[dict], echelle: float, anneaux: list[dict] | None
                         }
                     )
     return _retirer_vides_entre_murs(murs, motifs)
+
+
+# Aplats gris des murs coupés (luminance 118 à 153 sur le projet d'essai) ; le blanc et le noir sont écartés.
+LUMINANCE_REMPLISSAGE = (96, 176)
+LONGUEUR_MOTIF_MAX_M = 0.4
+POINTS_PAR_ARC = 24
+
+
+def detecter_murs(lignes: list[dict], aplats: list, echelle: float) -> dict:
+    """Chaîne complète pour l'affichage : murs droits et courbes en polygones (points PDF), types par
+    épaisseur et parois composées. `lignes` sort de `vecteurs.fusionner_lignes`, `aplats` de `traits.lire_aplats`."""
+    from thermique_moteur import vecteurs
+
+    m = 1.0 / pt_en_m(echelle)
+    anneaux = vecteurs.unir_aplats([a for a in aplats if LUMINANCE_REMPLISSAGE[0] <= a[1] <= LUMINANCE_REMPLISSAGE[1]])
+    toutes = faces_de_murs(lignes)
+    arcs = arcs_de_faces(toutes, echelle)
+    faces_arcs = {i for arc in arcs for i in arc["faces"]}
+    faces = [face for i, face in enumerate(toutes) if i not in faces_arcs]
+    motifs = [l for l in lignes if l.get("luminance", 0) > LUMINANCE_FACE_MAX and l["longueur"] <= LONGUEUR_MOTIF_MAX_M * m]
+    droits = apparier_faces(faces, echelle, anneaux, motifs)
+    courbes = apparier_arcs(arcs, echelle)
+
+    def arrondi(points):
+        return [[round(x, 2), round(y, 2)] for x, y in points]
+
+    murs = []
+    for mur in droits:
+        demi = (mur["n_b"] - mur["n_a"]) / 2
+        nx, ny = -mur["uy"] * demi, mur["ux"] * demi
+        coins = [(mur["x1"] + nx, mur["y1"] + ny), (mur["x2"] + nx, mur["y2"] + ny), (mur["x2"] - nx, mur["y2"] - ny), (mur["x1"] - nx, mur["y1"] - ny)]
+        murs.append(
+            {"points": arrondi(coins), "epaisseur_m": mur["epaisseur_m"], "longueur_m": mur["longueur_m"], "rempli": (mur["remplissage"] or 0) >= 0.5}
+        )
+    for courbe in courbes:
+        demi = courbe["epaisseur_m"] * m / 2
+        angles = [courbe["debut"] + (courbe["fin"] - courbe["debut"]) * k / POINTS_PAR_ARC for k in range(POINTS_PAR_ARC + 1)]
+        exterieur = [(courbe["cx"] + (courbe["rayon_axe"] + demi) * math.cos(a), courbe["cy"] + (courbe["rayon_axe"] + demi) * math.sin(a)) for a in angles]
+        interieur = [(courbe["cx"] + (courbe["rayon_axe"] - demi) * math.cos(a), courbe["cy"] + (courbe["rayon_axe"] - demi) * math.sin(a)) for a in reversed(angles)]
+        murs.append({"points": arrondi(exterieur + interieur), "epaisseur_m": courbe["epaisseur_m"], "longueur_m": courbe["longueur_m"], "rempli": True, "courbe": True})
+
+    types: dict[int, dict] = {}
+    for mur in murs:
+        cm = round(mur["epaisseur_m"] * 100)
+        entree = types.setdefault(cm, {"epaisseur_m": cm / 100, "longueur_m": 0.0, "nombre": 0})
+        entree["longueur_m"] += mur["longueur_m"]
+        entree["nombre"] += 1
+    composees = [
+        {
+            "epaisseur_m": round(paroi["epaisseur_m"], 3),
+            "couches_m": [round(couche["epaisseur_m"], 3) for couche in paroi["couches"]],
+            "longueur_m": round(paroi["longueur_pt"] / m, 2),
+        }
+        for paroi in parois_composees(droits)
+        if len(paroi["couches"]) > 1
+    ]
+    return {
+        "echelle": echelle,
+        "murs": murs,
+        "types": sorted(({**t, "longueur_m": round(t["longueur_m"], 2)} for t in types.values()), key=lambda t: -t["longueur_m"]),
+        "parois_composees": composees,
+        "lineaire_m": round(sum(mur["longueur_m"] for mur in murs), 2),
+    }

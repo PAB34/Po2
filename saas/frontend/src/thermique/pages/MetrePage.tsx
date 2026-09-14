@@ -55,6 +55,8 @@ const TOOLS: { id: MetreTool; label: string; help: string }[] = [
 
 const DRAW_TOOLS: MetreTool[] = ["contour", "lnc", "patio"];
 const EDGE_COLORS: Record<DonneSur, string> = { exterieur: "#d0342c", lnc: "#2f6fb0", sol: "#8a5a2b", mitoyen: "#7a7f87" };
+// Une couleur par épaisseur, dans l'ordre des linéaires décroissants (légende et plan partagent l'ordre).
+const WALL_PALETTE = ["#d0342c", "#2f6fb0", "#e07b00", "#2e9d4f", "#8a3fc4", "#00939c", "#a0522d", "#c2185b", "#5f6b73", "#b59a00"];
 const SNAP_PX = 12;
 const INSULATION_LABELS: Record<string, string> = {
   interieur: "isolant intérieur",
@@ -152,7 +154,8 @@ export function MetrePage() {
   const [hover, setHover] = useState<SnapResult | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [drag, setDrag] = useState<VertexDrag | null>(null);
-  const [layers, setLayers] = useState({ below: true, above: false, traits: false, snap: true });
+  const [layers, setLayers] = useState({ below: true, above: false, traits: false, snap: true, murs: false });
+  const [wallFilter, setWallFilter] = useState<number | null>(null);
   const [seuil, setSeuil] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -203,6 +206,18 @@ export function MetrePage() {
     staleTime: Infinity,
   });
 
+  const detectedWalls = useQuery({
+    queryKey: ["thermique", "murs", sheet?.id ?? 0, level?.echelle ?? 0],
+    queryFn: () => metreApi.walls(token!, sheet!.id),
+    enabled: Boolean(token && sheet && layers.murs),
+    staleTime: Infinity,
+  });
+  const wallColors = useMemo(
+    () =>
+      new Map((detectedWalls.data?.types ?? []).map((type, index) => [Math.round(type.epaisseur_m * 100), WALL_PALETTE[index % WALL_PALETTE.length]])),
+    [detectedWalls.data],
+  );
+
   const currentLevelId = level?.id ?? null;
   const currentSheetId = sheet?.id ?? null;
   useEffect(() => {
@@ -217,6 +232,7 @@ export function MetrePage() {
   }, [tool]);
   useEffect(() => {
     setSeuil(null);
+    setWallFilter(null);
   }, [currentSheetId]);
 
   const keyHandler = useRef<(event: KeyboardEvent) => void>(() => undefined);
@@ -466,6 +482,27 @@ export function MetrePage() {
     }
   }
 
+  async function createWallComponent(thickness: number, lengthM: number) {
+    if (!token) {
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await componentsApi.createInProject(token, projectId, {
+        categorie: "murs",
+        nom: `Mur ${thickness} cm`,
+        notes: `Type détecté sur le plan : épaisseur ${thickness} cm sur ${lengthM.toFixed(1).replace(".", ",")} m. Composition à compléter.`,
+      });
+      await componentsQuery.refetch();
+      setNotice(`Composant « Mur ${thickness} cm » créé dans la bibliothèque du projet (composition à compléter).`);
+    } catch (failure) {
+      setActionError(failure instanceof Error ? failure.message : "Création du composant impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function detectContour() {
     if (!level || !token) {
       return;
@@ -514,6 +551,24 @@ export function MetrePage() {
               const [x1, y1] = toScreen([segment[0], segment[1]]);
               const [x2, y2] = toScreen([segment[2], segment[3]]);
               return <line key={index} x1={x1} y1={y1} x2={x2} y2={y2} />;
+            })}
+          </g>
+        )}
+
+        {layers.murs && detectedWalls.data && (
+          <g className="th-walls">
+            {detectedWalls.data.murs.map((wall, index) => {
+              const thickness = Math.round(wall.epaisseur_m * 100);
+              const color = wallColors.get(thickness) ?? "#5f6b73";
+              return (
+                <polygon
+                  key={index}
+                  className={wallFilter !== null && wallFilter !== thickness ? "is-dimmed" : undefined}
+                  points={polygonPoints(wall.points)}
+                  fill={color}
+                  stroke={color}
+                />
+              );
             })}
           </g>
         )}
@@ -791,6 +846,80 @@ export function MetrePage() {
                 Supprimer le niveau
               </button>
             </div>
+          </section>
+        )}
+
+        {level && sheet && (
+          <section>
+            <h2>Murs du plan</h2>
+            <button
+              type="button"
+              className="po2-button po2-button--secondary"
+              onClick={() => {
+                setLayers({ ...layers, murs: !layers.murs });
+                setWallFilter(null);
+              }}
+            >
+              {layers.murs ? "Masquer les murs détectés" : "Afficher les murs détectés"}
+            </button>
+            {layers.murs && detectedWalls.isFetching && <p className="th-muted">Lecture des murs sur les traits du plan… (quelques secondes la première fois)</p>}
+            {layers.murs && detectedWalls.error && <p className="th-alert th-alert--error">{detectedWalls.error.message}</p>}
+            {layers.murs && detectedWalls.data && (
+              <>
+                <p className="th-muted">
+                  {detectedWalls.data.murs.length} murs coupés, {formatLength(detectedWalls.data.lineaire_m)} de linéaire. Cliquez une épaisseur pour
+                  isoler ses murs sur le plan.
+                </p>
+                <ul className="th-wall-types">
+                  {detectedWalls.data.types.map((type) => {
+                    const thickness = Math.round(type.epaisseur_m * 100);
+                    const name = `Mur ${thickness} cm`;
+                    const existing = walls.find((item) => item.nom === name);
+                    return (
+                      <li key={thickness}>
+                        <button
+                          type="button"
+                          className={wallFilter === thickness ? "is-active" : undefined}
+                          aria-pressed={wallFilter === thickness}
+                          onClick={() => setWallFilter(wallFilter === thickness ? null : thickness)}
+                        >
+                          <span className="th-wall-swatch" style={{ background: wallColors.get(thickness) }} />
+                          <strong>{thickness} cm</strong>
+                          <span>
+                            {type.nombre} mur{type.nombre > 1 ? "s" : ""} · {formatLength(type.longueur_m)}
+                          </span>
+                          <small className="th-muted">{existing ? existing.code : ""}</small>
+                        </button>
+                        {!existing && wallFilter === thickness && (
+                          <button
+                            type="button"
+                            className="th-link"
+                            disabled={busy}
+                            onClick={() => void createWallComponent(thickness, type.longueur_m)}
+                          >
+                            Créer le composant « {name} » dans la bibliothèque du projet
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {detectedWalls.data.parois_composees.length > 0 && (
+                  <p className="th-muted">
+                    Parois composées :{" "}
+                    {detectedWalls.data.parois_composees
+                      .map((paroi) => `${Math.round(paroi.epaisseur_m * 100)} cm (${paroi.couches_m.map((c) => Math.round(c * 100)).join(" + ")})`)
+                      .filter((text, index, all) => all.indexOf(text) === index)
+                      .join(", ")}
+                    .
+                  </p>
+                )}
+                <p className="th-muted">
+                  Lecture directe des vecteurs du PDF : un mur est la paire de ses deux faces, son épaisseur est mesurée entre elles. Aucun contour
+                  n'est nécessaire.
+                </p>
+              </>
+            )}
           </section>
         )}
 

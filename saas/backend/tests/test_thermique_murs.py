@@ -95,6 +95,22 @@ def test_feuillure_en_bout_de_mur_suit_le_contour_de_l_aplat():
     assert restantes and restantes <= set(murs.faces_de_contour(faces, anneaux, trouves))
 
 
+def test_detection_complete_pour_l_affichage():
+    # Mur de 30 cm sur 5 m et mur de 20 cm sur 4 m, éloignés : deux polygones, deux types triés par linéaire.
+    e, L = 0.30 * M, 5 * M
+    segments = [(0, 0, L, 0), (0, e, L, e), (0, 3 * M, 4 * M, 3 * M), (0, 3.2 * M, 4 * M, 3.2 * M)]
+    lignes = vecteurs.fusionner_lignes([(*s, 1.56, 0) for s in segments])
+    resultat = murs.detecter_murs(lignes, [], 100)
+    assert len(resultat["murs"]) == 2
+    mur = next(w for w in resultat["murs"] if round(w["epaisseur_m"], 2) == 0.3)
+    xs = sorted(p[0] for p in mur["points"])
+    ys = sorted(p[1] for p in mur["points"])
+    assert xs[0] == pytest.approx(0, abs=0.01) and xs[-1] == pytest.approx(L, abs=0.01)
+    assert ys[0] == pytest.approx(0, abs=0.01) and ys[-1] == pytest.approx(e, abs=0.01)
+    assert [(t["epaisseur_m"], t["nombre"]) for t in resultat["types"]] == [(0.3, 1), (0.2, 1)]
+    assert resultat["lineaire_m"] == pytest.approx(9.0, abs=0.05)
+
+
 def test_mesure_contre_la_verite_terrain():
     reference = [
         {"x1": 0, "y1": 0, "x2": 10 * M, "y2": 0, "epaisseur_m": 0.30},
