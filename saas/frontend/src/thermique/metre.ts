@@ -4,7 +4,15 @@ import { request, type PdfPoint } from "./api";
 export type DonneSur = "exterieur" | "lnc" | "sol" | "mitoyen";
 export type ZoneType = "contour" | "lnc" | "patio";
 
-export type ZoneEdge = { donne_sur: DonneSur; composant_id: number | null };
+export type WallInsulation = "interieur" | "exterieur" | "reparti";
+
+// Mur lu sur le plan pour un côté (lot M4a).
+export type EdgeWall = { epaisseur_m: number | null; isolant: WallInsulation | null; part_lue: number };
+
+export type ZoneEdge = { donne_sur: DonneSur; composant_id: number | null; mur?: EdgeWall | null };
+
+// Côtés regroupés par épaisseur lue (± 3 cm), proposés comme composant mur.
+export type WallType = { epaisseur_m: number; isolant: WallInsulation | null; longueur_m: number; cotes: number[]; composants: number[] };
 
 export type MetreZone = {
   id: number;
@@ -16,6 +24,7 @@ export type MetreZone = {
   // Côté i = du sommet i au suivant. Vide pour un local non chauffé.
   cotes: ZoneEdge[];
   source: string;
+  types_murs?: WallType[];
 };
 
 export type ZoneSummary = {
@@ -67,6 +76,8 @@ export type Metre = {
   listes: { donne_sur: Record<DonneSur, string>; types_zone: Record<ZoneType, string>; types_lnc: Record<string, string> };
   // Présent après une détection automatique du contour.
   detection?: { aire_m2: number; perimetre_m: number; sommets: number; zones_exterieures_ecartees: number };
+  // Présent après une lecture des murs.
+  detection_murs?: { cotes_lues: number; cotes: number; types: number };
 };
 
 // Hauteurs d'un niveau lues entre deux planchers d'une coupe.
@@ -129,6 +140,9 @@ export const metreApi = {
   detectContour: (token: string, levelId: number, remplacer: boolean) =>
     request<Metre>(token, `/thermique/niveaux/${levelId}/detecter-contour`, json("POST", { remplacer })),
   section: (token: string, sheetId: number) => request<SectionDetection>(token, `/thermique/sheets/${sheetId}/coupe`),
+  detectWalls: (token: string, zoneId: number) => request<Metre>(token, `/thermique/zones/${zoneId}/detecter-murs`, { method: "POST" }),
+  acceptWallType: (token: string, zoneId: number, payload: { epaisseur_m: number; composant_id: number | null }) =>
+    request<Metre>(token, `/thermique/zones/${zoneId}/types-murs`, json("POST", payload)),
   applySectionHeights: (
     token: string,
     projectId: number,

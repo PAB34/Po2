@@ -479,6 +479,14 @@ body {
   font-size: 0.88rem;
 }
 
+.th-walltype {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--po2-color-line);
+  font-size: 0.88rem;
+}
+
 .th-edgebox {
   display: grid;
   gap: 0.45rem;
