@@ -67,8 +67,12 @@ do_not_auto_read:
   - **▶️ Prochain : L3** (menuiseries composées depuis le référentiel B1, ponts thermiques), **L4**
     (bibliothèque par défaut, export des préconisations), puis référentiel B2b-2, B2b-3, B2c.
     Fascicules « méthodes » dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
-- Ensuite : étape 2 — géométrie des plans (`thermique/etape2-geometrie-decisions.md`, réponses
-  Q21-Q25 reportées). Questions générales : Q15-Q18, Q20.
+- **Métré sur les plans : pas commencé** (seul le prototype de lecture des traits existe). Méthode
+  cadrée le 2026-09-14 dans `thermique/metre-plans-decisions.md` : contour de référence au nu
+  intérieur par niveau, superposition N−1 / N / N+1, règle des « quatre quarts » pour les liaisons,
+  détection = proposition, composants colorés sur le plan ; lots M1 à M5 ; Q39-Q42 répondues (contour d'abord, hauteurs saisies, 60/40, couleur par
+  composant) ; **▶️ prochain : M1**.
+  Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.
 
