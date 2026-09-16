@@ -595,6 +595,123 @@ body {
   stroke-width: 1.5;
 }
 
+/* Signatures graphiques (étape E1) */
+.th-sig-lines line {
+  stroke: #e0007a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.th-sig-fill {
+  fill: rgba(224, 0, 122, 0.35);
+  stroke: #e0007a;
+  stroke-width: 1.2;
+}
+
+.th-sig-summary {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.th-sig-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--po2-color-line);
+  overflow: hidden;
+}
+
+.th-sig-progress span {
+  display: block;
+  height: 100%;
+  background: #2e8b57;
+}
+
+.th-sig-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-sig {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--po2-color-line);
+  border-left: 3px solid #d98a00;
+  border-radius: 4px;
+}
+
+.th-sig.is-validated {
+  border-left-color: #2e8b57;
+}
+
+.th-sig.is-selected {
+  border-color: #e0007a;
+  box-shadow: 0 0 0 1px #e0007a inset;
+}
+
+.th-sig__main {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-sig__main:focus-visible {
+  outline: 2px solid #2f6fb0;
+  outline-offset: 2px;
+}
+
+.th-sig-swatch {
+  width: 44px;
+  height: 16px;
+  display: block;
+}
+
+.th-sig__text {
+  display: grid;
+  min-width: 0;
+}
+
+.th-sig__text strong {
+  font-size: 0.9rem;
+}
+
+.th-sig__text small {
+  color: var(--po2-color-muted, #5f6b73);
+  font-variant-numeric: tabular-nums;
+}
+
+.th-sig__state {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9a5b00;
+  white-space: nowrap;
+}
+
+.th-sig__state.is-ok {
+  color: #2e7d4f;
+}
+
+.th-sig__role {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.th-sig__role select {
+  flex: 1;
+  min-width: 0;
+}
+
 .th-danger-zone {
   border-color: rgba(192, 57, 43, 0.35);
 }

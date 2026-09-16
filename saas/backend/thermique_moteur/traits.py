@@ -42,7 +42,7 @@ def _composer(enfant: Matrice, parent: Matrice) -> Matrice:
     )
 
 
-def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: int, couleur: bool = False) -> None:
+def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: int, couleur: bool = False, detail: bool = False) -> None:
     matrice = brut.FS_MATRIX()
     x, y = ctypes.c_float(), ctypes.c_float()
     largeur = ctypes.c_float()
@@ -56,7 +56,7 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: in
         if genre == brut.FPDF_PAGEOBJ_FORM:
             if profondeur < PROFONDEUR_MAX:
                 enfants = [brut.FPDFFormObj_GetObject(objet, i) for i in range(brut.FPDFFormObj_CountObjects(objet))]
-                _parcourir(brut, enfants, m, sortie, profondeur + 1, couleur)
+                _parcourir(brut, enfants, m, sortie, profondeur + 1, couleur, detail)
             continue
         if genre != brut.FPDF_PAGEOBJ_PATH:
             continue
@@ -66,10 +66,19 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: in
         a, b, c, d, e, f = m
         epaisseur = round(largeur.value * math.sqrt(abs(a * d - b * c)), 2)
         extra: tuple = ()
-        if couleur:
+        if couleur or detail:
             brut.FPDFPageObj_GetStrokeColor(objet, ctypes.byref(rouge), ctypes.byref(vert), ctypes.byref(bleu), ctypes.byref(alpha))
             # Luminance 0 (noir) à 255 (blanc) : sépare traits foncés, hachures grises et trames claires.
             extra = (round(0.3 * rouge.value + 0.59 * vert.value + 0.11 * bleu.value),)
+            if detail:
+                # Signature du calque d'origine : couleur exacte et motif de tirets (longueurs en points PDF).
+                tirets = ""
+                nombre = brut.FPDFPageObj_GetDashCount(objet)
+                if nombre > 0:
+                    motif = (ctypes.c_float * nombre)()
+                    brut.FPDFPageObj_GetDashArray(objet, motif, nombre)
+                    tirets = "-".join(f"{valeur * math.sqrt(abs(a * d - b * c)):.1f}" for valeur in motif)
+                extra = (*extra, f"#{rouge.value:02x}{vert.value:02x}{bleu.value:02x}", tirets)
         precedent = depart = None
         bezier = 0
         for i in range(brut.FPDFPath_CountSegments(objet)):
@@ -94,8 +103,9 @@ def _parcourir(brut, objets: list, parent: Matrice, sortie: list, profondeur: in
                 precedent = depart
 
 
-def lire_traits(pdf_path: Path | str, page_index: int, avec_couleur: bool = False) -> list[Trait]:
-    """Segments tracés (x1, y1, x2, y2, largeur) ; avec `avec_couleur`, la luminance du trait en plus."""
+def lire_traits(pdf_path: Path | str, page_index: int, avec_couleur: bool = False, detail: bool = False) -> list[Trait]:
+    """Segments tracés (x1, y1, x2, y2, largeur) ; avec `avec_couleur`, la luminance du trait en plus ; avec
+    `detail`, la luminance, la couleur exacte (« #rrggbb ») et le motif de tirets (« » si trait plein)."""
     import pypdfium2 as pdfium
     import pypdfium2.raw as brut
 
@@ -105,14 +115,14 @@ def lire_traits(pdf_path: Path | str, page_index: int, avec_couleur: bool = Fals
             page = document[page_index]
             objets = [brut.FPDFPage_GetObject(page.raw, i) for i in range(brut.FPDFPage_CountObjects(page.raw))]
             sortie: list = []
-            _parcourir(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0, avec_couleur)
+            _parcourir(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0, avec_couleur, detail)
             page.close()
         finally:
             document.close()
     return sortie
 
 
-def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profondeur: int) -> None:
+def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profondeur: int, detail: bool = False) -> None:
     matrice = brut.FS_MATRIX()
     x, y = ctypes.c_float(), ctypes.c_float()
     remplissage, trace = ctypes.c_int(), ctypes.c_int()
@@ -125,14 +135,16 @@ def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profond
         if genre == brut.FPDF_PAGEOBJ_FORM:
             if profondeur < PROFONDEUR_MAX:
                 enfants = [brut.FPDFFormObj_GetObject(objet, i) for i in range(brut.FPDFFormObj_CountObjects(objet))]
-                _parcourir_aplats(brut, enfants, m, sortie, profondeur + 1)
+                _parcourir_aplats(brut, enfants, m, sortie, profondeur + 1, detail)
             continue
         if genre != brut.FPDF_PAGEOBJ_PATH:
             continue
         if not brut.FPDFPath_GetDrawMode(objet, ctypes.byref(remplissage), ctypes.byref(trace)) or not remplissage.value:
             continue
         brut.FPDFPageObj_GetFillColor(objet, ctypes.byref(rouge), ctypes.byref(vert), ctypes.byref(bleu), ctypes.byref(alpha))
-        luminance = round(0.3 * rouge.value + 0.59 * vert.value + 0.11 * bleu.value)
+        teinte: tuple = (round(0.3 * rouge.value + 0.59 * vert.value + 0.11 * bleu.value),)
+        if detail:
+            teinte = (*teinte, f"#{rouge.value:02x}{vert.value:02x}{bleu.value:02x}")
         a, b, c, d, e, f = m
         contour: list = []
         bezier = 0
@@ -142,7 +154,7 @@ def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profond
             point = (a * x.value + c * y.value + e, b * x.value + d * y.value + f)
             if brut.FPDFPathSegment_GetType(segment) == brut.FPDF_SEGMENT_MOVETO:
                 if len(contour) >= 3:
-                    sortie.append((contour, luminance))
+                    sortie.append((contour, *teinte))
                 contour, bezier = [point], 0
                 continue
             if brut.FPDFPathSegment_GetType(segment) == brut.FPDF_SEGMENT_BEZIERTO:
@@ -151,11 +163,12 @@ def _parcourir_aplats(brut, objets: list, parent: Matrice, sortie: list, profond
                     continue
             contour.append(point)
         if len(contour) >= 3:
-            sortie.append((contour, luminance))
+            sortie.append((contour, *teinte))
 
 
-def lire_aplats(pdf_path: Path | str, page_index: int) -> list[tuple[list[tuple[float, float]], int]]:
-    """Contours des chemins remplis (aplats) en points PDF, avec leur luminance (0 noir à 255 blanc).
+def lire_aplats(pdf_path: Path | str, page_index: int, detail: bool = False) -> list[tuple]:
+    """Contours des chemins remplis (aplats) en points PDF, avec leur luminance (0 noir à 255 blanc) ; avec
+    `detail`, la couleur exacte (« #rrggbb ») en plus.
 
     Sur les plans d'architecte, les murs coupés sont remplis couche par couche (maçonnerie en gris,
     isolant en motif) : c'est la masse des murs que les traits seuls ne donnent pas."""
@@ -168,7 +181,7 @@ def lire_aplats(pdf_path: Path | str, page_index: int) -> list[tuple[list[tuple[
             page = document[page_index]
             objets = [brut.FPDFPage_GetObject(page.raw, i) for i in range(brut.FPDFPage_CountObjects(page.raw))]
             sortie: list = []
-            _parcourir_aplats(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0)
+            _parcourir_aplats(brut, objets, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0), sortie, 0, detail)
             page.close()
         finally:
             document.close()

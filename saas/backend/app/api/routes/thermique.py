@@ -26,6 +26,7 @@ from app.schemas.thermique import (
     DetectContourRequest,
     EraseAllRequest,
     ExternalAccountCreate,
+    SignatureRolesUpdate,
     ExternalAccountRead,
     LevelCreate,
     LevelUpdate,
@@ -725,6 +726,58 @@ def read_sheet_section(
     except Exception as exc:
         LOG.exception("Lecture de la coupe impossible pour la planche %s", sheet_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la coupe impossible.") from exc
+
+
+@router.get("/projects/{project_id}/signatures")
+def read_project_signatures(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Catalogue des signatures graphiques des plans du projet (quelques secondes par plan la première fois)."""
+    project = _project_or_404(db, user, project_id)
+    try:
+        return thermique_metre.project_signatures(db, project)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Lecture des signatures impossible pour le projet %s", project_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture des signatures impossible.") from exc
+
+
+@router.put("/projects/{project_id}/signatures")
+def save_project_signatures(
+    project_id: int,
+    payload: SignatureRolesUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Valide (ou retire) le rôle de signatures ; renvoie le catalogue à jour."""
+    project = _project_or_404(db, user, project_id)
+    try:
+        thermique_metre.save_signature_roles(db, project, payload.roles)
+        return thermique_metre.project_signatures(db, project)
+    except ThermiqueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/sheets/{sheet_id}/signatures/elements")
+def read_signature_elements(
+    sheet_id: int,
+    cle: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Traits ou remplissages d'une signature sur la planche, pour les montrer sur le plan."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_metre.sheet_signature_elements(sheet, cle)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Lecture des éléments de signature impossible pour la planche %s", sheet_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la signature impossible.") from exc
 
 
 @router.get("/sheets/{sheet_id}/murs")
