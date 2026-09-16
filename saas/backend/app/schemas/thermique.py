@@ -175,6 +175,11 @@ class DetectContourRequest(BaseModel):
     remplacer: bool = False
 
 
+class SignatureRolesUpdate(BaseModel):
+    # {clé de signature: rôle} ; None retire la validation.
+    roles: dict[str, str | None] = Field(default_factory=dict)
+
+
 class EraseAllRequest(BaseModel):
     # Le mot « EFFACER », tapé par l'utilisateur, confirme l'effacement de tous ses projets.
     confirmation: str = Field(default="", max_length=20)

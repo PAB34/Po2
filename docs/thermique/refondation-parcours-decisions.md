@@ -97,3 +97,22 @@
 | Q64 → D11 | **Pièces d'abord** : détection des pièces et de leurs noms, classement par clic, zones et deux lignes déduites, « donne sur » déduit. |
 | Q65 → D12 | Élévations réservées aux **menuiseries et aux façades** ; double ligne sur plans et coupes. |
 | D13 | Ordre de construction : bouton « Tout effacer », puis E1 (catalogue des signatures), E2 (trame d'axes), E3 (pièces), E4 (zones et lignes), E5 (parois), E6 (menuiseries), E7 (ponts thermiques). |
+
+## 9. E1 — Catalogue des signatures (livré le 2026-09-16)
+
+- **Signature d'un trait** = largeur (pt) + couleur exacte + motif de tirets ; **d'un remplissage** = couleur exacte.
+  Lecture : `traits.lire_traits(..., detail=True)` et `traits.lire_aplats(..., detail=True)`.
+- **Mesures** par signature (`thermique_moteur/signatures.py`) : nombre, linéaire ou surface, part de traits
+  courts (< 40 cm), part en paires de faces (traits foncés d'au moins 0,7 pt seulement), part dans les murs
+  détectés, part dans le prolongement d'un mur interrompu (baies).
+- **Rôle proposé** avec sa raison ; l'utilisateur valide, change ou annule. Rôles des traits : face de mur,
+  cloison ou doublage, vitrage ou menuiserie, isolant, motif (sol, végétation), projection, habillage, annotation,
+  trame, à ignorer. Rôles des remplissages : maçonnerie, isolant, terrasse ou sol extérieur, autre, à ignorer.
+- **Stockage** : `thermique_projects.signatures_json` (migration 0080), `{clé: rôle}`.
+- **Écran** : onglet « Signatures » du projet ; plan à gauche, signature choisie surlignée en magenta ; liste à
+  droite avec aperçu du trait, mesures, rôle proposé, bouton « Valider les propositions restantes ».
+- **Projet d'essai** (5 plans, 0,8 à 2,9 s par plan) : 1,56 pt et 1,44 pt noir → face de mur ; 0,96 pt noir →
+  cloison ; 0,24 pt noir → vitrage ; 0,48 pt gris 40 % → isolant ; 0,12 pt gris clair → trame ; rouge →
+  annotation ; verts → végétation ; remplissage gris 40 % → maçonnerie (86 % dans les murs).
+- **Limites** : les symboles répétés (portes, sanitaires) ne sont pas encore reconnus comme blocs (E6) ; les
+  rôles validés ne pilotent pas encore la détection (E3 à E6 s'appuieront dessus).

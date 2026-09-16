@@ -23,6 +23,8 @@ class ThermiqueProject(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Nord : degrés, sens trigonométrique, dans le repère commun des niveaux (0 = de A vers B).
     north_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Rôles validés des signatures graphiques (étape E1) : {clé de signature: rôle}.
+    signatures_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()

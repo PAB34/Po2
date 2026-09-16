@@ -8,6 +8,7 @@ import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SheetPage } from "./pages/SheetPage";
+import { SignaturesPage } from "./pages/SignaturesPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -84,6 +85,7 @@ export function ThermiqueApp() {
         <Route element={<Shell fullWidth />}>
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
           <Route path="projets/:projectId/metre" element={<MetrePage />} />
+          <Route path="projets/:projectId/signatures" element={<SignaturesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
