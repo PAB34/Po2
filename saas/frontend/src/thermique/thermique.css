@@ -595,6 +595,31 @@ body {
   stroke-width: 1.5;
 }
 
+.th-danger-zone {
+  border-color: rgba(192, 57, 43, 0.35);
+}
+
+.th-danger-zone h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  color: #a5281b;
+}
+
+.po2-button.th-button-danger {
+  color: #a5281b;
+  border-color: rgba(165, 40, 27, 0.45);
+}
+
+.po2-button--primary.th-button-danger {
+  color: #ffffff;
+  background: #a5281b;
+  border-color: #a5281b;
+}
+
+.po2-button--primary.th-button-danger:disabled {
+  opacity: 0.45;
+}
+
 .th-walls polygon {
   fill-opacity: 0.6;
   stroke-width: 1;

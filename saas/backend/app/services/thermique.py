@@ -180,6 +180,15 @@ def delete_project(db: Session, project: ThermiqueProject) -> None:
     shutil.rmtree(folder, ignore_errors=True)
 
 
+def delete_all_projects(db: Session, user: User) -> int:
+    """Efface tous les projets du compte : documents, planches, images, niveaux, tracés, composants de projet et
+    fichiers. La bibliothèque de modèles réutilisables est gardée (docs/thermique/refondation-parcours-decisions.md, D9)."""
+    projects = list_projects(db, user)
+    for project in projects:
+        delete_project(db, project)
+    return len(projects)
+
+
 # --- Fichiers -----------------------------------------------------------------
 
 

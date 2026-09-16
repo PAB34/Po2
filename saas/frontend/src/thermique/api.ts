@@ -114,6 +114,11 @@ export const thermiqueApi = {
     request<Project>(token, `/thermique/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (token: string, projectId: number) =>
     request<void>(token, `/thermique/projects/${projectId}`, { method: "DELETE" }),
+  eraseAllProjects: (token: string, confirmation: string) =>
+    request<{ projets_effaces: number }>(token, "/thermique/projects/tout-effacer", {
+      method: "POST",
+      body: JSON.stringify({ confirmation }),
+    }),
   uploadDocuments: (token: string, projectId: number, files: File[]) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file));
