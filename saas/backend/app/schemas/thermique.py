@@ -175,6 +175,11 @@ class DetectContourRequest(BaseModel):
     remplacer: bool = False
 
 
+class EraseAllRequest(BaseModel):
+    # Le mot « EFFACER », tapé par l'utilisateur, confirme l'effacement de tous ses projets.
+    confirmation: str = Field(default="", max_length=20)
+
+
 class SectionHeightsRequest(BaseModel):
     planche_id: int
     dessin: int = Field(ge=0)

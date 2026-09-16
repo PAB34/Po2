@@ -24,6 +24,7 @@ from app.schemas.thermique import (
     ComponentImport,
     ComponentUpdate,
     DetectContourRequest,
+    EraseAllRequest,
     ExternalAccountCreate,
     ExternalAccountRead,
     LevelCreate,
@@ -54,6 +55,7 @@ from app.services.thermique import (
     delete_project,
     document_path,
     get_project_for_user,
+    delete_all_projects,
     list_projects,
     max_upload_bytes,
     serialize_project,
@@ -335,6 +337,18 @@ def update_project_route(
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return serialize_project(project)
+
+
+@router.post("/projects/tout-effacer")
+def erase_all_projects_route(
+    payload: EraseAllRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Efface tous les projets du compte (les modèles réutilisables sont gardés)."""
+    if payload.confirmation.strip().upper() != "EFFACER":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tapez EFFACER pour confirmer l'effacement.")
+    return {"projets_effaces": delete_all_projects(db, user)}
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)

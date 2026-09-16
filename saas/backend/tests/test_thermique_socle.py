@@ -244,6 +244,26 @@ def test_suppression_projet_efface_les_fichiers(db_session, storage):
     assert not path.exists()
 
 
+def test_tout_effacer_garde_les_modeles_et_les_projets_des_autres(db_session, storage):
+    from app.models.thermique import ThermiqueComponent, ThermiqueProject
+    from app.services.thermique import delete_all_projects
+    from app.services.thermique_composants import create_component
+
+    user = _user(db_session, "agent@ville.fr")
+    autre = _user(db_session, "autre@bureau.fr", THERMIQUE_EXTERNAL_ROLE)
+    essais = [create_project(db_session, user, nom, None) for nom in ("Essai 1", "Essai 2")]
+    chemins = [document_path(add_document(db_session, projet, "a.pdf", _pdf(), user)) for projet in essais]
+    create_component(db_session, user, essais[0], {"categorie": "murs"})
+    modele = create_component(db_session, user, None, {"categorie": "murs"})
+    projet_autre = create_project(db_session, autre, "Projet d'un autre compte", None)
+
+    assert delete_all_projects(db_session, user) == 2
+    assert not any(chemin.exists() for chemin in chemins)
+    assert [p.id for p in db_session.query(ThermiqueProject).all()] == [projet_autre.id]
+    assert [c.id for c in db_session.query(ThermiqueComponent).all()] == [modele.id]
+    assert delete_all_projects(db_session, user) == 0
+
+
 def test_suppression_fichier_efface_le_pdf_et_ses_tuiles(db_session, storage):
     from app.services.thermique import delete_document
     from app.services.thermique_raster import raster_dir
