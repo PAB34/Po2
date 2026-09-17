@@ -21,13 +21,19 @@ from thermique_moteur.pieces import PiecesError
 GENRES = ("contour", "nu_exterieur")
 
 
-def propose_envelope(db: Session, level: ThermiqueLevel, fermeture_m: float, replace: bool = False) -> dict:
+def propose_envelope(
+    db: Session, level: ThermiqueLevel, fermeture_m: float, replace: bool = False, genres: tuple[str, ...] = GENRES
+) -> dict:
+    """Propose les lignes `genres` du niveau (les deux par défaut ; le nu intérieur seul garde un nu extérieur
+    tracé à la main)."""
+    if not genres or any(genre not in GENRES for genre in genres):
+        raise ThermiqueError("Ligne inconnue.")
     sheet = db.get(ThermiqueSheet, level.sheet_id) if level.sheet_id else None
     if sheet is None or not sheet.scale_denominator:
         raise ThermiqueError("Associez à ce niveau une planche de plan à l'échelle définie.")
     if not 0 <= fermeture_m <= 3:
         raise ThermiqueError("Fermeture des ouvertures hors limites (0 à 3 m).")
-    if not replace and any(zone.kind in GENRES and zone.source != "automatique" for zone in level.zones):
+    if not replace and any(zone.kind in genres and zone.source != "automatique" for zone in level.zones):
         raise ThermiqueError(
             "Ce niveau a déjà un nu intérieur ou un nu extérieur tracé ou corrigé à la main : confirmez son remplacement."
         )
@@ -37,13 +43,15 @@ def propose_envelope(db: Session, level: ThermiqueLevel, fermeture_m: float, rep
         batiments = moteur.proposer(elements, indices, fermeture_m)
     except PiecesError as exc:
         raise ThermiqueError(str(exc)) from exc
-    for zone in [zone for zone in level.zones if zone.kind in GENRES]:
+    for zone in [zone for zone in level.zones if zone.kind in genres]:
         if zone.source == "automatique" or replace:
             db.delete(zone)
     db.flush()
     for rang, batiment in enumerate(batiments, start=1):
         suffixe = "" if len(batiments) == 1 else f" {rang}"
         for kind, cle, nom in (("nu_exterieur", "nu_exterieur", "Nu extérieur"), ("contour", "nu_interieur", "Nu intérieur")):
+            if kind not in genres:
+                continue
             points = metre.nettoyer_points(batiment[cle])
             cotes = [] if kind in metre.ZONES_SANS_COTES else metre.normaliser_cotes(None, len(points), metre.DONNE_SUR_DEFAUT[kind])
             db.add(

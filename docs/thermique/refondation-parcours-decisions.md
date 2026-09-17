@@ -400,3 +400,13 @@ dans la zone thermique (option) ».
   extérieur, 676 m² au nu intérieur, contours qui suivent les façades mais festonnés là où les vitrages ne sont
   pas désignés ; R+3 inexploitable tant que la texture de terrasse reste dans le calque « mur » (même signature
   que la hachure des murs, à retirer au lasso).
+
+### 15.5 Correctif (2026-09-17) : tracer le nu intérieur
+
+Retour de l'utilisateur : « je ne trouve pas la possibilité de tracer le nu intérieur ». Constat en production :
+nu extérieur tracé à la main (Métré) sur cinq niveaux ; aucun nu intérieur ; seconde proposition refusée
+(confirmation pour ne pas écraser les lignes manuelles). Causes : l'onglet Enveloppe ne permettait pas de tracer ;
+dans le Métré, le nu intérieur s'appelait « Contour ». Correctifs : boutons « Tracer le nu intérieur / extérieur »
+dans Enveloppe (clic par sommet, Entrée ou premier sommet pour fermer, Retour arrière, Échap) ; bouton
+« Proposer seulement le nu intérieur » qui garde un nu extérieur manuel (`lignes` dans la requête) ; outil et
+nom par défaut « Nu intérieur » dans le Métré.

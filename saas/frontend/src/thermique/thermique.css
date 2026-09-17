@@ -1530,3 +1530,17 @@ circle.th-seg--measure {
 .th-env-dot--contour {
   background: #e8590c;
 }
+
+.th-env.is-drawing polyline {
+  fill: none;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.th-env--nu_exterieur.is-drawing polyline {
+  stroke: #1c7ed6;
+}
+
+.th-env--contour.is-drawing polyline {
+  stroke: #e8590c;
+}
