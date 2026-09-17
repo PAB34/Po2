@@ -206,6 +206,14 @@ class CalqueZoneAction(CalqueZone):
     action: Literal["retirer", "remettre"]
 
 
+class SuperpositionValidate(BaseModel):
+    reference_id: int
+    planche_id: int
+    # Translation en points PDF : point de la planche + (dx, dy) = point de la référence.
+    dx: float
+    dy: float
+
+
 class EraseAllRequest(BaseModel):
     # Le mot « EFFACER », tapé par l'utilisateur, confirme l'effacement de tous ses projets.
     confirmation: str = Field(default="", max_length=20)

@@ -161,6 +161,11 @@ Retours de l'utilisateur sur l'onglet « Calques » :
 2. Les menuiseries ne se détectent pas : le clic ne trouve que le cadre ou le profilé, jamais la fenêtre entière,
    et ce « cadre » est souvent le **montant commun à deux fenêtres**. Faut-il passer par les élévations ?
 
+### 11.0 bis — E1 validée par l'utilisateur (2026-09-17)
+
+« J'ai pu appliquer toutes les modifications que j'ai voulu et les éléments contenus dans les calques sont les
+bons pour moi. » Lasso et correctif d'affichage : PR #197. Suite : E2 (§12).
+
 ### 11.0 Retours du 2026-09-17 sur E1b (PR #196)
 
 - Le rectangle droit ne sait pas isoler des éléments **en biais** (couvertures, murs inclinés) : pour contenir un
@@ -202,3 +207,65 @@ tous les plans), **hauteur saisie par type** (réponse Q60), puis **contrôle su
 - **Q72** — Menuiseries : baies sur le plan + contrôle sur l'élévation (recommandé), élévation seule, ou dessin
   manuel des baies ?
 - **Q73** — Deux fenêtres séparées par un montant : une seule baie (dimensions d'ensemble), ou deux ?
+
+## 12. E2 — Repère commun et superposition des niveaux (2026-09-17)
+
+| N° | Décision |
+|---|---|
+| Q77 → D24 | **Superposition automatique** (décalage calculé sur les murs désignés, contrôle visuel, validation d'un clic) ; la recherche de trame d'axes est abandonnée (révision de Q63/D10). |
+| Q74 → D25 | Niveau de référence **choisi**, RDC par défaut. |
+| Q75 → D26 | Correction d'un niveau décalé : **glisser le plan** en transparence. |
+| Q76 → D27 | **Tous les plans** sont superposés, TOITURE et R+3 compris. |
+
+### 12.1 Existant vérifié
+
+- `ThermiqueLevel` : niveau → planche de plan, hauteurs, **calage A-B** (`calage_json`, deux points cliqués
+  communs à tous les niveaux) ; écran « Métré » (M1). Rien n'est encore calé sur le projet de production.
+- Aucune détection de trame d'axes dans le code.
+
+### 12.2 Constats sur le projet de production (« TEST », 6 plans au 1/50, lecture seule)
+
+| Sujet | Constat |
+|---|---|
+| Trame d'axes | **Absente** : aucun trait en tirets, aucune longue ligne d'axe (seuls 4 à 8 traits de plus de 15 m, tous des plumes d'habillage). |
+| Format | Six planches de même format (2 384 × 3 997 pt), même échelle, un PDF par planche. |
+| Orientation | Bâtiment dessiné **en biais** (murs à environ 80° et 170°). Le calque « mur » désigné est la hachure 0,48 pt à 135° des murs coupés. |
+| Superposition | Comparaison des murs désignés (corrélation 2D, tolérance 1 pt) : **R+1, R+2 et R-1 tombent déjà sur le RDC** (décalage 0 à 2 pt, soit 0 à 3,5 cm). R+3 (attique ?) et TOITURE (textures) : pas de correspondance nette. |
+
+Conclusion : sur ce projet, le « point géographique commun » existe déjà, c'est **le cadre du PDF**, parce que
+l'architecte a exporté tous les niveaux depuis la même maquette. Chercher une trame d'axes ne servirait à rien ici.
+
+### 12.3 Proposition
+
+1. **Niveau de référence** choisi par l'utilisateur (RDC par défaut).
+2. **Contrôle automatique** : pour chaque autre plan, le décalage qui superpose le mieux ses murs sur ceux de la
+   référence, avec un indice de confiance ; « déjà superposé » si le décalage est nul.
+3. **Vérification visuelle** : le niveau choisi en transparence par-dessus la référence, avec ses murs
+   désignés en couleur. L'utilisateur valide d'un clic.
+4. **Correction** si besoin : glisser le niveau jusqu'à la superposition (ou deux points A-B, déjà codés).
+5. **Trame d'axes** : abandonnée comme méthode principale (Q63 révisée) ; le décalage calculé la remplace.
+
+### 12.4 Questions
+
+- **Q74** — Niveau de référence : RDC imposé, ou choisi par l'utilisateur ?
+- **Q75** — Correction d'un niveau décalé : glisser le plan, ou deux points A-B ?
+- **Q76** — TOITURE et R+3 : les superposer comme les autres, ou TOITURE hors superposition (sert aux
+  toitures, E5) ?
+- **Q77** — Trame d'axes abandonnée au profit du cadre du PDF et du décalage calculé (révision de Q63) ?
+
+### 12.5 Livraison (2026-09-17)
+
+- Moteur `thermique_moteur/superposition.py` : image des traits au point près, corrélation (FFT) → 20 candidats
+  + translation nulle, note = part des traits du niveau retombant sur la référence (1 pt), affinage ±3 pt
+  (départage par le recouvrement exact). États : `superpose` (≤ 1 pt), `decale` (gain ≥ 5 points),
+  `incertain` (note < 20 %).
+- Sonde de production : tout le dessin > murs désignés (hachures) pour la toiture. Résultats : R+1, R+2,
+  TOITURE (0 ; 0), R-1 (0 ; −1), **R+3 (74 ; −39) pt**, confirmé à l'œil (patios, escalier, façades) ;
+  1 à 4 s par plan.
+- Service `app/services/thermique_superposition.py` ; validation = calage du niveau (A (−dx, −dy),
+  B (100 − dx, −dy), `source: superposition`) ; niveau créé pour un plan qui n'en a pas (TOITURE au-dessus) ;
+  changement de référence = superpositions validées recalculées.
+- API : `GET /projects/{id}/superposition`, `GET …/superposition/proposition?planche_id=&reference_id=`,
+  `POST /projects/{id}/superposition`, `DELETE /projects/{id}/superposition/{planche}`.
+- Écran : onglet **Superposition** (référence en gris, plan choisi en couleurs de calques, Maj + glisser,
+  flèches au point, validation, annulation).
