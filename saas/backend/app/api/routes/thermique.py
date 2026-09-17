@@ -700,7 +700,9 @@ def propose_envelope_route(
     level = _level_or_404(db, user, level_id)
     project = db.get(ThermiqueProject, level.project_id)
     try:
-        found = thermique_enveloppe.propose_envelope(db, level, payload.fermeture_cm / 100, payload.remplacer)
+        found = thermique_enveloppe.propose_envelope(
+            db, level, payload.fermeture_cm / 100, payload.remplacer, tuple(dict.fromkeys(payload.lignes))
+        )
     except (ThermiqueError, moteur_metre.MetreError) as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

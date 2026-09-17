@@ -249,7 +249,7 @@ def test_niveaux_traces_et_synthese(db_session):
     garage = thermique_metre.create_zone(
         db_session, rdc, {"type": "lnc", "type_lnc": "garage", "points": [[100, 100], [100 + 3 * M, 100], [100 + 3 * M, 100 + 4 * M], [100, 100 + 4 * M]]}
     )
-    assert (contour.name, garage.name) == ("Contour chauffé", "Garage, parking")
+    assert (contour.name, garage.name) == ("Nu intérieur", "Garage, parking")
     nu_ext = thermique_metre.create_zone(db_session, rdc, {"type": "nu_exterieur", "points": RECTANGLE})
     assert nu_ext.name == "Nu extérieur" and nu_ext.edges_json == "[]"
     thermique_metre.update_zone(db_session, nu_ext, {"points": RECTANGLE[:3]})

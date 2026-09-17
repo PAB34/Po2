@@ -25,14 +25,15 @@ import { ProjectTabs } from "./ProjectLibraryPage";
 const RASTER_STALE_MS = 6 * 3600 * 1000;
 const HANDLE_PX = 8;
 const LINES = { nu_exterieur: "Nu extérieur", contour: "Nu intérieur" } as const;
+type LineType = keyof typeof LINES;
 const m2 = (value: number) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)} m²`;
 
 type EnvelopeResult = Metre & { proposition_enveloppe?: { batiments: number; nu_exterieur_m2: number; nu_interieur_m2: number } };
 
-const proposeEnvelope = (token: string, levelId: number, fermetureCm: number, remplacer: boolean) =>
+const proposeEnvelope = (token: string, levelId: number, fermetureCm: number, remplacer: boolean, lignes: LineType[]) =>
   request<EnvelopeResult>(token, `/thermique/niveaux/${levelId}/proposer-enveloppe`, {
     method: "POST",
-    body: JSON.stringify({ fermeture_cm: fermetureCm, remplacer }),
+    body: JSON.stringify({ fermeture_cm: fermetureCm, remplacer, lignes }),
   });
 
 // Étape « Enveloppe » (docs/thermique/refondation-parcours-decisions.md §15) : par niveau, le nu extérieur et le
@@ -53,6 +54,9 @@ export function EnveloppePage() {
   const [dragPoints, setDragPoints] = useState<PdfPoint[] | null>(null);
   const dragRef = useRef<{ index: number; points: PdfPoint[] } | null>(null);
   const pixelsPerPt = useRef(1);
+  const lastLines = useRef<LineType[]>(["contour", "nu_exterieur"]);
+  // tracé à la main en cours : type de ligne et sommets posés
+  const [drawing, setDrawing] = useState<{ type: LineType; points: PdfPoint[] } | null>(null);
 
   const projectQuery = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -72,6 +76,7 @@ export function EnveloppePage() {
   useEffect(() => {
     setZoneId(null);
     setNeedsConfirm(false);
+    setDrawing(null);
   }, [level?.id]);
 
   const raster = useQuery({
@@ -95,7 +100,8 @@ export function EnveloppePage() {
   }
 
   const proposeMutation = useMutation({
-    mutationFn: (remplacer: boolean) => proposeEnvelope(token!, level!.id, fermetureCm, remplacer),
+    mutationFn: ({ remplacer, lignes }: { remplacer: boolean; lignes: LineType[] }) =>
+      proposeEnvelope(token!, level!.id, fermetureCm, remplacer, lignes),
     onSuccess: (next) => {
       done(next);
       setNeedsConfirm(false);
@@ -103,7 +109,9 @@ export function EnveloppePage() {
       const found = next.proposition_enveloppe;
       setNotice(
         found
-          ? `${found.batiments > 1 ? `${found.batiments} bâtiments : ` : ""}nu extérieur ${m2(found.nu_exterieur_m2)}, nu intérieur ${m2(found.nu_interieur_m2)}. Vérifiez et corrigez les lignes.`
+          ? `${found.batiments > 1 ? `${found.batiments} bâtiments : ` : ""}nu intérieur ${m2(found.nu_interieur_m2)}${
+              lastLines.current.includes("nu_exterieur") ? `, nu extérieur ${m2(found.nu_exterieur_m2)}` : ""
+            }. Vérifiez et corrigez les lignes.`
           : null,
       );
     },
@@ -122,8 +130,59 @@ export function EnveloppePage() {
       setZoneId(null);
     },
   });
-  const busy = proposeMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
-  const actionError = [proposeMutation, updateMutation, deleteMutation].find((mutation) => mutation.error)?.error ?? null;
+  const createMutation = useMutation({
+    mutationFn: (line: { type: LineType; points: PdfPoint[] }) => metreApi.createZone(token!, level!.id, { type: line.type, points: line.points }),
+    onSuccess: (next, line) => {
+      done(next);
+      setDrawing(null);
+      setNotice(`${LINES[line.type]} tracé.`);
+      const created = next.niveaux
+        .find((item) => item.id === level?.id)
+        ?.zones.filter((zone) => zone.type === line.type)
+        .sort((a, b) => b.id - a.id)[0];
+      setZoneId(created?.id ?? null);
+    },
+  });
+  const busy = proposeMutation.isPending || updateMutation.isPending || deleteMutation.isPending || createMutation.isPending;
+  const actionError =
+    [proposeMutation, updateMutation, deleteMutation, createMutation].find((mutation) => mutation.error)?.error ?? null;
+
+  const manualExterior = lines.some((zone) => zone.type === "nu_exterieur" && zone.source !== "automatique");
+
+  function propose(remplacer: boolean, lignes: LineType[]) {
+    lastLines.current = lignes;
+    proposeMutation.mutate({ remplacer, lignes });
+  }
+
+  function finishDrawing() {
+    if (drawing && drawing.points.length >= 3 && !busy) {
+      createMutation.mutate(drawing);
+    }
+  }
+
+  // Entrée ferme la ligne, Retour arrière retire le dernier sommet, Échap abandonne
+  useEffect(() => {
+    if (!drawing) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")) {
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        finishDrawing();
+      } else if (event.key === "Backspace") {
+        event.preventDefault();
+        setDrawing((current) => (current ? { ...current, points: current.points.slice(0, -1) } : current));
+      } else if (event.key === "Escape") {
+        setDrawing(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   const tolerance = () => HANDLE_PX / pixelsPerPt.current;
 
   function save(zone: MetreZone, points: PdfPoint[], cotes: MetreZone["cotes"]) {
@@ -162,6 +221,15 @@ export function EnveloppePage() {
             ))}
           </g>
         )}
+        {drawing && drawing.points.length > 0 && (
+          <g className={`th-env th-env--${drawing.type} is-drawing`}>
+            <polyline points={path(drawing.points)} />
+            {drawing.points.map((point, index) => {
+              const [x, y] = toScreen(point);
+              return <circle key={index} cx={x} cy={y} r={index === 0 ? 6 : 4} />;
+            })}
+          </g>
+        )}
         {lines.map((zone) => {
           const points = zone.id === selected?.id && dragPoints ? dragPoints : zone.points;
           return (
@@ -193,6 +261,15 @@ export function EnveloppePage() {
             pixelsPerPt.current = scale;
           }}
           onAddPoint={(point, event) => {
+            if (drawing) {
+              const first = drawing.points[0];
+              if (first && drawing.points.length >= 3 && Math.hypot(point[0] - first[0], point[1] - first[1]) <= tolerance()) {
+                finishDrawing();
+              } else {
+                setDrawing({ ...drawing, points: [...drawing.points, point] });
+              }
+              return;
+            }
             if (event.altKey && selected) {
               const index = nearestVertex(selected.points, point, tolerance());
               if (index !== null && selected.points.length > 3) {
@@ -205,7 +282,7 @@ export function EnveloppePage() {
           }}
           onGrab={(point, scale) => {
             pixelsPerPt.current = scale;
-            if (!selected || busy) {
+            if (!selected || busy || drawing) {
               return false;
             }
             const index = nearestVertex(selected.points, point, HANDLE_PX / scale);
@@ -231,7 +308,7 @@ export function EnveloppePage() {
             }
           }}
           onContextPick={(point, scale) => {
-            if (!selected) {
+            if (!selected || drawing) {
               return;
             }
             const edge = nearestEdge(selected.points, point, HANDLE_PX / scale);
@@ -313,18 +390,76 @@ export function EnveloppePage() {
               />
             </label>
             <div className="th-inline">
-              <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => proposeMutation.mutate(false)}>
-                {lines.length ? "Proposer à nouveau" : "Proposer les deux lignes"}
+              <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => propose(false, ["contour", "nu_exterieur"])}>
+                {lines.length ? "Proposer à nouveau les deux lignes" : "Proposer les deux lignes"}
               </button>
+              {manualExterior && (
+                <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => propose(false, ["contour"])}>
+                  Proposer seulement le nu intérieur
+                </button>
+              )}
             </div>
+            {manualExterior && (
+              <small className="th-muted">Votre nu extérieur tracé à la main est gardé si vous ne proposez que le nu intérieur.</small>
+            )}
             {proposeMutation.isPending && <span className="th-muted">Calcul des lignes… (quelques secondes)</span>}
             {needsConfirm && (
               <div className="th-alert th-alert--warn">
                 Des lignes de ce niveau ont été corrigées ou tracées à la main.{" "}
-                <button type="button" className="th-link" disabled={busy} onClick={() => proposeMutation.mutate(true)}>
+                <button type="button" className="th-link" disabled={busy} onClick={() => propose(true, lastLines.current)}>
                   Les remplacer par la proposition
                 </button>
               </div>
+            )}
+          </section>
+        )}
+
+        {level && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Tracer à la main</strong>
+            {!drawing ? (
+              <div className="th-inline">
+                {(["contour", "nu_exterieur"] as LineType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className="po2-button po2-button--ghost"
+                    disabled={busy}
+                    onClick={() => {
+                      setZoneId(null);
+                      setNotice(null);
+                      setDrawing({ type, points: [] });
+                    }}
+                  >
+                    <span className={`th-calque-dot th-env-dot--${type}`} /> Tracer le {LINES[type].toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <span>
+                  {LINES[drawing.type]} : {drawing.points.length} sommet{drawing.points.length > 1 ? "s" : ""} posé
+                  {drawing.points.length > 1 ? "s" : ""}.
+                </span>
+                <span className="th-muted">
+                  Cliquez chaque angle {drawing.type === "contour" ? "au nu intérieur des murs de façade" : "sur la face extérieure des façades"}.
+                  Cliquez le premier sommet ou appuyez sur <strong>Entrée</strong> pour fermer ; <strong>Retour arrière</strong> retire le
+                  dernier sommet ; <strong>Échap</strong> abandonne. Glisser déplace toujours le plan.
+                </span>
+                <div className="th-inline">
+                  <button
+                    type="button"
+                    className="po2-button po2-button--primary"
+                    disabled={busy || drawing.points.length < 3}
+                    onClick={finishDrawing}
+                  >
+                    Fermer la ligne
+                  </button>
+                  <button type="button" className="po2-button po2-button--ghost" onClick={() => setDrawing(null)}>
+                    Abandonner
+                  </button>
+                </div>
+              </>
             )}
           </section>
         )}
@@ -362,9 +497,6 @@ export function EnveloppePage() {
                 Supprimer « {selected.nom} » ({LINES[selected.type as keyof typeof LINES]})
               </button>
             )}
-            <p className="th-muted">
-              Pour tracer une ligne entièrement à la main, utilisez l'onglet <Link to={`/projets/${projectId}/metre`}>Métré</Link>.
-            </p>
           </section>
         )}
       </aside>

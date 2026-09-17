@@ -14,7 +14,7 @@ import unicodedata
 
 PT_EN_MM = 25.4 / 72.0
 
-TYPES_ZONE = {"contour": "Contour chauffé", "lnc": "Local non chauffé", "patio": "Patio ou cour", "nu_exterieur": "Nu extérieur"}
+TYPES_ZONE = {"contour": "Nu intérieur", "lnc": "Local non chauffé", "patio": "Patio ou cour", "nu_exterieur": "Nu extérieur"}
 # Tracés sans côtés qualifiés : le local non chauffé, et le nu extérieur (face extérieure des murs de façade,
 # lot G1 de docs/thermique/detection-guidee-decisions.md), qui borde le contour au nu intérieur.
 ZONES_SANS_COTES = {"lnc", "nu_exterieur"}

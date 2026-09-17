@@ -116,6 +116,16 @@ def test_enveloppe_proposee_et_portee_des_calques(db_session, monkeypatch):
     # les pièces se ferment aussi sur les deux vitres
     assert "menuiserie" in thermique_pieces.list_rooms(db_session, projet, sheet)["limites"]["natures"]
 
+    # nu extérieur tracé à la main : on ne propose que le nu intérieur, sans y toucher
+    zones["nu_exterieur"].source = "manuel"
+    db_session.commit()
+    thermique_enveloppe.propose_envelope(db_session, niveau, 0.4, genres=("contour",))
+    genres = sorted((z.kind, z.source) for z in db_session.scalars(select(ThermiqueZone).where(ThermiqueZone.level_id == niveau.id)))
+    assert genres == [("contour", "automatique"), ("nu_exterieur", "manuel")]
+    with pytest.raises(ThermiqueError, match="Ligne inconnue"):
+        thermique_enveloppe.propose_envelope(db_session, niveau, 0.4, genres=("patio",))
+    zones = {z.kind: z for z in db_session.scalars(select(ThermiqueZone).where(ThermiqueZone.level_id == niveau.id))}
+
     # une ligne corrigée à la main n'est pas remplacée sans confirmation
     points = json.loads(zones["contour"].points_json)
     thermique_metre.update_zone(db_session, zones["contour"], {"points": points[:-1] + [[points[-1][0] + 1, points[-1][1]]]})

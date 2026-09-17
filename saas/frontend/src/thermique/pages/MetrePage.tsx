@@ -40,8 +40,8 @@ const TOOLS: { id: MetreTool; label: string; help: string }[] = [
   { id: "pan", label: "Déplacer", help: "Glissez pour déplacer le plan, molette pour zoomer." },
   {
     id: "contour",
-    label: "Contour",
-    help: "Cliquez les sommets au nu intérieur des murs qui entourent les locaux chauffés. Cliquez le premier sommet ou appuyez sur Entrée pour fermer. Retour arrière retire le dernier sommet, Maj force un côté horizontal ou vertical, Alt coupe l'aimantation.",
+    label: "Nu intérieur",
+    help: "Contour chauffé : cliquez les sommets au nu intérieur des murs qui entourent les locaux chauffés. Cliquez le premier sommet ou appuyez sur Entrée pour fermer. Retour arrière retire le dernier sommet, Maj force un côté horizontal ou vertical, Alt coupe l'aimantation.",
   },
   {
     id: "nu_exterieur",

@@ -232,6 +232,8 @@ class EnvelopeProposal(BaseModel):
     # Ouvertures de façade refermées jusqu'à cette largeur, en centimètres.
     fermeture_cm: float = Field(default=100, ge=0, le=300)
     remplacer: bool = False
+    # lignes à proposer : « contour » (nu intérieur) et/ou « nu_exterieur »
+    lignes: list[Literal["contour", "nu_exterieur"]] = Field(default=["contour", "nu_exterieur"], min_length=1, max_length=2)
 
 
 class SuperpositionValidate(BaseModel):
