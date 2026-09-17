@@ -15,9 +15,8 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.models.thermique import ThermiqueProject, ThermiqueRoom, ThermiqueSheet
 from app.services.thermique import ThermiqueError, document_path
-from app.services.thermique_calques import _regles, plan_sheets, sheet_elements
+from app.services.thermique_calques import attribution, plan_sheets, sheet_elements
 from app.services.thermique_raster import raster_root
-from thermique_moteur import calques as moteur_calques
 from thermique_moteur import pieces as moteur
 from thermique_moteur import textes
 
@@ -52,9 +51,9 @@ def _plan(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet) -> Ther
 
 def _limites(project: ThermiqueProject, sheet: ThermiqueSheet) -> tuple[dict, list[int], list[str]]:
     elements = sheet_elements(sheet)
-    attribution = moteur_calques.attribuer(elements, _regles(project), sheet.id)
-    indices = [i for i, regle in attribution.items() if regle["nature"] in moteur.NATURES_LIMITES]
-    natures = sorted({regle["nature"] for regle in attribution.values() if regle["nature"] in moteur.NATURES_LIMITES})
+    attribues = attribution(project, sheet, elements)
+    indices = [i for i, regle in attribues.items() if regle["nature"] in moteur.NATURES_LIMITES]
+    natures = sorted({regle["nature"] for regle in attribues.values() if regle["nature"] in moteur.NATURES_LIMITES})
     return elements, indices, natures
 
 

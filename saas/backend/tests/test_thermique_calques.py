@@ -114,7 +114,7 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
     db_session.add(user)
     db_session.commit()
     projet = create_project(db_session, user, "Médiathèque", None)
-    assert thermique_calques.list_designations(db_session, projet) == {"regles": [], "natures": calques.NATURES, "planches": []}
+    assert thermique_calques.list_designations(db_session, projet) == {"regles": [], "ponctuels": [], "natures": calques.NATURES, "planches": []}
 
     document = ThermiqueDocument(
         project_id=projet.id, original_filename="plans.pdf", stored_filename="plans.pdf", file_format="pdf", size_bytes=1, sha256="0" * 64, page_count=3
@@ -185,6 +185,34 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
     assert "cloison" not in thermique_calques.sheet_designations(projet, rdc)["natures"]
     thermique_calques.apply_zone(db_session, projet, rdc, zone, [1, 3], retirer=False)
     assert [(c["id"], c["actifs"]) for c in thermique_calques.zone_summary(projet, rdc, zone)["calques"]] == [(1, 3)]
+    # lasso « Désigner » : types de traits présents dans la zone, avec leur nombre sur tous les plans
+    familles = thermique_calques.zone_summary(projet, rdc, zone)["familles"]
+    assert [(f["signature"], f["forme"], f["dans_zone"], f["total"], f["nature"]) for f in familles] == [(FIN, "court", 3, 6, "cloison")]
+
+    # un élément seul : sa nature prime sur celle de sa famille, sur ce plan seulement
+    thermique_calques.set_elements(db_session, projet, rdc, [2], "porte")
+    assert thermique_calques.pick_element(db_session, projet, rdc, 0.1 * M, 8 * M, 2.0)["ponctuel"]["nature"] == "porte"
+    designes = thermique_calques.sheet_designations(projet, rdc)["natures"]
+    assert len(designes["porte"]["traits"]) == 1 and len(designes["cloison"]["traits"]) == 2
+    assert thermique_calques.list_designations(db_session, projet)["ponctuels"] == [
+        {"nature": "porte", "nature_libelle": calques.NATURES["porte"], "nombre": 1, "planches": ["RDC"]}
+    ]
+    # les éléments de la zone seulement : les trois marches deviennent des menuiseries intérieures
+    thermique_calques.designate_zone(db_session, projet, rdc, zone, [(FIN, "court")], "menuiserie_interieure", partout=False)
+    natures = {p["nature"]: p["nombre"] for p in thermique_calques.list_designations(db_session, projet)["ponctuels"]}
+    assert natures == {"menuiserie_interieure": 3}
+    assert "cloison" not in thermique_calques.sheet_designations(projet, rdc)["natures"]
+    assert thermique_calques.sheet_designations(projet, etage)["natures"]["cloison"]["traits"]
+    thermique_calques.set_elements(db_session, projet, rdc, [2, 3, 4], None)
+    assert thermique_calques.list_designations(db_session, projet)["ponctuels"] == []
+    # sur tous les plans : la famille change de nature
+    thermique_calques.designate_zone(db_session, projet, rdc, zone, [(FIN, "court")], "garde_corps", partout=True)
+    assert thermique_calques.list_designations(db_session, projet)["regles"][0]["nature"] == "garde_corps"
+    with pytest.raises(ThermiqueError, match="Aucun élément"):
+        thermique_calques.designate_zone(db_session, projet, rdc, zone, [(GRIS, "*")], "mur", partout=False)
+    with pytest.raises(ThermiqueError, match="introuvable"):
+        thermique_calques.set_elements(db_session, projet, rdc, [99], "mur")
+
     with pytest.raises(ThermiqueError, match="au moins un calque"):
         thermique_calques.apply_zone(db_session, projet, rdc, zone, [], retirer=True)
     thermique_calques.delete_designation(db_session, projet, 3)

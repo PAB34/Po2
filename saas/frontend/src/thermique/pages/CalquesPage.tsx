@@ -19,6 +19,9 @@ const ZONE_MIN_PX = 6;
 // Un point de lasso tous les 4 px à l'écran, 1 500 au plus.
 const LASSO_STEP_PX = 4;
 const LASSO_MAX_POINTS = 1500;
+// portée « cet élément seulement » (à côté des familles renvoyées par le serveur)
+const SEUL = "seul";
+const familyKey = (item: { signature: string; forme: string }) => `${item.signature}#${item.forme}`;
 const flat = (points: PdfPoint[]): CalqueLasso => points.flatMap((point) => [point[0], point[1]]);
 
 // Étape E1 : le thermicien clique un élément du plan et donne sa nature ; tous ses semblables, sur tous les
@@ -43,6 +46,9 @@ export function CalquesPage() {
   const [zoneLasso, setZoneLasso] = useState<CalqueLasso | null>(null);
   const [zone, setZone] = useState<CalqueZone | null>(null);
   const [zoneRules, setZoneRules] = useState<number[]>([]);
+  const [zoneMode, setZoneMode] = useState<"retirer" | "designer">("retirer");
+  const [zoneFamilies, setZoneFamilies] = useState<string[]>([]);
+  const [zoneScope, setZoneScope] = useState<"familles" | "zone">("familles");
 
   const projectQuery = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -71,7 +77,7 @@ export function CalquesPage() {
 
   const shown = shownRule !== null ? data?.regles.find((rule) => rule.id === shownRule) ?? null : null;
   const familySignature = pick ? pick.element.signature : shown?.signature ?? null;
-  const familyForme = pick ? scope : shown?.forme ?? null;
+  const familyForme = pick ? (scope === SEUL ? null : scope) : shown?.forme ?? null;
   const family = useQuery({
     queryKey: ["thermique", "calques-famille", currentSheetId ?? 0, familySignature ?? "", familyForme ?? ""],
     queryFn: () => calquesApi.family(token!, currentSheetId!, familySignature!, familyForme!),
@@ -98,11 +104,23 @@ export function CalquesPage() {
     onError: () => setPick(null),
   });
   const selectedFamily = pick?.familles.find((item) => item.forme === scope) ?? pick?.familles[0] ?? null;
+  const selectedCount = scope === SEUL ? 1 : selectedFamily?.total ?? 0;
   const saveMutation = useMutation({
-    mutationFn: () => calquesApi.save(token!, projectId, { signature: pick!.element.signature, forme: scope, nature }),
+    mutationFn: () =>
+      scope === SEUL
+        ? calquesApi.setElements(token!, projectId, { planche_id: pick!.element.planche, elements: [pick!.element.index], nature })
+        : calquesApi.save(token!, projectId, { signature: pick!.element.signature, forme: scope, nature }),
     onSuccess: (next) => {
       refresh(next);
-      setNotice(`${plural(selectedFamily?.total ?? 0, "élément")} désigné${(selectedFamily?.total ?? 0) > 1 ? "s" : ""} « ${next.natures[nature]} ».`);
+      setNotice(`${plural(selectedCount, "élément")} désigné${selectedCount > 1 ? "s" : ""} « ${next.natures[nature]} ».`);
+      setPick(null);
+    },
+  });
+  const unsetSingleMutation = useMutation({
+    mutationFn: () => calquesApi.setElements(token!, projectId, { planche_id: pick!.element.planche, elements: [pick!.element.index], nature: null }),
+    onSuccess: (next) => {
+      refresh(next);
+      setNotice("Désignation de l'élément retirée.");
       setPick(null);
     },
   });
@@ -132,6 +150,14 @@ export function CalquesPage() {
         const kept = current.filter((id) => ids.includes(id));
         return kept.length ? kept : ids;
       });
+      setZoneFamilies((current) => {
+        const keys = result.familles.map(familyKey);
+        const kept = current.filter((key) => keys.includes(key));
+        return kept.length ? kept : keys;
+      });
+      if (result.calques.length === 0) {
+        setZoneMode("designer");
+      }
     },
   });
   const applyZoneMutation = useMutation({
@@ -142,14 +168,45 @@ export function CalquesPage() {
       zoneMutation.mutate(zoneLasso!);
     },
   });
+  const designateZoneMutation = useMutation({
+    mutationFn: () =>
+      calquesApi.designateZone(token!, currentSheetId!, {
+        contour: zoneLasso!,
+        familles: (zone?.familles ?? [])
+          .filter((item) => zoneFamilies.includes(familyKey(item)))
+          .map((item) => ({ signature: item.signature, forme: item.forme })),
+        nature,
+        portee: zoneScope,
+      }),
+    onSuccess: (next) => {
+      refresh(next);
+      setNotice(zoneScope === "familles" ? `Types de traits désignés « ${next.natures[nature]} » sur tous les plans.` : `Éléments de la zone désignés « ${next.natures[nature]} ».`);
+      zoneMutation.mutate(zoneLasso!);
+    },
+  });
   function closeZone() {
     setZone(null);
     setZoneLasso(null);
     zoneMutation.reset();
   }
-  const busy = saveMutation.isPending || removeMutation.isPending || excludeMutation.isPending || applyZoneMutation.isPending;
+  const busy =
+    saveMutation.isPending ||
+    removeMutation.isPending ||
+    excludeMutation.isPending ||
+    applyZoneMutation.isPending ||
+    unsetSingleMutation.isPending ||
+    designateZoneMutation.isPending;
   const actionError =
-    pickMutation.error ?? saveMutation.error ?? removeMutation.error ?? excludeMutation.error ?? zoneMutation.error ?? applyZoneMutation.error;
+    pickMutation.error ??
+    saveMutation.error ??
+    removeMutation.error ??
+    excludeMutation.error ??
+    zoneMutation.error ??
+    applyZoneMutation.error ??
+    unsetSingleMutation.error ??
+    designateZoneMutation.error;
+  const zoneFamiliesChosen = zone?.familles.filter((item) => zoneFamilies.includes(familyKey(item))) ?? [];
+  const zoneFamilyCount = zoneFamiliesChosen.reduce((sum, item) => sum + (zoneScope === "familles" ? item.total : item.dans_zone), 0);
   const zoneChosen = zone?.calques.filter((item) => zoneRules.includes(item.id)) ?? [];
   const zoneActive = zoneChosen.reduce((sum, item) => sum + item.actifs, 0);
   const zoneRemoved = zoneChosen.reduce((sum, item) => sum + item.retires, 0);
@@ -328,47 +385,123 @@ export function CalquesPage() {
         {zone && (
           <section className="th-edgebox th-calque-panel">
             <strong>Zone sélectionnée</strong>
-            {zone.calques.length === 0 ? (
-              <span className="th-muted">Aucun élément désigné entièrement dans cette zone.</span>
-            ) : (
-              <fieldset className="th-calque-scope">
-                <legend>Calques concernés</legend>
-                {zone.calques.map((item) => (
-                  <label key={item.id} className="th-check">
-                    <input
-                      type="checkbox"
-                      checked={zoneRules.includes(item.id)}
-                      onChange={(event) =>
-                        setZoneRules((current) =>
-                          event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id),
-                        )
-                      }
-                    />
-                    <span className="th-calque-dot" style={{ background: natureColor(item.nature) }} />
-                    <span>
-                      <strong>{item.nature_libelle}</strong> ({item.libelle} · {item.forme_libelle}) : {plural(item.actifs, "élément")}
-                      {item.retires ? `, ${countFormat.format(item.retires)} déjà retiré${item.retires > 1 ? "s" : ""}` : ""}
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
-            {zone.tronque && <small className="th-muted">Zone très chargée : une partie des éléments n'est pas surlignée.</small>}
-            <div className="th-inline">
-              {zoneActive > 0 && (
-                <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => applyZoneMutation.mutate("retirer")}>
-                  Retirer {plural(zoneActive, "élément")}
-                </button>
-              )}
-              {zoneRemoved > 0 && (
-                <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => applyZoneMutation.mutate("remettre")}>
-                  Remettre {plural(zoneRemoved, "élément")}
-                </button>
-              )}
-              <button type="button" className="po2-button po2-button--ghost" onClick={closeZone}>
-                Fermer
+            <div className="th-segmented" role="group" aria-label="Action sur la zone">
+              <button type="button" className={zoneMode === "retirer" ? "is-active" : ""} onClick={() => setZoneMode("retirer")}>
+                Retirer / remettre
+              </button>
+              <button type="button" className={zoneMode === "designer" ? "is-active" : ""} onClick={() => setZoneMode("designer")}>
+                Désigner
               </button>
             </div>
+            {zoneMode === "designer" && data && (
+              <>
+                {zone.familles.length === 0 ? (
+                  <span className="th-muted">Aucun élément entièrement dans cette zone.</span>
+                ) : (
+                  <fieldset className="th-calque-scope">
+                    <legend>Types de traits dans la zone</legend>
+                    {zone.familles.map((item) => (
+                      <label key={familyKey(item)} className="th-check">
+                        <input
+                          type="checkbox"
+                          checked={zoneFamilies.includes(familyKey(item))}
+                          onChange={(event) =>
+                            setZoneFamilies((current) =>
+                              event.target.checked ? [...current, familyKey(item)] : current.filter((key) => key !== familyKey(item)),
+                            )
+                          }
+                        />
+                        {item.nature && <span className="th-calque-dot" style={{ background: natureColor(item.nature) }} />}
+                        <span>
+                          {item.libelle} · {item.forme_libelle} : {countFormat.format(item.dans_zone)} ici,{" "}
+                          {countFormat.format(item.total)} sur les plans
+                          {item.nature ? ` (déjà ${data.natures[item.nature] ?? item.nature})` : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                <fieldset className="th-calque-scope">
+                  <legend>Portée</legend>
+                  <label className="th-check">
+                    <input type="radio" name="zone-portee" checked={zoneScope === "familles"} onChange={() => setZoneScope("familles")} />
+                    <span>Ces types de traits sur tous les plans</span>
+                  </label>
+                  <label className="th-check">
+                    <input type="radio" name="zone-portee" checked={zoneScope === "zone"} onChange={() => setZoneScope("zone")} />
+                    <span>Seulement les éléments de la zone</span>
+                  </label>
+                </fieldset>
+                <label className="th-field">
+                  <span>Nature</span>
+                  <select value={nature} onChange={(event) => setNature(event.target.value)}>
+                    {Object.entries(data.natures).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="th-inline">
+                  <button
+                    type="button"
+                    className="po2-button po2-button--primary"
+                    disabled={busy || zoneFamiliesChosen.length === 0}
+                    onClick={() => designateZoneMutation.mutate()}
+                  >
+                    Désigner {plural(zoneFamilyCount, "élément")}
+                  </button>
+                  <button type="button" className="po2-button po2-button--ghost" onClick={closeZone}>
+                    Fermer
+                  </button>
+                </div>
+              </>
+            )}
+            {zoneMode === "retirer" && (
+              <>
+                {zone.calques.length === 0 ? (
+                  <span className="th-muted">Aucun élément désigné entièrement dans cette zone.</span>
+                ) : (
+                  <fieldset className="th-calque-scope">
+                    <legend>Calques concernés</legend>
+                    {zone.calques.map((item) => (
+                      <label key={item.id} className="th-check">
+                        <input
+                          type="checkbox"
+                          checked={zoneRules.includes(item.id)}
+                          onChange={(event) =>
+                            setZoneRules((current) =>
+                              event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id),
+                            )
+                          }
+                        />
+                        <span className="th-calque-dot" style={{ background: natureColor(item.nature) }} />
+                        <span>
+                          <strong>{item.nature_libelle}</strong> ({item.libelle} · {item.forme_libelle}) : {plural(item.actifs, "élément")}
+                          {item.retires ? `, ${countFormat.format(item.retires)} déjà retiré${item.retires > 1 ? "s" : ""}` : ""}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+                {zone.tronque && <small className="th-muted">Zone très chargée : une partie des éléments n'est pas surlignée.</small>}
+                <div className="th-inline">
+                  {zoneActive > 0 && (
+                    <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => applyZoneMutation.mutate("retirer")}>
+                      Retirer {plural(zoneActive, "élément")}
+                    </button>
+                  )}
+                  {zoneRemoved > 0 && (
+                    <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => applyZoneMutation.mutate("remettre")}>
+                      Remettre {plural(zoneRemoved, "élément")}
+                    </button>
+                  )}
+                  <button type="button" className="po2-button po2-button--ghost" onClick={closeZone}>
+                    Fermer
+                  </button>
+                </div>
+              </>
+            )}
           </section>
         )}
 
@@ -384,6 +517,7 @@ export function CalquesPage() {
                 {pick.regle.exclu ? " (cet élément en est retiré)" : ""}.
               </span>
             )}
+            {pick.ponctuel && <span className="th-muted">Cet élément seul est désigné : {pick.ponctuel.nature_libelle}.</span>}
             <fieldset className="th-calque-scope">
               <legend>Éléments concernés</legend>
               {pick.familles.map((item) => (
@@ -395,9 +529,17 @@ export function CalquesPage() {
                   </span>
                 </label>
               ))}
-              <small className="th-muted">
-                {selectedFamily.par_planche.map((item) => `${item.libelle} : ${countFormat.format(item.nombre)}`).join(" · ")}
-              </small>
+              <label className="th-check">
+                <input type="radio" name="calque-scope" checked={scope === SEUL} onChange={() => setScope(SEUL)} />
+                <span>
+                  Seulement cet élément <small className="th-muted">(ce plan, sans report)</small>
+                </span>
+              </label>
+              {scope !== SEUL && (
+                <small className="th-muted">
+                  {selectedFamily.par_planche.map((item) => `${item.libelle} : ${countFormat.format(item.nombre)}`).join(" · ")}
+                </small>
+              )}
             </fieldset>
             <label className="th-field">
               <span>Nature</span>
@@ -411,12 +553,17 @@ export function CalquesPage() {
             </label>
             <div className="th-inline">
               <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => saveMutation.mutate()}>
-                Désigner {plural(selectedFamily.total, "élément")}
+                Désigner {plural(selectedCount, "élément")}
               </button>
               <button type="button" className="po2-button po2-button--ghost" onClick={() => setPick(null)}>
                 Annuler
               </button>
             </div>
+            {pick.ponctuel && (
+              <button type="button" className="th-link" disabled={busy} onClick={() => unsetSingleMutation.mutate()}>
+                Retirer la désignation de cet élément seul
+              </button>
+            )}
             {pick.regle && (
               <button
                 type="button"
@@ -435,7 +582,15 @@ export function CalquesPage() {
         {data && (
           <section>
             <h2>Calques désignés</h2>
-            {data.regles.length === 0 && <p className="th-muted">Aucun calque désigné pour l'instant : cliquez un trait sur le plan.</p>}
+            {data.regles.length === 0 && data.ponctuels.length === 0 && (
+              <p className="th-muted">Aucun calque désigné pour l'instant : cliquez un trait sur le plan.</p>
+            )}
+            {data.ponctuels.length > 0 && (
+              <p className="th-muted">
+                Éléments désignés seuls :{" "}
+                {data.ponctuels.map((item) => `${item.nature_libelle} ${countFormat.format(item.nombre)} (${item.planches.join(", ")})`).join(" · ")}
+              </p>
+            )}
             <ul className="th-sig-list">
               {data.regles.map((rule) => {
                 const isShown = shownRule === rule.id;

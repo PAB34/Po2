@@ -38,7 +38,9 @@ NATURES = {
     "mur": "Mur (maçonnerie, béton)",
     "isolant": "Isolant",
     "cloison": "Cloison, doublage",
-    "menuiserie": "Menuiserie extérieure (fenêtre, baie)",
+    "menuiserie": "Menuiserie (fenêtre, baie, vitrage)",
+    # à forcer seulement : l'intérieur / extérieur se déduit des pièces de part et d'autre (D31)
+    "menuiserie_interieure": "Menuiserie intérieure (forcée)",
     "porte": "Porte",
     "garde_corps": "Garde-corps, limite de terrasse",
     "plancher": "Plancher, dalle (coupes)",
@@ -253,16 +255,32 @@ def regle_applicable(regles: list[dict], signature: str, forme: str) -> dict | N
     return precise or next((r for r in regles if r["signature"] == signature and r["forme"] == TOUTES_FORMES), None)
 
 
-def attribuer(donnees: dict, regles: list[dict], planche: int) -> dict[int, dict]:
+def attribuer(donnees: dict, regles: list[dict], planche: int, ponctuels: list[dict] = ()) -> dict[int, dict]:
     """Élément → règle sur une planche ; une règle de forme précise l'emporte sur « toutes formes » ; un élément
-    retiré d'une règle n'en reçoit pas la nature."""
+    retiré d'une règle n'en reçoit pas la nature ; une désignation ponctuelle (un élément seul) prime sur tout."""
     resultat: dict[int, dict] = {}
     for regle in sorted(regles, key=lambda r: r["forme"] != TOUTES_FORMES):
         exclus = {e["element"] for e in regle.get("exclusions", []) if e["planche"] == planche}
         for index in famille(donnees, regle["signature"], regle["forme"]):
             if index not in exclus:
                 resultat[index] = regle
+    nombre = len(donnees["elements"])
+    for ponctuel in ponctuels:
+        if ponctuel["planche"] == planche and 0 <= ponctuel["element"] < nombre:
+            resultat[ponctuel["element"]] = {"id": None, "nature": ponctuel["nature"], "ponctuel": True}
     return resultat
+
+
+def familles_de(donnees: dict, indices: list[int]) -> list[tuple[str, str, int]]:
+    """(signature, forme, nombre) des familles présentes parmi les éléments, de la plus nombreuse à la moindre ;
+    un remplissage compte pour toutes ses formes."""
+    comptes: dict[tuple[str, str], int] = {}
+    for index in indices:
+        element = donnees["elements"][index]
+        forme = element[2] if element[0] == TRAIT else TOUTES_FORMES
+        cle = (donnees["signatures"][element[1]], forme)
+        comptes[cle] = comptes.get(cle, 0) + 1
+    return sorted(((s, f, n) for (s, f), n in comptes.items()), key=lambda t: -t[2])
 
 
 def dans_zone(donnees: dict, contour: list[float]) -> list[int]:
