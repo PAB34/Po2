@@ -2,18 +2,7 @@
 Voir docs/thermique/refondation-parcours-decisions.md."""
 from __future__ import annotations
 
-import json
-
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
-from app.core.db import Base
-from app.core.security import get_password_hash
-from app.models.thermique import ThermiqueDocument, ThermiqueSheet
-from app.models.user import User
-from app.services import thermique_metre
-from app.services.thermique import ThermiqueError, create_project
 from thermique_moteur import signatures
 
 M = 1000 / 100 / (25.4 / 72)  # points PDF pour 1 m à 1/100
@@ -84,59 +73,3 @@ def test_fusion_ponderee_entre_planches():
     assert (fusion["nombre"], fusion["longueur_m"], fusion["planches"]) == (15, 40.0, [1, 2])
     assert fusion["part_alignee"] == pytest.approx(0.3)
     assert fusion["role_propose"] == "vitrage"
-
-
-@pytest.fixture()
-def db_session():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-
-
-def test_catalogue_du_projet_et_validation_des_roles(db_session, monkeypatch):
-    user = User(email="be@example.fr", password_hash=get_password_hash("motdepasse-solide"), nom="Nom", prenom="Prenom", role="USER", is_active=True)
-    db_session.add(user)
-    db_session.commit()
-    projet = create_project(db_session, user, "Médiathèque", None)
-    with pytest.raises(ThermiqueError, match="Aucune planche"):
-        thermique_metre.project_signatures(db_session, projet)
-
-    document = ThermiqueDocument(
-        project_id=projet.id, original_filename="plans.pdf", stored_filename="plans.pdf", file_format="pdf", size_bytes=1, sha256="0" * 64, page_count=3
-    )
-    db_session.add(document)
-    db_session.flush()
-    for index, (label, nature, echelle) in enumerate([("PC02 Niveau -1", "plan", 100), ("PC10 Coupe AB", "coupe", 100), ("PC03 Niveau 0", "plan", None)]):
-        db_session.add(
-            ThermiqueSheet(
-                project_id=projet.id, document_id=document.id, page_index=index, label=label, nature=None, nature_suggested=nature,
-                level_label=None, rotation_deg=0, page_width_pt=1684, page_height_pt=2384, scale_denominator=echelle,
-                scale_source="declaree" if echelle else None,
-            )
-        )
-    db_session.commit()
-
-    trait = {"cle": "trait|1.56|#000000|", "genre": "trait", "largeur": 1.56, "couleur": "#000000", "tirets": "", "luminance": 0, "nombre": 4,
-             "longueur_m": 20.0, "part_courte": 0.0, "part_appariee": 0.9, "part_dans_murs": 0.0, "part_alignee": 0.0}
-    aplat = {"cle": "aplat|#989898", "genre": "aplat", "couleur": "#989898", "luminance": 152, "nombre": 8, "aire_m2": 6.0, "part_dans_murs": 0.95}
-    lus = []
-    monkeypatch.setattr(thermique_metre, "sheet_signature_catalogue", lambda sheet: lus.append(sheet.label) or {"signatures": [trait, aplat]})
-
-    catalogue = thermique_metre.project_signatures(db_session, projet)
-    assert lus == ["PC02 Niveau -1"]  # seules les planches de plan à l'échelle définie
-    assert (catalogue["validees"], catalogue["total"]) == (0, 2)
-    assert [(s["role_propose"], s["role"]) for s in catalogue["signatures"]] == [("face_mur", None), ("maconnerie", None)]
-
-    thermique_metre.save_signature_roles(db_session, projet, {"trait|1.56|#000000|": "face_mur", "aplat|#989898": "isolant"})
-    assert json.loads(projet.signatures_json) == {"trait|1.56|#000000|": "face_mur", "aplat|#989898": "isolant"}
-    thermique_metre.save_signature_roles(db_session, projet, {"aplat|#989898": None})
-    catalogue = thermique_metre.project_signatures(db_session, projet)
-    assert (catalogue["validees"], [s["role"] for s in catalogue["signatures"]]) == (1, ["face_mur", None])
-
-    with pytest.raises(ThermiqueError, match="Rôle inconnu"):
-        thermique_metre.save_signature_roles(db_session, projet, {"aplat|#989898": "face_mur"})
-    with pytest.raises(ThermiqueError, match="Signature inconnue"):
-        thermique_metre.save_signature_roles(db_session, projet, {"calque|x": "face_mur"})
-    with pytest.raises(ThermiqueError, match="Signature inconnue"):
-        thermique_metre.sheet_signature_elements(db_session.get(ThermiqueSheet, 1), "calque|x")

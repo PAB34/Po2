@@ -116,3 +116,30 @@
   annotation ; verts → végétation ; remplissage gris 40 % → maçonnerie (86 % dans les murs).
 - **Limites** : les symboles répétés (portes, sanitaires) ne sont pas encore reconnus comme blocs (E6) ; les
   rôles validés ne pilotent pas encore la détection (E3 à E6 s'appuieront dessus).
+
+## 10. E1 révisée — Désigner les calques par l'exemple (2026-09-17)
+
+Constat de l'utilisateur sur le catalogue §9 : « il mélange plusieurs éléments différents ». Vérifié au niveau 0 :
+la plume 0,36 pt noire réunit 2 834 éléments de natures différentes (1 856 traits courts, 400 polylignes,
+354 traits droits, 224 contours fermés). Proposition de l'utilisateur : cliquer un élément, donner la nature de
+son calque, et reporter sur tous les niveaux de signature identique.
+
+| N° | Décision |
+|---|---|
+| Q66 → D14 | « Semblable » = **même trait et même forme** (droit, polyligne, court < 40 cm, petit contour fermé < 1,5 m, grand contour fermé, arc) ; élargissement possible à tout le trait. |
+| Q67 → D15 | Natures proposées : mur (maçonnerie, béton), isolant, cloison ou doublage, menuiserie extérieure, porte, garde-corps ou limite de terrasse, plancher ou dalle (coupes), toiture (coupes). |
+| Q68 → D16 | Ce qui n'est pas désigné est **ignoré**. |
+| Q69 → D17 | L'onglet « Signatures » est **remplacé** par l'onglet **« Calques »** (plan + outil de désignation + récapitulatif). |
+
+- **Élément** = tracé continu du PDF (d'un « moveto » au suivant), lu par `thermique_moteur/calques.py`
+  (0,7 à 1,3 s par plan ; 8 000 à 84 000 éléments ; cache de 2,5 à 7,8 Mo à côté des tuiles).
+- **Règle** = signature + forme (ou « * ») → nature, avec les éléments retirés un à un ; stockée dans
+  `thermique_projects.signatures_json` (`{"version": 2, "regles": [...]}`), appliquée à toutes les planches de
+  plan à l'échelle définie. Une règle de forme précise l'emporte sur « toutes formes ».
+- **Clic** : trait le plus proche (8 px à l'écran) ; traits superposés → le plus épais ; sinon le plus petit
+  remplissage qui contient le point.
+- **API** : `GET/POST /projects/{id}/calques`, `DELETE /projects/{id}/calques/{règle}`,
+  `POST /projects/{id}/calques/{règle}/exclusions`, `POST /sheets/{id}/calques/designer`,
+  `GET /sheets/{id}/calques/famille`, `GET /sheets/{id}/calques/designes`.
+- Le catalogue §9 (liste à valider, routes `/signatures`) est retiré ; le moteur `signatures.py` reste pour les
+  libellés de couleur et d'éventuelles suggestions.

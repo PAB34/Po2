@@ -1,6 +1,7 @@
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
+import { CalquesPage } from "./pages/CalquesPage";
 import { LibraryPage } from "./pages/LibraryHomePage";
 import { MetrePage } from "./pages/MetrePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
@@ -8,7 +9,6 @@ import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SheetPage } from "./pages/SheetPage";
-import { SignaturesPage } from "./pages/SignaturesPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -85,7 +85,7 @@ export function ThermiqueApp() {
         <Route element={<Shell fullWidth />}>
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
           <Route path="projets/:projectId/metre" element={<MetrePage />} />
-          <Route path="projets/:projectId/signatures" element={<SignaturesPage />} />
+          <Route path="projets/:projectId/calques" element={<CalquesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
