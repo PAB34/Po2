@@ -13,12 +13,15 @@ from sqlalchemy.orm import Session
 
 from app.models.thermique import ThermiqueLevel, ThermiqueProject, ThermiqueSheet, ThermiqueZone
 from app.services.thermique import ThermiqueError
+from app.services.thermique_calques import attribution
 from app.services.thermique_pieces import _limites
 from thermique_moteur import bande as moteur
 from thermique_moteur import metre
+from thermique_moteur import pieces as pieces_moteur
 from thermique_moteur.pieces import PiecesError
 
 GENRES = ("contour", "nu_exterieur")
+LIMITES_ENVELOPPE = tuple(n for n in pieces_moteur.NATURES_LIMITES if n != "porte")
 
 
 def propose_envelope(
@@ -38,7 +41,10 @@ def propose_envelope(
             "Ce niveau a déjà un nu intérieur ou un nu extérieur tracé ou corrigé à la main : confirmez son remplacement."
         )
     project = db.get(ThermiqueProject, level.project_id)
-    elements, indices, _natures = _limites(project, sheet)
+    elements, _indices, _natures = _limites(project, sheet)
+    # le battement d'une porte ferme une pièce mais ne porte pas l'enveloppe : la ligne passe par l'ouverture
+    # (vitrage, cadre) et non par l'arc (essai R+2, §17)
+    indices = [i for i, regle in attribution(project, sheet, elements).items() if regle["nature"] in LIMITES_ENVELOPPE]
     try:
         batiments = moteur.proposer(elements, indices, fermeture_m)
     except PiecesError as exc:

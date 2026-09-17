@@ -198,10 +198,17 @@ def _dp(points: list[tuple[float, float]], tolerance: float) -> list[tuple[float
     return [p for p, g in zip(points, garder) if g]
 
 
-def _piece(masque: np.ndarray, grille: Grille, decalage: tuple[int, int] = (0, 0)) -> dict:
-    """Pièce d'un masque (éventuellement recadré : `decalage` = colonne et ligne de son coin)."""
+def _piece(masque: np.ndarray, grille: Grille, decalage: tuple[int, int] = (0, 0), segments=None) -> dict:
+    """Pièce d'un masque (éventuellement recadré : `decalage` = colonne et ligne de son coin). Avec `segments`,
+    le contour est redressé sur les faces vectorielles et la surface est celle du contour redressé."""
     sommets = simplifier(contour(masque), 1.0)
     points = [grille.point(c + decalage[0], l + decalage[1]) for c, l in sommets]
+    m_par_pt = RESOLUTION_M / grille.pas
+    redresse = None
+    if segments is not None and len(segments):
+        from thermique_moteur.redressement import redresser
+
+        redresse = redresser(points, segments, m_par_pt)
     # point d'étiquette : le plus loin des bords, donc à l'intérieur même d'une pièce en L
     distances = ndimage.distance_transform_edt(np.pad(masque, 1))[1:-1, 1:-1]
     cy, cx = np.unravel_index(int(np.argmax(distances)), distances.shape)
@@ -209,10 +216,25 @@ def _piece(masque: np.ndarray, grille: Grille, decalage: tuple[int, int] = (0, 0
     # les traits-limites occupent un pixel : la moitié revient à la pièce, tout le long du contour
     perimetre_m = sum(math.dist(sommets[k - 1], sommets[k]) for k in range(len(sommets))) * RESOLUTION_M
     return {
-        "contour": [round(v, 2) for p in points for v in p],
-        "surface_m2": round(float(masque.sum()) * grille.m2_par_pixel + perimetre_m * RESOLUTION_M / 2, 2),
+        "contour": [round(v, 2) for p in (redresse or points) for v in p],
+        "surface_m2": round(
+            _aire_pt(redresse) * m_par_pt * m_par_pt
+            if redresse
+            else float(masque.sum()) * grille.m2_par_pixel + perimetre_m * RESOLUTION_M / 2,
+            2,
+        ),
         "centre": [round(v, 2) for v in grille.point(cx, cy)],
     }
+
+
+def _aire_pt(points) -> float:
+    return abs(sum(points[k - 1][0] * points[k][1] - points[k][0] * points[k - 1][1] for k in range(len(points)))) / 2
+
+
+def _segments(donnees: dict, indices: list[int], grille: Grille):
+    from thermique_moteur.redressement import segments_des_elements
+
+    return segments_des_elements(donnees, indices, RESOLUTION_M / grille.pas)
 
 
 def detecter(
@@ -229,13 +251,14 @@ def detecter(
         return []
     tailles = np.bincount(etiquettes.ravel(), minlength=nombre + 1) * grille.m2_par_pixel
     objets = ndimage.find_objects(etiquettes)
+    segments = _segments(donnees, indices, grille)
     pieces = []
     for numero in range(1, nombre + 1):
         if numero in bord or not surface_min <= tailles[numero] <= surface_max:
             continue
         lignes, colonnes = objets[numero - 1]
         masque = etiquettes[lignes, colonnes] == numero
-        pieces.append(_piece(masque, grille, (colonnes.start, lignes.start)))
+        pieces.append(_piece(masque, grille, (colonnes.start, lignes.start), segments))
     return sorted(pieces, key=lambda p: -p["surface_m2"])
 
 
@@ -254,7 +277,7 @@ def piece_au_point(donnees: dict, indices: list[int], x: float, y: float, fermet
             "Cet espace n'est pas fermé : désignez les limites manquantes (portes, vitrages) ou augmentez la fermeture des ouvertures."
         )
     lignes, colonnes = ndimage.find_objects((etiquettes == numero).astype(np.int32))[0]
-    return _piece(etiquettes[lignes, colonnes] == numero, grille, (colonnes.start, lignes.start))
+    return _piece(etiquettes[lignes, colonnes] == numero, grille, (colonnes.start, lignes.start), _segments(donnees, indices, grille))
 
 
 def _grille_polygones(polygones: list[list[float]], echelle: float) -> Grille:
@@ -270,6 +293,18 @@ def _remplir(polygones: list[list[float]], grille: Grille) -> np.ndarray:
     return np.array(image, dtype=bool)
 
 
+def _cotes(polygones: list[list[float]]) -> np.ndarray:
+    """Côtés de contours fermés (x1, y1, x2, y2), pour redresser une fusion ou une découpe."""
+    lignes = []
+    for polygone in polygones:
+        n = len(polygone) // 2
+        for k in range(n):
+            j = (k + 1) % n if n > 2 else k + 1
+            if j < n:
+                lignes.append([polygone[2 * k], polygone[2 * k + 1], polygone[2 * j], polygone[2 * j + 1]])
+    return np.asarray(lignes, dtype=float).reshape(-1, 4)
+
+
 def fusionner(polygones: list[list[float]], echelle: float, epaisseur_max_m: float = 0.6) -> dict:
     """Une pièce à partir de pièces voisines (séparées au plus par une paroi de `epaisseur_max_m`)."""
     if len(polygones) < 2:
@@ -280,7 +315,7 @@ def fusionner(polygones: list[list[float]], echelle: float, epaisseur_max_m: flo
     etiquettes, nombre = ndimage.label(union)
     if nombre != 1:
         raise PiecesError("Ces pièces ne sont pas voisines : fusionnez des pièces qui se touchent.")
-    return _piece(union, grille)
+    return _piece(union, grille, segments=_cotes(polygones))
 
 
 def decouper(polygone: list[float], p1: list[float], p2: list[float], echelle: float) -> list[dict]:
@@ -295,7 +330,8 @@ def decouper(polygone: list[float], p1: list[float], p2: list[float], echelle: f
     morceaux = [n for n in range(1, nombre + 1) if tailles[n] >= 0.5]
     if len(morceaux) < 2:
         raise PiecesError("Le trait ne coupe pas la pièce en deux : tracez-le d'un bord à l'autre.")
-    return sorted((_piece(etiquettes == n, grille) for n in morceaux), key=lambda p: -p["surface_m2"])
+    cotes = _cotes([polygone, [p1[0], p1[1], p2[0], p2[1]]])
+    return sorted((_piece(etiquettes == n, grille, segments=cotes) for n in morceaux), key=lambda p: -p["surface_m2"])
 
 
 def dedans(x: float, y: float, polygone: list[float]) -> bool:
