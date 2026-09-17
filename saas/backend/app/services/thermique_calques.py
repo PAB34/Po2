@@ -380,8 +380,11 @@ def _plan_sheets_of(project: ThermiqueProject) -> list[ThermiqueSheet]:
     return plan_sheets(db, project) if db is not None else []
 
 
-def set_elements(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, indices: list[int], nature: str | None) -> None:
-    """Donne une nature à des éléments seuls de la planche, ou la leur retire (`nature` vide)."""
+def set_elements(
+    db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, indices: list[int], nature: str | None, source: str | None = None
+) -> None:
+    """Donne une nature à des éléments seuls de la planche, ou la leur retire (`nature` vide). `source: "auto"`
+    marque une désignation trouvée par la détection automatique (seule à être remplacée à la relance, §18)."""
     if nature is not None and nature not in moteur.NATURES:
         raise ThermiqueError("Nature inconnue.")
     nombre = len(sheet_elements(sheet)["elements"])
@@ -390,7 +393,9 @@ def set_elements(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
     cibles = set(indices)
     ponctuels = [p for p in _ponctuels(project) if p["planche"] != sheet.id or p["element"] not in cibles]
     if nature is not None:
-        ponctuels += [{"planche": sheet.id, "element": i, "nature": nature} for i in sorted(cibles)]
+        ponctuels += [
+            {"planche": sheet.id, "element": i, "nature": nature, **({"source": source} if source else {})} for i in sorted(cibles)
+        ]
     _enregistrer(db, project, _regles(project), ponctuels)
 
 

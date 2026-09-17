@@ -92,6 +92,14 @@ export const NATURE_COLORS: Record<string, string> = {
   toiture: "#2e7d32",
 };
 
+// « Tout détecter » : avancement et bilan de la détection automatique d'un plan (§18)
+export type AutoDetection = {
+  etape: "objets" | "pieces" | "noms" | "enveloppe" | "menuiseries" | null;
+  en_cours: boolean;
+  erreur: string | null;
+  resume: Record<string, number | string> | null;
+};
+
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const calquesApi = {
@@ -126,5 +134,7 @@ export const calquesApi = {
       perimetre: Perimetre;
     },
   ) => request<CalquesProject>(token, `/thermique/sheets/${sheetId}/calques/zone/designer`, json("POST", payload)),
+  autoDetect: (token: string, sheetId: number) => request<AutoDetection>(token, `/thermique/sheets/${sheetId}/detection-auto`, { method: "POST" }),
+  autoState: (token: string, sheetId: number) => request<AutoDetection>(token, `/thermique/sheets/${sheetId}/detection-auto`),
   designated: (token: string, sheetId: number) => request<SheetDesignations>(token, `/thermique/sheets/${sheetId}/calques/designes`),
 };

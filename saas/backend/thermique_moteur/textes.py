@@ -9,6 +9,7 @@ dans l'ordre de lecture.
 """
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 
@@ -20,6 +21,13 @@ CONFIANCE_MIN = 55
 REPERE = re.compile(r"^[0-9]{1,2}-[A-Z][0-9]{1,3}$")
 MOT = re.compile(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\-.]*$")
 NOM_MAX = 120
+# annotations de plan qui ne sont pas des noms de pièce (essai R+2 : « garde corps sol béton … nettoyage »)
+ANNOTATIONS = {
+    "GARDE", "CORPS", "SOL", "BETON", "BOITE", "OUVRANTS", "OUVRANT", "NETTOYAGE", "PASSERELLE", "PENTE", "NGF",
+    "VIDE", "TREMIE", "FAUX", "PLAFOND", "ACIER", "BOIS", "VITRAGE", "MENUISERIE", "GAINE", "DESCENTE", "EP", "EU",
+    "RIVE", "ACROTERE", "RELEVE", "COUPE", "NIVEAU", "ECHELLE", "PLAN", "INDICE", "DATE", "HSP", "HAUTEUR",
+}
+VOISINAGE_NOM_M = 1.2
 
 # Mots-clés de pré-classement (en majuscules sans accents), du plus sûr au moins sûr.
 EXTERIEUR = ("TERRASSE", "BALCON", "LOGGIA", "PATIO", "JARDIN", "PARVIS", "EXTERIEUR", "COURSIVE EXTERIEURE", "COUR ANGLAISE")
@@ -103,9 +111,12 @@ def _vrai_mot(texte: str) -> bool:
     )
 
 
-def nom_de_piece(mots: list[dict], polygone: list[float]) -> tuple[str, str | None]:
+def nom_de_piece(
+    mots: list[dict], polygone: list[float], centre: list[float] | None = None, voisinage_pt: float | None = None
+) -> tuple[str, str | None]:
     """(nom, repère) d'une pièce : mots de lettres dont le centre est dans le contour, lus de haut en bas puis de
-    gauche à droite ; le repère est un code du type « 6-B14 »."""
+    gauche à droite ; le repère est un code du type « 6-B14 ». Avec `centre` et `voisinage_pt` : seulement le mot
+    le plus proche du point d'étiquette et ses voisins (un grand plateau contient bien d'autres annotations)."""
     retenus, repere = [], None
     for mot in mots:
         x0, y0, x1, y1 = mot["boite"]
@@ -114,8 +125,12 @@ def nom_de_piece(mots: list[dict], polygone: list[float]) -> tuple[str, str | No
         texte = _propre(mot["texte"])
         if REPERE.match(texte.upper()):
             repere = repere or texte.upper()
-        elif _vrai_mot(texte):
+        elif _vrai_mot(texte) and majuscules(texte).strip(".-'") not in ANNOTATIONS:
             retenus.append((mot, texte))
+    if retenus and centre is not None and voisinage_pt:
+        milieu = lambda m: ((m["boite"][0] + m["boite"][2]) / 2, (m["boite"][1] + m["boite"][3]) / 2)
+        proche = min(retenus, key=lambda r: math.dist(milieu(r[0]), centre))
+        retenus = [r for r in retenus if math.dist(milieu(r[0]), milieu(proche[0])) <= voisinage_pt]
     # sens de lecture de l'image rendue : lignes de haut en bas, puis de gauche à droite
     if all("image" in m for m, _ in retenus):
         hauteur = max((m["image"][2] for m, _ in retenus), default=1) or 1

@@ -10,7 +10,7 @@ import logging
 import threading
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.db import SessionLocal
 from app.models.thermique import ThermiqueProject, ThermiqueRoom, ThermiqueSheet
@@ -19,6 +19,12 @@ from app.services.thermique_calques import attribution, plan_sheets, sheet_eleme
 from app.services.thermique_raster import raster_root
 from thermique_moteur import pieces as moteur
 from thermique_moteur import textes
+from thermique_moteur.metre import pt_en_m
+
+
+def room_scale(room: ThermiqueRoom) -> float | None:
+    sheet = object_session(room).get(ThermiqueSheet, room.sheet_id) if object_session(room) else None
+    return sheet.scale_denominator if sheet is not None else None
 
 LOG = logging.getLogger(__name__)
 MOTS_VERSION = "v1"
@@ -122,7 +128,9 @@ def _nommer(room: ThermiqueRoom, mots: list[dict]) -> None:
     """Nom et repère lus, sauf nom saisi ; classe proposée d'après le nom, sauf classe choisie."""
     if room.name_source == "saisi":
         return
-    nom, repere = textes.nom_de_piece(mots, _geometrie(room)["contour"])
+    geometrie = _geometrie(room)
+    voisinage = textes.VOISINAGE_NOM_M / pt_en_m(room_scale(room)) if room_scale(room) else None
+    nom, repere = textes.nom_de_piece(mots, geometrie["contour"], geometrie.get("centre"), voisinage)
     room.name, room.code, room.name_source = nom, repere, "lu"
     if room.classe_source != "choisi":
         room.classe = textes.classer(nom)
