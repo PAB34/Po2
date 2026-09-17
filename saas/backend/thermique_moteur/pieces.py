@@ -29,7 +29,8 @@ RESOLUTION_M = 0.05
 MARGE_M = 1.0
 FERMETURE_M = 0.4
 SURFACE_MIN_M2 = 1.0
-SURFACE_MAX_M2 = 400.0
+# un plateau ouvert de médiathèque dépasse 800 m² (essai R+2 du 2026-09-17)
+SURFACE_MAX_M2 = 3000.0
 PIXELS_MAX = 40_000_000
 
 
@@ -40,9 +41,9 @@ class PiecesError(ValueError):
 class Grille:
     """Image de la planche : pixel (colonne, ligne) ↔ point PDF."""
 
-    def __init__(self, xmin: float, ymin: float, xmax: float, ymax: float, echelle: float):
+    def __init__(self, xmin: float, ymin: float, xmax: float, ymax: float, echelle: float, marge_m: float = MARGE_M):
         self.pas = RESOLUTION_M / pt_en_m(echelle)
-        marge = MARGE_M / pt_en_m(echelle)
+        marge = marge_m / pt_en_m(echelle)
         self.ox, self.oy = xmin - marge, ymin - marge
         self.largeur = int((xmax - xmin + 2 * marge) / self.pas) + 1
         self.hauteur = int((ymax - ymin + 2 * marge) / self.pas) + 1
@@ -61,12 +62,19 @@ class Grille:
         return image, ImageDraw.Draw(image)
 
 
-def grille_des_elements(donnees: dict, indices: list[int]) -> Grille:
+def marge_pour(fermeture_m: float) -> float:
+    """Marge autour du dessin : plus large que l'épaississement, sinon des limites épaissies touchent le bord et
+    l'extérieur est coupé en morceaux (constaté sur le R+2 à 2 m de fermeture)."""
+    return max(MARGE_M, fermeture_m / 2 + 0.5)
+
+
+def grille_des_elements(donnees: dict, indices: list[int], marge_m: float = MARGE_M) -> Grille:
     elements = [donnees["elements"][i] for i in indices]
     if not elements:
         raise PiecesError("Aucun calque de limite désigné sur ce plan : désignez murs, cloisons, portes et menuiseries.")
     return Grille(
-        min(e[3] for e in elements), min(e[4] for e in elements), max(e[5] for e in elements), max(e[6] for e in elements), donnees["echelle"]
+        min(e[3] for e in elements), min(e[4] for e in elements), max(e[5] for e in elements), max(e[6] for e in elements), donnees["echelle"],
+        marge_m,
     )
 
 
@@ -107,7 +115,8 @@ def _espaces(limites: np.ndarray, fermeture_m: float) -> tuple[np.ndarray, int, 
         # croissance pas à pas, sans jamais franchir une limite (une pièce ne gagne pas les pixels d'un mur creux
         # ou de la pièce voisine à travers un trait) ; jusqu'à la diagonale du rayon pour restituer les angles
         libres = ~limites
-        for _ in range(int(math.ceil(rayon * math.sqrt(2))) + 1):
+        # croissance en croix : un coin en diagonale est à 2 × rayon pas (constaté sur le R+2 : pointes en V)
+        for _ in range(2 * rayon + 2):
             candidats = (etiquettes == 0) & libres
             if not candidats.any():
                 break
@@ -214,7 +223,7 @@ def detecter(
     surface_max: float = SURFACE_MAX_M2,
 ) -> list[dict]:
     """Pièces candidates d'une planche, de la plus grande à la plus petite."""
-    grille = grille_des_elements(donnees, indices)
+    grille = grille_des_elements(donnees, indices, marge_pour(fermeture_m))
     etiquettes, nombre, bord = _espaces(image_limites(donnees, indices, grille), fermeture_m)
     if nombre == 0:
         return []
@@ -232,7 +241,7 @@ def detecter(
 
 def piece_au_point(donnees: dict, indices: list[int], x: float, y: float, fermeture_m: float = FERMETURE_M) -> dict:
     """Espace fermé qui contient le point cliqué."""
-    grille = grille_des_elements(donnees, indices)
+    grille = grille_des_elements(donnees, indices, marge_pour(fermeture_m))
     colonne, ligne = (int(v) for v in grille.pixel(x, y))
     if not (0 <= ligne < grille.hauteur and 0 <= colonne < grille.largeur):
         raise PiecesError("Le point cliqué est hors des limites dessinées.")

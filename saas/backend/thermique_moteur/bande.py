@@ -28,6 +28,7 @@ from thermique_moteur.pieces import (
     _rayon,
     contour,
     grille_des_elements,
+    marge_pour,
     image_limites,
     simplifier,
 )
@@ -88,7 +89,7 @@ def proposer(
     surface_min: float = SURFACE_MIN_M2,
 ) -> list[dict]:
     """Un couple (nu extérieur, nu intérieur) par bâtiment du plan, du plus grand au plus petit."""
-    grille = grille_des_elements(donnees, indices)
+    grille = grille_des_elements(donnees, indices, marge_pour(fermeture_m))
     etiquettes, _nombre, bord = _espaces(image_limites(donnees, indices, grille), fermeture_m)
     exterieur = np.isin(etiquettes, list(bord)) if bord else np.zeros(etiquettes.shape, dtype=bool)
     batiments, nombre = ndimage.label(~exterieur)
