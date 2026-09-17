@@ -485,3 +485,24 @@ traits fluctuants ». Cause : les contours (pièces, enveloppe) suivent l'escali
   l'ouverture.
 - Essai R+2 : façades, noyaux et trémies à côtés droits posés sur les faces ; nu extérieur 934 m², nu intérieur
   894 m².
+
+## 18. « Tout détecter » (2026-09-17, accord de l'utilisateur : « go »)
+
+Mise en œuvre de la recommandation §16.5, sur un plan, d'un bouton, en tâche de fond :
+
+1. **Objets** (`thermique_moteur/reconnaissance.py`) : murs (trait noir le plus épais, règle « toutes formes »),
+   portes (points ou petits segments chaînés, cercle par tirage aléatoire, vantail), menuiseries (≥ 2 traits
+   fins parallèles de même longueur + cadres), isolant (petits traits gris logés dans les murs, règle « dans
+   l'enveloppe »). Portes et menuiseries : désignations d'éléments seuls marquées `source: auto`, remplacées à
+   chaque relance ; les désignations faites à la main ne sont jamais touchées ; une règle n'est créée que si la
+   famille n'en a pas.
+2. **Fermeture automatique** : la plus petite largeur (0,5 à 3 m) pour laquelle l'intérieur du bâtiment couvre
+   au moins 40 % de l'emprise des murs.
+3. **Pièces** (redressées) puis **noms** : mot le plus proche du point d'étiquette et ses voisins (≤ 1,2 m),
+   annotations techniques écartées ; pré-classement.
+4. **Enveloppe depuis les pièces chauffées** : nu intérieur = pièces chauffées réunies à travers les parois
+   (≤ 60 cm) ; nu extérieur = ce nu intérieur augmenté des limites (murs, vitrages) qui le bordent, sur 80 cm au
+   plus, sans jamais gagner d'espace libre (une terrasse reste dehors). Lignes corrigées à la main : non
+   remplacées.
+5. **Menuiseries** : dans la bande → menuiserie ; ailleurs → menuiserie intérieure.
+6. Écran : panneau « Tout détecter » dans l'onglet Calques (avancement, bilan, liens vers Enveloppe et Pièces).

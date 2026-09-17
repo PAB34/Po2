@@ -134,6 +134,91 @@ def proposer(
     return sorted(resultats, key=lambda r: -r["aire_exterieur_m2"])
 
 
+EPAISSEUR_MAX_M = 0.8
+FERMETURES_M = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0)
+PART_INTERIEUR_MIN = 0.4
+
+
+def fermeture_auto(donnees: dict, indices: list[int]) -> float:
+    """Plus petite largeur d'ouverture qui ferme le bâtiment : l'espace libre non extérieur couvre au moins
+    `PART_INTERIEUR_MIN` de l'emprise des limites (essai R+2 : 35 m² à 1,5 m, 888 m² à 2 m)."""
+    elements = [donnees["elements"][i] for i in indices]
+    if not elements:
+        raise PiecesError("Aucun calque de limite désigné sur ce plan : désignez murs, cloisons, portes et menuiseries.")
+    for fermeture in FERMETURES_M:
+        grille = grille_des_elements(donnees, indices, marge_pour(fermeture))
+        emprise = (
+            (max(e[5] for e in elements) - min(e[3] for e in elements))
+            * (max(e[6] for e in elements) - min(e[4] for e in elements))
+            * (RESOLUTION_M / grille.pas) ** 2
+        )
+        etiquettes, _nombre, bord = _espaces(image_limites(donnees, indices, grille), fermeture)
+        interieur = float(((etiquettes > 0) & ~np.isin(etiquettes, list(bord))).sum()) * grille.m2_par_pixel
+        if interieur >= PART_INTERIEUR_MIN * emprise:
+            return fermeture
+    return FERMETURES_M[-1]
+
+
+def depuis_pieces(
+    donnees: dict,
+    indices: list[int],
+    chauffees: list[list[float]],
+    paroi_max_m: float = PAROI_MAX_M,
+    epaisseur_max_m: float = EPAISSEUR_MAX_M,
+) -> list[dict]:
+    """Deux lignes déduites des pièces chauffées (§18) : nu intérieur = pièces réunies à travers les parois ;
+    nu extérieur = nu intérieur augmenté des limites qui le bordent (murs, vitrages), sur `epaisseur_max_m` au plus,
+    sans jamais gagner d'espace libre : une terrasse, même bordée de piliers, reste dehors."""
+    if not chauffees:
+        raise PiecesError("Aucune pièce chauffée sur ce plan : détectez et classez les pièces d'abord.")
+    grille = grille_des_elements(donnees, indices, marge_pour(epaisseur_max_m * 2))
+    image, dessin = grille.image()
+    for contour_piece in chauffees:
+        dessin.polygon([grille.pixel(contour_piece[k], contour_piece[k + 1]) for k in range(0, len(contour_piece) - 1, 2)], fill=1, outline=1)
+    pieces = np.array(image, dtype=bool)
+    interieur = ndimage.binary_fill_holes(ndimage.binary_closing(pieces, structure=_disque(_rayon(paroi_max_m))))
+    # limites « pleines » : l'épaisseur d'un mur (entre ses deux faces) est comblée, pas un espace large comme
+    # une terrasse (fermeture de `paroi_max_m`)
+    limites = ndimage.binary_closing(image_limites(donnees, indices, grille), structure=_disque(_rayon(paroi_max_m)))
+    pas = int(round(epaisseur_max_m / RESOLUTION_M))
+    bande = interieur.copy()
+    croix = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool)
+    for _ in range(pas):
+        suite = ndimage.binary_dilation(bande, structure=croix) & (limites | interieur)
+        if (suite == bande).all():
+            break
+        bande = suite
+    englobe = ndimage.binary_fill_holes(bande)
+    segments = segments_des_elements(donnees, indices, RESOLUTION_M / grille.pas)
+    k2 = (RESOLUTION_M / grille.pas) ** 2
+    resultats = []
+    morceaux, nombre = ndimage.label(interieur)
+    for numero, (lignes, colonnes) in enumerate(ndimage.find_objects(morceaux), start=1):
+        marge = pas + 2
+        l0, l1 = max(lignes.start - marge, 0), min(lignes.stop + marge, interieur.shape[0])
+        c0, c1 = max(colonnes.start - marge, 0), min(colonnes.stop + marge, interieur.shape[1])
+        dedans = morceaux[l0:l1, c0:c1] == numero
+        if dedans.sum() * grille.m2_par_pixel < SURFACE_MIN_M2:
+            continue
+        # la bande de ce morceau : ce qui touche son intérieur
+        autour, _n = ndimage.label(englobe[l0:l1, c0:c1])
+        numeros = set(np.unique(autour[dedans])) - {0}
+        dehors = np.isin(autour, list(numeros))
+        nu_int = _polygone(dedans, grille, (c0, l0), 0.5, segments)
+        nu_ext = _polygone(dehors, grille, (c0, l0), -0.5, segments)
+        resultats.append(
+            {
+                "nu_exterieur": nu_ext,
+                "nu_interieur": nu_int,
+                "aire_exterieur_m2": round(_aire(nu_ext) * k2, 2),
+                "aire_interieur_m2": round(_aire(nu_int) * k2, 2),
+            }
+        )
+    if not resultats:
+        raise PiecesError("Les pièces chauffées sont trop petites pour former une enveloppe.")
+    return sorted(resultats, key=lambda r: -r["aire_exterieur_m2"])
+
+
 class Bande:
     """Filtre des éléments selon leur position par rapport aux deux lignes d'un niveau (points PDF)."""
 

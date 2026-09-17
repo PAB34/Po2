@@ -57,7 +57,14 @@ from app.schemas.thermique import (
     ZoneCreate,
     ZoneUpdate,
 )
-from app.services import thermique_calques, thermique_enveloppe, thermique_metre, thermique_pieces, thermique_superposition
+from app.services import (
+    thermique_calques,
+    thermique_detection,
+    thermique_enveloppe,
+    thermique_metre,
+    thermique_pieces,
+    thermique_superposition,
+)
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -1034,6 +1041,31 @@ def _rooms_action(db: Session, sheet: ThermiqueSheet, action, background: Backgr
     if lire and background is not None:
         result["lecture_noms"] = "en_cours"
     return result
+
+
+@router.post("/sheets/{sheet_id}/detection-auto")
+def start_auto_detection(
+    sheet_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Lance « Tout détecter » sur la planche : objets, pièces, noms, enveloppe (étape E-auto, §18)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    try:
+        etat = thermique_detection.start(db, project, sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if etat.get("en_cours"):
+        background.add_task(thermique_detection.run, sheet.id)
+    return etat
+
+
+@router.get("/sheets/{sheet_id}/detection-auto")
+def read_auto_detection(sheet_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    """Avancement et bilan de la détection automatique de la planche."""
+    return thermique_detection.etat(_sheet_or_404(db, user, sheet_id))
 
 
 @router.get("/sheets/{sheet_id}/pieces")

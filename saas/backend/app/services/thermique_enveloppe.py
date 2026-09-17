@@ -49,9 +49,18 @@ def propose_envelope(
         batiments = moteur.proposer(elements, indices, fermeture_m)
     except PiecesError as exc:
         raise ThermiqueError(str(exc)) from exc
+    ecrire_lignes(db, level, batiments, genres)
+    return {
+        "batiments": len(batiments),
+        "nu_exterieur_m2": round(sum(b["aire_exterieur_m2"] for b in batiments), 2),
+        "nu_interieur_m2": round(sum(b["aire_interieur_m2"] for b in batiments), 2),
+    }
+
+
+def ecrire_lignes(db: Session, level: ThermiqueLevel, batiments: list[dict], genres: tuple[str, ...]) -> None:
+    """Remplace les lignes automatiques du niveau par celles proposées (une paire par bâtiment)."""
     for zone in [zone for zone in level.zones if zone.kind in genres]:
-        if zone.source == "automatique" or replace:
-            db.delete(zone)
+        db.delete(zone)
     db.flush()
     for rang, batiment in enumerate(batiments, start=1):
         suffixe = "" if len(batiments) == 1 else f" {rang}"
@@ -73,8 +82,3 @@ def propose_envelope(
             )
     db.commit()
     db.refresh(level)
-    return {
-        "batiments": len(batiments),
-        "nu_exterieur_m2": round(sum(b["aire_exterieur_m2"] for b in batiments), 2),
-        "nu_interieur_m2": round(sum(b["aire_interieur_m2"] for b in batiments), 2),
-    }

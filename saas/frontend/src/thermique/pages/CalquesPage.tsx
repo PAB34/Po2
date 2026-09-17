@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
@@ -14,6 +14,7 @@ import {
   type CalquesProject,
   type Perimetre,
 } from "../calques";
+import type { AutoDetection } from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { ProjectTabs } from "./ProjectLibraryPage";
@@ -29,6 +30,26 @@ const LASSO_STEP_PX = 4;
 const LASSO_MAX_POINTS = 1500;
 // portée « cet élément seulement » (à côté des familles renvoyées par le serveur)
 const SEUL = "seul";
+const ETAPES: Record<string, string> = {
+  objets: "Reconnaissance des murs, portes et menuiseries…",
+  pieces: "Détection des pièces…",
+  noms: "Lecture des noms sur le plan… (environ une minute)",
+  enveloppe: "Tracé du nu intérieur et du nu extérieur…",
+  menuiseries: "Classement des menuiseries…",
+};
+const BILAN: [string, string][] = [
+  ["murs", "éléments de mur"],
+  ["portes", "portes"],
+  ["menuiseries", "menuiseries"],
+  ["isolant", "calques d'isolant"],
+  ["fermeture_cm", "ouvertures refermées (cm)"],
+  ["pieces", "pièces"],
+  ["surface_chauffee_m2", "surface chauffée (m²)"],
+  ["menuiseries_exterieures", "menuiseries en façade"],
+  ["menuiseries_interieures", "menuiseries intérieures"],
+  ["nu_interieur_m2", "nu intérieur (m²)"],
+  ["nu_exterieur_m2", "nu extérieur (m²)"],
+];
 const familyKey = (item: { signature: string; forme: string }) => `${item.signature}#${item.forme}`;
 const flat = (points: PdfPoint[]): CalqueLasso => points.flatMap((point) => [point[0], point[1]]);
 
@@ -77,6 +98,35 @@ export function CalquesPage() {
     enabled: Boolean(token && sheet),
     staleTime: RASTER_STALE_MS,
   });
+  const auto = useQuery({
+    queryKey: ["thermique", "detection-auto", currentSheetId ?? 0],
+    queryFn: () => calquesApi.autoState(token!, currentSheetId!),
+    enabled: Boolean(token && currentSheetId),
+    refetchInterval: (query) => (query.state.data?.en_cours ? 2500 : false),
+  });
+  const autoRunning = Boolean(auto.data?.en_cours);
+  const autoMutation = useMutation({
+    mutationFn: () => calquesApi.autoDetect(token!, currentSheetId!),
+    onSuccess: (etat) => {
+      queryClient.setQueryData(["thermique", "detection-auto", currentSheetId ?? 0], etat);
+      setNotice(null);
+    },
+  });
+  // à la fin de la détection, tout l'écran se remet à jour (calques, pièces, lignes)
+  const autoDone = useRef<AutoDetection | null>(null);
+  useEffect(() => {
+    if (auto.data && !auto.data.en_cours && auto.data !== autoDone.current) {
+      autoDone.current = auto.data;
+      if (auto.data.resume) {
+        void queryClient.invalidateQueries({ queryKey: ["thermique", "calques", projectId] });
+        void queryClient.invalidateQueries({ queryKey: ["thermique", "calques-designes", projectId] });
+        void queryClient.invalidateQueries({ queryKey: ["thermique", "calques-famille"] });
+        void queryClient.invalidateQueries({ queryKey: ["thermique", "pieces"] });
+        void queryClient.invalidateQueries({ queryKey: ["thermique", "metre", projectId] });
+      }
+    }
+  }, [auto.data, projectId, queryClient]);
+
   const designated = useQuery({
     queryKey: ["thermique", "calques-designes", projectId, currentSheetId ?? 0],
     queryFn: () => calquesApi.designated(token!, currentSheetId!),
@@ -416,6 +466,44 @@ export function CalquesPage() {
               ))}
             </select>
           </label>
+        )}
+        {data && currentSheetId && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Tout détecter sur ce plan</strong>
+            <span className="th-muted">
+              L'outil reconnaît les murs, les portes et les menuiseries, détecte les pièces, lit leurs noms, puis trace le nu intérieur et le
+              nu extérieur. Vos désignations et vos lignes corrigées à la main sont gardées.
+            </span>
+            <div className="th-inline">
+              <button
+                type="button"
+                className="po2-button po2-button--primary"
+                disabled={autoRunning || autoMutation.isPending}
+                onClick={() => autoMutation.mutate()}
+              >
+                {autoRunning ? "Détection en cours…" : "Tout détecter"}
+              </button>
+            </div>
+            {autoRunning && auto.data?.etape && <span className="th-muted">{ETAPES[auto.data.etape] ?? "Détection…"}</span>}
+            {autoMutation.error && <span className="th-alert th-alert--error">{autoMutation.error.message}</span>}
+            {auto.data?.erreur && <span className="th-alert th-alert--error">{auto.data.erreur}</span>}
+            {!autoRunning && auto.data?.resume && (
+              <>
+                <ul className="th-calque-legend">
+                  {BILAN.filter(([cle]) => auto.data!.resume![cle] !== undefined).map(([cle, libelle]) => (
+                    <li key={cle}>
+                      <strong>{countFormat.format(Number(auto.data!.resume![cle]))}</strong> {libelle}
+                    </li>
+                  ))}
+                </ul>
+                {typeof auto.data.resume.enveloppe === "string" && <span className="th-muted">Enveloppe : {auto.data.resume.enveloppe}</span>}
+                <span className="th-muted">
+                  À vérifier dans <Link to={`/projets/${projectId}/enveloppe`}>Enveloppe</Link> et{" "}
+                  <Link to={`/projets/${projectId}/pieces`}>Pièces</Link>.
+                </span>
+              </>
+            )}
+          </section>
         )}
         {pickMutation.isPending && <p className="th-muted">Recherche de l'élément…</p>}
         {zoneMutation.isPending && !zone && <p className="th-muted">Lecture de la zone…</p>}
