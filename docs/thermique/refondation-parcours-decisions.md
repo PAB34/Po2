@@ -342,3 +342,61 @@ Retours de l'utilisateur après E3 :
 | Q81 → D31 | Intérieur / extérieur **déduit des pièces** de part et d'autre (extérieure si elle sépare une pièce chauffée de l'extérieur ou d'un local non chauffé) ; nature « menuiserie intérieure » ajoutée pour forcer un cas. Les deux ferment les pièces. |
 | Q82 → D32 | Lasso **« Désigner »** : les familles présentes dans la zone sont listées et cochées ; la nature s'applique à ces familles **sur tous les plans** (par défaut) ou **aux seuls éléments de la zone**. Révise D19 (zone = retirer / remettre seulement). |
 | D33 | Portée **« Seulement cet élément »** au clic. Désignations ponctuelles stockées dans `signatures_json.elements` (`planche`, `element`, `nature`) ; elles priment sur les règles. |
+
+## 15. Enveloppe thermique avant les pièces : désigner « seulement dans l'enveloppe » (2026-09-17)
+
+| N° | Décision |
+|---|---|
+| Q83 → D34 | Deux lignes **proposées depuis les calques** puis corrigées (déplacer, ajouter, supprimer un sommet). |
+| Q84 → D35 | Nouvel onglet **« Enveloppe »** entre Superposition et Pièces ; lignes enregistrées comme zones du niveau (reprises par le Métré). |
+| Q85 → D36 | Portée d'un calque : **partout / dans l'enveloppe / à l'intérieur** ; une même famille peut avoir une nature par portée. |
+
+Demande de l'utilisateur : « c'est pour ça que je t'avais parlé de pouvoir dessiner les zones de surface
+thermique au nu intérieur et au nu extérieur : cela permettrait de dire je ne veux sélectionner cet élément que
+dans la zone thermique (option) ».
+
+### 15.1 Existant vérifié (production, projet « TEST »)
+
+- Les six niveaux sont **superposés et calés** (E2 validée par l'utilisateur).
+- Calques : mur (hachure), isolant, cloison (0,96 pt, droit et polyligne), porte (0,48 pt, petit contour fermé).
+- **Aucune** zone tracée (`ThermiqueZone`) : ni nu intérieur (`contour`), ni nu extérieur (`nu_exterieur`).
+- Outils existants dans l'onglet Métré : tracé à la main des zones, clic droit pour ajouter un sommet, détection
+  « deux lignes » (G1) fondée sur l'ancien moteur de murs, **pas sur les calques** (juste au N-1 du premier
+  projet, trop grande ailleurs).
+
+### 15.2 Proposition
+
+1. Nouvel onglet **« Enveloppe »**, entre Superposition et Pièces : par niveau, les deux lignes.
+2. **Proposition automatique à partir des calques** : les limites désignées (murs, menuiseries, portes) sont
+   épaissies comme pour les pièces ; tout ce qui communique avec le bord du plan est l'extérieur ; son bord est le
+   **nu extérieur**. Le **nu intérieur** est le bord de l'espace libre situé juste derrière le mur de façade.
+   Patios et cours intérieures : lignes propres.
+3. **Corrections** : déplacer un sommet, clic droit pour en ajouter un, supprimer ; le niveau de dessous
+   s'affiche en repère (les niveaux sont superposés).
+4. Enregistrement dans les zones existantes (`contour` et `nu_exterieur` du niveau) : le Métré les reprend.
+5. **Calques, option « Où ? »** pour une famille : partout / **dans l'enveloppe** (entre les deux lignes) /
+   **à l'intérieur** (en deçà du nu intérieur). Un élément est « dans l'enveloppe » si tous ses points sont dans le
+   nu extérieur (à 10 cm près) et aucun à plus de 10 cm à l'intérieur du nu intérieur.
+6. Pièces (E3) : inchangées ; les menuiseries de l'enveloppe sont alors extérieures sans attendre E4.
+
+### 15.3 Questions
+
+- **Q83** — Lignes : proposées depuis les calques puis corrigées (recommandé), tracées à la main, ou détection G1 ?
+- **Q84** — Où : nouvel onglet « Enveloppe » (recommandé) ou dans l'onglet Métré ?
+- **Q85** — Options de portée d'un calque : partout / dans l'enveloppe / à l'intérieur (recommandé), ou seulement
+  partout / dans l'enveloppe ?
+
+### 15.4 Livraison (2026-09-17)
+
+- Moteur `thermique_moteur/bande.py` : proposition des deux lignes (`proposer`), décalage d'un demi-pixel vers
+  l'axe des traits-limites, filtre `Bande` (tolérance 10 cm) ; `calques.membres` / `attribuer` appliquent la
+  portée ; une règle restreinte ne s'applique pas sur un plan sans lignes.
+- Moteur des pièces : pixels rendus par **croissance pas à pas sans franchir de limite** (avant : au plus
+  proche, à travers les traits ; une pièce ou l'extérieur gagnait l'intérieur des murs creux).
+- Service `thermique_enveloppe.py` ; route `POST /niveaux/{id}/proposer-enveloppe` ; règles avec `perimetre` ;
+  route famille `?perimetre=` ; onglet **Enveloppe** (proposer, glisser un sommet, clic droit : ajouter,
+  Alt + clic : retirer) ; option **« Où ? »** dans Calques (clic et lasso).
+- Essai en production (calques réels, rien enregistré) : RDC à 3 m de fermeture → un bâtiment de 1 060 m² au nu
+  extérieur, 676 m² au nu intérieur, contours qui suivent les façades mais festonnés là où les vitrages ne sont
+  pas désignés ; R+3 inexploitable tant que la texture de terrasse reste dans le calque « mur » (même signature
+  que la hachure des murs, à retirer au lasso).

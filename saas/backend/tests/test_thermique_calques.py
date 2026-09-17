@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services import thermique_calques
 from app.services.thermique import ThermiqueError, create_project
 from thermique_moteur import calques
+from thermique_moteur.bande import PERIMETRES
 
 M = 1000 / 100 / (25.4 / 72)  # points PDF pour 1 m à 1/100
 MUR = "trait|1.56|#000000|"
@@ -114,7 +115,7 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
     db_session.add(user)
     db_session.commit()
     projet = create_project(db_session, user, "Médiathèque", None)
-    assert thermique_calques.list_designations(db_session, projet) == {"regles": [], "ponctuels": [], "natures": calques.NATURES, "planches": []}
+    assert thermique_calques.list_designations(db_session, projet) == {"regles": [], "ponctuels": [], "natures": calques.NATURES, "perimetres": PERIMETRES, "planches": []}
 
     document = ThermiqueDocument(
         project_id=projet.id, original_filename="plans.pdf", stored_filename="plans.pdf", file_format="pdf", size_bytes=1, sha256="0" * 64, page_count=3

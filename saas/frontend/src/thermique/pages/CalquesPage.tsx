@@ -5,7 +5,15 @@ import { Link, useParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type PdfPoint } from "../api";
-import { NATURE_COLORS, calquesApi, type CalquePick, type CalqueLasso, type CalqueZone, type CalquesProject } from "../calques";
+import {
+  NATURE_COLORS,
+  calquesApi,
+  type CalquePick,
+  type CalqueLasso,
+  type CalqueZone,
+  type CalquesProject,
+  type Perimetre,
+} from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { ProjectTabs } from "./ProjectLibraryPage";
@@ -37,6 +45,7 @@ export function CalquesPage() {
   const [pick, setPick] = useState<CalquePick | null>(null);
   const [scope, setScope] = useState("");
   const [nature, setNature] = useState("mur");
+  const [perimetre, setPerimetre] = useState<Perimetre>("partout");
   const [shownRule, setShownRule] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pixelsPerPt = useRef(1);
@@ -78,9 +87,10 @@ export function CalquesPage() {
   const shown = shownRule !== null ? data?.regles.find((rule) => rule.id === shownRule) ?? null : null;
   const familySignature = pick ? pick.element.signature : shown?.signature ?? null;
   const familyForme = pick ? (scope === SEUL ? null : scope) : shown?.forme ?? null;
+  const familyPerimetre: Perimetre = pick ? perimetre : shown?.perimetre ?? "partout";
   const family = useQuery({
-    queryKey: ["thermique", "calques-famille", currentSheetId ?? 0, familySignature ?? "", familyForme ?? ""],
-    queryFn: () => calquesApi.family(token!, currentSheetId!, familySignature!, familyForme!),
+    queryKey: ["thermique", "calques-famille", currentSheetId ?? 0, familySignature ?? "", familyForme ?? "", familyPerimetre],
+    queryFn: () => calquesApi.family(token!, currentSheetId!, familySignature!, familyForme!, familyPerimetre),
     enabled: Boolean(token && currentSheetId && familySignature && familyForme),
     staleTime: Infinity,
   });
@@ -98,6 +108,7 @@ export function CalquesPage() {
       setShownRule(null);
       setScope(result.familles[0].forme);
       setNature(result.regle?.nature ?? "mur");
+      setPerimetre(result.regle?.perimetre ?? "partout");
       setNotice(null);
       closeZone();
     },
@@ -109,7 +120,7 @@ export function CalquesPage() {
     mutationFn: () =>
       scope === SEUL
         ? calquesApi.setElements(token!, projectId, { planche_id: pick!.element.planche, elements: [pick!.element.index], nature })
-        : calquesApi.save(token!, projectId, { signature: pick!.element.signature, forme: scope, nature }),
+        : calquesApi.save(token!, projectId, { signature: pick!.element.signature, forme: scope, nature, perimetre }),
     onSuccess: (next) => {
       refresh(next);
       setNotice(`${plural(selectedCount, "élément")} désigné${selectedCount > 1 ? "s" : ""} « ${next.natures[nature]} ».`);
@@ -177,6 +188,7 @@ export function CalquesPage() {
           .map((item) => ({ signature: item.signature, forme: item.forme })),
         nature,
         portee: zoneScope,
+        perimetre,
       }),
     onSuccess: (next) => {
       refresh(next);
@@ -212,6 +224,32 @@ export function CalquesPage() {
   const zoneRemoved = zoneChosen.reduce((sum, item) => sum + item.retires, 0);
 
   const lasso = draft ? flat(draft) : zoneLasso;
+  const currentPlan = data?.planches.find((item) => item.id === currentSheetId);
+
+  // « Où ? » : portée d'une désignation par famille (docs/thermique/refondation-parcours-decisions.md §15)
+  function perimetreField(traced: boolean): ReactNode {
+    if (!data) {
+      return null;
+    }
+    return (
+      <label className="th-field">
+        <span>Où ?</span>
+        <select value={perimetre} onChange={(event) => setPerimetre(event.target.value as Perimetre)}>
+          {(Object.keys(data.perimetres) as Perimetre[]).map((key) => (
+            <option key={key} value={key}>
+              {data.perimetres[key].charAt(0).toUpperCase() + data.perimetres[key].slice(1)}
+            </option>
+          ))}
+        </select>
+        {perimetre !== "partout" && !traced && (
+          <small className="th-alert th-alert--warn">
+            L'enveloppe de ce plan n'est pas tracée : la désignation n'y prendra effet qu'une fois les deux lignes posées (onglet{" "}
+            <Link to={`/projets/${projectId}/enveloppe`}>Enveloppe</Link>).
+          </small>
+        )}
+      </label>
+    );
+  }
 
   function renderOverlay(toScreen: ToScreen): ReactNode {
     const points = (coords: number[]) => {
@@ -432,6 +470,7 @@ export function CalquesPage() {
                     <span>Seulement les éléments de la zone</span>
                   </label>
                 </fieldset>
+                {zoneScope === "familles" && perimetreField(Boolean(currentPlan?.enveloppe))}
                 <label className="th-field">
                   <span>Nature</span>
                   <select value={nature} onChange={(event) => setNature(event.target.value)}>
@@ -541,6 +580,7 @@ export function CalquesPage() {
                 </small>
               )}
             </fieldset>
+            {scope !== SEUL && perimetreField(pick.enveloppe_tracee)}
             <label className="th-field">
               <span>Nature</span>
               <select value={nature} onChange={(event) => setNature(event.target.value)}>
@@ -614,6 +654,7 @@ export function CalquesPage() {
                         <strong>{rule.nature_libelle}</strong>
                         <small>
                           {rule.libelle} · {rule.forme_libelle}
+                          {rule.perimetre !== "partout" ? ` · ${rule.perimetre_libelle}` : ""}
                         </small>
                         <small>
                           {plural(rule.total, "élément")} sur {plural(rule.par_planche.length, "plan")}

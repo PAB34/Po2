@@ -104,10 +104,15 @@ def _espaces(limites: np.ndarray, fermeture_m: float) -> tuple[np.ndarray, int, 
     etiquettes, nombre = ndimage.label(~epaissir(limites, fermeture_m))
     rayon = _rayon(fermeture_m)
     if nombre and rayon > 0:
-        distance, (iy, ix) = ndimage.distance_transform_edt(etiquettes == 0, return_indices=True)
-        # jusqu'à la diagonale du rayon : les angles droits sont restitués eux aussi
-        rendus = (etiquettes == 0) & ~limites & (distance <= rayon * math.sqrt(2) + 1)
-        etiquettes = np.where(rendus, etiquettes[iy, ix], etiquettes)
+        # croissance pas à pas, sans jamais franchir une limite (une pièce ne gagne pas les pixels d'un mur creux
+        # ou de la pièce voisine à travers un trait) ; jusqu'à la diagonale du rayon pour restituer les angles
+        libres = ~limites
+        for _ in range(int(math.ceil(rayon * math.sqrt(2))) + 1):
+            candidats = (etiquettes == 0) & libres
+            if not candidats.any():
+                break
+            voisins = ndimage.grey_dilation(etiquettes, footprint=np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=bool))
+            etiquettes = np.where(candidats & (voisins > 0), voisins, etiquettes)
     bord = set(np.unique(np.concatenate([etiquettes[0], etiquettes[-1], etiquettes[:, 0], etiquettes[:, -1]]))) - {0}
     return etiquettes, nombre, bord
 

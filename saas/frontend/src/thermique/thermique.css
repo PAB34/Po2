@@ -1498,3 +1498,35 @@ circle.th-seg--measure {
   stroke-width: 2;
   stroke-dasharray: 6 4;
 }
+
+/* Enveloppe : nu extérieur (bleu), nu intérieur (orange) */
+.th-env polygon {
+  fill: none;
+  stroke-width: 2;
+}
+
+.th-env--nu_exterieur polygon {
+  stroke: #1c7ed6;
+}
+
+.th-env--contour polygon {
+  stroke: #e8590c;
+}
+
+.th-env.is-selected polygon {
+  stroke-width: 3.5;
+}
+
+.th-env circle {
+  fill: #ffffff;
+  stroke: #111827;
+  stroke-width: 1.5;
+}
+
+.th-env-dot--nu_exterieur {
+  background: #1c7ed6;
+}
+
+.th-env-dot--contour {
+  background: #e8590c;
+}
