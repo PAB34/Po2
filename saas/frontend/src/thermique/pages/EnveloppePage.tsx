@@ -47,7 +47,8 @@ export function EnveloppePage() {
 
   const [levelId, setLevelId] = useState<number | null>(null);
   const [zoneId, setZoneId] = useState<number | null>(null);
-  const [fermetureCm, setFermetureCm] = useState(100);
+  // 2 m : largeur qui a fermé le bâtiment sur l'essai R+2 (docs/thermique/refondation-parcours-decisions.md §16)
+  const [fermetureCm, setFermetureCm] = useState(200);
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // sommet en cours de déplacement : points modifiés localement jusqu'au relâchement

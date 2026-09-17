@@ -410,3 +410,62 @@ dans le Métré, le nu intérieur s'appelait « Contour ». Correctifs : boutons
 dans Enveloppe (clic par sommet, Entrée ou premier sommet pour fermer, Retour arrière, Échap) ; bouton
 « Proposer seulement le nu intérieur » qui garde un nu extérieur manuel (`lignes` dans la requête) ; outil et
 nom par défaut « Nu intérieur » dans le Métré.
+
+## 16. Essai : tout détecter depuis le plan vierge (R+2, 2026-09-17)
+
+Demande : « prends le plan du R+2 uniquement et, par toi-même, avec les outils dont je dispose, redessine tout :
+cloisons, portes, menuiseries ; c'est un test pour trouver une autre solution pour tout détecter ». Précision :
+**sans les calques déjà définis**, depuis le plan vierge.
+
+### 16.1 Protocole
+
+- Projet séparé **« ESSAI R+2 — détection depuis le plan vierge (Claude) »** (projet 4, planche 31) : copie du
+  seul PDF du R+2, 1/50, aucun calque. Le projet « TEST » n'est pas touché.
+- Reconnaissance **par la forme** (prototypes exécutés sur le serveur), puis enregistrement avec les outils de
+  l'application : règle (murs, isolant), éléments seuls (portes, menuiseries), Enveloppe, Pièces, lecture des
+  noms.
+
+### 16.2 Ce que le dessin contient vraiment (R+2)
+
+| Objet | Dessin |
+|---|---|
+| Mur coupé | Contour noir 1,56 pt (le trait le plus épais du plan) + hachure grise. |
+| Isolant | Zigzag de petits traits 0,24 pt gris 50 %, dans l'épaisseur des façades (et marches d'escalier, même trait). |
+| Battement de porte | **Suite de points** (segments de 0,1 pt tous les 1 à 1,8 pt), pas un arc ; parfois continué par une partie droite. |
+| Porte / baie vitrée | 3 traits 0,24 pt noirs parallèles de même longueur (vitrage) + 2 traits 0,36 pt (cadre). |
+| Garde-corps vitré intérieur | Même vitrage 0,24 pt, autour des trémies. |
+| Terrasse sud | Lames 0,36 pt noires parallèles (texture), piliers et garde-corps en bord. |
+| Noms | Lettres en contours (lecture Tesseract). |
+
+### 16.3 Résultats
+
+| Étape | Résultat |
+|---|---|
+| Murs (trait le plus épais) | 206 éléments. |
+| Portes (points chaînés + cercle par tirage aléatoire, rayon 0,55-1,4 m, balayage 45-110°) | **4 / 4** (rayons 1,01 à 1,07 m). |
+| Vitrages (≥ 2 traits fins parallèles de même longueur, écart ≤ 12 cm) | 41 groupes, 114 traits ; 54 cadres associés. |
+| Isolant | règle « dans l'enveloppe » sur le petit trait gris. |
+| Enveloppe | fuit à 1 m (façades à éléments répétés, pointillés) ; **fermée à 2 m** : 935 m² au nu extérieur, 893 m² au nu intérieur. |
+| Pièces | plateau de 808 m² + noyaux et trémies (6 espaces). |
+| Noms | justes pour « Escalier » (6-C2) ; le plateau reçoit toutes les annotations (« garde-corps sol béton… »). |
+
+Défauts trouvés et corrigés dans le moteur : croissance en croix trop courte (pointes en V aux angles), marge
+plus petite que l'épaississement (traits vers le bord), plafond de 400 m² par pièce (plateau ouvert écarté).
+
+### 16.4 Limites constatées
+
+1. La **terrasse sud** est prise dans l'enveloppe (bordée de piliers et d'un garde-corps) : les vitrages de la
+   façade sud passent alors « intérieurs ». Le dessin seul ne dit pas ce qui est chauffé.
+2. Un trait **ne suffit pas** à dire ce qu'est un objet : le même 0,24 pt fait vitrages extérieurs, garde-corps
+   intérieurs et marches ; le même 0,36 pt fait cadres et lames de terrasse.
+3. Le nom d'un grand plateau mélange toutes les annotations qu'il contient.
+
+### 16.5 Recommandation : la meilleure solution
+
+1. **Reconnaître des objets, pas des traits** : détecteurs de portes (arc, même en pointillés), de menuiseries
+   (vitrage parallèle + cadre, dans une ouverture de mur), de textures (séries régulières à écarter), de murs
+   (trait le plus épais + hachure). Proposés en un clic (« Détecter automatiquement ») comme calques à valider.
+2. **Pièces avant enveloppe** (D11) : pièces → noms → classement (terrasse = extérieur) → **enveloppe déduite
+   des pièces chauffées** → menuiseries extérieures / intérieures déduites des pièces de part et d'autre.
+3. **Fermeture choisie automatiquement** : la plus petite largeur qui ferme le bâtiment (saut de surface).
+4. **Noms** : mots proches du point d'étiquette de la pièce, annotations techniques écartées.
