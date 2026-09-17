@@ -214,6 +214,32 @@ class SuperpositionValidate(BaseModel):
     dy: float
 
 
+class RoomDetect(BaseModel):
+    # Ouvertures refermées jusqu'à cette largeur (baies, passages), en centimètres.
+    fermeture_cm: float = Field(default=40, ge=0, le=300)
+
+
+class RoomAdd(RoomDetect):
+    # Point cliqué dans la pièce, en points PDF de la planche.
+    x: float
+    y: float
+
+
+class RoomMerge(BaseModel):
+    ids: list[int] = Field(min_length=2, max_length=50)
+
+
+class RoomUpdate(BaseModel):
+    nom: str | None = Field(default=None, max_length=120)
+    classe: str | None = Field(default=None, max_length=20)
+
+
+class RoomSplit(BaseModel):
+    # Trait de coupe, deux points PDF qui traversent la pièce.
+    p1: list[float] = Field(min_length=2, max_length=2)
+    p2: list[float] = Field(min_length=2, max_length=2)
+
+
 class EraseAllRequest(BaseModel):
     # Le mot « EFFACER », tapé par l'utilisateur, confirme l'effacement de tous ses projets.
     confirmation: str = Field(default="", max_length=20)
