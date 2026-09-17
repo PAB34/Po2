@@ -469,3 +469,19 @@ plus petite que l'épaississement (traits vers le bord), plafond de 400 m² par 
    des pièces chauffées** → menuiseries extérieures / intérieures déduites des pièces de part et d'autre.
 3. **Fermeture choisie automatiquement** : la plus petite largeur qui ferme le bâtiment (saut de surface).
 4. **Noms** : mots proches du point d'étiquette de la pièce, annotations techniques écartées.
+
+## 17. Lignes redressées sur les faces vectorielles (2026-09-17)
+
+Retour de l'utilisateur sur l'image de l'essai R+2 : « des choses vraiment très bien, mais des imprécisions, des
+traits fluctuants ». Cause : les contours (pièces, enveloppe) suivent l'escalier des pixels de 5 cm.
+
+- Module `thermique_moteur/redressement.py` : contour simplifié (8 cm), chaque côté accroché à la face
+  vectorielle parallèle (± 6°) la plus proche (≤ 12 cm) qui le recouvre, côtés alignés fusionnés, sommets aux
+  intersections ; là où aucune face ne porte la ligne (éléments répétés, pointillés, bord de terrasse), côtés
+  droits à 25 cm près ; garde-fous (sommet qui s'envole, surface changée de plus de 5 %).
+- Appliqué aux pièces (détection, clic, fusion et découpe : redressées sur les côtés d'origine et le trait de
+  coupe ; surface = celle du contour redressé) et aux deux lignes de l'enveloppe.
+- Enveloppe : les portes ne sont plus des limites (le battement faisait un zigzag), la ligne passe par
+  l'ouverture.
+- Essai R+2 : façades, noyaux et trémies à côtés droits posés sur les faces ; nu extérieur 934 m², nu intérieur
+  894 m².

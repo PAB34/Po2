@@ -19,6 +19,7 @@ import math
 import numpy as np
 from scipy import ndimage
 
+from thermique_moteur.redressement import redresser, segments_des_elements
 from thermique_moteur.pieces import (
     RESOLUTION_M,
     Grille,
@@ -70,11 +71,13 @@ def _aire_signee(points) -> float:
     return sum(points[k - 1][0] * points[k][1] - points[k][0] * points[k - 1][1] for k in range(len(points))) / 2
 
 
-def _polygone(masque: np.ndarray, grille: Grille, decalage: tuple[int, int], vers_dehors: float) -> list[list[float]]:
+def _polygone(masque: np.ndarray, grille: Grille, decalage: tuple[int, int], vers_dehors: float, segments) -> list[list[float]]:
     """Contour du masque en points PDF, décalé de `vers_dehors` pixels (le bord des pixels est à un demi-pixel de
-    l'axe du trait-limite)."""
+    l'axe du trait-limite), puis redressé sur les faces vectorielles (§17)."""
     sommets = decaler(simplifier(contour(masque), 1.0), vers_dehors)
-    return [[round(v, 3) for v in grille.point(c + decalage[0], l + decalage[1])] for c, l in sommets]
+    points = [grille.point(c + decalage[0], l + decalage[1]) for c, l in sommets]
+    points = redresser(points, segments, RESOLUTION_M / grille.pas)
+    return [[round(x, 3), round(y, 3)] for x, y in points]
 
 
 def _aire(points: list[list[float]]) -> float:
@@ -94,6 +97,7 @@ def proposer(
     exterieur = np.isin(etiquettes, list(bord)) if bord else np.zeros(etiquettes.shape, dtype=bool)
     batiments, nombre = ndimage.label(~exterieur)
     marge = _rayon(paroi_max_m) + 2
+    segments = segments_des_elements(donnees, indices, RESOLUTION_M / grille.pas)
     resultats = []
     for numero, (lignes, colonnes) in enumerate(ndimage.find_objects(batiments), start=1):
         # recadrage avec une marge, pour que la fermeture ne bute pas sur le bord
@@ -112,8 +116,8 @@ def proposer(
             tailles = np.bincount(morceaux.ravel())
             tailles[0] = 0
             interieur = morceaux == int(np.argmax(tailles))
-        nu_ext = _polygone(batiment, grille, (c0, l0), -0.5)
-        nu_int = _polygone(interieur, grille, (c0, l0), 0.5)
+        nu_ext = _polygone(batiment, grille, (c0, l0), -0.5, segments)
+        nu_int = _polygone(interieur, grille, (c0, l0), 0.5, segments)
         k2 = (RESOLUTION_M / grille.pas) ** 2
         resultats.append(
             {
