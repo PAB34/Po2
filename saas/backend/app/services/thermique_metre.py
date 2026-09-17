@@ -21,15 +21,12 @@ from app.services.thermique_composants import create_component
 from thermique_moteur import coupes, detection, enveloppe, metre, traits, vecteurs
 from thermique_moteur import lignes as lignes_murs
 from thermique_moteur import murs as murs_vectoriels
-from thermique_moteur import signatures as signatures_graphiques
 
 # Change si la lecture des traits évolue : les anciens fichiers en cache sont alors ignorés.
 TRAITS_VERSION = "v1"
 DETECTION_VERSION = "v1"
 # Détection vectorielle des murs (docs/thermique/detection-murs-strategie.md) : à changer à chaque évolution du moteur.
 MURS_VERSION = "v1"
-# Catalogue des signatures graphiques (étape E1 de docs/thermique/refondation-parcours-decisions.md).
-SIGNATURES_VERSION = "v1"
 # Faces de dalles sur les coupes : traits d'au moins 0,9 pt (1,56 et 0,96 pt sur le projet d'essai).
 SEUIL_COUPE = 0.9
 
@@ -413,74 +410,6 @@ def sheet_walls(sheet: ThermiqueSheet) -> dict:
 
     scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
     return _cached(sheet, f"murs_{MURS_VERSION}_{scale_key}", compute)
-
-
-def _plan_sheets(db: Session, project: ThermiqueProject) -> list[ThermiqueSheet]:
-    sheets = db.scalars(select(ThermiqueSheet).where(ThermiqueSheet.project_id == project.id).order_by(ThermiqueSheet.id))
-    return [sheet for sheet in sheets if (sheet.nature or sheet.nature_suggested) == "plan" and sheet.scale_denominator]
-
-
-def sheet_signature_catalogue(sheet: ThermiqueSheet) -> dict:
-    """Signatures graphiques d'une planche (plumes, couleurs, tirets, remplissages), mises en cache."""
-
-    def compute(path):
-        return signatures_graphiques.catalogue_planche(
-            traits.lire_traits(path, sheet.page_index, detail=True),
-            traits.lire_aplats(path, sheet.page_index, detail=True),
-            sheet.scale_denominator,
-        )
-
-    scale_key = f"{sheet.scale_denominator:g}".replace(".", "_")
-    return _cached(sheet, f"signatures_{SIGNATURES_VERSION}_{scale_key}", compute)
-
-
-def project_signatures(db: Session, project: ThermiqueProject) -> dict:
-    """Catalogue des signatures du projet (toutes les planches de plan), avec le rôle proposé et le rôle validé."""
-    sheets = _plan_sheets(db, project)
-    if not sheets:
-        raise ThermiqueError("Aucune planche de plan à l'échelle définie : classez vos planches et renseignez leur échelle.")
-    catalogue = signatures_graphiques.fusionner_catalogues([(sheet.id, sheet_signature_catalogue(sheet)) for sheet in sheets])
-    roles = _load(project.signatures_json, {})
-    for signature in catalogue:
-        signature["role"] = roles.get(signature["cle"])
-    return {
-        "signatures": catalogue,
-        "planches": [{"id": sheet.id, "libelle": sheet.label} for sheet in sheets],
-        "roles_traits": signatures_graphiques.ROLES_TRAITS,
-        "roles_aplats": signatures_graphiques.ROLES_APLATS,
-        "validees": sum(1 for signature in catalogue if signature["role"]),
-        "total": len(catalogue),
-    }
-
-
-def save_signature_roles(db: Session, project: ThermiqueProject, changes: dict[str, str | None]) -> None:
-    """Enregistre les rôles validés (None retire la validation)."""
-    roles = _load(project.signatures_json, {})
-    for cle, role in changes.items():
-        genre = cle.split("|", 1)[0]
-        permis = {"trait": signatures_graphiques.ROLES_TRAITS, "aplat": signatures_graphiques.ROLES_APLATS}.get(genre)
-        if permis is None or len(cle) > 120:
-            raise ThermiqueError("Signature inconnue.")
-        if role is None:
-            roles.pop(cle, None)
-        elif role not in permis:
-            raise ThermiqueError("Rôle inconnu pour cette signature.")
-        else:
-            roles[cle] = role
-    project.signatures_json = _dump(roles)
-    db.commit()
-
-
-def sheet_signature_elements(sheet: ThermiqueSheet, cle: str) -> dict:
-    """Traits ou remplissages d'une signature sur une planche, pour les montrer sur le plan."""
-    if not cle.startswith(("trait|", "aplat|")) or len(cle) > 120:
-        raise ThermiqueError("Signature inconnue.")
-    path = document_path(sheet.document)
-    if not path.is_file():
-        raise ThermiqueError("Fichier absent du stockage.")
-    if cle.startswith("trait|"):
-        return signatures_graphiques.elements_de_signature(traits.lire_traits(path, sheet.page_index, detail=True), [], cle)
-    return signatures_graphiques.elements_de_signature([], traits.lire_aplats(path, sheet.page_index, detail=True), cle)
 
 
 def detect_lines(db: Session, level: ThermiqueLevel, replace: bool = False) -> dict:

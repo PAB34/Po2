@@ -18,6 +18,9 @@ from app.core.roles import is_admin_role, is_external_role
 from app.models.thermique import ThermiqueDocument, ThermiqueProject, ThermiqueSheet
 from app.models.user import User
 from app.schemas.thermique import (
+    CalqueDesignation,
+    CalqueExclusion,
+    CalquePick,
     CalibrationRequest,
     ComponentCreate,
     ComponentEvaluate,
@@ -26,7 +29,6 @@ from app.schemas.thermique import (
     DetectContourRequest,
     EraseAllRequest,
     ExternalAccountCreate,
-    SignatureRolesUpdate,
     ExternalAccountRead,
     LevelCreate,
     LevelUpdate,
@@ -44,7 +46,7 @@ from app.schemas.thermique import (
     ZoneCreate,
     ZoneUpdate,
 )
-from app.services import thermique_metre
+from app.services import thermique_calques, thermique_metre
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -728,56 +730,119 @@ def read_sheet_section(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la coupe impossible.") from exc
 
 
-@router.get("/projects/{project_id}/signatures")
-def read_project_signatures(
+@router.get("/projects/{project_id}/calques")
+def read_project_calques(
     project_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Catalogue des signatures graphiques des plans du projet (quelques secondes par plan la première fois)."""
+    """Calques désignés du projet, comptés sur chaque plan (lecture des plans : quelques secondes la première fois)."""
     project = _project_or_404(db, user, project_id)
     try:
-        return thermique_metre.project_signatures(db, project)
+        return thermique_calques.list_designations(db, project)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        LOG.exception("Lecture des signatures impossible pour le projet %s", project_id)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture des signatures impossible.") from exc
+        LOG.exception("Lecture des calques impossible pour le projet %s", project_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture des calques impossible.") from exc
 
 
-@router.put("/projects/{project_id}/signatures")
-def save_project_signatures(
-    project_id: int,
-    payload: SignatureRolesUpdate,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_authenticated_user),
-) -> dict:
-    """Valide (ou retire) le rôle de signatures ; renvoie le catalogue à jour."""
-    project = _project_or_404(db, user, project_id)
+def _calques_action(db: Session, project: ThermiqueProject, action) -> dict:
     try:
-        thermique_metre.save_signature_roles(db, project, payload.roles)
-        return thermique_metre.project_signatures(db, project)
+        action()
+        return thermique_calques.list_designations(db, project)
     except ThermiqueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
-@router.get("/sheets/{sheet_id}/signatures/elements")
-def read_signature_elements(
-    sheet_id: int,
-    cle: str,
+@router.post("/projects/{project_id}/calques")
+def create_project_calque(
+    project_id: int,
+    payload: CalqueDesignation,
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Traits ou remplissages d'une signature sur la planche, pour les montrer sur le plan."""
+    """Donne une nature à une famille d'éléments (signature + forme), sur tous les plans du projet."""
+    project = _project_or_404(db, user, project_id)
+    return _calques_action(
+        db, project, lambda: thermique_calques.save_designation(db, project, payload.signature, payload.forme, payload.nature)
+    )
+
+
+@router.delete("/projects/{project_id}/calques/{regle_id}")
+def delete_project_calque(
+    project_id: int,
+    regle_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    return _calques_action(db, project, lambda: thermique_calques.delete_designation(db, project, regle_id))
+
+
+@router.post("/projects/{project_id}/calques/{regle_id}/exclusions")
+def toggle_project_calque_exclusion(
+    project_id: int,
+    regle_id: int,
+    payload: CalqueExclusion,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Retire un élément d'un calque désigné, ou l'y remet."""
+    project = _project_or_404(db, user, project_id)
+    return _calques_action(
+        db, project, lambda: thermique_calques.toggle_exclusion(db, project, regle_id, payload.planche_id, payload.element)
+    )
+
+
+@router.post("/sheets/{sheet_id}/calques/designer")
+def pick_sheet_calque(
+    sheet_id: int,
+    payload: CalquePick,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Élément sous le clic et ses semblables sur les plans du projet."""
     sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
     try:
-        return thermique_metre.sheet_signature_elements(sheet, cle)
+        return thermique_calques.pick_element(db, project, sheet, payload.x, payload.y, payload.tolerance)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        LOG.exception("Lecture des éléments de signature impossible pour la planche %s", sheet_id)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Lecture de la signature impossible.") from exc
+        LOG.exception("Désignation impossible sur la planche %s", sheet_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Désignation impossible.") from exc
+
+
+@router.get("/sheets/{sheet_id}/calques/famille")
+def read_sheet_calque_family(
+    sheet_id: int,
+    signature: str,
+    forme: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Éléments d'une famille sur la planche, pour les surligner."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_calques.family_elements(sheet, signature, forme)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/sheets/{sheet_id}/calques/designes")
+def read_sheet_calques(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Éléments désignés de la planche, regroupés par nature."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_calques.sheet_designations(db.get(ThermiqueProject, sheet.project_id), sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/sheets/{sheet_id}/murs")

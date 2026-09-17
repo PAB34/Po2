@@ -595,7 +595,89 @@ body {
   stroke-width: 1.5;
 }
 
-/* Signatures graphiques (étape E1) */
+/* Calques désignés par l'exemple (étape E1) */
+.th-calque polyline {
+  fill: none;
+  stroke: var(--nature);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.th-calque polygon {
+  fill: var(--nature);
+  fill-opacity: 0.35;
+  stroke: none;
+}
+
+.th-calque-famille polyline {
+  fill: none;
+  stroke: #e0007a;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.th-calque-famille polygon {
+  fill: rgba(224, 0, 122, 0.35);
+  stroke: #e0007a;
+  stroke-width: 1;
+}
+
+.th-calque-choisi {
+  fill: none;
+  stroke: #111827;
+  stroke-width: 5;
+  stroke-opacity: 0.55;
+  stroke-linejoin: round;
+}
+
+.th-calque-panel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.th-calque-scope {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: 4px;
+}
+
+.th-calque-scope legend {
+  padding: 0 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.th-calque-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  justify-self: center;
+  flex: none;
+}
+
+.th-calque-dot--famille {
+  background: #e0007a;
+}
+
+.th-calque-legend {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.th-calque-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .th-sig-lines line {
   stroke: #e0007a;
   stroke-width: 2.5;

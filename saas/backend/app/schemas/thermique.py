@@ -175,9 +175,23 @@ class DetectContourRequest(BaseModel):
     remplacer: bool = False
 
 
-class SignatureRolesUpdate(BaseModel):
-    # {clé de signature: rôle} ; None retire la validation.
-    roles: dict[str, str | None] = Field(default_factory=dict)
+class CalquePick(BaseModel):
+    # Point cliqué et tolérance, en points PDF de la planche.
+    x: float
+    y: float
+    tolerance: float = Field(default=4.0, gt=0, le=50)
+
+
+class CalqueDesignation(BaseModel):
+    signature: str = Field(min_length=1, max_length=120)
+    # Forme de l'élément, ou « * » pour toutes les formes de la signature.
+    forme: str = Field(min_length=1, max_length=20)
+    nature: str = Field(min_length=1, max_length=30)
+
+
+class CalqueExclusion(BaseModel):
+    planche_id: int
+    element: int = Field(ge=0)
 
 
 class EraseAllRequest(BaseModel):
