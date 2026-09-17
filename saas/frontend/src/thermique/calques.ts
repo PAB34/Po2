@@ -45,6 +45,13 @@ export type CalqueGeometry = { traits: number[][]; remplissages: number[][]; tro
 
 export type SheetDesignations = { natures: Record<string, { traits: number[][]; remplissages: number[][] }>; tronque: boolean };
 
+// Rectangle tracé par Maj + glisser, en points PDF (coins opposés).
+export type CalqueRect = { x0: number; y0: number; x1: number; y1: number };
+
+export type CalqueZone = CalqueGeometry & {
+  calques: { id: number; nature: string; nature_libelle: string; libelle: string; forme_libelle: string; actifs: number; retires: number }[];
+};
+
 export const NATURE_COLORS: Record<string, string> = {
   mur: "#c0392b",
   isolant: "#e39b00",
@@ -73,5 +80,9 @@ export const calquesApi = {
       token,
       `/thermique/sheets/${sheetId}/calques/famille?signature=${encodeURIComponent(signature)}&forme=${encodeURIComponent(forme)}`,
     ),
+  zone: (token: string, sheetId: number, rect: CalqueRect) =>
+    request<CalqueZone>(token, `/thermique/sheets/${sheetId}/calques/zone`, json("POST", rect)),
+  applyZone: (token: string, sheetId: number, rect: CalqueRect, regles: number[], action: "retirer" | "remettre") =>
+    request<CalquesProject>(token, `/thermique/sheets/${sheetId}/calques/zone/appliquer`, json("POST", { ...rect, regles, action })),
   designated: (token: string, sheetId: number) => request<SheetDesignations>(token, `/thermique/sheets/${sheetId}/calques/designes`),
 };

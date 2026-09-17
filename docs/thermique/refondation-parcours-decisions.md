@@ -143,3 +143,52 @@ son calque, et reporter sur tous les niveaux de signature identique.
   `GET /sheets/{id}/calques/famille`, `GET /sheets/{id}/calques/designes`.
 - Le catalogue §9 (liste à valider, routes `/signatures`) est retiré ; le moteur `signatures.py` reste pour les
   libellés de couleur et d'éventuelles suggestions.
+
+## 11. Retrait par zone et menuiseries (2026-09-17)
+
+| N° | Décision |
+|---|---|
+| Q70 → D18 | Zone = **Maj + glisser** ; glisser seul déplace le plan. |
+| Q71 → D19 | La zone sert à **retirer et remettre** les éléments désignés (pas à désigner). |
+| Q72 → D20 | Menuiseries : **baies sur le plan** (ouvertures dans les murs désignés), types par l'exemple, hauteur par type, **contrôle sur l'élévation** après la trame d'axes. Lot E6, après E2 à E4. |
+| Q73 → D21 | Deux fenêtres séparées par un montant = **une baie d'ensemble**. |
+
+Lot livré maintenant : E1b, retrait par zone (§11.1).
+
+Retours de l'utilisateur sur l'onglet « Calques » :
+1. Le retrait élément par élément est apprécié, mais un objet peut compter des centaines de traits (un escalier
+   désigné à tort comme isolant) → il faut **sélectionner une zone à la souris**.
+2. Les menuiseries ne se détectent pas : le clic ne trouve que le cadre ou le profilé, jamais la fenêtre entière,
+   et ce « cadre » est souvent le **montant commun à deux fenêtres**. Faut-il passer par les élévations ?
+
+### 11.1 Proposition : sélection par rectangle
+
+- Maintenir **Maj** et glisser (ou activer le mode « Zone ») trace un rectangle ; le glisser simple déplace
+  toujours le plan.
+- Les éléments désignés **entièrement dans le rectangle** sont listés par calque (« Isolant : 312 éléments »),
+  puis retirés en un clic, et remis de la même façon (« Remettre la zone »).
+- Stockage : les exclusions existantes (planche + élément), sans changement de format.
+
+### 11.2 Analyse des menuiseries
+
+- Sur un plan, une fenêtre n'est pas **un** élément : c'est un **assemblage** (tableaux du mur, dormant,
+  vitrage à 0,24 pt, appui, parfois l'arc d'ouverture). Désigner un trait ne peut donc pas la saisir entière.
+- Ce qui est sûr sur un plan, c'est **l'ouverture dans le mur** : une interruption du mur désigné sur la bande
+  entre les deux lignes (nu intérieur et nu extérieur). Sa largeur est celle de la baie, son emplacement donne la
+  façade et la pièce desservie, et un montant commun à deux fenêtres ne la coupe pas.
+- L'élévation donne ce que le plan ne donne pas (hauteur, allège, découpage en vantaux), mais seule elle ne suffit
+  pas : façades non dessinées (cours, retraits), niveau d'appartenance incertain sans trame d'axes, textures très
+  lourdes (442 000 éléments sur la toiture du projet d'essai).
+
+Recommandation : **baies trouvées sur le plan** (ouvertures dans les murs désignés), **types désignés par
+l'exemple** (un rectangle autour d'une fenêtre = modèle ; les assemblages de même composition sont retrouvés sur
+tous les plans), **hauteur saisie par type** (réponse Q60), puis **contrôle sur l'élévation** une fois la trame d'axes
+(E2) posée.
+
+### 11.3 Questions
+
+- **Q70** — Sélection de zone : Maj + glisser, ou bouton « Zone » ?
+- **Q71** — La zone sert-elle seulement à retirer / remettre, ou aussi à désigner ?
+- **Q72** — Menuiseries : baies sur le plan + contrôle sur l'élévation (recommandé), élévation seule, ou dessin
+  manuel des baies ?
+- **Q73** — Deux fenêtres séparées par un montant : une seule baie (dimensions d'ensemble), ou deux ?

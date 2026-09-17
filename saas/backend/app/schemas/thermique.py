@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -192,6 +193,20 @@ class CalqueDesignation(BaseModel):
 class CalqueExclusion(BaseModel):
     planche_id: int
     element: int = Field(ge=0)
+
+
+class CalqueZone(BaseModel):
+    # Rectangle tracé par Maj + glisser, en points PDF de la planche (coins opposés).
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+
+class CalqueZoneAction(CalqueZone):
+    regles: list[int] = Field(min_length=1, max_length=200)
+    # « retirer » les éléments de la zone des calques choisis, ou les « remettre ».
+    action: Literal["retirer", "remettre"]
 
 
 class EraseAllRequest(BaseModel):

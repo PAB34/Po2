@@ -194,6 +194,75 @@ def toggle_exclusion(db: Session, project: ThermiqueProject, regle_id: int, plan
     _enregistrer(db, project, regles)
 
 
+def _zone_par_regle(elements: dict, regles: list[dict], zone: list[int]) -> dict[int, list[int]]:
+    """Éléments de la zone appartenant à la famille de chaque règle (retirés compris)."""
+    signatures = elements["signatures"]
+    resultat: dict[int, list[int]] = {}
+    for regle in regles:
+        if regle["signature"] not in signatures:
+            continue
+        numero = signatures.index(regle["signature"])
+        membres = [
+            i for i in zone
+            if elements["elements"][i][1] == numero and regle["forme"] in (moteur.TOUTES_FORMES, elements["elements"][i][2])
+        ]
+        if membres:
+            resultat[regle["id"]] = membres
+    return resultat
+
+
+def zone_summary(project: ThermiqueProject, sheet: ThermiqueSheet, x0: float, y0: float, x1: float, y1: float) -> dict:
+    """Calques désignés présents dans un rectangle : éléments actifs et retirés, par calque (§11.1)."""
+    regles = _regles(project)
+    elements = sheet_elements(sheet)
+    zone = moteur.dans_zone(elements, x0, y0, x1, y1)
+    attribution = {i: r["id"] for i, r in moteur.attribuer(elements, regles, sheet.id).items()}
+    calques = []
+    montres: set[int] = set()
+    for regle in regles:
+        membres = _zone_par_regle(elements, [regle], zone).get(regle["id"], [])
+        exclus = {e["element"] for e in regle["exclusions"] if e["planche"] == sheet.id}
+        actifs = [i for i in membres if attribution.get(i) == regle["id"]]
+        retires = [i for i in membres if i in exclus]
+        if not actifs and not retires:
+            continue
+        montres.update(actifs)
+        montres.update(retires)
+        calques.append(
+            {
+                "id": regle["id"],
+                "nature": regle["nature"],
+                "nature_libelle": moteur.NATURES.get(regle["nature"], regle["nature"]),
+                "libelle": moteur.libelle_signature(regle["signature"]),
+                "forme_libelle": moteur.libelle_forme(regle["forme"]),
+                "actifs": len(actifs),
+                "retires": len(retires),
+            }
+        )
+    return {"calques": calques, **moteur.coordonnees(elements, sorted(montres), MAX_FAMILLE)}
+
+
+def apply_zone(
+    db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, x0: float, y0: float, x1: float, y1: float,
+    regle_ids: list[int], retirer: bool,
+) -> None:
+    """Retire de calques désignés tous leurs éléments situés dans le rectangle, ou les y remet."""
+    regles = _regles(project)
+    choisies = [_regle(regles, regle_id) for regle_id in regle_ids]
+    if not choisies:
+        raise ThermiqueError("Choisissez au moins un calque.")
+    elements = sheet_elements(sheet)
+    zone = moteur.dans_zone(elements, x0, y0, x1, y1)
+    for regle_id, membres in _zone_par_regle(elements, choisies, zone).items():
+        regle = _regle(regles, regle_id)
+        cibles = set(membres)
+        autres = [e for e in regle["exclusions"] if e["planche"] != sheet.id or e["element"] not in cibles]
+        if retirer:
+            autres += [{"planche": sheet.id, "element": i} for i in sorted(cibles)]
+        regle["exclusions"] = autres
+    _enregistrer(db, project, regles)
+
+
 def family_elements(sheet: ThermiqueSheet, signature: str, forme: str) -> dict:
     elements = sheet_elements(sheet)
     return moteur.coordonnees(elements, moteur.famille(elements, signature, forme), MAX_FAMILLE)
