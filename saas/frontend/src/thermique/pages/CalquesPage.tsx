@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type PdfPoint } from "../api";
-import { NATURE_COLORS, calquesApi, type CalquePick, type CalqueRect, type CalqueZone, type CalquesProject } from "../calques";
+import { NATURE_COLORS, calquesApi, type CalquePick, type CalqueLasso, type CalqueZone, type CalquesProject } from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { ProjectTabs } from "./ProjectLibraryPage";
@@ -16,7 +16,10 @@ const countFormat = new Intl.NumberFormat("fr-FR");
 const plural = (count: number, word: string) => `${countFormat.format(count)} ${word}${count > 1 ? "s" : ""}`;
 const natureColor = (nature: string) => NATURE_COLORS[nature] ?? "#5f6b73";
 const ZONE_MIN_PX = 6;
-const rectOf = (a: PdfPoint, b: PdfPoint): CalqueRect => ({ x0: a[0], y0: a[1], x1: b[0], y1: b[1] });
+// Un point de lasso tous les 4 px à l'écran, 1 500 au plus.
+const LASSO_STEP_PX = 4;
+const LASSO_MAX_POINTS = 1500;
+const flat = (points: PdfPoint[]): CalqueLasso => points.flatMap((point) => [point[0], point[1]]);
 
 // Étape E1 : le thermicien clique un élément du plan et donne sa nature ; tous ses semblables, sur tous les
 // plans, la prennent. Ce qui n'est pas désigné est ignoré.
@@ -34,10 +37,10 @@ export function CalquesPage() {
   const [shownRule, setShownRule] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pixelsPerPt = useRef(1);
-  // Zone : tracé en cours (Maj + glisser), puis rectangle retenu, son contenu et les calques cochés.
-  const draftRef = useRef<[PdfPoint, PdfPoint] | null>(null);
-  const [draft, setDraft] = useState<[PdfPoint, PdfPoint] | null>(null);
-  const [zoneRect, setZoneRect] = useState<CalqueRect | null>(null);
+  // Zone : lasso en cours (Maj + glisser), puis lasso retenu, son contenu et les calques cochés.
+  const draftRef = useRef<PdfPoint[] | null>(null);
+  const [draft, setDraft] = useState<PdfPoint[] | null>(null);
+  const [zoneLasso, setZoneLasso] = useState<CalqueLasso | null>(null);
   const [zone, setZone] = useState<CalqueZone | null>(null);
   const [zoneRules, setZoneRules] = useState<number[]>([]);
 
@@ -79,6 +82,7 @@ export function CalquesPage() {
   function refresh(next: CalquesProject) {
     queryClient.setQueryData(listKey, next);
     void queryClient.invalidateQueries({ queryKey: ["thermique", "calques-designes", projectId] });
+    void queryClient.invalidateQueries({ queryKey: ["thermique", "calques-famille"] });
   }
 
   const pickMutation = useMutation({
@@ -119,9 +123,9 @@ export function CalquesPage() {
     },
   });
   const zoneMutation = useMutation({
-    mutationFn: (rect: CalqueRect) => calquesApi.zone(token!, currentSheetId!, rect),
-    onSuccess: (result, rect) => {
-      setZoneRect(rect);
+    mutationFn: (contour: CalqueLasso) => calquesApi.zone(token!, currentSheetId!, contour),
+    onSuccess: (result, contour) => {
+      setZoneLasso(contour);
       setZone(result);
       setZoneRules((current) => {
         const ids = result.calques.map((item) => item.id);
@@ -131,16 +135,16 @@ export function CalquesPage() {
     },
   });
   const applyZoneMutation = useMutation({
-    mutationFn: (action: "retirer" | "remettre") => calquesApi.applyZone(token!, currentSheetId!, zoneRect!, zoneRules, action),
+    mutationFn: (action: "retirer" | "remettre") => calquesApi.applyZone(token!, currentSheetId!, zoneLasso!, zoneRules, action),
     onSuccess: (next, action) => {
       refresh(next);
       setNotice(action === "retirer" ? "Éléments de la zone retirés." : "Éléments de la zone remis.");
-      zoneMutation.mutate(zoneRect!);
+      zoneMutation.mutate(zoneLasso!);
     },
   });
   function closeZone() {
     setZone(null);
-    setZoneRect(null);
+    setZoneLasso(null);
     zoneMutation.reset();
   }
   const busy = saveMutation.isPending || removeMutation.isPending || excludeMutation.isPending || applyZoneMutation.isPending;
@@ -150,7 +154,7 @@ export function CalquesPage() {
   const zoneActive = zoneChosen.reduce((sum, item) => sum + item.actifs, 0);
   const zoneRemoved = zoneChosen.reduce((sum, item) => sum + item.retires, 0);
 
-  const rect = draft ? rectOf(draft[0], draft[1]) : zoneRect;
+  const lasso = draft ? flat(draft) : zoneLasso;
 
   function renderOverlay(toScreen: ToScreen): ReactNode {
     const points = (coords: number[]) => {
@@ -198,7 +202,7 @@ export function CalquesPage() {
             ))}
           </g>
         )}
-        {rect && <polygon className="th-calque-rect" points={points([rect.x0, rect.y0, rect.x1, rect.y0, rect.x1, rect.y1, rect.x0, rect.y1])} />}
+        {lasso && <polygon className="th-calque-rect" points={points(lasso)} />}
       </>
     );
   }
@@ -225,15 +229,20 @@ export function CalquesPage() {
               return false;
             }
             pixelsPerPt.current = scale;
-            draftRef.current = [point, point];
+            draftRef.current = [point];
             setDraft(draftRef.current);
             setPick(null);
             setShownRule(null);
             return true;
           }}
           onGrabMove={(point) => {
-            if (draftRef.current) {
-              draftRef.current = [draftRef.current[0], point];
+            const current = draftRef.current;
+            if (!current || current.length >= LASSO_MAX_POINTS) {
+              return;
+            }
+            const last = current[current.length - 1];
+            if (Math.hypot(point[0] - last[0], point[1] - last[1]) * pixelsPerPt.current >= LASSO_STEP_PX) {
+              draftRef.current = [...current, point];
               setDraft(draftRef.current);
             }
           }}
@@ -244,10 +253,11 @@ export function CalquesPage() {
             if (!current) {
               return;
             }
-            const [a, b] = current;
-            const sizePx = Math.min(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) * pixelsPerPt.current;
-            if (sizePx >= ZONE_MIN_PX) {
-              zoneMutation.mutate(rectOf(a, b));
+            const xs = current.map((point) => point[0]);
+            const ys = current.map((point) => point[1]);
+            const sizePx = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * pixelsPerPt.current;
+            if (current.length >= 3 && sizePx >= ZONE_MIN_PX) {
+              zoneMutation.mutate(flat(current));
             }
           }}
           renderOverlay={renderOverlay}
@@ -279,8 +289,8 @@ export function CalquesPage() {
           prennent. Ce que vous ne désignez pas est ignoré. Glissez pour déplacer le plan, molette pour zoomer.
         </p>
         <p className="th-muted">
-          <strong>Maj + glisser</strong> : sélectionner une zone (un escalier, un meuble…) pour en retirer d'un coup les éléments désignés à
-          tort.
+          <strong>Maj + glisser</strong> : entourer une zone à main levée (un escalier, un pan de toiture en biais…) pour en retirer d'un coup
+          les éléments désignés à tort.
         </p>
 
         {list.isLoading && <p className="th-muted">Lecture des plans du projet… (quelques secondes par plan la première fois)</p>}

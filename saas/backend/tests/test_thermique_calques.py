@@ -34,6 +34,22 @@ def test_formes_des_traits():
     assert calques.libelle_forme("*") == "toutes formes"
 
 
+def test_lasso_en_biais():
+    # deux traits parallèles en biais, proches : un rectangle droit ne sait pas isoler le premier, le lasso si
+    plan = calques.assembler(
+        [
+            (calques.TRAIT, FIN, "droit", [0, 0, 10 * M, 5 * M]),
+            (calques.TRAIT, FIN, "droit", [0, 1 * M, 10 * M, 6 * M]),
+        ],
+        100,
+    )
+    droit = [-1, -1, 10 * M + 1, -1, 10 * M + 1, 6 * M + 1, -1, 6 * M + 1]
+    assert calques.dans_zone(plan, droit) == [0, 1]
+    biais = [-0.5 * M, -0.5 * M, 10.5 * M, 4.5 * M, 10.5 * M, 5.5 * M, -0.5 * M, 0.5 * M]
+    assert calques.dans_zone(plan, biais) == [0]
+    assert calques.dans_zone(plan, [20 * M, 20 * M, 21 * M, 20 * M, 21 * M, 21 * M]) == []
+
+
 def _plan(decalage=0.0):
     # un mur (contour fermé), une cloison fine (trait droit), trois marches (traits courts), un remplissage
     return calques.assembler(
@@ -142,7 +158,7 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
     assert {k: (len(v["traits"]), len(v["remplissages"])) for k, v in designes["natures"].items()} == {"cloison": (2, 0), "mur": (0, 1)}
     thermique_calques.toggle_exclusion(db_session, projet, 1, rdc.id, 3)
     assert thermique_calques.list_designations(db_session, projet)["regles"][0]["total"] == 6
-    assert len(thermique_calques.family_elements(rdc, FIN, "*")["traits"]) == 4
+    assert len(thermique_calques.family_elements(projet, rdc, FIN, "*")["traits"]) == 4
 
     with pytest.raises(ThermiqueError, match="Nature inconnue"):
         thermique_calques.save_designation(db_session, projet, FIN, "droit", "fenetre")
@@ -155,19 +171,22 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
 
     # zone autour des trois marches du RDC : on les retire d'un coup, puis on les remet
     thermique_calques.save_designation(db_session, projet, FIN, "*", "isolant")
-    zone = (-0.1 * M, 7.5 * M, 3 * M, 8.5 * M)
-    resume = thermique_calques.zone_summary(projet, rdc, *zone)
+    zone = [-0.1 * M, 7.5 * M, 3 * M, 7.5 * M, 3 * M, 8.5 * M, -0.1 * M, 8.5 * M]
+    resume = thermique_calques.zone_summary(projet, rdc, zone)
     assert [(c["id"], c["actifs"], c["retires"]) for c in resume["calques"]] == [(1, 3, 0)]
     assert len(resume["traits"]) == 3
-    thermique_calques.apply_zone(db_session, projet, rdc, *zone, [1, 3], retirer=True)
-    resume = thermique_calques.zone_summary(projet, rdc, *zone)
+    thermique_calques.apply_zone(db_session, projet, rdc, zone, [1, 3], retirer=True)
+    resume = thermique_calques.zone_summary(projet, rdc, zone)
     assert [(c["id"], c["actifs"], c["retires"]) for c in resume["calques"]] == [(1, 0, 3), (3, 0, 3)]
     assert thermique_calques.list_designations(db_session, projet)["regles"][0]["total"] == 3
+    # « Voir » le calque et recliquer une marche : les éléments retirés ne reviennent pas
+    assert len(thermique_calques.family_elements(projet, rdc, FIN, "court")["traits"]) == 0
+    assert thermique_calques.pick_element(db_session, projet, rdc, 1.0 * M, 8 * M, 2.0)["familles"][0]["total"] == 3
     assert "cloison" not in thermique_calques.sheet_designations(projet, rdc)["natures"]
-    thermique_calques.apply_zone(db_session, projet, rdc, *zone, [1, 3], retirer=False)
-    assert [(c["id"], c["actifs"]) for c in thermique_calques.zone_summary(projet, rdc, *zone)["calques"]] == [(1, 3)]
+    thermique_calques.apply_zone(db_session, projet, rdc, zone, [1, 3], retirer=False)
+    assert [(c["id"], c["actifs"]) for c in thermique_calques.zone_summary(projet, rdc, zone)["calques"]] == [(1, 3)]
     with pytest.raises(ThermiqueError, match="au moins un calque"):
-        thermique_calques.apply_zone(db_session, projet, rdc, *zone, [], retirer=True)
+        thermique_calques.apply_zone(db_session, projet, rdc, zone, [], retirer=True)
     thermique_calques.delete_designation(db_session, projet, 3)
 
     thermique_calques.delete_designation(db_session, projet, 1)

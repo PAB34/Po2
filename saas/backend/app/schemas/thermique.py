@@ -196,11 +196,8 @@ class CalqueExclusion(BaseModel):
 
 
 class CalqueZone(BaseModel):
-    # Rectangle tracé par Maj + glisser, en points PDF de la planche (coins opposés).
-    x0: float
-    y0: float
-    x1: float
-    y1: float
+    # Lasso tracé par Maj + glisser, en points PDF de la planche : x1, y1, x2, y2…
+    contour: list[float] = Field(min_length=6, max_length=4000)
 
 
 class CalqueZoneAction(CalqueZone):

@@ -161,6 +161,16 @@ Retours de l'utilisateur sur l'onglet « Calques » :
 2. Les menuiseries ne se détectent pas : le clic ne trouve que le cadre ou le profilé, jamais la fenêtre entière,
    et ce « cadre » est souvent le **montant commun à deux fenêtres**. Faut-il passer par les élévations ?
 
+### 11.0 Retours du 2026-09-17 sur E1b (PR #196)
+
+- Le rectangle droit ne sait pas isoler des éléments **en biais** (couvertures, murs inclinés) : pour contenir un
+  trait diagonal, il avale aussi les voisins. → **D22** : Maj + glisser trace un **lasso à main levée** (contour
+  libre) ; un élément est pris si tous ses points sont dans le lasso. Le rectangle disparaît (un lasso peut le
+  remplacer).
+- Bug : « Voir » un calque montrait encore les éléments retirés. Causes : la famille surlignée ignorait les
+  retraits, et l'écran gardait l'ancienne famille en cache. → **D23** : la famille affichée (et les nombres
+  proposés au clic) déduisent les retraits du calque existant ; toute modification rafraîchit l'affichage.
+
 ### 11.1 Proposition : sélection par rectangle
 
 - Maintenir **Maj** et glisser (ou activer le mode « Zone ») trace un rectangle ; le glisser simple déplace

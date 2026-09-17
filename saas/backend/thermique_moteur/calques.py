@@ -15,6 +15,8 @@ import ctypes
 import math
 from pathlib import Path
 
+import numpy as np
+
 from thermique_moteur.metre import pt_en_m
 from thermique_moteur.signatures import cle_aplat, cle_trait, nom_couleur
 from thermique_moteur.traits import PROFONDEUR_MAX, VERROU_PDFIUM, _composer
@@ -263,13 +265,30 @@ def attribuer(donnees: dict, regles: list[dict], planche: int) -> dict[int, dict
     return resultat
 
 
-def dans_zone(donnees: dict, x0: float, y0: float, x1: float, y1: float) -> list[int]:
-    """Éléments entièrement contenus dans le rectangle (coins dans n'importe quel ordre)."""
-    gauche, droite = min(x0, x1), max(x0, x1)
-    bas, haut = min(y0, y1), max(y0, y1)
-    return [
+def dans_zone(donnees: dict, contour: list[float]) -> list[int]:
+    """Éléments dont tous les points sont dans le contour (lasso : x1, y1, x2, y2…)."""
+    xs, ys = contour[0::2], contour[1::2]
+    gauche, droite, bas, haut = min(xs), max(xs), min(ys), max(ys)
+    candidats = [
         i for i, e in enumerate(donnees["elements"]) if e[3] >= gauche and e[5] <= droite and e[4] >= bas and e[6] <= haut
     ]
+    if not candidats:
+        return []
+    # tous les points des candidats d'un coup (lancer de rayon vectorisé : une plume de toiture en compte des centaines de milliers)
+    points = [donnees["elements"][i][7] for i in candidats]
+    longueurs = np.array([len(p) // 2 for p in points])
+    plat = np.fromiter((v for p in points for v in p[: 2 * (len(p) // 2)]), dtype=float).reshape(-1, 2)
+    px, py = plat[:, 0], plat[:, 1]
+    dedans = np.zeros(len(plat), dtype=bool)
+    ax, ay = np.array(xs, dtype=float), np.array(ys, dtype=float)
+    bx, by = np.roll(ax, -1), np.roll(ay, -1)
+    for x1, y1, x2, y2 in zip(ax, ay, bx, by):
+        if y1 == y2:
+            continue
+        croise = (y1 > py) != (y2 > py)
+        dedans ^= croise & (px < x1 + (py - y1) * (x2 - x1) / (y2 - y1))
+    tous = np.logical_and.reduceat(dedans, np.concatenate(([0], np.cumsum(longueurs)[:-1])))
+    return [i for i, ok in zip(candidats, tous) if ok]
 
 
 def coordonnees(donnees: dict, indices: list[int], maximum: int) -> dict:

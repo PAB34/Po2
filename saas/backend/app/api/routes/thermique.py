@@ -824,11 +824,11 @@ def read_sheet_calque_zone(
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Calques désignés présents dans un rectangle, avec leurs éléments actifs et retirés."""
+    """Calques désignés présents dans un lasso, avec leurs éléments actifs et retirés."""
     sheet = _sheet_or_404(db, user, sheet_id)
     project = db.get(ThermiqueProject, sheet.project_id)
     try:
-        return thermique_calques.zone_summary(project, sheet, payload.x0, payload.y0, payload.x1, payload.y1)
+        return thermique_calques.zone_summary(project, sheet, payload.contour)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -840,14 +840,14 @@ def apply_sheet_calque_zone(
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Retire des calques choisis tous leurs éléments situés dans le rectangle, ou les y remet."""
+    """Retire des calques choisis tous leurs éléments situés dans le lasso, ou les y remet."""
     sheet = _sheet_or_404(db, user, sheet_id)
     project = db.get(ThermiqueProject, sheet.project_id)
     return _calques_action(
         db,
         project,
         lambda: thermique_calques.apply_zone(
-            db, project, sheet, payload.x0, payload.y0, payload.x1, payload.y1, payload.regles, payload.action == "retirer"
+            db, project, sheet, payload.contour, payload.regles, payload.action == "retirer"
         ),
     )
 
@@ -863,7 +863,7 @@ def read_sheet_calque_family(
     """Éléments d'une famille sur la planche, pour les surligner."""
     sheet = _sheet_or_404(db, user, sheet_id)
     try:
-        return thermique_calques.family_elements(sheet, signature, forme)
+        return thermique_calques.family_elements(db.get(ThermiqueProject, sheet.project_id), sheet, signature, forme)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
