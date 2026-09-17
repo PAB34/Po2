@@ -206,6 +206,25 @@ class CalqueZoneAction(CalqueZone):
     action: Literal["retirer", "remettre"]
 
 
+class CalqueElements(BaseModel):
+    planche_id: int
+    elements: list[int] = Field(min_length=1, max_length=20000)
+    # nature donnée à ces seuls éléments ; vide = leur désignation ponctuelle est retirée
+    nature: str | None = Field(default=None, max_length=30)
+
+
+class CalqueFamille(BaseModel):
+    signature: str = Field(min_length=1, max_length=120)
+    forme: str = Field(min_length=1, max_length=20)
+
+
+class CalqueZoneDesignate(CalqueZone):
+    familles: list[CalqueFamille] = Field(min_length=1, max_length=50)
+    nature: str = Field(min_length=1, max_length=30)
+    # « familles » : sur tous les plans ; « zone » : seuls les éléments du lasso
+    portee: Literal["familles", "zone"] = "familles"
+
+
 class SuperpositionValidate(BaseModel):
     reference_id: int
     planche_id: int

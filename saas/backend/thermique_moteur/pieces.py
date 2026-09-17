@@ -24,7 +24,7 @@ from scipy import ndimage
 from thermique_moteur.calques import TRAIT
 from thermique_moteur.metre import pt_en_m
 
-NATURES_LIMITES = ("mur", "isolant", "cloison", "menuiserie", "porte", "garde_corps")
+NATURES_LIMITES = ("mur", "isolant", "cloison", "menuiserie", "menuiserie_interieure", "porte", "garde_corps")
 RESOLUTION_M = 0.05
 MARGE_M = 1.0
 FERMETURE_M = 0.4

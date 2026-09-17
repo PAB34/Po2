@@ -328,3 +328,17 @@ Lots : E3a pièces (moteur + onglet « Pièces »), E3b lecture des noms, E3c cl
   `POST /sheets/{id}/pieces/fusion`, `PATCH /pieces/{id}`, `DELETE /pieces/{id}`, `POST /pieces/{id}/decoupe`.
 - Écran : onglet **Pièces** (clic : choisir ; Maj + clic : plusieurs, fusion ; Alt + glisser : couper ; clic
   hors pièce : ajouter ; nom, classe, surface, totaux par classe).
+
+## 14. Calques : élément seul, lasso « Désigner », vitrages intérieurs (2026-09-17)
+
+Retours de l'utilisateur après E3 :
+1. des menuiseries (vitrages) **intérieures** ont la même signature que les extérieures ;
+2. pouvoir donner une nature à **un seul élément** ;
+3. une menuiserie cliquée ne donne que son cadre : les traits du vitrage entre les cadres (autres signatures,
+   souvent plusieurs gris) n'y sont pas.
+
+| N° | Décision |
+|---|---|
+| Q81 → D31 | Intérieur / extérieur **déduit des pièces** de part et d'autre (extérieure si elle sépare une pièce chauffée de l'extérieur ou d'un local non chauffé) ; nature « menuiserie intérieure » ajoutée pour forcer un cas. Les deux ferment les pièces. |
+| Q82 → D32 | Lasso **« Désigner »** : les familles présentes dans la zone sont listées et cochées ; la nature s'applique à ces familles **sur tous les plans** (par défaut) ou **aux seuls éléments de la zone**. Révise D19 (zone = retirer / remettre seulement). |
+| D33 | Portée **« Seulement cet élément »** au clic. Désignations ponctuelles stockées dans `signatures_json.elements` (`planche`, `element`, `nature`) ; elles priment sur les règles. |

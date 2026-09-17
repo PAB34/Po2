@@ -19,10 +19,12 @@ from app.models.thermique import ThermiqueDocument, ThermiqueProject, ThermiqueS
 from app.models.user import User
 from app.schemas.thermique import (
     CalqueDesignation,
+    CalqueElements,
     CalqueExclusion,
     CalquePick,
     CalqueZone,
     CalqueZoneAction,
+    CalqueZoneDesignate,
     CalibrationRequest,
     ComponentCreate,
     ComponentEvaluate,
@@ -801,6 +803,43 @@ def toggle_project_calque_exclusion(
     project = _project_or_404(db, user, project_id)
     return _calques_action(
         db, project, lambda: thermique_calques.toggle_exclusion(db, project, regle_id, payload.planche_id, payload.element)
+    )
+
+
+@router.post("/projects/{project_id}/calques/elements")
+def set_project_calque_elements(
+    project_id: int,
+    payload: CalqueElements,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Nature d'éléments seuls (sans report sur leurs semblables), ou retrait de cette désignation."""
+    project = _project_or_404(db, user, project_id)
+    sheet = _sheet_or_404(db, user, payload.planche_id)
+    if sheet.project_id != project.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planche introuvable.")
+    return _calques_action(
+        db, project, lambda: thermique_calques.set_elements(db, project, sheet, payload.elements, payload.nature)
+    )
+
+
+@router.post("/sheets/{sheet_id}/calques/zone/designer")
+def designate_sheet_calque_zone(
+    sheet_id: int,
+    payload: CalqueZoneDesignate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Lasso « Désigner » : nature des types de traits cochés, sur tous les plans ou dans la zone seulement."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    familles = [(f.signature, f.forme) for f in payload.familles]
+    return _calques_action(
+        db,
+        project,
+        lambda: thermique_calques.designate_zone(
+            db, project, sheet, payload.contour, familles, payload.nature, payload.portee == "familles"
+        ),
     )
 
 
