@@ -153,6 +153,23 @@ def test_designation_sur_tous_les_plans(db_session, monkeypatch):
     with pytest.raises(ThermiqueError, match="introuvable"):
         thermique_calques.toggle_exclusion(db_session, projet, 1, rdc.id, 99)
 
+    # zone autour des trois marches du RDC : on les retire d'un coup, puis on les remet
+    thermique_calques.save_designation(db_session, projet, FIN, "*", "isolant")
+    zone = (-0.1 * M, 7.5 * M, 3 * M, 8.5 * M)
+    resume = thermique_calques.zone_summary(projet, rdc, *zone)
+    assert [(c["id"], c["actifs"], c["retires"]) for c in resume["calques"]] == [(1, 3, 0)]
+    assert len(resume["traits"]) == 3
+    thermique_calques.apply_zone(db_session, projet, rdc, *zone, [1, 3], retirer=True)
+    resume = thermique_calques.zone_summary(projet, rdc, *zone)
+    assert [(c["id"], c["actifs"], c["retires"]) for c in resume["calques"]] == [(1, 0, 3), (3, 0, 3)]
+    assert thermique_calques.list_designations(db_session, projet)["regles"][0]["total"] == 3
+    assert "cloison" not in thermique_calques.sheet_designations(projet, rdc)["natures"]
+    thermique_calques.apply_zone(db_session, projet, rdc, *zone, [1, 3], retirer=False)
+    assert [(c["id"], c["actifs"]) for c in thermique_calques.zone_summary(projet, rdc, *zone)["calques"]] == [(1, 3)]
+    with pytest.raises(ThermiqueError, match="au moins un calque"):
+        thermique_calques.apply_zone(db_session, projet, rdc, *zone, [], retirer=True)
+    thermique_calques.delete_designation(db_session, projet, 3)
+
     thermique_calques.delete_designation(db_session, projet, 1)
     assert [r["id"] for r in json.loads(projet.signatures_json)["regles"]] == [2]
     with pytest.raises(ThermiqueError, match="introuvable"):

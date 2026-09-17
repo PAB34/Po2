@@ -21,6 +21,8 @@ from app.schemas.thermique import (
     CalqueDesignation,
     CalqueExclusion,
     CalquePick,
+    CalqueZone,
+    CalqueZoneAction,
     CalibrationRequest,
     ComponentCreate,
     ComponentEvaluate,
@@ -813,6 +815,41 @@ def pick_sheet_calque(
     except Exception as exc:
         LOG.exception("Désignation impossible sur la planche %s", sheet_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Désignation impossible.") from exc
+
+
+@router.post("/sheets/{sheet_id}/calques/zone")
+def read_sheet_calque_zone(
+    sheet_id: int,
+    payload: CalqueZone,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Calques désignés présents dans un rectangle, avec leurs éléments actifs et retirés."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    try:
+        return thermique_calques.zone_summary(project, sheet, payload.x0, payload.y0, payload.x1, payload.y1)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/sheets/{sheet_id}/calques/zone/appliquer")
+def apply_sheet_calque_zone(
+    sheet_id: int,
+    payload: CalqueZoneAction,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Retire des calques choisis tous leurs éléments situés dans le rectangle, ou les y remet."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    return _calques_action(
+        db,
+        project,
+        lambda: thermique_calques.apply_zone(
+            db, project, sheet, payload.x0, payload.y0, payload.x1, payload.y1, payload.regles, payload.action == "retirer"
+        ),
+    )
 
 
 @router.get("/sheets/{sheet_id}/calques/famille")

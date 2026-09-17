@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type PdfPoint } from "../api";
-import { NATURE_COLORS, calquesApi, type CalquePick, type CalquesProject } from "../calques";
+import { NATURE_COLORS, calquesApi, type CalquePick, type CalqueRect, type CalqueZone, type CalquesProject } from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { ProjectTabs } from "./ProjectLibraryPage";
@@ -15,6 +15,8 @@ const PICK_PX = 8;
 const countFormat = new Intl.NumberFormat("fr-FR");
 const plural = (count: number, word: string) => `${countFormat.format(count)} ${word}${count > 1 ? "s" : ""}`;
 const natureColor = (nature: string) => NATURE_COLORS[nature] ?? "#5f6b73";
+const ZONE_MIN_PX = 6;
+const rectOf = (a: PdfPoint, b: PdfPoint): CalqueRect => ({ x0: a[0], y0: a[1], x1: b[0], y1: b[1] });
 
 // Étape E1 : le thermicien clique un élément du plan et donne sa nature ; tous ses semblables, sur tous les
 // plans, la prennent. Ce qui n'est pas désigné est ignoré.
@@ -32,6 +34,12 @@ export function CalquesPage() {
   const [shownRule, setShownRule] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pixelsPerPt = useRef(1);
+  // Zone : tracé en cours (Maj + glisser), puis rectangle retenu, son contenu et les calques cochés.
+  const draftRef = useRef<[PdfPoint, PdfPoint] | null>(null);
+  const [draft, setDraft] = useState<[PdfPoint, PdfPoint] | null>(null);
+  const [zoneRect, setZoneRect] = useState<CalqueRect | null>(null);
+  const [zone, setZone] = useState<CalqueZone | null>(null);
+  const [zoneRules, setZoneRules] = useState<number[]>([]);
 
   const projectQuery = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -81,6 +89,7 @@ export function CalquesPage() {
       setScope(result.familles[0].forme);
       setNature(result.regle?.nature ?? "mur");
       setNotice(null);
+      closeZone();
     },
     onError: () => setPick(null),
   });
@@ -109,8 +118,39 @@ export function CalquesPage() {
       setPick((current) => (current?.regle ? { ...current, regle: { ...current.regle, exclu: !current.regle.exclu } } : current));
     },
   });
-  const busy = saveMutation.isPending || removeMutation.isPending || excludeMutation.isPending;
-  const actionError = pickMutation.error ?? saveMutation.error ?? removeMutation.error ?? excludeMutation.error;
+  const zoneMutation = useMutation({
+    mutationFn: (rect: CalqueRect) => calquesApi.zone(token!, currentSheetId!, rect),
+    onSuccess: (result, rect) => {
+      setZoneRect(rect);
+      setZone(result);
+      setZoneRules((current) => {
+        const ids = result.calques.map((item) => item.id);
+        const kept = current.filter((id) => ids.includes(id));
+        return kept.length ? kept : ids;
+      });
+    },
+  });
+  const applyZoneMutation = useMutation({
+    mutationFn: (action: "retirer" | "remettre") => calquesApi.applyZone(token!, currentSheetId!, zoneRect!, zoneRules, action),
+    onSuccess: (next, action) => {
+      refresh(next);
+      setNotice(action === "retirer" ? "Éléments de la zone retirés." : "Éléments de la zone remis.");
+      zoneMutation.mutate(zoneRect!);
+    },
+  });
+  function closeZone() {
+    setZone(null);
+    setZoneRect(null);
+    zoneMutation.reset();
+  }
+  const busy = saveMutation.isPending || removeMutation.isPending || excludeMutation.isPending || applyZoneMutation.isPending;
+  const actionError =
+    pickMutation.error ?? saveMutation.error ?? removeMutation.error ?? excludeMutation.error ?? zoneMutation.error ?? applyZoneMutation.error;
+  const zoneChosen = zone?.calques.filter((item) => zoneRules.includes(item.id)) ?? [];
+  const zoneActive = zoneChosen.reduce((sum, item) => sum + item.actifs, 0);
+  const zoneRemoved = zoneChosen.reduce((sum, item) => sum + item.retires, 0);
+
+  const rect = draft ? rectOf(draft[0], draft[1]) : zoneRect;
 
   function renderOverlay(toScreen: ToScreen): ReactNode {
     const points = (coords: number[]) => {
@@ -148,6 +188,17 @@ export function CalquesPage() {
           </g>
         )}
         {pick && <polyline className="th-calque-choisi" points={points(pick.element.coords)} />}
+        {zone && (
+          <g className="th-calque-zone">
+            {zone.remplissages.map((coords, index) => (
+              <polygon key={`r${index}`} points={points(coords)} />
+            ))}
+            {zone.traits.map((coords, index) => (
+              <polyline key={index} points={points(coords)} />
+            ))}
+          </g>
+        )}
+        {rect && <polygon className="th-calque-rect" points={points([rect.x0, rect.y0, rect.x1, rect.y0, rect.x1, rect.y1, rect.x0, rect.y1])} />}
       </>
     );
   }
@@ -168,6 +219,36 @@ export function CalquesPage() {
           }}
           onHover={(_, scale) => {
             pixelsPerPt.current = scale;
+          }}
+          onGrab={(point, scale, event) => {
+            if (!event.shiftKey || currentSheetId === null) {
+              return false;
+            }
+            pixelsPerPt.current = scale;
+            draftRef.current = [point, point];
+            setDraft(draftRef.current);
+            setPick(null);
+            setShownRule(null);
+            return true;
+          }}
+          onGrabMove={(point) => {
+            if (draftRef.current) {
+              draftRef.current = [draftRef.current[0], point];
+              setDraft(draftRef.current);
+            }
+          }}
+          onGrabEnd={() => {
+            const current = draftRef.current;
+            draftRef.current = null;
+            setDraft(null);
+            if (!current) {
+              return;
+            }
+            const [a, b] = current;
+            const sizePx = Math.min(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])) * pixelsPerPt.current;
+            if (sizePx >= ZONE_MIN_PX) {
+              zoneMutation.mutate(rectOf(a, b));
+            }
           }}
           renderOverlay={renderOverlay}
         />
@@ -197,6 +278,10 @@ export function CalquesPage() {
           Cliquez un trait du plan (mur, isolant, fenêtre…) et donnez sa nature : tous les éléments semblables, sur tous les plans, la
           prennent. Ce que vous ne désignez pas est ignoré. Glissez pour déplacer le plan, molette pour zoomer.
         </p>
+        <p className="th-muted">
+          <strong>Maj + glisser</strong> : sélectionner une zone (un escalier, un meuble…) pour en retirer d'un coup les éléments désignés à
+          tort.
+        </p>
 
         {list.isLoading && <p className="th-muted">Lecture des plans du projet… (quelques secondes par plan la première fois)</p>}
         {list.error && <p className="th-alert th-alert--error">{list.error.message}</p>}
@@ -216,6 +301,7 @@ export function CalquesPage() {
               onChange={(event) => {
                 setSheetId(Number(event.target.value));
                 setPick(null);
+                closeZone();
               }}
             >
               {data.planches.map((item) => (
@@ -227,6 +313,54 @@ export function CalquesPage() {
           </label>
         )}
         {pickMutation.isPending && <p className="th-muted">Recherche de l'élément…</p>}
+        {zoneMutation.isPending && !zone && <p className="th-muted">Lecture de la zone…</p>}
+
+        {zone && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Zone sélectionnée</strong>
+            {zone.calques.length === 0 ? (
+              <span className="th-muted">Aucun élément désigné entièrement dans cette zone.</span>
+            ) : (
+              <fieldset className="th-calque-scope">
+                <legend>Calques concernés</legend>
+                {zone.calques.map((item) => (
+                  <label key={item.id} className="th-check">
+                    <input
+                      type="checkbox"
+                      checked={zoneRules.includes(item.id)}
+                      onChange={(event) =>
+                        setZoneRules((current) =>
+                          event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id),
+                        )
+                      }
+                    />
+                    <span className="th-calque-dot" style={{ background: natureColor(item.nature) }} />
+                    <span>
+                      <strong>{item.nature_libelle}</strong> ({item.libelle} · {item.forme_libelle}) : {plural(item.actifs, "élément")}
+                      {item.retires ? `, ${countFormat.format(item.retires)} déjà retiré${item.retires > 1 ? "s" : ""}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {zone.tronque && <small className="th-muted">Zone très chargée : une partie des éléments n'est pas surlignée.</small>}
+            <div className="th-inline">
+              {zoneActive > 0 && (
+                <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => applyZoneMutation.mutate("retirer")}>
+                  Retirer {plural(zoneActive, "élément")}
+                </button>
+              )}
+              {zoneRemoved > 0 && (
+                <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => applyZoneMutation.mutate("remettre")}>
+                  Remettre {plural(zoneRemoved, "élément")}
+                </button>
+              )}
+              <button type="button" className="po2-button po2-button--ghost" onClick={closeZone}>
+                Fermer
+              </button>
+            </div>
+          </section>
+        )}
 
         {data && pick && selectedFamily && (
           <section className="th-edgebox th-calque-panel">

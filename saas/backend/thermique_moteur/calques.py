@@ -263,6 +263,15 @@ def attribuer(donnees: dict, regles: list[dict], planche: int) -> dict[int, dict
     return resultat
 
 
+def dans_zone(donnees: dict, x0: float, y0: float, x1: float, y1: float) -> list[int]:
+    """Éléments entièrement contenus dans le rectangle (coins dans n'importe quel ordre)."""
+    gauche, droite = min(x0, x1), max(x0, x1)
+    bas, haut = min(y0, y1), max(y0, y1)
+    return [
+        i for i, e in enumerate(donnees["elements"]) if e[3] >= gauche and e[5] <= droite and e[4] >= bas and e[6] <= haut
+    ]
+
+
 def coordonnees(donnees: dict, indices: list[int], maximum: int) -> dict:
     """Coordonnées des éléments à montrer (les plus grands d'abord au-delà de `maximum`)."""
     tronque = len(indices) > maximum

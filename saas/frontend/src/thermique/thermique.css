@@ -622,6 +622,27 @@ body {
   stroke-width: 1;
 }
 
+.th-calque-zone polyline {
+  fill: none;
+  stroke: #0e7490;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+.th-calque-zone polygon {
+  fill: rgba(14, 116, 144, 0.3);
+  stroke: #0e7490;
+  stroke-width: 1;
+}
+
+.th-calque-rect {
+  fill: rgba(14, 116, 144, 0.08);
+  stroke: #0e7490;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
 .th-calque-choisi {
   fill: none;
   stroke: #111827;
