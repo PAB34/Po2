@@ -46,6 +46,7 @@ NATURES = {
     "plancher": "Plancher, dalle (coupes)",
     "toiture": "Toiture (coupes)",
 }
+PARTOUT = "partout"
 COURT_M = 0.4
 PETIT_FERME_M = 1.5
 TOL_FERMETURE_PT = 0.05
@@ -249,21 +250,42 @@ def famille(donnees: dict, signature: str, forme: str) -> list[int]:
     return [i for i, e in enumerate(donnees["elements"]) if e[1] == numero and (forme == TOUTES_FORMES or e[2] == forme)]
 
 
-def regle_applicable(regles: list[dict], signature: str, forme: str) -> dict | None:
-    """Règle qui s'applique à un élément : celle de sa forme, sinon celle de toutes les formes de sa signature."""
-    precise = next((r for r in regles if r["signature"] == signature and r["forme"] == forme), None)
-    return precise or next((r for r in regles if r["signature"] == signature and r["forme"] == TOUTES_FORMES), None)
+def perimetre(regle: dict) -> str:
+    """Portée d'une règle (§15, D36) : « partout » par défaut."""
+    return regle.get("perimetre") or PARTOUT
 
 
-def attribuer(donnees: dict, regles: list[dict], planche: int, ponctuels: list[dict] = ()) -> dict[int, dict]:
-    """Élément → règle sur une planche ; une règle de forme précise l'emporte sur « toutes formes » ; un élément
-    retiré d'une règle n'en reçoit pas la nature ; une désignation ponctuelle (un élément seul) prime sur tout."""
+def _priorite(regle: dict) -> tuple[bool, bool]:
+    # une forme précise l'emporte sur « toutes formes », une portée restreinte sur « partout »
+    return (regle["forme"] != TOUTES_FORMES, perimetre(regle) != PARTOUT)
+
+
+def regle_applicable(regles: list[dict], signature: str, forme: str, perimetres: list[str] | tuple[str, ...] = (PARTOUT,)) -> dict | None:
+    """Règle qui s'applique à un élément de cette signature et de cette forme, situé dans ces portées."""
+    candidates = [
+        r for r in regles if r["signature"] == signature and r["forme"] in (forme, TOUTES_FORMES) and perimetre(r) in perimetres
+    ]
+    return max(candidates, key=_priorite) if candidates else None
+
+
+def membres(donnees: dict, regle: dict, planche: int, bande=None) -> list[int]:
+    """Éléments d'une règle sur une planche : sa famille, dans sa portée, sans les éléments retirés. Une règle
+    restreinte à l'enveloppe ou à l'intérieur ne s'applique pas sur un plan sans lignes tracées."""
+    indices = famille(donnees, regle["signature"], regle["forme"])
+    if perimetre(regle) != PARTOUT:
+        indices = bande.filtrer(donnees, indices, perimetre(regle)) if bande is not None else []
+    exclus = {e["element"] for e in regle.get("exclusions", []) if e["planche"] == planche}
+    return [i for i in indices if i not in exclus]
+
+
+def attribuer(donnees: dict, regles: list[dict], planche: int, ponctuels: list[dict] = (), bande=None) -> dict[int, dict]:
+    """Élément → règle sur une planche ; une forme précise l'emporte sur « toutes formes », une portée restreinte
+    sur « partout » ; un élément retiré d'une règle n'en reçoit pas la nature ; une désignation ponctuelle (un
+    élément seul) prime sur tout."""
     resultat: dict[int, dict] = {}
-    for regle in sorted(regles, key=lambda r: r["forme"] != TOUTES_FORMES):
-        exclus = {e["element"] for e in regle.get("exclusions", []) if e["planche"] == planche}
-        for index in famille(donnees, regle["signature"], regle["forme"]):
-            if index not in exclus:
-                resultat[index] = regle
+    for regle in sorted(regles, key=_priorite):
+        for index in membres(donnees, regle, planche, bande):
+            resultat[index] = regle
     nombre = len(donnees["elements"])
     for ponctuel in ponctuels:
         if ponctuel["planche"] == planche and 0 <= ponctuel["element"] < nombre:

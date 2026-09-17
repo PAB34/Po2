@@ -1,118 +1,126 @@
-"""Lot M4a : types de murs lus le long du contour (épaisseur, isolant), regroupés et rattachés à la
-bibliothèque. Plans fabriqués pour le test. Voir docs/thermique/parois-menuiseries-pt-decisions.md."""
+"""Enveloppe thermique proposée depuis les calques et portée des calques (docs/thermique/refondation-parcours-decisions.md §15)."""
 from __future__ import annotations
 
 import json
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.db import Base
-from app.models.thermique import ThermiqueComponent, ThermiqueDocument, ThermiqueSheet
-from app.services import thermique_metre
-from app.services.thermique import create_project, document_path
-from tests.test_thermique_metre import _pdf, _user
-from thermique_moteur import enveloppe, traits
+from app.core.security import get_password_hash
+from app.models.thermique import ThermiqueDocument, ThermiqueLevel, ThermiqueSheet, ThermiqueZone
+from app.models.user import User
+from app.services import thermique_calques, thermique_enveloppe, thermique_metre, thermique_pieces
+from app.services.thermique import ThermiqueError, create_project
+from thermique_moteur import bande, calques
 
 M = 1000 / 100 / (25.4 / 72)  # points PDF pour 1 m à 1/100
-OX, OY = 60.0, 60.0
-EP = 0.30
-INTERIEUR = [[OX + EP * M, OY + EP * M], [OX + (10 - EP) * M, OY + EP * M], [OX + (10 - EP) * M, OY + (8 - EP) * M], [OX + EP * M, OY + (8 - EP) * M]]
+FACE = "trait|1.56|#000000|"
+VITRE = "trait|0.24|#000000|"
 
 
-def _plan_murs_remplis() -> bytes:
-    """Mur de 30 cm rempli en gris (maçonnerie), bordé de deux traits épais, sur les quatre façades."""
-    e = EP * M
-    largeur, hauteur = 10 * M, 8 * M
-    bandes = [
-        (OX, OY, largeur, e),
-        (OX, OY + hauteur - e, largeur, e),
-        (OX, OY, e, hauteur),
-        (OX + largeur - e, OY, e, hauteur),
-    ]
-    remplissage = "0.6 g " + " ".join(f"{x:.2f} {y:.2f} {w:.2f} {h:.2f} re f" for x, y, w, h in bandes)
-    faces = "1.5 w " + " ".join(
-        f"{x0:.2f} {y0:.2f} {x1 - x0:.2f} {y1 - y0:.2f} re S"
-        for x0, y0, x1, y1 in ((OX, OY, OX + largeur, OY + hauteur), (OX + e, OY + e, OX + largeur - e, OY + hauteur - e))
+def _rect(x0, y0, x1, y1):
+    return [x0 * M, y0 * M, x1 * M, y0 * M, x1 * M, y1 * M, x0 * M, y1 * M, x0 * M, y0 * M]
+
+
+def _plan():
+    """Bâtiment de 10 × 6 m, murs de 30 cm (deux faces), refend de 10 cm à x = 4 m ; une vitre dans le mur de façade
+    (x = 0,15 m) et une vitre intérieure (y = 3 m), de même signature."""
+    return calques.assembler(
+        [
+            (calques.TRAIT, FACE, "grand_ferme", _rect(0, 0, 10, 6)),
+            (calques.TRAIT, FACE, "grand_ferme", _rect(0.3, 0.3, 9.7, 5.7)),
+            (calques.TRAIT, FACE, "droit", [3.95 * M, 0.3 * M, 3.95 * M, 5.7 * M]),
+            (calques.TRAIT, FACE, "droit", [4.05 * M, 0.3 * M, 4.05 * M, 5.7 * M]),
+            (calques.TRAIT, VITRE, "droit", [0.15 * M, 1 * M, 0.15 * M, 2 * M]),
+            (calques.TRAIT, VITRE, "droit", [5 * M, 3 * M, 6 * M, 3 * M]),
+        ],
+        100,
     )
-    return _pdf(f"{remplissage} 0 g {faces}".encode()).replace(b"/MediaBox [0 0 600 400]", b"/MediaBox [0 0 600 500]")
 
 
-def test_epaisseur_des_murs_le_long_du_contour(tmp_path):
-    chemin = tmp_path / "plan.pdf"
-    chemin.write_bytes(_plan_murs_remplis())
-    lus = traits.lire_traits(chemin, 0, avec_couleur=True)
-    aplats = traits.lire_aplats(chemin, 0)
-    assert len(aplats) == 4 and all(luminance == 153 for _, luminance in aplats)
-    analyse = enveloppe.analyser_murs(lus, aplats, INTERIEUR, 1.5, 100)
-    assert len(analyse["cotes"]) == 4
-    for cote in analyse["cotes"]:
-        assert cote["epaisseur_m"] == pytest.approx(EP, abs=0.021)
-        assert cote["part_lue"] >= 0.9
-    longueurs = [9.4, 7.4, 9.4, 7.4]
-    cotes = [{"mur": {k: cote[k] for k in ("epaisseur_m", "isolant", "part_lue")}, "composant_id": None} for cote in analyse["cotes"]]
-    types = enveloppe.types_de_murs(cotes, longueurs)
-    assert len(types) == 1
-    assert sorted(types[0]["cotes"]) == [0, 1, 2, 3]
-    assert types[0]["longueur_m"] == pytest.approx(sum(longueurs) * min(c["part_lue"] for c in analyse["cotes"]), rel=0.1)
+def test_deux_lignes_et_bande():
+    plan = _plan()
+    (batiment,) = bande.proposer(plan, [0, 1, 2, 3], fermeture_m=0.4)
+    assert batiment["aire_exterieur_m2"] == pytest.approx(60, abs=1.2)
+    assert batiment["aire_interieur_m2"] == pytest.approx(9.4 * 5.4, abs=1.2)
+    filtre = bande.Bande([batiment["nu_exterieur"]], [batiment["nu_interieur"]], 100)
+    assert filtre.filtrer(plan, [4, 5], bande.ENVELOPPE) == [4]
+    assert filtre.filtrer(plan, [4, 5], bande.INTERIEUR) == [5]
+    assert filtre.filtrer(plan, [4, 5], bande.PARTOUT) == [4, 5]
+    assert filtre.positions(plan, 4) == ["partout", "enveloppe"]
+    assert bande.Bande([], [], 100).filtrer(plan, [4, 5], bande.ENVELOPPE) == []
+    with pytest.raises(Exception, match="Aucun bâtiment"):
+        bande.proposer(plan, [2, 3], fermeture_m=0.4)
 
 
-def test_types_regroupes_a_trois_centimetres():
-    cotes = [
-        {"mur": {"epaisseur_m": 0.42, "isolant": "reparti", "part_lue": 1.0}},
-        {"mur": {"epaisseur_m": 0.44, "isolant": "reparti", "part_lue": 0.5}, "composant_id": 7},
-        {"mur": {"epaisseur_m": 0.22, "isolant": None, "part_lue": 1.0}},
-        {"mur": {"epaisseur_m": None, "isolant": None, "part_lue": 0.0}},
-        {},
-    ]
-    types = enveloppe.types_de_murs(cotes, [10.0, 4.0, 3.0, 5.0, 2.0])
-    assert [(t["epaisseur_m"], t["isolant"], t["longueur_m"], t["cotes"], t["composants"]) for t in types] == [
-        (0.42, "reparti", 12.0, [0, 1], [7]),  # moyenne pondérée par la longueur lue : 0,423
-        (0.22, None, 3.0, [2], []),
-    ]
-
-
-def test_lecture_et_rattachement_des_murs_dans_le_projet(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "thermique_storage_dir", str(tmp_path))
+@pytest.fixture()
+def db_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    with Session(engine) as db:
-        thermicien = _user(db, "be@example.fr")
-        projet = create_project(db, thermicien, "Projet", None)
-        contenu = _plan_murs_remplis()
-        document = ThermiqueDocument(
-            project_id=projet.id, original_filename="plan.pdf", stored_filename="plan.pdf", file_format="pdf",
-            size_bytes=len(contenu), sha256="a" * 64, page_count=1,
-        )
-        db.add(document)
-        db.flush()
-        document_path(document).parent.mkdir(parents=True, exist_ok=True)
-        document_path(document).write_bytes(contenu)
-        planche = ThermiqueSheet(
-            project_id=projet.id, document_id=document.id, page_index=0, label="Plan", nature="plan",
-            rotation_deg=0, page_width_pt=600, page_height_pt=500, scale_denominator=100, scale_source="declaree",
-        )
-        db.add(planche)
-        db.commit()
-        niveau = thermique_metre.create_level(db, projet, {"nom": "RDC", "planche_id": planche.id})
-        zone = thermique_metre.create_zone(db, niveau, {"type": "contour", "points": INTERIEUR})
+    with Session(engine) as session:
+        yield session
 
-        resultat = thermique_metre.detect_walls(db, zone)
-        assert (resultat["cotes_lues"], resultat["cotes"], resultat["types"]) == (4, 4, 1)
-        cotes = json.loads(zone.edges_json)
-        assert all(cote["mur"]["epaisseur_m"] == pytest.approx(EP, abs=0.021) for cote in cotes)
 
-        # Changer le « donne sur » d'un côté conserve le mur lu.
-        cotes[1]["donne_sur"] = "lnc"
-        thermique_metre.update_zone(db, zone, {"cotes": cotes})
-        assert json.loads(zone.edges_json)[1]["mur"]["epaisseur_m"] == pytest.approx(EP, abs=0.021)
+def test_enveloppe_proposee_et_portee_des_calques(db_session, monkeypatch):
+    user = User(email="be@example.fr", password_hash=get_password_hash("motdepasse-solide"), nom="Nom", prenom="Prenom", role="USER", is_active=True)
+    db_session.add(user)
+    db_session.commit()
+    projet = create_project(db_session, user, "Médiathèque", None)
+    document = ThermiqueDocument(
+        project_id=projet.id, original_filename="plans.pdf", stored_filename="plans.pdf", file_format="pdf", size_bytes=1, sha256="0" * 64, page_count=1
+    )
+    db_session.add(document)
+    db_session.flush()
+    sheet = ThermiqueSheet(
+        project_id=projet.id, document_id=document.id, page_index=0, label="RDC", nature="plan", nature_suggested=None,
+        level_label=None, rotation_deg=0, page_width_pt=1684, page_height_pt=2384, scale_denominator=100, scale_source="declaree",
+    )
+    db_session.add(sheet)
+    db_session.flush()
+    niveau = ThermiqueLevel(project_id=projet.id, name="RDC", position=0, sheet_id=sheet.id)
+    db_session.add(niveau)
+    db_session.commit()
+    plan = _plan()
+    monkeypatch.setattr(thermique_calques, "sheet_elements", lambda s: plan)
+    monkeypatch.setattr(thermique_pieces, "sheet_elements", lambda s: plan)
 
-        type_mur = thermique_metre.serialize_metre(db, projet)["niveaux"][0]["zones"][0]["types_murs"][0]
-        composant_id = thermique_metre.accept_wall_type(db, thermicien, zone, type_mur["epaisseur_m"], None)
-        composant = db.get(ThermiqueComponent, composant_id)
-        assert (composant.category, composant.project_id) == ("murs", projet.id)
-        assert composant.name.startswith("Mur 30 cm")
-        assert {cote["composant_id"] for cote in json.loads(zone.edges_json)} == {composant_id}
-        assert thermique_metre.serialize_metre(db, projet)["niveaux"][0]["zones"][0]["types_murs"][0]["composants"] == [composant_id]
+    with pytest.raises(ThermiqueError, match="Aucun calque"):
+        thermique_enveloppe.propose_envelope(db_session, niveau, 0.4)
+    thermique_calques.save_designation(db_session, projet, FACE, "*", "mur")
+    # sans lignes, une règle « dans l'enveloppe » ne s'applique nulle part
+    thermique_calques.save_designation(db_session, projet, VITRE, "droit", "menuiserie", "enveloppe")
+    liste = thermique_calques.list_designations(db_session, projet)
+    assert [(r["nature"], r["perimetre"], r["total"]) for r in liste["regles"]] == [("mur", "partout", 4), ("menuiserie", "enveloppe", 0)]
+    assert liste["planches"] == [{"id": sheet.id, "libelle": "RDC", "enveloppe": False}]
+
+    resume = thermique_enveloppe.propose_envelope(db_session, niveau, 0.4)
+    assert resume["batiments"] == 1 and resume["nu_exterieur_m2"] == pytest.approx(60, abs=1.2)
+    zones = {z.kind: z for z in db_session.scalars(select(ThermiqueZone).where(ThermiqueZone.level_id == niveau.id))}
+    assert set(zones) == {"contour", "nu_exterieur"} and zones["contour"].source == "automatique"
+
+    # la même vitre : menuiserie dans l'enveloppe, menuiserie intérieure à l'intérieur
+    thermique_calques.save_designation(db_session, projet, VITRE, "droit", "menuiserie_interieure", "interieur")
+    liste = thermique_calques.list_designations(db_session, projet)
+    assert [(r["nature"], r["total"]) for r in liste["regles"]] == [("mur", 4), ("menuiserie", 1), ("menuiserie_interieure", 1)]
+    natures = {i: r["nature"] for i, r in thermique_calques.attribution(projet, sheet, plan).items()}
+    assert natures[4] == "menuiserie" and natures[5] == "menuiserie_interieure"
+    choix = thermique_calques.pick_element(db_session, projet, sheet, 0.15 * M, 1.5 * M, 2.0)
+    assert choix["enveloppe_tracee"] and choix["element"]["positions"] == ["partout", "enveloppe"]
+    assert choix["regle"]["nature"] == "menuiserie" and choix["regle"]["perimetre"] == "enveloppe"
+    assert len(thermique_calques.family_elements(projet, sheet, VITRE, "droit", "interieur")["traits"]) == 1
+    with pytest.raises(ThermiqueError, match="Portée inconnue"):
+        thermique_calques.save_designation(db_session, projet, VITRE, "droit", "menuiserie", "dehors")
+
+    # les pièces se ferment aussi sur les deux vitres
+    assert "menuiserie" in thermique_pieces.list_rooms(db_session, projet, sheet)["limites"]["natures"]
+
+    # une ligne corrigée à la main n'est pas remplacée sans confirmation
+    points = json.loads(zones["contour"].points_json)
+    thermique_metre.update_zone(db_session, zones["contour"], {"points": points[:-1] + [[points[-1][0] + 1, points[-1][1]]]})
+    with pytest.raises(ThermiqueError, match="confirmez"):
+        thermique_enveloppe.propose_envelope(db_session, niveau, 0.4)
+    thermique_enveloppe.propose_envelope(db_session, niveau, 0.4, replace=True)
+    sources = [z.source for z in db_session.scalars(select(ThermiqueZone).where(ThermiqueZone.level_id == niveau.id))]
+    assert sources == ["automatique", "automatique"]

@@ -4,6 +4,7 @@ import { useAuth } from "../providers/AuthProvider";
 import { CalquesPage } from "./pages/CalquesPage";
 import { SuperpositionPage } from "./pages/SuperpositionPage";
 import { PiecesPage } from "./pages/PiecesPage";
+import { EnveloppePage } from "./pages/EnveloppePage";
 import { LibraryPage } from "./pages/LibraryHomePage";
 import { MetrePage } from "./pages/MetrePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
@@ -89,6 +90,7 @@ export function ThermiqueApp() {
           <Route path="projets/:projectId/metre" element={<MetrePage />} />
           <Route path="projets/:projectId/calques" element={<CalquesPage />} />
           <Route path="projets/:projectId/superposition" element={<SuperpositionPage />} />
+          <Route path="projets/:projectId/enveloppe" element={<EnveloppePage />} />
           <Route path="projets/:projectId/pieces" element={<PiecesPage />} />
         </Route>
       </Route>

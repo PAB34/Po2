@@ -3,10 +3,15 @@ import { request, type PdfPoint } from "./api";
 
 export type CalqueCount = { id: number; libelle: string; nombre: number };
 
+// Où une règle s'applique : partout, dans l'enveloppe (entre les deux lignes) ou à l'intérieur.
+export type Perimetre = "partout" | "enveloppe" | "interieur";
+
 export type CalqueRule = {
   id: number;
   signature: string;
   forme: string;
+  perimetre: Perimetre;
+  perimetre_libelle: string;
   nature: string;
   exclusions: { planche: number; element: number }[];
   libelle: string;
@@ -23,7 +28,9 @@ export type CalquesProject = {
   // éléments désignés seuls, par nature
   ponctuels: CalqueSingles[];
   natures: Record<string, string>;
-  planches: { id: number; libelle: string }[];
+  perimetres: Record<Perimetre, string>;
+  // enveloppe : nu intérieur et nu extérieur tracés sur le niveau de ce plan
+  planches: { id: number; libelle: string; enveloppe: boolean }[];
 };
 
 // « * » = toutes les formes de la signature.
@@ -40,9 +47,12 @@ export type CalquePick = {
     forme_libelle: string;
     // x1, y1, x2, y2… en points PDF
     coords: number[];
+    // portées qui s'appliquent à cet élément
+    positions: Perimetre[];
   };
+  enveloppe_tracee: boolean;
   familles: CalqueFamily[];
-  regle: { id: number; nature: string; nature_libelle: string; forme: string; exclu: boolean } | null;
+  regle: { id: number; nature: string; nature_libelle: string; forme: string; perimetre: Perimetre; exclu: boolean } | null;
   // nature donnée à cet élément seul
   ponctuel: { nature: string; nature_libelle: string } | null;
 };
@@ -86,7 +96,7 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 
 export const calquesApi = {
   list: (token: string, projectId: number) => request<CalquesProject>(token, `/thermique/projects/${projectId}/calques`),
-  save: (token: string, projectId: number, payload: { signature: string; forme: string; nature: string }) =>
+  save: (token: string, projectId: number, payload: { signature: string; forme: string; nature: string; perimetre: Perimetre }) =>
     request<CalquesProject>(token, `/thermique/projects/${projectId}/calques`, json("POST", payload)),
   remove: (token: string, projectId: number, ruleId: number) =>
     request<CalquesProject>(token, `/thermique/projects/${projectId}/calques/${ruleId}`, { method: "DELETE" }),
@@ -94,10 +104,10 @@ export const calquesApi = {
     request<CalquesProject>(token, `/thermique/projects/${projectId}/calques/${ruleId}/exclusions`, json("POST", payload)),
   pick: (token: string, sheetId: number, point: PdfPoint, tolerance: number) =>
     request<CalquePick>(token, `/thermique/sheets/${sheetId}/calques/designer`, json("POST", { x: point[0], y: point[1], tolerance })),
-  family: (token: string, sheetId: number, signature: string, forme: string) =>
+  family: (token: string, sheetId: number, signature: string, forme: string, perimetre: Perimetre) =>
     request<CalqueGeometry>(
       token,
-      `/thermique/sheets/${sheetId}/calques/famille?signature=${encodeURIComponent(signature)}&forme=${encodeURIComponent(forme)}`,
+      `/thermique/sheets/${sheetId}/calques/famille?signature=${encodeURIComponent(signature)}&forme=${encodeURIComponent(forme)}&perimetre=${perimetre}`,
     ),
   zone: (token: string, sheetId: number, contour: CalqueLasso) =>
     request<CalqueZone>(token, `/thermique/sheets/${sheetId}/calques/zone`, json("POST", { contour })),
@@ -108,7 +118,13 @@ export const calquesApi = {
   designateZone: (
     token: string,
     sheetId: number,
-    payload: { contour: CalqueLasso; familles: { signature: string; forme: string }[]; nature: string; portee: "familles" | "zone" },
+    payload: {
+      contour: CalqueLasso;
+      familles: { signature: string; forme: string }[];
+      nature: string;
+      portee: "familles" | "zone";
+      perimetre: Perimetre;
+    },
   ) => request<CalquesProject>(token, `/thermique/sheets/${sheetId}/calques/zone/designer`, json("POST", payload)),
   designated: (token: string, sheetId: number) => request<SheetDesignations>(token, `/thermique/sheets/${sheetId}/calques/designes`),
 };

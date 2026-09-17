@@ -31,6 +31,7 @@ from app.schemas.thermique import (
     ComponentImport,
     ComponentUpdate,
     DetectContourRequest,
+    EnvelopeProposal,
     EraseAllRequest,
     ExternalAccountCreate,
     ExternalAccountRead,
@@ -56,7 +57,7 @@ from app.schemas.thermique import (
     ZoneCreate,
     ZoneUpdate,
 )
-from app.services import thermique_calques, thermique_metre, thermique_pieces, thermique_superposition
+from app.services import thermique_calques, thermique_enveloppe, thermique_metre, thermique_pieces, thermique_superposition
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -688,6 +689,28 @@ def detect_lines_route(
     return {**thermique_metre.serialize_metre(db, project), "detection_lignes": found}
 
 
+@router.post("/niveaux/{level_id}/proposer-enveloppe")
+def propose_envelope_route(
+    level_id: int,
+    payload: EnvelopeProposal,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Propose le nu extérieur et le nu intérieur du niveau à partir des calques désignés (étape « Enveloppe »)."""
+    level = _level_or_404(db, user, level_id)
+    project = db.get(ThermiqueProject, level.project_id)
+    try:
+        found = thermique_enveloppe.propose_envelope(db, level, payload.fermeture_cm / 100, payload.remplacer)
+    except (ThermiqueError, moteur_metre.MetreError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        LOG.exception("Proposition de l'enveloppe impossible pour le niveau %s", level_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Proposition de l'enveloppe impossible.") from exc
+    return {**thermique_metre.serialize_metre(db, project), "proposition_enveloppe": found}
+
+
 @router.post("/zones/{zone_id}/detecter-murs")
 def detect_walls_route(
     zone_id: int,
@@ -776,7 +799,7 @@ def create_project_calque(
     """Donne une nature à une famille d'éléments (signature + forme), sur tous les plans du projet."""
     project = _project_or_404(db, user, project_id)
     return _calques_action(
-        db, project, lambda: thermique_calques.save_designation(db, project, payload.signature, payload.forme, payload.nature)
+        db, project, lambda: thermique_calques.save_designation(db, project, payload.signature, payload.forme, payload.nature, payload.perimetre)
     )
 
 
@@ -838,7 +861,7 @@ def designate_sheet_calque_zone(
         db,
         project,
         lambda: thermique_calques.designate_zone(
-            db, project, sheet, payload.contour, familles, payload.nature, payload.portee == "familles"
+            db, project, sheet, payload.contour, familles, payload.nature, payload.portee == "familles", payload.perimetre
         ),
     )
 
@@ -902,13 +925,14 @@ def read_sheet_calque_family(
     sheet_id: int,
     signature: str,
     forme: str,
+    perimetre: str = "partout",
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Éléments d'une famille sur la planche, pour les surligner."""
+    """Éléments d'une famille sur la planche, dans la portée demandée, pour les surligner."""
     sheet = _sheet_or_404(db, user, sheet_id)
     try:
-        return thermique_calques.family_elements(db.get(ThermiqueProject, sheet.project_id), sheet, signature, forme)
+        return thermique_calques.family_elements(db.get(ThermiqueProject, sheet.project_id), sheet, signature, forme, perimetre)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

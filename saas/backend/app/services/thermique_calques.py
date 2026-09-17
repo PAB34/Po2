@@ -12,10 +12,11 @@ from collections import OrderedDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
-from app.models.thermique import ThermiqueProject, ThermiqueSheet
+from app.models.thermique import ThermiqueLevel, ThermiqueProject, ThermiqueSheet, ThermiqueZone
 from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_raster import raster_root
 from thermique_moteur import calques as moteur
+from thermique_moteur.bande import PERIMETRES, Bande
 
 # Change si la lecture des éléments évolue : les anciens fichiers en cache sont alors ignorés.
 ELEMENTS_VERSION = "v1"
@@ -24,6 +25,7 @@ MAX_FAMILLE = 30000
 MAX_DESIGNES = 60000
 MAX_FAMILLES_ZONE = 30
 _memoire: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+_bandes: OrderedDict[tuple, Bande] = OrderedDict()
 
 
 def sheet_elements(sheet: ThermiqueSheet) -> dict:
@@ -85,9 +87,35 @@ def _enregistrer(db: Session, project: ThermiqueProject, regles: list[dict], pon
     db.commit()
 
 
+def sheet_band(sheet: ThermiqueSheet) -> Bande | None:
+    """Nu extérieur et nu intérieur du niveau de la planche (§15), sous forme de filtre ; None sans lignes."""
+    db = object_session(sheet)
+    if db is None or not sheet.scale_denominator:
+        return None
+    zones = list(
+        db.scalars(
+            select(ThermiqueZone)
+            .join(ThermiqueLevel, ThermiqueZone.level_id == ThermiqueLevel.id)
+            .where(ThermiqueLevel.sheet_id == sheet.id, ThermiqueZone.kind.in_(("contour", "nu_exterieur")))
+            .order_by(ThermiqueZone.id)
+        )
+    )
+    exterieurs = [json.loads(z.points_json) for z in zones if z.kind == "nu_exterieur"]
+    interieurs = [json.loads(z.points_json) for z in zones if z.kind == "contour"]
+    if not exterieurs or not interieurs:
+        return None
+    cle = (sheet.id, sheet.scale_denominator, tuple((z.id, z.points_json) for z in zones))
+    if cle not in _bandes:
+        _bandes[cle] = Bande(exterieurs, interieurs, sheet.scale_denominator)
+        while len(_bandes) > MEMOIRE_MAX:
+            _bandes.popitem(last=False)
+    _bandes.move_to_end(cle)
+    return _bandes[cle]
+
+
 def attribution(project: ThermiqueProject, sheet: ThermiqueSheet, elements: dict | None = None) -> dict[int, dict]:
-    """Nature de chaque élément désigné de la planche (règles puis éléments seuls)."""
-    return moteur.attribuer(elements or sheet_elements(sheet), _regles(project), sheet.id, _ponctuels(project))
+    """Nature de chaque élément désigné de la planche (règles dans leur portée, puis éléments seuls)."""
+    return moteur.attribuer(elements or sheet_elements(sheet), _regles(project), sheet.id, _ponctuels(project), sheet_band(sheet))
 
 
 def _regle(regles: list[dict], regle_id: int) -> dict:
@@ -97,19 +125,33 @@ def _regle(regles: list[dict], regle_id: int) -> dict:
     return regle
 
 
-def _comptes(signature: str, forme: str, planches: list[tuple[ThermiqueSheet, dict]], exclusions: list[dict] = ()) -> list[dict]:
+def _comptes(
+    signature: str, forme: str, planches: list[tuple[ThermiqueSheet, dict]], exclusions: list[dict] = (), perimetre: str = moteur.PARTOUT
+) -> list[dict]:
     par_planche = []
     for sheet, elements in planches:
-        nombre = moteur.nombre_famille(elements, signature, forme) - sum(1 for e in exclusions if e["planche"] == sheet.id)
+        if perimetre == moteur.PARTOUT:
+            nombre = moteur.nombre_famille(elements, signature, forme) - sum(1 for e in exclusions if e["planche"] == sheet.id)
+        else:
+            regle = {"signature": signature, "forme": forme, "perimetre": perimetre, "exclusions": exclusions}
+            nombre = len(moteur.membres(elements, regle, sheet.id, sheet_band(sheet)))
         if nombre > 0:
             par_planche.append({"id": sheet.id, "libelle": sheet.label, "nombre": nombre})
     return par_planche
 
 
-def _exclusions(regles: list[dict], signature: str, forme: str) -> list[dict]:
-    """Éléments retirés du calque déjà désigné pour cette famille exacte (aucun s'il n'existe pas)."""
-    regle = next((r for r in regles if r["signature"] == signature and r["forme"] == forme), None)
+def _meme_regle(regle: dict, signature: str, forme: str, perimetre: str) -> bool:
+    return regle["signature"] == signature and regle["forme"] == forme and moteur.perimetre(regle) == perimetre
+
+
+def _exclusions(regles: list[dict], signature: str, forme: str, perimetre: str = moteur.PARTOUT) -> list[dict]:
+    """Éléments retirés du calque déjà désigné pour cette famille et cette portée (aucun s'il n'existe pas)."""
+    regle = next((r for r in regles if _meme_regle(r, signature, forme, perimetre)), None)
     return regle["exclusions"] if regle else []
+
+
+def _sans_enveloppe(planches: list[tuple[ThermiqueSheet, dict]]) -> list[str]:
+    return [sheet.label for sheet, _ in planches if sheet_band(sheet) is None]
 
 
 def list_designations(db: Session, project: ThermiqueProject) -> dict:
@@ -117,10 +159,12 @@ def list_designations(db: Session, project: ThermiqueProject) -> dict:
     planches = [(sheet, sheet_elements(sheet)) for sheet in sheets]
     regles = []
     for regle in _regles(project):
-        par_planche = _comptes(regle["signature"], regle["forme"], planches, regle["exclusions"])
+        par_planche = _comptes(regle["signature"], regle["forme"], planches, regle["exclusions"], moteur.perimetre(regle))
         regles.append(
             {
                 **regle,
+                "perimetre": moteur.perimetre(regle),
+                "perimetre_libelle": PERIMETRES[moteur.perimetre(regle)],
                 "libelle": moteur.libelle_signature(regle["signature"]),
                 "forme_libelle": moteur.libelle_forme(regle["forme"]),
                 "nature_libelle": moteur.NATURES.get(regle["nature"], regle["nature"]),
@@ -143,7 +187,8 @@ def list_designations(db: Session, project: ThermiqueProject) -> dict:
         "regles": regles,
         "ponctuels": list(par_nature.values()),
         "natures": moteur.NATURES,
-        "planches": [{"id": s.id, "libelle": s.label} for s in sheets],
+        "perimetres": PERIMETRES,
+        "planches": [{"id": s.id, "libelle": s.label, "enveloppe": sheet_band(s) is not None} for s in sheets],
     }
 
 
@@ -166,7 +211,9 @@ def pick_element(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
         familles.append(
             {"forme": forme, "forme_libelle": moteur.libelle_forme(forme), "total": sum(p["nombre"] for p in par_planche), "par_planche": par_planche}
         )
-    regle = moteur.regle_applicable(regles, signature, element[2] if trait else moteur.TOUTES_FORMES)
+    bande = sheet_band(sheet)
+    positions = bande.positions(elements, index) if bande is not None else [moteur.PARTOUT]
+    regle = moteur.regle_applicable(regles, signature, element[2] if trait else moteur.TOUTES_FORMES, positions)
     return {
         "element": {
             "planche": sheet.id,
@@ -177,7 +224,10 @@ def pick_element(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
             "libelle": moteur.libelle_signature(signature),
             "forme_libelle": moteur.libelle_forme(element[2]),
             "coords": element[7],
+            # portées qui s'appliquent à cet élément (« dans l'enveloppe », « à l'intérieur »)
+            "positions": positions,
         },
+        "enveloppe_tracee": bande is not None,
         "familles": familles,
         "regle": None
         if regle is None
@@ -186,6 +236,7 @@ def pick_element(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
             "nature": regle["nature"],
             "nature_libelle": moteur.NATURES.get(regle["nature"], regle["nature"]),
             "forme": regle["forme"],
+            "perimetre": moteur.perimetre(regle),
             "exclu": any(e["planche"] == sheet.id and e["element"] == index for e in regle["exclusions"]),
         },
         "ponctuel": next(
@@ -199,22 +250,34 @@ def pick_element(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
     }
 
 
-def save_designation(db: Session, project: ThermiqueProject, signature: str, forme: str, nature: str) -> None:
-    """Désigne la nature d'une famille ; une famille déjà désignée change de nature."""
+def save_designation(
+    db: Session, project: ThermiqueProject, signature: str, forme: str, nature: str, perimetre: str = moteur.PARTOUT
+) -> None:
+    """Désigne la nature d'une famille dans une portée ; une famille déjà désignée dans cette portée change de
+    nature."""
     if nature not in moteur.NATURES:
         raise ThermiqueError("Nature inconnue.")
+    if perimetre not in PERIMETRES:
+        raise ThermiqueError("Portée inconnue.")
     if signature.startswith("aplat|"):
         if forme != moteur.TOUTES_FORMES:
             raise ThermiqueError("Un remplissage se désigne pour toutes ses formes.")
     elif not signature.startswith("trait|") or (forme != moteur.TOUTES_FORMES and forme not in moteur.FORMES):
         raise ThermiqueError("Élément inconnu.")
     regles = _regles(project)
-    existante = next((r for r in regles if r["signature"] == signature and r["forme"] == forme), None)
+    existante = next((r for r in regles if _meme_regle(r, signature, forme, perimetre)), None)
     if existante is not None:
         existante["nature"] = nature
     else:
         regles.append(
-            {"id": max((r["id"] for r in regles), default=0) + 1, "signature": signature, "forme": forme, "nature": nature, "exclusions": []}
+            {
+                "id": max((r["id"] for r in regles), default=0) + 1,
+                "signature": signature,
+                "forme": forme,
+                "perimetre": perimetre,
+                "nature": nature,
+                "exclusions": [],
+            }
         )
     _enregistrer(db, project, regles)
 
@@ -339,6 +402,7 @@ def designate_zone(
     familles: list[tuple[str, str]],
     nature: str,
     partout: bool,
+    perimetre: str = moteur.PARTOUT,
 ) -> None:
     """Lasso « Désigner » (§14, D32) : les familles cochées prennent la nature sur tous les plans, ou seuls leurs
     éléments situés dans la zone."""
@@ -348,7 +412,7 @@ def designate_zone(
         raise ThermiqueError("Cochez au moins un type de trait.")
     if partout:
         for signature, forme in familles:
-            save_designation(db, project, signature, forme, nature)
+            save_designation(db, project, signature, forme, nature, perimetre)
         return
     elements = sheet_elements(sheet)
     choisies = set(familles)
@@ -383,12 +447,15 @@ def apply_zone(
     _enregistrer(db, project, regles)
 
 
-def family_elements(project: ThermiqueProject, sheet: ThermiqueSheet, signature: str, forme: str) -> dict:
-    """Éléments d'une famille sur la planche, sans ceux retirés de son calque (§11, D23)."""
+def family_elements(
+    project: ThermiqueProject, sheet: ThermiqueSheet, signature: str, forme: str, perimetre: str = moteur.PARTOUT
+) -> dict:
+    """Éléments d'une famille sur la planche, dans la portée, sans ceux retirés de son calque (§11 D23, §15)."""
+    if perimetre not in PERIMETRES:
+        raise ThermiqueError("Portée inconnue.")
     elements = sheet_elements(sheet)
-    retires = {e["element"] for e in _exclusions(_regles(project), signature, forme) if e["planche"] == sheet.id}
-    indices = [i for i in moteur.famille(elements, signature, forme) if i not in retires]
-    return moteur.coordonnees(elements, indices, MAX_FAMILLE)
+    regle = {"signature": signature, "forme": forme, "perimetre": perimetre, "exclusions": _exclusions(_regles(project), signature, forme, perimetre)}
+    return moteur.coordonnees(elements, moteur.membres(elements, regle, sheet.id, sheet_band(sheet)), MAX_FAMILLE)
 
 
 def sheet_designations(project: ThermiqueProject, sheet: ThermiqueSheet) -> dict:

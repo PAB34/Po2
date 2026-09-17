@@ -188,6 +188,8 @@ class CalqueDesignation(BaseModel):
     # Forme de l'élément, ou « * » pour toutes les formes de la signature.
     forme: str = Field(min_length=1, max_length=20)
     nature: str = Field(min_length=1, max_length=30)
+    # Où la règle s'applique : partout, dans l'enveloppe (entre les deux lignes) ou à l'intérieur.
+    perimetre: Literal["partout", "enveloppe", "interieur"] = "partout"
 
 
 class CalqueExclusion(BaseModel):
@@ -223,6 +225,13 @@ class CalqueZoneDesignate(CalqueZone):
     nature: str = Field(min_length=1, max_length=30)
     # « familles » : sur tous les plans ; « zone » : seuls les éléments du lasso
     portee: Literal["familles", "zone"] = "familles"
+    perimetre: Literal["partout", "enveloppe", "interieur"] = "partout"
+
+
+class EnvelopeProposal(BaseModel):
+    # Ouvertures de façade refermées jusqu'à cette largeur, en centimètres.
+    fermeture_cm: float = Field(default=100, ge=0, le=300)
+    remplacer: bool = False
 
 
 class SuperpositionValidate(BaseModel):
