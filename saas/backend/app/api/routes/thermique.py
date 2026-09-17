@@ -43,12 +43,13 @@ from app.schemas.thermique import (
     SectionHeightsRequest,
     SheetRead,
     SheetUpdate,
+    SuperpositionValidate,
     UploadResult,
     WallTypeAccept,
     ZoneCreate,
     ZoneUpdate,
 )
-from app.services import thermique_calques, thermique_metre
+from app.services import thermique_calques, thermique_metre, thermique_superposition
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -879,6 +880,66 @@ def read_sheet_calques(
     try:
         return thermique_calques.sheet_designations(db.get(ThermiqueProject, sheet.project_id), sheet)
     except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/projects/{project_id}/superposition")
+def read_project_superposition(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Plans du projet, niveau de référence et superpositions validées (étape E2)."""
+    return thermique_superposition.overview(db, _project_or_404(db, user, project_id))
+
+
+@router.get("/projects/{project_id}/superposition/proposition")
+def read_superposition_proposal(
+    project_id: int,
+    planche_id: int,
+    reference_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Translation proposée pour poser un plan sur la référence."""
+    project = _project_or_404(db, user, project_id)
+    try:
+        return thermique_superposition.propose(db, project, planche_id, reference_id)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        LOG.exception("Superposition impossible pour la planche %s", planche_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Superposition impossible.") from exc
+
+
+@router.post("/projects/{project_id}/superposition")
+def validate_superposition(
+    project_id: int,
+    payload: SuperpositionValidate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Valide la superposition d'un plan sur la référence (enregistrée comme calage de son niveau)."""
+    project = _project_or_404(db, user, project_id)
+    try:
+        return thermique_superposition.validate(db, project, payload.reference_id, payload.planche_id, payload.dx, payload.dy)
+    except ThermiqueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.delete("/projects/{project_id}/superposition/{sheet_id}")
+def reset_superposition(
+    project_id: int,
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    try:
+        return thermique_superposition.reset(db, project, sheet_id)
+    except ThermiqueError as exc:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 

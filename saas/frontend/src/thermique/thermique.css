@@ -1383,3 +1383,69 @@ circle.th-seg--measure {
     align-items: flex-start;
   }
 }
+
+/* Superposition des niveaux (étape E2) */
+.th-sup-reference polyline {
+  fill: none;
+  stroke: #6b7280;
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+}
+
+.th-sup-reference polygon {
+  fill: #6b7280;
+  fill-opacity: 0.15;
+  stroke: none;
+}
+
+.th-sup-niveau {
+  opacity: 0.85;
+}
+
+.th-sup-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-sup-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-sup-item:disabled {
+  cursor: default;
+}
+
+.th-sup-item.is-selected {
+  border-color: #0e7490;
+  box-shadow: inset 3px 0 0 #0e7490;
+}
+
+.th-sup-state {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.th-sup-state.is-ok {
+  color: #166534;
+}
+
+.th-sup-nudge {
+  display: flex;
+  gap: 4px;
+}
