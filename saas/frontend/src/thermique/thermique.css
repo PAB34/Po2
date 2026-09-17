@@ -1449,3 +1449,52 @@ circle.th-seg--measure {
   display: flex;
   gap: 4px;
 }
+
+/* Onglets du projet : passage à la ligne dans le panneau latéral */
+.th-segmented.th-section {
+  flex-wrap: wrap;
+}
+
+.th-segmented.th-section a {
+  flex: 1 0 30%;
+  border-bottom: 1px solid var(--po2-color-line);
+}
+
+/* Pièces (étape E3) */
+.th-room polygon {
+  fill: var(--room);
+  fill-opacity: 0.16;
+  stroke: var(--room);
+  stroke-width: 1.5;
+}
+
+.th-room.is-selected polygon {
+  fill-opacity: 0.32;
+  stroke-width: 3;
+}
+
+.th-room text {
+  fill: var(--room);
+  font: 700 12px var(--po2-font-body);
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+}
+
+.th-room .th-room__area {
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.th-room-pending {
+  fill: #0e7490;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.th-room-cut {
+  fill: none;
+  stroke: #b3261e;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}

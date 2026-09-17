@@ -39,6 +39,7 @@ class ThermiqueProject(Base):
     levels: Mapped[list["ThermiqueLevel"]] = relationship(
         cascade="all, delete-orphan", order_by="ThermiqueLevel.position"
     )
+    rooms: Mapped[list["ThermiqueRoom"]] = relationship(cascade="all, delete-orphan", order_by="ThermiqueRoom.id")
 
 
 class ThermiqueDocument(Base):
@@ -192,6 +193,37 @@ class ThermiqueComponent(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Composant ou modèle d'origine (copie, import, « enregistrer comme modèle »), sans lien actif.
     source_component_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThermiqueRoom(Base):
+    """Pièce d'un plan (étape E3) : espace fermé par les calques désignés, son nom lu ou saisi et son classement
+    thermique. Contour en points PDF de la planche. Voir `docs/thermique/refondation-parcours-decisions.md` §13.
+    """
+
+    __tablename__ = "thermique_rooms"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sheet_id: Mapped[int] = mapped_column(Integer, ForeignKey("thermique_sheets.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, default="", server_default="")
+    # repère du local lu sur le plan (ex. « 6-B14 »)
+    code: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # "lu" (reconnaissance de caractères) ou "saisi"
+    name_source: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # "chauffe", "non_chauffe" ou "exterieur"
+    classe: Mapped[str] = mapped_column(String(20), nullable=False, default="chauffe", server_default="chauffe")
+    # "propose" (d'après le nom) ou "choisi" (par l'utilisateur)
+    classe_source: Mapped[str] = mapped_column(String(10), nullable=False, default="propose", server_default="propose")
+    points_json: Mapped[str] = mapped_column(Text, nullable=False)
+    area_m2: Mapped[float] = mapped_column(Float, nullable=False)
+    # "auto" (détectée) ou "manuel" (clic, fusion, découpe)
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="auto", server_default="auto")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()

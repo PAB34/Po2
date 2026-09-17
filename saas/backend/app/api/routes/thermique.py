@@ -40,6 +40,11 @@ from app.schemas.thermique import (
     ProjectRead,
     ProjectUpdate,
     RasterManifest,
+    RoomAdd,
+    RoomDetect,
+    RoomMerge,
+    RoomSplit,
+    RoomUpdate,
     SectionHeightsRequest,
     SheetRead,
     SheetUpdate,
@@ -49,7 +54,7 @@ from app.schemas.thermique import (
     ZoneCreate,
     ZoneUpdate,
 )
-from app.services import thermique_calques, thermique_metre, thermique_superposition
+from app.services import thermique_calques, thermique_metre, thermique_pieces, thermique_superposition
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
     ThermiqueError,
@@ -941,6 +946,97 @@ def reset_superposition(
     except ThermiqueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+def _room_or_404(db: Session, user: User, room_id: int):
+    room = thermique_pieces.get_room(db, room_id)
+    if room is None or get_project_for_user(db, user, room.project_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pièce introuvable.")
+    return room
+
+
+def _rooms_action(db: Session, sheet: ThermiqueSheet, action, background: BackgroundTasks | None = None) -> dict:
+    """Exécute une action sur les pièces puis renvoie celles de la planche ; lance la lecture des noms au besoin."""
+    project = db.get(ThermiqueProject, sheet.project_id)
+    try:
+        lire = action(project)
+    except ThermiqueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if lire and background is not None:
+        background.add_task(thermique_pieces.read_names, sheet.id)
+    result = thermique_pieces.list_rooms(db, project, sheet)
+    if lire and background is not None:
+        result["lecture_noms"] = "en_cours"
+    return result
+
+
+@router.get("/sheets/{sheet_id}/pieces")
+def read_sheet_rooms(sheet_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    """Pièces de la planche, état de la lecture des noms et calques de limite disponibles (étape E3)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return _rooms_action(db, sheet, lambda project: False)
+
+
+@router.post("/sheets/{sheet_id}/pieces/detecter")
+def detect_sheet_rooms(
+    sheet_id: int,
+    payload: RoomDetect,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Détecte les pièces fermées par les calques désignés ; les noms sont lus en tâche de fond."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return _rooms_action(
+        db, sheet, lambda project: thermique_pieces.detect_rooms(db, project, sheet, payload.fermeture_cm / 100), background
+    )
+
+
+@router.post("/sheets/{sheet_id}/pieces")
+def add_sheet_room(
+    sheet_id: int,
+    payload: RoomAdd,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Ajoute la pièce qui contient le point cliqué."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return _rooms_action(
+        db, sheet, lambda project: thermique_pieces.add_room_at(db, project, sheet, payload.x, payload.y, payload.fermeture_cm / 100), background
+    )
+
+
+@router.post("/sheets/{sheet_id}/pieces/fusion")
+def merge_sheet_rooms(
+    sheet_id: int, payload: RoomMerge, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)
+) -> dict:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return _rooms_action(db, sheet, lambda project: thermique_pieces.merge_rooms(db, project, sheet, payload.ids))
+
+
+@router.patch("/pieces/{room_id}")
+def update_room(room_id: int, payload: RoomUpdate, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    """Nom saisi ou classe choisie (chauffé, non chauffé, extérieur)."""
+    room = _room_or_404(db, user, room_id)
+    sheet = db.get(ThermiqueSheet, room.sheet_id)
+    return _rooms_action(db, sheet, lambda project: thermique_pieces.update_room(db, room, payload.model_dump(exclude_unset=True)))
+
+
+@router.delete("/pieces/{room_id}")
+def delete_room(room_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    room = _room_or_404(db, user, room_id)
+    sheet = db.get(ThermiqueSheet, room.sheet_id)
+    return _rooms_action(db, sheet, lambda project: thermique_pieces.delete_room(db, room))
+
+
+@router.post("/pieces/{room_id}/decoupe")
+def split_room(room_id: int, payload: RoomSplit, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    """Coupe une pièce en deux le long d'un trait."""
+    room = _room_or_404(db, user, room_id)
+    sheet = db.get(ThermiqueSheet, room.sheet_id)
+    return _rooms_action(db, sheet, lambda project: thermique_pieces.split_room(db, project, room, payload.p1, payload.p2))
 
 
 @router.get("/sheets/{sheet_id}/murs")

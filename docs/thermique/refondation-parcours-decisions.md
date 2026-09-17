@@ -269,3 +269,62 @@ l'architecte a exporté tous les niveaux depuis la même maquette. Chercher une 
   `POST /projects/{id}/superposition`, `DELETE /projects/{id}/superposition/{planche}`.
 - Écran : onglet **Superposition** (référence en gris, plan choisi en couleurs de calques, Maj + glisser,
   flèches au point, validation, annulation).
+
+## 13. E3 — Pièces et noms (2026-09-17)
+
+| N° | Décision |
+|---|---|
+| Q78 → D28 | Pièces **proposées automatiquement** (espaces fermés par les calques), corrections : ajout par clic, fusion, découpe. |
+| Q79 → D29 | Noms lus par **reconnaissance de caractères sur le serveur** ; nom toujours modifiable. |
+| Q80 → D30 | **Pré-classement** chauffé / non chauffé / extérieur d'après le nom, corrigé d'un clic. |
+
+Lots : E3a pièces (moteur + onglet « Pièces »), E3b lecture des noms, E3c classement.
+
+### 13.1 Existant et constats (projet de production, RDC, lecture seule)
+
+| Sujet | Constat |
+|---|---|
+| Superpositions (E2) | Aucune validée pour l'instant. Utile avant E4 (zones sur plusieurs niveaux), pas bloquant pour E3. |
+| Calques désignés | 2 : « mur » (hachure 0,48 pt gris 152, toutes formes, 1 731 retirés) et « isolant » (0,24 pt gris 128, traits courts, 1 834 retirés). |
+| Pièces avec ces seuls calques | Image des éléments désignés, baies refermées jusqu'à 1 m : **1 à 2 espaces clos** (6 et 3 m²). Les cloisons, portes et menuiseries ne sont pas désignées : les pièces communiquent. |
+| Noms de pièces | Dessinés : **7 294 petits remplissages noirs** au RDC (lettres en contours), aucun caractère dans le PDF. |
+| Code existant | Tracés de zones (`ThermiqueZone`, contour nu intérieur, locaux non chauffés M1) ; aucune détection de pièce ni lecture de texte. |
+
+### 13.2 Proposition
+
+1. **Compléter les calques** (onglet Calques) : cloison ou doublage, menuiserie extérieure, porte. Ce sont les
+   limites des pièces.
+2. **Pièces proposées automatiquement** : espaces fermés par les calques désignés, portes et baies refermées
+   (jusqu'à environ 1 m), entre 1 et 400 m². **Clic dans un espace** pour en ajouter un oublié ; fusion et
+   découpe à la main.
+3. **Noms lus** dans chaque pièce : les petites formes noires de la pièce sont rendues en image puis lues par
+   une **reconnaissance de caractères installée sur le serveur** ; le nom lu reste modifiable.
+4. **Classement** chauffé, non chauffé ou extérieur par clic, pré-rempli d'après le nom (garage, parking, local
+   vélos : non chauffé ; terrasse, balcon : extérieur) (D11).
+
+### 13.3 Questions
+
+- **Q78** — Pièces : proposées automatiquement avec corrections (recommandé), ou créées une à une par clic ?
+- **Q79** — Lecture des noms : reconnaissance de caractères sur le serveur (gratuite, à éprouver), IA de vision
+  (plus fiable, coût par plan), ou saisie à la main ?
+- **Q80** — Pré-classement chauffé / non chauffé / extérieur d'après le nom lu : oui ou non ?
+
+### 13.4 Livraison E3 (2026-09-17)
+
+- Moteur `thermique_moteur/pieces.py` : image des calques-limites à 5 cm ; **épaississement** de la moitié de la
+  fermeture (une fermeture morphologique laisse ouvert l'espace entre deux bouts de cloison alignés) ; espaces
+  libres hors bord ; pixels rendus au plus proche jusqu'à la diagonale (angles droits) ; contour par les bords
+  des pixels puis Douglas-Peucker ; surface corrigée d'un demi-pixel le long du contour ; ajout par clic,
+  fusion (fermeture de la paroi entre deux pièces), découpe par un trait.
+- Moteur `thermique_moteur/textes.py` : page rendue à 250 dpi, Tesseract (fra, psm 11), mots replacés en points
+  PDF par pdfium ; nom = mots de la pièce (≥ 3 lettres, une voyelle) dans l'ordre de lecture de l'image ;
+  repère « 6-B14 » ; pré-classement par mots-clés.
+- Essai sur le RDC de production (calques simulés en mémoire : arcs et vantaux de portes, contour 1,56 pt) :
+  10 pièces à 1 m de fermeture (bureau, sanitaires, local, poussettes, escalier…), 0,6 s ; lecture des noms
+  38 s. Les plateaux ouverts le restent tant que les vitrages ne sont pas désignés.
+- Table `thermique_rooms` (migration 0081), service `thermique_pieces.py`, lecture des noms en tâche de fond
+  (cache `mots_v1.json` à côté des tuiles).
+- API : `GET /sheets/{id}/pieces`, `POST /sheets/{id}/pieces/detecter`, `POST /sheets/{id}/pieces`,
+  `POST /sheets/{id}/pieces/fusion`, `PATCH /pieces/{id}`, `DELETE /pieces/{id}`, `POST /pieces/{id}/decoupe`.
+- Écran : onglet **Pièces** (clic : choisir ; Maj + clic : plusieurs, fusion ; Alt + glisser : couper ; clic
+  hors pièce : ajouter ; nom, classe, surface, totaux par classe).
