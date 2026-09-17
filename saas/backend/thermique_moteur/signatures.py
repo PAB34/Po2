@@ -47,6 +47,7 @@ CELLULE_M = 2.0
 PORTEE_BAIE_M = 3.0
 LUMINANCE_FONCEE = 64
 LARGEUR_PAROI_MIN = 0.7
+PART_ALIGNEE_VITRAGE = 0.15
 ECART_GRIS = 12
 MAX_ELEMENTS = 20000
 
@@ -266,7 +267,9 @@ def proposer_role(signature: dict) -> tuple[str, str]:
     if signature["part_dans_murs"] >= 0.3 and signature["part_courte"] >= 0.5:
         return "isolant", f"petits traits entre les faces des murs ({pct(signature['part_dans_murs'])})"
     fonce = signature["luminance"] <= LUMINANCE_FONCEE
-    if fonce and signature["part_alignee"] >= 0.2:
+    # Seuil mesuré sur deux projets : vitrages 0,26 (PC au 1/100) et 0,199 (plans au 1/50) ; autres traits fins
+    # foncés 0,11 au plus.
+    if fonce and signature["part_alignee"] >= PART_ALIGNEE_VITRAGE:
         return "vitrage", f"{pct(signature['part_alignee'])} de ses traits prolongent un mur là où il s'interrompt"
     # Les traits fins foncés forment aussi des paires (mobilier, portes) : seuls les traits épais sont proposés en cloison.
     if fonce and signature["largeur"] >= LARGEUR_PAROI_MIN:
