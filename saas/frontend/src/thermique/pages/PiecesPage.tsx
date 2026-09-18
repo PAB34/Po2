@@ -260,8 +260,11 @@ export function PiecesPage() {
             }
             const room = data?.pieces.find((item) => insideRoom(point, item.contour));
             if (!room) {
+              // un clic dans un espace libre projette le contour tout de suite : c'est le geste attendu
               setSelection([]);
               setPending(point);
+              addMutation.reset();
+              addMutation.mutate(point);
               return;
             }
             setPending(null);
@@ -394,17 +397,21 @@ export function PiecesPage() {
           </section>
         )}
 
-        {pending && (
+        {pending && addMutation.isPending && (
           <section className="th-edgebox th-calque-panel">
-            <strong>Espace sans pièce</strong>
-            <div className="th-inline">
-              <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => addMutation.mutate(pending)}>
-                Ajouter la pièce ici
-              </button>
-              <button type="button" className="po2-button po2-button--ghost" onClick={() => setPending(null)}>
-                Annuler
-              </button>
-            </div>
+            <strong>Tracé du contour…</strong>
+          </section>
+        )}
+        {pending && addMutation.error && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Pas de contour ici</strong>
+            <span className="th-alert th-alert--error">{addMutation.error.message}</span>
+            <span className="th-muted">
+              Élargissez la fermeture des ouvertures ci-dessus, ou cliquez ailleurs dans la pièce.
+            </span>
+            <button type="button" className="po2-button po2-button--ghost" onClick={() => { setPending(null); addMutation.reset(); }}>
+              Fermer
+            </button>
           </section>
         )}
 
