@@ -4,6 +4,84 @@
 > `refondation-parcours-decisions.md` (« Tout détecter » par heuristiques), qui est abandonnée.
 > Sujet ouvert le 2026-09-18.
 
+## 0. L'objectif, redit par le client le 2026-09-18
+
+> « Calcul des déperditions thermiques pièce par pièce ; mon objectif est derrière de proposer des
+> prestations plus bas que les autres grâce à un modèle me permettant une réalisation rapide. »
+
+**Le livrable n'est pas un plan redessiné, c'est un tableau de déperditions par local.** Un plan
+imparfait peut donner un calcul juste ; un plan magnifique peut donner un calcul faux. Toutes les
+mesures de réussite se prennent sur le tableau, jamais sur l'aspect du plan redessiné — c'est l'erreur
+de méthode qui a fait juger le travail « de pire en pire » : on corrigeait des détails à 2 % pendant que
+65 % de la surface était mal délimitée.
+
+### 0.1 Ce que le calcul demande, par local
+
+Surface et **volume** ; **type** de local (consigne, débits d'air réglementaires, apports internes) ;
+parois **déperditives** avec leur U, leur surface, leur orientation **et ce qu'il y a de l'autre côté** ;
+menuiseries (surface, U, orientation, facteur solaire) ; ponts thermiques ; renouvellement d'air.
+
+### 0.2 L'exigence n'est pas uniforme — D10
+
+Une paroi entre deux locaux chauffés à la même température **ne déperd rien**.
+
+| Élément | Part typique des déperditions | Exigence |
+| --- | --- | --- |
+| Menuiseries | 25 à 40 % | exacte |
+| Murs extérieurs, toiture, plancher bas | 20 à 35 % | exacte |
+| Renouvellement d'air (donc le **type** de local) | 20 à 40 % | exacte |
+| Ponts thermiques | 5 à 20 % | bonne |
+| Parois vers locaux **non chauffés** | variable | exacte |
+| Cloisons entre locaux chauffés | **0 %** | approximatif suffit |
+
+**D10 — L'effort suit la part de déperdition.** S'acharner sur les cloisons intérieures était une
+erreur : elles pèsent zéro et ne servent qu'à délimiter les locaux.
+
+### 0.3 Le calcul par types de locaux — D11, D12
+
+Méthode de travail du client : calculer un local type, puis l'appliquer à ses semblables. Les sondes du
+§2.2 montrent que **c'est aussi une propriété du fichier** : un local recopié est le même groupe de
+traits, recopié. Le même appariement qui trouve les portes trouve les locaux jumeaux.
+
+- **D11 — La maille est le type × la position.** Un même local n'a pas les mêmes déperditions au dernier
+  étage (toiture), au rez-de-chaussée (plancher bas) ou en angle (deux façades). C'est l'erreur classique
+  du calcul par échantillon.
+- **D12 — L'échantillon se choisit par les cas limites** (angle, dernier niveau, local sur passage non
+  chauffé), jamais au hasard : un local courant en milieu de façade n'apprend rien.
+- **D13 — Les équipements se comptent comme des motifs.** WC, douches, baignoires, éviers sont des
+  symboles recopiés : le client en désigne un, l'outil les compte tous et les attribue à leur local. Le
+  type de local se déduit de ce qu'il contient, recoupé avec son nom écrit.
+- **D14 — Les conventions du dessinateur se capitalisent** (cette plume = un mur, ce symbole = une
+  cuvette) : valables pour tout le projet, puis pour toute l'agence. C'est le levier du modèle
+  économique — la dixième affaire avec le même architecte doit coûter presque rien.
+
+### 0.4 Comment on juge, sans étalon extérieur
+
+Le client ne fournit pas de bâtiment déjà calculé (choix du 2026-09-18) et la cible est le tertiaire du
+projet TEST. Trois juges objectifs remplacent la vérité terrain :
+
+1. **Bouclage des surfaces** : la somme des locaux retombe sur la surface du niveau.
+2. **Aucune paroi sans deux côtés identifiés** (extérieur, local non chauffé, local chauffé).
+3. **Forme des locaux** : compacité `4πA/P²` ≥ 0,5. En dessous de 0,3, le contour est en étoile : local
+   raté.
+
+### 0.5 État mesuré au 2026-09-18 (R+1, tableau des locaux)
+
+24 locaux, 841,2 m² pour un niveau de 898 m² (94 % de bouclage). Mais : **16 contours nets qui ne pèsent
+que 132 m²**, et **2 contours ratés qui pèsent 544 m², soit 65 % de la surface** (« salle consultation »
+329 m² et 158 sommets ; « catalogage » 214 m² et 136 sommets). Noms lus : 9 sur 24.
+
+Autrement dit : les petits locaux sont bons, les grands plateaux — qui portent la surface — sont ratés.
+C'est le premier chantier.
+
+### 0.6 Parcours cible
+
+1. **Locaux justes** — le client clique dans un local, le contour est tracé sur les traits réels.
+2. **Types de locaux** — nom lu exactement (alphabet de motifs) + équipements comptés (D13).
+3. **L'autre côté de chaque paroi** — le cœur du calcul, et le vrai travail manuel à supprimer.
+4. **Menuiseries** — depuis les baies déjà trouvées, croisées avec les élévations.
+5. **Calcul et export** Pléiades / Perrenoud.
+
 ## 1. Pourquoi on change de stratégie
 
 L'essai de « Tout détecter » sur le R+2 puis sur le R+1 a été refusé : « ça va pas du tout, même le R+2
