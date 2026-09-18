@@ -262,6 +262,8 @@ class RoomMerge(BaseModel):
 class RoomUpdate(BaseModel):
     nom: str | None = Field(default=None, max_length=120)
     classe: str | None = Field(default=None, max_length=20)
+    # contour corrigé à la main : x1, y1, x2, y2… en points PDF
+    contour: list[float] | None = Field(default=None, min_length=6, max_length=2000)
 
 
 class RoomSplit(BaseModel):
