@@ -17,6 +17,8 @@ from app.models.thermique import ThermiqueProject, ThermiqueRoom, ThermiqueSheet
 from app.services.thermique import ThermiqueError, document_path
 from app.services.thermique_calques import attribution, plan_sheets, sheet_elements
 from app.services.thermique_raster import raster_root
+from thermique_moteur import calques as calques_moteur
+from thermique_moteur import composants
 from thermique_moteur import pieces as moteur
 from thermique_moteur import textes
 from thermique_moteur.metre import pt_en_m
@@ -203,7 +205,31 @@ def add_room_at(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, x
     return mots is None and sheet.id not in _lectures
 
 
+def _redessiner(room: ThermiqueRoom, contour: list[float]) -> None:
+    """Contour corrigé à la main : sommet déplacé, ajouté ou retiré (étape 2 du parcours).
+
+    Le contour proposé au clic n'a pas à être parfait puisqu'il est rectifiable — c'est ce qui permet
+    de s'en servir sans attendre une détection exacte.
+    """
+    if len(contour) < 6 or len(contour) % 2:
+        raise ThermiqueError("Un contour demande au moins trois points.")
+    echelle = room_scale(room)
+    if not echelle:
+        raise ThermiqueError("Définissez l'échelle de la planche avant de corriger un contour.")
+    points = [(contour[k], contour[k + 1]) for k in range(0, len(contour), 2)]
+    aire = abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(points, points[1:] + points[:1]))) / 2
+    surface = aire * pt_en_m(echelle) ** 2
+    if surface < moteur.SURFACE_MIN_M2:
+        raise ThermiqueError(f"Ce contour ne fait que {surface:.1f} m² : trop petit pour une pièce.")
+    centre = [sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)]
+    room.points_json = json.dumps({"contour": list(contour), "centre": centre}, separators=(",", ":"))
+    room.area_m2 = round(surface, 2)
+    room.source = "manuel"
+
+
 def update_room(db: Session, room: ThermiqueRoom, data: dict) -> None:
+    if data.get("contour") is not None:
+        _redessiner(room, list(data["contour"]))
     if "nom" in data and data["nom"] is not None:
         room.name = str(data["nom"]).strip()[: textes.NOM_MAX]
         room.name_source = "saisi"
@@ -212,6 +238,29 @@ def update_room(db: Session, room: ThermiqueRoom, data: dict) -> None:
             raise ThermiqueError("Classe inconnue.")
         room.classe, room.classe_source = data["classe"], "choisi"
     db.commit()
+
+
+def room_components(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, room: ThermiqueRoom) -> dict:
+    """Ce qui borde ce local, côté par côté (étape 3 du parcours).
+
+    On rend les familles graphiques collées au contour, avec leur longueur de contact et la nature déjà
+    connue quand l'élément appartient à un calque désigné. Ce qui reste sans nature est ce sur quoi
+    l'utilisateur doit se prononcer — et une seule fois par famille.
+    """
+    elements = sheet_elements(sheet)
+    natures = {i: regle["nature"] for i, regle in attribution(project, sheet, elements).items()}
+    contour = _geometrie(room)["contour"]
+    familles = composants.bordant(elements, contour, natures)
+    for famille in familles:
+        famille["libelle"] = calques_moteur.libelle_signature(famille["signature"])
+        famille["forme_libelle"] = calques_moteur.libelle_forme(famille["forme"])
+        famille["nature_libelle"] = calques_moteur.NATURES.get(famille["nature"] or "")
+    return {
+        "piece": serialize_room(room),
+        "cotes": composants.longueurs_des_cotes(elements, contour),
+        "familles": familles,
+        "natures": dict(calques_moteur.NATURES),
+    }
 
 
 def delete_room(db: Session, room: ThermiqueRoom) -> None:

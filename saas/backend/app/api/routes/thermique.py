@@ -1113,9 +1113,21 @@ def merge_sheet_rooms(
     return _rooms_action(db, sheet, lambda project: thermique_pieces.merge_rooms(db, project, sheet, payload.ids))
 
 
+@router.get("/pieces/{room_id}/composants")
+def read_room_components(room_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
+    """Ce qui borde ce local, côté par côté : familles collées au contour et longueur de contact."""
+    room = _room_or_404(db, user, room_id)
+    sheet = db.get(ThermiqueSheet, room.sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    try:
+        return thermique_pieces.room_components(db, project, sheet, room)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.patch("/pieces/{room_id}")
 def update_room(room_id: int, payload: RoomUpdate, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
-    """Nom saisi ou classe choisie (chauffé, non chauffé, extérieur)."""
+    """Nom saisi, classe choisie (chauffé, non chauffé, extérieur), ou contour corrigé à la main."""
     room = _room_or_404(db, user, room_id)
     sheet = db.get(ThermiqueSheet, room.sheet_id)
     return _rooms_action(db, sheet, lambda project: thermique_pieces.update_room(db, room, payload.model_dump(exclude_unset=True)))
