@@ -1,6 +1,8 @@
 """Étape E3 : pièces et noms (docs/thermique/refondation-parcours-decisions.md §13)."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -69,6 +71,19 @@ def test_detection_des_pieces():
         pieces.decouper(deux[0]["contour"], [5 * M, 1 * M], [5.5 * M, 1 * M], 100)
     with pytest.raises(pieces.PiecesError, match="pas voisines"):
         pieces.fusionner([deux[1]["contour"], [20 * M, 0, 22 * M, 0, 22 * M, 2 * M, 20 * M, 2 * M]], 100)
+
+
+def test_le_service_conserve_le_contour_detaille_apres_simplification():
+    contour = [
+        0, 0, 2.4 * M, 0, 2.4 * M, 0.12 * M, 3.3 * M, 0.12 * M,
+        3.3 * M, 0, 6 * M, 0, 6 * M, 4 * M, 0, 4 * M,
+    ]
+    piece = {"contour": contour, "centre": [3 * M, 2 * M], "surface_m2": 23.9}
+    simplifiee = thermique_pieces._en_quadrilatere(_plan(), piece)
+    assert simplifiee["detaille"] == contour
+    assert len(simplifiee["contour"]) == 8
+    assert simplifiee["centre"] == piece["centre"]
+    assert simplifiee["surface_m2"] == pytest.approx(24.0, abs=0.1)
 
 
 def test_noms_et_classement():
@@ -144,6 +159,15 @@ def test_pieces_du_plan(db_session, monkeypatch):
     assert (atelier.name, atelier.classe, atelier.classe_source) == ("Atelier", "chauffe", "choisi")
     with pytest.raises(ThermiqueError, match="Classe inconnue"):
         thermique_pieces.update_room(db_session, atelier, {"classe": "tiede"})
+
+    # le recalage manuel accepte un sommet ajouté sur un côté et devient la nouvelle géométrie de référence
+    geometrie = json.loads(atelier.points_json)
+    contour = geometrie["contour"]
+    milieu = [(contour[0] + contour[2]) / 2, (contour[1] + contour[3]) / 2]
+    thermique_pieces.update_room(db_session, atelier, {"contour": contour[:2] + milieu + contour[2:]})
+    corrigee = json.loads(atelier.points_json)
+    assert len(corrigee["contour"]) == len(contour) + 2
+    assert "detaille" not in corrigee and atelier.source == "manuel"
 
     thermique_pieces.split_room(db_session, projet, atelier, [7 * M, -1 * M], [7 * M, 7 * M])
     vue = thermique_pieces.list_rooms(db_session, projet, sheet)
