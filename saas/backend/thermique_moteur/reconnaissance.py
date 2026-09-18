@@ -275,10 +275,30 @@ def menuiseries(donnees: dict, exclus: set[int] = frozenset()) -> list[list[int]
 # --- Isolant ------------------------------------------------------------------------------------------------
 
 
-def familles_isolant(donnees: dict, murs: list[int]) -> list[str]:
-    """Signatures de petits traits gris (non noirs) logés pour l'essentiel près des murs."""
+def _part_parallele(donnees: dict, indices: list[int]) -> float:
+    """Part des éléments dont la direction est celle de la majorité (une hachure est tous ses traits parallèles,
+    un isolant fait des zigzags)."""
+    angles = []
+    for i in indices:
+        c = donnees["elements"][i][7]
+        if len(c) >= 4:
+            angles.append(math.degrees(math.atan2(c[-1] - c[1], c[-2] - c[0])) % 180)
+    if not angles:
+        return 0.0
+    paquets = defaultdict(int)
+    for angle in angles:
+        paquets[round(angle / 8)] += 1
+    return max(paquets.values()) / len(angles)
+
+
+PART_PARALLELE_HACHURE = 0.75
+
+
+def familles_isolant(donnees: dict, murs: list[int]) -> tuple[list[str], list[str]]:
+    """(isolants, hachures) : familles de petits traits gris logées dans les murs, séparées par leur direction —
+    une hachure de mur est faite de traits parallèles, un isolant de zigzags."""
     if not murs:
-        return []
+        return [], []
     from thermique_moteur.pieces import grille_des_elements, image_limites
 
     grille = grille_des_elements(donnees, murs)
@@ -290,7 +310,7 @@ def familles_isolant(donnees: dict, murs: list[int]) -> list[str]:
         s = donnees["signatures"][e[1]]
         if e[0] == TRAIT and e[2] == "court" and _couleur(s) not in ("#000000", ""):
             par_signature[s].append(i)
-    retenues = []
+    isolants, hachures = [], []
     for s, indices in par_signature.items():
         if len(indices) < ISOLANT_ELEMENTS_MIN:
             continue
@@ -299,6 +319,7 @@ def familles_isolant(donnees: dict, murs: list[int]) -> list[str]:
             c, l = (int(v) for v in grille.pixel(*_centre(donnees["elements"][i])))
             if 0 <= l < voisinage.shape[0] and 0 <= c < voisinage.shape[1] and voisinage[l, c]:
                 dedans += 1
-        if dedans >= ISOLANT_DANS_MUR * len(indices):
-            retenues.append(s)
-    return retenues
+        if dedans < ISOLANT_DANS_MUR * len(indices):
+            continue
+        (hachures if _part_parallele(donnees, indices) >= PART_PARALLELE_HACHURE else isolants).append(s)
+    return isolants, hachures

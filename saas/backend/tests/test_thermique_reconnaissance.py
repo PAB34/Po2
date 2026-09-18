@@ -13,6 +13,7 @@ MUR = "trait|1.56|#000000|"
 CADRE = "trait|0.36|#000000|"
 VITRE = "trait|0.24|#000000|"
 ISOLANT = "trait|0.24|#808080|"
+HACHURE = "trait|0.48|#989898|"
 
 
 def _rect(x0, y0, x1, y1):
@@ -41,7 +42,12 @@ def _plan():
     # isolant : 60 petits traits gris dans l'épaisseur du mur bas
     for k in range(60):
         x = (0.5 + k * 0.15) * M
-        elements.append((calques.TRAIT, ISOLANT, "court", [x, 0.12 * M, x + 0.08 * M, 0.18 * M]))
+        haut = k % 2 == 0
+        elements.append((calques.TRAIT, ISOLANT, "court", [x, 0.12 * M if haut else 0.18 * M, x + 0.08 * M, 0.18 * M if haut else 0.12 * M]))
+    # hachure du mur haut : 60 traits gris tous parallèles
+    for k in range(60):
+        x = (0.4 + k * 0.15) * M
+        elements.append((calques.TRAIT, HACHURE, "court", [x, 5.75 * M, x + 0.1 * M, 5.85 * M]))
     # terrasse : 30 lames parallèles dehors
     for k in range(30):
         y = (-0.2 - k * 0.1) * M
@@ -68,8 +74,9 @@ def test_objets_reconnus_sans_calque():
     assert signatures == {VITRE, CADRE} and len(groupes[0]) == 5
 
     murs = calques.famille(plan, MUR, calques.TOUTES_FORMES)
-    assert reconnaissance.familles_isolant(plan, murs) == [ISOLANT]
-    assert reconnaissance.familles_isolant(plan, []) == []
+    # l'isolant zigzague, la hachure du mur est faite de traits parallèles
+    assert reconnaissance.familles_isolant(plan, murs) == ([ISOLANT], [HACHURE])
+    assert reconnaissance.familles_isolant(plan, []) == ([], [])
 
 
 def test_fermeture_auto_et_enveloppe_depuis_les_pieces():
