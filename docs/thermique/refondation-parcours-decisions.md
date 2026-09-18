@@ -525,3 +525,34 @@ Mesuré sur la planche du R+2 (part des traits de la direction majoritaire, paqu
 
 Le seuil de 0,75 sépare donc largement les deux cas. Une trame **croisée** tomberait entre les deux : si elle
 se loge un jour dans les murs, compter les deux plus gros paquets plutôt qu'un seul.
+
+### 18.2 Essai refait avec le correctif (18/09, en production)
+
+25 s. Calques trouvés seuls, sans aucune désignation préalable :
+
+| Calque | Signature | Où | Éléments |
+| --- | --- | --- | --- |
+| mur (contour coupé) | 1,56 pt noir | partout | 206 |
+| mur (hachure de remplissage) | 0,48 pt gris 40 % | partout | 6 016 |
+| isolant | 0,24 pt gris 50 % | enveloppe | 7 338 |
+
+Plus 4 portes (547 éléments), 12 menuiseries en façade et 153 menuiseries intérieures ; 6 pièces, 877 m²
+chauffés ; nu intérieur 898 m² (75 sommets), nu extérieur 935 m² (95 sommets). Il n'y a **plus qu'un seul**
+calque d'isolant, et la hachure est bien passée en « mur ».
+
+**Les 153 menuiseries intérieures ont été vérifiées** : mesurées contre les deux lignes, elles sont toutes à
+l'intérieur, à **4,2 m en médiane** du nu intérieur, et 5 seulement sont à moins d'un mètre. Le classement
+est donc cohérent avec l'enveloppe trouvée — reste à confirmer sur le plan que ce sont bien des vitrages
+intérieurs (garde-corps, cloisons vitrées) et non des façades que l'enveloppe aurait englobées.
+
+**Limite toujours ouverte** : les noms des grands plateaux (« uvrants », « ferrasse ») — lecture partielle des
+mots par l'OCR.
+
+### 18.3 Panne de déploiement du 18/09 (sans rapport avec le thermique)
+
+La mise en production a échoué deux fois sur `RUN npm install` du frontend (`Cannot read properties of null
+(reading 'edgesOut')`). Cause : le `Dockerfile` ne copiait que `package.json`, donc les dépendances
+indirectes étaient re-résolues à neuf à chaque build en ignorant le `package-lock.json` versionné ; une
+version publiée ce jour-là cassait la résolution. Corrigé par `COPY package.json package-lock.json` +
+`npm ci` (PR #207). **À retenir** : un build qui ignore son lock peut casser sans qu'une seule ligne du
+dépôt ait changé.
