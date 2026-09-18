@@ -31,9 +31,33 @@ export const ROOM_COLORS: Record<RoomClass, string> = {
   exterieur: "#2b8a3e",
 };
 
+// Étape 3 : ce qui borde un local, côté par côté (parois-et-motifs-decisions.md §0.6)
+export type RoomComponent = {
+  signature: string;
+  forme: string;
+  libelle: string;
+  forme_libelle: string;
+  elements: number[];
+  nombre: number;
+  longueur_m: number;
+  // rangs des côtés du contour que cette famille longe
+  cotes: number[];
+  nature: string | null;
+  nature_libelle: string | null;
+};
+
+export type RoomComponents = {
+  piece: Room;
+  // longueur de chaque côté du contour, en mètres
+  cotes: number[];
+  familles: RoomComponent[];
+  natures: Record<string, string>;
+};
+
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });
 
 export const piecesApi = {
+  components: (token: string, roomId: number) => request<RoomComponents>(token, `/thermique/pieces/${roomId}/composants`),
   list: (token: string, sheetId: number) => request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces`),
   detect: (token: string, sheetId: number, fermetureCm: number) =>
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces/detecter`, json("POST", { fermeture_cm: fermetureCm })),
@@ -41,7 +65,7 @@ export const piecesApi = {
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces`, json("POST", { x: point[0], y: point[1], fermeture_cm: fermetureCm })),
   merge: (token: string, sheetId: number, ids: number[]) =>
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces/fusion`, json("POST", { ids })),
-  update: (token: string, roomId: number, payload: { nom?: string; classe?: RoomClass }) =>
+  update: (token: string, roomId: number, payload: { nom?: string; classe?: RoomClass; contour?: number[] }) =>
     request<SheetRooms>(token, `/thermique/pieces/${roomId}`, json("PATCH", payload)),
   remove: (token: string, roomId: number) => request<SheetRooms>(token, `/thermique/pieces/${roomId}`, { method: "DELETE" }),
   split: (token: string, roomId: number, p1: PdfPoint, p2: PdfPoint) =>

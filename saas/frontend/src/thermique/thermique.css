@@ -1499,6 +1499,60 @@ circle.th-seg--measure {
   stroke-dasharray: 6 4;
 }
 
+/* contour en cours de correction : sommets saisissables */
+.th-room-draft polygon {
+  fill: rgba(14, 116, 144, 0.12);
+  stroke: #0e7490;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+
+.th-room-draft circle {
+  fill: #ffffff;
+  stroke: #0e7490;
+  stroke-width: 2;
+  cursor: grab;
+}
+
+/* ce qui borde un local : une famille par ligne, avec sa nature à choisir */
+.th-calque-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.th-calque-list li {
+  display: grid;
+  gap: 0.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--po2-color-border, #e5e7eb);
+}
+
+.th-calque-list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.th-calque-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.th-select {
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--po2-color-border, #e5e7eb);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+  background: #ffffff;
+}
+
 /* Enveloppe : nu extérieur (bleu), nu intérieur (orange) */
 .th-env polygon {
   fill: none;

@@ -7,6 +7,7 @@ import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type PdfPoint } from "../api";
 import { calquesApi } from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
+import { nearestEdge, nearestVertex } from "../metre";
 import { ROOM_COLORS, insideRoom, piecesApi, type Room, type RoomClass, type SheetRooms } from "../pieces";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { superpositionApi } from "../superposition";
@@ -16,7 +17,8 @@ const RASTER_STALE_MS = 6 * 3600 * 1000;
 const READING_POLL_MS = 4000;
 const LIMIT_NATURES: Record<string, string> = { cloison: "cloisons", porte: "portes", menuiserie: "menuiseries" };
 const CLASS_ORDER: RoomClass[] = ["chauffe", "non_chauffe", "exterieur"];
-const area = (value: number) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value)} m²`;
+const numberFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
+const area = (value: number) => `${numberFormat.format(value)} m²`;
 
 // Étape E3 : les pièces sont proposées d'après les calques désignés, nommées par lecture du plan et pré-classées ;
 // le thermicien corrige (clic, fusion, découpe, nom, classe).
@@ -33,6 +35,9 @@ export function PiecesPage() {
   const [nameDraft, setNameDraft] = useState("");
   const [cut, setCut] = useState<[PdfPoint, PdfPoint] | null>(null);
   const cutRef = useRef<[PdfPoint, PdfPoint] | null>(null);
+  // correction du contour à la main (étape 2 du parcours) : sommets déplacés, ajoutés ou retirés
+  const [draft, setDraft] = useState<PdfPoint[] | null>(null);
+  const dragRef = useRef<number | null>(null);
 
   const projectQuery = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -99,8 +104,26 @@ export function PiecesPage() {
     },
   });
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: { nom?: string; classe?: RoomClass } }) => piecesApi.update(token!, id, payload),
-    onSuccess: done,
+    mutationFn: ({ id, payload }: { id: number; payload: { nom?: string; classe?: RoomClass; contour?: number[] } }) =>
+      piecesApi.update(token!, id, payload),
+    onSuccess: (next) => {
+      done(next);
+      setDraft(null);
+    },
+  });
+  const components = useQuery({
+    queryKey: ["thermique", "composants", single?.id ?? 0],
+    queryFn: () => piecesApi.components(token!, single!.id),
+    enabled: Boolean(token && single),
+  });
+  const natureMutation = useMutation({
+    mutationFn: ({ signature, forme, nature }: { signature: string; forme: string; nature: string }) =>
+      calquesApi.save(token!, projectId, { signature, forme, nature, perimetre: "partout" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["thermique", "composants"] });
+      void queryClient.invalidateQueries({ queryKey: ["thermique", "calques-designes", projectId] });
+      void queryClient.invalidateQueries({ queryKey: ["thermique", "calques", projectId] });
+    },
   });
   const removeMutation = useMutation({ mutationFn: (id: number) => piecesApi.remove(token!, id), onSuccess: done });
   const mergeMutation = useMutation({
@@ -127,6 +150,20 @@ export function PiecesPage() {
     setSelection([]);
     setPending(null);
     mutations.forEach((mutation) => mutation.reset());
+  }
+
+  function contourPoints(room: Room): PdfPoint[] {
+    const out: PdfPoint[] = [];
+    for (let k = 0; k + 1 < room.contour.length; k += 2) {
+      out.push([room.contour[k], room.contour[k + 1]]);
+    }
+    return out;
+  }
+
+  function saveDraft() {
+    if (single && draft && draft.length >= 3) {
+      updateMutation.mutate({ id: single.id, payload: { contour: draft.flat() } });
+    }
   }
 
   function saveName(room: Room) {
@@ -179,6 +216,15 @@ export function PiecesPage() {
             </g>
           );
         })}
+        {draft && (
+          <g className="th-room-draft">
+            <polygon points={points(draft.flat())} />
+            {draft.map((point, index) => {
+              const [x, y] = toScreen(point);
+              return <circle key={index} cx={x} cy={y} r={5} />;
+            })}
+          </g>
+        )}
         {pending &&
           (() => {
             const [x, y] = toScreen(pending);
@@ -197,6 +243,21 @@ export function PiecesPage() {
           tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
           tool="pieces"
           onAddPoint={(point, event) => {
+            if (draft) {
+              // en correction : Alt + clic retire un sommet, un clic sur un côté en ajoute un
+              const vertex = nearestVertex(draft, point, 12);
+              if (vertex !== null) {
+                if (event.altKey && draft.length > 3) {
+                  setDraft(draft.filter((_, index) => index !== vertex));
+                }
+                return;
+              }
+              const edge = nearestEdge(draft, point, 12);
+              if (edge) {
+                setDraft([...draft.slice(0, edge.index + 1), edge.point, ...draft.slice(edge.index + 1)]);
+              }
+              return;
+            }
             const room = data?.pieces.find((item) => insideRoom(point, item.contour));
             if (!room) {
               setSelection([]);
@@ -213,6 +274,11 @@ export function PiecesPage() {
             );
           }}
           onGrab={(point, _scale, event) => {
+            if (draft) {
+              const vertex = nearestVertex(draft, point, 12);
+              dragRef.current = vertex;
+              return vertex !== null;
+            }
             if (!event.altKey || !single) {
               return false;
             }
@@ -221,12 +287,20 @@ export function PiecesPage() {
             return true;
           }}
           onGrabMove={(point) => {
+            if (dragRef.current !== null) {
+              setDraft((current) => (current ? current.map((p, index) => (index === dragRef.current ? point : p)) : current));
+              return;
+            }
             if (cutRef.current) {
               cutRef.current = [cutRef.current[0], point];
               setCut(cutRef.current);
             }
           }}
           onGrabEnd={() => {
+            if (dragRef.current !== null) {
+              dragRef.current = null;
+              return;
+            }
             const line = cutRef.current;
             cutRef.current = null;
             setCut(null);
@@ -370,9 +444,83 @@ export function PiecesPage() {
               ))}
             </div>
             {single.classe_source === "propose" && <small className="th-muted">Classement proposé d'après le nom.</small>}
+
+            {draft ? (
+              <>
+                <span className="th-muted">
+                  Glissez un sommet pour le déplacer, cliquez sur un côté pour en ajouter un, Alt + clic sur un sommet pour le retirer.
+                  {` ${draft.length} sommets.`}
+                </span>
+                <div className="th-inline">
+                  <button type="button" className="po2-button po2-button--primary" disabled={busy || draft.length < 3} onClick={saveDraft}>
+                    Enregistrer le contour
+                  </button>
+                  <button type="button" className="po2-button po2-button--ghost" onClick={() => setDraft(null)}>
+                    Annuler
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button type="button" className="th-link" disabled={busy} onClick={() => setDraft(contourPoints(single))}>
+                Corriger le contour
+              </button>
+            )}
             <button type="button" className="th-link th-link--danger" disabled={busy} onClick={() => removeMutation.mutate(single.id)}>
               Supprimer la pièce
             </button>
+          </section>
+        )}
+
+        {single && !draft && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Ce qui borde ce local</strong>
+            {components.isPending && <span className="th-muted">Relevé en cours…</span>}
+            {components.error && <span className="th-alert th-alert--error">{components.error.message}</span>}
+            {components.data && (
+              <>
+                <span className="th-muted">
+                  {components.data.cotes.length} côtés, {numberFormat.format(components.data.cotes.reduce((total, value) => total + value, 0))} m de
+                  périmètre. Nommez chaque famille une fois : la réponse vaut pour tous ses exemplaires du projet.
+                </span>
+                <ul className="th-calque-list">
+                  {components.data.familles.map((famille) => (
+                    <li key={`${famille.signature}|${famille.forme}`}>
+                      <div className="th-calque-line">
+                        <span>
+                          <strong>{numberFormat.format(famille.longueur_m)} m</strong> · {famille.libelle} · {famille.forme_libelle}
+                        </span>
+                        <span className="th-muted">
+                          {famille.nombre} trait{famille.nombre > 1 ? "s" : ""} · {famille.cotes.length} côté
+                          {famille.cotes.length > 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      {famille.nature ? (
+                        <span className="th-badge">{famille.nature_libelle}</span>
+                      ) : (
+                        <select
+                          className="th-select"
+                          value=""
+                          disabled={natureMutation.isPending}
+                          onChange={(event) =>
+                            event.target.value &&
+                            natureMutation.mutate({ signature: famille.signature, forme: famille.forme, nature: event.target.value })
+                          }
+                        >
+                          <option value="">À identifier…</option>
+                          {Object.entries(components.data!.natures).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {components.data.familles.length === 0 && <span className="th-muted">Rien ne borde ce contour.</span>}
+                {natureMutation.error && <span className="th-alert th-alert--error">{natureMutation.error.message}</span>}
+              </>
+            )}
           </section>
         )}
 
