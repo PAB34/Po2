@@ -32,6 +32,8 @@ LOG = logging.getLogger(__name__)
 MOTS_VERSION = "v1"
 FERMETURE_MIN_M = 0.0
 FERMETURE_MAX_M = 3.0
+# paliers essayés au clic, jusqu'à ce que l'espace se referme
+PALIERS_FERMETURE_M = (0.4, 0.8, 1.2, 1.6, 2.0, 2.5)
 _lectures: set[int] = set()
 _verrou = threading.Lock()
 
@@ -190,15 +192,30 @@ def detect_rooms(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, 
     return mots is None and sheet.id not in _lectures
 
 
+def _essayer_au_point(elements: dict, indices: list[int], x: float, y: float, fermeture_m: float) -> dict:
+    """Contour au point cliqué, en élargissant la fermeture jusqu'à ce que l'espace se referme.
+
+    Un local dont la façade est vitrée sans que les menuiseries soient désignées reste ouvert : à la
+    fermeture demandée, le clic échouait, et le thermicien n'avait aucun moyen de savoir de combien
+    l'élargir. On monte donc par paliers jusqu'à `FERMETURE_MAX_M` — le réglage de l'écran n'est plus
+    qu'un plancher. Le contour obtenu est ensuite corrigeable à la main.
+    """
+    derniere: Exception | None = None
+    paliers = [fermeture_m] + [p for p in PALIERS_FERMETURE_M if p > fermeture_m]
+    for palier in paliers:
+        try:
+            return moteur.piece_au_point(elements, indices, x, y, palier)
+        except moteur.PiecesError as exc:
+            derniere = exc
+    raise ThermiqueError(str(derniere) if derniere else "Aucun espace fermé à cet endroit.")
+
+
 def add_room_at(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, x: float, y: float, fermeture_m: float) -> bool:
     _plan(db, project, sheet)
     if any(moteur.dedans(x, y, _geometrie(room)["contour"]) for room in _rooms(db, sheet)):
         raise ThermiqueError("Ce point est déjà dans une pièce.")
     elements, indices, _natures = _limites(project, sheet)
-    try:
-        piece = moteur.piece_au_point(elements, indices, x, y, _fermeture(fermeture_m))
-    except moteur.PiecesError as exc:
-        raise ThermiqueError(str(exc)) from exc
+    piece = _essayer_au_point(elements, indices, x, y, _fermeture(fermeture_m))
     mots = sheet_words(sheet)
     db.add(_nouvelle(project, sheet, piece, "manuel", mots))
     db.commit()
