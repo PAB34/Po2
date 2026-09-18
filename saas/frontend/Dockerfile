@@ -2,8 +2,11 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+# `npm ci` suit package-lock.json : les versions installées sont celles qui ont été testées.
+# (Avec `npm install` et le seul package.json, chaque build resolvait a neuf les dependances
+# indirectes ; une version publiee le 2026-09-18 cassait la resolution — build en echec.)
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 
