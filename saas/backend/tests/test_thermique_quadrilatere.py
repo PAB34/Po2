@@ -90,3 +90,19 @@ def test_un_grand_espace_perd_ses_zigzags_sans_perdre_sa_forme_en_l():
 def test_un_contour_croise_n_est_jamais_corrige_automatiquement():
     with pytest.raises(quadrilatere.QuadrilatereError, match="invalide"):
         quadrilatere.simplifier_adaptatif(_plat([(0, 0), (6, 4), (0, 4), (6, 0)]), M)
+
+
+def test_un_contour_tres_bruite_reste_corrigeable_a_la_main():
+    forme = [(0, 0), (12, 0), (12, 4), (8, 4), (8, 8), (0, 8)]
+    points = []
+    for a, b in zip(forme, forme[1:] + forme[:1]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        longueur = math.hypot(dx, dy)
+        nx, ny = -dy / longueur, dx / longueur
+        for rang in range(8):
+            t = rang / 8
+            bruit = 0 if rang == 0 else (0.08 if rang % 2 else -0.08)
+            points.append((a[0] + t * dx + bruit * nx, a[1] + t * dy + bruit * ny))
+    simplifie = _points(quadrilatere.simplifier_adaptatif(_plat(points), M))
+    assert len(simplifie) <= quadrilatere.SOMMETS_BRUITES
+    assert quadrilatere.aire(simplifie) == pytest.approx(80.0, abs=1.0)

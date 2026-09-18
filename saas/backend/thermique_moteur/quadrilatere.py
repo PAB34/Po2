@@ -19,6 +19,8 @@ import math
 TOLERANCE_ANGLE_DEG = 10.0
 TOLERANCE_ECART_M = 0.35
 TOLERANCE_ZIGZAG_M = 0.15
+TOLERANCE_ZIGZAG_MAX_M = 0.80
+SOMMETS_BRUITES = 20
 PART_PERIMETRE_MIN = 0.55
 ECART_SURFACE_MAX = 0.18
 ECART_SURFACE_NETTOYAGE_MAX = 0.08
@@ -233,6 +235,18 @@ def simplifier_adaptatif(contour: list[float], m: float) -> list[float]:
     except QuadrilatereError:
         pass
     nettoyes = _nettoyer_points(points, TOLERANCE_ZIGZAG_M * m)
+    # Un contour très bruité reste pénible à corriger sommet par sommet. On augmente progressivement
+    # la tolérance, mais uniquement si le polygone reste simple et conserve sa surface à 8 % près.
+    if len(nettoyes) > SOMMETS_BRUITES:
+        depart = aire(points)
+        for tolerance_m in (0.25, 0.40, 0.60, TOLERANCE_ZIGZAG_MAX_M):
+            candidat = _nettoyer_points(points, tolerance_m * m)
+            if len(candidat) < 3 or not _est_simple(candidat):
+                continue
+            if abs(aire(candidat) - depart) <= ECART_SURFACE_NETTOYAGE_MAX * depart:
+                nettoyes = candidat
+            if len(nettoyes) <= SOMMETS_BRUITES:
+                break
     if len(nettoyes) < 3 or len(nettoyes) >= len(points) or not _est_simple(nettoyes):
         return list(contour)
     depart, arrivee = aire(points), aire(nettoyes)
