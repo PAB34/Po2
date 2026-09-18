@@ -1,265 +1,277 @@
-"""Coefficient de transmission surfacique d'une paroi opaque en couches (lot B2).
+"""Parois lues comme des paires de faces (docs/thermique/parois-et-motifs-decisions.md, D4 et D5).
 
-Méthode des règles Th-Bât, fascicule « Parois opaques » (méthodes), §3.1 :
-- Up = Uc + ΔU1 + ΔU2 (ΔU3, toitures inversées : lot B2c) ; Uc = 1 / (Rsi + ΣR + Rse) ;
-- couche homogène : R = e / λ ; lame d'air non ventilée : tableau V, interpolation linéaire
-  autorisée par le document ; lame d'air fortement ventilée : la lame et les couches situées
-  vers l'extérieur sont ignorées, et Rse prend la valeur de Rsi ;
-- ΔU2 = ΔU'' × (R1 / RT,h)², ΔU'' selon trois niveaux de cavités et lames d'air parasites ;
-- paroi donnant sur un local non chauffé : Rsi s'applique des deux côtés (tableau X, note 2) ;
-- arrondis du document : résistances à 3 décimales, U à 2 chiffres significatifs.
+Un mur n'est pas un motif recopié — chaque mur a sa longueur — mais il a toujours **deux faces
+parallèles**. On n'essaie donc pas de deviner qu'un trait « est un mur » : on apparie les faces, et ce
+qu'on rend est une paroi qui porte son **épaisseur**, sa **longueur** et ses **deux côtés**, c'est-à-dire
+ce dont le thermicien a besoin.
 
-Les couches sont données de l'intérieur vers l'extérieur. Les valeurs de ce module sont
-recoupées automatiquement avec le texte du document à chaque construction de la
-bibliothèque (voir `bibliotheque/build.py`).
+Deux faces forment une paroi si elles sont parallèles (à `ANGLE_MAX_DEG` près), écartées d'une épaisseur
+plausible et si elles se font face sur une longueur suffisante. Une face peut avoir plusieurs partenaires
+(un mur avec son doublage) : on garde celui qui la couvre le plus.
+
+Garde-fou (D5) : une face de mur a **un** vis-à-vis — celui d'en face — tandis qu'un trait de quadrillage
+en a autant que la trame compte de lignes à portée. Mesuré sur le R+1 : 0,8 vis-à-vis par face pour la
+plume des cloisons et 2,4 pour celle des murs, contre **15,1** pour la trame. Au-delà de
+`VIS_A_VIS_MAX`, ces traits ne dessinent pas des parois et on refuse de les mesurer.
 """
 from __future__ import annotations
 
-import copy
 import math
-from typing import Any
+from collections import Counter, defaultdict
 
-SOURCE = "Règles Th-Bât, fascicule Parois opaques (méthodes), §3.1"
+from thermique_moteur.calques import TRAIT
+from thermique_moteur.metre import pt_en_m
 
-# Tableau X : résistances superficielles (m².K/W).
-RESISTANCES_SUPERFICIELLES: dict[str, dict[str, Any]] = {
-    "mur": {"libelle": "Mur : paroi verticale (inclinaison ≥ 60°), flux horizontal", "flux": "horizontal", "rsi": 0.13, "rse": 0.04},
-    "plancher_haut": {"libelle": "Toiture ou plancher haut : paroi horizontale, flux ascendant", "flux": "ascendant", "rsi": 0.10, "rse": 0.04},
-    "plancher_bas": {"libelle": "Plancher bas sur extérieur ou local non chauffé : paroi horizontale, flux descendant", "flux": "descendant", "rsi": 0.17, "rse": 0.04},
-}
-DONNE_SUR = {"exterieur": "Extérieur (ou passage, local ouvert)", "local_non_chauffe": "Local non chauffé (Rsi des deux côtés)"}
-
-# Tableau V : lames d'air non ventilées, faces d'émissivité au moins 0,8.
-LAMES_AIR_MM = (0, 5, 7, 10, 15, 25, 50, 100, 300)
-LAMES_AIR_R: dict[str, tuple[float, ...]] = {
-    "ascendant": (0.00, 0.11, 0.13, 0.15, 0.16, 0.16, 0.16, 0.16, 0.16),
-    "horizontal": (0.00, 0.11, 0.13, 0.15, 0.17, 0.18, 0.18, 0.18, 0.18),
-    "descendant": (0.00, 0.11, 0.13, 0.15, 0.17, 0.19, 0.21, 0.22, 0.23),
-}
-
-# ΔU'' : cavités et lames d'air parasites dans une paroi ventilée sur l'extérieur.
-NIVEAUX_DELTA_U2: dict[int, dict[str, Any]] = {
-    1: {"valeur": 0.00, "libelle": "Aucune cavité ni lame d'air dans la paroi"},
-    2: {"valeur": 0.01, "libelle": "Cavités ponctuelles ou linéaires traversant tout ou partie de l'isolant"},
-    3: {"valeur": 0.04, "libelle": "Cavités communiquant avec des lames d'air côté chaud de l'isolant"},
-}
-
-TYPES_COUCHE = ("materiau", "lambda", "resistance", "element", "lame_air", "lame_air_ventilee")
-EPAISSEUR_ISOLANT_MAX_M = 1.0
+SEGMENT_MIN_M = 0.25
+LONGUEUR_MIN_M = 0.6
+EPAISSEUR_M = (0.04, 0.70)
+ANGLE_MAX_DEG = 2.0
+COLINEAIRE_ECART_M = 0.03
+BAIE_MAX_M = 6.0
+RECOUVREMENT_MIN = 0.5
+VIS_A_VIS_MAX = 5.0
 
 
-class ParoiError(ValueError):
-    """Donnée de paroi invalide ; le message est destiné à l'utilisateur."""
+class ParoisError(Exception):
+    """Ce que le plan ne permet pas de mesurer."""
 
 
-def chiffres_significatifs(valeur: float, chiffres: int = 2) -> float:
-    if valeur == 0:
-        return 0.0
-    return round(valeur, -int(math.floor(math.log10(abs(valeur)))) + chiffres - 1)
+class _Unions:
+    def __init__(self, n: int):
+        self.p = list(range(n))
+
+    def trouver(self, a: int) -> int:
+        while self.p[a] != a:
+            self.p[a] = self.p[self.p[a]]
+            a = self.p[a]
+        return a
+
+    def unir(self, a: int, b: int) -> None:
+        ra, rb = self.trouver(a), self.trouver(b)
+        if ra != rb:
+            self.p[ra] = rb
 
 
-def resistance_lame_air(epaisseur_mm: float, flux: str) -> float:
-    if flux not in LAMES_AIR_R:
-        raise ParoiError(f"Sens de flux inconnu : {flux}.")
-    if not 0 <= epaisseur_mm <= LAMES_AIR_MM[-1]:
-        raise ParoiError(
-            "Lame d'air de plus de 300 mm : le document impose un bilan thermique (coefficient b), "
-            "hors du calcul en couches."
-        )
-    valeurs = LAMES_AIR_R[flux]
-    for i in range(len(LAMES_AIR_MM) - 1):
-        e0, e1 = LAMES_AIR_MM[i], LAMES_AIR_MM[i + 1]
-        if e0 <= epaisseur_mm <= e1:
-            return valeurs[i] + (epaisseur_mm - e0) / (e1 - e0) * (valeurs[i + 1] - valeurs[i])
-    return valeurs[-1]
-
-
-def _nombre(couche: dict, cle: str, nom: str, minimum: float = 0.0, strict: bool = True) -> float:
-    try:
-        valeur = float(couche[cle])
-    except (KeyError, TypeError, ValueError):
-        raise ParoiError(f"{nom} manquant ou invalide.") from None
-    if valeur < minimum or (strict and valeur == minimum):
-        raise ParoiError(f"{nom} doit être {'strictement ' if strict else ''}supérieur à {minimum:g}.")
-    return valeur
-
-
-def _resistance_element(couche: dict, index: int, elements: dict[str, dict] | None, ligne: dict, remarques: list[str]) -> float:
-    """R lue dans une case d'un tableau d'applications (lot B2b, décision B2b-D2)."""
-    tableau = (elements or {}).get(couche.get("tableau_id"))
-    if tableau is None:
-        raise ParoiError(f"Couche {index + 1} : tableau d'éléments inconnu ({couche.get('tableau_id')}).")
-    try:
-        i, j = int(couche.get("ligne", -1)), int(couche.get("colonne", 0))
-    except (TypeError, ValueError):
-        raise ParoiError(f"Couche {index + 1} : ligne ou colonne du tableau invalide.") from None
-    if not (0 <= i < len(tableau["lignes"]) and 0 <= j < len(tableau["colonnes"])):
-        raise ParoiError(f"Couche {index + 1} : case hors du tableau.")
-    rangee = tableau["lignes"][i]
-    variante = couche.get("variante") or None
-    valeurs = rangee["variantes"].get(variante) if variante else rangee["valeurs"]
-    if valeurs is None or valeurs[j] is None:
-        raise ParoiError(f"Couche {index + 1} : pas de valeur dans cette case du tableau.")
-    colonne = f", {tableau['axe_colonnes'].lower()} {tableau['colonnes'][j]}" if len(tableau["colonnes"]) > 1 else ""
-    libelle = f"{tableau['titre']} : {rangee['libelle']}{colonne}"
-    if variante:
-        libelle += f" — {tableau['variantes'].get(variante, variante)}"
-    ligne["libelle"] = ligne["libelle"] or libelle
-    numero = f"T{tableau['numero']}" if tableau.get("numero") else "figure"
-    lecture = ", lu sur image" if tableau.get("lecture") == "image" else ""
-    ligne["source"] = f"Th-Bât {tableau['fascicule']} {numero} p. {tableau['page']}{lecture}"
-    ligne["tabule"] = True
-    if "isolant" not in couche:
-        ligne["isolant"] = bool(tableau.get("isolant"))
-    for signalement in tableau.get("signalements", []):
-        if signalement["ligne"] == i and signalement.get("colonne") in (None, j):
-            remarques.append(f"Couche {index + 1} : {signalement['message']}")
-    return float(valeurs[j])
-
-
-def calculer_paroi(
-    paroi: dict[str, Any], materiaux: dict[str, dict] | None = None, elements: dict[str, dict] | None = None
-) -> dict[str, Any]:
-    """Résistance et coefficient Up d'une paroi, avec le détail couche par couche."""
-    type_paroi = paroi.get("type")
-    if type_paroi not in RESISTANCES_SUPERFICIELLES:
-        raise ParoiError("Type de paroi inconnu (mur, plancher_haut ou plancher_bas).")
-    donne_sur = paroi.get("donne_sur", "exterieur")
-    if donne_sur not in DONNE_SUR:
-        raise ParoiError("La paroi donne sur l'extérieur ou sur un local non chauffé.")
-    couches = paroi.get("couches") or []
-    if not couches:
-        raise ParoiError("Ajoutez au moins une couche.")
-    reference = RESISTANCES_SUPERFICIELLES[type_paroi]
-    flux = reference["flux"]
-    rsi = reference["rsi"]
-    rse = rsi if donne_sur == "local_non_chauffe" else reference["rse"]
-    remarques: list[str] = []
-    if donne_sur == "local_non_chauffe":
-        remarques.append("Paroi sur local non chauffé : Rsi appliquée des deux côtés.")
-
-    details: list[dict[str, Any]] = []
-    somme_r = 0.0
-    r_isolant = 0.0
-    ventilee = False
-    for index, couche in enumerate(couches):
-        genre = couche.get("type")
-        if genre not in TYPES_COUCHE:
-            raise ParoiError(f"Couche {index + 1} : type inconnu.")
-        ligne: dict[str, Any] = {"index": index, "type": genre, "libelle": couche.get("libelle") or "", "isolant": bool(couche.get("isolant"))}
-        if ventilee:
-            ligne.update({"r": 0.0, "ignoree": True})
-            details.append(ligne)
+def _brins(donnees: dict, indices: list[int], m: float) -> list[tuple]:
+    """Segments droits élémentaires, orientés dans le demi-plan des directions positives."""
+    minimum = SEGMENT_MIN_M * m
+    elements = donnees["elements"]
+    brins = []
+    for i in indices:
+        e = elements[i]
+        if e[0] != TRAIT:
             continue
-        if genre in ("materiau", "lambda"):
-            epaisseur = _nombre(couche, "epaisseur_m", f"Couche {index + 1} : épaisseur", strict=False)
-            if genre == "materiau":
-                identifiant = couche.get("materiau_id")
-                materiau = (materiaux or {}).get(identifiant)
-                if materiau is None:
-                    raise ParoiError(f"Couche {index + 1} : matériau inconnu ({identifiant}).")
-                conductivite = float(materiau["lambda"])
-                ligne["libelle"] = ligne["libelle"] or materiau.get("libelle", identifiant)
-                ligne["source"] = f"{materiau.get('section', '')} p. {materiau.get('page', '?')}"
+        c = e[7]
+        for k in range(0, len(c) - 3, 2):
+            x1, y1, x2, y2 = c[k], c[k + 1], c[k + 2], c[k + 3]
+            longueur = math.hypot(x2 - x1, y2 - y1)
+            if longueur < minimum:
+                continue
+            ux, uy = (x2 - x1) / longueur, (y2 - y1) / longueur
+            if ux < 0 or (ux == 0 and uy < 0):
+                ux, uy, x1, y1, x2, y2 = -ux, -uy, x2, y2, x1, y1
+            brins.append((i, x1, y1, x2, y2, longueur, ux, uy, -x1 * uy + y1 * ux))
+    return brins
+
+
+def faces(donnees: dict, indices: list[int]) -> list[dict]:
+    """Faces candidates : les segments droits des éléments désignés.
+
+    On ne recoud rien ici. Une façade est coupée par ses fenêtres en morceaux courts, mais chacun est
+    une vraie face : c'est **après** l'appariement qu'on les recoud (`chainer`), quand on sait que le
+    morceau est bien une paroi et non un trait qui traverse le vide.
+    """
+    m = 1 / pt_en_m(donnees["echelle"])
+    return [
+        {
+            "element": b[0],
+            "a": (b[1], b[2]),
+            "b": (b[3], b[4]),
+            "longueur": b[5],
+            "u": (b[6], b[7]),
+        }
+        for b in _brins(donnees, indices, m)
+    ]
+
+
+def chainer(paires: list[dict], m: float) -> list[dict]:
+    """Parois colinéaires de même épaisseur réunies ; les trous laissés entre elles sont les **baies**.
+
+    Une façade percée de fenêtres donne d'abord un trumeau par plein ; recousus, ils redonnent la
+    façade entière et la liste de ses baies (décision D7). Deux parois séparées de plus de
+    `BAIE_MAX_M` restent deux murs distincts.
+    """
+    if not paires:
+        return []
+    pas_d = COLINEAIRE_ECART_M * m
+    familles = defaultdict(list)
+    for paroi in paires:
+        x1, y1, x2, y2 = paroi["axe"]
+        longueur = math.hypot(x2 - x1, y2 - y1) or 1.0
+        ux, uy = (x2 - x1) / longueur, (y2 - y1) / longueur
+        if ux < 0 or (ux == 0 and uy < 0):
+            ux, uy, x1, y1, x2, y2 = -ux, -uy, x2, y2, x1, y1
+        cle = (
+            round(math.degrees(math.atan2(uy, ux)) / ANGLE_MAX_DEG),
+            round((-x1 * uy + y1 * ux) / pas_d),
+            round(paroi["epaisseur"] / m * 100),
+        )
+        familles[cle].append((paroi, (x1, y1), (ux, uy)))
+    chainees = []
+    for liste in familles.values():
+        (_, origine, direction) = liste[0]
+        ox, oy = origine
+        ux, uy = direction
+        bouts = []
+        for paroi, (x1, y1), _ in liste:
+            x2, y2 = paroi["axe"][2], paroi["axe"][3]
+            t = sorted(((x1 - ox) * ux + (y1 - oy) * uy, (x2 - ox) * ux + (y2 - oy) * uy))
+            bouts.append((t[0], t[1], paroi))
+        bouts.sort(key=lambda b: (b[0], b[1]))
+        courant = [bouts[0]]
+        suites = [courant]
+        for bout in bouts[1:]:
+            if bout[0] - max(b[1] for b in courant) > BAIE_MAX_M * m:
+                courant = [bout]
+                suites.append(courant)
             else:
-                conductivite = _nombre(couche, "lambda", f"Couche {index + 1} : conductivité λ")
-            r = epaisseur / conductivite
-            ligne.update({"epaisseur_m": epaisseur, "lambda": conductivite})
-        elif genre == "resistance":
-            r = _nombre(couche, "r", f"Couche {index + 1} : résistance R", strict=False)
-        elif genre == "element":
-            r = _resistance_element(couche, index, elements, ligne, remarques)
-        elif genre == "lame_air":
-            epaisseur_mm = _nombre(couche, "epaisseur_mm", f"Couche {index + 1} : épaisseur de la lame d'air", strict=False)
-            r = resistance_lame_air(epaisseur_mm, flux)
-            ligne.update({"epaisseur_mm": epaisseur_mm, "flux": flux})
-        else:  # lame d'air fortement ventilée
-            ventilee = True
-            r = 0.0
-            rse = rsi
-            remarques.append("Lame d'air fortement ventilée : elle et les couches extérieures sont ignorées, Rse = Rsi.")
-        ligne["r"] = round(r, 3)
-        details.append(ligne)
-        somme_r += r
-        if ligne["isolant"]:
-            r_isolant += r
+                courant.append(bout)
+        for suite in suites:
+            debut, fin = suite[0][0], max(b[1] for b in suite)
+            baies, atteint = [], suite[0][1]
+            for t0, t1, _ in suite[1:]:
+                if t0 - atteint > 0:
+                    baies.append(t0 - atteint)
+                atteint = max(atteint, t1)
+            morceaux = [b[2] for b in suite]
+            chainees.append(
+                {
+                    "faces": tuple(sorted({f for p in morceaux for f in p["faces"]})),
+                    "axe": (ox + ux * debut, oy + uy * debut, ox + ux * fin, oy + uy * fin),
+                    "epaisseur": sum(p["epaisseur"] for p in morceaux) / len(morceaux),
+                    "longueur": fin - debut,
+                    "pleine": sum(p["longueur"] for p in morceaux),
+                    "baies": sorted(baies, reverse=True),
+                }
+            )
+    return chainees
 
-    rt = rsi + somme_r + rse
-    uc = 1 / rt
-    niveau = int(paroi.get("niveau_delta_u2", 1) or 1)
-    if niveau not in NIVEAUX_DELTA_U2:
-        raise ParoiError("Niveau de correction ΔU2 : 1, 2 ou 3.")
-    if niveau > 1 and r_isolant == 0:
-        raise ParoiError("Indiquez la couche isolante pour appliquer la correction ΔU2.")
-    delta_u2 = NIVEAUX_DELTA_U2[niveau]["valeur"] * (r_isolant / rt) ** 2
-    delta_u1 = float(paroi.get("delta_u1", 0) or 0)
-    if delta_u1 < 0:
-        raise ParoiError("ΔU1 (ponts thermiques intégrés) ne peut pas être négatif.")
-    up = uc + delta_u1 + delta_u2
+
+def _vis_a_vis(face: dict, autre: dict, m: float) -> tuple[float, float, float] | None:
+    """(épaisseur, début, fin) de la partie où les deux faces se font face, le long de `face`."""
+    ux, uy = face["u"]
+    vx, vy = autre["u"]
+    if abs(ux * vx + uy * vy) < math.cos(math.radians(ANGLE_MAX_DEG)):
+        return None
+    ax, ay = face["a"]
+    ecart = abs((autre["a"][0] - ax) * -uy + (autre["a"][1] - ay) * ux)
+    if not EPAISSEUR_M[0] * m <= ecart <= EPAISSEUR_M[1] * m:
+        return None
+    t1 = (autre["a"][0] - ax) * ux + (autre["a"][1] - ay) * uy
+    t2 = (autre["b"][0] - ax) * ux + (autre["b"][1] - ay) * uy
+    debut, fin = max(min(t1, t2), 0.0), min(max(t1, t2), face["longueur"])
+    commun = fin - debut
+    if commun < RECOUVREMENT_MIN * min(face["longueur"], autre["longueur"]):
+        return None
+    return ecart, debut, fin
+
+
+def apparier(donnees: dict, candidates: list[dict]) -> tuple[list[dict], int]:
+    """Paires de faces en vis-à-vis, et le nombre total de vis-à-vis possibles (garde-fou D5).
+
+    Chaque face garde le partenaire qui la couvre le plus ; le nombre de vis-à-vis rencontrés en
+    chemin dit si on a affaire à des parois ou à une trame.
+    """
+    m = 1 / pt_en_m(donnees["echelle"])
+    cases = defaultdict(list)
+    for k, face in enumerate(candidates):
+        for point in (face["a"], face["b"]):
+            cases[(int(point[0] // m), int(point[1] // m))].append(k)
+    meilleur: dict[int, tuple[float, int, tuple]] = {}
+    rencontres = 0
+    for k, face in enumerate(candidates):
+        voisins = set()
+        for point in (face["a"], face["b"]):
+            cx, cy = int(point[0] // m), int(point[1] // m)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    voisins.update(cases.get((cx + dx, cy + dy), ()))
+        for j in voisins:
+            if j == k:
+                continue
+            mesure = _vis_a_vis(face, candidates[j], m)
+            if mesure is None:
+                continue
+            rencontres += 1
+            couverture = mesure[2] - mesure[1]
+            if couverture > meilleur.get(k, (0.0,))[0]:
+                meilleur[k] = (couverture, j, mesure)
+    paires: dict[tuple[int, int], tuple[float, int, int, tuple]] = {}
+    for depuis, (couverture, vers, mesure) in meilleur.items():
+        cle = (min(depuis, vers), max(depuis, vers))
+        if couverture > paires.get(cle, (0.0,))[0]:
+            paires[cle] = (couverture, depuis, vers, mesure)
+    resultat = []
+    for _, (_, depuis, vers, (ecart, debut, fin)) in sorted(paires.items()):
+        face, autre = candidates[depuis], candidates[vers]
+        ux, uy = face["u"]
+        ax, ay = face["a"]
+        # l'axe de la paroi : la partie commune, décalée d'une demi-épaisseur vers l'autre face
+        cote = 1.0 if (autre["a"][0] - ax) * -uy + (autre["a"][1] - ay) * ux > 0 else -1.0
+        demi = cote * ecart / 2
+        resultat.append(
+            {
+                "faces": (face["element"], autre["element"]),
+                "axe": (
+                    ax + ux * debut - uy * demi,
+                    ay + uy * debut + ux * demi,
+                    ax + ux * fin - uy * demi,
+                    ay + uy * fin + ux * demi,
+                ),
+                "epaisseur": ecart,
+                "longueur": fin - debut,
+            }
+        )
+    return resultat, rencontres
+
+
+def epaisseurs(paires: list[dict], m: float) -> list[tuple[float, int]]:
+    """Épaisseurs rencontrées, au centimètre, de la plus fréquente à la moins fréquente."""
+    comptes = Counter(round(p["epaisseur"] / m * 100) for p in paires)
+    return [(cm / 100, n) for cm, n in comptes.most_common()]
+
+
+def mesurer(donnees: dict, indices: list[int], controler: bool = True) -> dict:
+    """Parois portées par les éléments désignés, avec leurs épaisseurs.
+
+    `controler` applique le garde-fou D5 : sans lui, une trame régulière passerait pour un mur.
+    """
+    m = 1 / pt_en_m(donnees["echelle"])
+    candidates = faces(donnees, indices)
+    if not candidates:
+        raise ParoisError("Aucune face assez longue : ces traits ne dessinent pas une paroi.")
+    morceaux, rencontres = apparier(donnees, candidates)
+    if not morceaux:
+        raise ParoisError("Aucune face n'en a une autre en vis-à-vis : ces traits ne dessinent pas une paroi.")
+    vis_a_vis = rencontres / len(candidates)
+    if controler and vis_a_vis > VIS_A_VIS_MAX:
+        raise ParoisError(
+            f"Chaque trait en a {vis_a_vis:.0f} autres en vis-à-vis : c'est une trame régulière, "
+            "pas des parois. Une face de mur n'en a qu'une seule en face d'elle."
+        )
+    paires = [p for p in chainer(morceaux, m) if p["longueur"] >= LONGUEUR_MIN_M * m]
+    if not paires:
+        raise ParoisError("Les parois trouvées sont trop courtes pour être mesurées.")
+    par_m = pt_en_m(donnees["echelle"])
+    baies = [b * par_m for p in paires for b in p["baies"]]
     return {
-        "type": type_paroi,
-        "libelle_type": reference["libelle"],
-        "donne_sur": donne_sur,
-        "flux": flux,
-        "couches": details,
-        "rsi": rsi,
-        "rse": rse,
-        "r_couches": round(somme_r, 3),
-        "rt": round(rt, 3),
-        "uc": round(uc, 4),
-        "delta_u1": round(delta_u1, 4),
-        "niveau_delta_u2": niveau,
-        "delta_u2": round(delta_u2, 4),
-        "up": round(up, 4),
-        "up_arrondi": chiffres_significatifs(up, 2),
-        "remarques": remarques,
-        "source": SOURCE,
-    }
-
-
-def epaisseur_isolant(
-    paroi: dict[str, Any],
-    index_isolant: int,
-    u_cible: float,
-    materiaux: dict[str, dict] | None = None,
-    epaisseur_max_m: float = EPAISSEUR_ISOLANT_MAX_M,
-    elements: dict[str, dict] | None = None,
-) -> dict[str, Any]:
-    """Épaisseur minimale de la couche isolante pour que Up ne dépasse pas la cible."""
-    couches = paroi.get("couches") or []
-    if not 0 <= index_isolant < len(couches):
-        raise ParoiError("Choisissez la couche isolante à dimensionner.")
-    couche = couches[index_isolant]
-    if couche.get("type") not in ("materiau", "lambda"):
-        raise ParoiError("La couche à dimensionner doit être un matériau ou une conductivité λ.")
-    if u_cible <= 0:
-        raise ParoiError("Le U cible doit être positif.")
-
-    def up_pour(epaisseur: float) -> float:
-        essai = copy.deepcopy(paroi)
-        essai["couches"][index_isolant] = {**couche, "epaisseur_m": epaisseur, "isolant": True}
-        return calculer_paroi(essai, materiaux, elements)["up"]
-
-    if up_pour(epaisseur_max_m) > u_cible:
-        raise ParoiError(f"U cible {u_cible:g} inatteignable avec {epaisseur_max_m * 100:.0f} cm d'isolant ou moins.")
-    if up_pour(0.0) <= u_cible:
-        minimum = 0.0
-    else:
-        bas, haut = 0.0, epaisseur_max_m
-        for _ in range(60):  # Up décroît avec l'épaisseur : dichotomie
-            milieu = (bas + haut) / 2
-            if up_pour(milieu) > u_cible:
-                bas = milieu
-            else:
-                haut = milieu
-        minimum = haut
-    arrondie = math.ceil(round(minimum * 100, 6)) / 100
-    up_obtenu = up_pour(arrondie)
-    return {
-        "u_cible": u_cible,
-        "epaisseur_min_m": round(minimum, 4),
-        "epaisseur_arrondie_m": arrondie,
-        "up_obtenu": round(up_obtenu, 4),
-        "up_obtenu_arrondi": chiffres_significatifs(up_obtenu, 2),
-        "source": SOURCE,
+        "parois": paires,
+        "epaisseurs": epaisseurs(paires, m),
+        "vis_a_vis_par_face": vis_a_vis,
+        "faces_appariees": len({f for p in paires for f in p["faces"]}),
+        "faces_vues": len({f["element"] for f in candidates}),
+        "longueur_m": sum(p["longueur"] for p in paires) * par_m,
+        "pleine_m": sum(p["pleine"] for p in paires) * par_m,
+        "baies": len(baies),
+        "baies_m": sum(baies),
     }
