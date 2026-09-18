@@ -25,6 +25,7 @@ PROLONGE_M = 0.3
 SOUDURE_M = 0.15
 PASSAGE_MAX_M = 2.5
 ALIGNEMENT_MAX_DEG = 12.0
+ANGLE_MAX_DEG_COTE = 8.0
 SEGMENT_MIN_M = 0.05
 SURFACE_MIN_M2 = 0.5
 CASE_M = 1.0
@@ -349,10 +350,14 @@ def decouper_le_plan(donnees: dict, indices: list[int]) -> dict:
     segments = _segments(donnees, indices, m)
     if not segments:
         raise LocauxError("Aucun trait de limite sur ce plan : désignez d'abord les murs et les cloisons.")
+    return _preparer(segments, m, pt_en_m(donnees["echelle"]))
+
+
+def _preparer(segments: list[tuple], m: float, par_m: float) -> dict:
     points, aretes = _graphe(decouper(souder(segments, m), m), m)
     aretes = _refermer(points, aretes, m)
     boucles = []
-    mini = SURFACE_MIN_M2 / pt_en_m(donnees["echelle"]) ** 2
+    mini = SURFACE_MIN_M2 / par_m**2
     for brute in _faces(points, aretes):
         boucle = _sans_aller_retour(brute)
         if len(boucle) < 3:
@@ -367,19 +372,89 @@ def decouper_le_plan(donnees: dict, indices: list[int]) -> dict:
     return {"points": points, "boucles": boucles, "m": m}
 
 
+def _epaisseur_du_cote(a: tuple, b: tuple, murs: list[dict], m: float) -> float:
+    """Épaisseur de la paroi qui porte ce côté du contour, ou 0 si c'est un raccord."""
+    mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+    longueur = math.dist(a, b) or 1.0
+    ux, uy = (b[0] - a[0]) / longueur, (b[1] - a[1]) / longueur
+    meilleure = (SOUDURE_M * m, 0.0)
+    for paroi in murs:
+        x1, y1, x2, y2 = paroi["axe"]
+        lp = math.hypot(x2 - x1, y2 - y1) or 1.0
+        vx, vy = (x2 - x1) / lp, (y2 - y1) / lp
+        if abs(ux * vx + uy * vy) < math.cos(math.radians(ANGLE_MAX_DEG_COTE)):
+            continue
+        distance, _ = _projete((mx, my), (x1, y1), (x2, y2))
+        if distance < meilleure[0]:
+            meilleure = (distance, paroi["epaisseur"])
+    return meilleure[1]
+
+
+def _retrecir(contour: list[tuple], epaisseurs: list[float]) -> list[tuple]:
+    """Rentre chaque côté d'une demi-épaisseur : du contour entre axes au **nu intérieur** du local."""
+    n = len(contour)
+    droites = []
+    for k in range(n):
+        a, b = contour[k], contour[(k + 1) % n]
+        longueur = math.dist(a, b) or 1.0
+        ux, uy = (b[0] - a[0]) / longueur, (b[1] - a[1]) / longueur
+        d = epaisseurs[k] / 2
+        droites.append(((a[0] - uy * d, a[1] + ux * d), (ux, uy)))  # contour direct : intérieur à gauche
+    rentre = []
+    for k in range(n):
+        (p1, u1), (p2, u2) = droites[(k - 1) % n], droites[k]
+        det = u1[0] * u2[1] - u1[1] * u2[0]
+        if abs(det) < 1e-9:  # côtés parallèles : on garde le point décalé
+            rentre.append(p2)
+            continue
+        t = ((p2[0] - p1[0]) * u2[1] - (p2[1] - p1[1]) * u2[0]) / det
+        rentre.append((p1[0] + u1[0] * t, p1[1] + u1[1] * t))
+    return rentre
+
+
+def depuis_parois(donnees: dict, murs: list[dict]) -> dict:
+    """Prépare le plan à partir des **axes de parois**, et non des traits bruts.
+
+    Un trait n'est pas un mur : c'est un côté de mur. En travaillant sur les traits, les boucles fermées
+    du dessin sont les rubans entre les deux faces — autrement dit les murs eux-mêmes, pas les pièces
+    (mesuré sur le R+1 : un ruban unique de 156 m² faisant le tour de toutes les cloisons). Sur les
+    axes, les faces sont les pièces, comme dans un logiciel de thermique : on pose des axes, et on
+    retranche les demi-épaisseurs pour obtenir la surface intérieure.
+    """
+    m = 1 / pt_en_m(donnees["echelle"])
+    if not murs:
+        raise LocauxError("Aucune paroi mesurée sur ce plan : désignez d'abord les murs et les cloisons.")
+    segments = [((p["axe"][0], p["axe"][1]), (p["axe"][2], p["axe"][3])) for p in murs]
+    plan = _preparer(segments, m, pt_en_m(donnees["echelle"]))
+    plan["murs"] = murs
+    return plan
+
+
 def local_au_point(plan: dict, point: tuple[float, float]) -> dict:
     """Le plus petit local qui contient le point, avec son contour exact et sa compacité."""
     points = plan["points"]
+    murs = plan.get("murs")
     for aire, boucle in plan["boucles"]:
         if _dedans(points, boucle, point):
             contour = [points[k] for k in boucle]
             perimetre = sum(math.dist(a, b) for a, b in zip(contour, contour[1:] + contour[:1]))
             par_m = 1 / plan["m"]
-            return {
+            local = {
                 "contour": [c for p in contour for c in p],
                 "surface_m2": aire * par_m * par_m,
                 "perimetre_m": perimetre * par_m,
                 "compacite": 4 * math.pi * aire / perimetre**2 if perimetre else 0.0,
                 "sommets": len(contour),
             }
+            if murs:
+                # sur les axes, le contour passe au milieu des parois : on rentre d'une demi-épaisseur
+                epaisseurs = [
+                    _epaisseur_du_cote(a, b, murs, plan["m"])
+                    for a, b in zip(contour, contour[1:] + contour[:1])
+                ]
+                dedans = _retrecir(contour, epaisseurs)
+                local["contour_interieur"] = [c for p in dedans for c in p]
+                local["surface_interieure_m2"] = abs(_aire(dedans, list(range(len(dedans))))) * par_m * par_m
+                local["epaisseurs_m"] = [round(e * par_m, 3) for e in epaisseurs]
+            return local
     raise LocauxError("Ce point n'est dans aucun local fermé : il manque une limite, ou le passage est trop large.")
