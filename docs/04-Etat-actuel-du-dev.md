@@ -87,7 +87,10 @@ do_not_auto_read:
   **Contours de pièces repris le 2026-09-18** (branche `fix/thermique-clic-piece`, commit `af9dc199`) :
   recalage manuel des sommets vérifié ; simplification adaptative des quadrilatères et des grands espaces
   multi-côtés, avec conservation du contour brut et garde-fous de surface/croisement. Validation réelle
-  du R+1 encore à faire avant déploiement (`thermique/contours-pieces-decisions.md`).
+  du R+1 faite : 20 → 4 et 59 → 19 sommets ; les limites absentes restent impossibles à inventer par
+  lissage. Commit `edef539e` : alerte des contours complexes et retracé complet en quelques clics.
+  Prochain moteur : vision locale des limites manquantes puis aimantation vectorielle
+  (`thermique/contours-pieces-decisions.md`).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.

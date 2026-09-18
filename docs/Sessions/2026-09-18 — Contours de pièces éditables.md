@@ -19,18 +19,23 @@ supprimer les zigzags, notamment dans le plus grand espace, sans déformer les f
   petits zigzags pour un grand espace multi-côtés.
 - Le contour brut est conservé dès qu'une simplification est appliquée.
 - Les contours croisés, intersections lointaines et écarts de surface excessifs sont refusés.
-- Validation : 12 tests backend ciblés, 4 tests front ciblés et typecheck TypeScript verts.
+- Commit `edef539e` : les contours très bruités sont ramenés à vingt sommets au plus ; avertissement
+  au-delà de douze sommets et nouveau mode **Retracer par points** avec annulation du dernier clic.
+- Validation finale : 13 tests backend ciblés, 4 tests front ciblés et typecheck TypeScript verts.
+- Contrôle réel en lecture seule sur cinq clics du R+1 : 20 → 4 sommets sur le cas propre, 59 → 19
+  sur le cas fuyant. La comparaison visuelle prouve que les écarts de surface restants viennent de
+  menuiseries non désignées, donc de limites absentes en amont et non du simplificateur.
 
 ## Ce qui reste à faire / handoff
 
-### Validation sur les données réelles du R+1
+### Détection hybride des limites manquantes
 
-- **Problème** : l'accès en lecture à la base distante a été refusé par la protection Codex ; aucun
-  accès de contournement n'a été tenté.
-- **Suite** : après autorisation explicite, rejouer les cinq clics de référence sur la planche 25 et
-  comparer le nombre de sommets, la surface et la projection visuelle avant déploiement.
-- **Fichiers cibles** : `saas/backend/thermique_moteur/quadrilatere.py`,
-  `saas/backend/app/services/thermique_pieces.py`.
+- **Problème** : trois des cinq clics restent faux et un ne se ferme pas lorsque les menuiseries ne sont
+  pas dans les calques désignés. Un post-traitement du polygone ne peut pas reconstruire une limite absente.
+- **Suite** : proposer les limites sur un crop raster par IA/vision, puis aimanter les côtés proposés
+  aux traits vectoriels proches avant de relancer la polygonisation.
+- **Fichiers cibles** : nouveau moteur autonome de proposition locale, puis
+  `saas/backend/app/services/thermique_pieces.py` et `PiecesPage.tsx`.
 - **Commande locale de validation** :
   `python -m pytest tests/test_thermique_quadrilatere.py tests/test_thermique_pieces.py -p no:cacheprovider`.
 
@@ -43,8 +48,7 @@ supprimer les zigzags, notamment dans le plus grand espace, sans déformer les f
 
 ```text
 J'ai lu les trois documents de démarrage et la session « Contours de pièces éditables ».
-Je comprends que la priorité est de valider la simplification adaptative sur les cinq clics réels du
-R+1, puis de contrôler visuellement le grand espace avant déploiement.
-Je commence par une lecture seule des contours réels, après autorisation explicite.
+Je comprends que les contours sont maintenant éditables et retracables, mais que les limites absentes
+doivent ensuite être proposées par vision/IA puis aimantées sur le vectoriel.
+Je commence par cadrer et tester ce moteur local sur les quatre échecs réels du R+1.
 ```
-

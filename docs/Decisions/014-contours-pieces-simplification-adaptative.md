@@ -16,7 +16,8 @@ en outre pouvoir ajuster la proposition sur le plan.
 
 Le moteur essaie d'abord une reconstruction par quatre droites dominantes avec garde-fous géométriques,
 puis, si elle n'est pas fiable, une simplification multi-côtés à tolérance métrique. Le contour brut est
-conservé et la correction manuelle devient toujours la nouvelle vérité.
+conservé et la correction manuelle devient toujours la nouvelle vérité. Un contour de plus de douze
+sommets est signalé et peut être remplacé par un retracé complet en quelques clics.
 
 ## Conséquences
 
@@ -26,11 +27,13 @@ conservé et la correction manuelle devient toujours la nouvelle vérité.
 - les grands espaces perdent leurs zigzags sans perdre leurs vrais changements de direction ;
 - un résultat douteux est refusé plutôt que déformé silencieusement ;
 - le recalage manuel reste possible sommet par sommet.
+- une fuite importante peut être remplacée sans supprimer les sommets parasites un à un.
 
 ### Négatives / coûts assumés
 
 - la tolérance métrique devra être éprouvée sur d'autres conventions de dessin ;
 - un contour très ouvert ou très faux peut encore demander une correction manuelle.
+- la détection automatique des limites graphiques manquantes reste un chantier IA distinct.
 
 ### Alternatives écartées
 
@@ -42,5 +45,4 @@ conservé et la correction manuelle devient toujours la nouvelle vérité.
 
 - Décisions détaillées : `docs/thermique/contours-pieces-decisions.md`
 - Moteur : `saas/backend/thermique_moteur/quadrilatere.py`
-- Commit : `af9dc199`
-
+- Commits : `af9dc199`, `edef539e`
