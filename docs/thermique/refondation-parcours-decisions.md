@@ -506,3 +506,22 @@ Mise en œuvre de la recommandation §16.5, sur un plan, d'un bouton, en tâche 
    remplacées.
 5. **Menuiseries** : dans la bande → menuiserie ; ailleurs → menuiserie intérieure.
 6. Écran : panneau « Tout détecter » dans l'onglet Calques (avancement, bilan, liens vers Enveloppe et Pièces).
+
+### 18.1 Premier essai de bout en bout (R+2, plan remis à vierge)
+
+26 s : 206 éléments de mur, 4 portes, 41 menuiseries, fermeture choisie à 2 m, 6 pièces, 877 m² chauffés,
+nu intérieur 898 m², nu extérieur 935 m² (soit 36 m² de murs : la **terrasse reste dehors**, le défaut de
+l'essai §16 est corrigé). Défaut trouvé et corrigé : la **hachure des murs** était prise pour de l'isolant (même
+petit trait gris) ; elle s'en distingue par sa **direction** (hachure = traits parallèles, isolant = zigzags) et
+devient « mur ». Reste faible : les noms des grands plateaux (annotations, fautes de lecture).
+
+Mesuré sur la planche du R+2 (part des traits de la direction majoritaire, paquets de 8°) :
+
+| Famille | Nombre | Part parallèle | Lecture |
+| --- | --- | --- | --- |
+| 0,48 pt gris #989898 | 6 016 | **0,997** (tous à 135°) | hachure du mur → « mur » |
+| 0,24 pt gris #808080 | 8 405 | 0,125 (2 821 polylignes) | isolant en zigzag |
+| 0,12 pt gris #545454 | 7 096 | 0,484 (deux directions à 50/50) | trame croisée — écartée en amont (hors murs) |
+
+Le seuil de 0,75 sépare donc largement les deux cas. Une trame **croisée** tomberait entre les deux : si elle
+se loge un jour dans les murs, compter les deux plus gros paquets plutôt qu'un seul.

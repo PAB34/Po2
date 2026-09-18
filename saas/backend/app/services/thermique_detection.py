@@ -105,10 +105,16 @@ def _objets(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, eleme
     resume["menuiseries"] = len(groupes)
 
     murs = [i for i, regle in attribution(project, sheet, elements).items() if regle["nature"] == "mur"]
-    for famille in reconnaissance.familles_isolant(elements, murs):
+    isolants, hachures = reconnaissance.familles_isolant(elements, murs)
+    for famille in isolants:
         if _regle_absente(project, famille, "court"):
             save_designation(db, project, famille, "court", "isolant", moteur_bande.ENVELOPPE)
             resume["isolant"] += 1
+    # une hachure logée dans les murs est le remplissage du mur, pas un isolant
+    for famille in hachures:
+        if _regle_absente(project, famille, "court"):
+            save_designation(db, project, famille, "court", "mur")
+            resume["hachures"] = resume.get("hachures", 0) + 1
     return resume
 
 
