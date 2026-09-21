@@ -7,7 +7,7 @@ import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type PdfPoint } from "../api";
 import { calquesApi } from "../calques";
 import { TileSheetViewer, type ToScreen } from "../components/TileSheetViewer";
-import { nearestEdge, nearestVertex } from "../metre";
+import { nearestEdge, nearestVertex, pdfTolerance } from "../metre";
 import { ROOM_COLORS, insideRoom, piecesApi, type Room, type RoomClass, type SheetRooms } from "../pieces";
 import { allSheets, projectQueryKey } from "../projectCache";
 import { superpositionApi } from "../superposition";
@@ -15,7 +15,7 @@ import { ProjectTabs } from "./ProjectLibraryPage";
 
 const RASTER_STALE_MS = 6 * 3600 * 1000;
 const READING_POLL_MS = 4000;
-const LIMIT_NATURES: Record<string, string> = { cloison: "cloisons", porte: "portes", menuiserie: "menuiseries" };
+const VERTEX_HIT_PX = 12;
 const CLASS_ORDER: RoomClass[] = ["chauffe", "non_chauffe", "exterieur"];
 const numberFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 const area = (value: number) => `${numberFormat.format(value)} m²`;
@@ -38,7 +38,9 @@ export function PiecesPage() {
   // correction du contour à la main (étape 2 du parcours) : sommets déplacés, ajoutés ou retirés
   const [draft, setDraft] = useState<PdfPoint[] | null>(null);
   const [redrawing, setRedrawing] = useState(false);
+  const [creating, setCreating] = useState(false);
   const dragRef = useRef<number | null>(null);
+  const pixelsPerPtRef = useRef(1);
 
   const projectQuery = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -104,6 +106,17 @@ export function PiecesPage() {
       setSelection(added ? [added.id] : []);
     },
   });
+  const traceMutation = useMutation({
+    mutationFn: (contour: PdfPoint[]) => piecesApi.trace(token!, currentSheetId!, contour),
+    onSuccess: (next) => {
+      done(next);
+      setDraft(null);
+      setRedrawing(false);
+      setCreating(false);
+      const added = next.pieces[next.pieces.length - 1];
+      setSelection(added ? [added.id] : []);
+    },
+  });
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { nom?: string; classe?: RoomClass; contour?: number[] } }) =>
       piecesApi.update(token!, id, payload),
@@ -111,6 +124,7 @@ export function PiecesPage() {
       done(next);
       setDraft(null);
       setRedrawing(false);
+      setCreating(false);
     },
   });
   const components = useQuery({
@@ -143,17 +157,32 @@ export function PiecesPage() {
       setSelection([]);
     },
   });
-  const mutations = [detectMutation, addMutation, updateMutation, removeMutation, mergeMutation, splitMutation];
+  const mutations = [detectMutation, addMutation, traceMutation, updateMutation, removeMutation, mergeMutation, splitMutation];
   const busy = mutations.some((mutation) => mutation.isPending);
   const actionError = mutations.find((mutation) => mutation.error)?.error ?? null;
-  const missing = Object.keys(LIMIT_NATURES).filter((key) => !data?.limites.natures.includes(key));
 
   function reset() {
     setSelection([]);
     setPending(null);
     setDraft(null);
     setRedrawing(false);
+    setCreating(false);
     mutations.forEach((mutation) => mutation.reset());
+  }
+
+  function startTrace(firstPoint?: PdfPoint) {
+    setSelection([]);
+    setPending(null);
+    addMutation.reset();
+    setDraft(firstPoint ? [firstPoint] : []);
+    setRedrawing(true);
+    setCreating(true);
+  }
+
+  function cancelDraft() {
+    setDraft(null);
+    setRedrawing(false);
+    setCreating(false);
   }
 
   function contourPoints(room: Room): PdfPoint[] {
@@ -165,7 +194,9 @@ export function PiecesPage() {
   }
 
   function saveDraft() {
-    if (single && draft && draft.length >= 3) {
+    if (creating && draft && draft.length >= 3) {
+      traceMutation.mutate(draft);
+    } else if (single && draft && draft.length >= 3) {
       updateMutation.mutate({ id: single.id, payload: { contour: draft.flat() } });
     }
   }
@@ -246,6 +277,9 @@ export function PiecesPage() {
           manifest={raster.data}
           tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
           tool="pieces"
+          onHover={(_point, scale) => {
+            pixelsPerPtRef.current = scale;
+          }}
           onAddPoint={(point, event) => {
             if (draft) {
               if (redrawing) {
@@ -253,14 +287,15 @@ export function PiecesPage() {
                 return;
               }
               // en correction : Alt + clic retire un sommet, un clic sur un côté en ajoute un
-              const vertex = nearestVertex(draft, point, 12);
+              const tolerance = pdfTolerance(VERTEX_HIT_PX, pixelsPerPtRef.current);
+              const vertex = nearestVertex(draft, point, tolerance);
               if (vertex !== null) {
                 if (event.altKey && draft.length > 3) {
                   setDraft(draft.filter((_, index) => index !== vertex));
                 }
                 return;
               }
-              const edge = nearestEdge(draft, point, 12);
+              const edge = nearestEdge(draft, point, tolerance);
               if (edge) {
                 setDraft([...draft.slice(0, edge.index + 1), edge.point, ...draft.slice(edge.index + 1)]);
               }
@@ -268,7 +303,12 @@ export function PiecesPage() {
             }
             const room = data?.pieces.find((item) => insideRoom(point, item.contour));
             if (!room) {
-              // un clic dans un espace libre projette le contour tout de suite : c'est le geste attendu
+              // Sans limite connue, le premier clic démarre le tracé manuel au lieu d'imposer un passage par Calques.
+              if (!data?.limites.elements) {
+                startTrace(point);
+                return;
+              }
+              // Avec des limites connues, un clic dans un espace libre tente une proposition automatique.
               setSelection([]);
               setPending(point);
               addMutation.reset();
@@ -284,9 +324,9 @@ export function PiecesPage() {
                 : [room.id],
             );
           }}
-          onGrab={(point, _scale, event) => {
+          onGrab={(point, scale, event) => {
             if (draft) {
-              const vertex = nearestVertex(draft, point, 12);
+              const vertex = nearestVertex(draft, point, pdfTolerance(VERTEX_HIT_PX, scale));
               dragRef.current = vertex;
               return vertex !== null;
             }
@@ -338,9 +378,10 @@ export function PiecesPage() {
         </div>
         <ProjectTabs projectId={projectId} />
         <p className="th-muted">
-          Les pièces sont les espaces fermés par vos calques. Cliquez une pièce pour la nommer et la classer ;{" "}
+          Définissez d'abord les pièces, par détection assistée ou en cliquant leurs angles. Cliquez ensuite une pièce pour la nommer,
+          la classer et identifier tous les composants qui longent son contour ;{" "}
           <strong>Maj + clic</strong> pour en choisir plusieurs (fusion) ; <strong>Alt + glisser</strong> sur une pièce choisie pour la couper ;
-          un clic hors des pièces propose d'en ajouter une.
+          un clic hors des pièces propose d'en ajouter une quand des limites sont déjà connues.
         </p>
 
         {plans.data && plans.data.planches.length > 0 && (
@@ -367,18 +408,13 @@ export function PiecesPage() {
 
         {data && (
           <section className="th-edgebox th-calque-panel">
-            <strong>Détection</strong>
+            <strong>Créer les pièces</strong>
             <span className="th-muted">
-              Limites désignées : {data.limites.natures.length ? data.limites.natures.join(", ") : "aucune"}.
+              Le tracé par points fonctionne immédiatement, sans identifier les portes ni les menuiseries. La détection automatique est une aide
+              optionnelle fondée sur les {data.limites.elements} limites déjà connues.
             </span>
-            {missing.length > 0 && (
-              <span className="th-alert th-alert--warn">
-                Désignez aussi les {missing.map((key) => LIMIT_NATURES[key]).join(", ")} dans l'onglet{" "}
-                <Link to={`/projets/${projectId}/calques`}>Calques</Link> : sans elles, les pièces restent ouvertes.
-              </span>
-            )}
             <label className="th-field">
-              <span>Refermer les ouvertures jusqu'à (cm)</span>
+              <span>Tolérance de la détection automatique (cm)</span>
               <input
                 type="number"
                 min={0}
@@ -389,13 +425,16 @@ export function PiecesPage() {
               />
             </label>
             <div className="th-inline">
+              <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => startTrace()}>
+                Tracer une pièce
+              </button>
               <button
                 type="button"
-                className="po2-button po2-button--primary"
+                className="po2-button po2-button--ghost"
                 disabled={busy || data.limites.elements === 0}
                 onClick={() => detectMutation.mutate()}
               >
-                {data.pieces.length ? "Relancer la détection" : "Détecter les pièces"}
+                {data.pieces.length ? "Relancer la détection assistée" : "Détection assistée"}
               </button>
             </div>
             {data.pieces.length > 0 && (
@@ -415,15 +454,42 @@ export function PiecesPage() {
             <strong>Pas de contour ici</strong>
             <span className="th-alert th-alert--error">{addMutation.error.message}</span>
             <span className="th-muted">
-              Élargissez la fermeture des ouvertures ci-dessus, ou cliquez ailleurs dans la pièce.
+              La pièce peut être définie tout de suite en cliquant ses angles ; les composants de bord seront identifiés ensuite.
             </span>
-            <button type="button" className="po2-button po2-button--ghost" onClick={() => { setPending(null); addMutation.reset(); }}>
-              Fermer
-            </button>
+            <div className="th-inline">
+              <button type="button" className="po2-button po2-button--primary" onClick={() => startTrace(pending)}>
+                Tracer depuis ce point
+              </button>
+              <button type="button" className="po2-button po2-button--ghost" onClick={() => { setPending(null); addMutation.reset(); }}>
+                Fermer
+              </button>
+            </div>
           </section>
         )}
 
-        {single && (
+        {creating && draft && (
+          <section className="th-edgebox th-calque-panel">
+            <strong>Nouvelle pièce</strong>
+            <span className="th-muted">
+              Cliquez successivement les angles réels de la pièce. Le dernier point sera relié au premier. {draft.length} sommets.
+            </span>
+            <div className="th-inline">
+              <button type="button" className="po2-button po2-button--primary" disabled={busy || draft.length < 3} onClick={saveDraft}>
+                Créer la pièce
+              </button>
+              {draft.length > 0 && (
+                <button type="button" className="po2-button po2-button--ghost" onClick={() => setDraft(draft.slice(0, -1))}>
+                  Annuler le dernier point
+                </button>
+              )}
+              <button type="button" className="po2-button po2-button--ghost" onClick={cancelDraft}>
+                Annuler
+              </button>
+            </div>
+          </section>
+        )}
+
+        {single && !creating && (
           <section className="th-edgebox th-calque-panel">
             <strong>
               {area(single.surface_m2)}

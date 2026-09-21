@@ -64,3 +64,19 @@ parcours fiable sans présenter une géométrie automatique douteuse comme exact
 - grand espace comportant de nombreux zigzags, simplifié sans devenir un quadrilatère ;
 - polygone auto-croisé ou déformation excessive refusés ;
 - service : conservation du contour détaillé et recalcul de la surface.
+
+## Décisions du 2026-09-21 — pièces avant composants
+
+1. **Aucune menuiserie n'est requise pour tracer une pièce.** Le parcours principal permet de créer
+   directement un contour polygonal sur le plan, même quand aucun calque n'a encore été désigné.
+2. **La détection automatique devient une aide optionnelle.** Elle continue d'exploiter les limites
+   déjà connues, mais l'interface ne présente plus la désignation préalable des portes et menuiseries
+   comme une condition du métré.
+3. **Repli immédiat.** Quand un clic de détection ne trouve pas de contour, l'utilisateur peut reprendre
+   ce même point comme premier sommet d'un tracé manuel, sans changer d'écran.
+4. **Les composants viennent après la géométrie.** Une fois la pièce créée, toutes les familles de traits
+   qui longent son contour sont inventoriées localement, y compris si elles n'ont encore aucune nature.
+   Leur qualification est alors mémorisée par signature graphique pour les autres occurrences.
+5. **Tolérance écran pour les sommets.** La prise d'un sommet et les clics d'ajout/retrait utilisent une
+   tolérance constante en pixels, convertie en points PDF selon le zoom courant. Le point visible et sa
+   zone cliquable restent ainsi superposés à tous les niveaux de zoom.

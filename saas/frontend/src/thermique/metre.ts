@@ -262,6 +262,10 @@ export function nearestVertex(points: PdfPoint[], p: PdfPoint, tolerance: number
   return best;
 }
 
+export function pdfTolerance(screenPixels: number, pixelsPerPt: number): number {
+  return screenPixels / Math.max(pixelsPerPt, Number.EPSILON);
+}
+
 export function nearestEdge(points: PdfPoint[], p: PdfPoint, tolerance: number): { index: number; point: PdfPoint } | null {
   let best: { index: number; point: PdfPoint } | null = null;
   let bestDistance = tolerance;

@@ -19,7 +19,7 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-11** (session Claude — outil de métré thermique, étape 1).
+> Mise à jour : **2026-09-21** (session Codex — pièces avant composants).
 
 - **✅ EN PROD — Outil de métré thermique, étape 1 (socle)** (PR #178, migration **0076**
   appliquée, vérifiée par SSH le 2026-09-11) : sous-domaine **`thermique.patrimoineaucarre.com`** (bloc Caddy), **mêmes comptes Po2**,
@@ -89,7 +89,11 @@ do_not_auto_read:
   multi-côtés, avec conservation du contour brut et garde-fous de surface/croisement. Validation réelle
   du R+1 faite : 20 → 4 et 59 → 19 sommets ; les limites absentes restent impossibles à inventer par
   lissage. Commit `edef539e` : alerte des contours complexes et retracé complet en quelques clics.
-  Prochain moteur : vision locale des limites manquantes puis aimantation vectorielle
+  **Parcours « pièce d'abord » ajouté le 2026-09-21** : création par points sans aucun calque ni
+  menuiserie désignée, repli direct après un échec de détection, puis inventaire local de toutes les
+  familles graphiques bordantes. La prise des sommets est maintenant constante en pixels et fonctionne
+  à tous les zooms. Prochain contrôle : recette métier sur le vrai R+1, puis vision locale des limites
+  manquantes et aimantation vectorielle
   (`thermique/contours-pieces-decisions.md`).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec

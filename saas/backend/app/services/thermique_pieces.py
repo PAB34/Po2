@@ -251,25 +251,40 @@ def add_room_at(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, x
     return mots is None and sheet.id not in _lectures
 
 
-def _redessiner(room: ThermiqueRoom, contour: list[float]) -> None:
-    """Contour corrigé à la main : sommet déplacé, ajouté ou retiré (étape 2 du parcours).
-
-    Le contour proposé au clic n'a pas à être parfait puisqu'il est rectifiable — c'est ce qui permet
-    de s'en servir sans attendre une détection exacte.
-    """
+def _piece_tracee(echelle: float | None, contour: list[float]) -> dict:
+    """Valide et mesure un contour fourni par l'utilisateur, sans dépendre des calques du plan."""
     if len(contour) < 6 or len(contour) % 2:
         raise ThermiqueError("Un contour demande au moins trois points.")
-    echelle = room_scale(room)
     if not echelle:
-        raise ThermiqueError("Définissez l'échelle de la planche avant de corriger un contour.")
+        raise ThermiqueError("Définissez l'échelle de la planche avant de tracer un contour.")
     points = [(contour[k], contour[k + 1]) for k in range(0, len(contour), 2)]
     aire = abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(points, points[1:] + points[:1]))) / 2
     surface = aire * pt_en_m(echelle) ** 2
     if surface < moteur.SURFACE_MIN_M2:
         raise ThermiqueError(f"Ce contour ne fait que {surface:.1f} m² : trop petit pour une pièce.")
     centre = [sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)]
-    room.points_json = json.dumps({"contour": list(contour), "centre": centre}, separators=(",", ":"))
-    room.area_m2 = round(surface, 2)
+    return {"contour": list(contour), "centre": centre, "surface_m2": round(surface, 2)}
+
+
+def trace_room(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, contour: list[float]) -> bool:
+    """Crée une pièce depuis un polygone tracé, sans exiger de murs ou menuiseries désignés."""
+    _plan(db, project, sheet)
+    piece = _piece_tracee(sheet.scale_denominator, contour)
+    mots = sheet_words(sheet)
+    db.add(_nouvelle(project, sheet, piece, "manuel", mots))
+    db.commit()
+    return mots is None and sheet.id not in _lectures
+
+
+def _redessiner(room: ThermiqueRoom, contour: list[float]) -> None:
+    """Contour corrigé à la main : sommet déplacé, ajouté ou retiré (étape 2 du parcours).
+
+    Le contour proposé au clic n'a pas à être parfait puisqu'il est rectifiable — c'est ce qui permet
+    de s'en servir sans attendre une détection exacte.
+    """
+    piece = _piece_tracee(room_scale(room), contour)
+    room.points_json = json.dumps({"contour": piece["contour"], "centre": piece["centre"]}, separators=(",", ":"))
+    room.area_m2 = piece["surface_m2"]
     room.source = "manuel"
 
 

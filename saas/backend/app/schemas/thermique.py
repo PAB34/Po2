@@ -255,6 +255,11 @@ class RoomAdd(RoomDetect):
     y: float
 
 
+class RoomTrace(BaseModel):
+    # Contour tracé directement sur le plan : x1, y1, x2, y2… en points PDF.
+    contour: list[float] = Field(min_length=6, max_length=2000)
+
+
 class RoomMerge(BaseModel):
     ids: list[int] = Field(min_length=2, max_length=50)
 
