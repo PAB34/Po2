@@ -1598,3 +1598,149 @@ circle.th-seg--measure {
 .th-env--contour.is-drawing polyline {
   stroke: #e8590c;
 }
+
+/* Nouveau MVP : une seule lecture, zonage automatique puis correction. */
+.th-auto-zoning {
+  grid-template-columns: minmax(0, 1fr) 420px;
+  background: #eef3f7;
+}
+
+.th-auto-zoning__panel {
+  gap: 1rem;
+  padding: 1.15rem;
+}
+
+.th-auto-zoning__panel .th-panel__title {
+  color: #173b63;
+  font-size: 1.35rem;
+}
+
+.th-auto-zoning__run {
+  width: 100%;
+  min-height: 3rem;
+  font-size: 1rem;
+}
+
+.th-auto-zoning__progress,
+.th-auto-zoning__summary,
+.th-auto-zoning__selected {
+  padding: 0.85rem;
+  border: 1px solid #d9e3ec;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.th-auto-zoning__progress {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.th-auto-zoning__progress .th-muted {
+  grid-column: 2;
+}
+
+.th-auto-zoning__spinner {
+  grid-row: 1 / span 2;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid #bfd3e5;
+  border-top-color: #176b9b;
+  border-radius: 50%;
+  animation: th-spin 0.8s linear infinite;
+}
+
+@keyframes th-spin {
+  to { transform: rotate(360deg); }
+}
+
+.th-zone-legend {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-zone-legend li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.82rem;
+}
+
+.th-zone-legend__swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 2px;
+}
+
+.th-auto-zoning__rooms {
+  min-height: 0;
+}
+
+.th-zone-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.th-zone-list button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-zone-list button:hover,
+.th-zone-list button.is-active {
+  border-color: #a9bfd1;
+  background: #edf5fb;
+}
+
+.th-zone-list__code {
+  min-width: 3rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.th-zone-list button > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.th-zone-list small {
+  color: var(--po2-color-muted);
+}
+
+.th-auto-zone polygon {
+  fill-opacity: 0.2;
+  stroke-width: 2;
+}
+
+.th-auto-zone.is-selected polygon {
+  fill-opacity: 0.35;
+  stroke-width: 4;
+}
+
+@media (max-width: 880px) {
+  .th-auto-zoning {
+    grid-template-columns: 1fr;
+    grid-template-rows: 62vh auto;
+  }
+}

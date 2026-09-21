@@ -12,6 +12,17 @@ l'impossibilité constatée de déplacer les sommets d'une pièce existante.
 
 ## ✅ Ce qui a été fait
 
+### Nouveau MVP de zonage automatique
+
+- Création d'une route isolée `/projets/:projectId/analyse`, accessible depuis le projet par
+  **Analyser les plans**.
+- Un seul bouton orchestre la reconnaissance automatique existante puis affiche toutes les zones sur
+  le plan, avec couleurs, identifiants, surfaces, catégories et légende inspirée de la projection R+1.
+- L'écran ne présente ni calques, ni menuiseries à désigner, ni calcul thermique.
+- Une zone est sélectionnable sur le plan ou dans la liste ; ses sommets sont directement corrigeables.
+- Contrat et audit : `thermique/mvp-zonage-auto-decisions.md`.
+- Validation : 7 tests frontend, 7 tests backend et build de production réussis.
+
 ### Parcours pièce d'abord
 
 - Ajout d'une création de pièce par polygone, indépendante des calques désignés.
