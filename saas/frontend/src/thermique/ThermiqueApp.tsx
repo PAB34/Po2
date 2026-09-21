@@ -12,6 +12,7 @@ import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SheetPage } from "./pages/SheetPage";
+import { AutoZoningPage } from "./pages/AutoZoningPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -86,6 +87,7 @@ export function ThermiqueApp() {
           <Route path="bibliotheque" element={<LibraryPage />} />
         </Route>
         <Route element={<Shell fullWidth />}>
+          <Route path="projets/:projectId/analyse" element={<AutoZoningPage />} />
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
           <Route path="projets/:projectId/metre" element={<MetrePage />} />
           <Route path="projets/:projectId/calques" element={<CalquesPage />} />

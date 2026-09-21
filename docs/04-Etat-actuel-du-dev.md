@@ -92,8 +92,11 @@ do_not_auto_read:
   **Parcours « pièce d'abord » ajouté le 2026-09-21** : création par points sans aucun calque ni
   menuiserie désignée, repli direct après un échec de détection, puis inventaire local de toutes les
   familles graphiques bordantes. La prise des sommets est maintenant constante en pixels et fonctionne
-  à tous les zooms. Prochain contrôle : recette métier sur le vrai R+1, puis vision locale des limites
-  manquantes et aimantation vectorielle
+  à tous les zooms. **Nouveau MVP isolé démarré le 2026-09-21** : route `analyse`, bouton unique
+  « Analyser le plan », progression de la détection globale, toutes les zones colorées avec légende et
+  correction directe des sommets. Il orchestre les moteurs existants sans exposer Calques, Enveloppe ou
+  Métré. Prochain contrôle : recette métier sur le vrai R+1, puis amélioration du moteur si le zonage ne
+  retrouve pas la projection de référence
   (`thermique/contours-pieces-decisions.md`).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec

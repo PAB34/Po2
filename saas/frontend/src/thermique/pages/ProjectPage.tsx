@@ -185,9 +185,14 @@ export function ProjectPage() {
           <h1>{project.name}</h1>
           {project.description && <p className="th-muted">{project.description}</p>}
         </div>
-        <button type="button" className="po2-button po2-button--danger" onClick={removeProject} disabled={Boolean(busy)}>
-          Supprimer le projet
-        </button>
+        <div className="th-actions">
+          <Link className="po2-button po2-button--primary" to={`/projets/${project.id}/analyse`}>
+            Analyser les plans
+          </Link>
+          <button type="button" className="po2-button po2-button--danger" onClick={removeProject} disabled={Boolean(busy)}>
+            Supprimer le projet
+          </button>
+        </div>
       </div>
       <ProjectTabs projectId={project.id} />
 
