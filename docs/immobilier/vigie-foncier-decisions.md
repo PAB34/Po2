@@ -180,3 +180,15 @@ Proposition : livrer **É0 → É3 d'un bloc** (carte filtrable toutes zones), p
 
 Prochaine étape proposée : **É3b** — jeu test 20/20/10 (cadrage §13) pour régler seuils et score,
 puis **É4** (géométrie : plus grande zone libre, accès, retraits art. 6/7/8).
+
+## 12. Voiries (2026-09-21)
+
+Demande : ne plus faire remonter les voiries (« si trop compliqué ou risque de fausser, laisse tomber »).
+Retenu parce que fiable au contrôle visuel (orthophoto : allées de résidence, rue de zone d'activités,
+chemin du lido, accès, bande de parking — 7/7 correctes) et sans effet sur les parcelles bâties :
+
+- **Voirie probable** = parcelle bâtie < 20 m² ET (couverte ≥ 50 % par une chaussée BD TOPO, ou
+  ≥ 25 % si largeur < 8 m, ou bande < 6 m de large, 5× plus longue que large, ≥ 150 m²).
+- 530 parcelles repérées ; **masquées par défaut, jamais supprimées** (case « Exclure les voiries
+  probables », alerte dans la fiche, colonne dans l'export).
+- Effet : « Division pavillonnaire » inchangé (256, bâti ≥ 40 m²) ; « Terrains nus » 416 → 268.

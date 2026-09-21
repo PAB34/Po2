@@ -2,7 +2,8 @@
 
 Données (téléchargées une fois dans VIGIE/.cache, puis réutilisées) :
   - cadastre Etalab : parcelles + bâtiments de la commune 34301 ;
-  - zonage du PLU : API Carto GPU, partition DU_34301.
+  - zonage du PLU : API Carto GPU, partition DU_34301 ;
+  - tronçons de route BD TOPO (WFS Géoplateforme) : repérage des parcelles de voirie.
 Sorties (chargées par la carte) : web/data/parcelles.geojson, batiments.geojson, zonage.geojson, meta.json.
 
 Lancer : python -m pipeline.build_parcelles [--refresh]   (depuis VIGIE/, après build_regles)
@@ -29,10 +30,16 @@ URLS = {
     "parcelles": f"https://cadastre.data.gouv.fr/data/etalab-cadastre/latest/geojson/communes/34/{INSEE}/cadastre-{INSEE}-parcelles.json.gz",
     "batiments": f"https://cadastre.data.gouv.fr/data/etalab-cadastre/latest/geojson/communes/34/{INSEE}/cadastre-{INSEE}-batiments.json.gz",
     "zonage": f"https://apicarto.ign.fr/api/gpu/zone-urba?partition=DU_{INSEE}&_limit=1000",
+    "routes": ("https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature"
+               "&TYPENAMES=BDTOPO_V3:troncon_de_route&OUTPUTFORMAT=application/json&SRSNAME=EPSG:4326"
+               "&BBOX=43.36,3.55,43.44,3.73,urn:ogc:def:crs:EPSG::4326&COUNT=5000&STARTINDEX={start}"),
 }
 SEUIL_PART = 1.0          # m² : en dessous, un morceau de secteur est ignoré (bruit de bordure)
 SEUIL_PARTIEL = 0.05      # part non calculable au-delà de laquelle la réserve est signalée partielle
 SEUIL_NU = 20.0           # m² : sous ce bâti (abri, muret), la parcelle est considérée comme nue
+# Voirie probable (parcelle nue seulement) : couverte par la chaussée IGN, ou bande longue et étroite.
+# Réglé sur contrôle visuel à l'orthophoto (2026-09-21) : allées de résidence, chemins, bandes de parking.
+LARGEUR_DEFAUT = {"Sentier": 1.5, "Escalier": 2.0, "Chemin": 3.0, "Route empierrée": 3.0}
 
 VERS_L93 = Transformer.from_crs(4326, 2154, always_xy=True).transform
 VERS_WGS = Transformer.from_crs(2154, 4326, always_xy=True).transform
@@ -49,6 +56,47 @@ def telecharger(nom: str, refresh: bool) -> dict:
             brut = gzip.decompress(brut)
         fichier.write_bytes(brut)
     return json.loads(fichier.read_text(encoding="utf-8"))
+
+
+def telecharger_routes(refresh: bool) -> list:
+    """Tronçons BD TOPO de Sète (WFS paginé par 5 000), mis en cache comme les autres sources."""
+    fichier = CACHE / "routes.json"
+    if refresh or not fichier.exists():
+        CACHE.mkdir(exist_ok=True)
+        features, start = [], 0
+        while True:
+            with urllib.request.urlopen(URLS["routes"].format(start=start), timeout=180) as r:
+                lot = json.loads(r.read())["features"]
+            features += lot
+            if len(lot) < 5000:
+                break
+            start += 5000
+        fichier.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    return json.loads(fichier.read_text(encoding="utf-8"))["features"]
+
+
+def chaussees(routes: list) -> list:
+    """Emprise approximative des chaussées au sol : tronçon tamponné de sa demi-largeur (+ 0,5 m)."""
+    polys = []
+    for f in routes:
+        p = f["properties"]
+        if p.get("fictif") or str(p.get("position_par_rapport_au_sol")) != "0":
+            continue
+        largeur = p.get("largeur_de_chaussee") or LARGEUR_DEFAUT.get(p.get("nature"), 4.0)
+        polys.append(en_l93(f["geometry"]).buffer(max(largeur, 2.0) / 2 + 0.5, cap_style=2))
+    return polys
+
+
+def voirie_probable(g, bati: float, couverture: float) -> bool:
+    if bati >= SEUIL_NU:
+        return False
+    epaisseur = 2 * g.area / g.length           # ≈ largeur d'une bande
+    rect = g.minimum_rotated_rectangle.exterior.coords
+    cotes = sorted(((rect[i][0] - rect[i + 1][0]) ** 2 + (rect[i][1] - rect[i + 1][1]) ** 2) ** 0.5 for i in range(2))
+    allongement = cotes[1] / max(cotes[0], 0.1)
+    return (couverture >= 0.5
+            or (couverture >= 0.25 and epaisseur < 8)
+            or (epaisseur < 6 and allongement > 5 and g.area >= 150))
 
 
 def en_l93(geojson_geom):
@@ -105,6 +153,8 @@ def main(refresh: bool = False) -> None:
     parcelles = telecharger("parcelles", refresh)["features"]
     batiments = telecharger("batiments", refresh)["features"]
     zonage = telecharger("zonage", refresh)["features"]
+    routes = chaussees(telecharger_routes(refresh))
+    arbre_routes = STRtree(routes)
 
     zones_g = [en_l93(f["geometry"]) for f in zonage]
     zones_code = [f["properties"]["libelle"] for f in zonage]
@@ -149,6 +199,9 @@ def main(refresh: bool = False) -> None:
         bati_leger = sum(m.area for i, m in morceaux if bat_type[i] == "02")
         bat_utiles.update(int(i) for i, _ in morceaux)
 
+        idx_r = arbre_routes.query(g, predicate="intersects")
+        couverture = (unary_union([routes[i] for i in idx_r]).intersection(g).area / surf) if len(idx_r) else 0.0
+
         res = None if tout_nc else round(emprise_max - bati)
         p = {
             "id": pr["id"],
@@ -168,6 +221,8 @@ def main(refresh: bool = False) -> None:
             "util": None if tout_nc or emprise_max <= 0 else round(bati / emprise_max, 3),
             "partiel": (not tout_nc) and part_nc / surf > SEUIL_PARTIEL,
             "nu": bati < SEUIL_NU,
+            "voie": voirie_probable(g, bati, couverture),
+            "vcov": round(couverture, 2),
         }
         if regles[principal]["famille"] not in familles_notees:
             p["score"], p["motif"] = None, "famille non notée"
@@ -191,6 +246,7 @@ def main(refresh: bool = False) -> None:
         "parcelles": len(sorties),
         "batiments": len(bat_utiles),
         "zones": len(zonage),
+        "voiries_probables": sum(f["properties"]["voie"] for f in sorties),
         "sources": URLS,
     }
     (DATA / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
