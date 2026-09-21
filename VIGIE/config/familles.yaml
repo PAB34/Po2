@@ -1,0 +1,31 @@
+# Familles d'opération (décision V5, 2026-09-21 — docs/immobilier/vigie-foncier-decisions.md §4).
+# Seul fichier saisi à la main : les règles chiffrées viennent du XML, le qualitatif de l'Excel.
+# Tout sous-secteur « …v » est rangé en « protege » quel que soit son préfixe.
+
+familles:
+  division:
+    libelle: Division pavillonnaire
+    couleur: "#2f7d4f"
+    score: true
+    secteurs: [UD1, UD1a, UD2, UD3, UD4, UC4a, UC4b, UV2, UV3]
+  densification:
+    libelle: Densification / promoteur
+    couleur: "#b5651d"
+    score: true
+    secteurs: [3UB1, 3UB2, 3UB3, 3UB4, 3UB6, 3UB7, 3UB8, 3UB9, UC3, UC4c, UC4d, UA5, UA5a]
+  rehabilitation:
+    libelle: Réhabilitation / division bâtie
+    couleur: "#6a4c93"
+    score: false
+    secteurs: [UA1, UA2, UA3, UA4, 1UB1, 1UB2, 1UB3, 1UB4, 1UB5, 2UB, UV1, UV4]
+  protege:
+    libelle: Protégé « v » (espace vert)
+    couleur: "#7a8a3a"
+    score: true
+    secteurs: []   # rempli automatiquement : tout code finissant par « v »
+  hors_cible:
+    libelle: Hors cible
+    couleur: "#8a8a8a"
+    score: false
+    secteurs: [UEa, UEb, UEc, UEc1, UEg, UEz, UEz1, UP, UPa, UPb, UPc, A, N, NL, NLc, Nc, Ne, Nf, Ng,
+               AU0, AUE0, 3UB5, UV3a, UC1, UC2, UC5, UC5a, UC4e]

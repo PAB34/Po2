@@ -61,6 +61,13 @@ services:
     depends_on:
       - prono-backend
 
+  # --- VIGIE FONCIER : carte des parcelles (sous-domaine immobilier.patrimoineaucarre.com) ---
+  # Site statique (nginx) ; accès protégé par basic_auth dans Caddy (VIGIE_AUTH_USER / VIGIE_AUTH_HASH).
+  vigie:
+    build:
+      context: ../../VIGIE
+    restart: unless-stopped
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
@@ -72,6 +79,7 @@ services:
       - prono-frontend
       - prono-backend
       - backend
+      - vigie
     ports:
       - "80:80"
       - "443:443"

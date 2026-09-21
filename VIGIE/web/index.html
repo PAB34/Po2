@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vigie Foncier Sète</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+  <aside id="panneau">
+    <header>
+      <h1>Vigie Foncier <span>Sète</span></h1>
+      <p class="sous-titre">Présélection de parcelles — outil d'aide, pas une garantie de constructibilité.</p>
+      <nav class="onglets">
+        <button data-onglet="filtres" class="actif">Filtres</button>
+        <button data-onglet="liste">Liste <span id="compteur-liste">0</span></button>
+        <button data-onglet="aide">Méthode</button>
+      </nav>
+    </header>
+
+    <section id="onglet-filtres" class="onglet actif">
+      <div class="bloc">
+        <h2>Réglages</h2>
+        <div id="prereglages" class="puces"></div>
+        <div class="ligne-actions">
+          <select id="mes-reglages"><option value="">Mes réglages…</option></select>
+          <button id="sauver-reglage" class="petit">Enregistrer</button>
+          <button id="suppr-reglage" class="petit discret" title="Supprimer le réglage choisi">✕</button>
+        </div>
+      </div>
+
+      <details class="bloc" open>
+        <summary>Zonage PLU <span class="resume" id="resume-zonage"></span></summary>
+        <div class="puces" id="raccourcis-familles"></div>
+        <div id="arbre-zones"></div>
+      </details>
+
+      <details class="bloc" open>
+        <summary>Parcelle</summary>
+        <div class="grille">
+          <label>Surface min (m²)<input type="number" id="f-surf-min" min="0" step="50"></label>
+          <label>Surface max (m²)<input type="number" id="f-surf-max" min="0" step="50"></label>
+          <label>Terrain libre min (m²)<input type="number" id="f-libre-min" min="0" step="50"></label>
+          <label>Bâti min (m²)<input type="number" id="f-bati-min" min="0" step="10"></label>
+          <label>Bâti max (m²)<input type="number" id="f-bati-max" min="0" step="10"></label>
+        </div>
+        <div class="choix" id="f-nu">
+          <span>Terrains nus (bâti &lt; 20 m²)</span>
+          <label><input type="radio" name="nu" value="tous">tous</label>
+          <label><input type="radio" name="nu" value="exclure">exclure</label>
+          <label><input type="radio" name="nu" value="seulement">seulement</label>
+        </div>
+      </details>
+
+      <details class="bloc" open>
+        <summary>Potentiel</summary>
+        <div class="grille">
+          <label>Réserve d'emprise min (m²)<input type="number" id="f-res-min" step="10"></label>
+          <label>Emprise utilisée max (%)<input type="number" id="f-util-max" min="0" max="100" step="5"></label>
+          <label>Score min<input type="number" id="f-score-min" min="0" max="100" step="5"></label>
+        </div>
+        <div class="choix" id="f-classes">
+          <span>Classes</span>
+          <label><input type="checkbox" value="A">A</label>
+          <label><input type="checkbox" value="B">B</label>
+          <label><input type="checkbox" value="C">C</label>
+          <label><input type="checkbox" value="D">D</label>
+          <label title="Parcelles non notées (famille non notée ou règle non chiffrée)"><input type="checkbox" value="-">non notées</label>
+        </div>
+        <label class="case"><input type="checkbox" id="f-nc"> Inclure les règles d'emprise non calculables</label>
+      </details>
+
+      <details class="bloc">
+        <summary>Lecture du classement (Excel)</summary>
+        <div class="choix" id="f-priorite"><span>Priorité de zone</span></div>
+        <div class="choix" id="f-habitation"><span>Habitation standard</span></div>
+      </details>
+
+      <div class="bloc">
+        <label>Référence cadastrale<input type="search" id="f-ref" placeholder="ex. BK 606 ou 34301000BK0606"></label>
+        <div class="ligne-actions">
+          <button id="reinit" class="petit discret">Tout réinitialiser</button>
+          <button id="export" class="petit">Exporter la sélection (CSV)</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="onglet-liste" class="onglet">
+      <div class="ligne-actions">
+        <label>Trier par
+          <select id="tri">
+            <option value="score">score</option>
+            <option value="res">réserve d'emprise</option>
+            <option value="libre">terrain libre</option>
+            <option value="surf">surface</option>
+          </select>
+        </label>
+      </div>
+      <ol id="liste"></ol>
+      <p class="note" id="note-liste"></p>
+    </section>
+
+    <section id="onglet-aide" class="onglet">
+      <div id="aide"></div>
+    </section>
+  </aside>
+
+  <main>
+    <div id="carte"></div>
+    <div id="bandeau">
+      <strong id="compteur">…</strong> parcelles affichées
+      <span class="sep">|</span>
+      Couleur :
+      <select id="couleur">
+        <option value="classe">classe de score</option>
+        <option value="famille">famille d'opération</option>
+        <option value="res">réserve d'emprise</option>
+      </select>
+      <span class="sep">|</span>
+      Fond :
+      <select id="fond">
+        <option value="plan">plan IGN</option>
+        <option value="ortho">photo aérienne</option>
+      </select>
+      <label class="case"><input type="checkbox" id="voir-zonage" checked> zonage</label>
+      <label class="case"><input type="checkbox" id="voir-bati" checked> bâti</label>
+      <div id="legende"></div>
+    </div>
+    <aside id="fiche" hidden></aside>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="app.js?v=2"></script>
+</body>
+</html>
