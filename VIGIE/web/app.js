@@ -83,6 +83,20 @@ async function charger() {
   initCarte();
 }
 
+/* Emprise au sol lisible en un coup d'œil : « 20 % », ou la nature de la règle si non chiffrée. */
+const MODES_COURTS = { non_reglementee: "non régl.", formule_spatiale: "formule", document_graphique: "plan ZAC", non_explicite: "n.c.", absente: "n.c." };
+function empriseCourte(s) {
+  const e = s.emprise;
+  if (e.taux != null) return `${Math.round(e.taux * 100)} %${e.mode === "conditionnelle" ? "*" : ""}`;
+  return MODES_COURTS[e.mode] || "n.c.";
+}
+function empriseZone(codes) {
+  const taux = codes.map((c) => R.secteurs[c].emprise.taux).filter((t) => t != null).map((t) => Math.round(t * 100));
+  if (!taux.length) return "emprise non chiffrée";
+  const [min, max] = [Math.min(...taux), Math.max(...taux)];
+  return `emprise ${min === max ? `${min} %` : `${min}–${max} %`}`;
+}
+
 /* ---------- Construction du panneau ---------- */
 function construireFiltres() {
   const pre = prereglages();
@@ -115,12 +129,12 @@ function construireFiltres() {
     const codes = parZone[z].sort((a, b) => a.localeCompare(b, "fr", { numeric: true }));
     const total = codes.reduce((t, c) => t + (compte[c] || 0), 0);
     return `<div class="zone" data-zone="${z}">
-      <div class="tete"><span class="chevron">▸</span><input type="checkbox" data-zone-case="${z}"><b>${z}</b><span class="n">${nf.format(total)}</span></div>
+      <div class="tete"><span class="chevron">▸</span><input type="checkbox" data-zone-case="${z}"><b>${z}</b><span class="emprise-zone">${empriseZone(codes)}</span><span class="n">${nf.format(total)}</span></div>
       <div class="secteurs">${codes.map((c) => {
         const s = R.secteurs[c];
         const couleur = (R.familles[s.famille] || {}).couleur || "#999";
-        const titre = `${R.familles[s.famille]?.libelle || ""} — emprise ${s.emprise.taux != null ? Math.round(s.emprise.taux * 100) + " %" : "non chiffrée"}`;
-        return `<label title="${titre}"><input type="checkbox" data-secteur="${c}"><span class="pastille" style="background:${couleur}"></span>${c} <span class="n">${compte[c] || 0}</span></label>`;
+        const titre = `${R.familles[s.famille]?.libelle || ""} — emprise au sol : ${s.emprise.texte || empriseCourte(s)} — ${compte[c] || 0} parcelle(s)`;
+        return `<label title="${titre.replaceAll('"', "&quot;")}"><input type="checkbox" data-secteur="${c}"><span class="pastille" style="background:${couleur}"></span><span class="code">${c}</span><span class="emprise ${s.emprise.taux == null ? "nc" : ""}">${empriseCourte(s)}</span><span class="n">${compte[c] || 0}</span></label>`;
       }).join("")}</div></div>`;
   }).join("");
   $("#arbre-zones").onclick = (e) => {
