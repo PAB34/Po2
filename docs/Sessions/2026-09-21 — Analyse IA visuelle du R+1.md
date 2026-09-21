@@ -35,7 +35,10 @@ PDF, afin de proposer tous les composants du bâtiment avant la détection des p
   transformation inverse pour replacer les points de l'agent sur la feuille complète.
 - Le lanceur génère avec le JSON une projection PNG colorée et sa légende ; les lignes droites sont simplifiées
   par consigne pour éviter les anciens tracés en zigzag.
-- Validation finale : 24 tests backend réussis (démarrage API, raster, adaptateur vision et pont Claude Code).
+- L'écran `/analyse` importe désormais le JSON Claude Code, refuse une orientation incompatible, reprojette
+  les coordonnées dans le PDF et rend chaque point éditable avec les outils existants.
+- Validation finale : 26 tests backend réussis (démarrage API, raster, adaptateur vision, import et pont
+  Claude Code) ; build frontend réussi.
 
 ## 🛠️ Outils / dépendances découverts ou installés
 
@@ -47,7 +50,8 @@ PDF, afin de proposer tous les composants du bâtiment avant la détection des p
 ### Priorité 1 — Recette réelle du R+1
 
 - **Problème** : le binaire Claude Code installé dans l'environnement Codex ne renvoie pas son état
-  d'authentification en mode non interactif ; l'appel réel n'a donc pas encore produit l'inventaire du R+1.
+  d'authentification en mode non interactif, y compris lors d'un appel borné à 90 secondes ; l'appel réel n'a
+  donc pas encore produit l'inventaire du R+1.
 - **Solution proposée** : ouvrir une session Claude Code authentifiée sur le poste puis exécuter le lanceur
   local sur le paquet R+1. Ne jamais copier le jeton du compte dans le dépôt ou dans le backend.
 - **Fichiers cibles** : `.claude/agents/thermicien-plan.md`,

@@ -1621,6 +1621,22 @@ circle.th-seg--measure {
   font-size: 1rem;
 }
 
+.th-auto-zoning__agent-import {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid #b9d7e8;
+  border-radius: 10px;
+  background: #f2f9fc;
+}
+
+.th-auto-zoning__agent-import label.th-auto-zoning__run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
 .th-auto-zoning__progress,
 .th-auto-zoning__summary,
 .th-auto-zoning__selected {

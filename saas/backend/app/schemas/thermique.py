@@ -299,6 +299,24 @@ class VisionObjectCreate(BaseModel):
     geometry_type: Literal["polyline", "polygon"]
 
 
+class VisionAgentObject(BaseModel):
+    category: VisionCategory
+    subtype: str = Field(default="", max_length=200)
+    geometry_type: Literal["polyline", "polygon", "bbox"]
+    # Coordonnées normalisées 0..1000 dans la feuille raster complète et tournée.
+    points: list[list[float]] = Field(min_length=2, max_length=2000)
+    confidence: float = Field(ge=0, le=1)
+    evidence: str = Field(default="", max_length=1000)
+    review_required: bool = False
+
+
+class VisionAgentImport(BaseModel):
+    model: str = Field(default="claude", min_length=1, max_length=100)
+    viewer_rotation_deg: Literal[0, 90, 180, 270]
+    objects: list[VisionAgentObject] = Field(max_length=10000)
+    observations: list[str] = Field(default_factory=list, max_length=1000)
+
+
 class RoomSplit(BaseModel):
     # Trait de coupe, deux points PDF qui traversent la pièce.
     p1: list[float] = Field(min_length=2, max_length=2)

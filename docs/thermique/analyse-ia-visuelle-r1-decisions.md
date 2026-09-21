@@ -102,6 +102,8 @@ Le socle est donc complete par :
 - une consigne explicite de simplification des lignes droites afin d'eviter les traces en zigzag.
 - une projection PNG generee apres chaque analyse, avec couleurs, identifiants, bilan par categorie et nombre
   d'objets a confirmer.
+- un import JSON dans l'ecran `/analyse` : controle de la rotation, conversion 0..1000 vers le repere PDF et
+  reprise immediate de l'edition manuelle des points.
 
 Ce pont utilise l'authentification deja geree localement par Claude Code. Il ne lit, ne copie et ne stocke
 aucun secret Claude. L'adaptateur API existant reste conserve comme solution de repli technique, mais ce n'est

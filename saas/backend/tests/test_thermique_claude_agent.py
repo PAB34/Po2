@@ -28,6 +28,7 @@ def test_prepare_bundle_applique_rotation_sans_perdre_le_repere(tmp_path):
     assert manifest["width_px"] == 400
     assert manifest["height_px"] == 600
     assert manifest["rotation_deg_ccw"] == 90
+    assert manifest["viewer_rotation_deg"] == 270
 
 
 def test_detect_plan_box_prefere_le_dessin_principal_au_cartouche():
@@ -58,6 +59,7 @@ def test_save_result_reprojette_les_points_du_crop_sur_la_page(tmp_path):
         "page_height_px": 500,
         "width_px": 800,
         "height_px": 400,
+        "viewer_rotation_deg": 270,
     }
 
     result = thermique_claude_agent.save_result(raw, manifest, tmp_path / "result.json", "opus")

@@ -99,8 +99,9 @@ do_not_auto_read:
   chaque point ; ajout/suppression manuels en dernier recours. Socle codé sur la branche
   `feat/thermique-inventaire-objets-r1`. **Mode d'exécution recadré** : agent de projet Claude Code lancé
   localement avec le compte du thermicien, vue globale + six tuiles et JSON strict ; l'adaptateur API serveur
-  reste un repli. Le paquet R+1 est prêt, mais la session Claude Code locale doit être authentifiée avant la
-  recette réelle (`thermique/analyse-ia-visuelle-r1-decisions.md`).
+  reste un repli. Le paquet R+1 est prêt et l'écran importe le JSON de l'agent avec contrôle de rotation puis
+  rend ses points éditables. La session Claude Code locale doit encore être authentifiée avant la recette
+  réelle (`thermique/analyse-ia-visuelle-r1-decisions.md`).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.

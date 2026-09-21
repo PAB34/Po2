@@ -187,6 +187,8 @@ def prepare_bundle(
         "method": "claude_code_agent_raster",
         "uses_pdf_vectors": False,
         "rotation_deg_ccw": rotation,
+        # pdfium et Pillow emploient des sens opposés pour les angles positifs.
+        "viewer_rotation_deg": (-rotation) % 360,
         "page_width_px": page_width,
         "page_height_px": page_height,
         "crop_box_px": list(crop_box),
@@ -338,6 +340,7 @@ def save_result(
         "method": "claude_code_agent_raster",
         "uses_pdf_vectors": False,
         "model": model,
+        "viewer_rotation_deg": manifest["viewer_rotation_deg"],
         "manifest": manifest,
         "objects": objects,
         "observations": raw.get("observations", []),

@@ -352,6 +352,30 @@ def run(sheet_id: int) -> None:
         db.close()
 
 
+def import_agent_result(sheet: ThermiqueSheet, payload: dict[str, Any]) -> dict[str, Any]:
+    """Importe le contrat normalisé produit par l'agent Claude Code local."""
+    if int(payload.get("viewer_rotation_deg", -1)) != int(sheet.rotation_deg):
+        raise ThermiqueError(
+            "La rotation du résultat Claude Code ne correspond pas à celle de la planche. "
+            f"Résultat : {payload.get('viewer_rotation_deg')}°, planche : {sheet.rotation_deg}°."
+        )
+    for item in payload.get("objects", []):
+        for point in item.get("points", []):
+            if len(point) != 2 or any(not 0 <= float(value) <= 1000 for value in point):
+                raise ThermiqueError("Les points importés doivent contenir x et y entre 0 et 1000.")
+    directory = raster_dir(sheet.project_id, sheet.id, sheet.rotation_deg)
+    manifest = ensure_raster(document_path(sheet.document), sheet.page_index, sheet.rotation_deg, directory)
+    result = normalize_result(
+        {"objects": payload.get("objects", []), "observations": payload.get("observations", [])},
+        manifest,
+    )
+    result["method"] = "claude_code_agent_raster"
+    result["model"] = str(payload.get("model") or "claude")
+    result["agent_rotation_deg"] = int(payload["viewer_rotation_deg"])
+    _write(sheet, result)
+    return result
+
+
 def update_object(sheet: ThermiqueSheet, object_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     result = _read(sheet)
     if result is None:

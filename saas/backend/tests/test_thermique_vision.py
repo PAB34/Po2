@@ -1,9 +1,11 @@
 """Contrat raster-only de l'analyse visuelle des plans."""
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
 from app.services import thermique_vision
+from app.services.thermique import ThermiqueError
 
 
 def test_tuiles_recouvrantes_couvrent_toute_image():
@@ -98,3 +100,45 @@ def test_ajout_et_suppression_manuels_recalculent_le_bilan(tmp_path, monkeypatch
     deleted = thermique_vision.delete_object(sheet, "manuel-001")
     assert deleted["objects"] == []
     assert deleted["counts"] == {}
+
+
+def test_import_agent_claude_reprojette_et_persiste(monkeypatch):
+    manifest = {"width_px": 1000, "height_px": 1000, "transform": [1, 0, 0, 1, 0, 0]}
+    sheet = SimpleNamespace(id=4, project_id=2, rotation_deg=270, page_index=0, document=object())
+    written = {}
+    monkeypatch.setattr(thermique_vision, "raster_dir", lambda *_args: None)
+    monkeypatch.setattr(thermique_vision, "document_path", lambda _document: None)
+    monkeypatch.setattr(thermique_vision, "ensure_raster", lambda *_args: manifest)
+    monkeypatch.setattr(thermique_vision, "_write", lambda _sheet, result: written.update(result))
+
+    result = thermique_vision.import_agent_result(
+        sheet,
+        {
+            "model": "opus",
+            "viewer_rotation_deg": 270,
+            "objects": [
+                {
+                    "category": "mur_exterieur",
+                    "subtype": "façade",
+                    "geometry_type": "polyline",
+                    "points": [[100, 200], [900, 200]],
+                    "confidence": 0.95,
+                    "evidence": "double trait épais",
+                    "review_required": False,
+                }
+            ],
+            "observations": [],
+        },
+    )
+
+    assert result["method"] == "claude_code_agent_raster"
+    assert result["model"] == "opus"
+    assert result["objects"][0]["points"] == [[100.0, 200.0], [900.0, 200.0]]
+    assert written["agent_rotation_deg"] == 270
+
+
+def test_import_agent_refuse_une_rotation_differente():
+    sheet = SimpleNamespace(id=4, project_id=2, rotation_deg=0)
+
+    with pytest.raises(ThermiqueError, match="rotation"):
+        thermique_vision.import_agent_result(sheet, {"viewer_rotation_deg": 270, "objects": []})

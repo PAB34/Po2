@@ -54,6 +54,7 @@ from app.schemas.thermique import (
     SheetUpdate,
     SuperpositionValidate,
     UploadResult,
+    VisionAgentImport,
     VisionObjectCreate,
     VisionObjectUpdate,
     WallTypeAccept,
@@ -1099,6 +1100,22 @@ def read_vision_analysis(
     user: User = Depends(get_authenticated_user),
 ) -> dict:
     return thermique_vision.state(_sheet_or_404(db, user, sheet_id))
+
+
+@router.post("/sheets/{sheet_id}/vision-analysis/agent-import")
+def import_vision_agent_result(
+    sheet_id: int,
+    payload: VisionAgentImport,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Importe le JSON produit localement par l'agent Claude Code du thermicien."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        result = thermique_vision.import_agent_result(sheet, payload.model_dump())
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"stage": None, "running": False, "error": None, "result": result}
 
 
 @router.patch("/sheets/{sheet_id}/vision-objects/{object_id}")

@@ -28,7 +28,7 @@ export type VisionObject = {
 
 export type VisionResult = {
   version: number;
-  method: "ia_visuelle_raster";
+  method: "ia_visuelle_raster" | "claude_code_agent_raster";
   uses_pdf_vectors: false;
   model: string;
   created_at: number;
@@ -36,6 +36,7 @@ export type VisionResult = {
   counts: Partial<Record<VisionCategory, number>>;
   review_count: number;
   observations: string[];
+  agent_rotation_deg?: 0 | 90 | 180 | 270;
 };
 
 export type VisionState = {
@@ -51,6 +52,8 @@ export const visionApi = {
   state: (token: string, sheetId: number) => request<VisionState>(token, `/thermique/sheets/${sheetId}/vision-analysis`),
   start: (token: string, sheetId: number) =>
     request<VisionState>(token, `/thermique/sheets/${sheetId}/vision-analysis`, { method: "POST" }),
+  importAgent: (token: string, sheetId: number, payload: unknown) =>
+    request<VisionState>(token, `/thermique/sheets/${sheetId}/vision-analysis/agent-import`, json("POST", payload)),
   update: (
     token: string,
     sheetId: number,

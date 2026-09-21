@@ -65,6 +65,7 @@ export function AutoZoningPage() {
   const [sheetId, setSheetId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PdfPoint[] | null>(null);
+  const [importFileError, setImportFileError] = useState<string | null>(null);
   const [creating, setCreating] = useState<{ category: VisionCategory; geometry_type: "polyline" | "polygon" } | null>(null);
   const dragRef = useRef<number | null>(null);
   const pixelsPerPtRef = useRef(1);
@@ -100,6 +101,14 @@ export function AutoZoningPage() {
   const analyze = useMutation({
     mutationFn: () => visionApi.start(token!, currentSheetId!),
     onSuccess: (state) => queryClient.setQueryData(visionKey, state),
+  });
+  const importAgent = useMutation({
+    mutationFn: (payload: unknown) => visionApi.importAgent(token!, currentSheetId!, payload),
+    onSuccess: (state) => {
+      queryClient.setQueryData(visionKey, state);
+      setImportFileError(null);
+      resetSelection();
+    },
   });
   const update = useMutation({
     mutationFn: ({ objectId, payload }: { objectId: string; payload: { points?: PdfPoint[]; category?: VisionCategory; confirmed?: boolean } }) =>
@@ -225,9 +234,32 @@ export function AutoZoningPage() {
         ) : <p className="th-alert th-alert--warn">Aucune planche n'est classée comme plan.</p>}
 
         {currentSheetId && (
-          <button type="button" className="po2-button po2-button--primary th-auto-zoning__run" disabled={running} onClick={() => analyze.mutate()}>
-            {running ? "Analyse IA en cours…" : result ? "Relancer l'analyse IA" : "Analyser visuellement le plan"}
-          </button>
+          <section className="th-auto-zoning__agent-import">
+            <strong>Agent Claude Code</strong>
+            <span className="th-muted">Lancez l'agent sur le PDF, puis chargez ici son fichier JSON. Les composants deviennent immédiatement éditables.</span>
+            <label className="po2-button po2-button--primary th-auto-zoning__run">
+              {importAgent.isPending ? "Import en cours…" : result?.method === "claude_code_agent_raster" ? "Remplacer le résultat Claude" : "Importer le résultat Claude"}
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                disabled={importAgent.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (!file) return;
+                  setImportFileError(null);
+                  void file.text()
+                    .then((content) => importAgent.mutate(JSON.parse(content)))
+                    .catch(() => setImportFileError("Ce fichier n'est pas un JSON Claude Code valide."));
+                }}
+              />
+            </label>
+            <span className="th-muted">Orientation attendue dans la visionneuse : {sheet?.rotation_deg ?? 0}°.</span>
+            <button type="button" className="po2-button po2-button--ghost" disabled={running} onClick={() => analyze.mutate()}>
+              {running ? "Analyse serveur en cours…" : "Utiliser l'adaptateur serveur (repli)"}
+            </button>
+          </section>
         )}
         {running && (
           <section className="th-auto-zoning__progress">
@@ -236,8 +268,8 @@ export function AutoZoningPage() {
             <span className="th-muted">Le modèle confronte la vue globale aux six zones de détail.</span>
           </section>
         )}
-        {(analyze.error || vision.data?.error || vision.error) && (
-          <p className="th-alert th-alert--error">{analyze.error?.message || vision.data?.error || vision.error?.message}</p>
+        {(analyze.error || importAgent.error || importFileError || vision.data?.error || vision.error) && (
+          <p className="th-alert th-alert--error">{analyze.error?.message || importAgent.error?.message || importFileError || vision.data?.error || vision.error?.message}</p>
         )}
 
         {result && (
