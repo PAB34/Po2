@@ -136,6 +136,19 @@ def test_pieces_du_plan(db_session, monkeypatch):
     assert vue["pieces"] == [] and vue["limites"] == {"elements": 0, "natures": []}
     with pytest.raises(ThermiqueError, match="Aucun calque"):
         thermique_pieces.detect_rooms(db_session, projet, sheet, 1.0)
+
+    # le tracé manuel crée d'abord la pièce, même sans mur, porte ou menuiserie désigné
+    contour_manuel = [0, 0, 4 * M, 0, 4 * M, 6 * M, 0, 6 * M]
+    assert thermique_pieces.trace_room(db_session, projet, sheet, contour_manuel) is True
+    vue = thermique_pieces.list_rooms(db_session, projet, sheet)
+    assert vue["limites"] == {"elements": 0, "natures": []}
+    assert [(p["source"], p["surface_m2"]) for p in vue["pieces"]] == [("manuel", pytest.approx(24.0, abs=0.1))]
+    piece_manuelle = thermique_pieces.get_room(db_session, vue["pieces"][0]["id"])
+    bordants = thermique_pieces.room_components(db_session, projet, sheet, piece_manuelle)
+    assert {famille["signature"] for famille in bordants["familles"]} == {MUR}
+    assert bordants["familles"][0]["nature"] is None  # attaché au contour avant toute qualification
+    thermique_pieces.delete_room(db_session, piece_manuelle)
+
     thermique_calques.save_designation(db_session, projet, MUR, "*", "mur")
 
     # sans mots lus : les pièces arrivent sans nom et la lecture est à lancer

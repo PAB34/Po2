@@ -6,6 +6,7 @@ import {
   nearestEdge,
   northOnSheet,
   parseSignedNumber,
+  pdfTolerance,
   polygonArea,
   removeVertex,
   repereOf,
@@ -62,6 +63,11 @@ describe("édition des tracés", () => {
     expect(removed.cotes.map((cote) => cote.donne_sur)).toEqual(["exterieur", "lnc", "sol", "mitoyen"]);
     const first = removeVertex(square, cotes, 0);
     expect(first.cotes.map((cote) => cote.donne_sur)).toEqual(["lnc", "sol", "mitoyen"]);
+  });
+
+  it("garde une zone de prise constante à l'écran quel que soit le zoom", () => {
+    expect(pdfTolerance(12, 2)).toBe(6);
+    expect(pdfTolerance(12, 0.5)).toBe(24);
   });
 
   it("lit les nombres saisis en français", () => {

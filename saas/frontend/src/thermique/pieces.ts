@@ -63,6 +63,8 @@ export const piecesApi = {
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces/detecter`, json("POST", { fermeture_cm: fermetureCm })),
   add: (token: string, sheetId: number, point: PdfPoint, fermetureCm: number) =>
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces`, json("POST", { x: point[0], y: point[1], fermeture_cm: fermetureCm })),
+  trace: (token: string, sheetId: number, contour: PdfPoint[]) =>
+    request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces/tracer`, json("POST", { contour: contour.flat() })),
   merge: (token: string, sheetId: number, ids: number[]) =>
     request<SheetRooms>(token, `/thermique/sheets/${sheetId}/pieces/fusion`, json("POST", { ids })),
   update: (token: string, roomId: number, payload: { nom?: string; classe?: RoomClass; contour?: number[] }) =>

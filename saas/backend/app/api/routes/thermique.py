@@ -47,6 +47,7 @@ from app.schemas.thermique import (
     RoomDetect,
     RoomMerge,
     RoomSplit,
+    RoomTrace,
     RoomUpdate,
     SectionHeightsRequest,
     SheetRead,
@@ -1103,6 +1104,19 @@ def add_sheet_room(
     return _rooms_action(
         db, sheet, lambda project: thermique_pieces.add_room_at(db, project, sheet, payload.x, payload.y, payload.fermeture_cm / 100), background
     )
+
+
+@router.post("/sheets/{sheet_id}/pieces/tracer")
+def trace_sheet_room(
+    sheet_id: int,
+    payload: RoomTrace,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Crée une pièce depuis ses sommets, sans classification préalable des éléments du plan."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return _rooms_action(db, sheet, lambda project: thermique_pieces.trace_room(db, project, sheet, payload.contour), background)
 
 
 @router.post("/sheets/{sheet_id}/pieces/fusion")
