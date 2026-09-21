@@ -20,6 +20,11 @@ IA multimodale classe et localise les composants ; le backend normalise la géom
 le repère de la visionneuse et réserve la correction manuelle aux objets douteux ou manquants. Les anciens
 moteurs vectoriels restent présents mais ne contribuent ni à cette détection ni à son score.
 
+Pour le premier MVP, l'IA est encapsulée dans un agent de projet Claude Code lancé localement avec le compte
+du thermicien. Un lanceur prépare le raster et les tuiles, appelle Claude Code en mode non interactif avec un
+schéma JSON strict, puis écrit un résultat indépendant du fournisseur. Les identifiants du compte Claude ne
+sont jamais transmis au SaaS. L'adaptateur d'API directe déjà développé est conservé comme solution de repli.
+
 ## Conséquences
 
 ### Positives
@@ -32,7 +37,9 @@ moteurs vectoriels restent présents mais ne contribuent ni à cette détection 
 
 ### Négatives / coûts assumés
 
-- l'analyse nécessite un service multimodal externe, une clé serveur et un coût par planche ;
+- l'analyse locale nécessite un poste connecté avec Claude Code installé et authentifié ;
+- une exploitation SaaS autonome et multi-utilisateur nécessitera ultérieurement une authentification serveur
+  supportée et une facturation distincte, ou une routine Claude Code compatible avec le flux de fichiers ;
 - la précision géométrique de la vision doit être mesurée sur plusieurs plans avant tout calcul de déperditions ;
 - l'envoi des images doit respecter les règles de confidentialité des projets ; `store=false` est imposé au
   premier adaptateur ;
@@ -45,9 +52,13 @@ moteurs vectoriels restent présents mais ne contribuent ni à cette détection 
 - **Conversion en DWG** — aucune source DWG fiable n'est disponible et une conversion du PDF n'ajoute pas
   l'information métier manquante.
 - **Dessin manuel intégral** — conservé comme secours mais incompatible avec l'objectif d'automatisation.
+- **Réutilisation de l'authentification claude.ai dans le backend SaaS** — écartée : les secrets locaux ne
+  doivent pas quitter le poste et cette connexion ne constitue pas une authentification produit supportée.
 
 ## Liens
 
 - Décisions détaillées : `docs/thermique/analyse-ia-visuelle-r1-decisions.md`
 - Service : `saas/backend/app/services/thermique_vision.py`
+- Pont Claude Code local : `saas/backend/app/services/thermique_claude_agent.py`
+- Agent : `.claude/agents/thermicien-plan.md`
 - Interface : `saas/frontend/src/thermique/pages/AutoZoningPage.tsx`

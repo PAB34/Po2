@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # Outil de métré thermique (thermique.patrimoineaucarre.com) : plans importés.
     thermique_storage_dir: str = "/app/storage/thermique"
     thermique_max_upload_mb: int = 80
-    # Analyse visuelle des plans : le PDF est rendu en images et aucun vecteur PDF
-    # n'est transmis au modèle. La clé reste uniquement côté serveur.
+    # Adaptateur API de repli. Le MVP recommandé passe par l'agent Claude Code
+    # local ; dans les deux cas, seuls les pixels raster sont analysés.
     thermique_vision_api_key: str = ""
     thermique_vision_base_url: str = "https://api.openai.com/v1"
     thermique_vision_model: str = "gpt-6-astra"

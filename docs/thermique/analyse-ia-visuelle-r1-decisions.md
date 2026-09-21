@@ -85,5 +85,29 @@ pour les prochains plans.
   dernier recours.
 - Les anciennes routes et technologies sont conservees, mais la route `/analyse` ne les appelle plus.
 
-Le fournisseur est configurable cote serveur. Le premier adaptateur utilise l'API Responses d'OpenAI avec
-entrees image et sortie JSON Schema stricte ; aucune cle n'est exposee au navigateur.
+## 9. Changement de mode d'execution : agent Claude Code personnel
+
+Decision utilisateur du 2026-09-21 : le premier essai ne doit pas etre facture ou authentifie par une cle
+multimodale du SaaS. L'analyse doit etre realisee par un agent specialise lance depuis le compte Claude Code
+du thermicien.
+
+Le socle est donc complete par :
+
+- un agent de projet `.claude/agents/thermicien-plan.md`, limite a la lecture des images ;
+- un lanceur generique `scripts/run_thermicien_claude.py` qui rasterise un PDF, prepare une vue globale et six
+  tuiles, impose le schema JSON et interroge Claude Code en mode non interactif ;
+- un manifeste qui conserve dimensions, rotation et bornes normalisees de chaque tuile ;
+- un recadrage automatique par densite d'encre qui separe le dessin principal du cartouche et des marges,
+  avec reprojection des points vers le repere de la feuille complete ;
+- une consigne explicite de simplification des lignes droites afin d'eviter les traces en zigzag.
+- une projection PNG generee apres chaque analyse, avec couleurs, identifiants, bilan par categorie et nombre
+  d'objets a confirmer.
+
+Ce pont utilise l'authentification deja geree localement par Claude Code. Il ne lit, ne copie et ne stocke
+aucun secret Claude. L'adaptateur API existant reste conserve comme solution de repli technique, mais ce n'est
+plus la voie recommandee pour le test R+1.
+
+Limite assumee de cette etape : l'agent local doit etre connecte et lance sur le poste du thermicien. Une
+execution autonome pour plusieurs utilisateurs devra passer par une authentification serveur officiellement
+supportee (API Anthropic, identite de charge, ou routine Claude Code lorsque ce mode experimental repondra au
+besoin de fichiers et de retour de resultat).

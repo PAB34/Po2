@@ -1,4 +1,7 @@
-.claude/
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/thermicien-plan.md
 .vscode/
 .DS_Store
 .obsidian/
@@ -29,6 +32,7 @@ saas/frontend/vite.config.d.ts
 
 # Local data, analysis outputs and source documents (never committed)
 outputs/
+tmp/
 saas/energie/
 saas/LOGO/
 
