@@ -13,6 +13,7 @@ PDF, afin de proposer tous les composants du bâtiment avant la détection des p
 
 ### Chantier thermique — inventaire visuel des composants
 
+- Commit `eb72978a` : moteur IA raster, contrat API, projection et édition des objets.
 - Audit du bouton `Analyser le plan` existant : il appelait encore le pipeline vectoriel objets -> pièces ->
   enveloppe -> menuiseries.
 - Nouveau service raster-only `app/services/thermique_vision.py` : vue globale + six tuiles, appel multimodal,
