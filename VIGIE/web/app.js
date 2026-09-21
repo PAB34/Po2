@@ -28,6 +28,8 @@ let selection = [];
 let prereglageActif = null;
 
 const $ = (s) => document.querySelector(s);
+// URL absolue sans identifiants : fetch refuse une base du type https://user:mdp@hote/.
+const url = (chemin) => new URL(chemin, location.origin + location.pathname).href;
 const nf = new Intl.NumberFormat("fr-FR");
 const m2 = (v) => (v === null || v === undefined ? "—" : `${nf.format(v)} m²`);
 
@@ -63,9 +65,9 @@ function prereglages() {
 /* ---------- Chargement ---------- */
 async function charger() {
   const [regles, parcelles, meta] = await Promise.all([
-    fetch("data/regles.json").then((r) => r.json()),
-    fetch("data/parcelles.geojson").then((r) => r.json()),
-    fetch("data/meta.json").then((r) => r.json()),
+    fetch(url("data/regles.json")).then((r) => r.json()),
+    fetch(url("data/parcelles.geojson")).then((r) => r.json()),
+    fetch(url("data/meta.json")).then((r) => r.json()),
   ]);
   R = regles;
   GEO = parcelles;
@@ -354,8 +356,8 @@ function initCarte() {
 
     // Couches d'appoint chargées ensuite (ne bloquent pas l'affichage)
     const [bati, zonage] = await Promise.all([
-      fetch("data/batiments.geojson").then((r) => r.json()),
-      fetch("data/zonage.geojson").then((r) => r.json()),
+      fetch(url("data/batiments.geojson")).then((r) => r.json()),
+      fetch(url("data/zonage.geojson")).then((r) => r.json()),
     ]);
     carte.addSource("bati", { type: "geojson", data: bati });
     carte.addLayer({ id: "bati", type: "fill", source: "bati", minzoom: 14,
