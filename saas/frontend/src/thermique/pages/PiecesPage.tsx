@@ -37,6 +37,7 @@ export function PiecesPage() {
   const cutRef = useRef<[PdfPoint, PdfPoint] | null>(null);
   // correction du contour à la main (étape 2 du parcours) : sommets déplacés, ajoutés ou retirés
   const [draft, setDraft] = useState<PdfPoint[] | null>(null);
+  const [redrawing, setRedrawing] = useState(false);
   const dragRef = useRef<number | null>(null);
 
   const projectQuery = useQuery({
@@ -109,6 +110,7 @@ export function PiecesPage() {
     onSuccess: (next) => {
       done(next);
       setDraft(null);
+      setRedrawing(false);
     },
   });
   const components = useQuery({
@@ -149,6 +151,8 @@ export function PiecesPage() {
   function reset() {
     setSelection([]);
     setPending(null);
+    setDraft(null);
+    setRedrawing(false);
     mutations.forEach((mutation) => mutation.reset());
   }
 
@@ -244,6 +248,10 @@ export function PiecesPage() {
           tool="pieces"
           onAddPoint={(point, event) => {
             if (draft) {
+              if (redrawing) {
+                setDraft([...draft, point]);
+                return;
+              }
               // en correction : Alt + clic retire un sommet, un clic sur un côté en ajoute un
               const vertex = nearestVertex(draft, point, 12);
               if (vertex !== null) {
@@ -455,22 +463,41 @@ export function PiecesPage() {
             {draft ? (
               <>
                 <span className="th-muted">
-                  Glissez un sommet pour le déplacer, cliquez sur un côté pour en ajouter un, Alt + clic sur un sommet pour le retirer.
+                  {redrawing
+                    ? "Cliquez successivement les angles réels de la pièce sur le plan. Le dernier point sera relié au premier."
+                    : "Glissez un sommet pour le déplacer, cliquez sur un côté pour en ajouter un, Alt + clic sur un sommet pour le retirer."}
                   {` ${draft.length} sommets.`}
                 </span>
                 <div className="th-inline">
                   <button type="button" className="po2-button po2-button--primary" disabled={busy || draft.length < 3} onClick={saveDraft}>
                     Enregistrer le contour
                   </button>
-                  <button type="button" className="po2-button po2-button--ghost" onClick={() => setDraft(null)}>
+                  {redrawing && draft.length > 0 && (
+                    <button type="button" className="po2-button po2-button--ghost" onClick={() => setDraft(draft.slice(0, -1))}>
+                      Annuler le dernier point
+                    </button>
+                  )}
+                  <button type="button" className="po2-button po2-button--ghost" onClick={() => { setDraft(null); setRedrawing(false); }}>
                     Annuler
                   </button>
                 </div>
               </>
             ) : (
-              <button type="button" className="th-link" disabled={busy} onClick={() => setDraft(contourPoints(single))}>
-                Corriger le contour
-              </button>
+              <>
+                {single.contour.length / 2 > 12 && (
+                  <span className="th-alert th-alert--warn">
+                    Ce contour comporte {single.contour.length / 2} sommets : un retracé rapide est conseillé.
+                  </span>
+                )}
+                <div className="th-inline">
+                  <button type="button" className="th-link" disabled={busy} onClick={() => { setDraft(contourPoints(single)); setRedrawing(false); }}>
+                    Ajuster les sommets
+                  </button>
+                  <button type="button" className="th-link" disabled={busy} onClick={() => { setDraft([]); setRedrawing(true); }}>
+                    Retracer par points
+                  </button>
+                </div>
+              </>
             )}
             <button type="button" className="th-link th-link--danger" disabled={busy} onClick={() => removeMutation.mutate(single.id)}>
               Supprimer la pièce

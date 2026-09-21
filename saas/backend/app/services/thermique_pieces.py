@@ -20,6 +20,7 @@ from app.services.thermique_raster import raster_root
 from thermique_moteur import calques as calques_moteur
 from thermique_moteur import composants
 from thermique_moteur import pieces as moteur
+from thermique_moteur import quadrilatere
 from thermique_moteur import textes
 from thermique_moteur.metre import pt_en_m
 
@@ -117,7 +118,10 @@ def _nouvelle(project: ThermiqueProject, sheet: ThermiqueSheet, piece: dict, sou
         project_id=project.id,
         sheet_id=sheet.id,
         name="",
-        points_json=json.dumps({"contour": piece["contour"], "centre": piece["centre"]}, separators=(",", ":")),
+        points_json=json.dumps(
+            {"contour": piece["contour"], "centre": piece["centre"], **({"detaille": piece["detaille"]} if piece.get("detaille") else {})},
+            separators=(",", ":"),
+        ),
         area_m2=piece["surface_m2"],
         source=source,
         classe="chauffe",
@@ -204,10 +208,35 @@ def _essayer_au_point(elements: dict, indices: list[int], x: float, y: float, fe
     paliers = [fermeture_m] + [p for p in PALIERS_FERMETURE_M if p > fermeture_m]
     for palier in paliers:
         try:
-            return moteur.piece_au_point(elements, indices, x, y, palier)
+            return _en_quadrilatere(elements, moteur.piece_au_point(elements, indices, x, y, palier))
         except moteur.PiecesError as exc:
             derniere = exc
     raise ThermiqueError(str(derniere) if derniere else "Aucun espace fermé à cet endroit.")
+
+
+def _en_quadrilatere(elements: dict, piece: dict) -> dict:
+    """Simplifie la proposition sans imposer quatre côtés à un grand espace irrégulier.
+
+    Le tracé détaillé est conservé à côté ; une correction manuelle devient ensuite la nouvelle vérité.
+    """
+    m = 1 / pt_en_m(elements["echelle"])
+    try:
+        coins = quadrilatere.simplifier_adaptatif(piece["contour"], m)
+    except quadrilatere.QuadrilatereError:
+        return piece
+    if coins == piece["contour"]:
+        return piece
+    points = [(coins[k], coins[k + 1]) for k in range(0, len(coins), 2)]
+    centre = piece.get("centre")
+    if not centre or not moteur.dedans(*centre, coins):
+        centre = [sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)]
+    return {
+        **piece,
+        "contour": coins,
+        "detaille": piece["contour"],
+        "centre": centre,
+        "surface_m2": round(quadrilatere.aire(points) * pt_en_m(elements["echelle"]) ** 2, 2),
+    }
 
 
 def add_room_at(db: Session, project: ThermiqueProject, sheet: ThermiqueSheet, x: float, y: float, fermeture_m: float) -> bool:
