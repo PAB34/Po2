@@ -93,11 +93,12 @@ do_not_auto_read:
   menuiserie désignée, repli direct après un échec de détection, puis inventaire local de toutes les
   familles graphiques bordantes. La prise des sommets est maintenant constante en pixels et fonctionne
   à tous les zooms. **Nouveau MVP isolé démarré le 2026-09-21** : route `analyse`, bouton unique
-  « Analyser le plan », progression de la détection globale, toutes les zones colorées avec légende et
-  correction directe des sommets. Il orchestre les moteurs existants sans exposer Calques, Enveloppe ou
-  Métré. Prochain contrôle : recette métier sur le vrai R+1, puis amélioration du moteur si le zonage ne
-  retrouve pas la projection de référence
-  (`thermique/contours-pieces-decisions.md`).
+  « Analyser le plan ». **Recadrage utilisateur du 2026-09-21** : cette route analyse maintenant le rendu
+  raster par IA multimodale, sans lire les vecteurs PDF. Elle propose murs extérieurs, refends, cloisons,
+  isolation, menuiseries, terrasses, balcons, poteaux et garde-corps, avec confiance, légende et édition de
+  chaque point ; ajout/suppression manuels en dernier recours. Socle codé sur la branche
+  `feat/thermique-inventaire-objets-r1`, configuration serveur IA encore requise avant la recette réelle du
+  R+1 (`thermique/analyse-ia-visuelle-r1-decisions.md`).
   Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.

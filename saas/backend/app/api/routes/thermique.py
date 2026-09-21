@@ -54,6 +54,8 @@ from app.schemas.thermique import (
     SheetUpdate,
     SuperpositionValidate,
     UploadResult,
+    VisionObjectCreate,
+    VisionObjectUpdate,
     WallTypeAccept,
     ZoneCreate,
     ZoneUpdate,
@@ -65,6 +67,7 @@ from app.services import (
     thermique_metre,
     thermique_pieces,
     thermique_superposition,
+    thermique_vision,
 )
 from app.services.thermique import (
     ALLOWED_ROTATIONS,
@@ -1067,6 +1070,78 @@ def start_auto_detection(
 def read_auto_detection(sheet_id: int, db: Session = Depends(get_db), user: User = Depends(get_authenticated_user)) -> dict:
     """Avancement et bilan de la détection automatique de la planche."""
     return thermique_detection.etat(_sheet_or_404(db, user, sheet_id))
+
+
+@router.post("/sheets/{sheet_id}/vision-analysis")
+def start_vision_analysis(
+    sheet_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Analyse le rendu raster de la planche par IA, sans lire les vecteurs du PDF."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    project = db.get(ThermiqueProject, sheet.project_id)
+    try:
+        current = thermique_vision.start(project, sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    launch = current.pop("_launch", False)
+    if launch:
+        background.add_task(thermique_vision.run, sheet.id)
+    return current
+
+
+@router.get("/sheets/{sheet_id}/vision-analysis")
+def read_vision_analysis(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    return thermique_vision.state(_sheet_or_404(db, user, sheet_id))
+
+
+@router.patch("/sheets/{sheet_id}/vision-objects/{object_id}")
+def update_vision_object(
+    sheet_id: int,
+    object_id: str,
+    payload: VisionObjectUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_vision.update_object(sheet, object_id, payload.model_dump(exclude_unset=True))
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/sheets/{sheet_id}/vision-objects")
+def create_vision_object(
+    sheet_id: int,
+    payload: VisionObjectCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_vision.create_object(sheet, payload.model_dump())
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.delete("/sheets/{sheet_id}/vision-objects/{object_id}")
+def delete_vision_object(
+    sheet_id: int,
+    object_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return thermique_vision.delete_object(sheet, object_id)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/sheets/{sheet_id}/pieces")

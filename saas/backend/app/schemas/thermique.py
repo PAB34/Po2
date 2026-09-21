@@ -271,6 +271,34 @@ class RoomUpdate(BaseModel):
     contour: list[float] | None = Field(default=None, min_length=6, max_length=2000)
 
 
+VisionCategory = Literal[
+        "mur_exterieur",
+        "refend",
+        "cloison",
+        "isolation",
+        "menuiserie_exterieure",
+        "menuiserie_interieure",
+        "terrasse",
+        "balcon",
+        "poteau",
+        "garde_corps",
+        "indetermine",
+    ]
+
+
+class VisionObjectUpdate(BaseModel):
+    # Points dans le repère PDF de la planche, éditables dans la visionneuse.
+    points: list[list[float]] | None = Field(default=None, min_length=2, max_length=2000)
+    category: VisionCategory | None = None
+    confirmed: bool | None = None
+
+
+class VisionObjectCreate(BaseModel):
+    points: list[list[float]] = Field(min_length=2, max_length=2000)
+    category: VisionCategory
+    geometry_type: Literal["polyline", "polygon"]
+
+
 class RoomSplit(BaseModel):
     # Trait de coupe, deux points PDF qui traversent la pièce.
     p1: list[float] = Field(min_length=2, max_length=2)

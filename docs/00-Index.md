@@ -49,7 +49,7 @@ do_not_auto_read:
 
 **Décisions durables (ADR)** — `Decisions/`
 - [[Decisions/000-format-ADR]] · [[Decisions/008-referentiel-patrimoine-et-rapprochements]] · [[Decisions/009-environnement-staging]]
-- [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]] · [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]]
+- [[Decisions/010-matrices-comptables-versionnees]] · [[Decisions/011-assistant-matrices-et-decisions-factures-V1]] · [[Decisions/012-auto-validation-et-semantique-controle-factures-V1]] · [[Decisions/015-analyse-thermique-ia-raster]]
 - ADR 001→007 : voir le dossier `Decisions/`
 
 **Specs techniques** : [[Specs]] (catalogue `saas/specs/`)

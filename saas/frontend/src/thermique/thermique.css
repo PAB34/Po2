@@ -1738,6 +1738,50 @@ circle.th-seg--measure {
   stroke-width: 4;
 }
 
+.th-vision-object polyline,
+.th-vision-object polygon {
+  stroke: var(--object-color);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-vision-object polyline {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.th-vision-object polygon {
+  fill: color-mix(in srgb, var(--object-color) 22%, transparent);
+}
+
+.th-vision-object.needs-review polyline,
+.th-vision-object.needs-review polygon {
+  stroke-dasharray: 7 5;
+}
+
+.th-vision-object.is-selected polyline,
+.th-vision-object.is-selected polygon {
+  stroke-width: 6;
+  filter: drop-shadow(0 0 3px #ffffff);
+}
+
+.th-vision-draft polyline,
+.th-vision-draft polygon {
+  fill: rgba(255, 0, 145, 0.12);
+  stroke: #ff0091;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-vision-draft circle {
+  fill: #ffffff;
+  stroke: #ff0091;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
 @media (max-width: 880px) {
   .th-auto-zoning {
     grid-template-columns: 1fr;
