@@ -1,0 +1,11 @@
+{
+ "genere_le": "2026-09-21",
+ "parcelles": 11268,
+ "batiments": 19942,
+ "zones": 259,
+ "sources": {
+  "parcelles": "https://cadastre.data.gouv.fr/data/etalab-cadastre/latest/geojson/communes/34/34301/cadastre-34301-parcelles.json.gz",
+  "batiments": "https://cadastre.data.gouv.fr/data/etalab-cadastre/latest/geojson/communes/34/34301/cadastre-34301-batiments.json.gz",
+  "zonage": "https://apicarto.ign.fr/api/gpu/zone-urba?partition=DU_34301&_limit=1000"
+ }
+}

@@ -127,3 +127,15 @@ ligue1.patrimoineaucarre.com {
         reverse_proxy prono-frontend:80
     }
 }
+
+# =====================================================================
+# VIGIE FONCIER — carte de présélection foncière de Sète (projet à part).
+# Site statique servi par le conteneur `vigie`. Accès réservé : basic_auth,
+# identifiants dans ../.env (VIGIE_AUTH_USER, VIGIE_AUTH_HASH = caddy hash-password).
+# =====================================================================
+immobilier.patrimoineaucarre.com {
+    basic_auth {
+        {$VIGIE_AUTH_USER} {$VIGIE_AUTH_HASH}
+    }
+    reverse_proxy vigie:80
+}

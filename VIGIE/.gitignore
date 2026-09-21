@@ -1,0 +1,5 @@
+.cache/
+.claude/
+__pycache__/
+# GeoJSON régénérés : seule la version .gz est versionnée (nginx gzip_static).
+web/data/*.geojson
