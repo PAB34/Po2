@@ -5,13 +5,14 @@ const ORDRE_ZONES = ["UD", "UC", "UV", "3UB", "1UB", "2UB", "UA", "UE", "UP", "A
 const COULEURS_CLASSE = { A: "#1a7f37", B: "#7fb800", C: "#e0a800", D: "#c9c4b8", "-": "#9aa0a6" };
 const LIBELLES_CLASSE = { A: "A ≥ 80", B: "B 65-79", C: "C 50-64", D: "D < 50", "-": "non notée" };
 const CLE_REGLAGES = "vigie.reglages.v1";
-const CLE_ETAT = "vigie.etat.v2";
+const CLE_ETAT = "vigie.etat.v3";
 const LIMITE_LISTE = 300;
 
 const FILTRE_VIDE = {
   secteurs: null,            // null = tous ; sinon liste de codes
   surfMin: null, surfMax: null, libreMin: null, batiMin: null, batiMax: null,
   nu: "tous",
+  exclVoies: true,           // voiries probables masquées par défaut (demande 2026-09-21)
   resMin: null, utilMax: null, scoreMin: null,
   classes: ["A", "B", "C", "D", "-"],
   nc: true,
@@ -170,6 +171,7 @@ function construireFiltres() {
   document.querySelectorAll("input[name=nu]").forEach((r) => r.addEventListener("change", (e) => { filtre.nu = e.target.value; modifie(); }));
   $("#f-classes").addEventListener("change", () => { filtre.classes = cochees("#f-classes"); modifie(); });
   $("#f-nc").addEventListener("change", (e) => { filtre.nc = e.target.checked; modifie(); });
+  $("#f-voies").addEventListener("change", (e) => { filtre.exclVoies = e.target.checked; modifie(); });
   $("#f-priorite").addEventListener("change", () => { const v = cochees("#f-priorite"); filtre.priorites = v.length ? v : null; modifie(); });
   $("#f-habitation").addEventListener("change", () => { const v = cochees("#f-habitation"); filtre.habitations = v.length ? v : null; modifie(); });
   $("#f-ref").addEventListener("input", (e) => { filtre.ref = e.target.value; modifie(false); });
@@ -232,6 +234,7 @@ function synchroniserControles() {
   document.querySelectorAll("input[name=nu]").forEach((r) => { r.checked = r.value === filtre.nu; });
   document.querySelectorAll("#f-classes input").forEach((c) => { c.checked = filtre.classes.includes(c.value); });
   $("#f-nc").checked = filtre.nc;
+  $("#f-voies").checked = filtre.exclVoies;
   document.querySelectorAll("#f-priorite input").forEach((c) => { c.checked = (filtre.priorites || []).includes(c.value); });
   document.querySelectorAll("#f-habitation input").forEach((c) => { c.checked = (filtre.habitations || []).includes(c.value); });
   if (document.activeElement !== $("#f-ref")) $("#f-ref").value = filtre.ref;
@@ -247,6 +250,7 @@ function passe(p, f, secteurs) {
   if (f.libreMin != null && p.libre < f.libreMin) return false;
   if (f.batiMin != null && p.bati < f.batiMin) return false;
   if (f.batiMax != null && p.bati > f.batiMax) return false;
+  if (f.exclVoies && p.voie) return false;
   if (f.nu === "exclure" && p.nu) return false;
   if (f.nu === "seulement" && !p.nu) return false;
   if (p.res === null) { if (!f.nc) return false; }
@@ -425,6 +429,7 @@ function ouvrirFiche(i, zoomer) {
   const secteurs = Object.entries(p.zs).map(([c, a]) => `${c} (${nf.format(a)} m²)`).join(", ");
   const alertes = [];
   if (p.fam === "protege") alertes.push("Secteur « v » : espace vert protégé, droits fortement minorés.");
+  if (p.voie) alertes.push(`Voirie probable : parcelle non bâtie ${p.vcov >= 0.25 ? `couverte à ${Math.round(p.vcov * 100)} % par une chaussée (BD TOPO IGN)` : "en bande longue et étroite"}.`);
   if (!s.emprise.calculable) alertes.push(`Règle d'emprise non calculable : ${s.emprise.texte}`);
   if (p.partiel) alertes.push("Une partie de la parcelle est dans un secteur à règle non chiffrée : réserve calculée sur le reste.");
   if (Object.keys(p.zs).length > 1) alertes.push(`Parcelle à cheval sur plusieurs secteurs : ${secteurs}. Emprise pondérée par surface.`);
@@ -478,7 +483,7 @@ function fermerFiche() {
 function exporterCsv() {
   const cols = [["id", "identifiant"], ["lib", "parcelle"], ["z", "secteur"], ["fam", "famille"], ["surf", "surface_m2"], ["bati", "bati_m2"],
     ["libre", "terrain_libre_m2"], ["emax", "emprise_max_m2"], ["res", "reserve_emprise_m2"], ["util", "emprise_utilisee"],
-    ["nu", "terrain_nu"], ["score", "score"], ["cl", "classe"], ["motif", "motif"]];
+    ["nu", "terrain_nu"], ["voie", "voirie_probable"], ["score", "score"], ["cl", "classe"], ["motif", "motif"]];
   const esc = (v) => (v == null ? "" : /[;"\n]/.test(String(v)) ? `"${String(v).replaceAll('"', '""')}"` : String(v).replace(".", ","));
   const lignes = [cols.map((c) => c[1]).join(";"), ...selection.map((p) => cols.map(([k]) => esc(p[k])).join(";"))];
   const blob = new Blob(["﻿" + lignes.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -505,6 +510,7 @@ function construireAide(meta) {
     <h3>Limites</h3>
     <ul>
       <li>Outil de présélection : <b>aucune garantie de constructibilité</b>. Contrôler PLU graphique, PPRI, SPR, servitudes, accès.</li>
+      <li><b>Voiries probables</b> (${nf.format(P.filter((p) => p.voie).length)} parcelles, masquées par défaut) : parcelle non bâtie couverte à ≥ 50 % par une chaussée IGN (BD TOPO), ou à ≥ 25 % si elle est étroite, ou bande longue et étroite (largeur &lt; 6 m, 5 fois plus longue que large, ≥ 150 m²).</li>
       <li>Le PLU raisonne en unité foncière (parcelles contiguës d'un même propriétaire) ; l'outil raisonne à la parcelle.</li>
       <li>Pas encore pris en compte : forme de la parcelle, accès, retraits (étape É4) ; PPRI, SPR, EVP (étape É5).</li>
       <li>Règles non calculables : ${nc}.</li>
