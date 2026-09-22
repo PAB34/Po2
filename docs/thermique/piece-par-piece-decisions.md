@@ -118,6 +118,47 @@ Recommandation : **les deux, à deux moments différents.**
 4. **Entre projets** : un type validé peut devenir un **modèle réutilisable** du compte (fonction déjà en
    production).
 
+## 8. Essai « lecture par local » (accord utilisateur du 2026-09-22)
+
+Question de l'utilisateur : les tronçons sont-ils une bonne idée, ne peut-on pas tout faire au pièce par pièce ?
+Essai sur le R+1, sans toucher à la méthode actuelle (option `--par-local` de `run_enveloppe_claude.py`, dossier
+séparé), puis comparaison chiffrée avant toute décision.
+
+- **D42** — Un tronçon devient un **côté d'un local** chauffé ou de circulation qui donne sur l'extérieur, un local
+  non chauffé, un vide ou « rien trouvé » (sondage de la fiche du local, D30). Coupé à 5 m au plus.
+- **D43** — La ligne 0 de la bande est la **face intérieure du local** ; la paroi est au-dessus (vers l'extérieur).
+  Bande : 90 cm côté extérieur, 40 cm côté pièce. Les longueurs intérieures sont lues directement.
+- **D44** — Le reste de la chaîne est inchangé : mêmes lots, même catalogue appris, même restitution, mêmes fiches ;
+  le bâtiment (pour dire « extérieur ») reste la face extérieure trouvée par remplissage.
+- **D45** — Comparaison : isolant compté sur une référence d'alvéoles commune aux deux méthodes, façade par local,
+  bureau de direction (14,05 m lus contre 18,00 m attendus), alertes des fiches, nombre de planches.
+
+### Résultats de l'essai (R+1, 2026-09-22)
+
+Lots lus en parallèle avec le catalogue déjà appris sur le R+1 (P1, M1…), ce qui avantage plutôt la lecture par local.
+
+| Critère | Tronçons (actuel) | Par local (essai) |
+|---|---|---|
+| Isolant compté (624 alvéoles vues par l'une ou l'autre méthode) | **89 %** | 74 % |
+| Bandes à lire par l'agent | **72 (12 planches)** | 148 (25 planches) |
+| Bureau de direction : façade relevée / côtés du local | 18,00 / 14,05 m | 14,15 / 14,05 m |
+| Bureaux assistants : écart façade / côtés | ±0,10 m | ±0,05 m |
+| Parois sur locaux non chauffés, gaines, vides relevées | non | **oui (≈ 60 m)** |
+
+Constats :
+- La lecture par local ne vaut que ce que vaut le contour du local. Dans les dents de scie, le contour est une corde
+  droite : les massifs sont lus en biais, une partie de l'isolant sort de la bande (Pôle multimédia : 90 alvéoles
+  manquées), et la longueur développée du bureau de direction (18,00 m) n'est plus mesurée.
+- Là où le contour colle au mur (bureaux, catalogage, lecture confort), les deux méthodes s'accordent au centimètre.
+- La moitié des bandes supplémentaires ne sert à rien : meubles pris pour des côtés (DVD), cabine d'ascenseur,
+  sanitaires dont le contour est faux.
+- Apport réel : les parois vers les locaux non chauffés et les vides sont relevées (voile de gaine, cloisons de la
+  boîte à vents), ce que le parcours de la façade ne fait pas.
+
+Conclusion proposée : **garder le parcours de la façade (tronçons) pour lire l'enveloppe**, invisible pour le
+thermicien, et **ajouter une lecture par local limitée aux côtés sur local non chauffé ou vide**. Le thermicien ne
+voit et ne valide que le pièce par pièce (§ 7).
+
 ## 4. Questions (tranchées au § 5)
 
 - **Q1** — Import par dépôt d'un fichier d'étude (D35) : cela vous convient ?

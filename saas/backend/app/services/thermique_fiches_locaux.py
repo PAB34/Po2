@@ -28,6 +28,8 @@ ORIENTATIONS = ("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 
 def batiment_du_manifeste(manifeste: dict[str, Any]) -> Polygon:
     """Face extérieure du bâtiment (guide de l'enveloppe), en pixels de la page."""
+    if manifeste.get("batiment_px"):  # lecture par local (D44) : face extérieure trouvée par remplissage
+        return Polygon(manifeste["batiment_px"]).buffer(0)
     anneau = [env._point(t, t["debut_m"], 0, manifeste["px_par_m"]) for t in manifeste["troncons"]]
     return Polygon(anneau).buffer(0)
 

@@ -259,13 +259,24 @@ def troncons(guide: dict[str, Any], analyse: dict[str, Any], largeur_px: float, 
     return resultat
 
 
+def bande_m(troncon: dict[str, Any]) -> tuple[float, float]:
+    """(profondeur côté intérieur, hauteur côté extérieur) de la bande, en m.
+
+    Guide sur la face extérieure : le mur est sous le 0. Lecture par local (D43) : la ligne 0 est la face
+    intérieure du local, le mur est au-dessus.
+    """
+    bande = troncon.get("bande_m") or {}
+    return bande.get("interieure", BANDE_INTERIEURE_M), bande.get("exterieure", BANDE_EXTERIEURE_M)
+
+
 def _bande(page: Image.Image, troncon: dict[str, Any], px_par_m: float) -> Image.Image:
     """Bande redressée : abscisse vers la droite, extérieur en haut."""
     (ox, oy), (ux, uy), (nx, ny) = troncon["origine_px"], troncon["direction"], troncon["normale_ext"]
     s0 = (troncon["local_debut_m"] - RECOUVREMENT_M) * px_par_m
     longueur = (troncon["local_fin_m"] - troncon["local_debut_m"] + 2 * RECOUVREMENT_M) * px_par_m
-    haut = BANDE_EXTERIEURE_M * px_par_m
-    profondeur = (BANDE_INTERIEURE_M + BANDE_EXTERIEURE_M) * px_par_m
+    interieure, exterieure = bande_m(troncon)
+    haut = exterieure * px_par_m
+    profondeur = (interieure + exterieure) * px_par_m
     k = 1 / AGRANDISSEMENT
     taille = (round(longueur * AGRANDISSEMENT), round(profondeur * AGRANDISSEMENT))
     # pixel (x, y) de la bande -> origine + u (s0 + x k) + n (haut - y k)
@@ -303,13 +314,14 @@ def _graduer(bande: Image.Image, troncon: dict[str, Any], px_par_m: float) -> Im
         x = MARGE_GAUCHE + (s_lim - s_image0) * echelle
         dessin.line((x, MARGE_HAUT - 30, x, MARGE_HAUT + bande.height + 12), fill="#d6336c", width=1)
     # règle de profondeur (cm, + vers l'extérieur, 0 = ligne guide)
-    for cm in range(-round(BANDE_INTERIEURE_M * 100), round(BANDE_EXTERIEURE_M * 100) + 1, 5):
-        y = MARGE_HAUT + (BANDE_EXTERIEURE_M - cm / 100) * echelle
+    interieure, exterieure = bande_m(troncon)
+    for cm in range(-round(interieure * 100), round(exterieure * 100) + 1, 5):
+        y = MARGE_HAUT + (exterieure - cm / 100) * echelle
         longueur = 26 if cm % 50 == 0 else 16 if cm % 10 == 0 else 8
         dessin.line((MARGE_GAUCHE - longueur, y, MARGE_GAUCHE, y), fill="#2b8a3e", width=2 if cm == 0 else 1)
         if cm % 10 == 0:
             dessin.text((MARGE_GAUCHE - 100, y - 9), f"{cm:+d} cm", fill="#2b8a3e", font=petite)
-    y0 = MARGE_HAUT + BANDE_EXTERIEURE_M * echelle
+    y0 = MARGE_HAUT + exterieure * echelle
     dessin.line((image.width - 18, y0, image.width - 2, y0), fill="#2b8a3e", width=3)
     dessin.text((8, MARGE_HAUT - 2), "EXT ↑", fill="#2b8a3e", font=petite)
     dessin.text((8, image.height - 30), "INT ↓", fill="#2b8a3e", font=petite)
@@ -394,16 +406,36 @@ def consigne(
 ) -> str:
     planches = manifeste["planches"] if planches is None else planches
     troncons_lot = {t for planche in planches for t in planche["troncons"]}
-    lignes = [
-        "Tu longes l'enveloppe extérieure d'un étage, dans le sens horaire, depuis le point vert du plan guide.",
-        f"Plan guide (contour rose = ligne guide, tronçons numérotés, point vert = départ) : {manifeste['plan_guide']}",
-        "La ligne guide suit la face extérieure de l'enveloppe (zigzags compris) : le mur est surtout SOUS le 0.",
-        "Chaque planche empile des bandes redressées rendues à 300 dpi (1/100) : EXTÉRIEUR EN HAUT, INTÉRIEUR EN BAS.",
-        "Règle du haut : abscisse le long de l'enveloppe en mètres (graduée tous les 10 cm). Traits roses : limites "
-        "du tronçon ; au-delà, 60 cm de recouvrement pour voir les angles.",
-        f"Règle de gauche : profondeur en cm depuis la ligne guide (0), positive vers l'extérieur "
-        f"(bande de -{manifeste['bande_m']['interieure'] * 100:.0f} à +{manifeste['bande_m']['exterieure'] * 100:.0f} cm).",
-    ]
+    if manifeste.get("mode") == "par_local":
+        # lecture par local (D42, D43) : un tronçon = un côté déperditif d'un local, 0 = face intérieure du local
+        lignes = [
+            "Tu fais le tour des locaux chauffés d'un étage, local par local. Pour chaque local, on ne te montre que "
+            "ses côtés qui donnent sur l'extérieur, un local non chauffé, un vide, ou derrière lesquels le plan n'a "
+            "rien trouvé.",
+            f"Plan guide (côtés numérotés en rose, un tronçon par côté) : {manifeste['plan_guide']}",
+            "La ligne guide (0) est la FACE INTÉRIEURE du local : le mur, l'isolant et le doublage sont AU-DESSUS du 0 "
+            "(profondeurs positives), la pièce est sous le 0. Le nu intérieur est donc proche de 0 cm.",
+            "Chaque planche empile des bandes redressées rendues à 300 dpi (1/100) : EXTÉRIEUR EN HAUT, PIÈCE EN BAS. "
+            "Le titre de chaque bande donne le local et le côté.",
+            "Règle du haut : abscisse le long du tour du local en mètres (graduée tous les 10 cm). Traits roses : limites "
+            "du tronçon ; au-delà, 60 cm de recouvrement pour voir les angles.",
+            f"Règle de gauche : profondeur en cm depuis la ligne guide (0), positive vers l'extérieur "
+            f"(bande de -{manifeste['bande_m']['interieure'] * 100:.0f} à +{manifeste['bande_m']['exterieure'] * 100:.0f} cm).",
+            "Si le côté donne sur un local non chauffé ou une gaine, relève la paroi telle qu'elle est dessinée. S'il n'y "
+            "a pas de paroi (ouverture sur une circulation, local voisin chauffé), relève un intervalle « indetermine » "
+            "avec un indice qui dit ce que tu vois.",
+        ]
+    else:
+        lignes = [
+            "Tu longes l'enveloppe extérieure d'un étage, dans le sens horaire, depuis le point vert du plan guide.",
+            f"Plan guide (contour rose = ligne guide, tronçons numérotés, point vert = départ) : {manifeste['plan_guide']}",
+            "La ligne guide suit la face extérieure de l'enveloppe (zigzags compris) : le mur est surtout SOUS le 0.",
+            "Chaque planche empile des bandes redressées rendues à 300 dpi (1/100) : EXTÉRIEUR EN HAUT, INTÉRIEUR EN BAS.",
+            "Règle du haut : abscisse le long de l'enveloppe en mètres (graduée tous les 10 cm). Traits roses : limites "
+            "du tronçon ; au-delà, 60 cm de recouvrement pour voir les angles.",
+            f"Règle de gauche : profondeur en cm depuis la ligne guide (0), positive vers l'extérieur "
+            f"(bande de -{manifeste['bande_m']['interieure'] * 100:.0f} à +{manifeste['bande_m']['exterieure'] * 100:.0f} cm).",
+        ]
     for planche in planches:
         lignes.append(f"Planche : {planche['chemin']} (tronçons {', '.join(planche['troncons'])})")
     lignes.append("Bornes des tronçons (m) : " + "; ".join(
@@ -960,14 +992,15 @@ def bandes_annotees(page_image: Image.Image, manifeste: dict[str, Any], brut: di
         calque = Image.new("RGBA", image.size, (0, 0, 0, 0))
         dessin = ImageDraw.Draw(calque)
         s0 = troncon["debut_m"] - RECOUVREMENT_M
+        interieure, exterieure = bande_m(troncon)
 
         def x_de(s: float) -> float:
             return MARGE_GAUCHE + (s - s0) * echelle
 
-        def y_de(cm: float) -> float:
-            return MARGE_HAUT + (BANDE_EXTERIEURE_M - cm / 100) * echelle
+        def y_de(cm: float, exterieure: float = exterieure) -> float:
+            return MARGE_HAUT + (exterieure - cm / 100) * echelle
 
-        bas = MARGE_HAUT + (BANDE_EXTERIEURE_M + BANDE_INTERIEURE_M) * echelle
+        bas = MARGE_HAUT + (exterieure + interieure) * echelle
         elements = sorted(par_troncon.get(troncon["id"], []), key=lambda e: e["debut_m"])
         fin_etiquette = [0.0, 0.0]
         if not elements:

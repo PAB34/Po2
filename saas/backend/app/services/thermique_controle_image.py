@@ -32,7 +32,15 @@ VOISINS_M = 0.20  # une alvéole a au moins deux voisines à cette distance
 BETON_MIN_CM = 10
 
 
-def cellules_isolant(bande: np.ndarray, px_par_m_bande: float) -> list[tuple[float, float, int, int]]:
+def profondeurs_cm(troncon: dict[str, Any] | None) -> tuple[float, float]:
+    """Profondeurs où chercher le mur : sous le 0 (guide sur la face extérieure) ou au-dessus (lecture par local)."""
+    if troncon and troncon.get("ligne") == "face_interieure":
+        return -15.0, 85.0
+    return PROFONDEUR_CM
+
+
+def cellules_isolant(bande: np.ndarray, px_par_m_bande: float,
+                     troncon: dict[str, Any] | None = None) -> list[tuple[float, float, int, int]]:
     """Alvéoles d'isolant d'une bande redressée : (x, y, largeur, hauteur) en pixels de la bande."""
     blanc = bande >= BLANC
     etiquettes, nombre = ndimage.label(blanc)
@@ -40,7 +48,8 @@ def cellules_isolant(bande: np.ndarray, px_par_m_bande: float) -> list[tuple[flo
         return []
     boites = ndimage.find_objects(etiquettes)
     aires = ndimage.sum(blanc, etiquettes, index=np.arange(1, nombre + 1))
-    haut_bande = env.BANDE_EXTERIEURE_M * 100
+    haut_bande = (env.bande_m(troncon)[1] if troncon else env.BANDE_EXTERIEURE_M) * 100
+    mini, maxi = profondeurs_cm(troncon)
     trouvees = []
     for rang, boite in enumerate(boites):
         hauteur, largeur = boite[0].stop - boite[0].start, boite[1].stop - boite[1].start
@@ -57,7 +66,7 @@ def cellules_isolant(bande: np.ndarray, px_par_m_bande: float) -> list[tuple[flo
             continue
         cy, cx = ndimage.center_of_mass(masque)
         profondeur = haut_bande - (boite[0].start + cy) / px_par_m_bande * 100
-        if not PROFONDEUR_CM[0] <= profondeur <= PROFONDEUR_CM[1]:
+        if not mini <= profondeur <= maxi:
             continue
         trouvees.append((boite[1].start + cx, boite[0].start + cy, largeur, hauteur))
     if not trouvees:
@@ -116,13 +125,16 @@ def controler(page: Image.Image, manifeste: dict[str, Any], brut: dict[str, Any]
     beton: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
     isolant_confirme: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
     cellules_par_troncon: dict[str, list[tuple[float, float, int, int]]] = {}
-    haut = round(env.BANDE_EXTERIEURE_M * echelle - 0.15 * echelle)
-    bas = round((env.BANDE_EXTERIEURE_M + 0.90) * echelle)
     for troncon in manifeste["troncons"]:
+        # fenêtre du béton : de 15 cm au-dessus à 90 cm sous le 0 (guide extérieur), l'inverse en lecture par local
+        exterieure = env.bande_m(troncon)[1]
+        dessus, dessous = (0.85, -0.15) if troncon.get("ligne") == "face_interieure" else (0.15, -0.90)
+        haut = max(0, round((exterieure - dessus) * echelle))
+        bas = round((exterieure - dessous) * echelle)
         bande = np.asarray(env._bande(page, troncon, px_par_m).convert("L"))
         s0 = troncon["debut_m"] - env.RECOUVREMENT_M
         elements = sorted(par_troncon.get(troncon["id"], []), key=lambda e: e["debut_m"])
-        cellules = cellules_isolant(bande, echelle)
+        cellules = cellules_isolant(bande, echelle, troncon)
         cellules_par_troncon[troncon["id"]] = cellules
         nombre = max(1, round((troncon["fin_m"] - troncon["debut_m"]) / PAS_M))
         vu = np.zeros(nombre, bool)

@@ -17,6 +17,7 @@ sys.path.insert(0, str(BACKEND))
 from app.services import thermique_controle_image as controle  # noqa: E402
 from app.services import thermique_enveloppe_pieces as pieces  # noqa: E402
 from app.services import thermique_fiches_locaux as fiches_locaux  # noqa: E402
+from app.services import thermique_lecture_locaux as lecture_locaux  # noqa: E402
 from app.services import thermique_parcours_enveloppe as enveloppe  # noqa: E402
 from app.services.thermique import ThermiqueError  # noqa: E402
 from app.services.thermique_claude_agent import (  # noqa: E402
@@ -36,6 +37,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--dpi", type=int, default=300)
     result.add_argument("--echelle", type=float, default=100, help="Dénominateur d'échelle du plan")
     result.add_argument("--prepare-only", action="store_true")
+    result.add_argument("--par-local", action="store_true",
+                        help="Essai D42 : un tronçon par côté déperditif de chaque local (0 = face intérieure)")
     result.add_argument("--from-raw", type=Path, nargs="+", help="Réponse(s) brute(s) de l'agent déjà obtenue(s), fusionnées dans l'ordre")
     result.add_argument("--lot", type=int, help="Affiche la consigne du lot K (catalogue des lots précédents compris)")
     result.add_argument("--integrer-lot", nargs=2, metavar=("K", "FICHIER"),
@@ -191,7 +194,8 @@ def main() -> int:
         if (args.from_raw or args.lot or args.integrer_lot) and manifeste_chemin.is_file():
             manifeste = json.loads(manifeste_chemin.read_text(encoding="utf-8"))
         else:
-            manifeste = enveloppe.preparer(args.source.resolve(), analyse, args.work_dir.resolve(), args.page, args.dpi, args.echelle)
+            preparer = lecture_locaux.preparer if args.par_local else enveloppe.preparer
+            manifeste = preparer(args.source.resolve(), analyse, args.work_dir.resolve(), args.page, args.dpi, args.echelle)
         dossier = args.work_dir.resolve()
         if args.lot:
             print(consigne_du_lot(manifeste, analyse, args.source.resolve(), args.page, dossier, args.lot))
