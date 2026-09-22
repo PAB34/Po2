@@ -61,7 +61,64 @@ côtés, adjacences, parois déperditives, métrés) est du calcul classique, d�
   coupes).
 - **D41 — Préalable.** Ajouter `shapely` aux dépendances du serveur (voir § 1), avant tout le reste.
 
-## 4. Questions
+## 5. Réponses du 2026-09-22 et recadrage
+
+**Recadrage de l'interface (demande utilisateur).** Ce n'est plus une « page pièce par pièce » ajoutée aux autres,
+c'est **un espace de travail unique du thermicien** :
+
+- un écran d'accueil pour **choisir le projet** ;
+- puis un seul écran, sans jamais en sortir : le **plan de référence** s'ouvre (RDC par défaut), on **passe de plan
+  en plan** (niveaux, coupes) dans la même vue, et on ouvre sur place la **bibliothèque**, les **informations du
+  projet**, les **étapes de l'étude** et la **fiche du local** (panneaux latéraux, tout dynamique, sans rechargement).
+- Les pages actuelles (liste des planches, planche, bibliothèque séparée) deviennent des panneaux de cet espace.
+
+| Q | Réponse | Conséquence |
+|---|---|---|
+| Q1 | Import par fichier : oui | D35 retenue |
+| Q2 | Tout pouvoir dessiner, **dans le processus étape par étape des agents** | chaque étape de la chaîne a un point d'arrêt où le thermicien corrige ou dessine avant l'étape suivante (voir § 6) |
+| Q3 | Pouvoir revenir à l'état antérieur | historique versionné (chaque enregistrement = une version, retour possible) |
+| Q4 | Au passage local par local, **associer les ponts thermiques** et ajouter/modifier les éléments de bibliothèque selon le référentiel des ponts thermiques | la fiche du local propose les liaisons détectées ; le thermicien leur associe un type de pont de la bibliothèque (catégorie déjà prévue) ou en crée un |
+| Q5 | **Aucune hauteur par défaut** : chantier à part entière | les hauteurs viendront des coupes (étape dédiée) ; en attendant, longueurs seulement, surfaces « en attente de hauteur » |
+| Q6 | Locaux chauffés d'abord | ordre du « suivant » : chauffés, puis circulations, puis non chauffés |
+
+## 6. Synthèse : des plans fournis à la bibliothèque
+
+| # | Étape | Qui | Produit | Point d'arrêt du thermicien (Q2) |
+|---|---|---|---|---|
+| 0 | Dépôt des PDF, découpage en planches, échelle, rotation, niveau | application | planches | vérifier niveau et échelle |
+| 1 | Lecture globale du plan (image seule) : murs, baies, locaux, objets | agent `thermicien-plan` | objets du plan | — |
+| 2 | Locaux : recalage des contours sur les murs, nom, nature (chauffé, circulation, non chauffé, vide) | algorithme + agent | locaux | **dessiner, fusionner, couper, renommer, changer la nature** |
+| 3 | Guide de l'enveloppe : contour extérieur découpé en tronçons de 5 m au plus, bandes redressées | algorithme | tronçons | — |
+| 4 | Relevé de l'enveloppe par lots : composition des parois (couches), menuiseries, poteaux, liaisons | agent `thermicien-enveloppe` | **catalogue des types** (P1, M2…) avec les tronçons où chaque type apparaît | **valider ou corriger chaque type** |
+| 5 | Restitution : couches positionnées, doublage présumé, rattachement au local, faces intérieures, liaisons (angles, refends) | algorithme | éléments d'enveloppe par local | — |
+| 6 | Contrôle indépendant par l'image (isolant alvéolé, béton) | algorithme | alertes | — |
+| 7 | Fiches par local : côtés, adjacences, déperditif, éléments, liaisons, alertes | algorithme | fiches | **local par local : modifier, remodéliser, associer les ponts, enregistrer** |
+| 8 | Hauteurs et planchers depuis les coupes | à construire | hauteurs, surfaces | à définir |
+| 9 | Bibliothèque du projet alimentée | application | composants du projet | valider |
+
+Aujourd'hui les étapes 1 à 7 tournent sur le poste (Claude Code) ; le catalogue sort en fichier
+(`enveloppe.bibliotheque.md`, `catalogue.json`) mais **n'entre pas encore dans la bibliothèque de l'application**.
+C'est le maillon manquant.
+
+## 7. Alimentation de la bibliothèque : générale ou pièce par pièce ?
+
+Recommandation : **les deux, à deux moments différents.**
+
+1. **Générale d'abord (étape 4).** Une paroi se répète : le relevé de l'enveloppe identifie des **types** (P1, M2…)
+   sur tout le niveau, avec la liste des tronçons où chacun apparaît. Ces types entrent dans la bibliothèque du
+   projet au statut **« hypothèse »** (le statut existe déjà). Le thermicien les valide une fois pour tous les
+   locaux, au lieu de les ressaisir pièce par pièce.
+2. **Pièce par pièce ensuite (étape 7).** Dans chaque local, le thermicien **affecte** les types aux éléments,
+   **associe** les ponts thermiques, corrige. S'il découvre un élément nouveau (une paroi différente, un pont
+   particulier), il le **crée dans la bibliothèque** depuis la fiche.
+3. **Propagation proposée, jamais imposée.** Quand un type est créé ou modifié dans un local, l'outil cherche les
+   éléments semblables **dans les autres locaux et les autres niveaux** (même composition, même épaisseur, même
+   aspect sur l'image) et **les propose** : « 6 autres éléments ressemblent à celui-ci, les rattacher ? ». Les
+   locaux déjà validés concernés repassent « à vérifier ».
+4. **Entre projets** : un type validé peut devenir un **modèle réutilisable** du compte (fonction déjà en
+   production).
+
+## 4. Questions (tranchées au § 5)
 
 - **Q1** — Import par dépôt d'un fichier d'étude (D35) : cela vous convient ?
 - **Q2** — Modifications de la première version (D37) : suffisantes, ou faut-il aussi pouvoir **dessiner** un local
