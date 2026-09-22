@@ -91,8 +91,9 @@ supprimées ; Q4 commit préalable fait.
   antérieur, la production est sous PostgreSQL).
 - Vérifications : application importée ; 114 tests de l'outil thermique OK ; 661 tests collectés sans erreur
   d'import ; scripts de la chaîne OK.
-- À faire avant la mise en production : relire le diff, pousser la branche, appliquer la migration 0082 (suppression
-  définitive des données des anciennes pages).
+- Mise en production le 2026-09-22 sur accord explicite (« Go mise en production ») : `main` intégré, branche
+  poussée, `main` avancé à `119df335` ; le déploiement applique la migration 0082 (`alembic upgrade head`),
+  suppression définitive des données des anciennes pages.
 
 ## 5. Questions
 
