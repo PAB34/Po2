@@ -1,12 +1,17 @@
-import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
 import { LibraryPage } from "./pages/LibraryHomePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
-import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
-import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
-import { SheetPage } from "./pages/SheetPage";
+import { WorkspacePage } from "./workspace/WorkspacePage";
+
+// Anciennes adresses (page planche, bibliothèque du projet) : même vue dans l'espace de travail.
+function LegacyRedirect({ panel }: { panel: "planche" | "bibliotheque" }) {
+  const { projectId, sheetId } = useParams();
+  const query = panel === "planche" ? `?planche=${sheetId}&panneau=planche` : "?panneau=bibliotheque";
+  return <Navigate to={`/projets/${projectId}${query}`} replace />;
+}
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -76,13 +81,13 @@ export function ThermiqueApp() {
       <Route element={<RequireAuth />}>
         <Route element={<Shell />}>
           <Route index element={<ProjectsPage />} />
-          <Route path="projets/:projectId" element={<ProjectPage />} />
-          <Route path="projets/:projectId/bibliotheque" element={<ProjectLibraryPage />} />
           <Route path="bibliotheque" element={<LibraryPage />} />
         </Route>
         <Route element={<Shell fullWidth />}>
-          <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
+          <Route path="projets/:projectId" element={<WorkspacePage />} />
         </Route>
+        <Route path="projets/:projectId/bibliotheque" element={<LegacyRedirect panel="bibliotheque" />} />
+        <Route path="projets/:projectId/planches/:sheetId" element={<LegacyRedirect panel="planche" />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

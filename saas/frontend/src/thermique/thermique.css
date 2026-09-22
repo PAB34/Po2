@@ -1633,3 +1633,255 @@ circle.th-seg--measure {
     grid-template-rows: 62vh auto;
   }
 }
+
+/* --- Espace de travail du thermicien (D47) : barre des niveaux, étude, plan, panneau à onglets ------------ */
+
+.th-ws {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+}
+
+.th-ws__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.45rem 0.9rem;
+  border-bottom: 1px solid var(--po2-color-line);
+  background: var(--po2-color-paper);
+}
+
+.th-app .th-ws__project {
+  max-width: 16rem;
+  font-weight: 750;
+}
+
+.th-ws__levels {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.th-ws__levels button,
+.th-ws__tabs button {
+  flex: none;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--po2-radius-sm);
+  background: transparent;
+  color: var(--po2-color-ink);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.th-ws__levels button:hover,
+.th-ws__tabs button:hover {
+  border-color: var(--po2-color-line);
+}
+
+.th-ws__levels button.is-active,
+.th-ws__tabs button.is-active {
+  background: var(--po2-color-ink);
+  color: var(--po2-color-paper);
+}
+
+.th-ws__levels button:focus-visible,
+.th-ws__tabs button:focus-visible {
+  outline: 2px solid var(--po2-color-ink);
+  outline-offset: 2px;
+}
+
+.th-ws__ref {
+  color: var(--po2-color-muted);
+}
+
+.th-ws__levels button.is-active .th-ws__ref {
+  color: inherit;
+}
+
+.th-app .th-ws__menu {
+  flex: none;
+  max-width: 12rem;
+}
+
+.th-app .th-ws__menu.is-active {
+  border-color: var(--po2-color-ink);
+  font-weight: 700;
+}
+
+.th-ws__tabs {
+  display: flex;
+  flex: none;
+  gap: 0.2rem;
+  margin-left: auto;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--po2-color-line);
+}
+
+.th-ws__body {
+  --th-ws-panel: 360px;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) var(--th-ws-panel);
+  min-height: 0;
+}
+
+.th-ws__body--documents,
+.th-ws__body--bibliotheque {
+  --th-ws-panel: 640px;
+}
+
+.th-ws__side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  overflow-y: auto;
+  padding: 1rem 0.9rem;
+  border-right: 1px solid var(--po2-color-line);
+  background: var(--po2-color-paper);
+}
+
+.th-ws__side h2 {
+  margin: 0 0 0.45rem;
+  color: var(--po2-color-muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.th-ws-steps {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-ws-steps li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem 0.5rem 0.4rem 1.6rem;
+  border-radius: var(--po2-radius-sm);
+  position: relative;
+}
+
+.th-ws-steps li::before {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.5rem;
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 2px solid var(--po2-color-line);
+  border-radius: 50%;
+  content: "";
+}
+
+.th-ws-steps li.is-done::before {
+  border-color: var(--po2-color-mint);
+  background: var(--po2-color-mint);
+}
+
+.th-ws-steps li.is-todo {
+  background: var(--po2-color-amber-soft);
+}
+
+.th-ws-steps li.is-later {
+  color: var(--po2-color-muted);
+}
+
+.th-ws-steps button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-ws-steps small {
+  color: var(--po2-color-muted);
+  font-size: 0.78rem;
+}
+
+.th-ws__plan {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.th-ws__plan > .th-viewer {
+  height: 100%;
+}
+
+.th-ws__panel {
+  min-height: 0;
+}
+
+.th-ws-subtabs {
+  flex-wrap: wrap;
+}
+
+.th-ws-sheets {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-ws-sheets li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 8.5rem 7rem 3.6rem auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--po2-radius-sm);
+  font-size: 0.88rem;
+}
+
+.th-ws-sheets li.is-current {
+  border-color: var(--po2-color-ink);
+}
+
+.th-ws-sheets__name {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.th-ws-sheets__name:hover {
+  text-decoration: underline;
+}
+
+.th-ws-facts {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-ws-facts li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--po2-color-line);
+  font-variant-numeric: tabular-nums;
+}

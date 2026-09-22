@@ -21,6 +21,7 @@ export type PickEvent = { shiftKey: boolean; altKey: boolean };
 export type ToScreen = (point: PdfPoint) => [number, number];
 
 type View = { zoom: number; panX: number; panY: number };
+export type ViewerView = View;
 type Drag = { pointerId: number; x: number; y: number; panX: number; panY: number; moved: boolean; grab: boolean };
 
 type Props = {
@@ -40,6 +41,9 @@ type Props = {
   // Clic droit : point sous le curseur (le menu du navigateur est alors supprimé).
   onContextPick?: (point: PdfPoint, pixelsPerPt: number) => void;
   renderOverlay?: (toScreen: ToScreen) => ReactNode;
+  // Cadrage à reprendre à l'ouverture de la planche (au lieu de l'ajuster), et suivi du cadrage courant.
+  initialView?: ViewerView | null;
+  onViewChange?: (view: ViewerView) => void;
 };
 
 const MAX_ZOOM = 8; // pixels écran par pixel du niveau le plus fin
@@ -70,6 +74,8 @@ export function TileSheetViewer({
   onGrabEnd,
   onContextPick,
   renderOverlay,
+  initialView = null,
+  onViewChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -83,6 +89,8 @@ export function TileSheetViewer({
     if (!element) {
       return;
     }
+    // mesure immédiate : l'observateur ne se déclenche qu'au prochain dessin de la page
+    setSize({ width: element.clientWidth, height: element.clientHeight });
     const observer = new ResizeObserver(([entry]) => {
       setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
     });
@@ -108,10 +116,26 @@ export function TileSheetViewer({
   // premier affichage : on ne marque la planche ajustée qu'une fois l'ajustement fait.
   useEffect(() => {
     const key = `${manifest.sheet_id}|${manifest.rotation}`;
-    if (fittedKeyRef.current !== key && fit()) {
+    if (fittedKeyRef.current === key) {
+      return;
+    }
+    if (initialView && fit()) {
+      // l'ajustement fixe le zoom minimal ; le cadrage mémorisé est ensuite repris
+      setView(initialView);
+      fittedKeyRef.current = key;
+    } else if (fit()) {
       fittedKeyRef.current = key;
     }
-  }, [manifest.sheet_id, manifest.rotation, fit]);
+  }, [manifest.sheet_id, manifest.rotation, fit, initialView]);
+
+  const onViewChangeRef = useRef(onViewChange);
+  onViewChangeRef.current = onViewChange;
+  useEffect(() => {
+    // rien n'est signalé avant l'ajustement : le cadrage provisoire écraserait celui mémorisé
+    if (fittedKeyRef.current === `${manifest.sheet_id}|${manifest.rotation}`) {
+      onViewChangeRef.current?.(view);
+    }
+  }, [view, manifest.sheet_id, manifest.rotation]);
 
   useEffect(() => {
     const element = containerRef.current;

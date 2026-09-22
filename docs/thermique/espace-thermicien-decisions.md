@@ -84,6 +84,29 @@ Aujourd'hui : quatre pages séparées (projets, projet, planche, bibliothèque) 
 
 Chaque lot est livrable seul et mis en production après votre accord.
 
+## 5 bis. Réponses du 2026-09-22
+
+Q1 RDC par défaut, modifiable : oui. Q2 niveaux du plus bas au plus haut, coupes et façades en menus : oui.
+Q3 **un seul panneau** (onglets). Q4 **poste de bureau seulement**. Q5 on commence par **E1**.
+
+## 6. E1 réalisé (2026-09-22, rien de poussé)
+
+- Deux écrans : la liste des projets, puis l'espace de travail `/projets/:id` (`workspace/WorkspacePage.tsx`). Les
+  anciennes adresses (`/planches/:id`, `/bibliotheque` du projet) renvoient vers la même vue de l'espace de travail.
+- Barre : changement de projet, niveaux du plus bas au plus haut (`workspace/levels.ts`, testé), menus Coupes,
+  Façades, Autres, onglets Planche, Documents, Bibliothèque, Infos. L'état est dans l'adresse (`?planche=…&panneau=…`).
+- Plan de référence : le RDC par défaut, sinon le premier plan ; un autre choix (panneau Planche ou Infos) est
+  **gardé dans le navigateur** en attendant d'être enregistré côté serveur avec l'étude du niveau (E2).
+- Cadrage gardé par planche quand on passe de l'une à l'autre (visionneuse : `initialView`, `onViewChange`) ; la
+  visionneuse mesure sa zone dès l'ouverture.
+- Panneaux : Planche (reprend l'ancienne page planche), Documents (reprend l'ancienne fiche projet), Bibliothèque
+  (projet, mes modèles, référentiel Th-Bât), Infos (nom, description, plan de référence, contenu du dossier).
+- Colonne de gauche : étapes de l'étude du niveau (seule la première est active en E1) et place des locaux.
+- Pages supprimées : `ProjectPage`, `SheetPage`, `ProjectLibraryPage`. Serveur inchangé.
+- Vérifié : types, construction, 27 tests de l'interface ; banc d'essai local (réponses serveur simulées, vraies
+  planches du projet 1) : ouverture sur le RDC, ordre des niveaux, menus, cadrage gardé, panneaux, changement du plan
+  de référence.
+
 ## 5. Questions
 
 - **Q1** — Plan de référence : RDC par défaut, modifiable dans les infos du projet. D'accord ?
