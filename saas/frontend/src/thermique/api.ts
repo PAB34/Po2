@@ -50,6 +50,7 @@ export type Project = {
   owner_user_id: number;
   name: string;
   description: string | null;
+  reference_sheet_id: number | null;
   created_at: string;
   updated_at: string;
   document_count: number;
@@ -58,6 +59,79 @@ export type Project = {
 };
 
 export type ProjectDetail = Project & { documents: ThermiqueDocument[] };
+
+export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe";
+export type StudyLocalState = { status: "a_verifier" | "valide" | "a_revoir"; motif: string | null };
+export type StudyEnvelopeItem = {
+  composant?: string;
+  type?: string;
+  composition?: string;
+  lineaire_m?: number;
+  largeurs_cm?: number[];
+};
+export type StudySide = {
+  adjacence: string;
+  voisin?: string;
+  longueur_m: number;
+  epaisseur_cm?: number | null;
+  orientation?: string;
+  deperditif: boolean;
+  enveloppe?: StudyEnvelopeItem[];
+};
+export type StudyRoomSheet = {
+  piece: string;
+  local: StudyLocalNature;
+  surface_m2: number;
+  perimetre_m: number;
+  cotes: StudySide[];
+  deperditif_m?: number;
+  par_adjacence?: Record<string, number>;
+  baies?: StudyEnvelopeItem[];
+  ponts?: Record<string, number>;
+  liaison_plancher_m?: number;
+  a_completer?: string[];
+  alertes?: string[];
+};
+export type StudyRoom = {
+  id: string;
+  nom: string;
+  nature: StudyLocalNature;
+  contour: PdfPoint[];
+  contour_pdf: PdfPoint[];
+  surface_m2: number;
+  fiche: StudyRoomSheet;
+  synthese: Record<string, unknown> & {
+    parois?: StudyEnvelopeItem[];
+    menuiseries?: StudyEnvelopeItem[];
+    ponts?: Record<string, number>;
+    sur_non_chauffe_m?: number;
+  };
+  demandes: { piece: string; objet: string; motif: string }[];
+};
+export type StudyContent = {
+  format: "thermique.etude_niveau";
+  format_version: number;
+  niveau: string;
+  locaux: StudyRoom[];
+  enveloppe: {
+    catalogue: unknown[];
+    releve: { elements: unknown[]; raccords: unknown[]; observations: string[] };
+    controle: Record<string, unknown>;
+    demandes: { piece: string; objet: string; motif: string }[];
+  };
+};
+export type Study = {
+  id: number;
+  project_id: number;
+  sheet_id: number;
+  format_version: number;
+  version_number: number;
+  content: StudyContent;
+  local_states: Record<string, StudyLocalState>;
+  imported_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type UploadResult = {
   project: ProjectDetail;
@@ -110,7 +184,7 @@ export const thermiqueApi = {
   createProject: (token: string, payload: { name: string; description?: string }) =>
     request<Project>(token, "/thermique/projects", { method: "POST", body: JSON.stringify(payload) }),
   getProject: (token: string, projectId: number) => request<ProjectDetail>(token, `/thermique/projects/${projectId}`),
-  updateProject: (token: string, projectId: number, payload: { name?: string; description?: string | null }) =>
+  updateProject: (token: string, projectId: number, payload: { name?: string; description?: string | null; reference_sheet_id?: number | null }) =>
     request<Project>(token, `/thermique/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (token: string, projectId: number) =>
     request<void>(token, `/thermique/projects/${projectId}`, { method: "DELETE" }),
@@ -130,6 +204,15 @@ export const thermiqueApi = {
     request<Sheet>(token, `/thermique/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(changes) }),
   calibrateSheet: (token: string, sheetId: number, payload: CalibrationPayload) =>
     request<Sheet>(token, `/thermique/sheets/${sheetId}/calibration`, { method: "POST", body: JSON.stringify(payload) }),
+  getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
+  importStudy: (token: string, sheetId: number, file: File, replace = false) => {
+    const form = new FormData();
+    form.append("fichier", file);
+    return request<Study>(token, `/thermique/sheets/${sheetId}/etude/importer?remplacer=${replace}`, {
+      method: "POST",
+      body: form,
+    });
+  },
   documentFileUrl: (documentId: number) => `${apiBaseUrl}/thermique/documents/${documentId}/file`,
   // Fiche des tuiles d'une planche (rendue par le serveur à la première demande).
   getRaster: (token: string, sheetId: number, rotation: number) =>

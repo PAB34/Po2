@@ -39,6 +39,7 @@ from app.services import thermique_claude_agent as agent  # noqa: E402
 from app.services import thermique_lecture_locaux as lecture_locaux  # noqa: E402
 from app.services import thermique_locaux as recaler  # noqa: E402
 from app.services import thermique_parcours_enveloppe as enveloppe  # noqa: E402
+from app.services.thermique_etudes import ecrire_etude_niveau  # noqa: E402
 from app.services.thermique import ThermiqueError  # noqa: E402
 
 EN_ATTENTE = 3
@@ -254,6 +255,25 @@ def a_faire_final(etude: Etude) -> None:
     (etude.dossier / "A-FAIRE.md").write_text("\n".join(lignes) + "\n", encoding="utf-8")
 
 
+def fichier_etude(etude: Etude, manifeste: dict) -> Path:
+    """Assemble le seul JSON à déposer dans l'application, sans relancer les agents."""
+    destination = etude.dossier / f"etude-{etude.args.niveau}.json"
+    ecrire_etude_niveau(
+        destination,
+        source=etude.source,
+        niveau=etude.args.niveau,
+        page_number=etude.args.page,
+        echelle=etude.args.echelle,
+        analyse=json.loads(etude.locaux_json.read_text(encoding="utf-8")),
+        manifeste=manifeste,
+        releve_brut=json.loads(etude.env_json.with_suffix(".raw.json").read_text(encoding="utf-8")),
+        restitution=json.loads(etude.env_json.read_text(encoding="utf-8")),
+        controle=json.loads((etude.env_dir / "controle.json").read_text(encoding="utf-8")),
+    )
+    etude.noter("fichier-etude", "écrit", destination.name)
+    return destination
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -271,6 +291,7 @@ def main() -> int:
         if attente:
             return attente
         restituer(etude, manifeste)
+        fichier_etude(etude, manifeste)
         a_faire_final(etude)
         etude.noter("etude", "terminée", str(etude.dossier / "A-FAIRE.md"))
         return 0

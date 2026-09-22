@@ -5,6 +5,7 @@ Ouverte à tout compte actif, Po2 ou bureau d'études : on passe par
 Seules les tuiles d'images passent par une adresse signée (une balise <img> ne peut
 pas envoyer d'en-tête d'authentification).
 """
+import json
 import logging
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from app.schemas.thermique import (
     ComponentImport,
     ComponentUpdate,
     EraseAllRequest,
+    EtudeRead,
     ExternalAccountCreate,
     ExternalAccountRead,
     ProjectCreate,
@@ -64,6 +66,13 @@ from app.services.thermique_composants import (
     list_components,
     serialize_component,
     update_component,
+)
+from app.services.thermique_etudes import (
+    MAX_ETUDE_BYTES,
+    EtudeConflict,
+    get_etude_for_sheet,
+    importer_etude,
+    serialize_etude,
 )
 from app.services.thermique_raster import (
     check_tile_signature,
@@ -434,6 +443,53 @@ def calibrate_sheet_route(
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return serialize_sheet(sheet)
+
+
+@router.get("/sheets/{sheet_id}/etude", response_model=EtudeRead | None)
+def read_sheet_etude(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict | None:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    etude = get_etude_for_sheet(db, sheet.id)
+    return serialize_etude(db, etude) if etude is not None else None
+
+
+@router.post("/sheets/{sheet_id}/etude/importer", response_model=EtudeRead)
+def import_sheet_etude(
+    sheet_id: int,
+    fichier: UploadFile = File(...),
+    remplacer: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Importe le fichier unique produit par ``run_etude_niveau.py``."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    data = fichier.file.read(MAX_ETUDE_BYTES + 1)
+    if len(data) > MAX_ETUDE_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Fichier d'étude trop volumineux (10 Mio maximum).")
+    try:
+        payload = json.loads(data.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le fichier d'étude n'est pas un JSON valide.") from exc
+    source = payload.get("source", {}) if isinstance(payload, dict) else {}
+    rotation = source.get("viewer_rotation_deg") if isinstance(source, dict) else None
+    if rotation not in ALLOWED_ROTATIONS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La rotation de référence de l'étude est invalide.")
+    try:
+        manifest = ensure_raster(
+            document_path(sheet.document),
+            sheet.page_index,
+            rotation,
+            raster_dir(sheet.project_id, sheet.id, rotation),
+        )
+        etude = importer_etude(db, sheet, user, payload, manifest, remplacer=remplacer)
+    except EtudeConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return serialize_etude(db, etude)
 
 
 @router.get("/sheets/{sheet_id}/raster", response_model=RasterManifest)

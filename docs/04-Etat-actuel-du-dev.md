@@ -19,7 +19,17 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-21** (session Codex — pièces avant composants).
+> Mise à jour : **2026-09-22** (session Codex — espace thermicien, lot E2).
+
+- **✅ LOT E2 TERMINÉ LOCALEMENT — Import d'une étude de niveau dans l'espace thermicien**
+  (branche `feat/thermique-socle-raster`, migration **0083**, pas encore poussé) : fichier unique
+  `etude-<niveau>.json` produit sans relancer les agents ; import strict lié au SHA-256 et à la page du PDF ;
+  étude courante et historique versionné ; plan de référence stocké côté serveur ; 24 locaux du R+1 superposés
+  au plan, liste chauffés/circulations/non chauffés et fiche détaillée en lecture seule. Vérification réelle :
+  17 + 5 + 2 locaux, 230 éléments rattachés, 32 composants, erreur de reprojection maximale 0,0003/1000.
+  Tests : 123 backend thermiques, 11 frontend thermiques, typecheck et build Vite. Décisions et preuves :
+  `thermique/etude-niveau-E2-decisions.md`. **Prochain lot : E3**, édition/recalage des contours et rattachements,
+  validation pièce par pièce et versions d'enregistrement.
 
 - **✅ EN PROD — Outil de métré thermique, étape 1 (socle)** (PR #178, migration **0076**
   appliquée, vérifiée par SSH le 2026-09-11) : sous-domaine **`thermique.patrimoineaucarre.com`** (bloc Caddy), **mêmes comptes Po2**,

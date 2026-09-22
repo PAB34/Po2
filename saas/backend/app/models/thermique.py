@@ -6,7 +6,7 @@ contrôlée par une cote. Voir `docs/thermique/metre-thermique-decisions.md`.
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -23,6 +23,9 @@ class ThermiqueProject(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Nord : degrés, sens trigonométrique, dans le repère commun des niveaux (0 = de A vers B).
     north_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference_sheet_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("thermique_sheets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
@@ -121,3 +124,47 @@ class ThermiqueComponent(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ThermiqueEtude(Base):
+    """État courant de l'étude importée pour une planche de niveau."""
+
+    __tablename__ = "thermique_etudes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sheet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_sheets.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    format_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_json: Mapped[str] = mapped_column(Text, nullable=False)
+    local_states_json: Mapped[str] = mapped_column(Text, nullable=False)
+    imported_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThermiqueEtudeVersion(Base):
+    """Photographie complète d'une étude à chaque import/enregistrement."""
+
+    __tablename__ = "thermique_etude_versions"
+    __table_args__ = (UniqueConstraint("etude_id", "version_number", name="uq_thermique_etude_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    etude_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_etudes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    content_json: Mapped[str] = mapped_column(Text, nullable=False)
+    local_states_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

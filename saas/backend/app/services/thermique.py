@@ -168,6 +168,13 @@ def update_project(db: Session, project: ThermiqueProject, changes: dict[str, An
         project.name = name
     if "description" in changes:
         project.description = (changes["description"] or "").strip() or None
+    if "reference_sheet_id" in changes:
+        reference_id = changes["reference_sheet_id"]
+        if reference_id is not None:
+            sheet = db.get(ThermiqueSheet, reference_id)
+            if sheet is None or sheet.project_id != project.id:
+                raise ThermiqueError("Le plan de référence doit appartenir au projet.")
+        project.reference_sheet_id = reference_id
     db.commit()
     db.refresh(project)
     return project
@@ -430,6 +437,7 @@ def serialize_project(project: ThermiqueProject) -> dict[str, Any]:
         "owner_user_id": project.owner_user_id,
         "name": project.name,
         "description": project.description,
+        "reference_sheet_id": project.reference_sheet_id,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
         "document_count": len(project.documents),

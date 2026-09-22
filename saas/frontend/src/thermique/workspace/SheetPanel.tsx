@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type SheetChanges } from "../api";
+import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type SheetChanges, type Study } from "../api";
 import type { ViewerSegment, ViewerTool } from "../components/TileSheetViewer";
 import { NATURES, NATURE_LABELS, NATURE_ROLES, STATUS_LABELS } from "../natures";
 import { projectQueryKey, projectsQueryKey, replaceSheet } from "../projectCache";
@@ -92,15 +92,33 @@ type Props = {
   tool: ViewerTool;
   onTool: (tool: ViewerTool) => void;
   points: PdfPoint[];
+  study: Study | null | undefined;
+  onStudyImported: (study: Study) => void;
 };
 
 // Panneau « Planche » : réglages de la planche affichée (type, niveau, orientation, échelle) et outils de mesure.
-export function SheetPanel({ projectId, sheet, isReference, onMakeReference, tool, onTool, points }: Props) {
+export function SheetPanel({ projectId, sheet, isReference, onMakeReference, tool, onTool, points, study, onStudyImported }: Props) {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [realLength, setRealLength] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  async function importStudy(file: File) {
+    const replace = study !== null && study !== undefined;
+    if (replace && !window.confirm("Une étude existe déjà sur cette planche. La remplacer en conservant sa version précédente ?")) {
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      onStudyImported(await thermiqueApi.importStudy(token!, sheet.id, file, replace));
+    } catch (actionFailure) {
+      setActionError(actionFailure instanceof Error ? actionFailure.message : "Import de l'étude impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function perform(action: () => Promise<Sheet>) {
     setBusy(true);
@@ -158,6 +176,32 @@ export function SheetPanel({ projectId, sheet, isReference, onMakeReference, too
             </button>
           ))}
       </div>
+
+      {sheet.nature === "plan" && (
+        <section className="th-study-import">
+          <h2>Étude du niveau</h2>
+          {study ? (
+            <p className="th-alert th-alert--ok">Étude importée · version {study.version_number} · {study.content.locaux.length} locaux</p>
+          ) : (
+            <p className="th-muted">Déposez le fichier unique <code>etude-&lt;niveau&gt;.json</code> produit sur le poste.</p>
+          )}
+          <label className="po2-button po2-button--primary">
+            {study ? "Remplacer l'étude" : "Importer l'étude"}
+            <input
+              type="file"
+              accept=".json,application/json"
+              hidden
+              disabled={busy || sheet.status !== "prete"}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = "";
+                if (file) void importStudy(file);
+              }}
+            />
+          </label>
+          {sheet.status !== "prete" && <p className="th-muted">Classez la planche et définissez son échelle avant l'import.</p>}
+        </section>
+      )}
 
       <section>
         <h2>Outils</h2>

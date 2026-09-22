@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type PdfPoint, type Sheet } from "../api";
+import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type Study } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -12,11 +12,14 @@ import { InfoPanel } from "./InfoPanel";
 import { groupSheets, referenceSheet, sheetTitle } from "./levels";
 import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
+import { StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { studyQueryKey, validatedRoomCount } from "./study";
 
-type Panel = "planche" | "documents" | "bibliotheque" | "infos";
+type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
 const PANELS: { id: Panel; label: string }[] = [
   { id: "planche", label: "Planche" },
+  { id: "fiche", label: "Fiche" },
   { id: "documents", label: "Documents" },
   { id: "bibliotheque", label: "Bibliothèque" },
   { id: "infos", label: "Infos" },
@@ -25,8 +28,7 @@ const PANELS: { id: Panel; label: string }[] = [
 // Les adresses de tuiles signées valent 12 h : on redemande la fiche avant.
 const RASTER_STALE_MS = 6 * 3600 * 1000;
 
-// Plan de référence choisi par le thermicien : gardé dans ce navigateur en attendant son enregistrement côté
-// serveur avec l'étude du niveau (lot E2).
+// Ancienne persistance locale du plan de référence : E2 la migre une fois vers le projet côté serveur.
 const referenceKey = (projectId: number) => `thermique.reference.${projectId}`;
 
 function readReference(projectId: number): number | null {
@@ -43,6 +45,14 @@ function writeReference(projectId: number, sheetId: number) {
     window.localStorage.setItem(referenceKey(projectId), String(sheetId));
   } catch {
     // stockage indisponible : le choix vaut pour la session en cours
+  }
+}
+
+function removeReference(projectId: number) {
+  try {
+    window.localStorage.removeItem(referenceKey(projectId));
+  } catch {
+    // stockage indisponible
   }
 }
 
@@ -73,6 +83,7 @@ function SheetMenu({ label, sheets, currentId, onPick }: { label: string; sheets
 // Espace de travail du thermicien (D47) : un projet, ses plans, sa bibliothèque et ses infos, sans quitter l'écran.
 export function WorkspacePage() {
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const projectId = Number(useParams().projectId);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -80,6 +91,7 @@ export function WorkspacePage() {
   const [tool, setTool] = useState<ViewerTool>("pan");
   const [points, setPoints] = useState<PdfPoint[]>([]);
   const views = useRef(new Map<string, ViewerView>());
+  const referenceMigration = useRef<number | null>(null);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -92,23 +104,25 @@ export function WorkspacePage() {
     enabled: Boolean(token),
   });
 
-  useEffect(() => setReferenceId(readReference(projectId)), [projectId]);
-
   const sheets = project ? allSheets(project) : [];
   const groups = groupSheets(sheets);
-  const reference = referenceSheet(sheets, referenceId);
+  const reference = referenceSheet(sheets, project?.reference_sheet_id ?? referenceId);
   const requestedId = Number(searchParams.get("planche")) || null;
   const sheet = sheets.find((item) => item.id === requestedId) ?? reference;
   const panel = (PANELS.find((item) => item.id === searchParams.get("panneau"))?.id ?? (sheets.length ? "planche" : "documents")) as Panel;
 
   const setParams = useCallback(
-    (changes: { planche?: number; panneau?: Panel }) => {
+    (changes: { planche?: number; panneau?: Panel; local?: string | null }) => {
       const next = new URLSearchParams(searchParams);
       if (changes.planche !== undefined) {
         next.set("planche", String(changes.planche));
       }
       if (changes.panneau !== undefined) {
         next.set("panneau", changes.panneau);
+      }
+      if (changes.local !== undefined) {
+        if (changes.local === null) next.delete("local");
+        else next.set("local", changes.local);
       }
       setSearchParams(next);
     },
@@ -138,6 +152,41 @@ export function WorkspacePage() {
     staleTime: RASTER_STALE_MS,
   });
   const viewKey = `${sheetId}|${rotation}`;
+  const studyQuery = useQuery({
+    queryKey: studyQueryKey(sheetId),
+    queryFn: () => thermiqueApi.getStudy(token!, sheetId!),
+    enabled: Boolean(token && sheetId),
+  });
+  const study = studyQuery.data;
+  const selectedLocalId = searchParams.get("local");
+  const selectedRoom = study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
+
+  useEffect(() => {
+    if (!project || !token || referenceMigration.current === project.id) return;
+    referenceMigration.current = project.id;
+    if (project.reference_sheet_id !== null) {
+      setReferenceId(project.reference_sheet_id);
+      removeReference(project.id);
+      return;
+    }
+    const stored = readReference(project.id);
+    if (stored !== null && allSheets(project).some((item) => item.id === stored)) {
+      setReferenceId(stored);
+      void thermiqueApi.updateProject(token, project.id, { reference_sheet_id: stored }).then(() => {
+        removeReference(project.id);
+        void queryClient.invalidateQueries({ queryKey: projectQueryKey(project.id) });
+        void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+      });
+    } else {
+      setReferenceId(null);
+    }
+  }, [project, queryClient, token]);
+
+  useEffect(() => {
+    if (selectedLocalId && study !== undefined && !study?.content.locaux.some((room) => room.id === selectedLocalId)) {
+      setParams({ local: null, panneau: panel === "fiche" ? "planche" : panel });
+    }
+  }, [panel, selectedLocalId, setParams, study]);
 
   if (error) {
     return <p className="th-alert th-alert--error th-main">{error.message}</p>;
@@ -146,11 +195,23 @@ export function WorkspacePage() {
     return <p className="th-muted th-main">Chargement du projet…</p>;
   }
 
-  const makeReference = (id: number) => {
+  const makeReference = async (id: number) => {
     writeReference(project.id, id);
     setReferenceId(id);
+    try {
+      await thermiqueApi.updateProject(token, project.id, { reference_sheet_id: id });
+      removeReference(project.id);
+      queryClient.setQueryData<ProjectDetail>(projectQueryKey(project.id), (current) =>
+        current ? { ...current, reference_sheet_id: id } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+    } catch {
+      // Le choix reste dans le navigateur et sera migré à la prochaine ouverture.
+    }
   };
   const levelTitle = sheet ? sheetTitle(sheet) : "";
+  const selectSheet = (id: number) => setParams({ planche: id, local: null, panneau: panel === "fiche" ? "planche" : panel });
+  const selectRoom = (id: string) => setParams({ local: id, panneau: "fiche" });
 
   return (
     <div className="th-ws">
@@ -174,7 +235,7 @@ export function WorkspacePage() {
               type="button"
               aria-pressed={item.id === sheetId}
               className={item.id === sheetId ? "is-active" : undefined}
-              onClick={() => setParams({ planche: item.id })}
+              onClick={() => selectSheet(item.id)}
               title={item.label}
             >
               {sheetTitle(item)}
@@ -183,9 +244,9 @@ export function WorkspacePage() {
           ))}
           {groups.levels.length === 0 && sheets.length > 0 && <span className="th-muted">Aucune planche classée en plan</span>}
         </nav>
-        <SheetMenu label="Coupes" sheets={groups.sections} currentId={sheetId} onPick={(id) => setParams({ planche: id })} />
-        <SheetMenu label="Façades" sheets={groups.elevations} currentId={sheetId} onPick={(id) => setParams({ planche: id })} />
-        <SheetMenu label="Autres" sheets={groups.others} currentId={sheetId} onPick={(id) => setParams({ planche: id })} />
+        <SheetMenu label="Coupes" sheets={groups.sections} currentId={sheetId} onPick={selectSheet} />
+        <SheetMenu label="Façades" sheets={groups.elevations} currentId={sheetId} onPick={selectSheet} />
+        <SheetMenu label="Autres" sheets={groups.others} currentId={sheetId} onPick={selectSheet} />
         <div className="th-ws__tabs" role="tablist" aria-label="Panneau">
           {PANELS.map((item) => (
             <button
@@ -213,17 +274,17 @@ export function WorkspacePage() {
                 </button>
                 <small>{sheet ? STATUS_LABELS[sheet.status] : "aucune planche"}</small>
               </li>
-              <li className="is-later">
+              <li className={study ? "is-done" : "is-later"}>
                 <span>Locaux</span>
-                <small>aucune étude importée</small>
+                <small>{study ? `${study.content.locaux.length} locaux importés` : "aucune étude importée"}</small>
               </li>
-              <li className="is-later">
+              <li className={study ? "is-done" : "is-later"}>
                 <span>Enveloppe</span>
-                <small>aucune étude importée</small>
+                <small>{study ? `${study.content.enveloppe.releve.elements.length} éléments rattachés` : "aucune étude importée"}</small>
               </li>
-              <li className="is-later">
+              <li className={study ? "is-todo" : "is-later"}>
                 <span>Pièce par pièce</span>
-                <small>aucune étude importée</small>
+                <small>{study ? `${validatedRoomCount(study)}/${study.content.locaux.length} validés` : "aucune étude importée"}</small>
               </li>
               <li className="is-later">
                 <span>Hauteurs (coupes)</span>
@@ -233,7 +294,11 @@ export function WorkspacePage() {
           </section>
           <section>
             <h2>Locaux</h2>
-            <p className="th-muted">Les locaux du niveau, chauffés d'abord, apparaîtront ici une fois l'étude importée.</p>
+            {study ? (
+              <StudyRoomList study={study} selectedId={selectedRoom?.id ?? null} onSelect={selectRoom} />
+            ) : (
+              <p className="th-muted">Les locaux du niveau, chauffés d'abord, apparaîtront ici une fois l'étude importée.</p>
+            )}
           </section>
         </aside>
 
@@ -253,6 +318,7 @@ export function WorkspacePage() {
               onAddPoint={(point) => setPoints((current) => (current.length >= 2 ? [point] : [...current, point]))}
               initialView={views.current.get(viewKey) ?? null}
               onViewChange={(view) => views.current.set(viewKey, view)}
+              renderOverlay={study ? (toScreen) => <StudyOverlay rooms={study.content.locaux} selectedId={selectedRoom?.id ?? null} toScreen={toScreen} onSelect={selectRoom} /> : undefined}
             />
           ) : (
             <div className="th-viewer th-viewer--empty">
@@ -275,6 +341,8 @@ export function WorkspacePage() {
                 tool={tool}
                 onTool={setTool}
                 points={points}
+                study={study}
+                onStudyImported={(imported) => queryClient.setQueryData<Study>(studyQueryKey(sheet.id), imported)}
               />
             ) : (
               <p className="th-muted">Aucune planche : déposez les plans dans « Documents ».</p>
@@ -284,6 +352,7 @@ export function WorkspacePage() {
           )}
           {panel === "bibliotheque" && <LibraryPanel projectId={project.id} />}
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
+          {panel === "fiche" && <StudyRoomPanel room={selectedRoom} state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined} />}
         </aside>
       </div>
     </div>

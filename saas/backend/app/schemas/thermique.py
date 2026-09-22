@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -49,6 +51,7 @@ class ProjectRead(BaseModel):
     owner_user_id: int
     name: str
     description: str | None
+    reference_sheet_id: int | None
     created_at: datetime
     updated_at: datetime
     document_count: int
@@ -79,6 +82,7 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
+    reference_sheet_id: int | None = None
 
 
 class SheetUpdate(BaseModel):
@@ -164,5 +168,18 @@ class ComponentEvaluate(BaseModel):
 class EraseAllRequest(BaseModel):
     # Le mot « EFFACER », tapé par l'utilisateur, confirme l'effacement de tous ses projets.
     confirmation: str = Field(default="", max_length=20)
+
+
+class EtudeRead(BaseModel):
+    id: int
+    project_id: int
+    sheet_id: int
+    format_version: int
+    version_number: int
+    content: dict[str, Any]
+    local_states: dict[str, dict[str, Any]]
+    imported_by_user_id: int | None
+    created_at: datetime
+    updated_at: datetime
 
 
