@@ -102,3 +102,25 @@ def test_parse_cli_output_accepte_resultat_json_en_texte():
     raw = {"objects": [], "observations": ["plan vide"]}
 
     assert thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(raw)})) == raw
+
+
+def test_cli_environment_retire_la_session_claude_hote():
+    hote = {
+        "PATH": "x",
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "desktop",
+        "CLAUDE_CODE_SESSION_ID": "s",
+        "CLAUDE_AGENT_SDK_VERSION": "1",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:1",
+        "CLAUDE_BIN": "claude",
+    }
+
+    environnement = thermique_claude_agent.cli_environment(hote)
+
+    assert environnement == {"PATH": "x", "CLAUDE_BIN": "claude"}
+
+
+def test_cli_environment_garde_une_adresse_api_choisie_hors_session():
+    assert thermique_claude_agent.cli_environment({"ANTHROPIC_BASE_URL": "https://proxy"}) == {
+        "ANTHROPIC_BASE_URL": "https://proxy"
+    }

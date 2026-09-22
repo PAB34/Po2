@@ -276,12 +276,14 @@ VisionCategory = Literal[
         "refend",
         "cloison",
         "isolation",
+        "doublage",
         "menuiserie_exterieure",
         "menuiserie_interieure",
         "terrasse",
         "balcon",
         "poteau",
         "garde_corps",
+        "piece",
         "indetermine",
     ]
 

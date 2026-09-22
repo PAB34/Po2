@@ -68,6 +68,7 @@ export function AutoZoningPage() {
   const [importFileError, setImportFileError] = useState<string | null>(null);
   const [creating, setCreating] = useState<{ category: VisionCategory; geometry_type: "polyline" | "polygon" } | null>(null);
   const dragRef = useRef<number | null>(null);
+  const removedRef = useRef(false);
   const pixelsPerPtRef = useRef(1);
   const wasRunningRef = useRef(false);
 
@@ -189,6 +190,11 @@ export function AutoZoningPage() {
               return;
             }
             if (draft) {
+              // le relâchement d'un Alt + clic de retrait ne doit pas réinsérer un point sur le segment
+              if (removedRef.current) {
+                removedRef.current = false;
+                return;
+              }
               const edge = nearestGeometryEdge(draft, point, pdfTolerance(HIT_PX, pixelsPerPtRef.current), selected?.geometry_type !== "polyline");
               if (edge) setDraft([...draft.slice(0, edge.index + 1), edge.point, ...draft.slice(edge.index + 1)]);
               return;
@@ -201,6 +207,7 @@ export function AutoZoningPage() {
             const minimum = (selected?.geometry_type ?? creating?.geometry_type) === "polygon" ? 3 : 2;
             if (event.altKey && index !== null && draft.length > minimum) {
               setDraft(draft.filter((_, current) => current !== index));
+              removedRef.current = true;
               return false;
             }
             dragRef.current = index;
@@ -296,7 +303,7 @@ export function AutoZoningPage() {
                     <span className="th-zone-list__code" style={{ background: VISION_STYLES[item.category].color }}>{item.id.split("-").at(-1)}</span>
                     <span>
                       <strong>{VISION_STYLES[item.category].label}{item.review_required ? " · à confirmer" : ""}</strong>
-                      <small>{Math.round(item.confidence * 100)} % · {item.source === "corrige" ? "corrigé" : item.source === "manuel" ? "ajout manuel" : "proposition IA"}</small>
+                      <small>{item.subtype ? `${item.subtype} · ` : ""}{Math.round(item.confidence * 100)} % · {item.source === "corrige" ? "corrigé" : item.source === "manuel" ? "ajout manuel" : "proposition IA"}</small>
                     </span>
                   </button>
                 ))}

@@ -20,18 +20,21 @@ from scipy import ndimage
 
 from app.services.thermique import ThermiqueError
 from app.services.thermique_vision import CATEGORIES, GEOMETRIES, tile_boxes
+from app.services.thermique_vision_geometrie import mettre_au_propre
 
 CATEGORY_STYLES = {
     "mur_exterieur": ("Murs extérieurs", "#d73027"),
     "refend": ("Murs de refend", "#7b3294"),
     "cloison": ("Cloisons", "#4575b4"),
     "isolation": ("Isolation", "#fdae61"),
+    "doublage": ("Doublages", "#9775fa"),
     "menuiserie_exterieure": ("Menuiseries extérieures", "#00a6d6"),
     "menuiserie_interieure": ("Menuiseries intérieures", "#66c2a5"),
     "terrasse": ("Terrasses", "#8c6d31"),
     "balcon": ("Balcons", "#a6761d"),
     "poteau": ("Poteaux", "#525252"),
     "garde_corps": ("Garde-corps", "#636363"),
+    "piece": ("Pièces et espaces", "#1b9e77"),
     "indetermine": ("À déterminer", "#e7298a"),
 }
 
@@ -60,6 +63,8 @@ def output_schema() -> dict[str, Any]:
                         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                         "evidence": {"type": "string"},
                         "review_required": {"type": "boolean"},
+                        # nature d'une pièce (D24) ; facultatif, sans objet pour les autres catégories
+                        "local": {"type": "string", "enum": ["chauffe", "circulation", "non_chauffe"]},
                     },
                     "required": [
                         "category",
@@ -217,7 +222,13 @@ def build_prompt(manifest: dict[str, Any]) -> str:
         )
     lines.extend(
         [
-            "Produis l'inventaire exhaustif mais prudent des composants du bâtiment.",
+            "Produis l'inventaire exhaustif mais prudent des composants du bâtiment, puis des pièces et "
+            "espaces (catégorie piece, polygone au nu intérieur, nom lu dans subtype).",
+            "Les pièces couvrent tout l'intérieur du niveau, murs exceptés : circulations, halls, dégagements, "
+            "paliers, sanitaires et locaux techniques compris. Pour chaque pièce, indique sa nature dans local : "
+            "chauffe, circulation ou non_chauffe (local technique, gaine, escalier encloisonné).",
+            "Un vide sur l'étage inférieur, une trémie, un patio ou un puits de lumière n'est pas une pièce ; une "
+            "terrasse ou un balcon non plus (catégories terrasse, balcon).",
             "Toutes les coordonnées finales doivent être globales et normalisées de 0 à 1000.",
             "Fusionne les doublons entre tuiles et simplifie les portions droites pour éviter les zigzags.",
         ]
@@ -255,6 +266,23 @@ def parse_cli_output(stdout: str) -> dict[str, Any]:
     return candidate
 
 
+def cli_environment(source: dict[str, str] | None = None) -> dict[str, str]:
+    """Environnement du sous-processus, débarrassé des variables d'une session Claude hôte.
+
+    Lancé depuis une session Claude Code (application de bureau, SDK), le binaire hériterait de l'adresse et
+    de l'authentification de l'hôte, refusées hors de celui-ci (erreur 401). Sans ces variables, la CLI reprend
+    la connexion locale de l'utilisateur. Aucun secret n'est lu ni transmis.
+    """
+    environment = dict(os.environ if source is None else source)
+    nested = any(key in environment for key in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID"))
+    for key in list(environment):
+        if key == "CLAUDECODE" or key.startswith(("CLAUDE_CODE_", "CLAUDE_AGENT_SDK")) or key == "CLAUDE_PID":
+            del environment[key]
+        elif nested and key == "ANTHROPIC_BASE_URL":
+            del environment[key]
+    return environment
+
+
 def run_agent(
     manifest: dict[str, Any],
     repository: Path,
@@ -287,6 +315,7 @@ def run_agent(
         completed = subprocess.run(
             command,
             cwd=repository,
+            env=cli_environment(),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -317,15 +346,27 @@ def save_result(
     crop_left, crop_top, _, _ = manifest["crop_box_px"]
     page_width = manifest["page_width_px"]
     page_height = manifest["page_height_px"]
-    objects: list[dict[str, Any]] = []
+    cleaned = [
+        {**source, "points": [list(point) for point in source.get("points", [])]}
+        for source in raw["objects"]
+        if len(source.get("points", [])) >= 2
+    ]
     counters: dict[str, int] = {}
-    for source in raw["objects"]:
-        item = dict(source)
-        category = item.get("category") if item.get("category") in CATEGORIES else "indetermine"
-        counters[category] = counters.get(category, 0) + 1
-        item["category"] = category
-        item["id"] = f"{category}-{counters[category]:03d}"
-        analysis_points = source.get("points", [])
+    for item in cleaned:
+        if item.get("category") not in CATEGORIES:
+            item["category"] = "indetermine"
+        counters[item["category"]] = counters.get(item["category"], 0) + 1
+        item["id"] = f"{item['category']}-{counters[item['category']]:03d}"
+    if manifest.get("overview") and Path(manifest["overview"]).is_file():
+        with Image.open(manifest["overview"]) as overview:
+            ink = 1.0 - np.asarray(overview.convert("L"), dtype=np.float32) / 255.0
+        cleanup = mettre_au_propre(cleaned, ink.shape[1], ink.shape[0], ink)
+    else:
+        cleanup = mettre_au_propre(cleaned, manifest["width_px"], manifest["height_px"])
+    objects: list[dict[str, Any]] = []
+    for source, item in zip([s for s in raw["objects"] if len(s.get("points", [])) >= 2], cleaned):
+        item["points_agent_norm"] = source.get("points", [])
+        analysis_points = item["points"]
         item["points_analysis_norm"] = analysis_points
         item["points"] = [
             [
@@ -344,6 +385,7 @@ def save_result(
         "manifest": manifest,
         "objects": objects,
         "observations": raw.get("observations", []),
+        "geometry_cleanup": cleanup,
     }
     if envelope:
         result["usage"] = envelope.get("usage")
@@ -351,6 +393,16 @@ def save_result(
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
+
+
+def _font(size: int) -> ImageFont.ImageFont:
+    """Police TrueType avec accents (Windows ou Linux), sinon police par défaut."""
+    for name in ("arial.ttf", "DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
 
 def render_projection(result: dict[str, Any], destination: Path) -> Path:
@@ -363,10 +415,13 @@ def render_projection(result: dict[str, Any], destination: Path) -> Path:
     canvas.alpha_composite(plan, (0, 0))
     overlay = Image.new("RGBA", canvas.size, (255, 255, 255, 0))
     draw = ImageDraw.Draw(overlay, "RGBA")
-    font = ImageFont.load_default()
+    font = _font(max(14, round(plan.width / 150)))
+    small = _font(max(11, round(plan.width / 220)))
     line_width = max(4, round(plan.width / 550))
     counts: dict[str, int] = {}
-    for item in result["objects"]:
+    # espaces dessous (fond léger, trait fin), composants dessus
+    ordered = sorted(result["objects"], key=lambda item: item["category"] not in {"piece", "terrasse", "balcon", "indetermine"})
+    for item in ordered:
         category = item["category"]
         counts[category] = counts.get(category, 0) + 1
         _, color_hex = CATEGORY_STYLES[category]
@@ -378,32 +433,48 @@ def render_projection(result: dict[str, Any], destination: Path) -> Path:
         if len(points) < 2:
             continue
         geometry = item.get("geometry_type", "polyline")
-        if geometry in {"polygon", "bbox"} and len(points) >= 3:
-            draw.polygon(points, fill=(red, green, blue, 42), outline=(red, green, blue, 255), width=line_width)
+        space = category in {"piece", "terrasse", "balcon", "indetermine"}
+        if geometry == "bbox" and len(points) == 2:
+            (x1, y1), (x2, y2) = points
+            points = [(min(x1, x2), min(y1, y2)), (max(x1, x2), min(y1, y2)), (max(x1, x2), max(y1, y2)), (min(x1, x2), max(y1, y2))]
+            geometry = "polygon"
+        if geometry == "polygon" and len(points) >= 3:
+            width = max(2, line_width // 2) if space else line_width
+            draw.polygon(points, fill=(red, green, blue, 34 if space else 90), outline=(red, green, blue, 255), width=width)
         else:
             draw.line(points, fill=(red, green, blue, 255), width=line_width, joint="curve")
+        radius = (line_width // 2 + 1) if space else line_width + 1
         for x, y in points:
-            radius = line_width + 2
             draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(red, green, blue, 255))
-        x, y = points[len(points) // 2]
-        draw.rectangle((x + 4, y - 10, x + 90, y + 10), fill=(255, 255, 255, 225))
-        draw.text((x + 7, y - 8), item["id"], fill=(20, 20, 20, 255), font=font)
+        if category == "piece":
+            cx = sum(x for x, _ in points) / len(points)
+            cy = sum(y for _, y in points) / len(points)
+            label = f"{item['id'].split('-')[-1]} {item.get('subtype', '')}"[:40]
+            box = draw.textbbox((cx, cy), label, font=small, anchor="mm")
+            draw.rectangle((box[0] - 3, box[1] - 2, box[2] + 3, box[3] + 2), fill=(255, 255, 255, 200))
+            draw.text((cx, cy), label, fill=(15, 90, 70, 255), font=small, anchor="mm")
+        elif category != "poteau":
+            x, y = points[len(points) // 2]
+            box = draw.textbbox((x + 6, y), item["id"], font=small, anchor="lm")
+            draw.rectangle((box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2), fill=(255, 255, 255, 215))
+            draw.text((x + 6, y), item["id"], fill=(20, 20, 20, 255), font=small, anchor="lm")
     canvas = Image.alpha_composite(canvas, overlay)
     legend = ImageDraw.Draw(canvas)
     start_x = plan.width + 28
+    step = round(font.size * 1.7) if hasattr(font, "size") else 30
     legend.text((start_x, 30), "ANALYSE THERMIQUE IA", fill="#172033", font=font)
-    legend.text((start_x, 55), "Composants proposés", fill="#4b5563", font=font)
-    y = 92
+    legend.text((start_x, 30 + step), "Composants proposés (raster seul)", fill="#4b5563", font=small)
+    y = 30 + 3 * step
     for category in CATEGORIES:
         if not counts.get(category):
             continue
         label, color = CATEGORY_STYLES[category]
-        legend.rectangle((start_x, y, start_x + 18, y + 18), fill=color)
-        legend.text((start_x + 28, y + 2), f"{label} : {counts[category]}", fill="#172033", font=font)
-        y += 30
+        legend.rectangle((start_x, y, start_x + step // 2 + 6, y + step // 2 + 6), fill=color)
+        legend.text((start_x + step, y), f"{label} : {counts[category]}", fill="#172033", font=font)
+        y += step
     review_count = sum(bool(item.get("review_required")) for item in result["objects"])
-    legend.text((start_x, y + 18), f"À confirmer : {review_count}", fill="#9f1239", font=font)
-    legend.text((start_x, y + 48), "Points éditables dans l'outil", fill="#4b5563", font=font)
+    legend.text((start_x, y + step // 2), f"À confirmer : {review_count}", fill="#9f1239", font=font)
+    legend.text((start_x, y + 2 * step), "Points éditables dans l'outil", fill="#4b5563", font=small)
     destination.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(destination, "PNG", optimize=True)
     return destination

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,7 @@ sys.path.insert(0, str(BACKEND))
 
 from app.services.thermique import ThermiqueError  # noqa: E402
 from app.services.thermique_claude_agent import (  # noqa: E402
+    parse_cli_output,
     prepare_bundle,
     render_projection,
     run_agent,
@@ -26,9 +28,20 @@ def rasterize(source: Path, page: int, dpi: int, directory: Path) -> Path:
     if source.suffix.lower() != ".pdf":
         return source
     executable = shutil.which("pdftoppm") or shutil.which("pdftoppm.exe")
-    if not executable:
-        raise ThermiqueError("Poppler/pdftoppm est requis pour convertir le PDF en pixels.")
     destination = directory / "source"
+    if not executable:
+        # Rendu en pixels par pdfium (déjà utilisé par la visionneuse) : aucun objet vectoriel n'est lu.
+        try:
+            import pypdfium2 as pdfium
+        except ImportError as exc:
+            raise ThermiqueError("Poppler/pdftoppm ou pypdfium2 est requis pour convertir le PDF en pixels.") from exc
+        document = pdfium.PdfDocument(str(source))
+        try:
+            bitmap = document[page - 1].render(scale=dpi / 72)
+            bitmap.to_pil().convert("RGB").save(destination.with_suffix(".jpg"), "JPEG", quality=92)
+        finally:
+            document.close()
+        return destination.with_suffix(".jpg")
     completed = subprocess.run(
         [executable, "-f", str(page), "-l", str(page), "-singlefile", "-r", str(dpi), "-jpeg", str(source), str(destination)],
         capture_output=True,
@@ -54,6 +67,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--claude-bin", help="Chemin explicite du binaire Claude Code")
     result.add_argument("--timeout", type=int, default=900, help="Délai maximal de l'appel Claude, en secondes")
     result.add_argument("--prepare-only", action="store_true", help="Prépare les images sans appeler Claude")
+    result.add_argument(
+        "--from-raw",
+        type=Path,
+        help="Réponse JSON brute de l'agent déjà obtenue : la retraite (nettoyage, projection) sans appeler Claude",
+    )
     return result
 
 
@@ -72,7 +90,12 @@ def main() -> int:
         if args.prepare_only:
             print(work_dir / "manifest.json")
             return 0
-        raw, envelope = run_agent(manifest, REPOSITORY, args.claude_bin, args.model, args.timeout)
+        if args.from_raw:
+            raw, envelope = parse_cli_output(args.from_raw.read_text(encoding="utf-8")), None
+        else:
+            raw, envelope = run_agent(manifest, REPOSITORY, args.claude_bin, args.model, args.timeout)
+            # la réponse brute est gardée pour pouvoir retraiter sans nouvel appel
+            args.output.with_suffix(".raw.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
         result = save_result(raw, manifest, args.output.resolve(), args.model, envelope)
         projection = (args.projection or args.output.with_suffix(".projection.png")).resolve()
         render_projection(result, projection)

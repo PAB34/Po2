@@ -34,12 +34,14 @@ CATEGORIES = (
     "refend",
     "cloison",
     "isolation",
+    "doublage",
     "menuiserie_exterieure",
     "menuiserie_interieure",
     "terrasse",
     "balcon",
     "poteau",
     "garde_corps",
+    "piece",
     "indetermine",
 )
 GEOMETRIES = ("polyline", "polygon", "bbox")
@@ -278,7 +280,12 @@ def normalized_to_pdf(point: list[float], manifest: dict[str, Any]) -> list[floa
     return [round(x, 3), round(y, 3)]
 
 
-def normalize_result(raw: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
+REVUE_SOUS = 0.78
+# L'agent Claude Code signale lui-même ses doutes ; la revue n'est forcée que sous ce seuil.
+REVUE_AGENT_SOUS = 0.5
+
+
+def normalize_result(raw: dict[str, Any], manifest: dict[str, Any], review_below: float = REVUE_SOUS) -> dict[str, Any]:
     objects: list[dict[str, Any]] = []
     counters: dict[str, int] = {}
     for raw_object in raw.get("objects", []):
@@ -300,9 +307,11 @@ def normalize_result(raw: dict[str, Any], manifest: dict[str, Any]) -> dict[str,
                 "points_norm": points_norm,
                 "confidence": round(confidence, 3),
                 "evidence": str(raw_object.get("evidence") or ""),
-                "review_required": bool(raw_object.get("review_required")) or confidence < 0.78,
+                "review_required": bool(raw_object.get("review_required")) or confidence < review_below,
                 "source": "ia_visuelle",
                 "confirmed": False,
+                # espaces enclavés (trémie, gaine) à déduire de la surface de cette pièce
+                **({"enclaves": [str(v) for v in raw_object["enclaves"]]} if raw_object.get("enclaves") else {}),
             }
         )
     counts = {category: sum(item["category"] == category for item in objects) for category in CATEGORIES}
@@ -368,6 +377,7 @@ def import_agent_result(sheet: ThermiqueSheet, payload: dict[str, Any]) -> dict[
     result = normalize_result(
         {"objects": payload.get("objects", []), "observations": payload.get("observations", [])},
         manifest,
+        REVUE_AGENT_SOUS,
     )
     result["method"] = "claude_code_agent_raster"
     result["model"] = str(payload.get("model") or "claude")

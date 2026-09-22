@@ -1,0 +1,475 @@
+<title>Référence enveloppe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --fond: #f1f4f6; --surface: #ffffff; --surface-2: #f7f9fa; --encre: #16202a; --doux: #5b6875; --trait: #d5dce3;
+  --accent: #0b6e8e; --accent-doux: #e1f0f5; --ok: #2b8a3e; --ok-doux: #e3f3e6; --modif: #1c5fb8; --modif-doux: #e2ecfa;
+  --alerte: #d9480f; --alerte-doux: #fdeee6; --suppr: #a61e1e;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --cond: "IBM Plex Sans Condensed", "Arial Narrow", var(--sans);
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #0f151b; --surface: #17202a; --surface-2: #1c2733; --encre: #e6edf3; --doux: #93a1ae; --trait: #2a3642;
+    --accent: #4fb3d1; --accent-doux: #13303b; --ok: #5cc26f; --ok-doux: #15301c; --modif: #6aa5f0; --modif-doux: #16263d;
+    --alerte: #ff8a4c; --alerte-doux: #3a2114; --suppr: #ff6b6b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --fond: #0f151b; --surface: #17202a; --surface-2: #1c2733; --encre: #e6edf3; --doux: #93a1ae; --trait: #2a3642;
+  --accent: #4fb3d1; --accent-doux: #13303b; --ok: #5cc26f; --ok-doux: #15301c; --modif: #6aa5f0; --modif-doux: #16263d;
+  --alerte: #ff8a4c; --alerte-doux: #3a2114; --suppr: #ff6b6b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--fond); color: var(--encre); font: 14px/1.45 var(--sans); padding-inline: 16px; padding-block: 0 96px; }
+h1, h2 { font-family: var(--cond); font-weight: 600; text-wrap: balance; margin: 0; }
+h1 { font-size: 20px; letter-spacing: .01em; }
+h2 { font-size: 17px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.entete { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--fond); padding-block: 12px 10px;
+  display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; border-bottom: 1px solid var(--trait); }
+.entete .titre { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.entete .sous { color: var(--doux); font-size: 12.5px; }
+.progres { flex: 1 1 260px; display: flex; flex-direction: column; gap: 5px; min-width: 200px; }
+.barre { height: 8px; border-radius: 4px; background: var(--trait); overflow: hidden; display: flex; }
+.barre span { display: block; height: 100%; }
+.progres .chiffres { font-size: 12.5px; color: var(--doux); display: flex; gap: 14px; flex-wrap: wrap; }
+.onglets { display: flex; gap: 4px; }
+.onglets button { border: 1px solid var(--trait); background: var(--surface); padding: 6px 12px; border-radius: 6px; }
+.onglets button[aria-pressed="true"] { background: var(--encre); color: var(--fond); border-color: var(--encre); }
+.etat-base { font-size: 12px; color: var(--doux); }
+.etat-base.erreur { color: var(--alerte); }
+
+.corps { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 20px; padding-top: 16px; }
+@media (max-width: 860px) { .corps { grid-template-columns: 1fr; } }
+
+.liste { display: flex; flex-direction: column; gap: 10px; }
+.filtres { display: flex; flex-wrap: wrap; gap: 4px; }
+.filtres button { border: 1px solid var(--trait); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; }
+.filtres button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-doux); color: var(--accent); }
+.puces { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 5px; }
+.puce { position: relative; border: 1px solid var(--trait); background: var(--surface); border-radius: 5px; padding: 5px 0;
+  font: 500 12.5px var(--mono); text-align: center; }
+.puce.conforme { background: var(--ok-doux); border-color: var(--ok); color: var(--ok); }
+.puce.corrige { background: var(--modif-doux); border-color: var(--modif); color: var(--modif); }
+.puce[aria-current="true"] { outline: 2px solid var(--encre); outline-offset: 1px; }
+.puce .signal { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--alerte); }
+.legende-puces { font-size: 12px; color: var(--doux); display: grid; gap: 3px; }
+.legende-puces i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--trait); }
+
+.panneau { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.fiche-troncon { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; }
+.fiche-troncon .meta { color: var(--doux); }
+.statut { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px;
+  background: var(--surface-2); color: var(--doux); }
+.statut.conforme { background: var(--ok-doux); color: var(--ok); }
+.statut.corrige { background: var(--modif-doux); color: var(--modif); }
+.signalements { background: var(--alerte-doux); border-left: 3px solid var(--alerte); padding: 8px 12px; border-radius: 0 6px 6px 0; }
+.signalements strong { color: var(--alerte); font-weight: 600; }
+.signalements ul { margin: 4px 0 0; padding-left: 18px; }
+
+.vue { background: var(--surface); border: 1px solid var(--trait); border-radius: 8px; overflow: hidden; }
+.vue .barre-vue { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--trait); font-size: 12.5px; color: var(--doux); }
+.bascule { display: inline-flex; border: 1px solid var(--trait); border-radius: 6px; overflow: hidden; }
+.bascule button { border: 0; background: transparent; padding: 3px 10px; }
+.bascule button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.image { overflow-x: auto; background: #fff; }
+.image img { display: block; width: 100%; min-width: 760px; max-width: none; cursor: zoom-in; }
+.image.zoom img { width: auto; min-width: 0; cursor: zoom-out; }
+
+.table-zone { overflow-x: auto; border: 1px solid var(--trait); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 900px; }
+th { font: 600 11.5px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--doux); text-align: left;
+  padding: 8px 6px; border-bottom: 1px solid var(--trait); background: var(--surface-2); white-space: nowrap; }
+td { padding: 4px 6px; border-bottom: 1px solid var(--trait); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td input, td select { width: 100%; border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 4px 5px; }
+td input:hover, td select:hover { border-color: var(--trait); }
+td input:focus, td select:focus { border-color: var(--accent); background: var(--surface); outline: none; }
+td input.num { text-align: right; }
+td .change { background: var(--modif-doux); color: var(--modif); border-color: var(--modif); }
+tr.supprime td { opacity: .45; }
+tr.supprime td input, tr.supprime td select { text-decoration: line-through; }
+tr.ajoute td:first-child { box-shadow: inset 3px 0 var(--modif); }
+.indice { color: var(--doux); font-size: 12px; max-width: 260px; }
+.confiance { font: 12px var(--mono); color: var(--doux); }
+.confiance.basse { color: var(--alerte); font-weight: 500; }
+.actions-ligne { display: flex; gap: 2px; }
+.actions-ligne button { border: 1px solid var(--trait); background: var(--surface); border-radius: 4px; padding: 2px 7px; font-size: 12px; }
+.biais { font-size: 11px; color: var(--doux); display: block; }
+.alerte-couverture { color: var(--alerte); font-size: 13px; }
+textarea { width: 100%; min-height: 54px; border: 1px solid var(--trait); border-radius: 6px; background: var(--surface); padding: 8px; }
+
+.pied { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--trait);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+.pied .message { margin-right: auto; font-size: 13px; color: var(--doux); }
+.bouton { border: 1px solid var(--trait); background: var(--surface); border-radius: 6px; padding: 8px 14px; font-weight: 500; }
+.bouton.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.bouton.modif { background: var(--modif); border-color: var(--modif); color: #fff; }
+.bouton:disabled { opacity: .45; cursor: not-allowed; }
+
+.catalogue { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); padding-top: 16px; }
+.fiche { background: var(--surface); border: 1px solid var(--trait); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.fiche .ligne1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.fiche .id { font: 600 13px var(--mono); color: var(--accent); }
+.fiche .composition { font: 12.5px var(--mono); color: var(--doux); }
+.fiche .regle { font-size: 12.5px; color: var(--doux); }
+.fiche select { border: 1px solid var(--trait); border-radius: 5px; background: var(--surface); padding: 3px 6px; }
+@media (prefers-reduced-motion: no-preference) { .puce, .bouton { transition: background-color .15s, border-color .15s; } }
+</style>
+
+<header class="entete">
+  <div class="titre">
+    <h1 id="titre">Référence enveloppe</h1>
+    <span class="sous" id="sous-titre"></span>
+  </div>
+  <div class="progres" aria-live="polite">
+    <div class="barre" id="barre"><span id="barre-ok" style="background:var(--ok)"></span><span id="barre-modif" style="background:var(--modif)"></span></div>
+    <div class="chiffres num" id="chiffres"></div>
+  </div>
+  <div class="onglets" role="tablist">
+    <button id="onglet-troncons" aria-pressed="true">Tronçons</button>
+    <button id="onglet-catalogue" aria-pressed="false">Catalogue</button>
+  </div>
+  <span class="etat-base" id="etat-base">Connexion à l'enregistrement…</span>
+</header>
+
+<main id="vue-troncons" class="corps">
+  <nav class="liste" aria-label="Tronçons">
+    <div class="filtres" id="filtres">
+      <button data-filtre="tous" aria-pressed="true">Tous</button>
+      <button data-filtre="a-valider" aria-pressed="false">À valider</button>
+      <button data-filtre="signales" aria-pressed="false">Signalés</button>
+      <button data-filtre="corriges" aria-pressed="false">Corrigés</button>
+    </div>
+    <div class="puces" id="puces"></div>
+    <div class="legende-puces">
+      <span><i style="background:var(--surface)"></i>à valider</span>
+      <span><i style="background:var(--ok-doux);border-color:var(--ok)"></i>conforme</span>
+      <span><i style="background:var(--modif-doux);border-color:var(--modif)"></i>corrigé</span>
+      <span><i style="background:var(--alerte);border-radius:50%;width:7px;height:7px"></i>signalé par le contrôle</span>
+      <span>Flèches ← → : tronçon précédent / suivant</span>
+    </div>
+  </nav>
+
+  <section class="panneau" id="panneau">
+    <div class="fiche-troncon">
+      <h2 id="t-titre"></h2>
+      <span class="meta num" id="t-bornes"></span>
+      <span class="meta" id="t-piece"></span>
+      <span class="statut" id="t-statut"></span>
+    </div>
+    <div class="signalements" id="t-signalements" hidden></div>
+    <div class="vue">
+      <div class="barre-vue">
+        <div class="bascule" role="group" aria-label="Image">
+          <button id="voir-lecture" aria-pressed="true">Lecture de l'agent</button>
+          <button id="voir-brut" aria-pressed="false">Plan seul</button>
+        </div>
+        <span>Extérieur en haut · abscisse en m le long de l'enveloppe · profondeur en cm depuis la ligne guide · clic : taille réelle</span>
+      </div>
+      <div class="image" id="image"><img id="t-image" alt=""></div>
+    </div>
+    <div class="table-zone">
+      <table>
+        <thead><tr>
+          <th>De (m)</th><th>À (m)</th><th>Nature</th><th>Composant</th><th>Nu ext. (cm)</th><th>Nu int. (cm)</th>
+          <th>Baie · cadre</th><th>Confiance</th><th>Indice de l'agent</th><th></th>
+        </tr></thead>
+        <tbody id="lignes"></tbody>
+      </table>
+    </div>
+    <div class="alerte-couverture" id="couverture" hidden></div>
+    <label for="note">Remarque sur ce tronçon (facultatif)</label>
+    <textarea id="note" placeholder="Ex. : la paroi réelle est hors de la bande ; baie de retour de 90 cm."></textarea>
+  </section>
+</main>
+
+<main id="vue-catalogue" hidden>
+  <p class="sous" style="padding-top:14px;max-width:70ch">Décision par composant : intégré à l'enveloppe, exclu, ou à confirmer. La décision de l'agent est présélectionnée ; toute modification est enregistrée aussitôt.</p>
+  <div class="catalogue" id="catalogue"></div>
+</main>
+
+<footer class="pied" id="pied">
+  <span class="message" id="message"></span>
+  <button class="bouton" id="precedent">← Précédent</button>
+  <button class="bouton ok" id="conforme">Tronçon conforme</button>
+  <button class="bouton modif" id="enregistrer">Enregistrer les corrections</button>
+  <button class="bouton" id="suivant">Suivant →</button>
+</footer>
+
+<script>
+const D = /*DONNEES*/null;
+const DECISIONS = { integre: "Intégré", exclu: "Exclu", a_confirmer: "À confirmer" };
+const TYPES_LIB = { paroi: "paroi", menuiserie: "menuiserie", poteau: "poteau", angle_sortant: "angle sortant",
+  angle_rentrant: "angle rentrant", about_refend: "about de refend", about_plancher: "about de plancher",
+  garde_corps: "garde-corps", indetermine: "indéterminé" };
+const $ = (id) => document.getElementById(id);
+const parTroncon = {};
+D.elements.forEach((e) => (parTroncon[e.troncon] ||= []).push(e));
+Object.values(parTroncon).forEach((l) => l.sort((a, b) => a.debut_m - b.debut_m));
+const validations = {};   // tronçon -> document enregistré
+const decisions = {};     // composant -> décision enregistrée
+let base = null, rang = 0, filtre = "tous", lecture = true, brouillon = null;
+
+$("sous-titre").textContent = `${D.plan} · niveau ${D.niveau} · ${D.troncons.length} tronçons · ${D.elements.length} intervalles relevés`;
+
+function statutDe(id) { return validations[id]?.statut || "a-valider"; }
+function libStatut(s) { return s === "conforme" ? "Conforme" : s === "corrige" ? "Corrigé" : "À valider"; }
+function fmt(v, d = 2) {
+  if (v === null || v === undefined || v === "") return "";
+  let s = Number(v).toFixed(d);
+  if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
+  return s;
+}
+
+function visibles() {
+  return D.troncons.filter((t) => {
+    if (filtre === "a-valider") return statutDe(t.id) === "a-valider";
+    if (filtre === "signales") return !!D.signalements[t.id];
+    if (filtre === "corriges") return statutDe(t.id) === "corrige";
+    return true;
+  });
+}
+
+function dessinerPuces() {
+  const zone = $("puces");
+  zone.replaceChildren();
+  visibles().forEach((t) => {
+    const b = document.createElement("button");
+    b.className = "puce " + statutDe(t.id);
+    b.textContent = t.id;
+    b.title = `${t.id} · ${t.piece}${D.signalements[t.id] ? " · signalé" : ""}`;
+    if (D.troncons[rang].id === t.id) b.setAttribute("aria-current", "true");
+    if (D.signalements[t.id]) { const s = document.createElement("span"); s.className = "signal"; b.append(s); }
+    b.onclick = () => aller(D.troncons.indexOf(t));
+    zone.append(b);
+  });
+  const n = D.troncons.length;
+  const ok = D.troncons.filter((t) => statutDe(t.id) === "conforme").length;
+  const mo = D.troncons.filter((t) => statutDe(t.id) === "corrige").length;
+  $("barre-ok").style.width = (100 * ok / n) + "%";
+  $("barre-modif").style.width = (100 * mo / n) + "%";
+  $("chiffres").innerHTML = "";
+  [[`${ok + mo}/${n} validés`], [`${ok} conformes`], [`${mo} corrigés`], [`${n - ok - mo} à valider`],
+   [`${Object.keys(D.signalements).length} signalés`]].forEach(([t]) => { const s = document.createElement("span"); s.textContent = t; $("chiffres").append(s); });
+}
+
+
+function ouvrir() {
+  const t = D.troncons[rang];
+  const enregistre = validations[t.id];
+  brouillon = enregistre ? enregistre.elements.map((e) => ({ ...e }))
+    : (parTroncon[t.id] || []).map((e, i) => ({ ...e, etat: "conforme", index_origine: i }));
+  $("note").value = enregistre?.note || "";
+  $("t-titre").textContent = t.id;
+  $("t-bornes").textContent = `${fmt(t.debut_m)} → ${fmt(t.fin_m)} m (${fmt(t.fin_m - t.debut_m)} m)`;
+  $("t-piece").textContent = `côté ${t.cote} · pièce : ${t.piece}`;
+  const s = statutDe(t.id);
+  $("t-statut").className = "statut " + s;
+  $("t-statut").textContent = libStatut(s);
+  const sig = D.signalements[t.id];
+  $("t-signalements").hidden = !sig;
+  if (sig) {
+    $("t-signalements").innerHTML = "<strong>À regarder en priorité</strong>";
+    const ul = document.createElement("ul");
+    sig.forEach((m) => { const li = document.createElement("li"); li.textContent = m; ul.append(li); });
+    $("t-signalements").append(ul);
+  }
+  $("t-image").src = `bandes/${t.id}${lecture ? "" : "-brut"}.jpg`;
+  $("t-image").alt = `Bande redressée du tronçon ${t.id}`;
+  $("image").classList.remove("zoom");
+  dessinerLignes();
+  dessinerPuces();
+  $("message").textContent = "";
+}
+
+function champ(e, cle, orig, options = {}) {
+  const input = document.createElement(options.select ? "select" : "input");
+  if (options.select) {
+    options.select.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; input.append(o); });
+    input.value = e[cle] ?? "";
+  } else {
+    input.type = options.texte ? "text" : "number";
+    if (!options.texte) { input.step = options.pas || "0.01"; input.className = "num"; }
+    input.value = e[cle] ?? "";
+  }
+  input.id = `c-${D.troncons[rang].id}-${brouillon.indexOf(e)}-${cle}`;
+  input.setAttribute("aria-label", cle);
+  const marquer = () => {
+    const change = orig && String(orig[cle] ?? "") !== String(e[cle] ?? "");
+    input.classList.toggle("change", !!change);
+  };
+  input.onchange = () => {
+    const v = input.value;
+    e[cle] = options.select || options.texte ? v : (v === "" ? null : Number(v));
+    if (e.etat === "conforme") e.etat = "modifie";
+    marquer(); verifierCouverture();
+  };
+  marquer();
+  return input;
+}
+
+function dessinerLignes() {
+  const corps = $("lignes");
+  corps.replaceChildren();
+  const originaux = parTroncon[D.troncons[rang].id] || [];
+  const choixComposant = [["", "—"], ...D.catalogue.map((f) => [f.id, `${f.id} · ${f.nom}`])];
+  const choixType = D.types.map((t) => [t, TYPES_LIB[t] || t]);
+  brouillon.forEach((e, i) => {
+    const orig = e.etat === "ajoute" ? null : originaux[e.index_origine];
+    const tr = document.createElement("tr");
+    if (e.etat === "supprime") tr.className = "supprime";
+    if (e.etat === "ajoute") tr.className = "ajoute";
+    const cell = (enfant) => { const td = document.createElement("td"); if (enfant) td.append(enfant); tr.append(td); return td; };
+    cell(champ(e, "debut_m", orig));
+    cell(champ(e, "fin_m", orig));
+    cell(champ(e, "type", orig, { select: choixType }));
+    cell(champ(e, "composant", orig, { select: choixComposant }));
+    const tdExt = cell(champ(e, "nu_exterieur_cm", orig, { pas: "1" }));
+    const tdInt = cell(champ(e, "nu_interieur_cm", orig, { pas: "1" }));
+    if (e.nu_exterieur_fin_cm != null && (e.nu_exterieur_fin_cm !== e.nu_exterieur_cm || e.nu_interieur_fin_cm !== e.nu_interieur_cm)) {
+      const b1 = document.createElement("span"); b1.className = "biais num"; b1.textContent = `fin : ${fmt(e.nu_exterieur_fin_cm, 0)}`; tdExt.append(b1);
+      const b2 = document.createElement("span"); b2.className = "biais num"; b2.textContent = `fin : ${fmt(e.nu_interieur_fin_cm, 0)}`; tdInt.append(b2);
+    }
+    const tdBaie = cell();
+    if (e.type === "menuiserie") {
+      tdBaie.append(champ(e, "menuiserie_type", orig, { texte: true }));
+      const cadre = champ(e, "cadre_cm", orig, { pas: "1" }); cadre.title = "profondeur du cadre (cm)"; tdBaie.append(cadre);
+    }
+    const conf = document.createElement("span");
+    conf.className = "confiance" + (e.confiance != null && e.confiance < 0.5 ? " basse" : "");
+    conf.textContent = e.confiance != null ? Number(e.confiance).toFixed(2) + (e.a_verifier ? " ?" : "") : "—";
+    cell(conf);
+    const ind = document.createElement("span"); ind.className = "indice"; ind.textContent = e.indice || ""; cell(ind);
+    const actions = document.createElement("div"); actions.className = "actions-ligne";
+    const suppr = document.createElement("button");
+    suppr.textContent = e.etat === "supprime" ? "Rétablir" : "Supprimer";
+    suppr.onclick = () => { e.etat = e.etat === "supprime" ? "modifie" : "supprime"; dessinerLignes(); };
+    const ajout = document.createElement("button");
+    ajout.textContent = "+ après"; ajout.title = "Insérer un intervalle après celui-ci";
+    ajout.onclick = () => {
+      brouillon.splice(i + 1, 0, { troncon: e.troncon, debut_m: e.fin_m, fin_m: brouillon[i + 1]?.debut_m ?? e.fin_m, type: "paroi",
+        composant: "", nu_exterieur_cm: e.nu_exterieur_cm, nu_interieur_cm: e.nu_interieur_cm, etat: "ajoute", indice: "ajouté par le thermicien" });
+      dessinerLignes();
+    };
+    actions.append(suppr, ajout);
+    cell(actions);
+    corps.append(tr);
+  });
+  verifierCouverture();
+}
+
+function verifierCouverture() {
+  const t = D.troncons[rang];
+  const actifs = brouillon.filter((e) => e.etat !== "supprime").slice().sort((a, b) => a.debut_m - b.debut_m);
+  const trous = [];
+  let curseur = t.debut_m;
+  actifs.forEach((e) => { if (e.debut_m > curseur + 0.02) trous.push(`${fmt(curseur)}–${fmt(e.debut_m)} m`); curseur = Math.max(curseur, e.fin_m); });
+  if (curseur < t.fin_m - 0.02) trous.push(`${fmt(curseur)}–${fmt(t.fin_m)} m`);
+  $("couverture").hidden = !trous.length;
+  $("couverture").textContent = trous.length ? `Portions sans intervalle : ${trous.join(", ")}. Vous pouvez enregistrer quand même.` : "";
+}
+
+async function enregistrer(statut) {
+  const t = D.troncons[rang];
+  const elements = brouillon.map((e) => ({ ...e, etat: statut === "conforme" ? "conforme" : e.etat }));
+  const doc = { statut, elements, note: $("note").value.trim(), maj: new Date().toISOString() };
+  if (!base) { $("message").textContent = "Enregistrement indisponible : ouvrez la page depuis claude.ai pour que vos validations soient conservées."; return false; }
+  try {
+    await base.doc(`troncons/${t.id}`).set(doc);
+    validations[t.id] = doc;
+    $("message").textContent = `${t.id} enregistré (${libStatut(statut).toLowerCase()}).`;
+    return true;
+  } catch (err) {
+    $("message").textContent = err?.code === "invalid_argument"
+      ? "Vous n'avez pas le droit d'enregistrer sur cette page (lecture seule)."
+      : "L'enregistrement n'a pas abouti. Réessayez dans un instant.";
+    return false;
+  }
+}
+
+function aller(i) { if (i < 0 || i >= D.troncons.length) return; rang = i; ouvrir(); window.scrollTo({ top: 0 }); }
+function suivantAValider() {
+  for (let k = 1; k <= D.troncons.length; k++) { const i = (rang + k) % D.troncons.length; if (statutDe(D.troncons[i].id) === "a-valider") return i; }
+  return Math.min(rang + 1, D.troncons.length - 1);
+}
+
+$("conforme").onclick = async () => { if (await enregistrer("conforme")) aller(suivantAValider()); };
+$("enregistrer").onclick = async () => { if (await enregistrer("corrige")) aller(suivantAValider()); };
+$("precedent").onclick = () => aller(rang - 1);
+$("suivant").onclick = () => aller(rang + 1);
+$("voir-lecture").onclick = () => { lecture = true; $("voir-lecture").setAttribute("aria-pressed", "true"); $("voir-brut").setAttribute("aria-pressed", "false"); $("t-image").src = `bandes/${D.troncons[rang].id}.jpg`; };
+$("voir-brut").onclick = () => { lecture = false; $("voir-brut").setAttribute("aria-pressed", "true"); $("voir-lecture").setAttribute("aria-pressed", "false"); $("t-image").src = `bandes/${D.troncons[rang].id}-brut.jpg`; };
+$("t-image").onclick = () => $("image").classList.toggle("zoom");
+$("filtres").onclick = (ev) => {
+  const b = ev.target.closest("button"); if (!b) return;
+  filtre = b.dataset.filtre;
+  $("filtres").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  dessinerPuces();
+};
+document.addEventListener("keydown", (ev) => {
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+  if (ev.key === "ArrowRight") aller(rang + 1);
+  if (ev.key === "ArrowLeft") aller(rang - 1);
+});
+function onglet(catalogue) {
+  $("vue-troncons").hidden = catalogue; $("vue-catalogue").hidden = !catalogue; $("pied").hidden = catalogue;
+  $("onglet-troncons").setAttribute("aria-pressed", String(!catalogue)); $("onglet-catalogue").setAttribute("aria-pressed", String(catalogue));
+  if (catalogue) dessinerCatalogue();
+}
+$("onglet-troncons").onclick = () => onglet(false);
+$("onglet-catalogue").onclick = () => onglet(true);
+
+function dessinerCatalogue() {
+  const zone = $("catalogue");
+  zone.replaceChildren();
+  D.catalogue.forEach((f) => {
+    const carte = document.createElement("article"); carte.className = "fiche";
+    const l1 = document.createElement("div"); l1.className = "ligne1";
+    const titre = document.createElement("div");
+    const id = document.createElement("span"); id.className = "id"; id.textContent = f.id + " ";
+    const nom = document.createElement("span"); nom.textContent = f.nom;
+    titre.append(id, nom);
+    const choix = document.createElement("select"); choix.id = "decision-" + f.id; choix.setAttribute("aria-label", "Décision " + f.id);
+    Object.entries(DECISIONS).forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; choix.append(o); });
+    choix.value = decisions[f.id]?.decision || f.decision;
+    choix.onchange = async () => {
+      if (!base) return;
+      try { await base.doc(`catalogue/${f.id}`).set({ decision: choix.value, decision_agent: f.decision, maj: new Date().toISOString() });
+        decisions[f.id] = { decision: choix.value }; }
+      catch { choix.value = decisions[f.id]?.decision || f.decision; }
+    };
+    l1.append(titre, choix);
+    const comp = document.createElement("div"); comp.className = "composition"; comp.textContent = `${f.genre} · ${f.composition}`;
+    const regle = document.createElement("div"); regle.className = "regle"; regle.textContent = f.regle;
+    carte.append(l1, comp, regle);
+    zone.append(carte);
+  });
+}
+
+ouvrir();
+
+(async () => {
+  const db = await window.claude?.use?.("db");
+  if (!db) { $("etat-base").textContent = "Enregistrement indisponible ici (lecture seule)"; $("etat-base").classList.add("erreur"); return; }
+  base = db;
+  $("etat-base").textContent = "Enregistrement actif";
+  db.collection("troncons").onSnapshot((snap) => {
+    snap.docs.forEach((d) => { if (d.exists) validations[d.id] = d.data(); });
+    dessinerPuces();
+    const t = D.troncons[rang];
+    $("t-statut").className = "statut " + statutDe(t.id); $("t-statut").textContent = libStatut(statutDe(t.id));
+  }, () => { $("etat-base").textContent = "Enregistrement interrompu : rechargez la page"; $("etat-base").classList.add("erreur"); });
+  db.collection("catalogue").onSnapshot((snap) => {
+    snap.docs.forEach((d) => { if (d.exists) decisions[d.id] = d.data(); });
+    if (!$("vue-catalogue").hidden) dessinerCatalogue();
+  });
+})();
+</script>

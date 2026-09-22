@@ -113,3 +113,67 @@ Limite assumee de cette etape : l'agent local doit etre connecte et lance sur le
 execution autonome pour plusieurs utilisateurs devra passer par une authentification serveur officiellement
 supportee (API Anthropic, identite de charge, ou routine Claude Code lorsque ce mode experimental repondra au
 besoin de fichiers et de retour de resultat).
+
+## 10. Recette réelle du R+1 (2026-09-21, Claude Code)
+
+### Exécution
+
+- `claude auth status` indique une connexion claude.ai, mais tout appel non interactif échoue en **401
+  « OAuth access token is invalid »** : le jeton enregistré localement est périmé et seule une reconnexion
+  interactive de l'utilisateur (`claude auth login --claudeai`) le renouvelle. Aucun identifiant n'est lu.
+- Cause annexe corrigée : lancé depuis une session Claude hôte (application de bureau), le binaire héritait de
+  ses variables (`ANTHROPIC_BASE_URL`, `CLAUDE_CODE_*`). `cli_environment()` les retire avant l'appel.
+- `pdftoppm` absent du poste : rendu de secours par pypdfium2 (pixels uniquement), paquet identique à celui
+  de Codex (2897 × 2731 px, même recadrage).
+- En attendant la reconnexion, le **même agent `thermicien-plan`** (Claude Opus, mêmes consignes, outil Read
+  seul) a été exécuté depuis la session Claude Code de l'utilisateur ; sa réponse brute est retraitée par
+  `run_thermicien_claude.py --from-raw` (nouvelle option, aucun nouvel appel au modèle).
+
+### Résultat brut de l'agent (≈ 4 min, 7 images lues)
+
+130 objets : 13 murs extérieurs, 4 refends, 24 cloisons, 4 isolants, 20 menuiseries extérieures, 20 intérieures,
+2 terrasses, 14 poteaux, 3 garde-corps, 22 pièces, 4 à déterminer ; 61 signalés à confirmer. Mobilier, textes,
+axes et cartouche absents des composants. Aucun zigzag.
+
+### Algorithmes classiques ajoutés (`thermique_vision_geometrie.py`, raster seul)
+
+1. Douglas-Peucker (6 px) contre les zigzags ;
+2. redressement sur les directions dominantes (0°/90° + façades en biais détectées), sommets recalculés par
+   intersection pour garder les tracés connectés ;
+3. recalage perpendiculaire des murs, refends, cloisons et isolants sur la bande d'encre la plus dense
+   (±22 px, gain ≥ 25 %) — 23 objets recalés sur le R+1 ;
+4. espaces d'un même niveau sans recouvrement : la grande pièce est amputée d'un espace en bord ; un espace
+   enclavé (trémie, gaine, escalier central) ne crée pas de trou mais est listé dans `enclaves`, à déduire
+   de la surface au calcul (plateau 4.2 : escalier atrium, vide sur accueil, gaine).
+
+Les points bruts de l'agent restent dans `points_agent_norm` pour traçabilité.
+
+### Décisions prises pendant la recette
+
+- D-R1 : catégorie **`piece`** ajoutée (polygone au nu intérieur, nom lu dans `subtype`), dans l'agent, le
+  schéma, l'API et l'écran.
+- D-R2 : à l'import agent, la revue n'est forcée que sous **0,5** de confiance (l'agent signale lui-même ses
+  doutes) ; l'adaptateur serveur garde 0,78. Effet : 61 objets à confirmer au lieu de 123 sur 130.
+- D-R3 : projection PNG — espaces dessous, composants dessus, nom des pièces au centre, police avec accents.
+
+### Vérifié dans `/analyse` (recette locale jetable)
+
+Import par le bouton « Importer le résultat Claude » : 130 objets, aucune erreur, rotation 270° acceptée,
+recalage correct sur le plan. Édition : déplacement d'un sommet puis « Enregistrer et valider » (objet
+« corrigé », validé), ajout d'un point sur un segment. Corrigés : Alt + clic réinsérait aussitôt le point
+retiré ; cartes claires illisibles (texte blanc sur fond clair) ; bouton d'import débordant ; noms des pièces
+absents de la liste.
+
+### Faux positifs / manques relevés sur le R+1 (à valider par le thermicien)
+
+- Manque : circulation devant vestiaire/sanitaires et kitchenette (aucune pièce) ; portes du bloc sanitaires.
+- Douteux : 6.1.1 B.dir fusionné avec l'EAPMR ; façade nord des bureaux lue comme mur-rideau ; « boîte à vents »
+  en `indetermine` ; bande est (escalier extérieur) en `indetermine`.
+- Le contour sud du plateau 4.2 suit la façade de façon approximative (nus intérieurs des redents).
+
+### Questions ouvertes
+
+- Q-R1 : les pièces non cloisonnées (4.3 Musique, 4.4 Zone ados) doivent-elles rester dans le plateau 4.2 ?
+- Q-R2 : l'escalier central compte-t-il dans la surface chauffée du plateau (enclave déduite ou non) ?
+- Q-R3 : faut-il caler automatiquement les côtés des pièces sur la face des cloisons recalées (étape suivante
+  « composants associés aux limites des pièces ») ?

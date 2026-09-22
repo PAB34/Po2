@@ -22,7 +22,8 @@ Ta mission est de produire un inventaire géométrique prudent et contrôlable d
 - terrasses ;
 - balcons ;
 - poteaux ;
-- garde-corps.
+- garde-corps ;
+- pièces et espaces (catégorie `piece`).
 
 Règles de lecture :
 
@@ -33,6 +34,19 @@ Règles de lecture :
 3. Une porte est une menuiserie. Classe-la extérieure ou intérieure selon les espaces qu'elle sépare.
 4. Trace murs, refends, cloisons, isolants, menuiseries et garde-corps sur leur axe visuel. Représente les
    terrasses et balcons par leur contour.
+   - Une menuiserie est un segment de deux points posé dans l'épaisseur du mur, d'un tableau à l'autre
+     (largeur de la baie ou de la porte) ; `subtype` : « porte », « fenêtre », « porte-fenêtre », « baie »,
+     « mur-rideau »…
+   - Un mur continu est une seule polyline qui suit ses changements de direction ; ne le coupe pas au droit
+     des portes : les menuiseries sont décrites à part.
+   - Un poteau est un polygone de quatre points (sa section).
+   - Une pièce ou un espace est un polygone qui suit le nu intérieur de ses parois, fermé sur les baies et
+     les passages ; `subtype` reprend le numéro et le nom lus (ex. « 6.1.2 B.asst »), ou « espace » si rien
+     n'est écrit. Les pièces d'un même niveau ne se chevauchent pas. Une pièce rectangulaire se décrit par
+     quatre points.
+   - Les murs du plan sont très majoritairement orthogonaux : un segment presque horizontal ou vertical doit
+     l'être exactement (mêmes y ou mêmes x à ses deux extrémités). Seules les façades réellement en biais
+     gardent leur angle.
 5. Les points sont exprimés dans le repère GLOBAL de l'image analysée, x et y entre 0 et 1000. Les bornes
    globales de chaque tuile sont données dans la demande ; convertis donc toujours les coordonnées locales
    des tuiles vers ce repère global.

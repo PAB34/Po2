@@ -1611,8 +1611,35 @@ circle.th-seg--measure {
 }
 
 .th-auto-zoning__panel .th-panel__title {
-  color: #173b63;
+  color: inherit;
   font-size: 1.35rem;
+}
+
+/* Cartes à fond clair dans un panneau sombre : leur texte doit être foncé. */
+.th-auto-zoning__agent-import,
+.th-auto-zoning__progress,
+.th-auto-zoning__summary,
+.th-auto-zoning__selected {
+  color: #172033;
+}
+
+.th-auto-zoning__agent-import .th-muted,
+.th-auto-zoning__progress .th-muted,
+.th-auto-zoning__summary .th-muted,
+.th-auto-zoning__selected .th-muted {
+  color: #4b5563;
+}
+
+.th-auto-zoning__agent-import .po2-button--primary,
+.th-auto-zoning__selected .po2-button--primary {
+  border-color: #173b63;
+  background: #173b63;
+  color: #ffffff;
+}
+
+.th-auto-zoning__selected .po2-button--ghost,
+.th-auto-zoning__selected .po2-button--secondary {
+  color: #173b63;
 }
 
 .th-auto-zoning__run {
@@ -1631,6 +1658,7 @@ circle.th-seg--measure {
 }
 
 .th-auto-zoning__agent-import label.th-auto-zoning__run {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1723,6 +1751,12 @@ circle.th-seg--measure {
 .th-zone-list button.is-active {
   border-color: #a9bfd1;
   background: #edf5fb;
+  color: #172033;
+}
+
+.th-zone-list button:hover small,
+.th-zone-list button.is-active small {
+  color: #4b5563;
 }
 
 .th-zone-list__code {

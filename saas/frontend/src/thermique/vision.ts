@@ -5,12 +5,14 @@ export type VisionCategory =
   | "refend"
   | "cloison"
   | "isolation"
+  | "doublage"
   | "menuiserie_exterieure"
   | "menuiserie_interieure"
   | "terrasse"
   | "balcon"
   | "poteau"
   | "garde_corps"
+  | "piece"
   | "indetermine";
 
 export type VisionObject = {
@@ -74,11 +76,13 @@ export const VISION_STYLES: Record<VisionCategory, { label: string; color: strin
   refend: { label: "Murs de refend", color: "#7b3294" },
   cloison: { label: "Cloisons", color: "#4575b4" },
   isolation: { label: "Isolation", color: "#fdae61" },
+  doublage: { label: "Doublages", color: "#9775fa" },
   menuiserie_exterieure: { label: "Menuiseries extérieures", color: "#00a6d6" },
   menuiserie_interieure: { label: "Menuiseries intérieures", color: "#66c2a5" },
   terrasse: { label: "Terrasses", color: "#8c6d31" },
   balcon: { label: "Balcons", color: "#a6761d" },
   poteau: { label: "Poteaux", color: "#525252" },
   garde_corps: { label: "Garde-corps", color: "#636363" },
+  piece: { label: "Pièces et espaces", color: "#1b9e77" },
   indetermine: { label: "À déterminer", color: "#e7298a" },
 };
