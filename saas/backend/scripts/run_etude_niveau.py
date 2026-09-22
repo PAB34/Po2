@@ -36,6 +36,7 @@ import run_enveloppe_claude as parcours  # noqa: E402
 import run_thermicien_claude as passe  # noqa: E402
 
 from app.services import thermique_claude_agent as agent  # noqa: E402
+from app.services import thermique_lecture_locaux as lecture_locaux  # noqa: E402
 from app.services import thermique_locaux as recaler  # noqa: E402
 from app.services import thermique_parcours_enveloppe as enveloppe  # noqa: E402
 from app.services.thermique import ThermiqueError  # noqa: E402
@@ -181,7 +182,9 @@ def preparer_enveloppe(etude: Etude) -> dict:
     analyse = json.loads(etude.locaux_json.read_text(encoding="utf-8"))
     if chemin.is_file():
         return json.loads(chemin.read_text(encoding="utf-8"))
-    manifeste = enveloppe.preparer(etude.source, analyse, etude.env_dir, etude.args.page, 300, etude.args.echelle)
+    # façade par tronçons + côtés des locaux chauffés sur local non chauffé ou vide (D46)
+    manifeste = enveloppe.preparer(etude.source, analyse, etude.env_dir, etude.args.page, 300, etude.args.echelle,
+                                   complement=lecture_locaux.complement)
     if etude.args.catalogue and not (etude.env_dir / "catalogue.json").is_file():
         shutil.copyfile(etude.args.catalogue, etude.env_dir / "catalogue.json")
         etude.noter("catalogue", "repris", str(etude.args.catalogue))

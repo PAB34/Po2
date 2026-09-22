@@ -84,7 +84,7 @@ def test_angle_a_la_piece_qui_le_contient_et_elements_exclus_ignores():
 
     assert synthese == [{"piece": "Bureau A", "parois": [], "menuiseries": [], "poteaux": 0,
                          "ponts": {"angle_sortant": 1.0, "angle_rentrant": 0.0, "about_refend": 0.0},
-                         "facade_m": 0.0, "liaison_plancher_m": 0.0}]
+                         "facade_m": 0.0, "sur_non_chauffe_m": 0.0, "liaison_plancher_m": 0.0}]
 
 
 def test_pieces_homonymes_restent_distinctes():

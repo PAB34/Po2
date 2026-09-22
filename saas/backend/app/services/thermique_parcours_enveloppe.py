@@ -335,8 +335,13 @@ def preparer(
     page: int = 1,
     dpi: int = 300,
     echelle: float = 100,
+    complement: Any = None,
 ) -> dict[str, Any]:
-    """Rend la page, trace le guide, découpe et gradue les bandes, puis les regroupe en planches."""
+    """Rend la page, trace le guide, découpe et gradue les bandes, puis les regroupe en planches.
+
+    `complement(analyse, largeur, hauteur, px_par_m, batiment)` ajoute des tronçons lus depuis la face intérieure
+    des locaux (D46 : côtés sur local non chauffé ou vide), sur des planches et dans des lots à part.
+    """
     manifeste_analyse = analyse["manifest"]
     rotation = int(manifeste_analyse["rotation_deg_ccw"])
     page_image = rendre_page(pdf, page, dpi, rotation)
@@ -344,21 +349,24 @@ def preparer(
     px_par_m = dpi / M_PAR_POUCE / echelle
     guide = contour_guide(analyse, largeur, hauteur, px_par_m, page_image)
     liste = troncons(guide, analyse, largeur, hauteur, px_par_m)
+    supplement = complement(analyse, largeur, hauteur, px_par_m, guide["polygone"]) if complement else []
     dossier.mkdir(parents=True, exist_ok=True)
     planches: list[dict[str, Any]] = []
-    graduees = [_graduer(_bande(page_image, t, px_par_m), t, px_par_m) for t in liste]
-    for debut in range(0, len(graduees), BANDES_PAR_PLANCHE):
-        groupe = graduees[debut : debut + BANDES_PAR_PLANCHE]
-        largeur_planche = max(image.width for image in groupe)
-        planche = Image.new("RGB", (largeur_planche, sum(image.height + 24 for image in groupe)), "#e9ecef")
-        y = 0
-        for image in groupe:
-            planche.paste(image, (0, y))
-            y += image.height + 24
-        chemin = dossier / f"enveloppe-{len(planches) + 1:02d}.png"
-        planche.save(chemin, optimize=True)
-        planches.append({"chemin": str(chemin.resolve()), "troncons": [t["id"] for t in liste[debut : debut + BANDES_PAR_PLANCHE]]})
-    plan = _plan_guide(page_image, guide, liste, dossier / "enveloppe-guide.jpg", px_par_m)
+    for groupe_troncons, est_complement in ((liste, False), (supplement, True)):
+        graduees = [_graduer(_bande(page_image, t, px_par_m), t, px_par_m) for t in groupe_troncons]
+        for debut in range(0, len(graduees), BANDES_PAR_PLANCHE):
+            groupe = graduees[debut : debut + BANDES_PAR_PLANCHE]
+            largeur_planche = max(image.width for image in groupe)
+            planche = Image.new("RGB", (largeur_planche, sum(image.height + 24 for image in groupe)), "#e9ecef")
+            y = 0
+            for image in groupe:
+                planche.paste(image, (0, y))
+                y += image.height + 24
+            chemin = dossier / f"enveloppe-{len(planches) + 1:02d}.png"
+            planche.save(chemin, optimize=True)
+            planches.append({"chemin": str(chemin.resolve()), "complement": est_complement,
+                             "troncons": [t["id"] for t in groupe_troncons[debut : debut + BANDES_PAR_PLANCHE]]})
+    plan = _plan_guide(page_image, guide, liste + supplement, dossier / "enveloppe-guide.jpg", px_par_m)
     manifeste = {
         "version": 1,
         "methode": "parcours_enveloppe_raster",
@@ -369,7 +377,8 @@ def preparer(
         "page_px": [largeur, hauteur],
         "bande_m": {"interieure": BANDE_INTERIEURE_M, "exterieure": BANDE_EXTERIEURE_M, "recouvrement": RECOUVREMENT_M},
         "perimetre_m": round(sum(t["fin_m"] - t["debut_m"] for t in liste), 2),
-        "troncons": liste,
+        "troncons": liste + supplement,
+        "batiment_px": [list(p) for p in guide["polygone"].exterior.coords],
         "trous_px": guide["trous"],
         "guide": guide["methode"],
         "planches": planches,
@@ -390,6 +399,10 @@ def _plan_guide(page: Image.Image, guide: dict[str, Any], liste: list[dict[str, 
     dessin.line(anneau + anneau[:1], fill="#d6336c", width=8)
     police = _police(48)
     for troncon in liste:
+        if troncon.get("ligne") == "face_interieure":  # D46 : côté de local, tracé en orange
+            a = _point(troncon, troncon["debut_m"], 0, px_par_m)
+            b = _point(troncon, troncon["fin_m"], 0, px_par_m)
+            dessin.line([(a[0] - boite[0], a[1] - boite[1]), (b[0] - boite[0], b[1] - boite[1])], fill="#e8590c", width=8)
         x, y = _point(troncon, (troncon["debut_m"] + troncon["fin_m"]) / 2, -60, px_par_m)
         dessin.text((x - boite[0] - 30, y - boite[1] - 24), troncon["id"], fill="#0b3d91", font=police)
     dessin.ellipse((anneau[0][0] - 25, anneau[0][1] - 25, anneau[0][0] + 25, anneau[0][1] + 25), fill="#2b8a3e")
@@ -406,7 +419,10 @@ def consigne(
 ) -> str:
     planches = manifeste["planches"] if planches is None else planches
     troncons_lot = {t for planche in planches for t in planche["troncons"]}
-    if manifeste.get("mode") == "par_local":
+    par_id = {t["id"]: t for t in manifeste["troncons"]}
+    par_local = manifeste.get("mode") == "par_local" or (troncons_lot and all(
+        par_id.get(t, {}).get("ligne") == "face_interieure" for t in troncons_lot))
+    if par_local:
         # lecture par local (D42, D43) : un tronçon = un côté déperditif d'un local, 0 = face intérieure du local
         lignes = [
             "Tu fais le tour des locaux chauffés d'un étage, local par local. Pour chaque local, on ne te montre que "
@@ -482,8 +498,11 @@ def consigne(
 
 def lots(manifeste: dict[str, Any]) -> list[list[dict[str, Any]]]:
     """Planches regroupées en lots successifs : le catalogue passe d'un lot au suivant."""
-    planches = manifeste["planches"]
-    return [planches[k : k + LOT_PLANCHES] for k in range(0, len(planches), LOT_PLANCHES)]
+    resultat = []
+    for complement in (False, True):  # les côtés sur local non chauffé (D46) forment leurs propres lots
+        planches = [p for p in manifeste["planches"] if bool(p.get("complement")) == complement]
+        resultat += [planches[k : k + LOT_PLANCHES] for k in range(0, len(planches), LOT_PLANCHES)]
+    return resultat
 
 
 def schema() -> dict[str, Any]:

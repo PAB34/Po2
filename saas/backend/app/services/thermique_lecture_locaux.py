@@ -74,7 +74,15 @@ def _suites(etiquettes: list[bool], pas: float) -> list[tuple[int, int]]:
 
 
 def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, px_par_m: float,
-                       batiment: Polygon) -> list[dict[str, Any]]:
+                       batiment: Polygon, adjacences: set[str] = ADJACENCES_LUES, prefixe: str = "T",
+                       depart_m: float = 0.0, longueur_min_m: float = 0.0,
+                       exiges: set[str] | None = None) -> list[dict[str, Any]]:
+    """Un tronçon par côté de local chauffé dont les sondages trouvent `adjacences` derrière le mur.
+
+    `exiges` : une suite n'est gardée que si au moins PART_EXIGEE de ses sondages trouvent l'une de ces adjacences
+    (le sondage alterne souvent entre « vide » et « rien trouvé » le long d'un vide mal délimité) ; son adjacence
+    est alors la plus fréquente d'entre elles.
+    """
     natures = pieces_env.natures_du_plan(analyse)
     formes = pieces_env.pieces_du_plan(analyse, largeur, hauteur)
     locaux = [(nom, prep(forme), natures.get(nom, "chauffe")) for nom, forme in formes]
@@ -83,7 +91,7 @@ def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, 
              for e in analyse.get("locaux_ecartes", []) if e.get("decision") == "vide" and e.get("points")]
     batiment_p = prep(batiment)
     resultat: list[dict[str, Any]] = []
-    abscisse = 0.0
+    abscisse = depart_m
     for nom, forme in formes:
         if natures.get(nom, "chauffe") not in LOCAUX_LUS:
             continue
@@ -103,16 +111,23 @@ def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, 
                 s = (k + 0.5) * pas
                 p = (a[0] + ux * s * px_par_m, a[1] + uy * s * px_par_m)
                 sondes.append(fiches_locaux._sonder(p, normale, px_par_m, nom, locaux, batiment_p, exterieurs, vides)[0])
-            for debut, fin in _suites([adj in ADJACENCES_LUES for adj in sondes], pas):
+            for debut, fin in _suites([adj in adjacences for adj in sondes], pas):
                 d0, d1 = debut * pas, fin * pas
-                adjacences = sondes[debut:fin]
-                majoritaire = max(set(adjacences), key=adjacences.count)
+                if d1 - d0 < longueur_min_m:
+                    continue
+                vues = sondes[debut:fin]
+                if exiges:
+                    retenues = [a for a in vues if a in exiges]
+                    if len(retenues) < PART_EXIGEE * len(vues):
+                        continue
+                    vues = retenues
+                majoritaire = max(set(vues), key=vues.count)
                 parts = max(1, math.ceil((d1 - d0) / env.TRONCON_MAX_M - 1e-9))
                 for k in range(parts):
                     local_debut = d0 + (d1 - d0) * k / parts
                     local_fin = d0 + (d1 - d0) * (k + 1) / parts
                     resultat.append({
-                        "id": f"T{len(resultat) + 1:02d}",
+                        "id": f"{prefixe}{len(resultat) + 1:02d}",
                         "cote": cote,
                         "origine_px": [a[0], a[1]],
                         "direction": [ux, uy],
@@ -129,6 +144,19 @@ def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, 
             tour += longueur_m
         abscisse += tour + SAUT_M
     return resultat
+
+
+ADJACENCES_COMPLEMENT = {"non_chauffe", "vide"}
+PART_EXIGEE = 0.30
+COMPLEMENT_MIN_M = 0.5
+COMPLEMENT_DEPART_M = 10000.0  # loin du périmètre de la façade : aucun raccord d'angle avec les tronçons T
+
+
+def complement(analyse: dict[str, Any], largeur: float, hauteur: float, px_par_m: float,
+               batiment: Polygon) -> list[dict[str, Any]]:
+    """D46 : côtés des locaux chauffés sur un local non chauffé ou un vide, lus en plus du parcours de la façade."""
+    return troncons_par_local(analyse, largeur, hauteur, px_par_m, batiment, ADJACENCES_COMPLEMENT | {"inconnu"}, "U",
+                              COMPLEMENT_DEPART_M, COMPLEMENT_MIN_M, exiges=ADJACENCES_COMPLEMENT)
 
 
 def _plan_guide(page: Image.Image, batiment: Polygon, liste: list[dict[str, Any]], chemin: Path, px_par_m: float) -> Path:

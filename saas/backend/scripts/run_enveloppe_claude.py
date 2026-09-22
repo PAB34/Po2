@@ -194,8 +194,13 @@ def main() -> int:
         if (args.from_raw or args.lot or args.integrer_lot) and manifeste_chemin.is_file():
             manifeste = json.loads(manifeste_chemin.read_text(encoding="utf-8"))
         else:
-            preparer = lecture_locaux.preparer if args.par_local else enveloppe.preparer
-            manifeste = preparer(args.source.resolve(), analyse, args.work_dir.resolve(), args.page, args.dpi, args.echelle)
+            if args.par_local:
+                manifeste = lecture_locaux.preparer(args.source.resolve(), analyse, args.work_dir.resolve(), args.page,
+                                                    args.dpi, args.echelle)
+            else:
+                # façade par tronçons + côtés des locaux chauffés sur local non chauffé ou vide (D46)
+                manifeste = enveloppe.preparer(args.source.resolve(), analyse, args.work_dir.resolve(), args.page, args.dpi,
+                                               args.echelle, complement=lecture_locaux.complement)
         dossier = args.work_dir.resolve()
         if args.lot:
             print(consigne_du_lot(manifeste, analyse, args.source.resolve(), args.page, dossier, args.lot))

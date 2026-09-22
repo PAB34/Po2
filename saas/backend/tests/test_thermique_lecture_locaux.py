@@ -22,6 +22,12 @@ def test_bande_par_defaut_et_par_local():
     assert enveloppe.bande_m({"bande_m": {"interieure": 0.4, "exterieure": 0.9}}) == (0.4, 0.9)
 
 
+def test_lots_des_cotes_sur_local_non_chauffe_a_part():
+    planches = [{"chemin": f"p{k}", "troncons": [], "complement": k >= 4} for k in range(6)]
+    lots = enveloppe.lots({"planches": planches})
+    assert [[p["chemin"] for p in lot] for lot in lots] == [["p0", "p1", "p2"], ["p3"], ["p4", "p5"]]
+
+
 def test_un_troncon_par_cote_deperditif_sans_le_mitoyen():
     batiment = Polygon([(80, 80), (940, 80), (940, 420), (80, 420)])
     troncons = lecture.troncons_par_local(_analyse(), 1000, 1000, PX, batiment)

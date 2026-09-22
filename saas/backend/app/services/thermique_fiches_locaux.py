@@ -116,11 +116,13 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
         cotes = _regrouper(sondages)
         lignes_cotes = [LineString([s["p"] for s in c["sondages"]]) if len(c["sondages"]) > 1 else Point(c["sondages"][0]["p"])
                         for c in cotes]
-        # chaque élément d'enveloppe va au seul côté extérieur le plus proche (à moins de RATTACHEMENT_M)
+        # chaque élément d'enveloppe va au seul côté déperditif le plus proche (à moins de RATTACHEMENT_M) : extérieur
+        # pour la façade, local non chauffé ou vide pour les côtés lus depuis la face intérieure (D46)
         affectation: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for element in enveloppe_par_local.get(nom, []):
             milieu = element["_face"].interpolate(0.5, normalized=True)
-            candidats = [(lignes_cotes[r].distance(milieu), r) for r, c in enumerate(cotes) if c["adjacence"] == "exterieur"]
+            vises = {"non_chauffe", "vide"} if par_troncon[element["troncon"]].get("ligne") == "face_interieure" else {"exterieur"}
+            candidats = [(lignes_cotes[r].distance(milieu), r) for r, c in enumerate(cotes) if c["adjacence"] in vises]
             if candidats:
                 distance, rang_cote = min(candidats)
                 if distance <= RATTACHEMENT_M * px_par_m:
@@ -136,7 +138,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 "deperditif": cote["adjacence"] in DEPERDITIFS and nature != "non_chauffe",
                 "enveloppe": [],
             }
-            if cote["adjacence"] == "exterieur":
+            if cote["adjacence"] in DEPERDITIFS:
                 composants: dict[str, float] = defaultdict(float)
                 for element in affectation.get(rang_cote, []):
                     composants[element.get("composant") or element["type"]] += element["_face"].length / px_par_m
@@ -150,7 +152,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 alertes.append(f"côté de {cote['longueur_m']:.2f} m : rien trouvé derrière le mur à moins de 1,2 m")
         orphelins = [e for e in enveloppe_par_local.get(nom, []) if not e.get("_rattache")]
         if orphelins:
-            alertes.append(f"{len(orphelins)} élément(s) d'enveloppe relevé(s) sans côté extérieur correspondant "
+            alertes.append(f"{len(orphelins)} élément(s) d'enveloppe relevé(s) sans côté déperditif correspondant "
                            f"({sum(e['_face'].length for e in orphelins) / px_par_m:.2f} m)")
         synthese_local = synthese_par_local.get(nom, {})
         # contrôle croisé : longueur des côtés extérieurs (tour du local) contre façade relevée sur l'enveloppe

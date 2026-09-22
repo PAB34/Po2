@@ -159,6 +159,16 @@ Conclusion proposée : **garder le parcours de la façade (tronçons) pour lire 
 thermicien, et **ajouter une lecture par local limitée aux côtés sur local non chauffé ou vide**. Le thermicien ne
 voit et ne valide que le pièce par pièce (§ 7).
 
+- **D46 (retenue par l'utilisateur le 2026-09-22)** — La préparation standard ajoute aux tronçons de façade (T) des
+  tronçons « U » : côtés des locaux chauffés dont au moins 30 % des sondages trouvent un local non chauffé ou un
+  vide, 0,5 m au moins, lus depuis la face intérieure, sur des planches et dans des lots à part. Leurs parois sont
+  comptées « sur local non chauffé », hors façade, et rattachées au côté correspondant de la fiche du local. Sur le
+  R+1 : 17 côtés, 39,5 m, un lot de plus (boîte à vents, cage d'escalier, gaines, vestiaire, sanitaires).
+  Validation de bout en bout (5 lots, catalogue repris) : isolant compté 91 % comme la référence, façade par local
+  cohérente, 28 alertes au lieu de 30 ; 44 m de parois et baies « sur local non chauffé ou vide » rattachés aux bons
+  côtés (voile de cage 22 cm non isolé, cloison vitrée pare-flamme de la boîte à vents, porte palière).
+  Nouveau composant récurrent à valider : voile de cage ou de gaine non isolé (22 cm).
+
 ## 4. Questions (tranchées au § 5)
 
 - **Q1** — Import par dépôt d'un fichier d'étude (D35) : cela vous convient ?

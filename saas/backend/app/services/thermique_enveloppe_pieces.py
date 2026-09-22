@@ -210,12 +210,25 @@ def raccorder_faces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
     px_par_m = manifeste["px_par_m"]
     perimetre = manifeste.get("perimetre_m") or max((t["fin_m"] for t in manifeste["troncons"]), default=0)
     decisions = {fiche["id"]: fiche.get("decision") for fiche in brut.get("catalogue", [])}
-    elements = sorted((e for e in brut["elements"] if e["troncon"] in par_id), key=lambda e: e["debut_m"])
+    raccords: list[dict[str, Any]] = []
+    # la façade (tour fermé) et les côtés lus depuis la face intérieure des locaux (D46, sans tour fermé)
+    for interieur in (False, True):
+        elements = sorted((e for e in brut["elements"] if e["troncon"] in par_id
+                           and (par_id[e["troncon"]].get("ligne") == "face_interieure") == interieur),
+                          key=lambda e: e["debut_m"])
+        raccords += _raccorder(elements, par_id, decisions, px_par_m, perimetre, boucle=not interieur)
+    return raccords
+
+
+def _raccorder(elements: list[dict[str, Any]], par_id: dict[str, Any], decisions: dict[str, Any], px_par_m: float,
+               perimetre: float, boucle: bool) -> list[dict[str, Any]]:
     faces = [e for e in elements if e["type"] in FACES and decisions.get(e.get("composant") or "") != "exclu"]
     for element in faces:
         element["face_px"] = [list(p) for p in face_interieure(element, par_id[element["troncon"]], px_par_m)]
     raccords = []
     for rang, avant in enumerate(faces):
+        if not boucle and rang == len(faces) - 1:
+            break
         apres = faces[(rang + 1) % len(faces)]
         if apres is avant:
             break
@@ -288,7 +301,7 @@ def synthese_pieces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
     def fiche_de(nom: str) -> dict[str, Any]:
         return fiches.setdefault(nom, {"piece": nom, "parois": {}, "menuiseries": {}, "poteaux": 0,
                                        "ponts": {"angle_sortant": 0.0, "angle_rentrant": 0.0, "about_refend": 0.0},
-                                       "facade_m": 0.0})
+                                       "facade_m": 0.0, "sur_non_chauffe_m": 0.0})
 
     for element in brut["elements"]:
         troncon = par_id.get(element["troncon"])
@@ -302,6 +315,18 @@ def synthese_pieces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
             continue
         fiche = fiche_de(element["piece"])
         longueur = longueur_interieure(element, troncon, px_par_m)
+        # D46 : paroi ou baie sur local non chauffé ou vide, lue depuis la face intérieure : hors façade
+        cle_longueur = "sur_non_chauffe_m" if troncon.get("ligne") == "face_interieure" else "facade_m"
+        if genre in ("paroi", "menuiserie", "poteau") and cle_longueur == "sur_non_chauffe_m":
+            fiche[cle_longueur] += longueur
+            if genre == "poteau":
+                continue
+            ligne = fiche["parois" if genre == "paroi" else "menuiseries"].setdefault(
+                composant or genre, {"composant": composant, "composition": compositions.get(composant, ""),
+                                     "type": element.get("menuiserie_type", ""), "largeurs_cm": [], "lineaire_m": 0.0,
+                                     "sur_non_chauffe": True})
+            ligne["lineaire_m"] += longueur
+            continue
         if genre == "paroi":
             cle = composant or env.composition_libelle(element["couches"])
             ligne = fiche["parois"].setdefault(cle, {
@@ -328,6 +353,7 @@ def synthese_pieces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
             "poteaux": fiche["poteaux"],
             "ponts": {k: round(v, 2) for k, v in fiche["ponts"].items()},
             "facade_m": round(fiche["facade_m"], 2),
+            "sur_non_chauffe_m": round(fiche["sur_non_chauffe_m"], 2),
             # la liaison avec les planchers court sur toute la façade de la pièce (D20)
             "liaison_plancher_m": round(fiche["facade_m"], 2),
         })
