@@ -15,23 +15,8 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
       <NavLink to={`/projets/${projectId}`} end className={tabClass}>
         Plans et planches
       </NavLink>
-      <NavLink to={`/projets/${projectId}/calques`} className={tabClass}>
-        Calques
-      </NavLink>
-      <NavLink to={`/projets/${projectId}/superposition`} className={tabClass}>
-        Superposition
-      </NavLink>
-      <NavLink to={`/projets/${projectId}/enveloppe`} className={tabClass}>
-        Enveloppe
-      </NavLink>
-      <NavLink to={`/projets/${projectId}/pieces`} className={tabClass}>
-        Pièces
-      </NavLink>
       <NavLink to={`/projets/${projectId}/bibliotheque`} className={tabClass}>
         Bibliothèque
-      </NavLink>
-      <NavLink to={`/projets/${projectId}/metre`} className={tabClass}>
-        Métré
       </NavLink>
     </nav>
   );

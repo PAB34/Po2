@@ -23,8 +23,6 @@ class ThermiqueProject(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Nord : degrés, sens trigonométrique, dans le repère commun des niveaux (0 = de A vers B).
     north_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # Calques désignés par l'exemple (étape E1) : {"version": 2, "regles": [{signature, forme, nature, exclusions}]}.
-    signatures_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
@@ -36,10 +34,6 @@ class ThermiqueProject(Base):
     components: Mapped[list["ThermiqueComponent"]] = relationship(
         cascade="all, delete-orphan", order_by="ThermiqueComponent.id"
     )
-    levels: Mapped[list["ThermiqueLevel"]] = relationship(
-        cascade="all, delete-orphan", order_by="ThermiqueLevel.position"
-    )
-    rooms: Mapped[list["ThermiqueRoom"]] = relationship(cascade="all, delete-orphan", order_by="ThermiqueRoom.id")
 
 
 class ThermiqueDocument(Base):
@@ -95,76 +89,6 @@ class ThermiqueSheet(Base):
     document: Mapped[ThermiqueDocument] = relationship(back_populates="sheets")
 
 
-class ThermiqueLevel(Base):
-    """Niveau du bâtiment pour le métré : sa planche de plan, ses hauteurs et son calage.
-
-    Le calage (deux points A et B communs à tous les niveaux, en points PDF de la planche)
-    définit le repère commun qui permet de superposer les niveaux.
-    Voir `docs/thermique/metre-plans-decisions.md`.
-    """
-
-    __tablename__ = "thermique_levels"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    name: Mapped[str] = mapped_column(String(80), nullable=False)
-    # Rang du niveau, du plus bas au plus haut (−1 sous-sol, 0 rez-de-chaussée…).
-    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    altitude_m: Mapped[float | None] = mapped_column(Float, nullable=True)
-    floor_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
-    slab_thickness_m: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # Hauteur sous plafond saisie ou lue sur une coupe : prime sur hauteur d'étage − plancher.
-    ceiling_height_m: Mapped[float | None] = mapped_column(Float, nullable=True)
-    # "manuel" ou "coupe" (planche et dessin retenus dans le journal de l'étape)
-    heights_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    sheet_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("thermique_sheets.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    calage_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
-    )
-
-    zones: Mapped[list["ThermiqueZone"]] = relationship(
-        back_populates="level", cascade="all, delete-orphan", order_by="ThermiqueZone.id"
-    )
-
-
-class ThermiqueZone(Base):
-    """Tracé d'un niveau : contour chauffé (au nu intérieur), local non chauffé ou patio.
-
-    Points en coordonnées PDF de la planche du niveau ; une qualification par côté
-    (donne sur, composant) pour les contours et patios.
-    """
-
-    __tablename__ = "thermique_zones"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    level_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("thermique_levels.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    # "contour", "lnc" ou "patio"
-    kind: Mapped[str] = mapped_column(String(20), nullable=False)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-    lnc_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    points_json: Mapped[str] = mapped_column(Text, nullable=False)
-    edges_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # "manuel" pour l'instant ; "automatique" / "corrige" avec la détection (lot M3).
-    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manuel", server_default="manuel")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
-    )
-
-    level: Mapped[ThermiqueLevel] = relationship(back_populates="zones")
-
-
 class ThermiqueComponent(Base):
     """Composant de bibliothèque : d'un projet (`project_id` renseigné) ou modèle réutilisable du compte.
 
@@ -193,37 +117,6 @@ class ThermiqueComponent(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Composant ou modèle d'origine (copie, import, « enregistrer comme modèle »), sans lien actif.
     source_component_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
-    )
-
-
-class ThermiqueRoom(Base):
-    """Pièce d'un plan (étape E3) : espace fermé par les calques désignés, son nom lu ou saisi et son classement
-    thermique. Contour en points PDF de la planche. Voir `docs/thermique/refondation-parcours-decisions.md` §13.
-    """
-
-    __tablename__ = "thermique_rooms"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    sheet_id: Mapped[int] = mapped_column(Integer, ForeignKey("thermique_sheets.id", ondelete="CASCADE"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, default="", server_default="")
-    # repère du local lu sur le plan (ex. « 6-B14 »)
-    code: Mapped[str | None] = mapped_column(String(40), nullable=True)
-    # "lu" (reconnaissance de caractères) ou "saisi"
-    name_source: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    # "chauffe", "non_chauffe" ou "exterieur"
-    classe: Mapped[str] = mapped_column(String(20), nullable=False, default="chauffe", server_default="chauffe")
-    # "propose" (d'après le nom) ou "choisi" (par l'utilisateur)
-    classe_source: Mapped[str] = mapped_column(String(10), nullable=False, default="propose", server_default="propose")
-    points_json: Mapped[str] = mapped_column(Text, nullable=False)
-    area_m2: Mapped[float] = mapped_column(Float, nullable=False)
-    # "auto" (détectée) ou "manuel" (clic, fusion, découpe)
-    source: Mapped[str] = mapped_column(String(10), nullable=False, default="auto", server_default="auto")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()

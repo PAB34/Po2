@@ -16,12 +16,6 @@ class Settings(BaseSettings):
     # Outil de métré thermique (thermique.patrimoineaucarre.com) : plans importés.
     thermique_storage_dir: str = "/app/storage/thermique"
     thermique_max_upload_mb: int = 80
-    # Adaptateur API de repli. Le MVP recommandé passe par l'agent Claude Code
-    # local ; dans les deux cas, seuls les pixels raster sont analysés.
-    thermique_vision_api_key: str = ""
-    thermique_vision_base_url: str = "https://api.openai.com/v1"
-    thermique_vision_model: str = "gpt-6-astra"
-    thermique_vision_timeout_seconds: int = 300
     # Sync DJU (Open-Meteo, profils Sète + DALKIA Montpellier) planifié automatiquement.
     dju_sync_enabled: bool = True
     dju_sync_interval_hours: int = 24

@@ -5,7 +5,7 @@ read_policy: lire en entier avant toute nouvelle étude sur plans raster ; sourc
 # Chaîne d'analyse thermique d'un plan raster — mode d'emploi et plan d'automatisation
 
 Mise à jour : 2026-09-22. Cas de référence : R+1 de la médiathèque de Frontignan
-(`Thermique/PLAN EXEMPLE PROJET/PC04-FRONT-NIVEAU1.pdf`, 1/100, 300 dpi, rotation antihoraire 90°).
+(`Thermique/PLAN EXEMPLE PROJET 1/PC04-FRONT-NIVEAU1.pdf`, 1/100, 300 dpi, rotation antihoraire 90°).
 Décisions détaillées : [analyse-ia-visuelle-r1-decisions.md](analyse-ia-visuelle-r1-decisions.md) et
 [parcours-enveloppe-decisions.md](parcours-enveloppe-decisions.md) (D1 à D23).
 
@@ -60,7 +60,7 @@ l'apprentissage.
 | # | Étape | Qui | Ce qui est produit | Code |
 |---|---|---|---|---|
 | 1 | Rendu du plan, recadrage, rotation | algorithme | images de travail | `run_thermicien_claude.py` |
-| 2 | Passe globale : pièces, murs, menuiseries, terrasses… | agent `thermicien-plan` | `claude_agent_R1.json` + projection | `thermique_claude_agent.py`, `thermique_vision*.py` |
+| 2 | Passe globale : pièces, murs, menuiseries, terrasses… | agent `thermicien-plan` | `claude_agent_R1.json` + projection | `thermique_claude_agent.py`, `thermique_vision_geometrie.py` |
 | 3 | Mise au propre des formes (angles droits, directions dominantes, enclaves) | algorithme | géométrie éditable | `thermique_vision_geometrie.py` |
 | 3 bis | Locaux : contours recalés sur les murs, espaces libres repérés ; l'agent donne la nature de chaque pièce (chauffé, circulation, non chauffé) et nomme ou écarte les espaces libres (vide, patio, mur) | algorithme + agent `thermicien-plan` (consigne courte) | `recalage.json`, `locaux.json` | `thermique_locaux.py` ([locaux-decisions.md](locaux-decisions.md)) |
 | 4 | Guide de l'enveloppe : face extérieure réelle (remplissage de l'extérieur), tronçons ≤ 5 m, bandes redressées graduées | algorithme | `enveloppe-manifeste.json`, `enveloppe-XX.png`, `enveloppe-guide.jpg` | `thermique_parcours_enveloppe.py` (`preparer`) |
@@ -68,7 +68,7 @@ l'apprentissage.
 | 6 | Résolution : couches de la fiche, doublage BA13 présumé, épaisseurs commerciales | algorithme | relevé résolu | `resoudre`, `epaisseur_commerciale` |
 | 7 | Découpage pièce par pièce, raccord des angles, ponts thermiques par pièce | algorithme | section « Par pièce », plan des pièces | `thermique_enveloppe_pieces.py` |
 | 7 bis | Fiche par local : tour de chaque pièce, ce qu'il y a derrière chaque côté (extérieur, local non chauffé, vide, circulation, local chauffé), épaisseur du mur, côtés déperditifs, enveloppe rattachée, alertes | algorithme | `.locaux.md`, `.adjacences.png`, `fiches_locaux` | `thermique_fiches_locaux.py` ([fiches-locaux-decisions.md](fiches-locaux-decisions.md)) |
-| 8 | Reprojection sur la feuille : un objet par couche (voiles, isolant, doublage), baies, poteaux | algorithme | `enveloppe_R1.json` (importable dans `/analyse`) | `reprojeter`, `fusionner` |
+| 8 | Reprojection sur la feuille : un objet par couche (voiles, isolant, doublage), baies, poteaux | algorithme | `enveloppe_R1.json` (à reprendre dans la future page « Pièce par pièce ») | `reprojeter`, `fusionner` |
 | 9 | Contrôle par l'image : alvéoles d'isolant et béton gris comparés au relevé | algorithme | `controle.json`, `controle-image.png`, section « Contrôle par l'image » | `thermique_controle_image.py` |
 | 10 | Restitution : bibliothèque, planches de relevé, catalogue, plan des pièces, demandes | algorithme | `.bibliotheque.md`, `releve-XX.png`, `catalogue.png`, `.pieces.png` | `run_enveloppe_claude.py` |
 
@@ -112,7 +112,7 @@ une session Claude Code et ses réponses sont recopiées dans `reponse-lot-K.jso
 | Tronçons, repères des bandes | `enveloppe-manifeste.json` | convertit une lecture (abscisse, profondeur) en coordonnées du plan | par niveau |
 | Relevé linéaire par intervalles | `reponse-lot-K.json`, `enveloppe_R1.raw.json` | composition, nus, baies, liaisons | par niveau |
 | **Catalogue appris** (23 composants sur le R+1) | `catalogue.json`, `catalogue.png` | bibliothèque de composants : fiche, règle de reconnaissance, décision | **oui : autres niveaux, puis autres projets** |
-| Objets éditables (un par couche) | `enveloppe_R1.json` | correction dans `/analyse` | par niveau |
+| Objets éditables (un par couche) | `enveloppe_R1.json` | correction dans la future page « Pièce par pièce » (la page `/analyse` a été supprimée le 2026-09-22) | par niveau |
 | Bilan par composant, familles, parois, baies, liaisons | `enveloppe_R1.bibliotheque.md` | métré | par niveau |
 | Par pièce : façade, parois, baies, poteaux, ψ, liaison plancher | idem, section « Par pièce » | métré pièce par pièce | par niveau |
 | Raccords d'angles et raccords refusés | idem | longueurs intérieures justes, relevés à revoir | par niveau |

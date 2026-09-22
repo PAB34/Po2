@@ -80,8 +80,6 @@ from app.models.cpe import (
 from app.models.thermique import (
     ThermiqueComponent,
     ThermiqueDocument,
-    ThermiqueLevel,
     ThermiqueProject,
     ThermiqueSheet,
-    ThermiqueZone,
 )

@@ -49,7 +49,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--niveau", required=True, help="Nom court du niveau (ex. R1)")
     result.add_argument("--sorties", type=Path, required=True, help="Dossier de l'étude ; le niveau y a son sous-dossier")
     result.add_argument("--rotation", type=int, choices=(0, 90, 180, 270), default=0,
-                        help="Rotation antihoraire à appliquer (= (360 - rotation de la visionneuse) % 360)")
+                        help="Rotation antihoraire à appliquer (= (360 - rotation de la visionneuse) %% 360)")
     result.add_argument("--page", type=int, default=1)
     result.add_argument("--echelle", type=float, default=100, help="Dénominateur d'échelle du plan")
     result.add_argument("--catalogue", type=Path, help="Catalogue validé d'un autre niveau ou projet, point de départ")

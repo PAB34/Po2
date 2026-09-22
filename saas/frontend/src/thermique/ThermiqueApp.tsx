@@ -1,18 +1,12 @@
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../providers/AuthProvider";
-import { CalquesPage } from "./pages/CalquesPage";
-import { SuperpositionPage } from "./pages/SuperpositionPage";
-import { PiecesPage } from "./pages/PiecesPage";
-import { EnveloppePage } from "./pages/EnveloppePage";
 import { LibraryPage } from "./pages/LibraryHomePage";
-import { MetrePage } from "./pages/MetrePage";
 import { ThermiqueLoginPage } from "./pages/ThermiqueLoginPage";
 import { ProjectLibraryPage } from "./pages/ProjectLibraryPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SheetPage } from "./pages/SheetPage";
-import { AutoZoningPage } from "./pages/AutoZoningPage";
 
 function RequireAuth() {
   const { isLoading, user } = useAuth();
@@ -87,13 +81,7 @@ export function ThermiqueApp() {
           <Route path="bibliotheque" element={<LibraryPage />} />
         </Route>
         <Route element={<Shell fullWidth />}>
-          <Route path="projets/:projectId/analyse" element={<AutoZoningPage />} />
           <Route path="projets/:projectId/planches/:sheetId" element={<SheetPage />} />
-          <Route path="projets/:projectId/metre" element={<MetrePage />} />
-          <Route path="projets/:projectId/calques" element={<CalquesPage />} />
-          <Route path="projets/:projectId/superposition" element={<SuperpositionPage />} />
-          <Route path="projets/:projectId/enveloppe" element={<EnveloppePage />} />
-          <Route path="projets/:projectId/pieces" element={<PiecesPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

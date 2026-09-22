@@ -28,7 +28,10 @@ from typing import Any
 from PIL import Image
 
 from app.core.config import settings
-from thermique_moteur.traits import VERROU_PDFIUM
+
+# pdfium n'est pas sûr entre fils d'exécution : tous les rendus d'un même processus (serveur à plusieurs
+# requêtes) passent par ce verrou, sans quoi le processus peut s'arrêter net.
+VERROU_PDFIUM = threading.RLock()
 
 TILE_SIZE = 256
 # Plus grand côté de l'image rendue : un A1 fait 5063 × 7168 px (≈ 216 dpi), soit

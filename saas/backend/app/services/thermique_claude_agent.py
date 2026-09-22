@@ -8,6 +8,7 @@ le backend SaaS et aucun jeton Claude n'est persisté par le projet.
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -19,8 +20,40 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont, ImageOps
 from scipy import ndimage
 
 from app.services.thermique import ThermiqueError
-from app.services.thermique_vision import CATEGORIES, GEOMETRIES, tile_boxes
 from app.services.thermique_vision_geometrie import mettre_au_propre
+
+CATEGORIES = (
+    "mur_exterieur",
+    "refend",
+    "cloison",
+    "isolation",
+    "doublage",
+    "menuiserie_exterieure",
+    "menuiserie_interieure",
+    "terrasse",
+    "balcon",
+    "poteau",
+    "garde_corps",
+    "piece",
+    "indetermine",
+)
+GEOMETRIES = ("polyline", "polygon", "bbox")
+
+
+def tile_boxes(width: int, height: int, columns: int = 3, rows: int = 2, overlap: float = 0.08) -> list[tuple[int, int, int, int]]:
+    """Six zones régulières avec recouvrement, bornées à l'image."""
+    boxes: list[tuple[int, int, int, int]] = []
+    cell_w, cell_h = width / columns, height / rows
+    pad_x, pad_y = cell_w * overlap, cell_h * overlap
+    for row in range(rows):
+        for column in range(columns):
+            left = max(0, math.floor(column * cell_w - (pad_x if column else 0)))
+            top = max(0, math.floor(row * cell_h - (pad_y if row else 0)))
+            right = min(width, math.ceil((column + 1) * cell_w + (pad_x if column + 1 < columns else 0)))
+            bottom = min(height, math.ceil((row + 1) * cell_h + (pad_y if row + 1 < rows else 0)))
+            boxes.append((left, top, right, bottom))
+    return boxes
+
 
 CATEGORY_STYLES = {
     "mur_exterieur": ("Murs extérieurs", "#d73027"),

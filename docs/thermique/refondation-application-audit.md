@@ -64,6 +64,36 @@ chaque évolution.
 - Frontend : ~4 000 lignes retirées sur ~8 700 ; backend : ~7 000 lignes retirées (services + moteur vectoriel).
 - Une application qui ne contient que : connexion, projets, plans, bibliothèque, et la nouvelle chaîne.
 
+## 5 bis. Réalisé le 2026-09-22 (branche `feat/thermique-socle-raster`, rien de poussé)
+
+Réponses de l'utilisateur : Q1 liste validée ; Q2 `/analyse` supprimée ; Q3 données des anciennes méthodes
+supprimées ; Q4 commit préalable fait.
+
+- Mise à l'abri : commit `63f8c447` (moteur raster pièce par pièce) + étiquette `thermique-avant-refondation`.
+  Le test `test_thermique_locaux.py` (moteur vectoriel), écrasé par erreur par les nouveaux tests, a été restauré
+  avant ce commit ; les nouveaux tests s'appellent `test_thermique_locaux_raster.py`.
+- Frontend : pages Métré, Calques, Superposition, Enveloppe, Pièces et `/analyse` retirées avec leurs modules
+  (`metre`, `snap`, `zoning`, `calques`, `superposition`, `pieces`, `vision`) ; onglets du projet réduits à « Plans
+  et planches » et « Bibliothèque » ; 205 lignes de CSS mortes retirées. `ElementsPanel` et `natures.ts` gardés
+  (bibliothèque, planches). Types et construction OK, tests unitaires OK.
+- Backend : routes réduites au socle (509 lignes au lieu de 1 331) ; services `thermique_calques`, `_detection`,
+  `_enveloppe`, `_metre`, `_pieces`, `_superposition`, `_vision` supprimés (l'analyse par l'API OpenAI disparaît avec
+  ses réglages `THERMIQUE_VISION_*`) ; moteur vectoriel supprimé (19 modules) ; il reste `thermique_moteur` =
+  bibliothèque Th-Bât + calcul des parois + composants. Catégories et découpage en tuiles rapatriés dans
+  `thermique_claude_agent.py`, verrou pdfium dans `thermique_raster.py`. Schémas réduits au socle.
+- **Réparation au passage** : le commit #209 (24893dff) avait écrasé `thermique_moteur/composants.py` et
+  `parois.py` (bibliothèque et calcul du U, lots B2a/B2b-1/L1/L2) par des modules vectoriels du même nom, avec leurs
+  tests : la bibliothèque des composants était cassée sur cette branche (test en échec signalé depuis le début).
+  Versions d'avant #209 restaurées ; tests OK.
+- Données : migration `0082` qui supprime `thermique_levels`, `thermique_zones`, `thermique_rooms` et la colonne
+  `thermique_projects.signatures_json` (`north_deg` gardée) ; retour arrière qui recrée les tables vides ; testée
+  dans les deux sens sur SQLite (la chaîne complète des migrations ne tourne pas sur SQLite depuis 0007 : défaut
+  antérieur, la production est sous PostgreSQL).
+- Vérifications : application importée ; 114 tests de l'outil thermique OK ; 661 tests collectés sans erreur
+  d'import ; scripts de la chaîne OK.
+- À faire avant la mise en production : relire le diff, pousser la branche, appliquer la migration 0082 (suppression
+  définitive des données des anciennes pages).
+
 ## 5. Questions
 
 - **Q1** — « Fonctionnalités connexes » à garder : connexion, projets, dépôt des plans et planches, bibliothèque du
