@@ -138,6 +138,54 @@ tout branchement à l'import E2/E3.
 6. Ne promouvoir une sortie qu'après accord de plusieurs runs ou validation du thermicien.
 7. Comparer ensuite l'agent enveloppe, lot par lot, une fois le recalage stabilisé.
 
+## Témoin manquant : stabilité de Claude Code (2026-09-23)
+
+Le pilote comparait trois répétitions OpenAI à **une seule** sortie Claude. Sans mesure de la reproductibilité de
+Claude, la phrase « l'agent OpenAI n'est pas assez stable » n'était pas démontrée : on savait seulement qu'il ne
+reproduisait pas un tirage. Deux lectures aveugles supplémentaires ont donc été demandées à l'agent
+`thermicien-plan`, sur le paquet neutre `input/` (les sept mêmes images), avec la consigne de `build_prompt` et
+l'interdiction explicite de lire tout résultat antérieur.
+
+| Comparaison | Objets | Taux symétrique | Accord géométrique moyen | IoU pièces | Accord nature |
+|---|---:|---:|---:|---:|---:|
+| Claude 01 / 02 | 130 vs 118 | 50,8 % | 46,4 % | **85,0 %** | n/a |
+| Claude 01 / 03 | 130 vs 115 | 62,9 % | 54,8 % | **83,8 %** | n/a |
+| Claude 02 / 03 | 118 vs 115 | 62,7 % | 60,6 % | **87,0 %** | 100 % (29 pièces) |
+
+IoU moyen des pièces entre runs Claude : **85,3 %**, contre 73,3 % côté OpenAI. La comparaison propre est
+**02 / 03** (même consigne, même jour, deux tirages indépendants) : 87,0 %.
+
+Le run Claude de référence (`claude_agent_R1.raw.json`, 130 objets) a été produit avant l'ajout du champ `local`
+dans la consigne : ses 22 pièces n'ont pas de nature, d'où `n/a` sur les deux premières lignes et un taux
+d'appariement tiré vers le bas par l'écart de comptage. Les runs 02 et 03 déclarent 30 et 31 pièces.
+
+### A7 — Lecture corrigée du pilote
+
+1. **Claude est plus reproductible qu'OpenAI**, sur toutes les mesures : IoU des pièces 85,3 % contre 73,3 %,
+   appariement symétrique 58,8 % contre 34,0 %, dispersion du nombre d'objets 115–130 contre 78–116.
+2. **Le critère « IoU ≥ 0,85 face à Claude » était inatteignable par construction** : il demandait au candidat
+   d'être plus proche de Claude que Claude ne l'est de lui-même. Le bon seuil est l'accord Claude/Claude, et le
+   run 01 d'OpenAI (85,0 %) l'atteint : sur ce tirage, il est indiscernable d'une autre lecture de Claude.
+3. **15 % de la surface change d'une lecture à l'autre, même chez Claude.** L'instabilité du zonage n'est donc pas
+   un défaut de fournisseur : elle est intrinsèque à la tâche. Cela confirme A6 par un autre chemin.
+4. **La confiance déclarée reste inutilisable, mais `review_required` est un bon signal.** Sur les objets où les
+   deux lectures Claude divergent, 82 % (run 02) et 88 % (run 03) étaient déjà marqués à revoir, contre 53 % et
+   56 % des objets concordants ; la confiance moyenne, elle, ne bouge pas (0,51 contre 0,53).
+5. **La carte des divergences est la liste de contrôle du thermicien.** Sur `stabilite-claude-run-02-vs-03`, tout
+   le bâti et la trame des bureaux se superposent ; les écarts portent exactement sur les objets ambigus : l'alcôve
+   EAPMR, la boîte à vents / boîte à lumière, le vide sur Accueil, la bande d'escalier le long de la façade est et
+   les parois de la salle de réunion 6.1.6. Ce sont les points à faire trancher, et eux seuls.
+
+### Conséquences pratiques
+
+- Ne pas promouvoir une sortie issue d'un tirage unique : **deux lectures, puis arbitrage des divergences**, quel
+  que soit le fournisseur.
+- La bande le long de la façade est (escalier extérieur ou intérieur) est une question ouverte sur l'enveloppe :
+  les runs 02 et 03 la classent `indetermine` et placent le nu de façade à x ≈ 778 ; le run 01 la traitait
+  autrement. À trancher par le thermicien avant tout métré de façade sur ce niveau.
+- Artefacts : `claude/run-02/`, `claude/run-03/` et `stabilite-claude-run-01-vs-02`, `-01-vs-03`, `-02-vs-03`
+  dans `outputs/benchmark_agents/R1/`.
+
 ## Références OpenAI
 
 - Sous-agents Codex : <https://learn.chatgpt.com/docs/agent-configuration/subagents>.
