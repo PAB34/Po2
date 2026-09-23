@@ -61,6 +61,8 @@ export type Project = {
 export type ProjectDetail = Project & { documents: ThermiqueDocument[] };
 
 export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe";
+/** Nature d'un côté de local : sur l'enveloppe, le long d'une paroi lue, ou limite d'usage (D59). */
+export type StudyLimit = "exterieur" | "paroi" | "convention";
 export type StudyLocalState = { status: "a_verifier" | "valide" | "a_revoir"; motif: string | null };
 export type StudyEnvelopeItem = {
   composant?: string;
@@ -98,6 +100,7 @@ export type StudyRoom = {
   nature: StudyLocalNature;
   contour: PdfPoint[];
   contour_pdf: PdfPoint[];
+  limites: StudyLimit[];
   surface_m2: number;
   fiche: StudyRoomSheet;
   synthese: Record<string, unknown> & {
@@ -115,10 +118,39 @@ export type StudyContent = {
   locaux: StudyRoom[];
   enveloppe: {
     catalogue: unknown[];
-    releve: { elements: unknown[]; raccords: unknown[]; observations: string[] };
+    releve_brut: { elements: unknown[]; catalogue: unknown[]; observations: string[] };
+    raccords: unknown[];
     controle: Record<string, unknown>;
     demandes: { piece: string; objet: string; motif: string }[];
   };
+  couverture: StudyCoverage;
+};
+export type StudyCoverage = {
+  surface_emprise_m2: number;
+  surface_affectee_m2: number;
+  surface_non_affectee_m2: number;
+  surface_hors_emprise_m2: number;
+  chevauchement_m2: number;
+  chevauchements: { locaux: string[]; surface_m2: number }[];
+  taux_couverture_pct: number;
+  zones_non_affectees: PdfPoint[][];
+  zones_non_affectees_pdf?: PdfPoint[][];
+};
+export type StudyOperation =
+  | { type: "modifier"; id: string; contour_pdf?: PdfPoint[]; nature?: StudyLocalNature; nom?: string }
+  | { type: "couper"; id: string; segment_pdf: PdfPoint[]; noms?: string[] }
+  | { type: "fusionner"; ids: string[]; nom?: string };
+export type StudyPreview = {
+  content: StudyContent;
+  couverture: StudyCoverage;
+  voisins_modifies: string[];
+  bloquant: string | null;
+};
+export type StudyVersion = {
+  version_number: number;
+  reason: string;
+  created_by_user_id: number | null;
+  created_at: string;
 };
 export type Study = {
   id: number;
@@ -213,6 +245,21 @@ export const thermiqueApi = {
       body: form,
     });
   },
+  remodelStudy: (token: string, sheetId: number, operations: StudyOperation[], localId?: string | null) =>
+    request<StudyPreview>(
+      token,
+      `/thermique/sheets/${sheetId}/etude/remodeliser${localId ? `?local_id=${encodeURIComponent(localId)}` : ""}`,
+      { method: "POST", body: JSON.stringify({ operations }) },
+    ),
+  saveStudy: (
+    token: string,
+    sheetId: number,
+    payload: { operations: StudyOperation[]; local_id?: string | null; motif?: string; valider?: boolean },
+  ) => request<Study>(token, `/thermique/sheets/${sheetId}/etude/enregistrer`, { method: "POST", body: JSON.stringify(payload) }),
+  listStudyVersions: (token: string, sheetId: number) =>
+    request<StudyVersion[]>(token, `/thermique/sheets/${sheetId}/etude/versions`),
+  restoreStudyVersion: (token: string, sheetId: number, numero: number) =>
+    request<Study>(token, `/thermique/sheets/${sheetId}/etude/versions/${numero}/restaurer`, { method: "POST" }),
   documentFileUrl: (documentId: number) => `${apiBaseUrl}/thermique/documents/${documentId}/file`,
   // Fiche des tuiles d'une planche (rendue par le serveur à la première demande).
   getRaster: (token: string, sheetId: number, rotation: number) =>

@@ -280,6 +280,13 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
                 raise ThermiqueError(f"Le contour du local « {local_id} » sort de la feuille.")
             contour_pdf.append(_inverser_transform(transform, x * width / 1000, y * height / 1000))
         local["contour_pdf"] = contour_pdf
+    couverture = contenu.get("couverture")
+    if isinstance(couverture, dict):
+        # Les zones à combler sont dessinées sur le plan : elles passent aussi en points PDF.
+        couverture["zones_non_affectees_pdf"] = [
+            [_inverser_transform(transform, x * width / 1000, y * height / 1000) for x, y in zone]
+            for zone in couverture.get("zones_non_affectees", [])
+        ]
 
 
 def get_etude_for_sheet(db: Session, sheet_id: int) -> ThermiqueEtude | None:

@@ -9,6 +9,7 @@ const room = (id: string, nature: StudyRoom["nature"]): StudyRoom => ({
   nature,
   contour: [],
   contour_pdf: [],
+  limites: [],
   surface_m2: 1,
   fiche: { piece: id, local: nature, surface_m2: 1, perimetre_m: 4, cotes: [] },
   synthese: {},

@@ -1,6 +1,6 @@
 ---
 read_policy: lire avant de coder le lot E3 (édition pièce par pièce de l'espace de travail thermique)
-status: questions_ouvertes
+status: realise
 ---
 
 # Édition pièce par pièce — décisions du lot E3
@@ -9,7 +9,7 @@ Date : 2026-09-23. Périmètre annoncé en E3 : modifier un local (contour, natu
 **Remodéliser**, **Enregistrer et suivant**, et les versions. S'y ajoute l'intégration de la décision **A6**
 (séparer couverture physique et découpage fonctionnel), issue du comparatif d'agents du 2026-09-23.
 
-**Rien n'est codé tant que les questions du § 6 ne sont pas tranchées.**
+Questions tranchées le 2026-09-23 (§ 7) ; lot réalisé et vérifié sur les vraies données (§ 8).
 
 ## 1. Objectif repris et niveau de confiance
 
@@ -163,3 +163,49 @@ sommets et on garde couper/fusionner pour un E3 bis.
 **Q6 — Qui code E3 ?** Codex vient de livrer E2 et connaît le code de l'étude ; je viens de mesurer la stabilité
 des agents. Le dépôt est partagé, donc **un seul de nous deux doit travailler sur ces fichiers à la fois**.
 Dites-moi lequel.
+
+## 7. Réponses du 2026-09-23
+
+Q1 version 2 sans compatibilité : oui. Q2 trou = avertissement, chevauchement > 2 % = blocage : oui.
+Q3 **versions par différences** (seules les pièces sont gardées) : oui. Q4 voisins repassés à revoir : oui.
+Q5 **couper et fusionner dans E3** : oui. Q6 réalisé par Claude.
+
+## 8. E3 réalisé (2026-09-23, rien de poussé)
+
+### Serveur
+
+- Contrat en `format_version: 2` : le fichier porte le **relevé brut** (le rattachement se refait à chaque
+  calcul), chaque local porte ses `limites` côté par côté, et le fichier porte son contrôle de couverture.
+- `thermique_etude_geometrie.py` : qualification des côtés (`exterieur`, `paroi`, `convention`, seuil 0,35 m) et
+  contrôle de couverture contre `batiment_px`, avec les zones à combler rendues en points PDF.
+- `thermique_etude_edition.py` : modifier, couper, fusionner ; reconstruction complète sans agent ni image ;
+  voisins dont la fiche a changé ; conversion des points PDF de l'interface vers le repère de la feuille.
+- Routes `remodeliser`, `enregistrer`, `versions`, `versions/{n}/restaurer`. Migration 0084 : une version ne
+  garde que les pièces (19 Ko au lieu de 351 Ko sur le R+1), le contenu complet restant aux seuls imports.
+
+### Interface
+
+- Calque : côtés colorés selon leur limite (rouge extérieur, vert paroi lue, violet pointillé limite d'usage),
+  poignées de sommets, trait de coupe, zones d'intérieur non affecté hachurées.
+- Panneau « Fiche » : reprendre le contour, couper en deux (avec le nom des deux moitiés), fusionner avec un
+  local, nature, Remodéliser, Enregistrer et suivant, liste des versions et retour en arrière.
+- Bandeau de couverture dans la colonne de gauche.
+- Pendant une édition, les polygones ne captent plus le clic : il va au plan.
+
+### Vérifié sur les vraies données (banc local, PDF et étude réels du R+1)
+
+- Reconstruction à vide **identique** aux 24 fiches, 32 composants, 16 raccords et 4 demandes importés.
+- Coupe du plateau ouvert : 334,57 m² → 196,69 + 137,88 m², somme conservée ; 7 voisins signalés à revoir.
+- Enregistrement : version 4 créée, local validé, passage automatique au local suivant, 1/25 validés.
+- Retour à la version 1 : 24 locaux retrouvés, nouvelle version créée, rien d'effacé.
+- Déplacement d'un sommet à la souris : le sommet suit le curseur au pixel près.
+- Couverture du R+1 : **86,2 %** — 112,63 m² d'intérieur sans local et 10,85 m² comptés deux fois
+  (l'escalier atrium recouvre le plateau). C'est le travail qui attend le thermicien.
+- 145 tests serveur, 18 tests d'interface, `tsc -b` et build : tout passe.
+
+### Limite connue
+
+« Remodéliser » et « Enregistrer » demandent **10 à 15 secondes** : le recalcul des fiches sonde tous les côtés
+de tous les locaux (4,4 s), la qualification des limites 0,9 s, le rattachement 0,5 s. Une attente est affichée.
+Une indexation spatiale des pièces dans `thermique_fiches_locaux._sonder` devrait ramener cela à 1 à 2 secondes ;
+à décider avant E4, car la boucle pièce par pièce est le geste le plus répété de l'outil.

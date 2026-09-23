@@ -1965,6 +1965,11 @@ circle.th-seg--measure {
   cursor: pointer;
 }
 
+/* En édition, le plan reprend la main : plus de sélection au clic sur un local. */
+.th-study-room.is-locked {
+  pointer-events: none;
+}
+
 .th-study-room polygon {
   fill: var(--room-color);
   fill-opacity: 0.16;
@@ -2040,4 +2045,99 @@ circle.th-seg--measure {
   margin: 0;
   padding-left: 1.2rem;
   color: #8d3c13;
+}
+
+/* Lot E3 : couverture de l'intérieur, limites des locaux et édition des contours. */
+.th-study-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  align-items: baseline;
+  margin-bottom: 0.8rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  background: var(--po2-color-amber-soft);
+  font-size: 0.82rem;
+}
+
+.th-study-coverage.is-ok {
+  background: var(--po2-color-mint-soft);
+}
+
+.th-study-coverage span {
+  opacity: 0.85;
+}
+
+.th-study-gap {
+  fill: #b3261e;
+  fill-opacity: 0.18;
+  stroke: #b3261e;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.th-study-side {
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.th-study-draft circle {
+  fill: #ffffff;
+  stroke: #1f1f1f;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.th-study-cut {
+  stroke: #8a5cf6;
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.th-study-edit {
+  border-top: 1px solid var(--po2-color-border);
+  padding-top: 0.9rem;
+}
+
+.th-study-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.th-study-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+}
+
+.th-study-versions {
+  margin-top: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.th-study-versions ul {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.th-study-versions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }

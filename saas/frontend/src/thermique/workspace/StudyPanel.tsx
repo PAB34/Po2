@@ -1,7 +1,8 @@
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 
-import type { Study, StudyRoom } from "../api";
+import type { PdfPoint, Study, StudyRoom } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
+import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
 import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms } from "./study";
 
 const meters = (value: number | undefined) => (value == null ? "—" : `${value.toLocaleString("fr-FR")} m`);
@@ -12,11 +13,15 @@ export function StudyOverlay({
   selectedId,
   toScreen,
   onSelect,
+  draft,
+  gaps,
 }: {
   rooms: StudyRoom[];
   selectedId: string | null;
   toScreen: ToScreen;
   onSelect: (id: string) => void;
+  draft?: StudyDraft | null;
+  gaps?: PdfPoint[][];
 }) {
   const stopPointer = (event: PointerEvent<SVGGElement>) => event.stopPropagation();
   const selectWithKeyboard = (event: KeyboardEvent<SVGGElement>, id: string) => {
@@ -25,15 +30,23 @@ export function StudyOverlay({
       onSelect(id);
     }
   };
+  const trace = (points: PdfPoint[]) => points.map(toScreen).map(([x, y]) => `${x},${y}`).join(" ");
   return (
     <>
+      {(gaps ?? []).map((zone, index) => (
+        <polygon key={`vide-${index}`} className="th-study-gap" points={trace(zone)}>
+          <title>Intérieur non affecté à un local</title>
+        </polygon>
+      ))}
       {rooms.map((room) => {
-        const points = room.contour_pdf.map(toScreen).map(([x, y]) => `${x},${y}`).join(" ");
+        const edited = draft?.roomId === room.id ? draft.contour : room.contour_pdf;
         const selected = room.id === selectedId;
+        // Pendant une édition, les polygones laissent passer les clics : ils vont au plan, pas à la sélection.
+        const classes = ["th-study-room", selected ? "is-selected" : "", draft ? "is-locked" : ""].filter(Boolean);
         return (
           <g
             key={room.id}
-            className={selected ? "th-study-room is-selected" : "th-study-room"}
+            className={classes.join(" ")}
             style={{ "--room-color": NATURE_COLORS[room.nature] } as CSSProperties}
             role="button"
             tabIndex={0}
@@ -45,12 +58,44 @@ export function StudyOverlay({
             }}
             onKeyDown={(event) => selectWithKeyboard(event, room.id)}
           >
-            <polygon points={points}>
+            <polygon points={trace(edited)}>
               <title>{`${room.nom} · ${NATURE_LABELS[room.nature]} · ${squareMeters(room.surface_m2)}`}</title>
             </polygon>
+            {selected &&
+              edited.map((vertex, index) => {
+                const next = edited[(index + 1) % edited.length];
+                const limite = room.limites?.[index] ?? "convention";
+                const [x1, y1] = toScreen(vertex);
+                const [x2, y2] = toScreen(next);
+                return (
+                  <line
+                    key={`cote-${index}`}
+                    className="th-study-side"
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke={LIMIT_COLORS[limite]}
+                    strokeDasharray={limite === "convention" ? "6 4" : undefined}
+                  >
+                    <title>{`Côté ${index + 1} · ${LIMIT_LABELS[limite]}`}</title>
+                  </line>
+                );
+              })}
           </g>
         );
       })}
+      {draft && (
+        <g className="th-study-draft">
+          {draft.contour.map((vertex, index) => {
+            const [x, y] = toScreen(vertex);
+            return <circle key={`poignee-${index}`} cx={x} cy={y} r={5} />;
+          })}
+          {draft.cut.length > 0 && (
+            <polyline className="th-study-cut" points={trace(draft.cut)} fill="none" />
+          )}
+        </g>
+      )}
     </>
   );
 }
@@ -90,7 +135,144 @@ function EnvelopeItems({ items }: { items: NonNullable<StudyRoom["synthese"]["pa
   );
 }
 
-export function StudyRoomPanel({ room, state }: { room: StudyRoom | null; state?: Study["local_states"][string] }) {
+export type StudyEdition = {
+  draft: StudyDraft | null;
+  busy: boolean;
+  message: string | null;
+  blocking: string | null;
+  neighbours: string[];
+  coverage: Study["content"]["couverture"] | null;
+  versions: { version_number: number; reason: string; created_at: string }[];
+  rooms: StudyRoom[];
+  onStart: (mode: "contour" | "couper") => void;
+  onCancel: () => void;
+  onDraft: (changes: Partial<Pick<StudyDraft, "nature" | "nom" | "noms">>) => void;
+  onRecompute: () => void;
+  onSave: () => void;
+  onMerge: (otherId: string) => void;
+  onRestore: (numero: number) => void;
+};
+
+function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdition }) {
+  const { draft } = edition;
+  const libres = (room.limites ?? []).filter((limite) => limite === "convention").length;
+  return (
+    <section className="th-study-edit">
+      <h2>Modifier ce local</h2>
+      <p className="th-muted">
+        {libres > 0
+          ? `${libres} côté(s) sans paroi lue : vous pouvez les déplacer librement.`
+          : "Tous les côtés suivent une paroi lue ou l'enveloppe."}
+      </p>
+      {!draft && (
+        <div className="th-study-actions">
+          <button type="button" className="po2-button po2-button--ghost" onClick={() => edition.onStart("contour")}>
+            Reprendre le contour
+          </button>
+          <button type="button" className="po2-button po2-button--ghost" onClick={() => edition.onStart("couper")}>
+            Couper en deux
+          </button>
+        </div>
+      )}
+      {draft && (
+        <>
+          <p className="th-muted">
+            {draft.mode === "contour"
+              ? "Faites glisser une poignée pour déplacer un sommet, cliquez sur un côté pour en ajouter un, Alt+clic sur une poignée pour la retirer."
+              : "Cliquez deux points pour tracer la limite ; le trait est prolongé jusqu'aux bords du local."}
+          </p>
+          {draft.mode === "couper" ? (
+            <>
+              <label>
+                Nom de la première moitié
+                <input value={draft.noms[0]} onChange={(event) => edition.onDraft({ noms: [event.target.value, draft.noms[1]] })} />
+              </label>
+              <label>
+                Nom de la seconde moitié
+                <input value={draft.noms[1]} onChange={(event) => edition.onDraft({ noms: [draft.noms[0], event.target.value] })} />
+              </label>
+            </>
+          ) : (
+            <label>
+              Nom
+              <input value={draft.nom} onChange={(event) => edition.onDraft({ nom: event.target.value })} />
+            </label>
+          )}
+          <label hidden={draft.mode === "couper"}>
+            Nature
+            <select
+              value={draft.nature}
+              onChange={(event) => edition.onDraft({ nature: event.target.value as StudyRoom["nature"] })}
+            >
+              {(Object.keys(NATURE_LABELS) as StudyRoom["nature"][]).map((nature) => (
+                <option key={nature} value={nature}>
+                  {NATURE_LABELS[nature]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="th-study-actions">
+            <button type="button" className="po2-button po2-button--ghost" onClick={edition.onRecompute} disabled={edition.busy}>
+              Remodéliser
+            </button>
+            <button type="button" className="po2-button" onClick={edition.onSave} disabled={edition.busy || Boolean(edition.blocking)}>
+              Enregistrer et suivant
+            </button>
+            <button type="button" className="po2-button po2-button--ghost" onClick={edition.onCancel} disabled={edition.busy}>
+              Annuler
+            </button>
+          </div>
+        </>
+      )}
+      <label>
+        Fusionner avec
+        <select value="" onChange={(event) => event.target.value && edition.onMerge(event.target.value)}>
+          <option value="">choisir un local mitoyen…</option>
+          {edition.rooms
+            .filter((other) => other.id !== room.id)
+            .map((other) => (
+              <option key={other.id} value={other.id}>
+                {other.nom}
+              </option>
+            ))}
+        </select>
+      </label>
+      {edition.busy && <p className="th-muted">Calcul en cours… (le rattachement de l'enveloppe prend quelques secondes)</p>}
+      {edition.blocking && <p className="th-alert th-alert--error">{edition.blocking}</p>}
+      {edition.message && <p className="th-alert th-alert--warn">{edition.message}</p>}
+      {edition.neighbours.length > 0 && (
+        <p className="th-muted">{edition.neighbours.length} local/locaux voisins repasseront à revoir.</p>
+      )}
+      {edition.versions.length > 0 && (
+        <details className="th-study-versions">
+          <summary>Versions ({edition.versions.length})</summary>
+          <ul>
+            {edition.versions.map((version) => (
+              <li key={version.version_number}>
+                <span>
+                  n° {version.version_number} · {version.reason.replace(/_/g, " ")}
+                </span>
+                <button type="button" className="po2-button po2-button--ghost" onClick={() => edition.onRestore(version.version_number)}>
+                  Revenir ici
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+export function StudyRoomPanel({
+  room,
+  state,
+  edition,
+}: {
+  room: StudyRoom | null;
+  state?: Study["local_states"][string];
+  edition?: StudyEdition;
+}) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
   }
@@ -140,18 +322,32 @@ export function StudyRoomPanel({ room, state }: { room: StudyRoom | null; state?
       </section>
 
       {(sheet.a_completer ?? []).length > 0 && (
-        <section><h2>À compléter</h2><ul>{sheet.a_completer?.map((item) => <li key={item}>{item}</li>)}</ul></section>
+        <section><h2>À compléter</h2><ul>{sheet.a_completer?.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></section>
       )}
       {((sheet.alertes ?? []).length > 0 || room.demandes.length > 0) && (
         <section>
           <h2>Alertes et demandes</h2>
           <ul className="th-study-alerts">
-            {sheet.alertes?.map((alert) => <li key={alert}>{alert}</li>)}
+            {sheet.alertes?.map((alert, index) => <li key={`${alert}-${index}`}>{alert}</li>)}
             {room.demandes.map((request, index) => <li key={`${request.objet}-${index}`}><strong>{request.objet}</strong> : {request.motif}</li>)}
           </ul>
         </section>
       )}
-      <p className="th-muted">Lecture seule — les corrections et la remodélisation arrivent au lot E3.</p>
+      {edition && <EditionSection room={room} edition={edition} />}
     </>
+  );
+}
+
+export function StudyCoverageBanner({ coverage }: { coverage: Study["content"]["couverture"] | null | undefined }) {
+  if (!coverage) {
+    return null;
+  }
+  const complet = coverage.surface_non_affectee_m2 < 0.5 && coverage.chevauchement_m2 < 0.5;
+  return (
+    <div className={complet ? "th-study-coverage is-ok" : "th-study-coverage"}>
+      <strong>{coverage.taux_couverture_pct.toLocaleString("fr-FR")} % de l'intérieur affecté</strong>
+      {coverage.surface_non_affectee_m2 >= 0.5 && <span>{squareMeters(coverage.surface_non_affectee_m2)} sans local</span>}
+      {coverage.chevauchement_m2 >= 0.5 && <span>{squareMeters(coverage.chevauchement_m2)} comptés deux fois</span>}
+    </div>
   );
 }

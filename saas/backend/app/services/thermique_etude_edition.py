@@ -256,6 +256,35 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
 SEUIL_CHEVAUCHEMENT_PCT = 2.0
 
 
+def _vers_feuille(transform: list[Any], largeur: float, hauteur: float, point: Any) -> list[float]:
+    """Point PDF -> repère normalisé 0..1000 de la feuille, par la matrice du rendu pdfium."""
+    if not isinstance(point, (list, tuple)) or len(point) != 2:
+        raise ThermiqueError("Un point PDF est invalide.")
+    a, b, c, d, e, f = (float(valeur) for valeur in transform)
+    x, y = float(point[0]), float(point[1])
+    px, py = a * x + c * y + e, b * x + d * y + f
+    return [round(px * 1000 / largeur, 3), round(py * 1000 / hauteur, 3)]
+
+
+def _operations_en_feuille(
+    operations: list[dict[str, Any]], transform: list[Any], largeur: float, hauteur: float
+) -> list[dict[str, Any]]:
+    """L'interface ne manipule que des points PDF : la conversion se fait ici, une seule fois."""
+    resultat = []
+    for operation in operations:
+        converti = dict(operation)
+        if isinstance(converti.get("contour_pdf"), list):
+            converti["contour"] = [
+                _vers_feuille(transform, largeur, hauteur, point) for point in converti.pop("contour_pdf")
+            ]
+        if isinstance(converti.get("segment_pdf"), list):
+            converti["segment"] = [
+                _vers_feuille(transform, largeur, hauteur, point) for point in converti.pop("segment_pdf")
+            ]
+        resultat.append(converti)
+    return resultat
+
+
 def remodeler(
     contenu: dict[str, Any],
     operations: list[dict[str, Any]],
@@ -267,7 +296,8 @@ def remodeler(
     """Calcule sans rien écrire : contenu recalculé, couverture, voisins touchés, motif de blocage."""
     from app.services import thermique_etudes as etudes  # import tardif : évite une boucle d'imports
 
-    apres = appliquer(contenu, operations) if operations else reconstruire(contenu)
+    gestes = _operations_en_feuille(operations, transform, largeur, hauteur)
+    apres = appliquer(contenu, gestes) if gestes else reconstruire(contenu)
     etudes.convertir_contours(apres, transform, largeur, hauteur)
     couverture = apres["couverture"]
     bloquant = None

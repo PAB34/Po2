@@ -192,7 +192,9 @@ class EtudeOperation(BaseModel):
     id: str | None = None
     ids: list[str] | None = None
     contour: list[list[float]] | None = None
+    contour_pdf: list[list[float]] | None = None
     segment: list[list[float]] | None = None
+    segment_pdf: list[list[float]] | None = None
     nature: Literal["chauffe", "circulation", "non_chauffe"] | None = None
     nom: str | None = None
     noms: list[str] | None = None

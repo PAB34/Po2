@@ -14,7 +14,7 @@ import {
   type TileRef,
 } from "../raster";
 
-export type ViewerTool = "pan" | "measure" | "calibrate";
+export type ViewerTool = "pan" | "measure" | "calibrate" | "edition";
 export type ViewerSegment = { p1: PdfPoint; p2: PdfPoint; label?: string; tone: "measure" | "reference" };
 // Touches enfoncées au clic ou au survol : Maj et Alt modifient l'aimantation du métré.
 export type PickEvent = { shiftKey: boolean; altKey: boolean };

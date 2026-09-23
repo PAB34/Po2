@@ -12,7 +12,8 @@ import { InfoPanel } from "./InfoPanel";
 import { groupSheets, referenceSheet, sheetTitle } from "./levels";
 import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
-import { StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { useStudyEdition } from "./useStudyEdition";
 import { studyQueryKey, validatedRoomCount } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
@@ -159,7 +160,17 @@ export function WorkspacePage() {
   });
   const study = studyQuery.data;
   const selectedLocalId = searchParams.get("local");
-  const selectedRoom = study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
+  const selectRoom = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
+  const editionState = useStudyEdition({
+    token: token ?? null,
+    sheetId,
+    study: study ?? undefined,
+    selectedRoom: study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null,
+    onSelectRoom: selectRoom,
+  });
+  // Tant qu'un aperçu n'est pas enregistré, c'est lui qui est affiché sur le plan et dans la fiche.
+  const shownStudy = editionState.shown;
+  const selectedRoom = shownStudy?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
 
   useEffect(() => {
     if (!project || !token || referenceMigration.current === project.id) return;
@@ -210,8 +221,10 @@ export function WorkspacePage() {
     }
   };
   const levelTitle = sheet ? sheetTitle(sheet) : "";
-  const selectSheet = (id: number) => setParams({ planche: id, local: null, panneau: panel === "fiche" ? "planche" : panel });
-  const selectRoom = (id: string) => setParams({ local: id, panneau: "fiche" });
+  const selectSheet = (id: number) => {
+    editionState.reset();
+    setParams({ planche: id, local: null, panneau: panel === "fiche" ? "planche" : panel });
+  };
 
   return (
     <div className="th-ws">
@@ -280,7 +293,7 @@ export function WorkspacePage() {
               </li>
               <li className={study ? "is-done" : "is-later"}>
                 <span>Enveloppe</span>
-                <small>{study ? `${study.content.enveloppe.releve.elements.length} éléments rattachés` : "aucune étude importée"}</small>
+                <small>{study ? `${study.content.enveloppe.releve_brut.elements.length} éléments relevés` : "aucune étude importée"}</small>
               </li>
               <li className={study ? "is-todo" : "is-later"}>
                 <span>Pièce par pièce</span>
@@ -294,8 +307,9 @@ export function WorkspacePage() {
           </section>
           <section>
             <h2>Locaux</h2>
-            {study ? (
-              <StudyRoomList study={study} selectedId={selectedRoom?.id ?? null} onSelect={selectRoom} />
+            <StudyCoverageBanner coverage={shownStudy?.content.couverture ?? null} />
+            {shownStudy ? (
+              <StudyRoomList study={shownStudy} selectedId={selectedRoom?.id ?? null} onSelect={selectRoom} />
             ) : (
               <p className="th-muted">Les locaux du niveau, chauffés d'abord, apparaîtront ici une fois l'étude importée.</p>
             )}
@@ -312,13 +326,32 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={tool}
+              tool={editionState.draft ? "edition" : tool}
               points={points}
-              segments={sheetSegments(sheet, tool, points)}
-              onAddPoint={(point) => setPoints((current) => (current.length >= 2 ? [point] : [...current, point]))}
+              segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
+              onAddPoint={(point) => {
+                if (editionState.handlers.onAddPoint(point)) return;
+                setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
+              }}
+              onGrab={editionState.handlers.onGrab}
+              onGrabMove={editionState.handlers.onGrabMove}
+              onGrabEnd={editionState.handlers.onGrabEnd}
               initialView={views.current.get(viewKey) ?? null}
               onViewChange={(view) => views.current.set(viewKey, view)}
-              renderOverlay={study ? (toScreen) => <StudyOverlay rooms={study.content.locaux} selectedId={selectedRoom?.id ?? null} toScreen={toScreen} onSelect={selectRoom} /> : undefined}
+              renderOverlay={
+                shownStudy
+                  ? (toScreen) => (
+                      <StudyOverlay
+                        rooms={shownStudy.content.locaux}
+                        selectedId={selectedRoom?.id ?? null}
+                        toScreen={toScreen}
+                        onSelect={selectRoom}
+                        draft={editionState.draft}
+                        gaps={shownStudy.content.couverture?.zones_non_affectees_pdf ?? []}
+                      />
+                    )
+                  : undefined
+              }
             />
           ) : (
             <div className="th-viewer th-viewer--empty">
@@ -352,7 +385,13 @@ export function WorkspacePage() {
           )}
           {panel === "bibliotheque" && <LibraryPanel projectId={project.id} />}
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
-          {panel === "fiche" && <StudyRoomPanel room={selectedRoom} state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined} />}
+          {panel === "fiche" && (
+            <StudyRoomPanel
+              room={selectedRoom}
+              state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
+              edition={editionState.edition}
+            />
+          )}
         </aside>
       </div>
     </div>
