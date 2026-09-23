@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_authenticated_user
 from app.core.db import get_db
 from app.core.roles import is_admin_role, is_external_role
-from app.models.thermique import ThermiqueDocument, ThermiqueProject, ThermiqueSheet
+from app.models.thermique import ThermiqueDocument, ThermiqueEtude, ThermiqueProject, ThermiqueSheet
 from app.models.user import User
 from app.schemas.thermique import (
     CalibrationRequest,
@@ -25,7 +25,11 @@ from app.schemas.thermique import (
     ComponentImport,
     ComponentUpdate,
     EraseAllRequest,
+    EtudeApercu,
+    EtudeEnregistrement,
     EtudeRead,
+    EtudeRemodelage,
+    EtudeVersionRead,
     ExternalAccountCreate,
     ExternalAccountRead,
     ProjectCreate,
@@ -67,11 +71,17 @@ from app.services.thermique_composants import (
     serialize_component,
     update_component,
 )
+from app.services import thermique_etude_edition as edition
 from app.services.thermique_etudes import (
     MAX_ETUDE_BYTES,
     EtudeConflict,
+    base_de_version,
+    convertir_contours,
+    enregistrer_etude,
     get_etude_for_sheet,
     importer_etude,
+    lister_versions,
+    poser_etat_editable,
     serialize_etude,
 )
 from app.services.thermique_raster import (
@@ -487,6 +497,114 @@ def import_sheet_etude(
         etude = importer_etude(db, sheet, user, payload, manifest, remplacer=remplacer)
     except EtudeConflict as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return serialize_etude(db, etude)
+
+
+def _etude_ou_404(db: Session, sheet: ThermiqueSheet) -> ThermiqueEtude:
+    etude = get_etude_for_sheet(db, sheet.id)
+    if etude is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aucune étude n'est importée sur cette planche.")
+    return etude
+
+
+def _repere_de_la_planche(sheet: ThermiqueSheet, contenu: dict) -> tuple[list, float, float]:
+    """Matrice pdfium et dimensions du raster de référence de l'étude, pour reconvertir les contours."""
+    rotation = contenu.get("source", {}).get("viewer_rotation_deg", 0)
+    manifest = ensure_raster(
+        document_path(sheet.document), sheet.page_index, rotation, raster_dir(sheet.project_id, sheet.id, rotation)
+    )
+    return manifest["transform"], float(manifest["width_px"]), float(manifest["height_px"])
+
+
+@router.post("/sheets/{sheet_id}/etude/remodeliser", response_model=EtudeApercu)
+def remodeler_sheet_etude(
+    sheet_id: int,
+    payload: EtudeRemodelage,
+    local_id: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Recalcule l'étude après les gestes du thermicien, sans rien enregistrer (D62)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    etude = _etude_ou_404(db, sheet)
+    contenu = json.loads(etude.content_json)
+    try:
+        transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
+        return edition.remodeler(
+            contenu, [op.model_dump(exclude_none=True) for op in payload.operations], transform, largeur, hauteur, local_id
+        )
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/sheets/{sheet_id}/etude/enregistrer", response_model=EtudeRead)
+def enregistrer_sheet_etude(
+    sheet_id: int,
+    payload: EtudeEnregistrement,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Enregistre les modifications et crée une version ; les voisins touchés repassent à revoir (D63)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    etude = _etude_ou_404(db, sheet)
+    contenu = json.loads(etude.content_json)
+    try:
+        transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
+        apercu = edition.remodeler(
+            contenu,
+            [op.model_dump(exclude_none=True) for op in payload.operations],
+            transform,
+            largeur,
+            hauteur,
+            payload.local_id,
+        )
+        if apercu["bloquant"]:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=apercu["bloquant"])
+        etats = edition.etats_apres_enregistrement(
+            json.loads(etude.local_states_json),
+            apercu["content"],
+            payload.local_id,
+            apercu["voisins_modifies"],
+            payload.valider,
+        )
+        etude = enregistrer_etude(db, etude, user, apercu["content"], etats, payload.motif[:80])
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return serialize_etude(db, etude)
+
+
+@router.get("/sheets/{sheet_id}/etude/versions", response_model=list[EtudeVersionRead])
+def read_sheet_etude_versions(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> list[dict]:
+    sheet = _sheet_or_404(db, user, sheet_id)
+    return lister_versions(db, _etude_ou_404(db, sheet))
+
+
+@router.post("/sheets/{sheet_id}/etude/versions/{numero}/restaurer", response_model=EtudeRead)
+def restaurer_sheet_etude_version(
+    sheet_id: int,
+    numero: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Revient à une version antérieure ; le retour crée une version, il n'efface rien (D64)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    etude = _etude_ou_404(db, sheet)
+    try:
+        socle, pieces, etats = base_de_version(db, etude, numero)
+        contenu = edition.reconstruire(poser_etat_editable(socle, pieces)) if pieces else socle
+        transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
+        convertir_contours(contenu, transform, largeur, hauteur)
+        etats = {
+            identifiant: etats.get(identifiant, {"status": "a_verifier", "motif": None})
+            for identifiant in (local["id"] for local in contenu["locaux"])
+        }
+        etude = enregistrer_etude(db, etude, user, contenu, etats, f"retour_version_{numero}"[:80])
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return serialize_etude(db, etude)

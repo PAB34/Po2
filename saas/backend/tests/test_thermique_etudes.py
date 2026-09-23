@@ -1,6 +1,7 @@
 """Lot E2 : fichier d'étude unique, import strict, versions et migration 0083."""
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 from io import BytesIO
@@ -23,10 +24,16 @@ from app.models.thermique import (
 )
 from app.models.user import User
 from app.services.thermique import ThermiqueError, update_project
+from app.services import thermique_etude_edition as edition
 from app.services.thermique_etudes import (
     EtudeConflict,
     assembler_etude_niveau,
+    base_de_version,
+    convertir_contours,
+    enregistrer_etude,
     importer_etude,
+    lister_versions,
+    poser_etat_editable,
     serialize_etude,
     valider_et_convertir,
 )
@@ -84,6 +91,18 @@ def contexte():
         yield db, user, project, sheet
 
 
+def _manifeste() -> dict:
+    # Page de 2000 x 1000 px, 10 px par mètre : le bâtiment couvre toute la page.
+    return {
+        "page_px": [2000, 1000],
+        "px_par_m": 10,
+        "batiment_px": [[0, 0], [2000, 0], [2000, 1000], [0, 1000]],
+        "trous_px": [],
+        "troncons": [],
+        "perimetre_m": 0,
+    }
+
+
 def _payload(sha256: str) -> dict:
     fiche = {
         "piece": "Bureau",
@@ -95,7 +114,7 @@ def _payload(sha256: str) -> dict:
     }
     return {
         "format": "thermique.etude_niveau",
-        "format_version": 1,
+        "format_version": 2,
         "uses_pdf_vectors": False,
         "niveau": "R1",
         "source": {
@@ -107,13 +126,32 @@ def _payload(sha256: str) -> dict:
             "page_width_px": 2000,
             "page_height_px": 1000,
         },
-        "analyse": {},
+        "analyse": {
+            "objects": [
+                {
+                    "id": "piece-001",
+                    "category": "piece",
+                    "subtype": "Bureau",
+                    "geometry_type": "polygon",
+                    "local": "chauffe",
+                    "points": [[100, 200], [300, 200], [300, 500], [100, 500]],
+                }
+            ],
+            "manifest": {
+                "page_width_px": 2000,
+                "page_height_px": 1000,
+                "crop_box_px": [0, 0, 2000, 1000],
+                "width_px": 2000,
+                "height_px": 1000,
+            },
+        },
         "locaux": [
             {
                 "id": "piece-001",
                 "nom": "Bureau",
                 "nature": "chauffe",
                 "contour": [[100, 200], [300, 200], [300, 500], [100, 500]],
+                "limites": ["paroi", "paroi", "paroi", "convention"],
                 "surface_m2": 12.5,
                 "fiche": fiche,
                 "synthese": {},
@@ -121,7 +159,7 @@ def _payload(sha256: str) -> dict:
             }
         ],
         "locaux_ecartes": [],
-        "enveloppe": {"manifeste": {}, "releve": {"elements": [], "raccords": [], "observations": []}, "catalogue": [], "synthese_pieces": [], "fiches_locaux": [fiche], "controle": {}, "demandes": []},
+        "enveloppe": {"manifeste": _manifeste(), "releve_brut": {"elements": [], "catalogue": [], "observations": []}, "catalogue": [], "synthese_pieces": [], "fiches_locaux": [fiche], "controle": {}, "demandes": []},
     }
 
 
@@ -254,3 +292,99 @@ def test_migration_0083_monte_et_redescend_isolee():
         inspector = inspect(connection)
         assert "thermique_etudes" not in inspector.get_table_names()
         assert "reference_sheet_id" not in {column["name"] for column in inspector.get_columns("thermique_projects")}
+
+
+# --- Lot E3 : remodéliser, enregistrer, versions ------------------------------------------------
+
+
+def _etude_importee(contexte):
+    db, user, _project, sheet = contexte
+    etude = importer_etude(db, sheet, user, _payload(sheet.document.sha256), _raster())
+    return db, user, sheet, etude
+
+
+def test_remodeliser_recalcule_sans_rien_ecrire(contexte):
+    db, _user, _sheet, etude = _etude_importee(contexte)
+    contenu = json.loads(etude.content_json)
+    raster = _raster()
+    apercu = edition.remodeler(
+        contenu,
+        [{"type": "modifier", "id": "piece-001", "nature": "circulation"}],
+        raster["transform"],
+        raster["width_px"],
+        raster["height_px"],
+    )
+    assert apercu["content"]["locaux"][0]["nature"] == "circulation"
+    assert apercu["couverture"]["surface_affectee_m2"] > 0
+    assert apercu["bloquant"] is None
+    # Rien n'a été enregistré : l'étude en base est inchangée.
+    db.refresh(etude)
+    assert json.loads(etude.content_json)["locaux"][0]["nature"] == "chauffe"
+
+
+def test_remodeliser_bloque_un_recouvrement_de_plus_de_deux_pour_cent(contexte):
+    _db, _user, _sheet, etude = _etude_importee(contexte)
+    contenu = json.loads(etude.content_json)
+    raster = _raster()
+    # On ajoute un second local qui recouvre largement le premier.
+    apercu = edition.remodeler(
+        contenu,
+        [{"type": "couper", "id": "piece-001", "segment": [[200, 100], [200, 600]]}],
+        raster["transform"],
+        raster["width_px"],
+        raster["height_px"],
+    )
+    jumeau = copy.deepcopy(apercu["content"]["analyse"]["objects"][0])
+    jumeau["id"] = "piece-999"
+    apercu["content"]["analyse"]["objects"].append(jumeau)
+    complet = edition.remodeler(apercu["content"], [], raster["transform"], raster["width_px"], raster["height_px"])
+    assert complet["bloquant"] and "recouvrent" in complet["bloquant"]
+
+
+def test_enregistrer_cree_une_version_legere_et_met_a_jour_les_etats(contexte):
+    db, user, _sheet, etude = _etude_importee(contexte)
+    contenu = json.loads(etude.content_json)
+    raster = _raster()
+    apercu = edition.remodeler(
+        contenu,
+        [{"type": "modifier", "id": "piece-001", "nom": "Bureau agrandi"}],
+        raster["transform"],
+        raster["width_px"],
+        raster["height_px"],
+        "piece-001",
+    )
+    etats = edition.etats_apres_enregistrement(
+        json.loads(etude.local_states_json), apercu["content"], "piece-001", apercu["voisins_modifies"], True
+    )
+    etude = enregistrer_etude(db, etude, user, apercu["content"], etats, "validation_local")
+
+    versions = db.scalars(
+        select(ThermiqueEtudeVersion).where(ThermiqueEtudeVersion.etude_id == etude.id).order_by(ThermiqueEtudeVersion.version_number)
+    ).all()
+    assert [version.version_number for version in versions] == [1, 2]
+    assert versions[0].content_json is not None  # l'import garde le fichier complet
+    assert versions[1].content_json is None  # l'enregistrement ne garde que les pièces
+    assert len(versions[1].pieces_json) < len(versions[0].content_json)
+    assert json.loads(etude.local_states_json)["piece-001"]["status"] == "valide"
+    assert json.loads(etude.content_json)["locaux"][0]["nom"] == "Bureau agrandi"
+
+
+def test_revenir_a_une_version_anterieure_cree_une_nouvelle_version(contexte):
+    db, user, _sheet, etude = _etude_importee(contexte)
+    contenu = json.loads(etude.content_json)
+    raster = _raster()
+    apercu = edition.remodeler(
+        contenu, [{"type": "modifier", "id": "piece-001", "nom": "Bureau agrandi"}],
+        raster["transform"], raster["width_px"], raster["height_px"], "piece-001",
+    )
+    etude = enregistrer_etude(db, etude, user, apercu["content"], json.loads(etude.local_states_json), "validation_local")
+    assert json.loads(etude.content_json)["locaux"][0]["nom"] == "Bureau agrandi"
+
+    socle, pieces, _etats = base_de_version(db, etude, 1)
+    revenu = edition.reconstruire(poser_etat_editable(socle, pieces))
+    convertir_contours(revenu, raster["transform"], raster["width_px"], raster["height_px"])
+    etude = enregistrer_etude(db, etude, user, revenu, json.loads(etude.local_states_json), "retour_version_1")
+
+    assert json.loads(etude.content_json)["locaux"][0]["nom"] == "Bureau"
+    numeros = [version["version_number"] for version in lister_versions(db, etude)]
+    assert numeros == [3, 2, 1]  # rien n'est effacé

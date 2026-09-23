@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -183,3 +183,42 @@ class EtudeRead(BaseModel):
     updated_at: datetime
 
 
+
+
+class EtudeOperation(BaseModel):
+    """Un geste du thermicien sur un local (E3, D61)."""
+
+    type: Literal["modifier", "couper", "fusionner"]
+    id: str | None = None
+    ids: list[str] | None = None
+    contour: list[list[float]] | None = None
+    segment: list[list[float]] | None = None
+    nature: Literal["chauffe", "circulation", "non_chauffe"] | None = None
+    nom: str | None = None
+    noms: list[str] | None = None
+
+
+class EtudeRemodelage(BaseModel):
+    operations: list[EtudeOperation] = Field(default_factory=list, max_length=50)
+
+
+class EtudeEnregistrement(EtudeRemodelage):
+    local_id: str | None = None
+    motif: str = "validation_local"
+    valider: bool = True
+
+
+class EtudeApercu(BaseModel):
+    """Résultat d'un « Remodéliser » : rien n'est écrit en base."""
+
+    content: dict[str, Any]
+    couverture: dict[str, Any]
+    voisins_modifies: list[str]
+    bloquant: str | None = None
+
+
+class EtudeVersionRead(BaseModel):
+    version_number: int
+    reason: str
+    created_by_user_id: int | None
+    created_at: datetime

@@ -162,7 +162,9 @@ class ThermiqueEtudeVersion(Base):
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(80), nullable=False)
-    content_json: Mapped[str] = mapped_column(Text, nullable=False)
+    # Contenu complet aux seuls imports ; les enregistrements ne gardent que les pièces (D64).
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pieces_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     local_states_json: Mapped[str] = mapped_column(Text, nullable=False)
     created_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True

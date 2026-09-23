@@ -1,8 +1,14 @@
-"""Fichier d'étude d'un niveau, import et stockage versionné (lot E2, D53 à D55).
+"""Fichier d'étude d'un niveau, import et stockage versionné (lots E2 et E3, D53 à D64).
 
 Le fichier est assemblé sur le poste à partir des résultats raster déjà produits. Le serveur
 ne relit jamais les vecteurs du PDF : il vérifie le document et transforme seulement le repère
 normalisé de la feuille en points PDF grâce à la matrice du rendu pdfium.
+
+Version 2 du contrat (E3) : le fichier porte le **relevé brut** de l'enveloppe plutôt que sa version
+déjà rattachée aux pièces, pour que le serveur puisse tout recalculer quand le thermicien déplace un
+contour ; et chaque local dit, côté par côté, s'il suit une paroi lue sur le plan ou une simple limite
+d'usage (D59). La source de vérité géométrique reste ``analyse["objects"]`` : ``locaux[].contour`` en
+est le reflet, régénéré à chaque recalcul.
 """
 from __future__ import annotations
 
@@ -18,10 +24,13 @@ from sqlalchemy.orm import Session
 from app.models.thermique import ThermiqueEtude, ThermiqueEtudeVersion, ThermiqueSheet
 from app.models.user import User
 from app.services import thermique_enveloppe_pieces as pieces
+from app.services import thermique_etude_geometrie as geo
+from app.services import thermique_fiches_locaux as fiches_locaux
+from app.services import thermique_parcours_enveloppe as enveloppe
 from app.services.thermique import ThermiqueError
 
 ETUDE_FORMAT = "thermique.etude_niveau"
-ETUDE_FORMAT_VERSION = 1
+ETUDE_FORMAT_VERSION = 2
 MAX_ETUDE_BYTES = 10 * 1024 * 1024
 LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe"}
 
@@ -93,7 +102,7 @@ def assembler_etude_niveau(
     bibliotheque = restitution.get("enveloppe", {}).get("bibliotheque", {})
     fiches = {fiche.get("piece"): fiche for fiche in bibliotheque.get("fiches_locaux", [])}
     syntheses = {fiche.get("piece"): fiche for fiche in bibliotheque.get("pieces", [])}
-    releve_resolu = pieces.decouper_par_piece(copy.deepcopy(releve_brut), manifeste, analyse)
+    limites = geo.limites_des_locaux(analyse, manifeste)
 
     locaux = []
     for objet, nom in _noms_locaux(analyse):
@@ -110,6 +119,7 @@ def assembler_etude_niveau(
                 "nom": nom,
                 "nature": objet.get("local") or "chauffe",
                 "contour": copy.deepcopy(objet["points"]),
+                "limites": limites.get(identifiant, []),
                 "surface_m2": fiche.get("surface_m2"),
                 "fiche": copy.deepcopy(fiche),
                 "synthese": copy.deepcopy(syntheses.get(nom, {})),
@@ -146,17 +156,20 @@ def assembler_etude_niveau(
         "locaux_ecartes": copy.deepcopy(analyse.get("locaux_ecartes", [])),
         "enveloppe": {
             "manifeste": _manifest_enveloppe_portable(manifeste),
-            "releve": {
-                "elements": copy.deepcopy(releve_resolu.get("elements", [])),
-                "raccords": copy.deepcopy(releve_resolu.get("raccords", [])),
-                "observations": copy.deepcopy(releve_resolu.get("observations", [])),
+            # Le relevé reste **brut** : le rattachement aux pièces se refait à chaque recalcul (E3).
+            "releve_brut": {
+                "elements": copy.deepcopy(releve_brut.get("elements", [])),
+                "catalogue": copy.deepcopy(releve_brut.get("catalogue", [])),
+                "observations": copy.deepcopy(releve_brut.get("observations", [])),
             },
-            "catalogue": copy.deepcopy(releve_resolu.get("catalogue", [])),
+            "catalogue": copy.deepcopy(bibliotheque.get("composants", [])),
             "synthese_pieces": copy.deepcopy(bibliotheque.get("pieces", [])),
             "fiches_locaux": copy.deepcopy(bibliotheque.get("fiches_locaux", [])),
+            "raccords": copy.deepcopy(bibliotheque.get("raccords", [])),
             "controle": {key: copy.deepcopy(value) for key, value in controle.items() if key != "cellules"},
             "demandes": copy.deepcopy(bibliotheque.get("demandes", [])),
         },
+        "couverture": geo.controler_couverture({local["id"]: local["contour"] for local in locaux}, manifeste),
     }
 
 
@@ -214,6 +227,15 @@ def valider_et_convertir(
     if abs((source_width / source_height) / (width / height) - 1) > 0.01:
         raise ThermiqueError("Les proportions de l'étude ne correspondent pas à la planche choisie.")
 
+    enveloppe_etude = payload.get("enveloppe")
+    if not isinstance(enveloppe_etude, dict) or not isinstance(enveloppe_etude.get("manifeste"), dict):
+        raise ThermiqueError("Le manifeste de l'enveloppe est absent de l'étude.")
+    brut = enveloppe_etude.get("releve_brut")
+    if not isinstance(brut, dict) or not isinstance(brut.get("elements"), list):
+        raise ThermiqueError("Le relevé brut de l'enveloppe est absent : l'étude ne serait pas modifiable.")
+    if not isinstance(payload.get("analyse"), dict) or not isinstance(payload["analyse"].get("objects"), list):
+        raise ThermiqueError("L'analyse du plan est absente de l'étude.")
+
     locaux = payload.get("locaux")
     if not isinstance(locaux, list) or not locaux:
         raise ThermiqueError("L'étude ne contient aucun local.")
@@ -230,9 +252,25 @@ def valider_et_convertir(
             raise ThermiqueError(f"La nature du local « {local_id} » est inconnue.")
         if not isinstance(local.get("fiche"), dict) or local["fiche"].get("piece") != local.get("nom"):
             raise ThermiqueError(f"La fiche du local « {local_id} » ne correspond pas à son nom.")
+    convertir_contours(contenu, raster_manifest["transform"], width, height)
+    return contenu
+
+
+def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: float, height: float) -> None:
+    """Ajoute à chaque local son contour durable en points PDF, et contrôle ses limites (D59).
+
+    Appelé à l'import comme après chaque enregistrement : les points PDF restent la géométrie de travail.
+    """
+    for local in contenu.get("locaux", []):
+        local_id = local.get("id")
         contour = local.get("contour")
         if not isinstance(contour, list) or len(contour) < 3:
             raise ThermiqueError(f"Le contour du local « {local_id} » doit avoir au moins trois points.")
+        limites = local.get("limites")
+        if not isinstance(limites, list) or len(limites) != len(contour):
+            raise ThermiqueError(f"Les limites du local « {local_id} » ne suivent pas son contour.")
+        if any(limite not in geo.LIMITES for limite in limites):
+            raise ThermiqueError(f"Une limite du local « {local_id} » est d'un type inconnu.")
         contour_pdf = []
         for point in contour:
             if not isinstance(point, list) or len(point) != 2:
@@ -240,9 +278,8 @@ def valider_et_convertir(
             x, y = (_nombre(value, "Une coordonnée") for value in point)
             if not 0 <= x <= 1000 or not 0 <= y <= 1000:
                 raise ThermiqueError(f"Le contour du local « {local_id} » sort de la feuille.")
-            contour_pdf.append(_inverser_transform(raster_manifest["transform"], x * width / 1000, y * height / 1000))
+            contour_pdf.append(_inverser_transform(transform, x * width / 1000, y * height / 1000))
         local["contour_pdf"] = contour_pdf
-    return contenu
 
 
 def get_etude_for_sheet(db: Session, sheet_id: int) -> ThermiqueEtude | None:
@@ -301,6 +338,7 @@ def importer_etude(
             version_number=numero,
             reason=motif,
             content_json=contenu_json,
+            pieces_json=json.dumps(etat_editable(contenu), ensure_ascii=False, separators=(",", ":")),
             local_states_json=etats_json,
             created_by_user_id=user.id,
         )
@@ -308,6 +346,102 @@ def importer_etude(
     db.commit()
     db.refresh(etude)
     return etude
+
+
+def etat_editable(contenu: dict[str, Any]) -> list[dict[str, Any]]:
+    """Ce que le thermicien peut changer : les objets « pièce » de l'analyse (D64).
+
+    Tout le reste — rattachement, raccords, synthèse, fiches, couverture — se recalcule à l'identique
+    depuis ces objets et le relevé brut ; une version n'a donc pas à en garder de copie. Sur le R+1 cela
+    ramène une version de 351 Ko à 19 Ko.
+    """
+    return copy.deepcopy(
+        [objet for objet in contenu.get("analyse", {}).get("objects", []) if objet.get("category") == "piece"]
+    )
+
+
+def poser_etat_editable(contenu: dict[str, Any], pieces: list[dict[str, Any]]) -> dict[str, Any]:
+    """Remet les pièces d'une version dans le contenu ; l'appelant reconstruit ensuite le reste."""
+    resultat = copy.deepcopy(contenu)
+    autres = [objet for objet in resultat["analyse"]["objects"] if objet.get("category") != "piece"]
+    resultat["analyse"]["objects"] = autres + copy.deepcopy(pieces)
+    return resultat
+
+
+def prochaine_version(db: Session, etude: ThermiqueEtude) -> int:
+    dernier = db.scalar(
+        select(func.max(ThermiqueEtudeVersion.version_number)).where(ThermiqueEtudeVersion.etude_id == etude.id)
+    )
+    return int(dernier or 0) + 1
+
+
+def enregistrer_etude(
+    db: Session,
+    etude: ThermiqueEtude,
+    user: User,
+    contenu: dict[str, Any],
+    etats: dict[str, Any],
+    motif: str,
+) -> ThermiqueEtude:
+    """Écrit l'état courant et crée une version qui ne garde que ce qui est modifiable (D63, D64)."""
+    etude.content_json = json.dumps(contenu, ensure_ascii=False, separators=(",", ":"))
+    etude.local_states_json = json.dumps(etats, ensure_ascii=False, separators=(",", ":"))
+    db.add(
+        ThermiqueEtudeVersion(
+            etude_id=etude.id,
+            version_number=prochaine_version(db, etude),
+            reason=motif,
+            content_json=None,
+            pieces_json=json.dumps(etat_editable(contenu), ensure_ascii=False, separators=(",", ":")),
+            local_states_json=etude.local_states_json,
+            created_by_user_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(etude)
+    return etude
+
+
+def lister_versions(db: Session, etude: ThermiqueEtude) -> list[dict[str, Any]]:
+    lignes = db.scalars(
+        select(ThermiqueEtudeVersion)
+        .where(ThermiqueEtudeVersion.etude_id == etude.id)
+        .order_by(ThermiqueEtudeVersion.version_number.desc())
+    ).all()
+    return [
+        {
+            "version_number": ligne.version_number,
+            "reason": ligne.reason,
+            "created_by_user_id": ligne.created_by_user_id,
+            "created_at": ligne.created_at,
+        }
+        for ligne in lignes
+    ]
+
+
+def base_de_version(db: Session, etude: ThermiqueEtude, numero: int) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    """Contenu complet du dernier import à ou avant `numero`, plus les pièces et états de `numero`."""
+    cible = db.scalar(
+        select(ThermiqueEtudeVersion).where(
+            ThermiqueEtudeVersion.etude_id == etude.id, ThermiqueEtudeVersion.version_number == numero
+        )
+    )
+    if cible is None:
+        raise ThermiqueError("Cette version n'existe pas.")
+    socle = db.scalars(
+        select(ThermiqueEtudeVersion)
+        .where(
+            ThermiqueEtudeVersion.etude_id == etude.id,
+            ThermiqueEtudeVersion.version_number <= numero,
+            ThermiqueEtudeVersion.content_json.is_not(None),
+        )
+        .order_by(ThermiqueEtudeVersion.version_number.desc())
+        .limit(1)
+    ).first()
+    if socle is None:
+        raise ThermiqueError("L'import d'origine de cette version est introuvable.")
+    pieces = json.loads(cible.pieces_json) if cible.pieces_json else []
+    return json.loads(socle.content_json), pieces, json.loads(cible.local_states_json)
 
 
 def serialize_etude(db: Session, etude: ThermiqueEtude) -> dict[str, Any]:
