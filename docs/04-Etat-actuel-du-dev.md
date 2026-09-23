@@ -19,11 +19,20 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-23** (session Claude — E2 et E3 en production, lot F1 terminé localement).
+> Mise à jour : **2026-09-23** (reprise Codex — métrés, nord et gestes de correction terminés localement).
 
-- **▶️ REPRENDRE ICI — outil thermique, prochain lot F0** (file d'attente et relais local, D76). Tout l'état,
-  ce qui est fait et les commandes : **`docs/thermique/reprise-F1.md`**. Décisions :
-  `docs/thermique/parcours-par-niveau-E3bis-decisions.md` (D66 à D77, toutes validées par l'utilisateur).
+- **▶️ REPRENDRE ICI — attendre l'accord explicite avant tout push**, puis livrer les commits locaux F3 et
+  nord/édition (`50005292`, `a19dba04`, migration **0085**). Ensuite, reprendre le lot **F0** (file d'attente
+  et relais local, D76), puis F2/F4. La branche est volontairement locale ; aucun push n'a été fait par Codex.
+- **✅ MÉTRÉS, PONTS ET ÉLÉMENTS SUR LE PLAN — F3** (`50005292`) : un clic sur un local dessine ses cotes,
+  sa surface, ses ponts thermiques et ses éléments d'enveloppe ; les quatre réglages permettent d'étendre
+  l'affichage au niveau entier. Le vrai R+1 recoupe 222 côtés, 289 éléments et 77 liaisons.
+- **✅ NORD ET CORRECTION DU CONTOUR** (`a19dba04`) : flèche sans ambiguïté, de la base vers la pointe `N`,
+  stockée en points PDF par planche et propageable entre formats ; les orientations sont recalculées dès la
+  validation. Le contour se simplifie au lasso libre (`Alt + glisser`) et le clic droit propose ajouter,
+  supprimer ou redresser un côté. Sur le vrai R+1, les **222 côtés** passent de « nord à caler » à une
+  orientation calculée, sans perdre les 24 locaux. Vérifications : 73 tests backend, 32 frontend et build.
+  Décisions : `thermique/nord-et-edition-plan-decisions.md`.
 - **✅ LOT F1 TERMINÉ LOCALEMENT — contours calés et chaîne qui se relit elle-même.** Le fichier d'étude passe
   en `format_version: 3` : contours calés sur le nu intérieur mesuré à l'assemblage (D66), liaisons localisées
   (D74), tracé reprojeté des éléments (D75), et **contrôle de cohérence en six points (D77)** écrit dans
