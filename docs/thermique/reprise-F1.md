@@ -1,16 +1,20 @@
 ---
-read_policy: lire en premier pour reprendre l'outil thermique (point de reprise du 2026-09-23, lot F1)
+read_policy: lire en premier pour reprendre l'outil thermique (point de reprise du 2026-09-23, lots F1 puis F0)
 ---
 
-# Reprise — outil thermique, lot F1
+# Reprise — outil thermique, après le lot F1
+
+**Prochain lot : F0** (file d'attente et relais local, D76), puis F2 (parcours par niveau), F3 (métrés et
+ponts dessinés sur le plan), F4 (éléments isolables et modifiables).
 
 ## 1. Où on en est
 
 - Dépôt : worktree `C:\Users\pa.borja\Documents\Po2-thermique`, branche `feat/thermique-socle-raster`.
 - **En production** (thermique.patrimoineaucarre.com) : jusqu'au commit `365a9055` — espace de travail (E1),
   import d'une étude de niveau (E2), édition pièce par pièce (E3). Migrations 0083 et 0084 appliquées.
-- **Commits locaux non poussés** : `812c2405`, `fafcbecc` (décisions E3 bis) et `9e385d2d` (correction de
-  l'emprise intérieure). Un push sur `main` déclenche le déploiement : **jamais sans l'accord de l'utilisateur**.
+- **Commits locaux non poussés** : `812c2405`, `fafcbecc` (décisions E3 bis), `9e385d2d` (correction de
+  l'emprise intérieure), `54f5c4fe` (D77 et ce document) et le lot F1 lui-même. Un push sur `main` déclenche
+  le déploiement : **jamais sans l'accord de l'utilisateur**.
 - L'utilisateur a repris un projet propre en production, importé le R+1, et travaillé dessus.
 
 ## 2. Ce que l'utilisateur a demandé, et qui est décidé
@@ -28,9 +32,9 @@ Tout est dans [parcours-par-niveau-E3bis-decisions.md](parcours-par-niveau-E3bis
 
 Ordre des lots retenu : **F1 → F0 (relais) → F2 (parcours) → F3 (métrés sur le plan) → F4 (éléments)**.
 
-## 3. Lot F1 — ce qui est fait, ce qui reste
+## 3. Lot F1 — terminé
 
-### Fait (commit `9e385d2d`, testé sur le R+1 réel)
+### Socle (commit `9e385d2d`, testé sur le R+1 réel)
 
 - `app/services/thermique_calage_contours.py` : reconstruit le **corps des parois** (du nu extérieur au nu
   intérieur mesuré) et le retire des contours de locaux. Sur le R+1, corrige sept locaux qui mordaient
@@ -42,20 +46,28 @@ Ordre des lots retenu : **F1 → F0 (relais) → F2 (parcours) → F3 (métrés 
   C'est ce défaut que l'utilisateur voyait comme « la limite des pièces ne s'est pas faite au pied de la
   menuiserie » sur toute une façade : la bande rouge dessinait l'épaisseur des murs.
 
-### Reste à faire dans F1
+### Fait (lot F1 terminé, testé sur le R+1 réel)
 
-1. **Contrôle de cohérence de fin de chaîne (D77)** — la demande la plus importante de la journée : la chaîne
-   doit confronter les deux lectures (contours de `thermicien-plan` contre nus de `thermicien-enveloppe`) et
-   écrire ce qu'elle trouve dans `A-FAIRE.md` **et** dans le fichier d'étude. Les six contrôles sont listés
-   dans D77. Le défaut corrigé aujourd'hui aurait été détecté par le contrôle n° 1.
-2. **Brancher le calage** dans `assembler_etude_niveau` (sur le poste, jamais au serveur — D66), avec
-   `contours_cales: true` et le rapport de déplacement par local.
-3. **Brancher les liaisons localisées** dans le fichier d'étude (D74), pour que F3 puisse les dessiner.
-4. **Remettre le tracé reprojeté des éléments** dans le fichier (D75) : la version 2 ne garde que le relevé
-   brut, donc les éléments ne sont plus dessinables. Régression introduite par moi en E3.
-5. Passer le contrat en `format_version: 3`, adapter `valider_et_convertir` et les tests.
-6. Réassembler `etude-R1.json` en v3 et le faire réimporter par l'utilisateur (l'ancienne étude devient une
-   version, rien n'est perdu).
+1. **Contrôle de cohérence de fin de chaîne (D77)** — `app/services/thermique_coherence.py`. Les six contrôles
+   tournent avant l'écriture du fichier et à chaque recalcul ; le rapport part dans `A-FAIRE.md` **et** dans
+   l'étude, et s'affiche dans le panneau « Locaux ». Le défaut corrigé le 2026-09-23 est attrapé par le
+   contrôle n° 1, et le contrôle n° 3 se tait sur un fichier calé : c'est lui qui vérifie le calage.
+2. **Calage branché** dans `assembler_etude_niveau` (sur le poste, à l'assemblage — D66), avec
+   `calage.contours_cales` et le déplacement par local. Le fichier repasse ensuite par `reconstruire`, la
+   même chaîne qu'après chaque geste d'édition : impossible qu'il décrive des contours qu'il n'a pas mesurés.
+3. **Liaisons localisées** (D74) et **tracé reprojeté des éléments** (D75) dans `enveloppe.liaisons` et
+   `enveloppe.objets`, convertis en points PDF à l'import comme les contours, prêts pour F3.
+4. Contrat en `format_version: 3` ; une étude sans son rapport de cohérence est refusée à l'import.
+5. `etude-R1.v3.json` réassemblé (à côté de la v2, même dossier) : **à réimporter dans l'application**.
+
+### Ce que le R+1 donne en v3
+
+Chaîne fidèle : 24 locaux, 32 composants, 24 fiches, 16 raccords, 4 demandes, 22 synthèses — comme en v2.
+Nouveau : 289 tracés d'éléments et 77 liaisons. Couverture 86,2 → **92,5 %**, surface sans local
+112,6 → **31,0 m²**. Le calage recule sept locaux (escalier encloisonné −4,4 m², locaux techniques −3,8 m²,
+pôle multimédia −1,3 m²). Le contrôle de cohérence remonte **9 points**, dont un vrai défaut que personne
+n'avait vu : *escalier atrium* et *4.2 Pôle multimédia* se recouvrent sur **10,85 m²** (sous le seuil de
+blocage de 2 %, donc silencieux jusqu'ici).
 
 ## 4. Ce qu'il faut savoir pour ne pas se tromper
 
@@ -77,9 +89,10 @@ Ordre des lots retenu : **F1 → F0 (relais) → F2 (parcours) → F3 (métrés 
 
 Données réelles, sans relancer aucun agent :
 
-- étude v2 du R+1 : `C:\Users\pa.borja\Documents\Codex\2026-09-18\tu\outputs\complement_R1\etude-R1.v2.json`
-- sources d'assemblage : même dossier (`enveloppe.raw.json`, `enveloppe.json`, `enveloppe/controle.json`) et
-  l'analyse `...\outputs\claude_agent_R1_locaux.json`
+- étude **v3** du R+1 (à importer) : `C:\Users\pa.borja\Documents\Codex\2026-09-18\tu\outputs\complement_R1\etude-R1.v3.json`
+- étude v2, pour comparer : même dossier, `etude-R1.v2.json`
+- sources d'assemblage : même dossier (`enveloppe.raw.json`, `enveloppe.json`, `enveloppe/controle.json`,
+  `enveloppe/enveloppe-manifeste.json`) et l'analyse `...\outputs\claude_agent_R1_locaux.json`
 - plan : `C:\Users\pa.borja\Documents\Po2\Thermique\PLAN EXEMPLE PROJET 1\PC04-FRONT-NIVEAU1.pdf`
   (empreinte `e2da3c91d3756be0…`, page 1, rotation visionneuse 270)
 

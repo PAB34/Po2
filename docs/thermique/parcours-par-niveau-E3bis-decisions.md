@@ -177,7 +177,7 @@ reprojeté des éléments, liaisons localisées, contours calés.
 
 | Lot | Contenu | Pourquoi dans cet ordre |
 |---|---|---|
-| **F1** | Calage automatique des contours, **contrôle de cohérence (D77)**, liaisons localisées, tracé des éléments ; format v3 | réduit d'emblée le travail de l'étape 3 : moins de contours à reprendre à la main |
+| **F1** ✅ | Calage automatique des contours, **contrôle de cohérence (D77)**, liaisons localisées, tracé des éléments ; format v3 | réduit d'emblée le travail de l'étape 3 : moins de contours à reprendre à la main |
 | **F0** | File d'attente et relais local (D76) | **après F1** : sinon le relais importerait automatiquement des études aux contours faux |
 | **F2** | Parcours en cinq étapes, brouillon de niveau, enregistrement obligatoire au changement, recalcul en fin de passe | le squelette du travail quotidien |
 | **F3** | Métrés et ponts dessinés sur le plan | lecture |
@@ -194,6 +194,22 @@ E4 (bibliothèque alimentée, ponts associés au référentiel) et E5 (hauteurs)
 4. Vérifier qu'un changement de planche avec brouillon non enregistré est bien retenu.
 5. Contrôler sur le banc local, avec le vrai PDF, l'isolement des éléments et les cotes dessinées.
 6. Tests ciblés serveur et interface, typage et construction.
+
+### Ce que la vérification a donné (2026-09-23, lot F1 livré)
+
+Le point 1 ci-dessus partait d'un diagnostic faux de ma part : les bureaux nord n'avaient **pas** de défaut de
+contour (`6.1.2 B.asst` est mesuré à 26,2 cm au droit d'un mur-rideau de 26 cm). Le calage ne les touche donc
+pas, et c'est le bon résultat. Il recule en revanche **sept locaux qui mordaient réellement dans les murs** :
+escalier encloisonné −4,37 m² (76 cm), locaux techniques −3,76 m² (78 cm), pôle multimédia −1,30 m² (43 cm),
+espace formation −0,09 m² (64 cm), et trois retouches centimétriques.
+
+Point 2 vérifié : couverture 86,2 → **92,5 %**, surface sans local 112,6 → **31,0 m²** en dix zones réelles,
+chevauchement inchangé (10,85 m²). Chaîne fidèle : 24 locaux, 32 composants, 24 fiches, 16 raccords,
+4 demandes, comme en v2 ; s'y ajoutent 289 tracés d'éléments et 77 liaisons localisées.
+
+Le contrôle de cohérence remonte **9 points** sur ce niveau, dont un défaut que personne n'avait vu :
+*escalier atrium* et *4.2 Pôle multimédia* se recouvrent sur **10,85 m²**. Il passait sous le seuil de blocage
+de 2 % et ne disait donc rien. C'est exactement ce que D77 était censé faire remonter.
 
 ## 6. Questions à valider avant le code
 

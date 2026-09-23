@@ -9,6 +9,11 @@ déjà rattachée aux pièces, pour que le serveur puisse tout recalculer quand 
 contour ; et chaque local dit, côté par côté, s'il suit une paroi lue sur le plan ou une simple limite
 d'usage (D59). La source de vérité géométrique reste ``analyse["objects"]`` : ``locaux[].contour`` en
 est le reflet, régénéré à chaque recalcul.
+
+Version 3 du contrat (F1) : le fichier arrive **déjà calé**. Les contours reculent jusqu'au nu intérieur
+mesuré avant d'être écrits (D66), les liaisons du relevé portent leur position sur la feuille (D74), le
+tracé reprojeté des éléments d'enveloppe revient dans le fichier pour être dessiné (D75), et la chaîne
+se relit elle-même : le rapport de cohérence entre les deux lectures voyage avec l'étude (D77).
 """
 from __future__ import annotations
 
@@ -23,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.models.thermique import ThermiqueEtude, ThermiqueEtudeVersion, ThermiqueSheet
 from app.models.user import User
+from app.services import thermique_calage_contours as calage
 from app.services import thermique_enveloppe_pieces as pieces
 from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
@@ -30,7 +36,7 @@ from app.services import thermique_parcours_enveloppe as enveloppe
 from app.services.thermique import ThermiqueError
 
 ETUDE_FORMAT = "thermique.etude_niveau"
-ETUDE_FORMAT_VERSION = 2
+ETUDE_FORMAT_VERSION = 3
 MAX_ETUDE_BYTES = 10 * 1024 * 1024
 LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe"}
 
@@ -96,7 +102,13 @@ def assembler_etude_niveau(
     restitution: dict[str, Any],
     controle: dict[str, Any],
 ) -> dict[str, Any]:
-    """Assemble le contrat portable importé par l'application, sans appeler d'agent."""
+    """Assemble le contrat portable importé par l'application, sans appeler d'agent.
+
+    Le calage des contours sur le nu intérieur mesuré se fait ici, sur le poste, à l'assemblage (D66) :
+    le serveur ne retouche jamais une géométrie en silence. Les fiches, la synthèse et la couverture sont
+    ensuite régénérées par la chaîne de recalcul, la même qu'après chaque geste d'édition, pour que le
+    fichier livré ne puisse pas décrire des contours qu'il n'a pas mesurés.
+    """
     if analyse.get("uses_pdf_vectors") is not False:
         raise ThermiqueError("L'analyse ne garantit pas une lecture raster sans vecteurs PDF.")
     bibliotheque = restitution.get("enveloppe", {}).get("bibliotheque", {})
@@ -130,14 +142,16 @@ def assembler_etude_niveau(
         orphelines = sorted(set(fiches) - {local["nom"] for local in locaux})
         raise ThermiqueError(f"Des fiches ne correspondent à aucun local : {', '.join(orphelines)}")
 
+    # Calage : les contours reculent jusqu'au nu intérieur mesuré, ils ne s'agrandissent jamais (D66).
+    analyse_calee, rapport_calage = calage.caler_locaux(analyse, manifeste, releve_brut)
     analyse_portable = {
         key: copy.deepcopy(value)
-        for key, value in analyse.items()
+        for key, value in analyse_calee.items()
         if key not in {"manifest", "usage", "session_id"}
     }
     analyse_portable["manifest"] = _manifest_analyse_portable(analyse.get("manifest", {}))
     manifest_analyse = analyse.get("manifest", {})
-    return {
+    contenu = {
         "format": ETUDE_FORMAT,
         "format_version": ETUDE_FORMAT_VERSION,
         "uses_pdf_vectors": False,
@@ -169,10 +183,19 @@ def assembler_etude_niveau(
             "controle": {key: copy.deepcopy(value) for key, value in controle.items() if key != "cellules"},
             "demandes": copy.deepcopy(bibliotheque.get("demandes", [])),
         },
+        "calage": {
+            "contours_cales": True,
+            "locaux_deplaces": rapport_calage,
+        },
         "couverture": geo.controler_couverture(
             {local["id"]: local["contour"] for local in locaux}, manifeste, releve_brut
         ),
     }
+    # Import différé : l'édition s'appuie sur ce module. Le fichier livré passe par la même chaîne de
+    # recalcul que chaque geste d'édition — c'est la garantie qu'il est cohérent avec ses contours calés.
+    from app.services import thermique_etude_edition as edition
+
+    return edition.reconstruire(contenu)
 
 
 def ecrire_etude_niveau(destination: Path, **kwargs: Any) -> dict[str, Any]:
@@ -237,6 +260,9 @@ def valider_et_convertir(
         raise ThermiqueError("Le relevé brut de l'enveloppe est absent : l'étude ne serait pas modifiable.")
     if not isinstance(payload.get("analyse"), dict) or not isinstance(payload["analyse"].get("objects"), list):
         raise ThermiqueError("L'analyse du plan est absente de l'étude.")
+    # Une étude v3 arrive calée et relue : sans son rapport de cohérence, on ne saurait pas ce qu'elle vaut.
+    if not isinstance(payload.get("coherence"), dict) or not isinstance(payload["coherence"].get("controles"), list):
+        raise ThermiqueError("Le contrôle de cohérence est absent de l'étude : réassemblez-la avec la chaîne à jour.")
 
     locaux = payload.get("locaux")
     if not isinstance(locaux, list) or not locaux:
@@ -289,6 +315,20 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
             [_inverser_transform(transform, x * width / 1000, y * height / 1000) for x, y in zone]
             for zone in couverture.get("zones_non_affectees", [])
         ]
+    enveloppe_etude = contenu.get("enveloppe")
+    if isinstance(enveloppe_etude, dict):
+        # Tracé des éléments (D75) et position des liaisons (D74) : dessinés sur le plan, donc en points PDF.
+        for objet in enveloppe_etude.get("objets", []):
+            objet["points_pdf"] = [
+                _inverser_transform(transform, x * width / 1000, y * height / 1000)
+                for x, y in objet.get("points", [])
+            ]
+        for liaison in enveloppe_etude.get("liaisons", []):
+            point = liaison.get("point")
+            if isinstance(point, list) and len(point) == 2:
+                liaison["point_pdf"] = _inverser_transform(
+                    transform, float(point[0]) * width / 1000, float(point[1]) * height / 1000
+                )
 
 
 def get_etude_for_sheet(db: Session, sheet_id: int) -> ThermiqueEtude | None:

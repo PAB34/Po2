@@ -19,11 +19,17 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-23** (session Claude — E2 et E3 en production, lot F1 en cours).
+> Mise à jour : **2026-09-23** (session Claude — E2 et E3 en production, lot F1 terminé localement).
 
-- **▶️ REPRENDRE ICI — outil thermique, lot F1.** Tout l'état, ce qui est fait, ce qui reste et les
-  commandes : **`docs/thermique/reprise-F1.md`**. Décisions du lot :
+- **▶️ REPRENDRE ICI — outil thermique, prochain lot F0** (file d'attente et relais local, D76). Tout l'état,
+  ce qui est fait et les commandes : **`docs/thermique/reprise-F1.md`**. Décisions :
   `docs/thermique/parcours-par-niveau-E3bis-decisions.md` (D66 à D77, toutes validées par l'utilisateur).
+- **✅ LOT F1 TERMINÉ LOCALEMENT — contours calés et chaîne qui se relit elle-même.** Le fichier d'étude passe
+  en `format_version: 3` : contours calés sur le nu intérieur mesuré à l'assemblage (D66), liaisons localisées
+  (D74), tracé reprojeté des éléments (D75), et **contrôle de cohérence en six points (D77)** écrit dans
+  `A-FAIRE.md` et dans l'étude, affiché à l'import. Sur le R+1 : couverture 86,2 → 92,5 %, surface sans local
+  112,6 → 31,0 m², sept locaux reculés, et un recouvrement de 10,85 m² enfin signalé. `etude-R1.v3.json` est
+  prêt à réimporter. **Rien n'est poussé.**
 
 > Mise à jour précédente : **2026-09-23** (session Codex — benchmark agents thermiciens OpenAI).
 

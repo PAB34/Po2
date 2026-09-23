@@ -2068,6 +2068,38 @@ circle.th-seg--measure {
   opacity: 0.85;
 }
 
+/* Ce que la chaîne a trouvé en se relisant : discret quand tout va, dépliable sinon (D77). */
+.th-study-coherence {
+  margin-bottom: 0.8rem;
+  font-size: 0.82rem;
+}
+
+.th-study-coherence.is-ok {
+  margin-bottom: 0.8rem;
+  opacity: 0.7;
+}
+
+.th-study-coherence dl {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 10px;
+  background: var(--po2-color-amber-soft);
+}
+
+.th-study-coherence dt {
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.th-study-coherence dt:first-child {
+  margin-top: 0;
+}
+
+.th-study-coherence dd {
+  margin: 0.15rem 0 0 0.8rem;
+  opacity: 0.85;
+}
+
 .th-study-gap {
   fill: #b3261e;
   fill-opacity: 0.18;

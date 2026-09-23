@@ -246,11 +246,13 @@ def _manifeste_avec_troncon() -> dict:
             "id": "T01",
             "debut_m": 0.0,
             "local_debut_m": 0.0,
+            "fin_m": 100.0,
             "origine_px": [0, 0],
             "direction": [1.0, 0.0],
             "normale_ext": [0.0, -1.0],
         }
     ]
+    manifeste["perimetre_m"] = 100.0
     return manifeste
 
 
@@ -291,3 +293,25 @@ def test_le_calage_ne_touche_pas_un_local_deja_bien_pose():
     analyse = {"objects": [_piece("piece-001", [[0, 60], [1000, 60], [1000, 500], [0, 500]])]}
     _cale, rapport = calage.caler_locaux(analyse, manifeste, _releve_mur_nord())
     assert rapport == []
+
+
+def test_le_recalcul_redonne_le_trace_des_elements_les_liaisons_et_le_controle():
+    """Version 3 : sans ces trois blocs, rien n'est dessinable et la chaîne ne se relit pas (D74, D75, D77)."""
+    contenu = {
+        "niveau": "R1",
+        "analyse": {
+            "objects": [_piece("piece-001", [[0, 60], [1000, 60], [1000, 500], [0, 500]], "Bureau")],
+            "manifest": {"page_width_px": 1000, "page_height_px": 1000, "crop_box_px": [0, 0, 1000, 1000],
+                         "width_px": 1000, "height_px": 1000},
+        },
+        "enveloppe": {"manifeste": _manifeste_avec_troncon(), "releve_brut": _releve_mur_nord()},
+        "locaux": [],
+    }
+    contenu["enveloppe"]["releve_brut"]["elements"].append(
+        {"troncon": "T01", "debut_m": 100.0, "fin_m": 100.0, "type": "angle_sortant", "composant": None,
+         "nu_exterieur_cm": 0, "nu_interieur_cm": -50, "confiance": 0.9, "a_verifier": False, "indice": "angle"}
+    )
+    resultat = edition.reconstruire(contenu)
+    assert resultat["enveloppe"]["objets"], "le tracé reprojeté des éléments doit revenir dans le fichier"
+    assert [liaison["type"] for liaison in resultat["enveloppe"]["liaisons"]] == ["angle_sortant"]
+    assert len(resultat["coherence"]["controles"]) == 6

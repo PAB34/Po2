@@ -12,7 +12,7 @@ import { InfoPanel } from "./InfoPanel";
 import { groupSheets, referenceSheet, sheetTitle } from "./levels";
 import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
-import { StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { useStudyEdition } from "./useStudyEdition";
 import { studyQueryKey, validatedRoomCount } from "./study";
 
@@ -308,6 +308,7 @@ export function WorkspacePage() {
           <section>
             <h2>Locaux</h2>
             <StudyCoverageBanner coverage={shownStudy?.content.couverture ?? null} />
+            <StudyCoherenceReport coherence={shownStudy?.content.coherence ?? null} />
             {shownStudy ? (
               <StudyRoomList study={shownStudy} selectedId={selectedRoom?.id ?? null} onSelect={selectRoom} />
             ) : (

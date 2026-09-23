@@ -16,6 +16,8 @@ from typing import Any
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import split, unary_union
 
+from app.services import thermique_calage_contours as calage
+from app.services import thermique_coherence as coherence
 from app.services import thermique_enveloppe_pieces as pieces
 from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
@@ -246,9 +248,17 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat["enveloppe"]["fiches_locaux"] = fiches
     resultat["enveloppe"]["raccords"] = copy.deepcopy(coupe.get("raccords", []))
     resultat["enveloppe"]["demandes"] = demandes
+    # Le tracé des éléments revient dans le fichier (D75) : sans lui, rien n'est dessinable sur le plan.
+    resultat["enveloppe"]["objets"] = copy.deepcopy(releve.get("objets", []))
+    # Les ponts thermiques portent leur position, pour être montrés là où ils sont (D74).
+    resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(
+        resultat["enveloppe"]["releve_brut"], manifeste, analyse
+    )
     resultat["couverture"] = geo.controler_couverture(
         {local["id"]: local["contour"] for local in locaux}, manifeste, resultat["enveloppe"]["releve_brut"]
     )
+    # La chaîne se relit elle-même : le rapport voyage avec l'étude et s'affiche à l'import (D77).
+    resultat["coherence"] = coherence.controler_niveau(resultat)
     return resultat
 
 

@@ -119,11 +119,31 @@ export type StudyContent = {
   enveloppe: {
     catalogue: unknown[];
     releve_brut: { elements: unknown[]; catalogue: unknown[]; observations: string[] };
+    /** Tracé reprojeté des éléments relevés, pour les dessiner sur le plan (D75). */
+    objets?: { id: string; category: string; subtype: string; points_pdf?: PdfPoint[] }[];
+    /** Liaisons du relevé avec leur position sur la feuille : les ponts thermiques (D74). */
+    liaisons?: { type: string; troncon: string; piece: string | null; point_pdf?: PdfPoint }[];
     raccords: unknown[];
     controle: Record<string, unknown>;
     demandes: { piece: string; objet: string; motif: string }[];
   };
   couverture: StudyCoverage;
+  coherence?: StudyCoherence;
+};
+/** Rapport de la chaîne sur elle-même : les deux lectures du niveau confrontées (D77). */
+export type StudyCoherence = {
+  version: number;
+  niveau: string | null;
+  locaux: number;
+  anomalies: number;
+  statut: "ok" | "attention";
+  controles: {
+    code: string;
+    titre: string;
+    statut: "ok" | "attention";
+    resume: string;
+    anomalies: { message: string; local?: string | null }[];
+  }[];
 };
 export type StudyCoverage = {
   surface_emprise_m2: number;

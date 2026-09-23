@@ -114,7 +114,7 @@ def _payload(sha256: str) -> dict:
     }
     return {
         "format": "thermique.etude_niveau",
-        "format_version": 2,
+        "format_version": 3,
         "uses_pdf_vectors": False,
         "niveau": "R1",
         "source": {
@@ -159,7 +159,9 @@ def _payload(sha256: str) -> dict:
             }
         ],
         "locaux_ecartes": [],
-        "enveloppe": {"manifeste": _manifeste(), "releve_brut": {"elements": [], "catalogue": [], "observations": []}, "catalogue": [], "synthese_pieces": [], "fiches_locaux": [fiche], "controle": {}, "demandes": []},
+        "enveloppe": {"manifeste": _manifeste(), "releve_brut": {"elements": [], "catalogue": [], "observations": []}, "catalogue": [], "synthese_pieces": [], "fiches_locaux": [fiche], "controle": {}, "demandes": [], "objets": [], "liaisons": []},
+        "calage": {"contours_cales": True, "locaux_deplaces": []},
+        "coherence": {"version": 1, "statut": "ok", "anomalies": 0, "controles": []},
     }
 
 

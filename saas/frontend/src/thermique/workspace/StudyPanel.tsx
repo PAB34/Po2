@@ -1,3 +1,4 @@
+import { Fragment, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 
 import type { PdfPoint, Study, StudyRoom } from "../api";
@@ -348,6 +349,40 @@ export function StudyCoverageBanner({ coverage }: { coverage: Study["content"]["
       <strong>{coverage.taux_couverture_pct.toLocaleString("fr-FR")} % de l'intérieur affecté</strong>
       {coverage.surface_non_affectee_m2 >= 0.5 && <span>{squareMeters(coverage.surface_non_affectee_m2)} sans local</span>}
       {coverage.chevauchement_m2 >= 0.5 && <span>{squareMeters(coverage.chevauchement_m2)} comptés deux fois</span>}
+    </div>
+  );
+}
+
+/** Ce que la chaîne a trouvé en se relisant : deux lectures du même niveau confrontées (D77). */
+export function StudyCoherenceReport({ coherence }: { coherence: Study["content"]["coherence"] | null | undefined }) {
+  const [ouvert, setOuvert] = useState(false);
+  if (!coherence) {
+    return null;
+  }
+  if (coherence.statut === "ok") {
+    return (
+      <p className="th-study-coherence is-ok">Contrôle de cohérence : les contours et le relevé concordent.</p>
+    );
+  }
+  const anomalies = coherence.controles.filter((controle) => controle.anomalies.length > 0);
+  return (
+    <div className="th-study-coherence">
+      <button type="button" className="th-link" onClick={() => setOuvert(!ouvert)}>
+        Contrôle de cohérence : {coherence.anomalies} point{coherence.anomalies > 1 ? "s" : ""} à regarder
+        <span aria-hidden="true">{ouvert ? " ▴" : " ▾"}</span>
+      </button>
+      {ouvert && (
+        <dl>
+          {anomalies.map((controle) => (
+            <Fragment key={controle.code}>
+              <dt>{controle.titre}</dt>
+              {controle.anomalies.map((anomalie, rang) => (
+                <dd key={`${controle.code}-${rang}`}>{anomalie.message}</dd>
+              ))}
+            </Fragment>
+          ))}
+        </dl>
+      )}
     </div>
   );
 }

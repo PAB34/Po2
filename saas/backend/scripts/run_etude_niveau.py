@@ -36,6 +36,7 @@ import run_enveloppe_claude as parcours  # noqa: E402
 import run_thermicien_claude as passe  # noqa: E402
 
 from app.services import thermique_claude_agent as agent  # noqa: E402
+from app.services import thermique_coherence as coherence_service  # noqa: E402
 from app.services import thermique_lecture_locaux as lecture_locaux  # noqa: E402
 from app.services import thermique_locaux as recaler  # noqa: E402
 from app.services import thermique_parcours_enveloppe as enveloppe  # noqa: E402
@@ -224,14 +225,20 @@ def restituer(etude: Etude, manifeste: dict) -> None:
     etude.noter("restitution", "faite", etude.env_json.name)
 
 
-def a_faire_final(etude: Etude) -> None:
+def a_faire_final(etude: Etude, coherence: dict | None = None) -> None:
     """Ce qui reste au thermicien : décisions à confirmer, raccords refusés, demandes."""
     fusion = json.loads(etude.env_json.read_text(encoding="utf-8"))
     bibliotheque = fusion["enveloppe"]["bibliotheque"]
-    lignes = [f"# Niveau {etude.args.niveau} : étude terminée — ce qui reste à vous\n",
+    entete = ""
+    if coherence and coherence.get("statut") == "attention":
+        entete = f" — **{coherence['anomalies']} incohérence(s) détectée(s)**"
+    lignes = [f"# Niveau {etude.args.niveau} : étude terminée{entete} — ce qui reste à vous\n",
               f"Résultats : `{etude.env_json.with_suffix('.bibliotheque.md').name}`, "
               f"`{etude.env_json.with_suffix('.pieces.png').name}`, `enveloppe/catalogue.png`, "
               f"`enveloppe/controle-image.png`, `enveloppe/releve-XX.png`.\n"]
+    if coherence:
+        # Le contrôle de cohérence passe en tête : c'est lui qui dit si la lecture des agents tient (D77).
+        lignes += coherence_service.rapport_markdown(coherence)
     confirmer = [c for c in bibliotheque["composants"] if c.get("decision") == "a_confirmer"]
     if confirmer:
         lignes.append("## Composants à confirmer (catalogue)\n")
@@ -255,10 +262,10 @@ def a_faire_final(etude: Etude) -> None:
     (etude.dossier / "A-FAIRE.md").write_text("\n".join(lignes) + "\n", encoding="utf-8")
 
 
-def fichier_etude(etude: Etude, manifeste: dict) -> Path:
+def fichier_etude(etude: Etude, manifeste: dict) -> dict:
     """Assemble le seul JSON à déposer dans l'application, sans relancer les agents."""
     destination = etude.dossier / f"etude-{etude.args.niveau}.json"
-    ecrire_etude_niveau(
+    contenu = ecrire_etude_niveau(
         destination,
         source=etude.source,
         niveau=etude.args.niveau,
@@ -270,8 +277,10 @@ def fichier_etude(etude: Etude, manifeste: dict) -> Path:
         restitution=json.loads(etude.env_json.read_text(encoding="utf-8")),
         controle=json.loads((etude.env_dir / "controle.json").read_text(encoding="utf-8")),
     )
-    etude.noter("fichier-etude", "écrit", destination.name)
-    return destination
+    coherence = contenu.get("coherence", {})
+    etude.noter("fichier-etude", "écrit", f"{destination.name} ; cohérence : {coherence.get('statut', '?')} "
+                                          f"({coherence.get('anomalies', 0)} anomalie(s))")
+    return contenu
 
 
 def main() -> int:
@@ -291,8 +300,8 @@ def main() -> int:
         if attente:
             return attente
         restituer(etude, manifeste)
-        fichier_etude(etude, manifeste)
-        a_faire_final(etude)
+        contenu = fichier_etude(etude, manifeste)
+        a_faire_final(etude, contenu.get("coherence"))
         etude.noter("etude", "terminée", str(etude.dossier / "A-FAIRE.md"))
         return 0
     except (ThermiqueError, ValueError) as exc:
