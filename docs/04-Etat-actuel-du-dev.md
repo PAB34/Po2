@@ -19,7 +19,17 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-22** (session Codex — espace thermicien, lot E2).
+> Mise à jour : **2026-09-23** (session Codex — benchmark agents thermiciens OpenAI).
+
+- **✅ BENCHMARK LOCAL OPENAI / CLAUDE CODE SUR LE R+1** (commit `3eb0c5e4`, non poussé) : deux agents
+  OpenAI de projet en lecture seule (`thermicien_plan_openai`, `thermicien_enveloppe_openai`), sans API ni
+  vecteurs PDF ; comparateur strict des JSON, appariement géométrique, couverture IoU et projections avec
+  légende. Quatre runs OpenAI aveugles exécutés : le meilleur run de base couvre 85,0 % des pièces face à
+  Claude, mais les trois répétitions ne s'accordent qu'à 73,3 % en moyenne. Le run mal recalé reste pourtant
+  très confiant ; un prompt renforcé corrige les débordements mais omet le plateau ouvert 4.2/4.3/4.4.
+  **Décision : ne pas importer automatiquement**. Prochain lot : séparer couverture physique complète et
+  frontières fonctionnelles proposées, puis ajouter les contrôles raster de couverture/débordement avant de
+  tester l'agent enveloppe. Détail : `thermique/comparatif-agents-claude-openai.md`.
 
 - **✅ LOT E2 TERMINÉ LOCALEMENT — Import d'une étude de niveau dans l'espace thermicien**
   (branche `feat/thermique-socle-raster`, migration **0083**, pas encore poussé) : fichier unique
