@@ -247,7 +247,7 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat["enveloppe"]["raccords"] = copy.deepcopy(coupe.get("raccords", []))
     resultat["enveloppe"]["demandes"] = demandes
     resultat["couverture"] = geo.controler_couverture(
-        {local["id"]: local["contour"] for local in locaux}, manifeste
+        {local["id"]: local["contour"] for local in locaux}, manifeste, resultat["enveloppe"]["releve_brut"]
     )
     return resultat
 

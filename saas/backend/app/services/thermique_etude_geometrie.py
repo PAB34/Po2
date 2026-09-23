@@ -19,6 +19,7 @@ from typing import Any
 from shapely.geometry import LineString, MultiPolygon, Polygon
 from shapely.ops import unary_union
 
+from app.services import thermique_calage_contours as calage
 from app.services import thermique_enveloppe_pieces as pieces_env
 from app.services import thermique_fiches_locaux as fiches_locaux
 
@@ -48,14 +49,25 @@ def _en_normalise(points: Any, largeur: float, hauteur: float) -> list[list[floa
     return [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in points]
 
 
-def emprise_interieure(manifeste: dict[str, Any]) -> Polygon:
-    """Intérieur du niveau tel que le raster le donne, patios et trémies déduits."""
+def emprise_interieure(manifeste: dict[str, Any], releve: dict[str, Any] | None = None) -> Polygon:
+    """Intérieur du niveau : l'emprise du raster, patios et trémies déduits, **murs déduits**.
+
+    ``batiment_px`` suit la face **extérieure** du bâtiment. Comparer les locaux à cette emprise revient à
+    compter toute l'épaisseur des murs comme de la surface « sans local » : sur le R+1, 66 m² de murs étaient
+    ainsi signalés à tort. Quand le relevé d'enveloppe est fourni, on retranche le corps des parois mesurées.
+    """
     batiment = fiches_locaux.batiment_du_manifeste(manifeste)
     trous = [Polygon(trou).buffer(0) for trou in manifeste.get("trous_px", []) if len(trou) >= 3]
     for trou in trous:
         if trou.area > 0:
             batiment = batiment.difference(trou)
-    return batiment
+    if releve:
+        murs = calage.corps_des_parois(releve, manifeste)
+        if murs:
+            batiment = batiment.difference(unary_union(murs))
+    if isinstance(batiment, MultiPolygon):
+        batiment = max(batiment.geoms, key=lambda part: part.area)
+    return batiment if isinstance(batiment, Polygon) else Polygon()
 
 
 def _lignes_des_parois(analyse: dict[str, Any], largeur: float, hauteur: float) -> list[Any]:
@@ -142,26 +154,34 @@ def _morceaux(forme: Any) -> list[Polygon]:
 
 # Sous cette surface, un écart de couverture n'est que du bruit de tracé (un demi-mètre carré).
 BRUIT_M2 = 0.5
+# Une bande plus étroite que cela n'est pas un manque mais une cloison intérieure, que le parcours
+# d'enveloppe ne mesure pas : on ne la signale pas comme surface à affecter.
+LARGEUR_MIN_MANQUE_M = 0.30
 
 
 def controler_couverture(
     contours: dict[str, list[list[float]]],
     manifeste: dict[str, Any],
+    releve: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Confronte l'union des locaux à l'emprise intérieure du raster (D60).
 
-    ``contours`` associe l'identifiant d'un local à son contour normalisé de 0 à 1000.
+    ``contours`` associe l'identifiant d'un local à son contour normalisé de 0 à 1000. ``releve`` est le
+    relevé d'enveloppe : fourni, il permet de retrancher l'épaisseur des murs de l'emprise.
     """
     largeur, hauteur, px_par_m = _echelle(manifeste)
     m2 = px_par_m * px_par_m
     bruit_px = BRUIT_M2 * m2
-    emprise = emprise_interieure(manifeste)
+    emprise = emprise_interieure(manifeste, releve)
     formes = {identifiant: _polygone(contour, largeur, hauteur) for identifiant, contour in contours.items()}
     union = unary_union([forme for forme in formes.values() if forme.area > 0]) if formes else Polygon()
 
     manque = emprise.difference(union) if not emprise.is_empty else Polygon()
     debord = union.difference(emprise) if not emprise.is_empty else Polygon()
-    zones = sorted(_morceaux(manque), key=lambda part: part.area, reverse=True)
+    # On referme les bandes étroites : ce sont des cloisons, pas des surfaces oubliées.
+    rayon = LARGEUR_MIN_MANQUE_M / 2 * px_par_m
+    epaisses = manque.buffer(-rayon).buffer(rayon) if not manque.is_empty else manque
+    zones = sorted(_morceaux(epaisses), key=lambda part: part.area, reverse=True)
     zones = [part for part in zones if part.area > bruit_px]
 
     chevauchements = []

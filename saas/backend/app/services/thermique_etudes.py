@@ -169,7 +169,9 @@ def assembler_etude_niveau(
             "controle": {key: copy.deepcopy(value) for key, value in controle.items() if key != "cellules"},
             "demandes": copy.deepcopy(bibliotheque.get("demandes", [])),
         },
-        "couverture": geo.controler_couverture({local["id"]: local["contour"] for local in locaux}, manifeste),
+        "couverture": geo.controler_couverture(
+            {local["id"]: local["contour"] for local in locaux}, manifeste, releve_brut
+        ),
     }
 
 

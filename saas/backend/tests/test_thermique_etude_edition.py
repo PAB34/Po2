@@ -11,6 +11,7 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import inspect
 
+from app.services import thermique_calage_contours as calage
 from app.services import thermique_etude_edition as edition
 from app.services import thermique_etude_geometrie as geo
 from app.services.thermique import ThermiqueError
@@ -211,3 +212,82 @@ def test_migration_0084_monte_et_redescend_isolee():
         # Une version sans contenu complet n'est pas restituable en 0083 : elle est écartée.
         restantes = connexion.execute(sa.text("SELECT version_number FROM thermique_etude_versions")).scalars().all()
         assert restantes == [1]
+
+
+# --- Lot F1 : emprise intérieure et calage sur le relevé -----------------------------------------
+
+
+def _releve_mur_nord() -> dict:
+    """Un tronçon plein nord de 100 m, mur de 50 cm : de quoi tester l'emprise et le calage."""
+    return {
+        "elements": [
+            {
+                "troncon": "T01",
+                "debut_m": 0.0,
+                "fin_m": 100.0,
+                "type": "paroi",
+                "composant": "P1",
+                "nu_exterieur_cm": 0,
+                "nu_interieur_cm": -50,
+                "confiance": 0.9,
+                "a_verifier": False,
+                "indice": "mur",
+            }
+        ],
+        "catalogue": [],
+        "observations": [],
+    }
+
+
+def _manifeste_avec_troncon() -> dict:
+    manifeste = dict(MANIFESTE)
+    manifeste["troncons"] = [
+        {
+            "id": "T01",
+            "debut_m": 0.0,
+            "local_debut_m": 0.0,
+            "origine_px": [0, 0],
+            "direction": [1.0, 0.0],
+            "normale_ext": [0.0, -1.0],
+        }
+    ]
+    return manifeste
+
+
+def test_l_emprise_interieure_retranche_l_epaisseur_des_murs():
+    manifeste = _manifeste_avec_troncon()
+    sans = geo.emprise_interieure(manifeste)
+    avec = geo.emprise_interieure(manifeste, _releve_mur_nord())
+    # Le mur fait 50 cm sur les 100 m du bord nord : 50 m² de moins.
+    assert (sans.area - avec.area) / (manifeste["px_par_m"] ** 2) == pytest.approx(50, rel=0.02)
+
+
+def test_une_bande_de_la_largeur_d_une_cloison_n_est_pas_un_manque():
+    # Deux locaux séparés par 10 cm : le vide entre eux est une cloison, pas une surface à affecter.
+    contours = {
+        "piece-001": [[0, 0], [499, 0], [499, 1000], [0, 1000]],
+        "piece-002": [[501, 0], [1000, 0], [1000, 1000], [501, 1000]],
+    }
+    controle = geo.controler_couverture(contours, MANIFESTE)
+    assert controle["surface_non_affectee_m2"] == pytest.approx(0, abs=0.5)
+    assert controle["zones_non_affectees"] == []
+
+
+def test_le_calage_retire_du_local_ce_qui_mord_dans_le_mur():
+    manifeste = _manifeste_avec_troncon()
+    # Le local monte jusqu'à y = 0 : il mord donc dans les 50 cm de mur.
+    analyse = {"objects": [_piece("piece-001", [[0, 0], [1000, 0], [1000, 500], [0, 500]])]}
+    cale, rapport = calage.caler_locaux(analyse, manifeste, _releve_mur_nord())
+    assert len(rapport) == 1
+    assert rapport[0]["surface_retiree_m2"] == pytest.approx(50, rel=0.05)
+    assert rapport[0]["deplacement_max_m"] == pytest.approx(0.5, abs=0.05)
+    # Le contour commence maintenant au nu intérieur, soit 50 cm plus bas.
+    y_min = min(point[1] for point in cale["objects"][0]["points"])
+    assert y_min * manifeste["page_px"][1] / 1000 / manifeste["px_par_m"] == pytest.approx(0.5, abs=0.05)
+
+
+def test_le_calage_ne_touche_pas_un_local_deja_bien_pose():
+    manifeste = _manifeste_avec_troncon()
+    analyse = {"objects": [_piece("piece-001", [[0, 60], [1000, 60], [1000, 500], [0, 500]])]}
+    _cale, rapport = calage.caler_locaux(analyse, manifeste, _releve_mur_nord())
+    assert rapport == []
