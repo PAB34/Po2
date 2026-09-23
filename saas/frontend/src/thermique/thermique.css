@@ -983,6 +983,82 @@ circle.th-seg--measure {
   text-align: center;
 }
 
+/* Ce qui s'affiche sur le plan : le local sélectionné montre tout, ces cases étendent au niveau (D83). */
+.th-viewer__display {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: 0.35rem;
+  padding-left: 0.6rem;
+  border-left: 1px solid var(--po2-color-line);
+}
+
+.th-viewer__display label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Métrés dessinés sur le plan : ils se lisent, ils ne se cliquent pas — le geste va toujours au plan (D79). */
+.th-metrics {
+  pointer-events: none;
+}
+
+.th-metric-element {
+  stroke-width: 1;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-metric-cote polyline {
+  fill: none;
+  stroke: var(--po2-color-ink);
+  stroke-width: 1.5;
+  stroke-opacity: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-metric-cote.is-deperditif polyline {
+  stroke: #b3261e;
+  stroke-opacity: 0.9;
+  stroke-width: 2.5;
+}
+
+.th-metric-cote text {
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--po2-color-paper);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  fill: var(--po2-color-ink);
+}
+
+.th-metric-cote__valeur {
+  font-weight: 700;
+}
+
+.th-metric-cote__detail {
+  font-size: 9.5px;
+  opacity: 0.75;
+}
+
+.th-metric-surface {
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--po2-color-paper);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  fill: var(--po2-color-ink);
+}
+
+.th-metric-pont circle {
+  stroke: var(--po2-color-paper);
+  stroke-width: 1.5;
+}
+
 .th-viewer__status {
   position: absolute;
   bottom: 0.8rem;

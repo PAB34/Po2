@@ -1,6 +1,6 @@
 ---
 read_policy: lire avant de coder les métrés et ponts thermiques dessinés sur le plan (lot F3)
-status: questions_ouvertes
+status: livre
 ---
 
 # Métrés et ponts thermiques sur le plan — décisions du lot F3
@@ -11,7 +11,7 @@ lorsque je clique sur une pièce tous les métrés apparaissent sur la pièce ai
 Cadre déjà validé : **D73** (ce qu'on dessine), **D74** (ponts localisés), **D75** (tracé des éléments).
 Ce document ne les rediscute pas ; il vérifie ce qui existe et pose les questions restées ouvertes.
 
-**Rien n'est codé tant que les questions du § 4 ne sont pas tranchées.**
+Questions tranchées par l'utilisateur le 2026-09-23 (§ 6). **Lot livré**, vérifié au § 7.
 
 ## 1. Pourquoi ce lot maintenant
 
@@ -130,3 +130,74 @@ préférez le traiter tout de suite.
 4. Vérifier qu'au zoom arrière les étiquettes disparaissent sans jamais se chevaucher.
 5. Vérifier que le geste de déplacement du plan reste intact au-dessus des étiquettes et des pastilles (D79).
 6. Tests ciblés serveur et interface, typage et construction.
+
+## 6. Réponses de l'utilisateur du 2026-09-23
+
+| Question | Réponse |
+|---|---|
+| Q1 géométrie des côtés | **oui** |
+| Q2 affichage par défaut | **conforme à D73** |
+| Q3 contenu de l'étiquette | **(c)** longueur + épaisseur + orientation |
+| Q4 ponts | **une pastille par liaison** |
+| Q5 éléments dessinés dès F3 | **oui** |
+| Q6 réglages mémorisés | **oui** |
+| Q7 portée de l'affichage | **libre par famille sur tout le plan ; tout s'affiche dans le local sélectionné** |
+| Q8 nord du plan | **plus tard, mais important** |
+
+### D83 — Le local sélectionné montre tout ; le reste du plan, ce qu'on coche
+
+Réponse Q7, qui remplace ma proposition plus étroite : « une case pour choisir ponts thermiques, métrés… sur
+tout le plan, mais tout doit s'afficher dans le local ».
+
+- **Local sélectionné** : cotes, surface, ponts et éléments, toujours, sans réglage.
+- **Reste du niveau** : trois cases indépendantes — *Métrés*, *Ponts*, *Éléments* — qui étendent chaque
+  famille à tout le plan. Décochées par défaut, mémorisées par planche (Q6).
+
+Les cotes sur tout le niveau se chevaucheraient si on les dessinait toutes : c'est **D82** qui règle le
+problème, en effaçant l'étiquette dont le côté est trop court à l'écran. Le trait de cote, lui, reste.
+
+### D84 — L'orientation ne s'affiche que si le nord est connu
+
+Conséquence directe de Q3 **(c)** combinée à Q8 **plus tard** : tant que le nord du plan n'est pas renseigné,
+`orientation` vaut `"nord à caler"` sur **tous** les côtés du niveau. L'afficher écrirait « à caler » sur
+chaque étiquette du plan — du bruit, et une fausse précision.
+
+L'étiquette porte donc la longueur, l'épaisseur, et l'orientation **seulement quand elle est réellement
+calculée**. Dès que le nord sera posé (Q8, lot F2), les orientations apparaîtront d'elles-mêmes, sans
+retoucher F3. La fiche latérale, elle, continue d'afficher « nord à caler » : c'est là que l'information
+manquante doit se voir, pas sur le dessin.
+
+## 7. Vérification faite le 2026-09-23, sur le R+1 réel
+
+Banc local, vrai PDF, étude v3 réassemblée. Local témoin : `6.1.1 B.dir + EAPMR`.
+
+| Contrôle | Attendu (fichier) | Dessiné | Verdict |
+|---|---|---|---|
+| Cotes déperditives | 14,05 m / 47 cm et 0,31 m / 86 cm | idem | ✅ |
+| Surface au centre | 17,79 m² | 17,79 m² | ✅ |
+| Pastilles de ponts | 8 liaisons rattachées | 8 | ✅ |
+| Éléments d'enveloppe | 36 rattachés | 36 | ✅ |
+| Niveau entier, tout coché | 222 côtés, 289 éléments, 77 liaisons | idem | ✅ |
+| Effacement des étiquettes | invisible à 5 % de zoom, lisible à 575 % | conforme | ✅ D82 |
+| Déplacement du plan au-dessus des métrés | intact | intact | ✅ D79 |
+
+### Ce que le dessin a révélé (et qui n'était pas prévu)
+
+**Les ponts thermiques étaient affichés en mètres dans la fiche, alors que ce sont des comptes.**
+`synthese_pieces` incrémente `ponts[genre] += part`, où `part` vaut `1.0`, ou `0.5` quand un refend est
+partagé entre deux locaux (`thermique_enveloppe_pieces._couper` et le partage des abouts). Le panneau
+affichait `meters(6.0)` → « 6 m » pour **six angles sortants**. Corrigé : la fiche affiche le nombre, avec
+une infobulle expliquant la demie. `liaison_plancher_m`, lui, est bien un linéaire et reste en mètres.
+
+Ce défaut était invisible tant que la donnée ne vivait que dans un tableau. Il est apparu au premier
+recoupement avec le plan. C'est exactement la raison d'être de ce lot.
+
+**Trois liaisons ne sont rattachées à aucun local** (77 relevées, 74 rattachées). Elles sont désormais
+dessinées en gris avec les ponts du niveau, plutôt que passées sous silence : ce qu'on ne voit pas ne se
+corrige pas. Leur rattachement relève de F4.
+
+### Reste ouvert
+
+- L'étiquette de cote n'affiche pas l'orientation tant que le nord n'est pas posé (**D84**) ; elle
+  apparaîtra d'elle-même dès que Q8 sera traitée, sans retoucher F3.
+- Les cotes des côtés intérieurs sont derrière la case « Côtés intérieurs », décochée par défaut.

@@ -78,7 +78,32 @@ export type StudySide = {
   epaisseur_cm?: number | null;
   orientation?: string;
   deperditif: boolean;
+  /** Polyligne du côté : un côté est un regroupement de sondages, sa position ne se déduit pas
+   *  du contour. Sans elle, aucune cote ne peut être posée sur le plan (D80). */
+  trace?: PdfPoint[];
+  trace_pdf?: PdfPoint[];
   enveloppe?: StudyEnvelopeItem[];
+};
+/** Un élément d'enveloppe relevé, tel qu'il se dessine sur le plan (mur, isolant, doublage, menuiserie…). */
+export type StudyEnvelopeShape = {
+  id: string;
+  category: string;
+  subtype: string;
+  geometry_type: "polygon" | "polyline";
+  confidence?: number;
+  review_required?: boolean;
+  points_pdf?: PdfPoint[];
+  source_parcours?: { troncon?: string; piece?: string | null; composant?: string | null };
+};
+/** Un pont thermique relevé, avec sa position sur la feuille. */
+export type StudyBridge = {
+  type: string;
+  troncon: string;
+  abscisse_m?: number;
+  longueur_m?: number;
+  piece: string | null;
+  composant?: string | null;
+  point_pdf?: PdfPoint;
 };
 export type StudyRoomSheet = {
   piece: string;
@@ -120,9 +145,9 @@ export type StudyContent = {
     catalogue: unknown[];
     releve_brut: { elements: unknown[]; catalogue: unknown[]; observations: string[] };
     /** Tracé reprojeté des éléments relevés, pour les dessiner sur le plan (D75). */
-    objets?: { id: string; category: string; subtype: string; points_pdf?: PdfPoint[] }[];
+    objets?: StudyEnvelopeShape[];
     /** Liaisons du relevé avec leur position sur la feuille : les ponts thermiques (D74). */
-    liaisons?: { type: string; troncon: string; piece: string | null; point_pdf?: PdfPoint }[];
+    liaisons?: StudyBridge[];
     raccords: unknown[];
     controle: Record<string, unknown>;
     demandes: { piece: string; objet: string; motif: string }[];

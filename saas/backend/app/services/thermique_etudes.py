@@ -321,6 +321,14 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
                 raise ThermiqueError(f"Le contour du local « {local_id} » sort de la feuille.")
             contour_pdf.append(_inverser_transform(transform, x * width / 1000, y * height / 1000))
         local["contour_pdf"] = contour_pdf
+        # Le tracé de chaque côté suit les contours en points PDF : c'est lui qui porte la cote (D80).
+        for cote in (local.get("fiche") or {}).get("cotes", []):
+            trace = cote.get("trace")
+            if isinstance(trace, list) and trace:
+                cote["trace_pdf"] = [
+                    _inverser_transform(transform, float(x) * width / 1000, float(y) * height / 1000)
+                    for x, y in trace
+                ]
     couverture = contenu.get("couverture")
     if isinstance(couverture, dict):
         # Les zones à combler sont dessinées sur le plan : elles passent aussi en points PDF.

@@ -12,6 +12,7 @@ import { InfoPanel } from "./InfoPanel";
 import { groupSheets, referenceSheet, sheetTitle } from "./levels";
 import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
+import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { useStudyEdition } from "./useStudyEdition";
 import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
@@ -57,6 +58,36 @@ function removeReference(projectId: number) {
   }
 }
 
+// Affichage des métrés : mémorisé par planche, pour ne pas le reposer à chaque local (Q6).
+const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
+
+function readMetrics(sheetId: number | null): MetricsShow {
+  if (sheetId == null) {
+    return METRICS_DEFAUT;
+  }
+  try {
+    const brut = window.localStorage.getItem(metricsKey(sheetId));
+    return brut ? { ...METRICS_DEFAUT, ...(JSON.parse(brut) as Partial<MetricsShow>) } : METRICS_DEFAUT;
+  } catch {
+    return METRICS_DEFAUT;
+  }
+}
+
+function writeMetrics(sheetId: number, show: MetricsShow) {
+  try {
+    window.localStorage.setItem(metricsKey(sheetId), JSON.stringify(show));
+  } catch {
+    // stockage indisponible : le choix vaut pour la session en cours
+  }
+}
+
+const METRICS_CASES: { cle: keyof MetricsShow; label: string; titre: string }[] = [
+  { cle: "metres", label: "Métrés", titre: "Coter tous les locaux du niveau, pas seulement celui sélectionné" },
+  { cle: "ponts", label: "Ponts", titre: "Montrer les ponts thermiques de tout le niveau" },
+  { cle: "elements", label: "Éléments", titre: "Montrer les éléments d'enveloppe relevés sur tout le niveau" },
+  { cle: "toutesCotes", label: "Côtés intérieurs", titre: "Coter aussi les côtés qui ne déperdent pas" },
+];
+
 function SheetMenu({ label, sheets, currentId, onPick }: { label: string; sheets: Sheet[]; currentId: number | null; onPick: (id: number) => void }) {
   if (sheets.length === 0) {
     return null;
@@ -93,6 +124,7 @@ export function WorkspacePage() {
   const [points, setPoints] = useState<PdfPoint[]>([]);
   const views = useRef(new Map<string, ViewerView>());
   const referenceMigration = useRef<number | null>(null);
+  const [metrics, setMetrics] = useState<MetricsShow>(METRICS_DEFAUT);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -134,6 +166,24 @@ export function WorkspacePage() {
   useEffect(() => {
     setPoints([]);
   }, [sheetId, tool]);
+
+  // Les réglages d'affichage suivent la planche : on reprend ceux qu'elle avait à la dernière visite.
+  useEffect(() => {
+    setMetrics(readMetrics(sheetId));
+  }, [sheetId]);
+
+  const basculerMetrique = useCallback(
+    (cle: keyof MetricsShow) => {
+      setMetrics((current) => {
+        const suivant = { ...current, [cle]: !current[cle] };
+        if (sheetId != null) {
+          writeMetrics(sheetId, suivant);
+        }
+        return suivant;
+      });
+    },
+    [sheetId],
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -348,18 +398,42 @@ export function WorkspacePage() {
               onGrabEnd={editionState.handlers.onGrabEnd}
               initialView={views.current.get(viewKey) ?? null}
               onViewChange={(view) => views.current.set(viewKey, view)}
+              renderTools={
+                shownStudy ? (
+                  <div className="th-viewer__display" role="group" aria-label="Ce qui s'affiche sur le plan">
+                    {METRICS_CASES.map((item) => (
+                      <label key={item.cle} title={item.titre}>
+                        <input type="checkbox" checked={metrics[item.cle]} onChange={() => basculerMetrique(item.cle)} />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                ) : undefined
+              }
               renderOverlay={
                 shownStudy
                   ? (toScreen) => (
-                      <StudyOverlay
-                        rooms={shownStudy.content.locaux}
-                        selectedId={selectedRoom?.id ?? null}
-                        toScreen={toScreen}
-                        onSelect={selectRoom}
-                        draft={editionState.draft}
-                        locked={tool !== "pan"}
-                        gaps={shownStudy.content.couverture?.zones_non_affectees_pdf ?? []}
-                      />
+                      <>
+                        <StudyOverlay
+                          rooms={shownStudy.content.locaux}
+                          selectedId={selectedRoom?.id ?? null}
+                          toScreen={toScreen}
+                          onSelect={selectRoom}
+                          draft={editionState.draft}
+                          locked={tool !== "pan"}
+                          gaps={shownStudy.content.couverture?.zones_non_affectees_pdf ?? []}
+                        />
+                        {!editionState.draft && (
+                          <StudyMetrics
+                            rooms={shownStudy.content.locaux}
+                            selected={selectedRoom}
+                            shapes={shownStudy.content.enveloppe.objets ?? []}
+                            bridges={shownStudy.content.enveloppe.liaisons ?? []}
+                            show={metrics}
+                            toScreen={toScreen}
+                          />
+                        )}
+                      </>
                     )
                   : undefined
               }

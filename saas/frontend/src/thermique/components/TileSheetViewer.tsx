@@ -44,6 +44,8 @@ type Props = {
   // Clic droit : point sous le curseur (le menu du navigateur est alors supprimé).
   onContextPick?: (point: PdfPoint, pixelsPerPt: number) => void;
   renderOverlay?: (toScreen: ToScreen) => ReactNode;
+  // Réglages propres à la planche, rendus dans la barre d'outils (cases d'affichage des métrés…).
+  renderTools?: ReactNode;
   // Cadrage à reprendre à l'ouverture de la planche (au lieu de l'ajuster), et suivi du cadrage courant.
   initialView?: ViewerView | null;
   onViewChange?: (view: ViewerView) => void;
@@ -77,6 +79,7 @@ export function TileSheetViewer({
   onGrabMove,
   onGrabEnd,
   onContextPick,
+  renderTools,
   renderOverlay,
   initialView = null,
   onViewChange,
@@ -350,6 +353,7 @@ export function TileSheetViewer({
         <button type="button" onClick={() => fit()}>
           Ajuster
         </button>
+        {renderTools}
       </div>
     </div>
   );

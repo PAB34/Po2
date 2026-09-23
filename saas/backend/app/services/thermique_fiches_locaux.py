@@ -24,6 +24,23 @@ COTE_MIN_M = 0.15
 RATTACHEMENT_M = 0.90
 DEPERDITIFS = {"exterieur", "non_chauffe", "vide"}
 ORIENTATIONS = ("N", "NE", "E", "SE", "S", "SO", "O", "NO")
+# Le tracé d'un côté est réduit sous cette flèche : un côté droit de 14 m tient alors en deux points,
+# au lieu des 140 sondages qui l'ont mesuré (D80).
+SIMPLIFICATION_TRACE_M = 0.02
+
+
+def _trace_du_cote(ligne: Any, largeur: float, hauteur: float, px_par_m: float) -> list[list[float]]:
+    """Polyligne du côté dans le repère de la feuille (0 à 1000), pour dessiner sa cote sur le plan (D80).
+
+    Un côté n'est pas une arête du contour mais un regroupement de sondages : sa position ne peut pas être
+    recalculée depuis le contour, elle doit voyager avec la fiche.
+    """
+    if isinstance(ligne, Point):
+        points = [(ligne.x, ligne.y)]
+    else:
+        reduite = ligne.simplify(SIMPLIFICATION_TRACE_M * px_par_m, preserve_topology=False)
+        points = list(reduite.coords) or list(ligne.coords)
+    return [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in points]
 
 
 def batiment_du_manifeste(manifeste: dict[str, Any]) -> Polygon:
@@ -136,6 +153,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 "epaisseur_cm": round(sorted(s["epaisseur"] for s in cote["sondages"])[len(cote["sondages"]) // 2]),
                 "orientation": orientation(cote["sondages"][len(cote["sondages"]) // 2]["normale"], nord_deg),
                 "deperditif": cote["adjacence"] in DEPERDITIFS and nature != "non_chauffe",
+                "trace": _trace_du_cote(lignes_cotes[rang_cote], largeur, hauteur, px_par_m),
                 "enveloppe": [],
             }
             if cote["adjacence"] in DEPERDITIFS:

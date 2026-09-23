@@ -317,8 +317,15 @@ export function StudyRoomPanel({
       <section>
         <h2>Liaisons</h2>
         <ul className="th-ws-facts">
-          {Object.entries(sheet.ponts ?? room.synthese.ponts ?? {}).map(([type, length]) => (
-            <li key={type}><span>{type.replace(/_/g, " ")}</span><strong>{meters(length)}</strong></li>
+          {/* Un pont est compté, pas mesuré : la valeur est un nombre de liaisons, une demie étant
+              partagée avec le local voisin. L'afficher en mètres était faux. */}
+          {Object.entries(sheet.ponts ?? room.synthese.ponts ?? {}).map(([type, nombre]) => (
+            <li key={type}>
+              <span>{type.replace(/_/g, " ")}</span>
+              <strong title="Nombre de liaisons relevées ; une demie est partagée avec le local voisin">
+                {nombre.toLocaleString("fr-FR")}
+              </strong>
+            </li>
           ))}
           <li><span>Liaison plancher</span><strong>{meters(sheet.liaison_plancher_m)}</strong></li>
         </ul>
