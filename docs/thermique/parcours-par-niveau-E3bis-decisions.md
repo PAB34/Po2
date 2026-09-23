@@ -68,12 +68,31 @@ géométrie à l'insu du thermicien. Le fichier porte `contours_cales: true` et,
 Conséquence : l'étude du R+1 déjà importée en production **devra être réassemblée et réimportée**. C'est
 quelques secondes, sans relancer le moindre agent, et l'ancienne étude reste en version.
 
+### D76 — Analyser un projet entier depuis l'outil, par un relais local
+
+Un bouton « Analyser avec Claude Code » met en file d'attente, côté serveur, tous les niveaux classés et à
+l'échelle qui n'ont pas encore d'étude. Un petit programme lancé **sur le poste** vide cette file : pour chaque
+niveau il télécharge le PDF et ses paramètres, lance `run_etude_niveau.py --mode cli`, puis importe le résultat
+par la route d'import existante.
+
+Le serveur ne peut pas démarrer un programme sur le poste : le relais est donc indispensable, et c'est lui qui
+porte l'abonnement Claude. Première version **à la demande** (on lance la commande, elle vide la file et
+s'arrête) ; le mode en veille (`--boucle`, tâche planifiée) viendra ensuite.
+
+- **Ordre** : du niveau le plus bas au plus haut, le **catalogue validé passant d'un niveau au suivant**, pour
+  que les composants gardent les mêmes identifiants dans tout le bâtiment.
+- **Reprise** : la file survit à une coupure ; la chaîne repart où son journal s'est arrêté.
+- **Garde-fou** : le relais **refuse** de remplacer une étude sur laquelle le thermicien a déjà travaillé
+  (locaux validés ou contours retouchés) ; il le signale et passe au niveau suivant.
+- **Identification** : le relais demande les identifiants du thermicien à sa première exécution et garde la
+  session dans un fichier local, comme le fait le navigateur. Aucun secret n'entre dans le dépôt.
+
 ### D67 — Le parcours du niveau en cinq étapes
 
 | Étape | Contenu | Portée |
 |---|---|---|
 | 1 | Plans : import, échelle, dénomination, classement | le projet |
-| 2 | **Importer l'étude** | chaque niveau |
+| 2 | **Analyse** : envoi à Claude Code, traitement niveau par niveau, import automatique (D76) ; import manuel en secours | le projet |
 | 3 | **Contours** : reprendre, couper, fusionner | une passe sur le niveau |
 | 4 | **Recalcul** du niveau | le niveau |
 | 5 | **Éléments** : voir, isoler, modifier, exclure, puis valider le local | pièce par pièce |
@@ -134,6 +153,7 @@ reprojeté des éléments, liaisons localisées, contours calés.
 | Lot | Contenu | Pourquoi dans cet ordre |
 |---|---|---|
 | **F1** | Calage automatique des contours, liaisons localisées, tracé des éléments ; format v3 | réduit d'emblée le travail de l'étape 3 : moins de contours à reprendre à la main |
+| **F0** | File d'attente et relais local (D76) | **après F1** : sinon le relais importerait automatiquement des études aux contours faux |
 | **F2** | Parcours en cinq étapes, brouillon de niveau, enregistrement obligatoire au changement, recalcul en fin de passe | le squelette du travail quotidien |
 | **F3** | Métrés et ponts dessinés sur le plan | lecture |
 | **F4** | Éléments : isolement, modification, exclusion | le cœur de l'étape 5 |
@@ -172,3 +192,8 @@ Q4 modification d'un élément : **composant, type, longueur et pièce de rattac
 Q5 métrés sur le plan : côtés déperditifs, surface, ponts en pastilles, réglage pour tout montrer.
 Q6 calage : **pas un bouton** — il doit se faire automatiquement à la fin du travail des agents, pour que le
 fichier importé soit déjà calé. D'où D66.
+
+Second tour, sur le relais (D76) : version **à la demande** d'abord ; traitement **du plus bas au plus haut avec
+le catalogue transmis** ; identifiants demandés **une seule fois** au relais et gardés localement.
+
+Ordre des lots retenu : **F1 → F0 → F2 → F3 → F4**.
