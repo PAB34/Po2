@@ -1,4 +1,5 @@
 import type { PdfPoint, Study, StudyLocalNature, StudyRoom } from "../api";
+import { pointInPolygon } from "./edition";
 
 export const studyQueryKey = (sheetId: number | null) => ["thermique", "etude", sheetId] as const;
 
@@ -23,19 +24,6 @@ export function sortedStudyRooms(rooms: StudyRoom[]): StudyRoom[] {
     .map(({ room }) => room);
 }
 
-/** Le point est-il dans le polygone ? Lancer de rayon, la méthode la plus sûre sur un contour concave. */
-function contient(contour: PdfPoint[], [x, y]: PdfPoint): boolean {
-  let dedans = false;
-  for (let rang = 0, precedent = contour.length - 1; rang < contour.length; precedent = rang++) {
-    const [xi, yi] = contour[rang];
-    const [xj, yj] = contour[precedent];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      dedans = !dedans;
-    }
-  }
-  return dedans;
-}
-
 function aire(contour: PdfPoint[]): number {
   let somme = 0;
   for (let rang = 0, precedent = contour.length - 1; rang < contour.length; precedent = rang++) {
@@ -47,7 +35,7 @@ function aire(contour: PdfPoint[]): number {
 /** Le local sous ce point du plan. Quand deux locaux se recouvrent, le plus petit gagne : c'est celui
  *  que l'on vise en cliquant dans un coin d'un grand plateau ouvert. */
 export function roomAt(rooms: StudyRoom[], point: PdfPoint): StudyRoom | null {
-  const candidats = rooms.filter((room) => room.contour_pdf?.length >= 3 && contient(room.contour_pdf, point));
+  const candidats = rooms.filter((room) => room.contour_pdf?.length >= 3 && pointInPolygon(room.contour_pdf, point[0], point[1]));
   if (candidats.length === 0) {
     return null;
   }

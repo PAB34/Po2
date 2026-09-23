@@ -1,5 +1,6 @@
 import type { PdfPoint, StudyBridge, StudyEnvelopeShape, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
+import { pointInPolygon } from "./edition";
 
 /** Ce que l'on montre au-delà du local sélectionné (D83). Le local sélectionné, lui, montre tout. */
 export type MetricsShow = {
@@ -83,18 +84,6 @@ function milieu(points: [number, number][]): { x: number; y: number; ux: number;
   return { x: x2, y: y2, ux: (x2 - x1) / longueur, uy: (y2 - y1) / longueur };
 }
 
-function dansPolygone(points: [number, number][], x: number, y: number): boolean {
-  let dedans = false;
-  for (let rang = 0, avant = points.length - 1; rang < points.length; avant = rang++) {
-    const [xi, yi] = points[rang];
-    const [xj, yj] = points[avant];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      dedans = !dedans;
-    }
-  }
-  return dedans;
-}
-
 /** Point d'ancrage de l'étiquette de surface : le centre de gravité, ramené dans le local quand celui-ci
  *  est creux (un plateau en L a son centre de gravité dehors). */
 function ancre(points: [number, number][]): { x: number; y: number } {
@@ -109,7 +98,7 @@ function ancre(points: [number, number][]): { x: number; y: number } {
   }
   if (aire !== 0) {
     const centre = { x: cx / (3 * aire), y: cy / (3 * aire) };
-    if (dansPolygone(points, centre.x, centre.y)) {
+    if (pointInPolygon(points, centre.x, centre.y)) {
       return centre;
     }
     // Centre hors du local : on prend le milieu de la plus large traversée horizontale à cette hauteur.

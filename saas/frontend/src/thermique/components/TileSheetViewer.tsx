@@ -14,7 +14,7 @@ import {
   type TileRef,
 } from "../raster";
 
-export type ViewerTool = "pan" | "measure" | "calibrate" | "edition";
+export type ViewerTool = "pan" | "measure" | "calibrate" | "edition" | "nord";
 export type ViewerSegment = { p1: PdfPoint; p2: PdfPoint; label?: string; tone: "measure" | "reference" };
 // Touches enfoncées au clic ou au survol : Maj et Alt modifient l'aimantation du métré.
 export type PickEvent = { shiftKey: boolean; altKey: boolean };
@@ -42,7 +42,7 @@ type Props = {
   onGrabMove?: (point: PdfPoint, event: PickEvent) => void;
   onGrabEnd?: () => void;
   // Clic droit : point sous le curseur (le menu du navigateur est alors supprimé).
-  onContextPick?: (point: PdfPoint, pixelsPerPt: number) => void;
+  onContextPick?: (point: PdfPoint, pixelsPerPt: number, ecran: { x: number; y: number }) => void;
   renderOverlay?: (toScreen: ToScreen) => ReactNode;
   // Réglages propres à la planche, rendus dans la barre d'outils (cases d'affichage des métrés…).
   renderTools?: ReactNode;
@@ -284,7 +284,13 @@ export function TileSheetViewer({
         }
       }}
       onPointerCancel={() => {
+        const drag = dragRef.current;
         dragRef.current = null;
+        if (drag?.grab) {
+          // Ne jamais laisser une poignée ou un lasso dans un état « en cours » après une interruption
+          // du navigateur (perte de capture, changement de fenêtre, geste tactile annulé).
+          onGrabEnd?.();
+        }
       }}
       onContextMenu={(event) => {
         if (!onContextPick) {
@@ -293,7 +299,7 @@ export function TileSheetViewer({
         event.preventDefault();
         const point = toPdf(event.clientX, event.clientY);
         if (point) {
-          onContextPick(point, pixelsPerPt);
+          onContextPick(point, pixelsPerPt, { x: event.clientX, y: event.clientY });
         }
       }}
     >

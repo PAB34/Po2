@@ -32,6 +32,7 @@ from app.services import thermique_calage_contours as calage
 from app.services import thermique_enveloppe_pieces as pieces
 from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
+from app.services import thermique_nord
 from app.services import thermique_parcours_enveloppe as enveloppe
 from app.services.thermique import ThermiqueError
 
@@ -293,6 +294,10 @@ def valider_et_convertir(
             raise ThermiqueError(f"La nature du local « {local_id} » est inconnue.")
         if not isinstance(local.get("fiche"), dict) or local["fiche"].get("piece") != local.get("nom"):
             raise ThermiqueError(f"La fiche du local « {local_id} » ne correspond pas à son nom.")
+    # Le nord est une donnée de la planche, pas du fichier : s'il est déjà posé, l'étude en hérite (D85).
+    contenu["nord_deg"] = thermique_nord.azimut_dans_l_image(
+        thermique_nord.charger(sheet), raster_manifest["transform"]
+    )
     convertir_contours(contenu, raster_manifest["transform"], width, height)
     return contenu
 

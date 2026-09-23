@@ -18,12 +18,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user, get_current_user
+from app.api.routes.thermique import definir_nord_route
 from app.api.routes.internal_auth import verify_basic_auth
 from app.core.config import settings
 from app.core.db import Base
 from app.core.roles import THERMIQUE_EXTERNAL_ROLE
 from app.core.security import create_access_token, get_password_hash
 from app.models.user import User
+from app.schemas.thermique import NordRequest
 from app.services.thermique import (
     ThermiqueError,
     add_document,
@@ -232,6 +234,24 @@ def test_classement_echelle_et_controle_par_cote(db_session, storage):
 
     with pytest.raises(ThermiqueError, match="trop proches"):
         calibrate_sheet(db_session, sheet, [0.0, 0.0], [0.2, 0.0], 1.0, apply=True)
+
+
+def test_le_nord_peut_etre_pose_sur_tous_les_plans_du_projet(db_session, storage):
+    user = _user(db_session, "agent@ville.fr")
+    project = create_project(db_session, user, "Projet", None)
+    sheets = add_document(db_session, project, "PC04-FRONT-NIVEAU1.pdf", _pdf(pages=2), user).sheets
+    for sheet in sheets:
+        update_sheet(db_session, sheet, {"nature": "plan"})
+
+    resultat = definir_nord_route(
+        sheets[0].id,
+        NordRequest(p1=[100, 100], p2=[100, 200], tout_le_projet=True),
+        db_session,
+        user,
+    )
+
+    assert {planche["id"] for planche in resultat} == {sheet.id for sheet in sheets}
+    assert all(planche["nord"]["p2"][1] > planche["nord"]["p1"][1] for planche in resultat)
 
 
 def test_suppression_projet_efface_les_fichiers(db_session, storage):

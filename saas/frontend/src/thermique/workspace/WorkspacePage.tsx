@@ -12,6 +12,8 @@ import { InfoPanel } from "./InfoPanel";
 import { groupSheets, referenceSheet, sheetTitle } from "./levels";
 import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
+import { NorthOverlay } from "./NorthOverlay";
+import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { useStudyEdition } from "./useStudyEdition";
@@ -125,6 +127,7 @@ export function WorkspacePage() {
   const views = useRef(new Map<string, ViewerView>());
   const referenceMigration = useRef<number | null>(null);
   const [metrics, setMetrics] = useState<MetricsShow>(METRICS_DEFAUT);
+  const [menu, setMenu] = useState<{ x: number; y: number; actions: PlanAction[] } | null>(null);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -393,6 +396,37 @@ export function WorkspacePage() {
                   setParams({ local: null, panneau: panel === "fiche" ? "planche" : panel });
                 }
               }}
+              onContextPick={(point, pixelsPerPt, ecran) => {
+                // Clic droit : les gestes du contour en cours d'édition, sinon ceux du local visé.
+                const actions: PlanAction[] = editionState.draft
+                  ? editionState.contextActions(point, pixelsPerPt)
+                  : (() => {
+                      const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
+                      if (!room) {
+                        return [];
+                      }
+                      return [
+                        { cle: "fiche", label: `Ouvrir « ${room.nom} »`, faire: () => selectRoom(room.id) },
+                        {
+                          cle: "contour",
+                          label: "Reprendre le contour",
+                          faire: () => {
+                            selectRoom(room.id);
+                            editionState.startOn(room.id, "contour");
+                          },
+                        },
+                        {
+                          cle: "couper",
+                          label: "Couper en deux",
+                          faire: () => {
+                            selectRoom(room.id);
+                            editionState.startOn(room.id, "couper");
+                          },
+                        },
+                      ];
+                    })();
+                setMenu(actions.length ? { x: ecran.x, y: ecran.y, actions } : null);
+              }}
               onGrab={editionState.handlers.onGrab}
               onGrabMove={editionState.handlers.onGrabMove}
               onGrabEnd={editionState.handlers.onGrabEnd}
@@ -410,10 +444,11 @@ export function WorkspacePage() {
                   </div>
                 ) : undefined
               }
-              renderOverlay={
-                shownStudy
-                  ? (toScreen) => (
-                      <>
+              renderOverlay={(toScreen) => (
+                <>
+                  <NorthOverlay nord={sheet.nord} enCours={points} toScreen={toScreen} actif={tool === "nord"} />
+                  {shownStudy && (
+                    <>
                         <StudyOverlay
                           rooms={shownStudy.content.locaux}
                           selectedId={selectedRoom?.id ?? null}
@@ -432,11 +467,11 @@ export function WorkspacePage() {
                             show={metrics}
                             toScreen={toScreen}
                           />
-                        )}
-                      </>
-                    )
-                  : undefined
-              }
+                      )}
+                    </>
+                  )}
+                </>
+              )}
             />
           ) : (
             <div className="th-viewer th-viewer--empty">
@@ -445,6 +480,7 @@ export function WorkspacePage() {
               </p>
             </div>
           )}
+          {menu && <PlanMenu x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}
         </div>
 
         <aside className="th-panel th-ws__panel" aria-label={PANELS.find((item) => item.id === panel)?.label}>
@@ -460,6 +496,7 @@ export function WorkspacePage() {
                 onTool={setTool}
                 points={points}
                 study={study}
+                transform={raster.data?.transform ?? null}
                 onStudyImported={(imported) => queryClient.setQueryData<Study>(studyQueryKey(sheet.id), imported)}
               />
             ) : (

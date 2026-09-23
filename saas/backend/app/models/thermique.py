@@ -81,6 +81,9 @@ class ThermiqueSheet(Base):
     scale_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Dernière cote de contrôle : deux points en coordonnées PDF (pt) + longueur réelle saisie.
     calibration_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Nord de la planche : flèche tracée par le thermicien, en coordonnées PDF (pt), donc insensible
+    # à la rotation d'affichage. {"p1": [x, y], "p2": [x, y]} — p2 est la pointe, du côté du nord.
+    north_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     rotation_deg: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     page_width_pt: Mapped[float] = mapped_column(Float, nullable=False)
     page_height_pt: Mapped[float] = mapped_column(Float, nullable=False)

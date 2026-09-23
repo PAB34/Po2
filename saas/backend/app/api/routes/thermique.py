@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_authenticated_user
@@ -32,6 +33,7 @@ from app.schemas.thermique import (
     EtudeVersionRead,
     ExternalAccountCreate,
     ExternalAccountRead,
+    NordRequest,
     ProjectCreate,
     ProjectDetail,
     ProjectRead,
@@ -72,6 +74,7 @@ from app.services.thermique_composants import (
     update_component,
 )
 from app.services import thermique_etude_edition as edition
+from app.services import thermique_nord
 from app.services.thermique_etudes import (
     MAX_ETUDE_BYTES,
     EtudeConflict,
@@ -516,6 +519,87 @@ def _repere_de_la_planche(sheet: ThermiqueSheet, contenu: dict) -> tuple[list, f
         document_path(sheet.document), sheet.page_index, rotation, raster_dir(sheet.project_id, sheet.id, rotation)
     )
     return manifest["transform"], float(manifest["width_px"]), float(manifest["height_px"])
+
+
+@router.post("/sheets/{sheet_id}/nord", response_model=list[SheetRead])
+def definir_nord_route(
+    sheet_id: int,
+    payload: NordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> list[dict]:
+    """Pose le nord de la planche par une flèche, et rafraîchit les orientations de l'étude (D85).
+
+    Renvoie toutes les planches modifiées : le nord vaut souvent pour le projet entier.
+    """
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        nord = thermique_nord.poser(
+            payload.p1, payload.p2, float(sheet.page_width_pt), float(sheet.page_height_pt)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    cibles = [sheet]
+    if payload.tout_le_projet:
+        # Un bâtiment n'a qu'un nord. On suppose les planches dessinées dans le même sens : chacune
+        # affiche sa propre flèche, une planche mal orientée se voit donc immédiatement.
+        cibles = list(
+            db.scalars(
+                select(ThermiqueSheet).where(
+                    ThermiqueSheet.project_id == sheet.project_id, ThermiqueSheet.nature == "plan"
+                )
+            )
+        )
+        if sheet not in cibles:
+            cibles.append(sheet)
+    for cible in cibles:
+        try:
+            nord_cible = (
+                nord
+                if cible.id == sheet.id
+                else thermique_nord.adapter_a_planche(
+                    nord,
+                    float(sheet.page_width_pt),
+                    float(sheet.page_height_pt),
+                    float(cible.page_width_pt),
+                    float(cible.page_height_pt),
+                )
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        cible.north_json = json.dumps(nord_cible, allow_nan=False, separators=(",", ":"))
+
+    # Le nord et les orientations dérivées sont enregistrés ensemble : aucune fiche ne doit rester
+    # « à caler » simplement parce que la transaction a été coupée en deux.
+    db.flush()
+    for cible in cibles:
+        try:
+            _rafraichir_orientations(db, cible)
+        except ThermiqueError:
+            # Une étude illisible ne doit pas empêcher de poser le nord : elle se rattrapera au recalcul.
+            continue
+    db.commit()
+    return [serialize_sheet(cible) for cible in cibles]
+
+
+def _rafraichir_orientations(db: Session, sheet: ThermiqueSheet) -> None:
+    """Recalcule l'étude de la planche avec le nouveau nord, sans créer de version.
+
+    Rien de ce que le thermicien a édité ne change : seules les orientations, qui en découlent.
+    """
+    etude = get_etude_for_sheet(db, sheet.id)
+    if etude is None:
+        return
+    try:
+        contenu = json.loads(etude.content_json)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ThermiqueError("L'étude enregistrée est illisible ; recalculez-la avant de poser le nord.") from exc
+    transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
+    contenu["nord_deg"] = thermique_nord.azimut_dans_l_image(thermique_nord.charger(sheet), transform)
+    recalcule = edition.reconstruire(contenu)
+    convertir_contours(recalcule, transform, largeur, hauteur)
+    etude.content_json = json.dumps(recalcule, ensure_ascii=False, separators=(",", ":"))
 
 
 @router.post("/sheets/{sheet_id}/etude/remodeliser", response_model=EtudeApercu)

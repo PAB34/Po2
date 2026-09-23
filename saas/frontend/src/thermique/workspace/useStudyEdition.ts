@@ -8,8 +8,11 @@ import {
   draftFromRoom,
   insertVertex,
   moveVertex,
+  nearestSide,
   nearestVertex,
   removeVertex,
+  removeVerticesInLasso,
+  straightenSide,
   type EditMode,
   type StudyDraft,
 } from "./edition";
@@ -17,6 +20,8 @@ import { sortedStudyRooms, studyQueryKey } from "./study";
 
 // Rayon de saisie d'une poignée, en pixels d'écran.
 const PRISE_PX = 10;
+// Pas d'échantillonnage du lasso, en pixels d'écran.
+const PAS_LASSO_PX = 2;
 
 export function useStudyEdition({
   token,
@@ -37,6 +42,8 @@ export function useStudyEdition({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const dragIndex = useRef<number | null>(null);
+  // Tracé du lasso en cours. Hors état React : il se remplit à chaque mouvement de souris.
+  const lassoPath = useRef<PdfPoint[] | null>(null);
   const pixelsPerPt = useRef(1);
 
   const versions = useQuery({
@@ -50,6 +57,7 @@ export function useStudyEdition({
     setPreview(null);
     setMessage(null);
     dragIndex.current = null;
+    lassoPath.current = null;
   }, []);
 
   const operations = useCallback((): StudyOperation[] => {
@@ -179,6 +187,17 @@ export function useStudyEdition({
       }
     : undefined;
 
+  /** Ouvre l'édition sur un local désigné, sans attendre qu'il soit déjà sélectionné (clic droit). */
+  const startOn = (roomId: string, mode: EditMode) => {
+    const room = study?.content.locaux.find((item) => item.id === roomId);
+    if (!room) {
+      return;
+    }
+    setPreview(null);
+    setMessage(null);
+    setDraft(draftFromRoom(room, mode));
+  };
+
   const grab = (point: PdfPoint, echelle: number, event: PickEvent): boolean => {
     pixelsPerPt.current = echelle;
     if (!draft || draft.mode !== "contour") {
@@ -186,6 +205,13 @@ export function useStudyEdition({
     }
     const index = nearestVertex(draft.contour, point, PRISE_PX / echelle);
     if (index === null) {
+      // Alt dans le vide : on ouvre un lasso plutôt que de déplacer le plan. Alt veut dire
+      // « supprimer » partout : sur une poignée un seul sommet, en entourant tous ceux visés.
+      if (event.altKey) {
+        lassoPath.current = [point];
+        setDraft({ ...draft, lasso: [point] });
+        return true;
+      }
       return false;
     }
     if (event.altKey) {
@@ -197,11 +223,96 @@ export function useStudyEdition({
   };
 
   const grabMove = (point: PdfPoint) => {
+    const trace = lassoPath.current;
+    if (trace) {
+      // Un point tous les 2 pixels écran suffit à suivre la main sans alourdir le tracé.
+      const dernier = trace[trace.length - 1];
+      if (Math.hypot(point[0] - dernier[0], point[1] - dernier[1]) * pixelsPerPt.current >= PAS_LASSO_PX) {
+        trace.push(point);
+        setDraft((current) => (current ? { ...current, lasso: [...trace] } : current));
+      }
+      return;
+    }
     const index = dragIndex.current;
     if (index === null) {
       return;
     }
     setDraft((current) => (current ? { ...current, contour: moveVertex(current.contour, index, point) } : current));
+  };
+
+  const grabEnd = () => {
+    dragIndex.current = null;
+    const trace = lassoPath.current;
+    if (!trace) {
+      return;
+    }
+    lassoPath.current = null;
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
+      const { contour, removed, refus } = removeVerticesInLasso(current.contour, trace);
+      setMessage(
+        removed > 0
+          ? `${removed} point${removed > 1 ? "s" : ""} supprimé${removed > 1 ? "s" : ""} : le contour passe tout droit.`
+          : refus === "trop"
+            ? "Lasso trop large : il ne resterait pas assez de points pour fermer le local. Zoomez et reprenez."
+            : "Aucun point entouré.",
+      );
+      return { ...current, contour, lasso: null };
+    });
+  };
+
+  /** Ce que le clic droit propose là où il tombe. Le menu ne montre que des gestes applicables. */
+  const contextActions = (point: PdfPoint, echelle: number): { cle: string; label: string; faire: () => void }[] => {
+    if (!draft || draft.mode !== "contour") {
+      return [];
+    }
+    const tolerance = PRISE_PX / echelle;
+    const sommet = nearestVertex(draft.contour, point, tolerance);
+    const cote = nearestSide(draft.contour, point, tolerance * 2);
+    const actions: { cle: string; label: string; faire: () => void }[] = [];
+    if (sommet !== null && draft.contour.length > 3) {
+      actions.push({
+        cle: "supprimer",
+        label: "Supprimer ce point",
+        faire: () => {
+          setDraft((current) =>
+            current ? { ...current, contour: removeVertex(current.contour, sommet) } : current,
+          );
+          setMessage("Point supprimé : le contour passe tout droit entre ses deux voisins.");
+        },
+      });
+    } else if (cote !== null) {
+      actions.push({
+        cle: "ajouter",
+        label: "Ajouter un point ici",
+        faire: () =>
+          setDraft((current) =>
+            current ? { ...current, contour: insertVertex(current.contour, point, tolerance * 2) } : current,
+          ),
+      });
+    }
+    if (cote !== null) {
+      actions.push({
+        cle: "redresser",
+        label: "Redresser ce côté",
+        faire: () =>
+          setDraft((current) => {
+            if (!current) {
+              return current;
+            }
+            const { contour, removed } = straightenSide(current.contour, cote);
+            setMessage(
+              removed > 0
+                ? `Côté redressé : ${removed} point${removed > 1 ? "s" : ""} de moins.`
+                : "Ce côté est déjà droit.",
+            );
+            return { ...current, contour };
+          }),
+      });
+    }
+    return actions;
   };
 
   const addPoint = (point: PdfPoint): boolean => {
@@ -225,11 +336,11 @@ export function useStudyEdition({
     handlers: {
       onGrab: grab,
       onGrabMove: grabMove,
-      onGrabEnd: () => {
-        dragIndex.current = null;
-      },
+      onGrabEnd: grabEnd,
       onAddPoint: addPoint,
     },
+    contextActions,
+    startOn,
     reset,
   };
 }

@@ -218,7 +218,8 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
         {**fiche, "local": natures.get(fiche["piece"], "chauffe")}
         for fiche in pieces.synthese_pieces(coupe, manifeste)
     ]
-    fiches = fiches_locaux.fiches(analyse, manifeste, coupe, syntheses)
+    # Le nord vient de la planche, posé par le thermicien (D85). Absent, les orientations restent « à caler ».
+    fiches = fiches_locaux.fiches(analyse, manifeste, coupe, syntheses, resultat.get("nord_deg"))
     demandes = pieces.demandes_etude(syntheses)
     limites = geo.limites_des_locaux(analyse, manifeste)
 

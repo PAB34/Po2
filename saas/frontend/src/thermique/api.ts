@@ -4,6 +4,13 @@ export type SheetNature = "plan" | "coupe" | "facade" | "plan_masse" | "autre";
 export type SheetStatus = "a_classer" | "a_mettre_a_l_echelle" | "prete";
 export type PdfPoint = [number, number];
 
+/** Flèche du nord tracée sur la planche, en points PDF : `p2` est la pointe, du côté du nord. */
+export type SheetNorth = {
+  p1: PdfPoint;
+  p2: PdfPoint;
+  longueur_pt: number;
+};
+
 export type SheetCalibration = {
   p1: PdfPoint;
   p2: PdfPoint;
@@ -32,6 +39,7 @@ export type Sheet = {
   page_height_pt: number;
   status: SheetStatus;
   calibration: SheetCalibration | null;
+  nord: SheetNorth | null;
 };
 
 export type ThermiqueDocument = {
@@ -281,6 +289,9 @@ export const thermiqueApi = {
     request<Sheet>(token, `/thermique/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(changes) }),
   calibrateSheet: (token: string, sheetId: number, payload: CalibrationPayload) =>
     request<Sheet>(token, `/thermique/sheets/${sheetId}/calibration`, { method: "POST", body: JSON.stringify(payload) }),
+  /** Pose le nord : p1 la base de la flèche, p2 sa pointe du côté du nord. Renvoie les planches modifiées. */
+  setNorth: (token: string, sheetId: number, payload: { p1: PdfPoint; p2: PdfPoint; tout_le_projet: boolean }) =>
+    request<Sheet[]>(token, `/thermique/sheets/${sheetId}/nord`, { method: "POST", body: JSON.stringify(payload) }),
   getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {
     const form = new FormData();

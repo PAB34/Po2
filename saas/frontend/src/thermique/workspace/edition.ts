@@ -26,6 +26,8 @@ export type StudyDraft = {
   nom: string;
   /** Noms des deux moitiés, en mode « couper ». */
   noms: [string, string];
+  /** Lasso en cours (Alt + glisser), pour entourer et supprimer plusieurs sommets d'un coup. */
+  lasso?: Lasso | null;
 };
 
 export function draftFromRoom(room: StudyRoom, mode: EditMode = "contour"): StudyDraft {
@@ -100,6 +102,111 @@ export function insertVertex(contour: PdfPoint[], point: PdfPoint, tolerance: nu
 export function removeVertex(contour: PdfPoint[], index: number): PdfPoint[] {
   // Un local garde au moins un triangle.
   return contour.length <= 3 ? contour : contour.filter((_vertex, rank) => rank !== index);
+}
+
+/** Tracé du lasso : la suite des points parcourus, refermée d'elle-même au relâchement. */
+export type Lasso = PdfPoint[];
+
+/** Le point est-il dans le polygone ? Lancer de rayon : vaut pour n'importe quelle forme, même creuse. */
+export function pointInPolygon(polygone: readonly (readonly [number, number])[], x: number, y: number): boolean {
+  let dedans = false;
+  for (let rang = 0, avant = polygone.length - 1; rang < polygone.length; avant = rang++) {
+    const [xi, yi] = polygone[rang];
+    const [xj, yj] = polygone[avant];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      dedans = !dedans;
+    }
+  }
+  return dedans;
+}
+
+export function verticesInLasso(contour: PdfPoint[], lasso: Lasso): number[] {
+  if (lasso.length < 3) {
+    return [];
+  }
+  return contour.reduce<number[]>((rangs, [x, y], rang) => {
+    if (pointInPolygon(lasso, x, y)) {
+      rangs.push(rang);
+    }
+    return rangs;
+  }, []);
+}
+
+/**
+ * Supprime d'un coup tous les sommets entourés par le lasso.
+ *
+ * Aplanir une dentelle de vingt points au droit d'alcôves demandait vingt gestes : le contour passe
+ * alors tout droit du sommet qui précède à celui qui suit. Le lasso se referme tout seul entre son
+ * dernier point et son premier. Le local garde toujours au moins un triangle, donc on ne retire
+ * jamais au-delà.
+ */
+export function removeVerticesInLasso(
+  contour: PdfPoint[],
+  lasso: Lasso,
+): { contour: PdfPoint[]; removed: number; refus?: "vide" | "trop" } {
+  const vises = new Set(verticesInLasso(contour, lasso));
+  if (vises.size === 0) {
+    return { contour, removed: 0, refus: "vide" };
+  }
+  const restant = contour.filter((_vertex, rang) => !vises.has(rang));
+  if (restant.length < 3) {
+    // Au zoom d'ensemble, un petit geste couvre tout le local : on refuse, et on le dit clairement.
+    return { contour, removed: 0, refus: "trop" };
+  }
+  return { contour: restant, removed: contour.length - restant.length };
+}
+
+// Au-delà, deux segments ne sont plus dans le prolongement l'un de l'autre : le côté s'arrête là.
+const ALIGNEMENT_MAX_DEG = 8;
+
+function capMoyen(a: PdfPoint, b: PdfPoint): number {
+  return (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI;
+}
+
+function ecartAngulaire(alpha: number, beta: number): number {
+  // En JavaScript, `%` garde le signe : le double modulo évite qu'un passage de -179° à +179°
+  // produise un faux écart négatif.
+  const brut = Math.abs(((((alpha - beta + 180) % 360) + 360) % 360) - 180);
+  // Un segment parcouru à l'envers reste aligné.
+  return Math.min(brut, 180 - brut);
+}
+
+/**
+ * Redresse le côté visuel qui porte le segment `index` : la suite des segments qui restent dans son
+ * prolongement, dont on retire tous les sommets intermédiaires.
+ *
+ * Ce que l'œil appelle « un côté » est souvent une suite de petits segments presque alignés, laissés
+ * par la lecture du plan. Les retirer un à un est le travail que ce geste supprime.
+ */
+export function straightenSide(contour: PdfPoint[], index: number): { contour: PdfPoint[]; removed: number } {
+  const total = contour.length;
+  if (total <= 3) {
+    return { contour, removed: 0 };
+  }
+  const cap = capMoyen(contour[index], contour[(index + 1) % total]);
+  const aligne = (rang: number) =>
+    ecartAngulaire(capMoyen(contour[rang % total], contour[(rang + 1) % total]), cap) <= ALIGNEMENT_MAX_DEG;
+
+  let debut = index;
+  let fin = index;
+  while (fin - debut < total - 2 && aligne(fin + 1)) {
+    fin += 1;
+  }
+  while (fin - debut < total - 2 && aligne(debut - 1 + total)) {
+    debut -= 1;
+  }
+  // Les sommets strictement entre le premier et le dernier du côté disparaissent.
+  const aRetirer = new Set<number>();
+  for (let rang = debut + 1; rang <= fin; rang += 1) {
+    aRetirer.add(((rang % total) + total) % total);
+  }
+  if (aRetirer.size === 0 || total - aRetirer.size < 3) {
+    return { contour, removed: 0 };
+  }
+  return {
+    contour: contour.filter((_vertex, rang) => !aRetirer.has(rang)),
+    removed: aRetirer.size,
+  };
 }
 
 export function contourChanged(room: StudyRoom, contour: PdfPoint[]): boolean {

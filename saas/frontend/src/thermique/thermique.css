@@ -908,6 +908,51 @@ body {
   stroke-width: 2.5;
 }
 
+/* Flèche du nord : elle se lit, elle ne se clique pas — le geste va toujours au plan (D79). */
+.th-north {
+  pointer-events: none;
+}
+
+.th-north polygon {
+  fill: #1d4d80;
+}
+
+.th-north__base {
+  fill: #ffffff;
+  stroke: #1d4d80;
+  stroke-width: 2;
+}
+
+/* Pendant le tracé, la flèche est provisoire : on la distingue de celle qui est enregistrée. */
+.th-north.is-draft line,
+.th-north.is-draft polygon {
+  stroke: #b35c00;
+  fill: #b35c00;
+}
+
+.th-north.is-draft text {
+  fill: #b35c00;
+}
+
+.th-north.is-draft .th-north__base {
+  stroke: #b35c00;
+}
+
+.th-north .th-north__base-label {
+  font-size: 10px;
+}
+
+.th-north-form .th-steps {
+  margin: 0 0 0.6rem;
+  padding-left: 1.2rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.th-north-form .th-steps li + li {
+  margin-top: 0.25rem;
+}
+
 .th-seg line {
   stroke-width: 2.5;
 }
@@ -2192,6 +2237,17 @@ circle.th-seg--measure {
   pointer-events: none;
 }
 
+/* Lasso de suppression (Alt + glisser) : ce qu'il entoure disparaît au relâchement. */
+.th-study-lasso {
+  fill: #b3261e;
+  fill-opacity: 0.1;
+  stroke: #b3261e;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .th-study-draft circle {
   fill: #ffffff;
   stroke: #1f1f1f;
@@ -2248,4 +2304,35 @@ circle.th-seg--measure {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+/* Menu du clic droit sur le plan : il suit le curseur et ne propose que ce qui s'applique. */
+.th-plan-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  padding: 0.25rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+  box-shadow: var(--po2-shadow-card);
+  font-size: 0.86rem;
+}
+
+.th-plan-menu button {
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--po2-color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-plan-menu button:hover,
+.th-plan-menu button:focus-visible {
+  background: var(--po2-color-blue-soft);
 }

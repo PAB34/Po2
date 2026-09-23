@@ -97,6 +97,11 @@ export function StudyOverlay({
           {draft.cut.length > 0 && (
             <polyline className="th-study-cut" points={trace(draft.cut)} fill="none" />
           )}
+          {/* Lasso en cours : il se referme à l'écran comme il se refermera au calcul, et tout sommet
+              entouré partira au relâchement. */}
+          {draft.lasso && draft.lasso.length >= 2 && (
+            <polygon className="th-study-lasso" points={trace(draft.lasso)} />
+          )}
         </g>
       )}
     </>
@@ -181,7 +186,7 @@ function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdit
         <>
           <p className="th-muted">
             {draft.mode === "contour"
-              ? "Faites glisser une poignée pour déplacer un sommet, cliquez sur un côté pour en ajouter un, Alt+clic sur une poignée pour la retirer."
+              ? "Faites glisser une poignée pour déplacer un sommet, cliquez sur un côté pour en ajouter un. Alt+clic sur une poignée la retire ; Alt+glisser dessine un lasso et retire d'un coup tous les sommets entourés. Le clic droit ouvre un menu : ajouter un point, supprimer celui-ci, redresser le côté."
               : "Cliquez deux points pour tracer la limite ; le trait est prolongé jusqu'aux bords du local."}
           </p>
           {draft.mode === "couper" ? (

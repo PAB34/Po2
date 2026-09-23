@@ -6,6 +6,8 @@ import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type Sheet
 import type { ViewerSegment, ViewerTool } from "../components/TileSheetViewer";
 import { NATURES, NATURE_LABELS, NATURE_ROLES, STATUS_LABELS } from "../natures";
 import { projectQueryKey, projectsQueryKey, replaceSheet } from "../projectCache";
+import { azimutEcran, degres, lectureDuNord } from "./nord";
+import { studyQueryKey } from "./study";
 import {
   COMMON_SCALES,
   PT_TO_MM,
@@ -25,11 +27,20 @@ export const TOOLS: { id: ViewerTool; label: string; help: string }[] = [
     label: "Vérifier l'échelle",
     help: "Cliquez les deux extrémités d'une cote imprimée, puis saisissez sa valeur.",
   },
+  {
+    id: "nord",
+    label: "Nord",
+    help: "Cliquez d'abord la base de la flèche, puis sa pointe, du côté du nord.",
+  },
 ];
 
 // Traits affichés sur le plan : la mesure en cours, ou la cote de référence de l'échelle.
 export function sheetSegments(sheet: Sheet, tool: ViewerTool, points: PdfPoint[]): ViewerSegment[] {
   const segments: ViewerSegment[] = [];
+  if (tool === "nord") {
+    // La flèche du nord a son propre dessin : une longueur en mètres n'aurait aucun sens ici.
+    return segments;
+  }
   if (points.length === 2) {
     const lengthPt = distancePt(points[0], points[1]);
     const measured = sheet.scale_denominator ? paperPtToRealM(lengthPt, sheet.scale_denominator) : null;
@@ -94,15 +105,29 @@ type Props = {
   points: PdfPoint[];
   study: Study | null | undefined;
   onStudyImported: (study: Study) => void;
+  /** Matrice du rendu de la planche : sert à lire le nord dans le repère affiché. */
+  transform: number[] | null;
 };
 
 // Panneau « Planche » : réglages de la planche affichée (type, niveau, orientation, échelle) et outils de mesure.
-export function SheetPanel({ projectId, sheet, isReference, onMakeReference, tool, onTool, points, study, onStudyImported }: Props) {
+export function SheetPanel({
+  projectId,
+  sheet,
+  isReference,
+  onMakeReference,
+  tool,
+  onTool,
+  points,
+  study,
+  onStudyImported,
+  transform,
+}: Props) {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [realLength, setRealLength] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [nordPartout, setNordPartout] = useState(true);
 
   async function importStudy(file: File) {
     const replace = study !== null && study !== undefined;
@@ -146,6 +171,36 @@ export function SheetPanel({ projectId, sheet, isReference, onMakeReference, too
     }
     void perform(() => thermiqueApi.calibrateSheet(token!, sheet.id, { p1: points[0], p2: points[1], real_length_m: real, apply }));
   };
+
+  const poserNord = async () => {
+    if (points.length < 2) {
+      setActionError("Cliquez la base de la flèche, puis sa pointe du côté du nord.");
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      // La réponse porte toutes les planches touchées : le nord vaut le plus souvent pour le projet.
+      const planches = await thermiqueApi.setNorth(token!, sheet.id, {
+        p1: points[0],
+        p2: points[1],
+        tout_le_projet: nordPartout,
+      });
+      queryClient.setQueryData<ProjectDetail>(projectQueryKey(projectId), (current) =>
+        planches.reduce((projet, planche) => (projet ? replaceSheet(projet, planche) : projet), current),
+      );
+      // Les orientations de l'étude ont été recalculées côté serveur : on la redemande.
+      void queryClient.invalidateQueries({ queryKey: studyQueryKey(sheet.id) });
+      onTool("pan");
+    } catch (actionFailure) {
+      setActionError(actionFailure instanceof Error ? actionFailure.message : "Impossible de poser le nord.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const azimutNord = sheet.nord && transform ? azimutEcran(sheet.nord.p1, sheet.nord.p2, transform) : null;
+  const azimutTrace = points.length >= 2 && transform ? azimutEcran(points[0], points[1], transform) : null;
 
   const hasScale = sheet.scale_denominator !== null;
   const lengthPt = points.length === 2 ? distancePt(points[0], points[1]) : null;
@@ -222,6 +277,43 @@ export function SheetPanel({ projectId, sheet, isReference, onMakeReference, too
               {paperMm} mm mesurés <strong>sur le papier</strong> : l'échelle n'est pas définie.
             </p>
           ))}
+        {tool === "nord" && (
+          <div className="th-form th-north-form">
+            <ol className="th-steps">
+              <li>Repérez la flèche du nord imprimée sur le plan, ou son orientation connue.</li>
+              <li>
+                Cliquez <strong>la base</strong> de la flèche, puis <strong>sa pointe, du côté du nord</strong>.
+              </li>
+            </ol>
+            {azimutTrace !== null ? (
+              <p className="th-alert th-alert--ok">
+                Flèche tracée : le nord pointe <strong>{lectureDuNord(azimutTrace)}</strong> ({degres(azimutTrace)}).
+                <br />
+                Vérifiez le « N » sur le plan avant de valider.
+              </p>
+            ) : (
+              <p className="th-muted">
+                {points.length === 1 ? "Cliquez maintenant la pointe, du côté du nord." : "Aucun point posé."}
+              </p>
+            )}
+            <label className="th-inline">
+              <input type="checkbox" checked={nordPartout} onChange={(event) => setNordPartout(event.target.checked)} />
+              Appliquer à tous les plans du projet
+            </label>
+            <p className="th-muted">
+              Un bâtiment n'a qu'un nord. Décochez si ce plan est dessiné dans un autre sens que les autres.
+            </p>
+            <button
+              type="button"
+              className="po2-button po2-button--primary"
+              disabled={busy || points.length < 2}
+              onClick={() => void poserNord()}
+            >
+              {busy ? "Recalcul des orientations…" : "Valider le nord"}
+            </button>
+            <p className="th-muted">Les orientations des parois sont recalculées dans la foulée (quelques secondes).</p>
+          </div>
+        )}
         {tool === "calibrate" && (
           <div className="th-form">
             {!hasScale && <p className="th-muted">Sans échelle déclarée, la cote fixera l'échelle de la planche.</p>}
@@ -332,6 +424,29 @@ export function SheetPanel({ projectId, sheet, isReference, onMakeReference, too
             Ramener à {formatScale(roundableTo)}, l'échelle usuelle confirmée par la cote
           </button>
         )}
+      </section>
+
+      <section>
+        <h2>Nord</h2>
+        {azimutNord !== null ? (
+          <>
+            <p className="th-result">
+              Nord <strong>{lectureDuNord(azimutNord)}</strong> ({degres(azimutNord)})
+            </p>
+            <p className="th-muted">
+              Les orientations des parois en découlent. La flèche est dessinée sur le plan : vérifiez que son
+              « N » tombe bien du côté du nord.
+            </p>
+          </>
+        ) : (
+          <div className="th-alert th-alert--warn">
+            <strong>Nord non défini</strong> : les orientations des parois restent « à caler », alors qu'elles
+            entrent dans le calcul des déperditions.
+          </div>
+        )}
+        <button type="button" className="po2-button po2-button--ghost" onClick={() => onTool("nord")}>
+          {azimutNord !== null ? "Redéfinir le nord" : "Définir le nord"}
+        </button>
       </section>
 
       <section>

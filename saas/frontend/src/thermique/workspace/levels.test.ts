@@ -19,6 +19,7 @@ const sheet = (id: number, nature: Sheet["nature"], level: string | null, label 
   page_height_pt: 100,
   status: "prete",
   calibration: null,
+  nord: null,
 });
 
 describe("levelRank", () => {

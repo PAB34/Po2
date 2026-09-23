@@ -5,6 +5,14 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class SheetNord(BaseModel):
+    """Flèche du nord tracée sur la planche, en points PDF : p2 est la pointe, du côté du nord."""
+
+    p1: list[float]
+    p2: list[float]
+    longueur_pt: float
+
+
 class SheetCalibration(BaseModel):
     p1: list[float]
     p2: list[float]
@@ -33,6 +41,7 @@ class SheetRead(BaseModel):
     page_height_pt: float
     status: str
     calibration: SheetCalibration | None
+    nord: SheetNord | None = None
 
 
 class DocumentRead(BaseModel):
@@ -91,6 +100,14 @@ class SheetUpdate(BaseModel):
     level_label: str | None = Field(default=None, max_length=80)
     rotation_deg: int | None = None
     scale_denominator: float | None = Field(default=None, gt=0, le=10000)
+
+
+class NordRequest(BaseModel):
+    """Flèche du nord : p1 sa base, p2 **sa pointe, du côté du nord**, en points PDF."""
+
+    p1: list[float] = Field(min_length=2, max_length=2)
+    p2: list[float] = Field(min_length=2, max_length=2)
+    tout_le_projet: bool = True
 
 
 class CalibrationRequest(BaseModel):
