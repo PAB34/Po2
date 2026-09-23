@@ -19,7 +19,13 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-23** (session Codex — benchmark agents thermiciens OpenAI).
+> Mise à jour : **2026-09-23** (session Claude — E2 et E3 en production, lot F1 en cours).
+
+- **▶️ REPRENDRE ICI — outil thermique, lot F1.** Tout l'état, ce qui est fait, ce qui reste et les
+  commandes : **`docs/thermique/reprise-F1.md`**. Décisions du lot :
+  `docs/thermique/parcours-par-niveau-E3bis-decisions.md` (D66 à D77, toutes validées par l'utilisateur).
+
+> Mise à jour précédente : **2026-09-23** (session Codex — benchmark agents thermiciens OpenAI).
 
 - **✅ BENCHMARK LOCAL OPENAI / CLAUDE CODE SUR LE R+1** (commit `3eb0c5e4`, non poussé) : deux agents
   OpenAI de projet en lecture seule (`thermicien_plan_openai`, `thermicien_enveloppe_openai`), sans API ni

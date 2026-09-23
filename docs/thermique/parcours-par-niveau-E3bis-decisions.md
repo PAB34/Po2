@@ -87,6 +87,31 @@ s'arrête) ; le mode en veille (`--boucle`, tâche planifiée) viendra ensuite.
 - **Identification** : le relais demande les identifiants du thermicien à sa première exécution et garde la
   session dans un fichier local, comme le fait le navigateur. Aucun secret n'entre dans le dépôt.
 
+### D77 — La chaîne se relit elle-même à la fin de chaque niveau
+
+Demande de l'utilisateur, 2026-09-23 : « j'attends que ce soit l'IA, lors de son traitement, qui s'en
+aperçoive niveau par niveau ; c'est le type d'erreur simple à éviter ».
+
+Le défaut trouvé aujourd'hui — l'épaisseur des murs comptée comme surface sans local — était détectable
+sans aucune intelligence : deux lectures indépendantes existent pour le même niveau, celle de
+`thermicien-plan` (les contours) et celle de `thermicien-enveloppe` (les nus mesurés), et **personne ne les
+confronte**. C'est exactement la leçon du benchmark d'agents : le désaccord entre deux lectures est le
+meilleur détecteur d'erreur, bien meilleur qu'un score de confiance.
+
+À la fin de la chaîne d'un niveau, avant d'écrire le fichier d'étude, un **contrôle de cohérence** compare
+les deux lectures et refuse de se taire :
+
+1. couverture de l'emprise intérieure par les locaux, et liste des zones non affectées de plus de 0,5 m² ;
+2. chevauchements entre locaux ;
+3. locaux qui mordent dans une paroi mesurée, avec le déplacement nécessaire ;
+4. locaux qui débordent de l'emprise ;
+5. écart entre la surface d'un local et la somme de ses côtés relevés ;
+6. côtés `exterieur` sans aucun élément d'enveloppe en regard, et l'inverse.
+
+Le résultat va dans `A-FAIRE.md` **et** dans le fichier d'étude, pour être affiché à l'import. Un contrôle
+qui échoue n'interrompt pas la chaîne : il est rendu visible. Ce contrôle est aussi ce qui permettra de
+mesurer la qualité des agents dans le temps, niveau après niveau.
+
 ### D67 — Le parcours du niveau en cinq étapes
 
 | Étape | Contenu | Portée |
@@ -152,7 +177,7 @@ reprojeté des éléments, liaisons localisées, contours calés.
 
 | Lot | Contenu | Pourquoi dans cet ordre |
 |---|---|---|
-| **F1** | Calage automatique des contours, liaisons localisées, tracé des éléments ; format v3 | réduit d'emblée le travail de l'étape 3 : moins de contours à reprendre à la main |
+| **F1** | Calage automatique des contours, **contrôle de cohérence (D77)**, liaisons localisées, tracé des éléments ; format v3 | réduit d'emblée le travail de l'étape 3 : moins de contours à reprendre à la main |
 | **F0** | File d'attente et relais local (D76) | **après F1** : sinon le relais importerait automatiquement des études aux contours faux |
 | **F2** | Parcours en cinq étapes, brouillon de niveau, enregistrement obligatoire au changement, recalcul en fin de passe | le squelette du travail quotidien |
 | **F3** | Métrés et ponts dessinés sur le plan | lecture |
