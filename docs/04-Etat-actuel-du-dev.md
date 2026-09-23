@@ -27,9 +27,10 @@ do_not_auto_read:
 - **✅ LOT F1 TERMINÉ LOCALEMENT — contours calés et chaîne qui se relit elle-même.** Le fichier d'étude passe
   en `format_version: 3` : contours calés sur le nu intérieur mesuré à l'assemblage (D66), liaisons localisées
   (D74), tracé reprojeté des éléments (D75), et **contrôle de cohérence en six points (D77)** écrit dans
-  `A-FAIRE.md` et dans l'étude, affiché à l'import. Sur le R+1 : couverture 86,2 → 92,5 %, surface sans local
-  112,6 → 31,0 m², sept locaux reculés, et un recouvrement de 10,85 m² enfin signalé. `etude-R1.v3.json` est
-  prêt à réimporter. **Rien n'est poussé.**
+  `A-FAIRE.md` et dans l'étude, affiché à l'import. Un calage qui doute ne s'applique pas et rend la main
+  au thermicien (**D78**, correction d'une régression livrée le 2026-09-23) ; le format **v2 reste
+  importable**, pour pouvoir revenir en arrière. Sur le R+1 : couverture 86,2 → 91,1 %, surface sans local
+  112,6 → 42,4 m², quatre locaux reculés de 2,08 m² en tout, et un recouvrement de 10,85 m² enfin signalé.
 
 > Mise à jour précédente : **2026-09-23** (session Codex — benchmark agents thermiciens OpenAI).
 

@@ -118,17 +118,31 @@ def _morsures(analyse: dict[str, Any], manifeste: dict[str, Any], releve: dict[s
         return _controle("morsure_paroi", "Locaux qui mordent dans une paroi mesurée", [],
                          "aucun relevé d'enveloppe : contrôle impossible")
     _cale, rapport = calage.caler_locaux(analyse, manifeste, releve)
-    anomalies = [
-        {
-            "local": ligne.get("id"),
-            "message": f"« {ligne.get('nom')} » entre de {ligne['deplacement_max_m'] * 100:.0f} cm dans une paroi "
-            f"mesurée ({ligne['surface_retiree_m2']:.2f} m²)",
-            "surface_m2": ligne["surface_retiree_m2"],
-            "deplacement_m": ligne["deplacement_max_m"],
-        }
-        for ligne in rapport
-        if ligne["surface_retiree_m2"] >= MORSURE_MIN_M2 or ligne["deplacement_max_m"] >= MORSURE_PROFONDEUR_MIN_M
-    ]
+    anomalies = []
+    for ligne in rapport:
+        assez = ligne["surface_retiree_m2"] >= MORSURE_MIN_M2 or ligne["deplacement_max_m"] >= MORSURE_PROFONDEUR_MIN_M
+        if not assez and ligne.get("applique", True):
+            continue
+        if ligne.get("applique", True):
+            message = (
+                f"« {ligne.get('nom')} » entre de {ligne['deplacement_max_m'] * 100:.0f} cm dans une paroi "
+                f"mesurée ({ligne['surface_retiree_m2']:.2f} m²)"
+            )
+        else:
+            # Le calage s'est abstenu : c'est au thermicien de trancher, il faut donc le lui dire.
+            message = (
+                f"« {ligne.get('nom')} » : contour à reprendre à la main, le calage automatique s'est abstenu "
+                f"({ligne.get('motif')})"
+            )
+        anomalies.append(
+            {
+                "local": ligne.get("id"),
+                "message": message,
+                "surface_m2": ligne["surface_retiree_m2"],
+                "deplacement_m": ligne["deplacement_max_m"],
+                "calage_applique": bool(ligne.get("applique", True)),
+            }
+        )
     return _controle(
         "morsure_paroi",
         "Locaux qui mordent dans une paroi mesurée",

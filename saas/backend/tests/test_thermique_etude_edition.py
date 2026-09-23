@@ -295,6 +295,73 @@ def test_le_calage_ne_touche_pas_un_local_deja_bien_pose():
     assert rapport == []
 
 
+def _manifeste_troncon_interieur() -> dict:
+    """Un tronçon parcouru par sa face intérieure, en plein milieu du plan (patio, atrium, mitoyenneté).
+
+    Sa normale pointe vers le haut : le « nu extérieur » de la paroi est à l'intérieur du bâtiment, avec
+    un vrai local de l'autre côté. C'est le cas qui a fait manger des locaux entiers le 2026-09-23.
+    """
+    manifeste = dict(MANIFESTE)
+    manifeste["troncons"] = [
+        {
+            "id": "U01",
+            "debut_m": 0.0,
+            "fin_m": 100.0,
+            "local_debut_m": 0.0,
+            "origine_px": [0, 300],
+            "direction": [1.0, 0.0],
+            "normale_ext": [0.0, -1.0],
+            "ligne": "face_interieure",
+        }
+    ]
+    manifeste["perimetre_m"] = 100.0
+    return manifeste
+
+
+def _releve_paroi_interieure() -> dict:
+    """Paroi de 30 cm : le corps va de y = 300 px (nu intérieur) à y = 297 px (nu extérieur)."""
+    return {
+        "elements": [
+            {
+                "troncon": "U01",
+                "debut_m": 0.0,
+                "fin_m": 100.0,
+                "type": "paroi",
+                "composant": "P1",
+                "nu_exterieur_cm": 30,
+                "nu_interieur_cm": 0,
+                "confiance": 0.9,
+                "a_verifier": False,
+                "indice": "refend",
+            }
+        ],
+        "catalogue": [],
+        "observations": [],
+    }
+
+
+def test_une_paroi_interieure_ne_deborde_pas_dans_le_local_d_en_face():
+    # Le local s'arrête juste avant la paroi (y = 296 px, la paroi commence à 297).
+    manifeste = _manifeste_troncon_interieur()
+    analyse = {"objects": [_piece("piece-001", [[0, 100], [1000, 100], [1000, 296], [0, 296]])]}
+    _cale, rapport = calage.caler_locaux(analyse, manifeste, _releve_paroi_interieure())
+    # Sur une façade le corps déborde de 60 cm vers l'extérieur, où il n'y a rien. Ici l'extérieur du
+    # tronçon est un local : déborder lui mangerait une bande de 60 cm sur toute sa longueur.
+    assert rapport == []
+
+
+def test_un_calage_qui_couperait_le_local_en_deux_est_refuse():
+    manifeste = _manifeste_troncon_interieur()
+    # Le local traverse la paroi de part en part : le retrait le couperait en deux morceaux.
+    analyse = {"objects": [_piece("piece-001", [[0, 100], [1000, 100], [1000, 500], [0, 500]])]}
+    avant = [list(point) for point in analyse["objects"][0]["points"]]
+    cale, rapport = calage.caler_locaux(analyse, manifeste, _releve_paroi_interieure())
+    assert len(rapport) == 1 and rapport[0]["applique"] is False
+    assert "morceaux" in rapport[0]["motif"]
+    # Refusé veut dire refusé : le contour n'a pas bougé d'un pixel.
+    assert cale["objects"][0]["points"] == avant
+
+
 def test_le_recalcul_redonne_le_trace_des_elements_les_liaisons_et_le_controle():
     """Version 3 : sans ces trois blocs, rien n'est dessinable et la chaîne ne se relit pas (D74, D75, D77)."""
     contenu = {

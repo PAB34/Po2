@@ -195,17 +195,47 @@ E4 (bibliothèque alimentée, ponts associés au référentiel) et E5 (hauteurs)
 5. Contrôler sur le banc local, avec le vrai PDF, l'isolement des éléments et les cotes dessinées.
 6. Tests ciblés serveur et interface, typage et construction.
 
+### D78 — Un calage qui doute ne s'applique pas
+
+Signalé par l'utilisateur le 2026-09-23, après la mise en production de F1 : « j'ai l'impression que la
+détection des contours a perdu en qualité ». **C'était vrai**, et pour deux raisons cumulées.
+
+1. Le corps d'une paroi déborde de 60 cm au-delà du nu extérieur, pour qu'aucun filet de local ne survive
+   dehors. Ce débord n'a de sens que sur une **façade**. Sur les 17 tronçons parcourus par leur face
+   intérieure (patio, atrium, mitoyenneté avec un local non chauffé), les deux côtés sont du bâtiment :
+   déborder mangeait le local d'en face. *Locaux techniques CF CVC* passait de 4,88 à 1,12 m²,
+   *escalier encloisonné* de 17,61 à 13,24 m².
+2. Rien ne bornait le résultat. `caler_locaux` gardait le plus gros morceau après soustraction, donc un
+   local coupé en deux perdait silencieusement une moitié.
+
+Décision : le débord ne s'applique qu'aux tronçons de façade, et **deux garde-fous** bornent le calage.
+Il ne s'applique pas si le recul dépasse la paroi la plus épaisse **qui touche ce local** (+ 10 cm), ni
+s'il couperait le local en morceaux. Un calage refusé laisse le contour **intact** et remonte dans le
+contrôle de cohérence comme « contour à reprendre à la main », avec son motif.
+
+Principe général à retenir : *un calage automatique qui se trompe en silence est pire que pas de calage du
+tout*. Sur le R+1, le calage passe de 7 locaux et 9,61 m² retirés à **4 locaux et 2,08 m²**, soit 0,3 % de
+la surface, et un local rendu au thermicien.
+
+Corollaire : le format **v2 redevient importable**. Refuser l'ancien format privait l'utilisateur du seul
+moyen de revenir en arrière après une mauvaise livraison. Une v2 arrive sans calage ni contrôle ; le
+premier recalcul les lui donne, sans jamais retoucher ses contours.
+
 ### Ce que la vérification a donné (2026-09-23, lot F1 livré)
 
 Le point 1 ci-dessus partait d'un diagnostic faux de ma part : les bureaux nord n'avaient **pas** de défaut de
 contour (`6.1.2 B.asst` est mesuré à 26,2 cm au droit d'un mur-rideau de 26 cm). Le calage ne les touche donc
 pas, et c'est le bon résultat. Il recule en revanche **sept locaux qui mordaient réellement dans les murs** :
-escalier encloisonné −4,37 m² (76 cm), locaux techniques −3,76 m² (78 cm), pôle multimédia −1,30 m² (43 cm),
-espace formation −0,09 m² (64 cm), et trois retouches centimétriques.
+pôle multimédia −1,30 m² (43 cm), locaux techniques −0,72 m² (14 cm) et deux retouches centimétriques ;
+*espace formation* est rendu au thermicien, le calage s'y abstenant (voir D78).
 
-Point 2 vérifié : couverture 86,2 → **92,5 %**, surface sans local 112,6 → **31,0 m²** en dix zones réelles,
-chevauchement inchangé (10,85 m²). Chaîne fidèle : 24 locaux, 32 composants, 24 fiches, 16 raccords,
-4 demandes, comme en v2 ; s'y ajoutent 289 tracés d'éléments et 77 liaisons localisées.
+Point 2 vérifié, **après la correction D78** : couverture 86,2 → **91,1 %**, surface sans local
+112,6 → **42,4 m²** en dix zones réelles, chevauchement inchangé (10,85 m²). Chaîne fidèle : 24 locaux,
+32 composants, 24 fiches, 16 raccords, 4 demandes, comme en v2 ; s'y ajoutent 289 tracés d'éléments et
+77 liaisons localisées.
+
+*(Les chiffres de la première livraison — 92,5 % et 31,0 m² — étaient flattés : la surface des locaux
+détruits était comptée comme de la paroi, donc ni affectée ni manquante.)*
 
 Le contrôle de cohérence remonte **9 points** sur ce niveau, dont un défaut que personne n'avait vu :
 *escalier atrium* et *4.2 Pôle multimédia* se recouvrent sur **10,85 m²**. Il passait sous le seuil de blocage

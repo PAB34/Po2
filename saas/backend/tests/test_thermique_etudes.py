@@ -191,6 +191,24 @@ def test_validation_refuse_mauvais_pdf_page_et_geometrie(contexte):
         valider_et_convertir(payload, sheet, _raster())
 
 
+def test_une_etude_en_version_2_reste_importable(contexte):
+    """Revenir en arrière doit rester possible : une étude assemblée avant F1 se réimporte (sans calage)."""
+    db, user, _project, sheet = contexte
+    payload = _payload(sheet.document.sha256)
+    payload["format_version"] = 2
+    for cle in ("coherence", "calage"):
+        payload.pop(cle)
+    etude = importer_etude(db, sheet, user, payload, _raster())
+    # La version enregistrée est celle du fichier, pas la plus récente que le serveur sait lire.
+    assert etude.format_version == 2
+    assert json.loads(etude.content_json)["locaux"][0]["contour_pdf"]
+
+    inconnue = _payload(sheet.document.sha256)
+    inconnue["format_version"] = 1
+    with pytest.raises(ThermiqueError, match="attendues : 2, 3"):
+        valider_et_convertir(inconnue, sheet, _raster())
+
+
 def test_import_initial_et_remplacement_sont_versionnes(contexte):
     db, user, _project, sheet = contexte
     payload = _payload(sheet.document.sha256)

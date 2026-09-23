@@ -37,6 +37,10 @@ from app.services.thermique import ThermiqueError
 
 ETUDE_FORMAT = "thermique.etude_niveau"
 ETUDE_FORMAT_VERSION = 3
+# Versions encore acceptées à l'import. La 2 reste lisible : une étude assemblée avant F1 doit pouvoir
+# être réimportée, ne serait-ce que pour revenir en arrière. Elle arrive sans calage ni contrôle de
+# cohérence ; le premier recalcul les lui donne, sans jamais retoucher ses contours (D66).
+ETUDE_VERSIONS_LUES = (2, 3)
 MAX_ETUDE_BYTES = 10 * 1024 * 1024
 LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe"}
 
@@ -185,6 +189,8 @@ def assembler_etude_niveau(
         },
         "calage": {
             "contours_cales": True,
+            "appliques": sum(1 for ligne in rapport_calage if ligne.get("applique")),
+            "refuses": sum(1 for ligne in rapport_calage if not ligne.get("applique")),
             "locaux_deplaces": rapport_calage,
         },
         "couverture": geo.controler_couverture(
@@ -229,8 +235,12 @@ def valider_et_convertir(
     """Valide le fichier et ajoute à chaque local son contour durable en points PDF."""
     if not isinstance(payload, dict):
         raise ThermiqueError("Le fichier d'étude doit contenir un objet JSON.")
-    if payload.get("format") != ETUDE_FORMAT or payload.get("format_version") != ETUDE_FORMAT_VERSION:
-        raise ThermiqueError("Format d'étude inconnu ou version non prise en charge.")
+    version = payload.get("format_version")
+    if payload.get("format") != ETUDE_FORMAT or version not in ETUDE_VERSIONS_LUES:
+        lues = ", ".join(str(numero) for numero in ETUDE_VERSIONS_LUES)
+        raise ThermiqueError(
+            f"Format d'étude inconnu ou version non prise en charge (reçue : {version!r}, attendues : {lues})."
+        )
     if payload.get("uses_pdf_vectors") is not False:
         raise ThermiqueError("L'étude doit provenir exclusivement de la lecture raster du plan.")
     source = payload.get("source")
@@ -261,7 +271,10 @@ def valider_et_convertir(
     if not isinstance(payload.get("analyse"), dict) or not isinstance(payload["analyse"].get("objects"), list):
         raise ThermiqueError("L'analyse du plan est absente de l'étude.")
     # Une étude v3 arrive calée et relue : sans son rapport de cohérence, on ne saurait pas ce qu'elle vaut.
-    if not isinstance(payload.get("coherence"), dict) or not isinstance(payload["coherence"].get("controles"), list):
+    # Une v2 est acceptée telle quelle : le premier recalcul lui donnera son rapport.
+    if version >= 3 and (
+        not isinstance(payload.get("coherence"), dict) or not isinstance(payload["coherence"].get("controles"), list)
+    ):
         raise ThermiqueError("Le contrôle de cohérence est absent de l'étude : réassemblez-la avec la chaîne à jour.")
 
     locaux = payload.get("locaux")
@@ -354,11 +367,13 @@ def importer_etude(
     etats = {local["id"]: {"status": "a_verifier", "motif": None} for local in contenu["locaux"]}
     contenu_json = json.dumps(contenu, ensure_ascii=False, separators=(",", ":"))
     etats_json = json.dumps(etats, ensure_ascii=False, separators=(",", ":"))
+    # On enregistre la version réellement importée, pas la plus récente que le serveur sait lire.
+    version_lue = int(contenu.get("format_version") or ETUDE_FORMAT_VERSION)
     if etude is None:
         etude = ThermiqueEtude(
             project_id=sheet.project_id,
             sheet_id=sheet.id,
-            format_version=ETUDE_FORMAT_VERSION,
+            format_version=version_lue,
             content_json=contenu_json,
             local_states_json=etats_json,
             imported_by_user_id=user.id,
@@ -377,7 +392,7 @@ def importer_etude(
             or 0
         ) + 1
         motif = "import_remplacement"
-        etude.format_version = ETUDE_FORMAT_VERSION
+        etude.format_version = version_lue
         etude.content_json = contenu_json
         etude.local_states_json = etats_json
         etude.imported_by_user_id = user.id

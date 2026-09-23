@@ -37,12 +37,12 @@ Ordre des lots retenu : **F1 → F0 (relais) → F2 (parcours) → F3 (métrés 
 ### Socle (commit `9e385d2d`, testé sur le R+1 réel)
 
 - `app/services/thermique_calage_contours.py` : reconstruit le **corps des parois** (du nu extérieur au nu
-  intérieur mesuré) et le retire des contours de locaux. Sur le R+1, corrige sept locaux qui mordaient
-  réellement dans les murs (escalier encloisonné −4,4 m², locaux techniques −3,8 m²). Fournit aussi
-  `liaisons_localisees` (positions des ponts thermiques), **écrite mais pas encore branchée**.
+  intérieur mesuré) et le retire des contours de locaux, **sans jamais déborder sur un tronçon parcouru
+  par sa face intérieure et sans jamais couper un local en deux** (D78). Fournit aussi
+  `liaisons_localisees` (positions des ponts thermiques).
 - `thermique_etude_geometrie.emprise_interieure(manifeste, releve)` retranche les murs, et
   `controler_couverture` ignore les bandes de moins de 30 cm (les cloisons, non mesurées).
-  **Sur le R+1 : couverture 86,2 % → 92,5 %, et 113 m² signalés en nappe → 31 m² en dix zones réelles.**
+  **Sur le R+1 : couverture 86,2 % → 91,1 %, et 113 m² signalés en nappe → 42 m² en dix zones réelles.**
   C'est ce défaut que l'utilisateur voyait comme « la limite des pièces ne s'est pas faite au pied de la
   menuiserie » sur toute une façade : la bande rouge dessinait l'épaisseur des murs.
 
@@ -51,22 +51,25 @@ Ordre des lots retenu : **F1 → F0 (relais) → F2 (parcours) → F3 (métrés 
 1. **Contrôle de cohérence de fin de chaîne (D77)** — `app/services/thermique_coherence.py`. Les six contrôles
    tournent avant l'écriture du fichier et à chaque recalcul ; le rapport part dans `A-FAIRE.md` **et** dans
    l'étude, et s'affiche dans le panneau « Locaux ». Le défaut corrigé le 2026-09-23 est attrapé par le
-   contrôle n° 1, et le contrôle n° 3 se tait sur un fichier calé : c'est lui qui vérifie le calage.
+   contrôle n° 1, et le contrôle n° 3 ne laisse passer, sur un fichier calé, que les locaux où le calage
+   s'est **abstenu** — c'est lui qui vérifie le calage et qui rend la main au thermicien.
 2. **Calage branché** dans `assembler_etude_niveau` (sur le poste, à l'assemblage — D66), avec
    `calage.contours_cales` et le déplacement par local. Le fichier repasse ensuite par `reconstruire`, la
    même chaîne qu'après chaque geste d'édition : impossible qu'il décrive des contours qu'il n'a pas mesurés.
 3. **Liaisons localisées** (D74) et **tracé reprojeté des éléments** (D75) dans `enveloppe.liaisons` et
    `enveloppe.objets`, convertis en points PDF à l'import comme les contours, prêts pour F3.
-4. Contrat en `format_version: 3` ; une étude sans son rapport de cohérence est refusée à l'import.
+4. Contrat en `format_version: 3` ; une v3 sans son rapport de cohérence est refusée à l'import, une **v2
+   reste acceptée** telle quelle pour pouvoir revenir en arrière (D78).
 5. `etude-R1.v3.json` réassemblé (à côté de la v2, même dossier) : **à réimporter dans l'application**.
 
 ### Ce que le R+1 donne en v3
 
 Chaîne fidèle : 24 locaux, 32 composants, 24 fiches, 16 raccords, 4 demandes, 22 synthèses — comme en v2.
-Nouveau : 289 tracés d'éléments et 77 liaisons. Couverture 86,2 → **92,5 %**, surface sans local
-112,6 → **31,0 m²**. Le calage recule sept locaux (escalier encloisonné −4,4 m², locaux techniques −3,8 m²,
-pôle multimédia −1,3 m²). Le contrôle de cohérence remonte **9 points**, dont un vrai défaut que personne
-n'avait vu : *escalier atrium* et *4.2 Pôle multimédia* se recouvrent sur **10,85 m²** (sous le seuil de
+Nouveau : 289 tracés d'éléments et 77 liaisons. Couverture 86,2 → **91,1 %**, surface sans local
+112,6 → **42,4 m²**. Le calage recule quatre locaux, 2,08 m² en tout (pôle multimédia −1,30 m²,
+locaux techniques −0,72 m²) et s'abstient sur un cinquième, rendu au thermicien (D78).
+
+Le contrôle de cohérence remonte **7 points**, dont un vrai défaut que personne n'avait vu : *escalier atrium* et *4.2 Pôle multimédia* se recouvrent sur **10,85 m²** (sous le seuil de
 blocage de 2 %, donc silencieux jusqu'ici).
 
 ## 4. Ce qu'il faut savoir pour ne pas se tromper
