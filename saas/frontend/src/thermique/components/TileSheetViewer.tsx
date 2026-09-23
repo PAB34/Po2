@@ -32,6 +32,9 @@ type Props = {
   points?: PdfPoint[];
   segments?: ViewerSegment[];
   onAddPoint: (point: PdfPoint, event: PickEvent) => void;
+  // Clic simple en mode « pan » : le plan n'a pas bougé, le geste désigne donc ce point. Sert à choisir
+  // un local sans empêcher le glisser de déplacer le plan.
+  onPick?: (point: PdfPoint, event: PickEvent) => void;
   // Survol : point sous le curseur et pixels écran par point PDF (tolérance d'aimantation).
   onHover?: (point: PdfPoint | null, pixelsPerPt: number, event: PickEvent) => void;
   // Clic enfoncé sur un objet : si la fonction renvoie true, le glisser déplace l'objet et non le plan.
@@ -68,6 +71,7 @@ export function TileSheetViewer({
   points = NO_POINTS,
   segments = NO_SEGMENTS,
   onAddPoint,
+  onPick,
   onHover,
   onGrab,
   onGrabMove,
@@ -226,11 +230,17 @@ export function TileSheetViewer({
       onGrabEnd?.();
       return;
     }
-    if (!drag || drag.moved || tool === "pan" || event.button !== 0) {
+    if (!drag || drag.moved || event.button !== 0) {
       return;
     }
     const point = toPdf(event.clientX, event.clientY);
-    if (point) {
+    if (!point) {
+      return;
+    }
+    // Le plan n'a pas bougé : c'est un clic. En mode « pan » il désigne, ailleurs il pose un point.
+    if (tool === "pan") {
+      onPick?.(point, modifiers(event));
+    } else {
       onAddPoint(point, modifiers(event));
     }
   };

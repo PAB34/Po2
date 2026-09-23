@@ -268,3 +268,22 @@ Second tour, sur le relais (D76) : version **à la demande** d'abord ; traitemen
 le catalogue transmis** ; identifiants demandés **une seule fois** au relais et gardés localement.
 
 Ordre des lots retenu : **F1 → F0 → F2 → F3 → F4**.
+
+### D79 — Le plan se déplace toujours, même le doigt posé sur un local
+
+Signalé par l'utilisateur le 2026-09-23 : « si je clique sur une pièce malencontreusement je ne peux plus
+naviguer sur le plan ».
+
+Cause : chaque polygone de local retenait l'événement `pointerdown` (`stopPropagation`) pour que le clic
+serve à sélectionner. La visionneuse ne voyait donc jamais le début du geste, et comme les locaux couvrent
+tout le bâtiment, **le plan ne se déplaçait plus dès que le geste partait d'un local**. Le même défaut
+empêchait de mesurer ou de caler au-dessus d'un local : le clic n'arrivait pas non plus.
+
+Décision : l'interface ne retient plus le pointeur. La sélection ne se fait plus au clic sur le polygone
+mais **dans la visionneuse**, seule à savoir distinguer un clic d'un déplacement (seuil de 4 px, déjà en
+place). Elle publie `onPick` pour un clic simple en mode « déplacer », et l'espace de travail cherche le
+local sous ce point (`roomAt`). Quand deux locaux se recouvrent, **le plus petit gagne** : c'est celui
+qu'on vise en cliquant dans un coin d'un plateau ouvert. Un clic dans le vide referme la fiche.
+
+Leçon : ne pas intercepter un geste au niveau d'un élément dessiné par-dessus le plan. Le plan est le
+support de tous les gestes ; ce qui est dessiné dessus décore, et ne décide qu'après coup.

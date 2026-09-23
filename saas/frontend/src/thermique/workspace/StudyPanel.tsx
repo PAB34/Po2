@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
+import type { CSSProperties, KeyboardEvent } from "react";
 
 import type { PdfPoint, Study, StudyRoom } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
@@ -16,6 +16,7 @@ export function StudyOverlay({
   onSelect,
   draft,
   gaps,
+  locked = false,
 }: {
   rooms: StudyRoom[];
   selectedId: string | null;
@@ -23,8 +24,12 @@ export function StudyOverlay({
   onSelect: (id: string) => void;
   draft?: StudyDraft | null;
   gaps?: PdfPoint[][];
+  /** Vrai quand le plan est occupé par un autre geste (mesure, calage, édition) : les locaux s'effacent. */
+  locked?: boolean;
 }) {
-  const stopPointer = (event: PointerEvent<SVGGElement>) => event.stopPropagation();
+  // Le pointeur n'est jamais retenu ici : il doit atteindre le plan pour pouvoir le déplacer, même posé
+  // sur un local. La sélection se fait donc au clic simple, côté visionneuse, qui seule sait distinguer
+  // un clic d'un déplacement (voir `onPick`).
   const selectWithKeyboard = (event: KeyboardEvent<SVGGElement>, id: string) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -42,21 +47,18 @@ export function StudyOverlay({
       {rooms.map((room) => {
         const edited = draft?.roomId === room.id ? draft.contour : room.contour_pdf;
         const selected = room.id === selectedId;
-        // Pendant une édition, les polygones laissent passer les clics : ils vont au plan, pas à la sélection.
-        const classes = ["th-study-room", selected ? "is-selected" : "", draft ? "is-locked" : ""].filter(Boolean);
+        // Pendant une édition, une mesure ou un calage, les polygones laissent passer les clics :
+        // ils vont au plan, pas à la sélection.
+        const inerte = Boolean(draft) || locked;
+        const classes = ["th-study-room", selected ? "is-selected" : "", inerte ? "is-locked" : ""].filter(Boolean);
         return (
           <g
             key={room.id}
             className={classes.join(" ")}
             style={{ "--room-color": NATURE_COLORS[room.nature] } as CSSProperties}
             role="button"
-            tabIndex={0}
+            tabIndex={inerte ? -1 : 0}
             aria-label={`Ouvrir la fiche de ${room.nom}`}
-            onPointerDown={stopPointer}
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(room.id);
-            }}
             onKeyDown={(event) => selectWithKeyboard(event, room.id)}
           >
             <polygon points={trace(edited)}>

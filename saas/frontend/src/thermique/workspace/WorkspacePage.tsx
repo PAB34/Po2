@@ -14,7 +14,7 @@ import { LibraryPanel } from "./LibraryPanel";
 import { SheetPanel, sheetSegments } from "./SheetPanel";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { useStudyEdition } from "./useStudyEdition";
-import { studyQueryKey, validatedRoomCount } from "./study";
+import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
@@ -334,6 +334,15 @@ export function WorkspacePage() {
                 if (editionState.handlers.onAddPoint(point)) return;
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
+              onPick={(point) => {
+                // Un clic simple sur le plan ouvre le local visé ; un clic dans le vide le referme.
+                const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
+                if (room) {
+                  selectRoom(room.id);
+                } else if (selectedLocalId) {
+                  setParams({ local: null, panneau: panel === "fiche" ? "planche" : panel });
+                }
+              }}
               onGrab={editionState.handlers.onGrab}
               onGrabMove={editionState.handlers.onGrabMove}
               onGrabEnd={editionState.handlers.onGrabEnd}
@@ -348,6 +357,7 @@ export function WorkspacePage() {
                         toScreen={toScreen}
                         onSelect={selectRoom}
                         draft={editionState.draft}
+                        locked={tool !== "pan"}
                         gaps={shownStudy.content.couverture?.zones_non_affectees_pdf ?? []}
                       />
                     )
