@@ -180,9 +180,9 @@ d'appariement tiré vers le bas par l'écart de comptage. Les runs 02 et 03 déc
 
 - Ne pas promouvoir une sortie issue d'un tirage unique : **deux lectures, puis arbitrage des divergences**, quel
   que soit le fournisseur.
-- La bande le long de la façade est (escalier extérieur ou intérieur) est une question ouverte sur l'enveloppe :
-  les runs 02 et 03 la classent `indetermine` et placent le nu de façade à x ≈ 778 ; le run 01 la traitait
-  autrement. À trancher par le thermicien avant tout métré de façade sur ce niveau.
+- La bande le long de la façade est est **extérieure** (arbitrage du thermicien, 2026-09-23) : les runs 02 et 03
+  avaient vu juste en la classant `indetermine` et en plaçant le nu de façade à x ≈ 778. Elle ne fait pas partie
+  de l'enveloppe chauffée et ne doit jamais être comptée comme pièce ni comme circulation intérieure.
 - Artefacts : `claude/run-02/`, `claude/run-03/` et `stabilite-claude-run-01-vs-02`, `-01-vs-03`, `-02-vs-03`
   dans `outputs/benchmark_agents/R1/`.
 
