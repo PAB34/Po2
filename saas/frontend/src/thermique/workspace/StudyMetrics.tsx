@@ -51,6 +51,10 @@ const SIGLES_PONT: Record<string, string> = {
 
 // Deux sigles plus proches que cela se chevaucheraient : on les efface plutôt (même règle que D82).
 const SIGLE_LISIBLE_PX = 26;
+// En deçà, deux pastilles se confondent à l'œil : on n'en dessine qu'une, qui annonce combien elle
+// représente. Le métré n'est pas touché — sur le R+1, les ponts sont bien distincts, jusqu'à 1,4 m
+// d'écart ; c'est le tracé de l'enveloppe qui est très découpé (89 tronçons, 67 changements de cap).
+const GROUPE_PONT_PX = 15;
 
 const metres = (value: number) => `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`;
 
@@ -223,8 +227,21 @@ export function StudyMetrics({
       const [x, y] = toScreen(bridge.point_pdf as PdfPoint);
       return { bridge, x, y, sigleLisible: false };
     });
-  pontsAffiches.forEach((pont, rang) => {
-    pont.sigleLisible = pontsAffiches.every(
+  // Regroupement visuel : une pastille par amas, qui dit combien de ponts elle porte. Le premier de
+  // l'amas la représente ; le clic, lui, vise toujours le pont réellement le plus proche.
+  const amas: { bridge: StudyBridge; x: number; y: number; sigleLisible: boolean; nombre: number }[] = [];
+  for (const pont of pontsAffiches) {
+    const proche = amas.find(
+      (groupe) => Math.hypot(groupe.x - pont.x, groupe.y - pont.y) < GROUPE_PONT_PX,
+    );
+    if (proche && !pontVise(pont.bridge, selectedElement)) {
+      proche.nombre += 1;
+    } else {
+      amas.push({ ...pont, nombre: 1 });
+    }
+  }
+  amas.forEach((pont, rang) => {
+    pont.sigleLisible = amas.every(
       (autre, autreRang) => autreRang === rang || Math.hypot(autre.x - pont.x, autre.y - pont.y) >= SIGLE_LISIBLE_PX,
     );
   });
@@ -287,7 +304,7 @@ export function StudyMetrics({
         );
       })}
 
-      {pontsAffiches.map(({ bridge, x, y, sigleLisible }, rang) => {
+      {amas.map(({ bridge, x, y, sigleLisible, nombre }, rang) => {
           const libelle = LIBELLES_PONT[bridge.type] ?? bridge.type;
           const orpheline = bridge.piece == null;
           return (
@@ -309,12 +326,15 @@ export function StudyMetrics({
               {(sigleLisible || pontVise(bridge, selectedElement)) && (
                 <text className="th-metric-pont__sigle" x={x + 8} y={y - 7}>
                   {SIGLES_PONT[bridge.type] ?? "?"}
+                  {nombre > 1 ? ` ×${nombre}` : ""}
                 </text>
               )}
               <title>
                 {`${libelle}${bridge.composant ? ` · ${bridge.composant}` : ""} · ${bridge.troncon}${
                   bridge.abscisse_m != null ? ` à ${bridge.abscisse_m.toLocaleString("fr-FR")} m` : ""
-                }${orpheline ? " · rattachée à aucun local" : ""}`}
+                }${orpheline ? " · rattachée à aucun local" : ""}${
+                  nombre > 1 ? ` · ${nombre} ponts à cet endroit, cliquez pour les distinguer` : ""
+                }`}
               </title>
             </g>
           );
