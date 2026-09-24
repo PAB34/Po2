@@ -7,6 +7,7 @@ import { thermiqueApi, type ProjectDetail, type Sheet, type SheetChanges, type T
 import { NATURES, NATURE_LABELS, STATUS_LABELS } from "../natures";
 import { allSheets, formatSize, projectQueryKey, projectsQueryKey, replaceSheet } from "../projectCache";
 import { COMMON_SCALES, formatScale, parseDecimal } from "../scale";
+import { AnalysisQueue } from "./AnalysisQueue";
 
 function UploadZone({ disabled, onFiles }: { disabled: boolean; onFiles: (files: File[]) => void }) {
   const [isOver, setIsOver] = useState(false);
@@ -148,6 +149,8 @@ export function DocumentsPanel({ project, currentSheetId, onShowSheet }: Props) 
           {item.filename} : {item.message}
         </p>
       ))}
+
+      {sheets.length > 0 && <AnalysisQueue projectId={project.id} />}
 
       {sheets.length > 0 && (
         <section>

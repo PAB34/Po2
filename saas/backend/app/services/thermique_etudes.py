@@ -43,6 +43,12 @@ ETUDE_FORMAT_VERSION = 3
 # cohérence ; le premier recalcul les lui donne, sans jamais retoucher ses contours (D66).
 ETUDE_VERSIONS_LUES = (2, 3)
 MAX_ETUDE_BYTES = 10 * 1024 * 1024
+
+# Motifs de version écrits par un import, donc sans intervention humaine. Toute autre valeur est une
+# retouche du thermicien ; la file d'analyse s'en sert pour ne jamais écraser son travail (D94).
+MOTIF_IMPORT_INITIAL = "import_initial"
+MOTIF_IMPORT_REMPLACEMENT = "import_remplacement"
+MOTIFS_D_IMPORT = (MOTIF_IMPORT_INITIAL, MOTIF_IMPORT_REMPLACEMENT)
 LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe"}
 
 
@@ -394,7 +400,7 @@ def importer_etude(
         db.add(etude)
         db.flush()
         numero = 1
-        motif = "import_initial"
+        motif = MOTIF_IMPORT_INITIAL
     else:
         numero = int(
             db.scalar(
@@ -404,7 +410,7 @@ def importer_etude(
             )
             or 0
         ) + 1
-        motif = "import_remplacement"
+        motif = MOTIF_IMPORT_REMPLACEMENT
         etude.format_version = version_lue
         etude.content_json = contenu_json
         etude.local_states_json = etats_json

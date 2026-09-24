@@ -205,6 +205,25 @@ export type StudyVersion = {
   created_by_user_id: number | null;
   created_at: string;
 };
+/** Un niveau dans la file d'analyse, que le relais du poste vient prendre (F0). */
+export type Work = {
+  id: number;
+  project_id: number;
+  sheet_id: number;
+  label: string;
+  level_label: string | null;
+  statut: "en_attente" | "en_cours" | "fini" | "refuse" | "echec";
+  rang: number;
+  message: string | null;
+  pris_a: string | null;
+  fini_a: string | null;
+  created_at: string;
+};
+export type QueueResult = {
+  ajoutes: Work[];
+  /** Niveaux non mis en file, avec la raison en clair : échelle absente, travail déjà fait… */
+  ecartes: { sheet_id: number; label: string; motif: string }[];
+};
 export type Study = {
   id: number;
   project_id: number;
@@ -316,6 +335,11 @@ export const thermiqueApi = {
     request<StudyVersion[]>(token, `/thermique/sheets/${sheetId}/etude/versions`),
   restoreStudyVersion: (token: string, sheetId: number, numero: number) =>
     request<Study>(token, `/thermique/sheets/${sheetId}/etude/versions/${numero}/restaurer`, { method: "POST" }),
+  /** Met en file les niveaux analysables du projet ; le relais du poste videra la file (D93). */
+  analyseProject: (token: string, projectId: number) =>
+    request<QueueResult>(token, `/thermique/projects/${projectId}/analyser`, { method: "POST" }),
+  listWorks: (token: string, projectId: number) =>
+    request<Work[]>(token, `/thermique/projects/${projectId}/travaux`),
   documentFileUrl: (documentId: number) => `${apiBaseUrl}/thermique/documents/${documentId}/file`,
   // Fiche des tuiles d'une planche (rendue par le serveur à la première demande).
   getRaster: (token: string, sheetId: number, rotation: number) =>

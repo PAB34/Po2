@@ -23,6 +23,7 @@ from app.models.thermique import (
 from app.models.user import User
 from app.services import thermique_travaux as travaux
 from app.services.thermique import ThermiqueError
+from app.services.thermique_etudes import MOTIF_IMPORT_INITIAL, MOTIFS_D_IMPORT
 
 
 @pytest.fixture()
@@ -103,7 +104,10 @@ def _etude(db: Session, sheet: ThermiqueSheet, etats: dict, *, retouches: int = 
     db.flush()
     db.add(
         ThermiqueEtudeVersion(
-            etude_id=etude.id, version_number=1, reason="import", local_states_json=etude.local_states_json
+            etude_id=etude.id,
+            version_number=1,
+            reason=MOTIF_IMPORT_INITIAL,
+            local_states_json=etude.local_states_json,
         )
     )
     for rang in range(retouches):
@@ -189,6 +193,30 @@ def test_une_etude_importee_mais_jamais_touchee_se_reanalyse_sans_rien_demander(
     resultat = travaux.mettre_en_file(db_session, projet, user)
     assert [t["sheet_id"] for t in resultat["ajoutes"]] == [sheet.id]
     assert resultat["ecartes"] == []
+
+
+def test_un_remplacement_d_etude_ne_compte_pas_comme_du_travail_humain(db_session):
+    """Défaut trouvé sur le banc réel : le test inventait le motif « import » alors que le code écrit
+    « import_initial » / « import_remplacement ». Une étude fraîchement importée passait donc pour
+    retouchée, et plus aucun niveau ne pouvait être analysé. Le motif vient maintenant de la constante.
+    """
+    assert "import" not in MOTIFS_D_IMPORT  # le libellé court n'a jamais existé
+    user, projet, document = _socle(db_session)
+    sheet = _planche(db_session, projet, document, 0, "R+1")
+    etude = _etude(db_session, sheet, {"p1": {"status": "a_verifier"}})
+    for numero, motif in enumerate(MOTIFS_D_IMPORT[1:], start=2):
+        db_session.add(
+            ThermiqueEtudeVersion(
+                etude_id=etude.id,
+                version_number=numero,
+                reason=motif,
+                local_states_json=etude.local_states_json,
+            )
+        )
+    db_session.commit()
+
+    assert travaux.travail_humain(db_session, sheet.id) is None
+    assert len(travaux.mettre_en_file(db_session, projet, user)["ajoutes"]) == 1
 
 
 @pytest.mark.parametrize(
@@ -295,3 +323,70 @@ def test_la_file_d_un_thermicien_ne_montre_pas_les_projets_d_un_autre(db_session
     db_session.add(autre)
     db_session.commit()
     assert travaux.file_du_relais(db_session, autre) == []
+
+
+# --- Relais local (D96, D98) ---------------------------------------------------
+
+
+def _relais():
+    """Le relais est un script : on l'importe par son chemin, comme le fait le poste."""
+    import importlib.util
+    from pathlib import Path
+
+    chemin = Path(__file__).resolve().parents[1] / "scripts" / "relais_thermique.py"
+    spec = importlib.util.spec_from_file_location("relais_thermique", chemin)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_le_relais_reconnait_une_session_claude_expiree():
+    """D98 : sans cette reconnaissance, tous les niveaux seraient marqués en échec d'affilée."""
+    relais = _relais()
+    vrai = (
+        'Failed to authenticate. API Error: 401 {"type":"error","error":'
+        '{"type":"authentication_error","message":"OAuth access token is invalid."}}'
+    )
+    assert relais.session_claude_expiree(vrai)
+    assert not relais.session_claude_expiree("passe globale terminée, 24 locaux")
+
+
+def test_le_catalogue_du_niveau_precedent_est_repris_s_il_existe(tmp_path):
+    """D95 : le catalogue monte d'un niveau au suivant, dans le même projet."""
+    relais = _relais()
+    assert relais.catalogue_precedent(tmp_path, 1, None) is None
+    assert relais.catalogue_precedent(tmp_path, 1, "RDC") is None
+
+    catalogue = tmp_path / "1" / "RDC" / "enveloppe" / "catalogue.json"
+    catalogue.parent.mkdir(parents=True)
+    catalogue.write_text("{}", encoding="utf-8")
+    assert relais.catalogue_precedent(tmp_path, 1, "RDC") == catalogue
+    # Le catalogue d'un autre projet ne doit jamais servir.
+    assert relais.catalogue_precedent(tmp_path, 2, "RDC") is None
+
+
+def test_le_relais_transmet_les_consignes_de_la_planche_a_la_chaine(tmp_path, monkeypatch):
+    """La rotation, la page et l'échelle viennent de la planche : le relais ne les invente pas."""
+    relais = _relais()
+    appels = {}
+
+    class Resultat:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    def faux_run(commande, **kwargs):
+        appels["commande"] = commande
+        return Resultat()
+
+    monkeypatch.setattr(relais.subprocess, "run", faux_run)
+    consignes = {"niveau": "R+1", "rotation": 90, "page": 3, "echelle": 100.0, "project_id": 1}
+    code, _ = relais.lancer_la_chaine(tmp_path / "plan.pdf", consignes, tmp_path, None)
+
+    assert code == 0
+    commande = appels["commande"]
+    assert "--mode" in commande and commande[commande.index("--mode") + 1] == "cli"
+    assert commande[commande.index("--rotation") + 1] == "90"
+    assert commande[commande.index("--page") + 1] == "3"
+    assert commande[commande.index("--niveau") + 1] == "R+1"
+    assert "--catalogue" not in commande

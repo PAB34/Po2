@@ -2336,3 +2336,83 @@ circle.th-seg--measure {
 .th-plan-menu button:focus-visible {
   background: var(--po2-color-blue-soft);
 }
+
+/* File d'analyse : le travail part sur le poste du thermicien, l'écran doit le dire (D97). */
+.th-queue {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.th-queue code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: var(--po2-color-canvas);
+  font-size: 0.85em;
+}
+
+.th-work-ecartes {
+  margin: 0.4rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.th-work-ecartes span {
+  font-weight: 600;
+}
+
+.th-works {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* Le statut se lit à la couleur du fond autant qu'au mot : les deux thèmes suivent les mêmes jetons. */
+.th-works li {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+}
+
+.th-work-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: baseline;
+}
+
+.th-work-nom {
+  font-weight: 600;
+}
+
+.th-work-statut {
+  font-size: 0.82rem;
+  color: var(--po2-color-muted);
+}
+
+.th-work-message {
+  margin: 0.3rem 0 0;
+  font-size: 0.82rem;
+  color: var(--po2-color-muted);
+  white-space: pre-wrap;
+}
+
+.th-work--attente {
+  background: var(--po2-color-amber-soft);
+}
+
+.th-work--cours {
+  background: var(--po2-color-blue-soft);
+}
+
+.th-work--fini {
+  background: var(--po2-color-mint-soft);
+}
+
+.th-work--echec,
+.th-work--ecarte {
+  background: var(--po2-color-coral-soft);
+}

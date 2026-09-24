@@ -25,6 +25,7 @@ from app.models.thermique import (
 )
 from app.models.user import User
 from app.services.thermique import ThermiqueError
+from app.services.thermique_etudes import MOTIFS_D_IMPORT
 
 # Statuts d'un travail. `en_attente` et `en_cours` sont vivants ; les trois autres sont des fins de course.
 VIVANTS = ("en_attente", "en_cours")
@@ -83,10 +84,15 @@ def travail_humain(db: Session, sheet_id: int) -> str | None:
     valides = sum(1 for etat in etats.values() if isinstance(etat, dict) and etat.get("status") == "valide")
     if valides:
         return f"{valides} local{'aux' if valides > 1 else ''} déjà validé{'s' if valides > 1 else ''}"
+    # Tout motif qui n'est pas celui d'un import est une retouche : le libellé exact vient de
+    # `thermique_etudes`, pour que les deux ne puissent pas diverger en silence.
     retouches = db.scalar(
         select(func.count())
         .select_from(ThermiqueEtudeVersion)
-        .where(ThermiqueEtudeVersion.etude_id == etude.id, ThermiqueEtudeVersion.reason != "import")
+        .where(
+            ThermiqueEtudeVersion.etude_id == etude.id,
+            ThermiqueEtudeVersion.reason.notin_(MOTIFS_D_IMPORT),
+        )
     )
     if retouches:
         return f"{retouches} enregistrement{'s' if retouches > 1 else ''} de retouches"
