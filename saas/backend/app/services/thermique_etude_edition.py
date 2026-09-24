@@ -18,6 +18,7 @@ from shapely.ops import split, unary_union
 
 from app.services import thermique_calage_contours as calage
 from app.services import thermique_coherence as coherence
+from app.services import thermique_elements as elements_releve
 from app.services import thermique_enveloppe_pieces as pieces
 from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
@@ -25,7 +26,18 @@ from app.services import thermique_parcours_enveloppe as enveloppe
 from app.services.thermique import ThermiqueError
 from app.services.thermique_etudes import LOCAL_NATURES, _noms_locaux
 
-OPERATIONS = ("modifier", "couper", "fusionner")
+OPERATIONS = (
+    "modifier",
+    "couper",
+    "fusionner",
+    # Gestes sur les éléments d'enveloppe (F4). Ils passent par le même mécanisme que les contours :
+    # aperçu, recalcul, enregistrement versionné — pas de second chemin d'édition.
+    "element_confirmer",
+    "element_corriger",
+    "element_ecarter",
+    "element_reactiver",
+)
+OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
 SIMPLIFICATION = 0.5
 # Deux locaux à fusionner doivent se toucher ; ce jeu rattrape l'épaisseur d'un trait.
@@ -191,13 +203,36 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
     for operation in operations:
         if not isinstance(operation, dict) or operation.get("type") not in OPERATIONS:
             raise ThermiqueError("Type de modification inconnu.")
-        if operation["type"] == "modifier":
+        if operation["type"] in OPERATIONS_ELEMENT:
+            _element(resultat, operation)
+        elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
             _couper(resultat["analyse"], operation)
         else:
             _fusionner(resultat["analyse"], operation)
     return reconstruire(resultat)
+
+
+def _element(contenu: dict[str, Any], operation: dict[str, Any]) -> None:
+    """Un geste sur un élément relevé (F4). Il écrit dans le relevé brut, jamais dans le dessin (D99)."""
+    ref = operation.get("element")
+    if not isinstance(ref, dict):
+        raise ThermiqueError("L'élément visé n'est pas désigné.")
+    geste = operation["type"]
+    if geste == "element_confirmer":
+        elements_releve.confirmer(contenu, ref)
+    elif geste == "element_corriger":
+        elements_releve.corriger(
+            contenu,
+            ref,
+            operation.get("changes") or {},
+            operation.get("portee", elements_releve.PORTEE_CET_ELEMENT),
+        )
+    elif geste == "element_ecarter":
+        elements_releve.ecarter(contenu, ref, operation.get("motif", ""))
+    else:
+        elements_releve.reactiver(contenu, ref)
 
 
 def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
@@ -208,7 +243,10 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat = copy.deepcopy(contenu)
     analyse = resultat["analyse"]
     manifeste = resultat["enveloppe"]["manifeste"]
-    brut = copy.deepcopy(resultat["enveloppe"]["releve_brut"])
+    # Les éléments écartés par le thermicien restent dans l'étude, avec leur motif, mais sortent de tout
+    # ce qui se mesure (D100). Une seule copie filtrée sert à toute la chaîne, pour que le dessin, les
+    # fiches, les liaisons et la couverture racontent la même chose.
+    brut = elements_releve.releve_actif(resultat["enveloppe"]["releve_brut"])
 
     coupe = pieces.decouper_par_piece(brut, manifeste, analyse)
     releve = enveloppe.reprojeter(coupe, manifeste, analyse)
@@ -252,11 +290,9 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     # Le tracé des éléments revient dans le fichier (D75) : sans lui, rien n'est dessinable sur le plan.
     resultat["enveloppe"]["objets"] = copy.deepcopy(releve.get("objets", []))
     # Les ponts thermiques portent leur position, pour être montrés là où ils sont (D74).
-    resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(
-        resultat["enveloppe"]["releve_brut"], manifeste, analyse
-    )
+    resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(brut, manifeste, analyse)
     resultat["couverture"] = geo.controler_couverture(
-        {local["id"]: local["contour"] for local in locaux}, manifeste, resultat["enveloppe"]["releve_brut"]
+        {local["id"]: local["contour"] for local in locaux}, manifeste, brut
     )
     # La chaîne se relit elle-même : le rapport voyage avec l'étude et s'affiche à l'import (D77).
     resultat["coherence"] = coherence.controler_niveau(resultat)

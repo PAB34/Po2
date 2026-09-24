@@ -382,3 +382,107 @@ def test_le_recalcul_redonne_le_trace_des_elements_les_liaisons_et_le_controle()
     assert resultat["enveloppe"]["objets"], "le tracé reprojeté des éléments doit revenir dans le fichier"
     assert [liaison["type"] for liaison in resultat["enveloppe"]["liaisons"]] == ["angle_sortant"]
     assert len(resultat["coherence"]["controles"]) == 6
+
+
+# --- Gestes sur les éléments d'enveloppe (F4, D99 et D100) ----------------------
+
+
+def _etude_avec_deux_elements() -> dict:
+    """Un mur nord relevé en deux morceaux : de quoi en écarter un et voir le dessin changer."""
+    releve = _releve_mur_nord()
+    releve["elements"][0]["fin_m"] = 50.0
+    releve["elements"].append(
+        {
+            "troncon": "T01",
+            "debut_m": 50.0,
+            "fin_m": 100.0,
+            "type": "menuiserie",
+            "composant": "M1",
+            "nu_exterieur_cm": 0,
+            "nu_interieur_cm": -20,
+            "nu_exterieur_fin_cm": 0,
+            "nu_interieur_fin_cm": -20,
+            # Le relevé réel porte toujours ces champs, même vides : la chaîne les lit sans garde.
+            "couches": [],
+            "menuiserie_type": "fenetre",
+            "cadre_cm": -4,
+            "confiance": 0.5,
+            "a_verifier": True,
+            "indice": "double trait",
+        }
+    )
+    return {
+        "niveau": "R1",
+        "analyse": {
+            "objects": [_piece("piece-001", [[0, 60], [1000, 60], [1000, 500], [0, 500]], "Bureau")],
+            "manifest": {"page_width_px": 1000, "page_height_px": 1000, "crop_box_px": [0, 0, 1000, 1000],
+                         "width_px": 1000, "height_px": 1000},
+        },
+        "enveloppe": {"manifeste": _manifeste_avec_troncon(), "releve_brut": releve},
+        "locaux": [],
+    }
+
+
+def test_une_correction_d_element_survit_au_recalcul():
+    """Le point qui gouverne tout le lot (D99) : le dessin est régénéré, le relevé fait foi."""
+    contenu = _etude_avec_deux_elements()
+    resultat = edition.appliquer(
+        contenu,
+        [
+            {
+                "type": "element_corriger",
+                "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0},
+                "changes": {"nu_interieur_cm": -35.0},
+            }
+        ],
+    )
+    corrige = resultat["enveloppe"]["releve_brut"]["elements"][1]
+    assert corrige["nu_interieur_cm"] == -35.0
+    assert corrige["releve_origine"]["nu_interieur_cm"] == -20
+    assert corrige["a_verifier"] is False
+    # Le tracé a été refait depuis le relevé corrigé, il n'a pas été laissé tel quel.
+    assert resultat["enveloppe"]["objets"]
+
+
+def test_un_element_ecarte_sort_du_dessin_mais_reste_dans_l_etude():
+    contenu = _etude_avec_deux_elements()
+    avant = len(edition.reconstruire(contenu)["enveloppe"]["objets"])
+
+    resultat = edition.appliquer(
+        contenu,
+        [
+            {
+                "type": "element_ecarter",
+                "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0},
+                "motif": "double trait de cotation pris pour une menuiserie",
+            }
+        ],
+    )
+    # Il n'est plus dessiné…
+    assert len(resultat["enveloppe"]["objets"]) < avant
+    # …mais il est toujours là, avec sa raison, donc réactivable (D100).
+    ecarte = resultat["enveloppe"]["releve_brut"]["elements"][1]
+    assert ecarte["exclu"] is True and "cotation" in ecarte["motif_exclusion"]
+
+    revenu = edition.appliquer(
+        resultat,
+        [{"type": "element_reactiver", "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0}}],
+    )
+    assert len(revenu["enveloppe"]["objets"]) == avant
+
+
+def test_confirmer_un_element_ne_change_aucune_mesure():
+    contenu = _etude_avec_deux_elements()
+    avant = edition.reconstruire(contenu)
+    apres = edition.appliquer(
+        contenu,
+        [{"type": "element_confirmer", "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0}}],
+    )
+    assert apres["couverture"] == avant["couverture"]
+    assert apres["enveloppe"]["releve_brut"]["elements"][1]["a_verifier"] is False
+
+
+def test_un_geste_sans_element_designe_est_refuse():
+    contenu = _etude_avec_deux_elements()
+    with pytest.raises(ThermiqueError, match="n'est pas désigné"):
+        edition.appliquer(contenu, [{"type": "element_confirmer"}])

@@ -104,7 +104,24 @@ Deux chemins vers le même panneau : cliquer la forme sur le plan, ou la prendre
 Comme pour les contours (D68), une passe de corrections ne recalcule pas à chaque geste : on enchaîne,
 puis on recalcule. Sur un local à quinze éléments, recalculer quinze fois serait insupportable.
 
-## 4. Questions numérotées — à trancher avant de coder
+### D104 — Ce qui est volontairement remis à plus tard
+
+Réponse Q1 : les recommandations sont retenues **et ce qui en est écarté doit rester écrit**, pour ne pas
+être redécouvert comme un oubli. Sont hors du lot F4, sans être abandonnés :
+
+| Reporté | Pourquoi | Quand le reprendre |
+|---|---|---|
+| `couches` d'un élément | se corrigent déjà par le composant, dans la bibliothèque | si un élément doit un jour diverger de son composant |
+| `menuiserie_type`, `cadre_cm` | n'entrent pas dans le calcul tant que la menuiserie n'est pas rattachée au référentiel | avec E4 (bibliothèque alimentée) |
+| bornes `debut_m` / `fin_m` | geste géométrique délicat : déplacer une borne déplace le voisin | avec l'ajout d'élément (Q2), même famille de gestes |
+| ajout d'un élément non relevé | demande de désigner une position sur un tronçon | second temps de F4, après correction et exclusion |
+
+## 4. Questions numérotées — réponses du 2026-09-24
+
+**Les huit recommandations sont retenues telles quelles.** Q1 s'accompagne de D104, qui consigne ce qui
+est reporté pour que ce ne soit pas perdu. L'énoncé complet est conservé ci-dessous.
+
+### Rappel de l'énoncé initial
 
 **Q1 — Que doit-on pouvoir corriger ?** Le relevé porte, par élément : son **type** (menuiserie, paroi,
 poteau…), son **composant** du catalogue, ses **nus** intérieur et extérieur en cm (début et fin), ses
