@@ -2565,3 +2565,30 @@ circle.th-seg--measure {
   display: grid;
   gap: 0.4rem;
 }
+
+/* L'élément visé doit être impossible à manquer : un halo blanc le détache du plan (F4). */
+.th-metric-element__halo {
+  stroke: #ffffff;
+  stroke-width: 7;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.9;
+}
+
+.th-metric-element.is-selected {
+  stroke-width: 3.5;
+  stroke-dasharray: none;
+}
+
+.th-metric-pont__halo {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-metric-pont.is-selected circle:last-of-type {
+  stroke: var(--po2-color-ink);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}

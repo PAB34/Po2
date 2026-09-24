@@ -16,6 +16,7 @@ import {
   porteursDuComposant,
   refDeForme,
   trouverElement,
+  viserSurLePlan,
 } from "./elements";
 
 const element = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
@@ -241,5 +242,56 @@ describe("les ponts thermiques sont des éléments du relevé", () => {
     ]);
     expect(pontsDuLocal(content, local("Bureau"))).toHaveLength(1);
     expect(pontsDuLocal(content, local("Couloir"))).toHaveLength(0);
+  });
+});
+
+
+describe("viser un élément n'importe où sur le plan", () => {
+  // Coordonnées réelles du R+1 : le local 6.1.1 occupe x 1096..1236, et son mur x 1236..1249.
+  // Le mur est donc EN DEHORS du contour de son local — c'est le nu intérieur qui fait le contour.
+  // Exiger que le local soit déjà ouvert rendait le mur impossible à attraper.
+  const mur = forme({
+    id: "env-mur",
+    points_pdf: [
+      [1245, 1679],
+      [1249, 1679],
+      [1249, 1791],
+      [1245, 1791],
+    ],
+    source_parcours: { troncon: "T01", debut_m: 0.25, fin_m: 4.2, piece: "6.1.1 B.dir + EAPMR" },
+  });
+  const pont: StudyBridge = {
+    type: "angle_sortant",
+    troncon: "T01",
+    abscisse_m: 0.125,
+    longueur_m: 0.25,
+    piece: "6.1.1 B.dir + EAPMR",
+    point_pdf: [1236, 1794],
+  };
+  const angle = element({ troncon: "T01", debut_m: 0, fin_m: 0.25, type: "angle_sortant" });
+  const paroi = element({ troncon: "T01", debut_m: 0.25, fin_m: 4.2 });
+  const locaux = [local("6.1.1 B.dir + EAPMR"), local("Couloir")];
+  const content = etude([angle, paroi], [mur], [pont]);
+
+  it("attrape un mur situé hors du contour de son local, et ouvre ce local", () => {
+    const vise = viserSurLePlan(content, locaux, [1247, 1700], { element: 9, pont: 12 });
+    expect(vise?.ref).toEqual({ troncon: "T01", debut_m: 0.25, fin_m: 4.2 });
+    expect(vise?.room?.nom).toBe("6.1.1 B.dir + EAPMR");
+  });
+
+  it("donne le pont avant le mur qui le porte", () => {
+    const vise = viserSurLePlan(content, locaux, [1237, 1793], { element: 9, pont: 12 });
+    expect(vise?.ref).toEqual({ troncon: "T01", debut_m: 0, fin_m: 0.25 });
+    expect(vise?.room?.nom).toBe("6.1.1 B.dir + EAPMR");
+  });
+
+  it("ne rend rien loin de tout", () => {
+    expect(viserSurLePlan(content, locaux, [500, 500], { element: 9, pont: 12 })).toBeNull();
+  });
+
+  it("rend quand même l'élément quand son local n'est pas dans la liste", () => {
+    const vise = viserSurLePlan(content, [local("Couloir")], [1247, 1700], { element: 9, pont: 12 });
+    expect(vise?.ref.troncon).toBe("T01");
+    expect(vise?.room).toBeNull();
   });
 });

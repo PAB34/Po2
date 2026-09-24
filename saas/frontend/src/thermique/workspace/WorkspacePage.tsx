@@ -17,7 +17,7 @@ import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
-import { elementAt, elementDuPont, formesDuLocal, pontAt, pontsDuLocal } from "./elements";
+import { viserSurLePlan } from "./elements";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
@@ -400,24 +400,17 @@ export function WorkspacePage() {
               onPick={(point, pixelsPerPt) => {
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
                 // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
-                if (shownStudy && selectedRoom) {
-                  // Un pont thermique est un élément du relevé : sa pastille ouvre le même panneau.
-                  // Elle passe en premier, sinon le mur qui la porte l'emporterait toujours.
-                  const pont = pontAt(
-                    pontsDuLocal(shownStudy.content, selectedRoom),
-                    point,
-                    PRISE_PONT_PX / pixelsPerPt,
-                  );
-                  const vise = pont
-                    ? elementDuPont(shownStudy.content, pont)
-                    : elementAt(
-                        formesDuLocal(shownStudy.content, selectedRoom),
-                        point,
-                        PRISE_ELEMENT_PX / pixelsPerPt,
-                      );
+                if (shownStudy) {
+                  // On cherche l'élément dans tout le niveau, et non dans le seul local ouvert : un mur
+                  // est en dehors du contour de son local, donc introuvable autrement. Le pont passe en
+                  // premier, sinon le mur qui le porte l'emporterait toujours.
+                  const vise = viserSurLePlan(shownStudy.content, shownStudy.content.locaux, point, {
+                    element: PRISE_ELEMENT_PX / pixelsPerPt,
+                    pont: PRISE_PONT_PX / pixelsPerPt,
+                  });
                   if (vise) {
-                    elementsState.select(vise);
-                    setParams({ local: selectedRoom.id, panneau: "fiche" });
+                    elementsState.select(vise.ref);
+                    setParams({ local: vise.room?.id ?? selectedLocalId, panneau: "fiche" });
                     return;
                   }
                 }

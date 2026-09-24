@@ -302,6 +302,15 @@ export function StudyRoomPanel({
         </span>
       </div>
 
+      {/* Une cote ne se dessine que si son tracé a voyagé avec la fiche (D80). Sans lui le plan reste
+          muet, et rien ne dit pourquoi : on le dit ici plutôt que de laisser chercher. */}
+      {sheet.cotes.length > 0 && sheet.cotes.every((side) => (side.trace_pdf?.length ?? 0) < 2) && (
+        <p className="th-alert th-alert--warn">
+          Les {sheet.cotes.length} côtés de ce local sont mesurés, mais leur tracé manque : ils ne peuvent pas
+          être dessinés sur le plan. Recalculez le niveau pour les obtenir.
+        </p>
+      )}
+
       <section>
         <h2>Côtés et adjacences</h2>
         <div className="th-study-sides">

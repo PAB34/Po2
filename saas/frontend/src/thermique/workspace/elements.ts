@@ -214,6 +214,32 @@ export function formesDuLocal(content: StudyContent, room: StudyRoom | null): St
   return (content.enveloppe.objets ?? []).filter((shape) => shape.source_parcours?.piece === room.nom);
 }
 
+/**
+ * L'élément visé n'importe où sur le plan, avec le local auquel il appartient.
+ *
+ * Un mur est **en dehors** du contour de son local : le contour est le nu intérieur, la paroi est
+ * au-delà. Exiger que le local soit déjà ouvert pour attraper son mur rendait le geste introuvable —
+ * on clique sur le mur, aucun local n'est sous le curseur, et rien ne se passe. On cherche donc dans
+ * tout le niveau, et l'on ouvre le local de l'élément trouvé.
+ */
+export function viserSurLePlan(
+  content: StudyContent,
+  rooms: StudyRoom[],
+  point: PdfPoint,
+  tolerances: { element: number; pont: number },
+): { ref: StudyElementRef; room: StudyRoom | null } | null {
+  const pont = pontAt(content.enveloppe.liaisons ?? [], point, tolerances.pont);
+  const ref = pont ? elementDuPont(content, pont) : elementAt(content.enveloppe.objets ?? [], point, tolerances.element);
+  if (!ref) {
+    return null;
+  }
+  const nom = pont
+    ? pont.piece
+    : ((content.enveloppe.objets ?? []).find((shape) => memeElement(refDeForme(shape), ref))?.source_parcours?.piece ??
+      null);
+  return { ref, room: rooms.find((room) => room.nom === nom) ?? null };
+}
+
 export function porteursDuComposant(content: StudyContent, composant: string | null): number {
   if (!composant) {
     return 0;

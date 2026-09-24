@@ -167,6 +167,14 @@ function Cote({ cote, contour, toScreen }: { cote: StudySide; contour: [number, 
   );
 }
 
+/** Le pont visé, reconnu sans le relevé : son abscisse tombe dans les bornes de l'élément désigné. */
+function pontVise(bridge: StudyBridge, ref: StudyElementRef | null): boolean {
+  if (!ref || bridge.troncon !== ref.troncon || bridge.abscisse_m == null) {
+    return false;
+  }
+  return Math.abs((ref.debut_m + ref.fin_m) / 2 - bridge.abscisse_m) < 1e-6;
+}
+
 export function StudyMetrics({
   rooms,
   selected,
@@ -196,6 +204,9 @@ export function StudyMetrics({
     <g className="th-metrics">
       {shapes
         .filter((shape) => (shape.points_pdf?.length ?? 0) >= 2 && visible(shape.source_parcours?.piece, show.elements))
+        // La forme visée passe en dernier : dessinée avant les autres couches du mur, elle disparaissait
+        // dessous. C'est ce qui faisait dire « on ne voit pas l'élément clairement sur le plan ».
+        .sort((a, b) => Number(memeElement(refDeForme(a), selectedElement)) - Number(memeElement(refDeForme(b), selectedElement)))
         .map((shape) => {
           const points = (shape.points_pdf ?? []).map(toScreen).map(([x, y]) => `${x},${y}`).join(" ");
           const couleur = COULEURS_ELEMENT[shape.category] ?? COULEURS_ELEMENT.indetermine;
@@ -206,8 +217,14 @@ export function StudyMetrics({
           const commun = { points, stroke: couleur, className: classes };
           return (
             <g key={shape.id}>
+              {vise &&
+                (shape.geometry_type === "polygon" ? (
+                  <polygon points={points} className="th-metric-element__halo" />
+                ) : (
+                  <polyline points={points} className="th-metric-element__halo" fill="none" />
+                ))}
               {shape.geometry_type === "polygon" ? (
-                <polygon {...commun} fill={couleur} fillOpacity={0.14} />
+                <polygon {...commun} fill={couleur} fillOpacity={vise ? 0.45 : 0.14} />
               ) : (
                 <polyline {...commun} fill="none" />
               )}
@@ -253,7 +270,16 @@ export function StudyMetrics({
           const libelle = LIBELLES_PONT[bridge.type] ?? bridge.type;
           const orpheline = bridge.piece == null;
           return (
-            <g key={`pont-${bridge.troncon}-${rang}`} className={`th-metric-pont${orpheline ? " is-orpheline" : ""}`}>
+            <g
+              key={`pont-${bridge.troncon}-${rang}`}
+              className={`th-metric-pont${orpheline ? " is-orpheline" : ""}${
+                pontVise(bridge, selectedElement) ? " is-selected" : ""
+              }`}
+            >
+              {/* Un pont visé n'avait aucun état visible : on ne savait pas ce qu'on venait de cliquer. */}
+              {pontVise(bridge, selectedElement) && (
+                <circle cx={x} cy={y} r={11} className="th-metric-pont__halo" />
+              )}
               <circle cx={x} cy={y} r={5} fill={orpheline ? "#9ca3af" : COULEURS_PONT[bridge.type] ?? COULEURS_PONT.about_refend} />
               {/* Pas de longueur ici : `longueur_m` est l'emprise relevée de l'angle sur le tronçon,
                   pas un linéaire de pont thermique. L'afficher induirait en erreur. */}
