@@ -19,11 +19,35 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-24** (recette du menu contextuel sur le vrai R+1, correctif D91).
+> Mise à jour : **2026-09-24** (F0 et F4 livrés en production ; il ne reste que F2).
 
-- **▶️ REPRENDRE ICI — attendre l'accord explicite avant tout push**, puis livrer les commits locaux F3 et
-  nord/édition (`50005292`, `a19dba04`, migration **0085**). Ensuite, reprendre le lot **F0** (file d'attente
-  et relais local, D76), puis F2/F4. La branche est volontairement locale ; aucun push n'a été fait par Codex.
+- **▶️ REPRENDRE ICI — lot F2, le parcours en cinq étapes par niveau.** C'est le dernier lot de la série F.
+  Décisions déjà écrites : `thermique/parcours-par-niveau-E3bis-decisions.md`. Son **étape 5 est F4**, qui
+  existe désormais : il s'agit de l'héberger dans la structure en étapes, pas de la réécrire. Deux gestes
+  restent volontairement reportés (D104) : **ajouter** un élément ou un pont absent, et déplacer les bornes
+  d'un élément sur son tronçon. **Rappel permanent : rien n'est poussé sans accord explicite.**
+- **✅ F4 EN PRODUCTION — les éléments d'enveloppe se corrigent** (`e8e4d764`, `44e5932d`, `283995f8`, sans
+  migration). Sur le R+1, **92 des 227 éléments** arrivent marqués « à vérifier » : on peut maintenant les
+  confirmer d'un clic, corriger leur type, leur composant et leurs nus, ou les écarter avec un motif. Une
+  correction s'écrit dans le **relevé brut**, jamais dans le dessin (**D99**) : les 289 formes sont
+  régénérées à chaque recalcul. Écarter ne supprime pas (**D100**), la lecture d'origine de l'agent est
+  conservée à côté de la correction (**Q7**), et corriger un composant partagé annonce le nombre d'éléments
+  touchés avant de proposer la portée (**D103**, `L1` en porte 34). Un **pont thermique est un élément du
+  relevé** : les 77 liaisons correspondent aux 77 angles et abouts, leur pastille ouvre le même panneau.
+  Décisions : `thermique/elements-F4-decisions.md`.
+- **✅ F0 EN PRODUCTION — « Analyser avec Claude Code »** (`ca7abb47`, `b4762ffb`, `29d8f77f`, migration
+  **0086**). File `thermique_travaux` côté serveur, relais `scripts/relais_thermique.py` côté poste, et une
+  règle qui **refuse d'écraser un niveau déjà travaillé**, en disant pourquoi. Les niveaux partent du plus
+  bas au plus haut pour que le catalogue monte (**D95**). Une session Claude expirée remet le niveau à faire
+  au lieu de l'échouer (**D98**). ⚠️ **Le relais n'a jamais tourné de bout en bout** : ses fonctions sont
+  testées, l'enchaînement complet reste à éprouver sur un vrai plan.
+  Décisions : `thermique/relais-local-F0-decisions.md`.
+- **⚠️ CORRECTIF D'USAGE — le local ouvert montre toutes ses cotes** (`283995f8`). D83 le disait déjà, mais
+  la case « Côtés intérieurs » filtrait aussi le local sélectionné : un local décollé de la façade
+  n'affichait plus une seule cote, sans rien dire. La fiche annonce désormais le linéaire déperditif et
+  alerte quand il est nul. Mesuré sur le R+1 : la déperditivité tient jusqu'à **0,84 m** de recul.
+- **📌 À FAIRE PAR LE THERMICIEN, hors code** : l'étude du R+1 porte un recouvrement de **10,85 m²**
+  (*escalier atrium* / *4.2 Pôle multimédia*) et **42,36 m²** d'intérieur sans local.
 - **✅ RECETTE RÉELLE DU MENU CONTEXTUEL — 2026-09-24.** Les trois gestes du clic droit ont enfin été
   exercés à la souris sur le R+1 (local 6.1.6, contour de 14 sommets) : ajout au pixel visé, suppression
   d'une poignée, redressement d'un côté (« 2 points de moins »), menu hors édition, fermeture au clic
