@@ -173,3 +173,35 @@ class ThermiqueEtudeVersion(Base):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class ThermiqueTravail(Base):
+    """Un niveau à analyser, en attente du relais qui tourne sur le poste du thermicien (D92).
+
+    Le serveur ne peut pas lancer les agents : il tient la file, le relais la vide. Une seule ligne
+    vivante par planche, pour qu'un double clic sur « Analyser » ne mette pas le même niveau deux fois.
+    """
+
+    __tablename__ = "thermique_travaux"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sheet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_sheets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # en_attente → en_cours → fini ; refuse (garde-fou D94) et echec sont des fins de course.
+    statut: Mapped[str] = mapped_column(String(20), nullable=False, default="en_attente")
+    # Ordre de passage : le catalogue monte du niveau le plus bas au plus haut (D95).
+    rang: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    demande_par_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    pris_a: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fini_a: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

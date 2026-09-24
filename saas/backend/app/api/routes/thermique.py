@@ -17,7 +17,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_authenticated_user
 from app.core.db import get_db
 from app.core.roles import is_admin_role, is_external_role
-from app.models.thermique import ThermiqueDocument, ThermiqueEtude, ThermiqueProject, ThermiqueSheet
+from app.models.thermique import (
+    ThermiqueDocument,
+    ThermiqueEtude,
+    ThermiqueProject,
+    ThermiqueSheet,
+    ThermiqueTravail,
+)
 from app.models.user import User
 from app.schemas.thermique import (
     CalibrationRequest,
@@ -33,6 +39,7 @@ from app.schemas.thermique import (
     EtudeVersionRead,
     ExternalAccountCreate,
     ExternalAccountRead,
+    MiseEnFileResult,
     NordRequest,
     ProjectCreate,
     ProjectDetail,
@@ -41,6 +48,9 @@ from app.schemas.thermique import (
     RasterManifest,
     SheetRead,
     SheetUpdate,
+    TravailConsignes,
+    TravailIncident,
+    TravailRead,
     UploadResult,
 )
 from app.services.thermique import (
@@ -75,6 +85,7 @@ from app.services.thermique_composants import (
 )
 from app.services import thermique_etude_edition as edition
 from app.services import thermique_nord
+from app.services import thermique_travaux as travaux
 from app.services.thermique_etudes import (
     MAX_ETUDE_BYTES,
     EtudeConflict,
@@ -765,3 +776,138 @@ def create_external_account_route(
         return create_external_account(db, payload.email, payload.nom, payload.prenom, payload.password)
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+# --- File d'analyse et relais local (F0, D92 à D98) ---------------------------
+
+
+def _travail_or_404(db: Session, user: User, travail_id: int) -> ThermiqueTravail:
+    travail = db.get(ThermiqueTravail, travail_id)
+    if travail is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Travail introuvable.")
+    _project_or_404(db, user, travail.project_id)
+    return travail
+
+
+def _lire_etude_envoyee(fichier: UploadFile) -> dict:
+    """Lecture et contrôle du fichier d'étude, communs à l'import manuel et au rendu du relais."""
+    data = fichier.file.read(MAX_ETUDE_BYTES + 1)
+    if len(data) > MAX_ETUDE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Fichier d'étude trop volumineux (10 Mio maximum).",
+        )
+    try:
+        payload = json.loads(data.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Le fichier d'étude n'est pas un JSON valide."
+        ) from exc
+    source = payload.get("source", {}) if isinstance(payload, dict) else {}
+    rotation = source.get("viewer_rotation_deg") if isinstance(source, dict) else None
+    if rotation not in ALLOWED_ROTATIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="La rotation de référence de l'étude est invalide."
+        )
+    return payload
+
+
+@router.post("/projects/{project_id}/analyser", response_model=MiseEnFileResult)
+def mettre_le_projet_en_file(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """« Analyser avec Claude Code » : met en file les niveaux éligibles, et dit ce qu'il écarte (D93)."""
+    project = _project_or_404(db, user, project_id)
+    return travaux.mettre_en_file(db, project, user)
+
+
+@router.get("/projects/{project_id}/travaux", response_model=list[TravailRead])
+def lire_travaux_du_projet(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> list[dict]:
+    project = _project_or_404(db, user, project_id)
+    return [travaux.serialize_travail(db, t) for t in travaux.travaux_du_projet(db, project.id)]
+
+
+@router.get("/travaux", response_model=list[TravailRead])
+def lire_file_du_relais(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> list[dict]:
+    """Ce que le relais doit faire, dans l'ordre des niveaux : le catalogue monte du bas vers le haut."""
+    return [travaux.serialize_travail(db, t) for t in travaux.file_du_relais(db, user)]
+
+
+@router.post("/travaux/{travail_id}/prendre", response_model=TravailConsignes)
+def prendre_un_travail(
+    travail_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    travail = _travail_or_404(db, user, travail_id)
+    try:
+        travaux.prendre(db, travail)
+        return travaux.consignes_du_travail(db, travail)
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.post("/travaux/{travail_id}/rendre", response_model=EtudeRead)
+def rendre_un_travail(
+    travail_id: int,
+    fichier: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Import de l'étude produite par la chaîne **et** clôture du travail, en une seule fois."""
+    travail = _travail_or_404(db, user, travail_id)
+    if travail.statut != "en_cours":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ce travail n'est pas en cours (état : {travail.statut}).",
+        )
+    sheet = _sheet_or_404(db, user, travail.sheet_id)
+    payload = _lire_etude_envoyee(fichier)
+    rotation = payload["source"]["viewer_rotation_deg"]
+    try:
+        manifest = ensure_raster(
+            document_path(sheet.document),
+            sheet.page_index,
+            rotation,
+            raster_dir(sheet.project_id, sheet.id, rotation),
+        )
+        etude = importer_etude(db, sheet, user, payload, manifest, remplacer=True)
+    except EtudeConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+    travaux.terminer(db, travail)
+    return serialize_etude(db, etude)
+
+
+@router.post("/travaux/{travail_id}/echec", response_model=TravailRead)
+def declarer_un_echec(
+    travail_id: int,
+    incident: TravailIncident,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """La chaîne a échoué sur ce niveau. Pas de réessai automatique : le message dit quoi corriger."""
+    travail = _travail_or_404(db, user, travail_id)
+    return travaux.serialize_travail(db, travaux.echouer(db, travail, incident.message))
+
+
+@router.post("/travaux/{travail_id}/reporter", response_model=TravailRead)
+def reporter_un_travail(
+    travail_id: int,
+    incident: TravailIncident,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """La chaîne attend une intervention, ou la session Claude a expiré (D98) : le niveau reste à faire."""
+    travail = _travail_or_404(db, user, travail_id)
+    return travaux.serialize_travail(db, travaux.remettre_en_attente(db, travail, incident.message))

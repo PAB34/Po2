@@ -131,7 +131,27 @@ Un bouton « Analyser avec Claude Code » sur le projet, et sous lui la file : u
 statut, et pour les écartés la raison. Tant que le relais n'a pas tourné, l'écran dit clairement
 **« en attente du relais sur votre poste »** — sinon le thermicien croira que l'outil est en panne.
 
-## 4. Questions numérotées — à trancher avant de coder
+### D98 — Une session Claude expirée n'est pas un échec d'analyse
+
+Constaté le 2026-09-24 en vérifiant Q1 : la session du poste avait expiré, et `claude -p` répondait
+`401 OAuth access token is invalid`. Si le relais traitait cette réponse comme une erreur de chaîne, il
+marquerait **tous** les niveaux en échec en quelques secondes. Il doit donc reconnaître ce cas, remettre
+le travail en `en_attente`, s'arrêter et afficher « votre session Claude a expiré : `claude auth login` ».
+La même prudence vaut pour le jeton du site (Q2).
+
+## 4. Questions numérotées — réponses du 2026-09-24
+
+**Q1 — Le relais tourne-t-il bien sur ce poste ? → OUI, vérifié.**
+`claude` version 2.1.128 est installé (`C:\Users\pa.borja\.local\bin\claude.exe`). Après reconnexion :
+`claude -p "…"` répond, et `claude -p "…" --agent thermicien-plan` répond depuis le dépôt. **Les deux
+formes marchent, dont celle qu'utilise `run_etude_niveau.py --mode cli`.** L'hypothèse qui porte le lot
+est confirmée. Au passage : la session expire, d'où D98.
+
+**Q2 — Connexion du relais. → (a)**, le relais redemande les identifiants dans son terminal à
+l'expiration. C'est l'option qui **ne demande aucun ajout côté serveur** : si le besoin d'un jeton
+d'application révocable apparaît quand le relais tournera en veille, rien ne sera à défaire.
+
+### Rappel de l'énoncé initial
 
 **Q1 — Le relais tourne-t-il bien sur ce poste ?** `--mode cli` suppose que la commande `claude` est
 installée et connectée sur ta machine. Peux-tu confirmer que `claude` répond dans un terminal ? Sinon le

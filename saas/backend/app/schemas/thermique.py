@@ -241,3 +241,47 @@ class EtudeVersionRead(BaseModel):
     reason: str
     created_by_user_id: int | None
     created_at: datetime
+
+
+class TravailRead(BaseModel):
+    """Un niveau dans la file d'analyse (D92)."""
+
+    id: int
+    project_id: int
+    sheet_id: int
+    label: str
+    level_label: str | None
+    statut: str
+    rang: int
+    message: str | None
+    pris_a: datetime | None
+    fini_a: datetime | None
+    created_at: datetime
+
+
+class TravailEcarte(BaseModel):
+    sheet_id: int
+    label: str
+    motif: str
+
+
+class MiseEnFileResult(BaseModel):
+    ajoutes: list[TravailRead]
+    ecartes: list[TravailEcarte]
+
+
+class TravailConsignes(BaseModel):
+    """Ce que le relais doit passer à ``run_etude_niveau.py`` pour ce niveau."""
+
+    travail_id: int
+    sheet_id: int
+    project_id: int
+    document_id: int
+    niveau: str
+    page: int
+    rotation: int
+    echelle: float | None
+
+
+class TravailIncident(BaseModel):
+    message: str
