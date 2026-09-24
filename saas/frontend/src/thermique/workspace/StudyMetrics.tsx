@@ -1,6 +1,7 @@
-import type { PdfPoint, StudyBridge, StudyEnvelopeShape, StudyRoom, StudySide } from "../api";
+import type { PdfPoint, StudyBridge, StudyElementRef, StudyEnvelopeShape, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { pointInPolygon } from "./edition";
+import { memeElement, refDeForme } from "./elements";
 
 /** Ce que l'on montre au-delà du local sélectionné (D83). Le local sélectionné, lui, montre tout. */
 export type MetricsShow = {
@@ -173,6 +174,7 @@ export function StudyMetrics({
   bridges,
   show,
   toScreen,
+  selectedElement = null,
 }: {
   rooms: StudyRoom[];
   selected: StudyRoom | null;
@@ -180,6 +182,8 @@ export function StudyMetrics({
   bridges: StudyBridge[];
   show: MetricsShow;
   toScreen: ToScreen;
+  /** Élément désigné par le thermicien : il ressort du lot (F4). */
+  selectedElement?: StudyElementRef | null;
 }) {
   // Le local sélectionné montre tout ; les cases étendent chaque famille au reste du niveau (D83).
   const cotesDe = show.metres ? rooms : selected ? [selected] : [];
@@ -195,7 +199,11 @@ export function StudyMetrics({
         .map((shape) => {
           const points = (shape.points_pdf ?? []).map(toScreen).map(([x, y]) => `${x},${y}`).join(" ");
           const couleur = COULEURS_ELEMENT[shape.category] ?? COULEURS_ELEMENT.indetermine;
-          const commun = { points, stroke: couleur, className: "th-metric-element" };
+          const vise = memeElement(refDeForme(shape), selectedElement);
+          const classes = ["th-metric-element", vise ? "is-selected" : "", shape.review_required ? "is-doute" : ""]
+            .filter(Boolean)
+            .join(" ");
+          const commun = { points, stroke: couleur, className: classes };
           return (
             <g key={shape.id}>
               {shape.geometry_type === "polygon" ? (

@@ -202,10 +202,26 @@ class EtudeRead(BaseModel):
 
 
 
-class EtudeOperation(BaseModel):
-    """Un geste du thermicien sur un local (E3, D61)."""
+class ElementReference(BaseModel):
+    """Un élément relevé, désigné par sa position sur l'enveloppe (F4)."""
 
-    type: Literal["modifier", "couper", "fusionner"]
+    troncon: str
+    debut_m: float
+    fin_m: float
+
+
+class EtudeOperation(BaseModel):
+    """Un geste du thermicien sur un local (E3, D61) ou sur un élément d'enveloppe (F4, D99)."""
+
+    type: Literal[
+        "modifier",
+        "couper",
+        "fusionner",
+        "element_confirmer",
+        "element_corriger",
+        "element_ecarter",
+        "element_reactiver",
+    ]
     id: str | None = None
     ids: list[str] | None = None
     contour: list[list[float]] | None = None
@@ -215,6 +231,11 @@ class EtudeOperation(BaseModel):
     nature: Literal["chauffe", "circulation", "non_chauffe"] | None = None
     nom: str | None = None
     noms: list[str] | None = None
+    # Gestes sur un élément d'enveloppe.
+    element: ElementReference | None = None
+    changes: dict[str, Any] | None = None
+    portee: Literal["cet_element", "partout"] | None = None
+    motif: str | None = None
 
 
 class EtudeRemodelage(BaseModel):

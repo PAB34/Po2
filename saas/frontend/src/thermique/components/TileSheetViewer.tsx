@@ -33,8 +33,9 @@ type Props = {
   segments?: ViewerSegment[];
   onAddPoint: (point: PdfPoint, event: PickEvent) => void;
   // Clic simple en mode « pan » : le plan n'a pas bougé, le geste désigne donc ce point. Sert à choisir
-  // un local sans empêcher le glisser de déplacer le plan.
-  onPick?: (point: PdfPoint, event: PickEvent) => void;
+  // un local ou un élément d'enveloppe sans empêcher le glisser de déplacer le plan. `pixelsPerPt` donne
+  // la tolérance à l'écran, pour viser un trait fin au même confort quel que soit le zoom.
+  onPick?: (point: PdfPoint, pixelsPerPt: number, event: PickEvent) => void;
   // Survol : point sous le curseur et pixels écran par point PDF (tolérance d'aimantation).
   onHover?: (point: PdfPoint | null, pixelsPerPt: number, event: PickEvent) => void;
   // Clic enfoncé sur un objet : si la fonction renvoie true, le glisser déplace l'objet et non le plan.
@@ -242,7 +243,7 @@ export function TileSheetViewer({
     }
     // Le plan n'a pas bougé : c'est un clic. En mode « pan » il désigne, ailleurs il pose un point.
     if (tool === "pan") {
-      onPick?.(point, modifiers(event));
+      onPick?.(point, pixelsPerPt, modifiers(event));
     } else {
       onAddPoint(point, modifiers(event));
     }

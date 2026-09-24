@@ -101,7 +101,32 @@ export type StudyEnvelopeShape = {
   confidence?: number;
   review_required?: boolean;
   points_pdf?: PdfPoint[];
-  source_parcours?: { troncon?: string; piece?: string | null; composant?: string | null };
+  source_parcours?: { troncon?: string; debut_m?: number; fin_m?: number; piece?: string | null; composant?: string | null };
+};
+/**
+ * Un élément tel qu'il a été relevé sur l'enveloppe. C'est **la** donnée qui fait foi : les formes
+ * dessinées en sont régénérées à chaque recalcul, donc toute correction s'écrit ici (D99).
+ */
+export type StudyReleveElement = {
+  troncon: string;
+  debut_m: number;
+  fin_m: number;
+  type: string;
+  composant: string | null;
+  nu_exterieur_cm: number;
+  nu_interieur_cm: number;
+  nu_exterieur_fin_cm?: number;
+  nu_interieur_fin_cm?: number;
+  confiance?: number;
+  /** Ce que l'agent a cru voir : la phrase qui justifie sa lecture. */
+  indice?: string;
+  a_verifier?: boolean;
+  confirme?: boolean;
+  corrige?: boolean;
+  exclu?: boolean;
+  motif_exclusion?: string;
+  /** Valeurs lues par l'agent, gardées à côté de la correction humaine (Q7). */
+  releve_origine?: Record<string, unknown>;
 };
 /** Un pont thermique relevé, avec sa position sur la feuille. */
 export type StudyBridge = {
@@ -151,7 +176,7 @@ export type StudyContent = {
   locaux: StudyRoom[];
   enveloppe: {
     catalogue: unknown[];
-    releve_brut: { elements: unknown[]; catalogue: unknown[]; observations: string[] };
+    releve_brut: { elements: StudyReleveElement[]; catalogue: unknown[]; observations: string[] };
     /** Tracé reprojeté des éléments relevés, pour les dessiner sur le plan (D75). */
     objets?: StudyEnvelopeShape[];
     /** Liaisons du relevé avec leur position sur la feuille : les ponts thermiques (D74). */
@@ -189,10 +214,26 @@ export type StudyCoverage = {
   zones_non_affectees: PdfPoint[][];
   zones_non_affectees_pdf?: PdfPoint[][];
 };
+/** Un élément relevé, désigné par sa position sur l'enveloppe : la clé que porte aussi son tracé (F4). */
+export type StudyElementRef = { troncon: string; debut_m: number; fin_m: number };
+/** Ce que F4 laisse corriger : les trois familles qui changent le calcul (Q1). */
+export type StudyElementChanges = Partial<{
+  type: string;
+  composant: string;
+  nu_exterieur_cm: number;
+  nu_interieur_cm: number;
+  nu_exterieur_fin_cm: number;
+  nu_interieur_fin_cm: number;
+}>;
+export type StudyElementScope = "cet_element" | "partout";
 export type StudyOperation =
   | { type: "modifier"; id: string; contour_pdf?: PdfPoint[]; nature?: StudyLocalNature; nom?: string }
   | { type: "couper"; id: string; segment_pdf: PdfPoint[]; noms?: string[] }
-  | { type: "fusionner"; ids: string[]; nom?: string };
+  | { type: "fusionner"; ids: string[]; nom?: string }
+  | { type: "element_confirmer"; element: StudyElementRef }
+  | { type: "element_corriger"; element: StudyElementRef; changes: StudyElementChanges; portee?: StudyElementScope }
+  | { type: "element_ecarter"; element: StudyElementRef; motif: string }
+  | { type: "element_reactiver"; element: StudyElementRef };
 export type StudyPreview = {
   content: StudyContent;
   couverture: StudyCoverage;

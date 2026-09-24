@@ -16,7 +16,10 @@ import { NorthOverlay } from "./NorthOverlay";
 import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { ElementPanel } from "./ElementPanel";
+import { elementAt, formesDuLocal } from "./elements";
 import { useStudyEdition } from "./useStudyEdition";
+import { useStudyElements } from "./useStudyElements";
 import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
@@ -62,6 +65,8 @@ function removeReference(projectId: number) {
 
 // Affichage des métrés : mémorisé par planche, pour ne pas le reposer à chaque local (Q6).
 const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
+// Rayon de saisie d'un élément d'enveloppe, en pixels d'écran : un trait fin doit rester attrapable.
+const PRISE_ELEMENT_PX = 6;
 
 function readMetrics(sheetId: number | null): MetricsShow {
   if (sheetId == null) {
@@ -214,10 +219,13 @@ export function WorkspacePage() {
   const study = studyQuery.data;
   const selectedLocalId = searchParams.get("local");
   const selectRoom = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
+  // Les corrections d'éléments s'appliquent d'abord : l'édition des contours travaille ensuite sur
+  // l'étude qu'elles montrent, pour que les deux aperçus ne se contredisent jamais.
+  const elementsState = useStudyElements({ token: token ?? null, sheetId, study: study ?? undefined });
   const editionState = useStudyEdition({
     token: token ?? null,
     sheetId,
-    study: study ?? undefined,
+    study: elementsState.shown,
     selectedRoom: study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null,
     onSelectRoom: selectRoom,
   });
@@ -387,12 +395,29 @@ export function WorkspacePage() {
                 if (editionState.handlers.onAddPoint(point)) return;
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
-              onPick={(point) => {
-                // Un clic simple sur le plan ouvre le local visé ; un clic dans le vide le referme.
+              onPick={(point, pixelsPerPt) => {
+                // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
+                // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
+                if (shownStudy && selectedRoom) {
+                  const vise = elementAt(
+                    formesDuLocal(shownStudy.content, selectedRoom),
+                    point,
+                    PRISE_ELEMENT_PX / pixelsPerPt,
+                  );
+                  if (vise) {
+                    elementsState.select(vise);
+                    setParams({ local: selectedRoom.id, panneau: "fiche" });
+                    return;
+                  }
+                }
                 const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
                 if (room) {
+                  if (room.id !== selectedRoom?.id) {
+                    elementsState.select(null);
+                  }
                   selectRoom(room.id);
                 } else if (selectedLocalId) {
+                  elementsState.select(null);
                   setParams({ local: null, panneau: panel === "fiche" ? "planche" : panel });
                 }
               }}
@@ -466,6 +491,7 @@ export function WorkspacePage() {
                             bridges={shownStudy.content.enveloppe.liaisons ?? []}
                             show={metrics}
                             toScreen={toScreen}
+                            selectedElement={elementsState.selected}
                           />
                       )}
                     </>
@@ -508,11 +534,46 @@ export function WorkspacePage() {
           {panel === "bibliotheque" && <LibraryPanel projectId={project.id} />}
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
           {panel === "fiche" && (
-            <StudyRoomPanel
-              room={selectedRoom}
-              state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
-              edition={editionState.edition}
-            />
+            <>
+              <StudyRoomPanel
+                room={selectedRoom}
+                state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
+                edition={editionState.edition}
+              />
+              {/* L'étape 5 : les éléments du local, sous sa fiche et jamais en carte flottante (Q8). */}
+              {shownStudy && !editionState.draft && (
+                <ElementPanel
+                  content={shownStudy.content}
+                  room={selectedRoom}
+                  selected={elementsState.selected}
+                  onSelect={elementsState.select}
+                  busy={elementsState.busy}
+                  message={elementsState.message}
+                  onOperation={elementsState.apply}
+                />
+              )}
+              {elementsState.pending > 0 && (
+                <div className="th-element-enregistrer">
+                  <p className="th-alert th-alert--warn">
+                    {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} en attente
+                    d'enregistrement.
+                  </p>
+                  <div className="th-inline">
+                    <button
+                      type="button"
+                      className="po2-button po2-button--primary"
+                      disabled={elementsState.busy}
+                      onClick={elementsState.save}
+                    >
+                      Enregistrer les corrections
+                    </button>
+                    <button type="button" className="th-link" disabled={elementsState.busy} onClick={elementsState.cancel}>
+                      Tout annuler
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </aside>
       </div>
