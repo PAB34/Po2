@@ -16,6 +16,7 @@ import {
   ecartsAvecLAgent,
   elementsDuLocal,
   epaisseurCm,
+  estPont,
   longueurM,
   memeElement,
   porteursDuComposant,
@@ -214,6 +215,9 @@ export function ElementPanel({
                     {item.composant ? ` · ${item.composant}` : ""}
                   </span>
                   <span className="th-element-mesure">
+                    {/* Pour une liaison, `longueur_m` est l'emprise de l'angle sur le tronçon, pas un
+                        linéaire de pont thermique : le mot le dit, pour ne pas induire en erreur. */}
+                    {estPont(item) ? "emprise " : ""}
                     {longueurM(item).toLocaleString("fr-FR")} m · {epaisseurCm(item)} cm
                   </span>
                   <Etat element={item} />

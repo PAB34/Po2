@@ -290,6 +290,13 @@ export function StudyRoomPanel({
       <div>
         <h2 className="th-panel__title">{room.nom}</h2>
         <p className="th-muted">{NATURE_LABELS[room.nature]} · {squareMeters(sheet.surface_m2)} · périmètre {meters(sheet.perimetre_m)}</p>
+        {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,
+            car un local décollé de la façade cesse de déperdre et ses cotes changent de sens. */}
+        <p className={sheet.deperditif_m ? "th-muted" : "th-alert th-alert--warn"}>
+          {sheet.deperditif_m
+            ? `Donne sur l'extérieur : ${meters(sheet.deperditif_m)}`
+            : "Aucun côté ne donne sur l'extérieur : ce local ne déperd pas. Vérifiez son contour s'il longe une façade."}
+        </p>
         <span className={`th-badge th-study-badge--${state?.status ?? "a_verifier"}`}>
           {(state?.status ?? "a_verifier").replace(/_/g, " ")}
         </span>

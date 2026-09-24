@@ -17,7 +17,7 @@ import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
-import { elementAt, formesDuLocal } from "./elements";
+import { elementAt, elementDuPont, formesDuLocal, pontAt, pontsDuLocal } from "./elements";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
@@ -67,6 +67,8 @@ function removeReference(projectId: number) {
 const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
 // Rayon de saisie d'un élément d'enveloppe, en pixels d'écran : un trait fin doit rester attrapable.
 const PRISE_ELEMENT_PX = 6;
+// La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
+const PRISE_PONT_PX = 8;
 
 function readMetrics(sheetId: number | null): MetricsShow {
   if (sheetId == null) {
@@ -399,11 +401,20 @@ export function WorkspacePage() {
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
                 // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
                 if (shownStudy && selectedRoom) {
-                  const vise = elementAt(
-                    formesDuLocal(shownStudy.content, selectedRoom),
+                  // Un pont thermique est un élément du relevé : sa pastille ouvre le même panneau.
+                  // Elle passe en premier, sinon le mur qui la porte l'emporterait toujours.
+                  const pont = pontAt(
+                    pontsDuLocal(shownStudy.content, selectedRoom),
                     point,
-                    PRISE_ELEMENT_PX / pixelsPerPt,
+                    PRISE_PONT_PX / pixelsPerPt,
                   );
+                  const vise = pont
+                    ? elementDuPont(shownStudy.content, pont)
+                    : elementAt(
+                        formesDuLocal(shownStudy.content, selectedRoom),
+                        point,
+                        PRISE_ELEMENT_PX / pixelsPerPt,
+                      );
                   if (vise) {
                     elementsState.select(vise);
                     setParams({ local: selectedRoom.id, panneau: "fiche" });

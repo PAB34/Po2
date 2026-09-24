@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { StudyContent, StudyEnvelopeShape, StudyReleveElement, StudyRoom } from "../api";
+import type { StudyBridge, StudyContent, StudyEnvelopeShape, StudyReleveElement, StudyRoom } from "../api";
 import {
   compterElements,
   ecartsAvecLAgent,
   elementAt,
+  elementDuPont,
   elementsDuLocal,
   epaisseurCm,
   formesDuLocal,
   longueurM,
   memeElement,
+  pontAt,
+  pontsDuLocal,
   porteursDuComposant,
   refDeForme,
   trouverElement,
@@ -44,9 +47,13 @@ const forme = (reste: Partial<StudyEnvelopeShape> = {}): StudyEnvelopeShape => (
   ...reste,
 });
 
-const etude = (elements: StudyReleveElement[], objets: StudyEnvelopeShape[] = []): StudyContent =>
+const etude = (
+  elements: StudyReleveElement[],
+  objets: StudyEnvelopeShape[] = [],
+  liaisons: StudyBridge[] = [],
+): StudyContent =>
   ({
-    enveloppe: { releve_brut: { elements, catalogue: [], observations: [] }, objets },
+    enveloppe: { releve_brut: { elements, catalogue: [], observations: [] }, objets, liaisons },
   }) as unknown as StudyContent;
 
 const local = (nom: string): StudyRoom => ({ nom }) as StudyRoom;
@@ -174,5 +181,65 @@ describe("comparer la lecture de l'agent et la correction", () => {
 
   it("ne montre rien tant que l'agent n'a pas été corrigé", () => {
     expect(ecartsAvecLAgent(element())).toEqual([]);
+  });
+});
+
+
+describe("les ponts thermiques sont des éléments du relevé", () => {
+  // Sur le vrai R+1, les 77 liaisons correspondent une à une aux 77 éléments de type angle ou about,
+  // et ces éléments-là n'ont AUCUNE forme dessinée : ils n'existent sur le plan que comme pastilles.
+  const angle = element({
+    troncon: "T01",
+    debut_m: 0,
+    fin_m: 0.25,
+    type: "angle_sortant",
+    composant: "L1",
+    a_verifier: true,
+  });
+  const pont: StudyBridge = {
+    type: "angle_sortant",
+    troncon: "T01",
+    abscisse_m: 0.125,
+    longueur_m: 0.25,
+    piece: "Bureau",
+    composant: "L1",
+    point_pdf: [100, 100],
+  };
+
+  it("retrouve l'élément d'un pont par son tronçon et son abscisse", () => {
+    const content = etude([angle], [], [pont]);
+    expect(elementDuPont(content, pont)).toEqual({ troncon: "T01", debut_m: 0, fin_m: 0.25 });
+    expect(elementDuPont(content, { ...pont, abscisse_m: undefined })).toBeNull();
+    expect(elementDuPont(content, { ...pont, troncon: "T99" })).toBeNull();
+  });
+
+  it("ne confond pas deux angles du même tronçon", () => {
+    const autre = element({ troncon: "T01", debut_m: 8, fin_m: 8.3, type: "angle_sortant" });
+    const content = etude([angle, autre], [], [pont]);
+    expect(elementDuPont(content, pont)?.debut_m).toBe(0);
+    expect(elementDuPont(content, { ...pont, abscisse_m: 8.15 })?.debut_m).toBe(8);
+  });
+
+  it("attrape la pastille sous le curseur, la plus proche gagnant", () => {
+    const voisin: StudyBridge = { ...pont, abscisse_m: 8.15, point_pdf: [108, 100] };
+    expect(pontAt([pont, voisin], [102, 100], 8)).toBe(pont);
+    expect(pontAt([pont, voisin], [107, 100], 8)).toBe(voisin);
+    expect(pontAt([pont, voisin], [300, 300], 8)).toBeNull();
+    expect(pontAt([{ ...pont, point_pdf: undefined }], [100, 100], 8)).toBeNull();
+  });
+
+  it("fait figurer les ponts du local dans sa liste d'éléments, bien qu'ils n'aient aucune forme", () => {
+    const mur = element({ troncon: "T02", debut_m: 0, fin_m: 4 });
+    const content = etude(
+      [angle, mur],
+      [forme({ source_parcours: { troncon: "T02", debut_m: 0, fin_m: 4, piece: "Bureau" } })],
+      [pont],
+    );
+    expect(elementsDuLocal(content, local("Bureau")).map((item) => item.type)).toEqual([
+      "angle_sortant",
+      "paroi",
+    ]);
+    expect(pontsDuLocal(content, local("Bureau"))).toHaveLength(1);
+    expect(pontsDuLocal(content, local("Couloir"))).toHaveLength(0);
   });
 });

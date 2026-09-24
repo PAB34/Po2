@@ -1,5 +1,6 @@
 import type {
   PdfPoint,
+  StudyBridge,
   StudyContent,
   StudyElementRef,
   StudyEnvelopeShape,
@@ -31,6 +32,13 @@ export const LIBELLES_TYPE: Record<string, string> = {
   indetermine: "Indéterminé",
 };
 
+/** Types qui ne sont pas des surfaces mais des liaisons : ce sont eux, les ponts thermiques. */
+export const TYPES_PONT = ["angle_sortant", "angle_rentrant", "about_refend"] as const;
+
+export function estPont(element: StudyReleveElement): boolean {
+  return (TYPES_PONT as readonly string[]).includes(element.type);
+}
+
 export function refDeElement(element: StudyReleveElement): StudyElementRef {
   return { troncon: element.troncon, debut_m: element.debut_m, fin_m: element.fin_m };
 }
@@ -57,7 +65,16 @@ export function trouverElement(content: StudyContent, ref: StudyElementRef | nul
   );
 }
 
-/** Éléments relevés qui touchent un local, dans l'ordre du parcours de l'enveloppe. */
+const cleDe = (ref: StudyElementRef) => `${ref.troncon}|${ref.debut_m}|${ref.fin_m}`;
+
+/**
+ * Éléments relevés qui touchent un local, dans l'ordre du parcours de l'enveloppe.
+ *
+ * Deux sources, et il faut les deux : les **formes dessinées** pour les murs, menuiseries, poteaux et
+ * garde-corps ; les **liaisons** pour les angles et abouts de refend, qui n'ont aucune forme et
+ * n'existent sur le plan que comme pastilles. Sur le R+1, les oublier revenait à ignorer 77 des
+ * 227 éléments, soit tous les ponts thermiques.
+ */
 export function elementsDuLocal(content: StudyContent, room: StudyRoom | null): StudyReleveElement[] {
   if (!room) {
     return [];
@@ -69,11 +86,17 @@ export function elementsDuLocal(content: StudyContent, room: StudyRoom | null): 
     }
     const ref = refDeForme(shape);
     if (ref) {
-      vises.add(`${ref.troncon}|${ref.debut_m}|${ref.fin_m}`);
+      vises.add(cleDe(ref));
+    }
+  }
+  for (const bridge of pontsDuLocal(content, room)) {
+    const ref = elementDuPont(content, bridge);
+    if (ref) {
+      vises.add(cleDe(ref));
     }
   }
   return content.enveloppe.releve_brut.elements.filter((element) =>
-    vises.has(`${element.troncon}|${element.debut_m}|${element.fin_m}`),
+    vises.has(cleDe(refDeElement(element))),
   );
 }
 
@@ -135,6 +158,53 @@ export function elementAt(
     }
   }
   return meilleur?.ref ?? null;
+}
+
+/**
+ * Un pont thermique **est** un élément du relevé : sur le R+1, les 77 liaisons correspondent une à une
+ * aux 77 éléments de type angle sortant, angle rentrant ou about de refend. On le retrouve donc par son
+ * tronçon et son abscisse, sans reconstruire des bornes qui souffriraient des arrondis.
+ */
+export function elementDuPont(content: StudyContent, bridge: StudyBridge): StudyElementRef | null {
+  const abscisse = bridge.abscisse_m;
+  if (abscisse == null) {
+    return null;
+  }
+  const candidats = content.enveloppe.releve_brut.elements.filter(
+    (element) => element.troncon === bridge.troncon && element.type === bridge.type,
+  );
+  const trouve =
+    candidats.find(
+      (element) => Math.abs((element.debut_m + element.fin_m) / 2 - abscisse) < 1e-6,
+    ) ?? candidats.find((element) => element.debut_m <= abscisse && abscisse <= element.fin_m);
+  return trouve ? refDeElement(trouve) : null;
+}
+
+/** Le pont thermique sous le curseur, parmi ceux dessinés. La pastille fait 5 px de rayon à l'écran. */
+export function pontAt(
+  bridges: StudyBridge[],
+  point: PdfPoint,
+  tolerance: number,
+): StudyBridge | null {
+  let meilleur: { bridge: StudyBridge; ecart: number } | null = null;
+  for (const bridge of bridges) {
+    const centre = bridge.point_pdf;
+    if (!centre) {
+      continue;
+    }
+    const ecart = Math.hypot(point[0] - centre[0], point[1] - centre[1]);
+    if (ecart <= tolerance && (!meilleur || ecart < meilleur.ecart)) {
+      meilleur = { bridge, ecart };
+    }
+  }
+  return meilleur?.bridge ?? null;
+}
+
+export function pontsDuLocal(content: StudyContent, room: StudyRoom | null): StudyBridge[] {
+  if (!room) {
+    return [];
+  }
+  return (content.enveloppe.liaisons ?? []).filter((bridge) => bridge.piece === room.nom);
 }
 
 export function formesDuLocal(content: StudyContent, room: StudyRoom | null): StudyEnvelopeShape[] {

@@ -220,10 +220,15 @@ export function StudyMetrics({
         const contour = room.contour_pdf.map(toScreen) as [number, number][];
         const taille = boite(contour);
         const centre = ancre(contour);
+        // D83 : le local ouvert montre tout, sans réglage. La case « Côtés intérieurs » ne gouverne que
+        // le reste du niveau. Sans cette exception, un local dont plus aucun côté ne déperd — ce qui
+        // arrive dès qu'un recadrage le décolle de la façade — n'affichait plus une seule cote, sans
+        // rien dire au thermicien.
+        const tout = show.toutesCotes || room.id === selected?.id;
         return (
           <g key={`metres-${room.id}`}>
             {room.fiche.cotes
-              .filter((cote) => (show.toutesCotes || cote.deperditif) && (cote.trace_pdf?.length ?? 0) >= 2)
+              .filter((cote) => (tout || cote.deperditif) && (cote.trace_pdf?.length ?? 0) >= 2)
               .map((cote, rang) => (
                 <Cote key={`${room.id}-cote-${rang}`} cote={cote} contour={contour} toScreen={toScreen} />
               ))}
