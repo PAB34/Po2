@@ -539,11 +539,15 @@ export function WorkspacePage() {
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
           {panel === "fiche" && (
             <>
-              <StudyRoomPanel
-                room={selectedRoom}
-                state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
-                edition={editionState.edition}
-              />
+              {/* Un élément désigné prend tout le bandeau : voir la fiche du local par-dessus noyait
+                  l'information qu'on venait justement de demander. */}
+              {!elementsState.selected && (
+                <StudyRoomPanel
+                  room={selectedRoom}
+                  state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
+                  edition={editionState.edition}
+                />
+              )}
               {/* L'étape 5 : les éléments du local, sous sa fiche et jamais en carte flottante (Q8). */}
               {shownStudy && !editionState.draft && (
                 <ElementPanel

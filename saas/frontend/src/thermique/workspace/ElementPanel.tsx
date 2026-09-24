@@ -153,6 +153,111 @@ function Correction({
   );
 }
 
+/** Le détail d'un élément : ce que l'agent a lu, ce qui a été corrigé, et les trois gestes. */
+function Detail({
+  element,
+  content,
+  room,
+  busy,
+  motif,
+  onMotif,
+  onOperation,
+}: {
+  element: StudyReleveElement;
+  content: StudyContent;
+  room: StudyRoom | null;
+  busy: boolean;
+  motif: string;
+  onMotif: (valeur: string) => void;
+  onOperation: (operation: StudyOperation) => void;
+}) {
+  return (
+    <>
+      {room && estPont(element) && (
+        <p className="th-muted">Pont thermique de « {room.nom} »</p>
+      )}
+      <article className="th-element-detail">
+        <header>
+          <strong>
+            {LIBELLES_TYPE[element.type] ?? element.type} · {element.troncon} de {element.debut_m} à {element.fin_m} m
+          </strong>
+          <Etat element={element} />
+        </header>
+        {element.indice && (
+          <p className="th-element-indice">
+            Ce que l'agent a lu : « {element.indice} »
+            {element.confiance != null ? ` (confiance ${Math.round(element.confiance * 100)} %)` : ""}
+          </p>
+        )}
+        {ecartsAvecLAgent(element).length > 0 && (
+          <ul className="th-element-ecarts">
+            {ecartsAvecLAgent(element).map((ecart) => (
+              <li key={ecart.champ}>
+                {LIBELLES_CHAMP[ecart.champ] ?? ecart.champ} : <del>{String(ecart.avant)}</del> → {String(ecart.apres)}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {element.exclu ? (
+          <>
+            <p className="th-alert th-alert--warn">Écarté : {element.motif_exclusion}</p>
+            <button
+              type="button"
+              className="po2-button po2-button--ghost"
+              disabled={busy}
+              onClick={() => onOperation({ type: "element_reactiver", element: refDeElement(element) })}
+            >
+              Remettre dans le calcul
+            </button>
+          </>
+        ) : (
+          <>
+            {element.a_verifier && (
+              <button
+                type="button"
+                className="po2-button po2-button--secondary"
+                disabled={busy}
+                onClick={() => onOperation({ type: "element_confirmer", element: refDeElement(element) })}
+              >
+                C'est juste, confirmer
+              </button>
+            )}
+            <Correction
+              element={element}
+              content={content}
+              busy={busy}
+              onApply={(changes, portee) =>
+                onOperation({ type: "element_corriger", element: refDeElement(element), changes, portee })
+              }
+            />
+            <div className="th-element-ecarter">
+              <label>
+                Écarter cet élément, parce que
+                <input
+                  value={motif}
+                  placeholder="ex. trait de cotation pris pour une menuiserie"
+                  onChange={(event) => onMotif(event.target.value)}
+                  disabled={busy}
+                />
+              </label>
+              <button
+                type="button"
+                className="po2-button po2-button--danger"
+                disabled={busy || motif.trim().length === 0}
+                onClick={() => onOperation({ type: "element_ecarter", element: refDeElement(element), motif })}
+              >
+                Écarter
+              </button>
+              <p className="th-muted">Il reste dans l'étude, en grisé sur le plan, et peut revenir.</p>
+            </div>
+          </>
+        )}
+      </article>
+    </>
+  );
+}
+
 /**
  * Panneau d'un élément d'enveloppe (F4, D102 et Q8).
  *
@@ -184,8 +289,30 @@ export function ElementPanel({
 
   useEffect(() => setMotif(""), [selected?.troncon, selected?.debut_m, selected?.fin_m]);
 
-  if (!room) {
+  if (!room && !element) {
     return null;
+  }
+
+  // Un élément désigné prend tout le bandeau : la fiche du local, la liste et les compteurs le noyaient.
+  // On ne montre qu'une chose à la fois, et le retour est explicite.
+  if (element) {
+    return (
+      <section className="th-elements th-elements--seul">
+        <button type="button" className="th-link th-element-retour" onClick={() => onSelect(null)}>
+          ← Revenir {room ? `à « ${room.nom} »` : "à la fiche du local"}
+        </button>
+        <Detail
+          element={element}
+          content={content}
+          room={room}
+          busy={busy}
+          motif={motif}
+          onMotif={setMotif}
+          onOperation={onOperation}
+        />
+        {message && <p className="th-alert">{message}</p>}
+      </section>
+    );
   }
 
   return (
@@ -226,87 +353,6 @@ export function ElementPanel({
             );
           })}
         </ul>
-      )}
-
-      {element && (
-        <article className="th-element-detail">
-          <header>
-            <strong>
-              {LIBELLES_TYPE[element.type] ?? element.type} · {element.troncon} de {element.debut_m} à {element.fin_m} m
-            </strong>
-            <Etat element={element} />
-          </header>
-          {element.indice && (
-            <p className="th-element-indice">
-              Ce que l'agent a lu : « {element.indice} »
-              {element.confiance != null ? ` (confiance ${Math.round(element.confiance * 100)} %)` : ""}
-            </p>
-          )}
-          {ecartsAvecLAgent(element).length > 0 && (
-            <ul className="th-element-ecarts">
-              {ecartsAvecLAgent(element).map((ecart) => (
-                <li key={ecart.champ}>
-                  {LIBELLES_CHAMP[ecart.champ] ?? ecart.champ} : <del>{String(ecart.avant)}</del> → {String(ecart.apres)}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {element.exclu ? (
-            <>
-              <p className="th-alert th-alert--warn">Écarté : {element.motif_exclusion}</p>
-              <button
-                type="button"
-                className="po2-button po2-button--ghost"
-                disabled={busy}
-                onClick={() => onOperation({ type: "element_reactiver", element: refDeElement(element) })}
-              >
-                Remettre dans le calcul
-              </button>
-            </>
-          ) : (
-            <>
-              {element.a_verifier && (
-                <button
-                  type="button"
-                  className="po2-button po2-button--secondary"
-                  disabled={busy}
-                  onClick={() => onOperation({ type: "element_confirmer", element: refDeElement(element) })}
-                >
-                  C'est juste, confirmer
-                </button>
-              )}
-              <Correction
-                element={element}
-                content={content}
-                busy={busy}
-                onApply={(changes, portee) =>
-                  onOperation({ type: "element_corriger", element: refDeElement(element), changes, portee })
-                }
-              />
-              <div className="th-element-ecarter">
-                <label>
-                  Écarter cet élément, parce que
-                  <input
-                    value={motif}
-                    placeholder="ex. trait de cotation pris pour une menuiserie"
-                    onChange={(event) => setMotif(event.target.value)}
-                    disabled={busy}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="po2-button po2-button--danger"
-                  disabled={busy || motif.trim().length === 0}
-                  onClick={() => onOperation({ type: "element_ecarter", element: refDeElement(element), motif })}
-                >
-                  Écarter
-                </button>
-                <p className="th-muted">Il reste dans l'étude, en grisé sur le plan, et peut revenir.</p>
-              </div>
-            </>
-          )}
-        </article>
       )}
 
       {message && <p className="th-alert">{message}</p>}

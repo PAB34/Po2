@@ -2592,3 +2592,23 @@ circle.th-seg--measure {
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+
+/* Sigle du pont thermique, lu en vue en plan : AS angle sortant, AR angle rentrant, RF about de refend. */
+.th-metric-pont__sigle {
+  font: 700 11px var(--po2-font-body, system-ui);
+  fill: var(--po2-color-ink);
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+/* Un élément désigné occupe seul le bandeau. */
+.th-elements--seul {
+  gap: 0.7rem;
+}
+
+.th-element-retour {
+  justify-self: start;
+  font-size: 0.86rem;
+}

@@ -42,6 +42,16 @@ const LIBELLES_PONT: Record<string, string> = {
   about_refend: "about de refend",
 };
 
+/** Sigle lu en vue en plan : une pastille de couleur ne dit pas de quel pont il s'agit. */
+const SIGLES_PONT: Record<string, string> = {
+  angle_sortant: "AS",
+  angle_rentrant: "AR",
+  about_refend: "RF",
+};
+
+// Deux sigles plus proches que cela se chevaucheraient : on les efface plutôt (même règle que D82).
+const SIGLE_LISIBLE_PX = 26;
+
 const metres = (value: number) => `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m`;
 
 /** L'orientation n'est calculée que si le nord du plan est posé ; sinon elle vaut « nord à caler » sur tout
@@ -200,6 +210,25 @@ export function StudyMetrics({
   const visible = (piece: string | null | undefined, etendu: boolean) =>
     piece != null && (piece === nomSelection || (etendu && nomsVises.has(piece)));
 
+  // Les ponts affichés, avec leur position à l'écran : c'est elle qui décide si le sigle tient.
+  // Sur le R+1, 77 ponts n'occupent que 48 emplacements distincts — beaucoup se marchent dessus.
+  const pontsAffiches = bridges
+    .filter(
+      (bridge) =>
+        // Une liaison que le relevé n'a rattachée à aucun local doit rester visible : l'invisible ne
+        // se corrige pas. Elle se dessine en gris avec les ponts du niveau.
+        bridge.point_pdf && (visible(bridge.piece, show.ponts) || (show.ponts && bridge.piece == null)),
+    )
+    .map((bridge) => {
+      const [x, y] = toScreen(bridge.point_pdf as PdfPoint);
+      return { bridge, x, y, sigleLisible: false };
+    });
+  pontsAffiches.forEach((pont, rang) => {
+    pont.sigleLisible = pontsAffiches.every(
+      (autre, autreRang) => autreRang === rang || Math.hypot(autre.x - pont.x, autre.y - pont.y) >= SIGLE_LISIBLE_PX,
+    );
+  });
+
   return (
     <g className="th-metrics">
       {shapes
@@ -258,15 +287,7 @@ export function StudyMetrics({
         );
       })}
 
-      {bridges
-        .filter(
-          (bridge) =>
-            // Une liaison que le relevé n'a rattachée à aucun local doit rester visible : l'invisible ne
-            // se corrige pas. Elle se dessine en gris avec les ponts du niveau.
-            bridge.point_pdf && (visible(bridge.piece, show.ponts) || (show.ponts && bridge.piece == null)),
-        )
-        .map((bridge, rang) => {
-          const [x, y] = toScreen(bridge.point_pdf as PdfPoint);
+      {pontsAffiches.map(({ bridge, x, y, sigleLisible }, rang) => {
           const libelle = LIBELLES_PONT[bridge.type] ?? bridge.type;
           const orpheline = bridge.piece == null;
           return (
@@ -283,6 +304,13 @@ export function StudyMetrics({
               <circle cx={x} cy={y} r={5} fill={orpheline ? "#9ca3af" : COULEURS_PONT[bridge.type] ?? COULEURS_PONT.about_refend} />
               {/* Pas de longueur ici : `longueur_m` est l'emprise relevée de l'angle sur le tronçon,
                   pas un linéaire de pont thermique. L'afficher induirait en erreur. */}
+              {/* Le sigle dit de quel pont il s'agit : une pastille de couleur ne se lit pas en plan.
+                  Il s'efface quand deux ponts sont trop proches pour que les deux sigles tiennent. */}
+              {(sigleLisible || pontVise(bridge, selectedElement)) && (
+                <text className="th-metric-pont__sigle" x={x + 8} y={y - 7}>
+                  {SIGLES_PONT[bridge.type] ?? "?"}
+                </text>
+              )}
               <title>
                 {`${libelle}${bridge.composant ? ` · ${bridge.composant}` : ""} · ${bridge.troncon}${
                   bridge.abscisse_m != null ? ` à ${bridge.abscisse_m.toLocaleString("fr-FR")} m` : ""
