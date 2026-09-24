@@ -116,6 +116,35 @@ Réponse Q1 : les recommandations sont retenues **et ce qui en est écarté doit
 | bornes `debut_m` / `fin_m` | geste géométrique délicat : déplacer une borne déplace le voisin | avec l'ajout d'élément (Q2), même famille de gestes |
 | ajout d'un élément non relevé | demande de désigner une position sur un tronçon | second temps de F4, après correction et exclusion |
 
+### D105 — Un recalcul de niveau coûte 3 secondes, pas 3 dixièmes
+
+Mesuré le 2026-09-24 sur le vrai R+1 (24 locaux, 227 éléments, 289 formes), après la mise en ligne de F4 :
+
+| Étape de `reconstruire()` | Avant | Après index spatial |
+|---|---|---|
+| `fiches_locaux` | **4,79 s** | **0,9 s** |
+| `limites_des_locaux` | 0,89 s | 0,89 s |
+| `decouper_par_piece` | 0,47 s | 0,47 s |
+| tout le reste | 0,15 s | 0,15 s |
+| **chaîne complète** | **6,6 à 19,4 s**, en dérive | **3,2 s**, stable |
+
+La cause : un sondage tous les 10 cm sur chaque côté de chaque local, chacun testant un point tous les
+3 cm jusqu'à 1,20 m, et **chacun de ces points interrogeant les 24 locaux du niveau**. Des millions de
+tests. Un index spatial (`Voisinage`) ramène l'interrogation aux seuls locaux dont la boîte englobe le
+point. L'ordre d'origine est conservé — deux locaux peuvent se recouvrir, et c'est le premier qui
+l'emporte — et les fiches produites sont **identiques au fichier près** (sha256 `a5260e5a`, 222 côtés,
+170,12 m déperditifs, avant comme après).
+
+**Ce que cela impose** : même à 3,2 s, recalculer à **chaque clic** est intenable. Confirmer les 92
+éléments douteux du R+1 demanderait cinq minutes d'attente pure. Or dix gestes envoyés ensemble coûtent
+**3,4 s**, soit le prix d'un seul : le coût est le recalcul, pas le geste. C'est exactement ce que D68 et
+D103 avaient prévu ; F4 a été livré sans le respecter, en appelant le serveur après chaque geste.
+
+**Correction** : les gestes sur les éléments s'appliquent d'abord **dans l'écran**, sans serveur — un
+élément confirmé, corrigé ou écarté se voit aussitôt dans la liste et le panneau. Le recalcul n'a lieu
+que sur demande (« Recalculer ») et à l'enregistrement, et c'est lui qui met le **plan** à jour. L'écran
+dit franchement ce qui attend : « 7 corrections en attente — recalculez pour les voir sur le plan ».
+
 ## 4. Questions numérotées — réponses du 2026-09-24
 
 **Les huit recommandations sont retenues telles quelles.** Q1 s'accompagne de D104, qui consigne ce qui

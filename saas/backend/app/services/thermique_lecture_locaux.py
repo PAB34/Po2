@@ -85,7 +85,8 @@ def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, 
     """
     natures = pieces_env.natures_du_plan(analyse)
     formes = pieces_env.pieces_du_plan(analyse, largeur, hauteur)
-    locaux = [(nom, prep(forme), natures.get(nom, "chauffe")) for nom, forme in formes]
+    # Même index spatial que les fiches : sans lui, chaque sondage interroge tous les locaux.
+    locaux = fiches_locaux.Voisinage([(nom, forme, natures.get(nom, "chauffe")) for nom, forme in formes])
     exterieurs = [prep(f) for f in fiches_locaux._formes(analyse, {"terrasse", "balcon"}, int(largeur), int(hauteur))]
     vides = [prep(Polygon([(x * largeur / 1000, y * hauteur / 1000) for x, y in e["points"]]).buffer(0))
              for e in analyse.get("locaux_ecartes", []) if e.get("decision") == "vide" and e.get("points")]

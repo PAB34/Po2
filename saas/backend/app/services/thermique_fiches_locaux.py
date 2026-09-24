@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
+from shapely import STRtree
 from shapely.geometry import LineString, Point, Polygon
 from shapely.prepared import prep
 
@@ -73,14 +74,38 @@ def orientation(normale: tuple[float, float], nord_deg: float | None) -> str:
     return ORIENTATIONS[round(azimut / 45) % 8]
 
 
+class Voisinage:
+    """Les locaux du plan, avec un index spatial, pour répondre vite à « qu'y a-t-il en ce point ? ».
+
+    Un sondage teste un point tous les 3 cm jusqu'à 1,20 m, et il y a un sondage tous les 10 cm sur
+    chaque côté de chaque local : sans index, chacun d'eux interrogeait **les 24 locaux du niveau**, ce
+    qui faisait des millions de tests et 4,8 s de recalcul sur le R+1.
+
+    L'ordre d'origine est scrupuleusement conservé : deux locaux peuvent se recouvrir — 10,85 m² sur ce
+    même R+1 — et c'est le premier de la liste qui l'emportait. Changer cet ordre changerait les fiches.
+    """
+
+    def __init__(self, formes: list[tuple[str, Any, str]]) -> None:
+        self.noms = [nom for nom, _forme, _nature in formes]
+        self.natures = [nature for _nom, _forme, nature in formes]
+        self.prepares = [prep(forme) for _nom, forme, _nature in formes]
+        self.arbre = STRtree([forme for _nom, forme, _nature in formes])
+
+    def contenant(self, point: Any, sauf: str) -> tuple[str, str] | None:
+        for rang in sorted(int(r) for r in self.arbre.query(point)):
+            if self.noms[rang] != sauf and self.prepares[rang].contains(point):
+                return self.natures[rang], self.noms[rang]
+        return None
+
+
 def _sonder(point: tuple[float, float], normale: tuple[float, float], px_par_m: float, soi: str,
-            locaux: list[tuple[str, Any, str]], batiment: Any, exterieurs: list[Any], vides: list[Any]) -> tuple[str, str, float]:
+            locaux: Voisinage, batiment: Any, exterieurs: list[Any], vides: list[Any]) -> tuple[str, str, float]:
     """(adjacence, voisin, épaisseur en cm) au droit d'un point du contour."""
     for cm in range(SONDE_DEBUT_CM, SONDE_MAX_CM + 1, SONDE_PAS_CM):
         q = Point(point[0] + normale[0] * cm / 100 * px_par_m, point[1] + normale[1] * cm / 100 * px_par_m)
-        for nom, forme, nature in locaux:
-            if nom != soi and forme.contains(q):
-                return nature, nom, cm
+        trouve = locaux.contenant(q, soi)
+        if trouve is not None:
+            return trouve[0], trouve[1], cm
         if any(forme.contains(q) for forme in exterieurs) or not batiment.contains(q):
             return "exterieur", "extérieur", cm
         if any(forme.contains(q) for forme in vides):
@@ -96,7 +121,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
     batiment = prep(batiment_du_manifeste(manifeste))
     natures = pieces_env.natures_du_plan(analyse)
     locaux_formes = [(nom, forme, natures.get(nom, "chauffe")) for nom, forme in pieces_env.pieces_du_plan(analyse, largeur, hauteur)]
-    locaux = [(nom, prep(forme), nature) for nom, forme, nature in locaux_formes]
+    locaux = Voisinage(locaux_formes)
     exterieurs = [prep(f) for f in _formes(analyse, {"terrasse", "balcon"}, largeur, hauteur)]
     vides = [prep(Polygon([(x * largeur / 1000, y * hauteur / 1000) for x, y in e["points"]]).buffer(0))
              for e in analyse.get("locaux_ecartes", []) if e.get("decision") == "vide" and e.get("points")]
@@ -248,7 +273,7 @@ def planche_adjacences(page: Image.Image, analyse: dict[str, Any], manifeste: di
     batiment = prep(batiment_du_manifeste(manifeste))
     natures = pieces_env.natures_du_plan(analyse)
     formes = pieces_env.pieces_du_plan(analyse, largeur, hauteur)
-    locaux = [(nom, prep(forme), natures.get(nom, "chauffe")) for nom, forme in formes]
+    locaux = Voisinage([(nom, forme, natures.get(nom, "chauffe")) for nom, forme in formes])
     exterieurs = [prep(f) for f in _formes(analyse, {"terrasse", "balcon"}, largeur, hauteur)]
     vides = [prep(Polygon([(x * largeur / 1000, y * hauteur / 1000) for x, y in e["points"]]).buffer(0))
              for e in analyse.get("locaux_ecartes", []) if e.get("decision") == "vide" and e.get("points")]
