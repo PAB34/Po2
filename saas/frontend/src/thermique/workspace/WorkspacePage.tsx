@@ -565,9 +565,10 @@ export function WorkspacePage() {
               )}
               {elementsState.pending > 0 && (
                 <div className="th-element-enregistrer">
+                  {/* D105 : le geste est immédiat, seul le plan attend un recalcul. On le dit. */}
                   <p className="th-alert th-alert--warn">
-                    {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} en attente
-                    d'enregistrement.
+                    {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} en attente —
+                    recalculez pour les voir sur le plan.
                   </p>
                   <div className="th-inline">
                     <button
@@ -577,6 +578,14 @@ export function WorkspacePage() {
                       onClick={elementsState.save}
                     >
                       Enregistrer les corrections
+                    </button>
+                    <button
+                      type="button"
+                      className="po2-button po2-button--ghost"
+                      disabled={elementsState.busy}
+                      onClick={elementsState.recompute}
+                    >
+                      {elementsState.busy ? "Recalcul…" : "Recalculer le plan"}
                     </button>
                     <button type="button" className="th-link" disabled={elementsState.busy} onClick={elementsState.cancel}>
                       Tout annuler

@@ -1,15 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
-import { thermiqueApi, type Study, type StudyElementRef, type StudyOperation, type StudyPreview } from "../api";
+import {
+  thermiqueApi,
+  type Study,
+  type StudyContent,
+  type StudyElementRef,
+  type StudyOperation,
+} from "../api";
+import { appliquerEnLocal, refusDeCorrection } from "./elementsLocal";
+import { memeElement, refDeElement } from "./elements";
 import { studyQueryKey } from "./study";
 
 /**
- * Gestes sur les éléments d'enveloppe (F4).
+ * Gestes sur les éléments d'enveloppe (F4, D68, D103 et D105).
  *
- * Les corrections s'**accumulent** (D103) : chacune part au serveur avec celles qui la précèdent, pour
- * que le plan montre aussitôt leur effet, mais rien n'est écrit en base avant « Enregistrer ». Sur un
- * local à quinze éléments, quinze enregistrements versionnés n'auraient aucun sens.
+ * Chaque geste s'applique **dans l'écran**, sans serveur : un recalcul de niveau coûte 3,2 s sur le R+1,
+ * et confirmer les 92 éléments douteux un par un ferait attendre cinq minutes pour rien. Les gestes
+ * s'accumulent, le serveur ne recalcule qu'à la demande ou à l'enregistrement — et c'est ce recalcul
+ * qui met le **plan** à jour, ce que l'écran annonce.
  */
 export function useStudyElements({
   token,
@@ -23,36 +32,57 @@ export function useStudyElements({
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<StudyElementRef | null>(null);
   const [operations, setOperations] = useState<StudyOperation[]>([]);
-  const [preview, setPreview] = useState<StudyPreview | null>(null);
+  // Étude telle qu'elle serait après les gestes en attente : recalculée en local, pas par le serveur.
+  const [local, setLocal] = useState<StudyContent | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setOperations([]);
-    setPreview(null);
+    setLocal(null);
     setMessage(null);
   }, []);
 
   const apply = useCallback(
-    async (operation: StudyOperation) => {
-      if (!token || !sheetId) {
+    (operation: StudyOperation) => {
+      const base = local ?? study?.content;
+      if (!base) {
         return;
       }
-      const suite = [...operations, operation];
-      setBusy(true);
-      setMessage(null);
-      try {
-        setPreview(await thermiqueApi.remodelStudy(token, sheetId, suite));
-        setOperations(suite);
-      } catch (echec) {
-        // La liste ne retient pas un geste refusé : sinon il repartirait à chaque geste suivant.
-        setMessage(echec instanceof Error ? echec.message : "Ce geste n'a pas pu être appliqué.");
-      } finally {
-        setBusy(false);
+      if (operation.type === "element_corriger") {
+        const vise = base.enveloppe.releve_brut.elements.find((element) =>
+          memeElement(refDeElement(element), operation.element),
+        );
+        const refus = vise ? refusDeCorrection(vise, operation.changes) : "Cet élément n'existe plus.";
+        if (refus) {
+          setMessage(refus);
+          return;
+        }
       }
+      setLocal(appliquerEnLocal(base, operation));
+      setOperations((current) => [...current, operation]);
+      setMessage(null);
     },
-    [operations, sheetId, token],
+    [local, study],
   );
+
+  /** Envoie les gestes accumulés au serveur pour voir leur effet sur le plan, sans enregistrer. */
+  const recompute = useCallback(async () => {
+    if (!token || !sheetId || operations.length === 0) {
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const apercu = await thermiqueApi.remodelStudy(token, sheetId, operations);
+      setLocal(apercu.content);
+      setMessage("Plan à jour. Les corrections ne sont pas encore enregistrées.");
+    } catch (echec) {
+      setMessage(echec instanceof Error ? echec.message : "Le recalcul a échoué.");
+    } finally {
+      setBusy(false);
+    }
+  }, [operations, sheetId, token]);
 
   const save = useCallback(async () => {
     if (!token || !sheetId || operations.length === 0) {
@@ -78,12 +108,13 @@ export function useStudyElements({
   return {
     selected,
     select: setSelected,
-    /** Étude à afficher : l'aperçu tant qu'il n'est pas enregistré, sinon celle en base. */
-    shown: preview && study ? { ...study, content: preview.content } : study,
+    /** Étude à afficher : celle que les gestes en attente décrivent, sinon celle en base. */
+    shown: local && study ? { ...study, content: local } : study,
     pending: operations.length,
     busy,
     message,
-    apply: (operation: StudyOperation) => void apply(operation),
+    apply,
+    recompute: () => void recompute(),
     save: () => void save(),
     cancel: reset,
   };
