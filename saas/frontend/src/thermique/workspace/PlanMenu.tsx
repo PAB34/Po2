@@ -45,12 +45,13 @@ export function PlanMenu({
         onClose();
       }
     };
-    // Capture : le menu se ferme avant que le plan ne traite le clic suivant.
+    // Capture des deux côtés : le menu se ferme avant que le plan ne traite le clic ou la touche
+    // suivante. En bouillonnement, Échap n'arrivait pas jusqu'ici et le menu restait ouvert.
     window.addEventListener("pointerdown", fermer, true);
-    window.addEventListener("keydown", auClavier);
+    window.addEventListener("keydown", auClavier, true);
     return () => {
       window.removeEventListener("pointerdown", fermer, true);
-      window.removeEventListener("keydown", auClavier);
+      window.removeEventListener("keydown", auClavier, true);
     };
   }, [onClose]);
 

@@ -41,6 +41,10 @@ related:
   ouvrir/reprendre/couper un local hors édition ; ajouter, supprimer ou redresser un côté en édition.
 - **D90 — Aucune confusion entre outils.** Les deux points d'une mesure ou d'un contrôle d'échelle ne
   doivent jamais être rendus comme une flèche du nord provisoire.
+- **D91 — Le menu se ferme en capture, au clic comme au clavier.** Constaté en recette : posé en
+  bouillonnement, l'écouteur `keydown` du menu ne voyait jamais la vraie touche Échap et le menu restait
+  ouvert. Il est désormais posé en **capture**, comme le `pointerdown` voisin. Il ne consomme pas la
+  touche : Échap continue d'effacer les points de mesure du plan, et n'annule pas la reprise en cours.
 
 ## 3. Questions numérotées et réponses
 
@@ -59,3 +63,23 @@ related:
    passage de l'angle −180°/180°.
 3. Frontend : tests thermiques ciblés, typecheck et build.
 4. Recette réelle R+1 : direction lisible, validation, lasso libre, menu contextuel, navigation intacte.
+
+## 5. Recette réelle du menu contextuel — 2026-09-24
+
+Banc local reconstruit sur le vrai R+1 (24 locaux), local **6.1.6 salle de réunion**, contour de
+14 sommets. Chaque geste a été exercé à la souris, pas seulement en test unitaire :
+
+| Geste | Attendu | Constaté |
+| --- | --- | --- |
+| Clic droit sur un local, hors édition | Ouvrir / Reprendre le contour / Couper en deux | conforme |
+| Clic droit sur un côté, en édition | Ajouter un point ici + Redresser ce côté | conforme |
+| « Ajouter un point ici » | un sommet de plus, au point visé | 14 → 15, sommet posé au pixel cliqué |
+| Clic droit sur une poignée | Supprimer ce point + Redresser ce côté | conforme, « Ajouter » disparaît |
+| « Supprimer ce point » | un sommet de moins | 15 → 14 |
+| « Redresser ce côté » | les sommets intermédiaires alignés disparaissent | 16 → 14, « Côté redressé : 2 points de moins. » |
+| Échap | le menu se ferme, l'édition continue | **échec initial**, corrigé par D91 puis conforme |
+| Clic hors du menu | le menu se ferme | conforme |
+| Glisser dans le vide pendant l'édition | le plan se déplace | conforme, contour inchangé |
+
+Le défaut Échap n'a pas de test automatisé : le banc frontend n'a ni jsdom ni bibliothèque de rendu
+DOM, et le poste interdit toute installation. Il est couvert par cette recette et par D91.

@@ -19,11 +19,19 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-23** (reprise Codex — métrés, nord et gestes de correction terminés localement).
+> Mise à jour : **2026-09-24** (recette du menu contextuel sur le vrai R+1, correctif D91).
 
 - **▶️ REPRENDRE ICI — attendre l'accord explicite avant tout push**, puis livrer les commits locaux F3 et
   nord/édition (`50005292`, `a19dba04`, migration **0085**). Ensuite, reprendre le lot **F0** (file d'attente
   et relais local, D76), puis F2/F4. La branche est volontairement locale ; aucun push n'a été fait par Codex.
+- **✅ RECETTE RÉELLE DU MENU CONTEXTUEL — 2026-09-24.** Les trois gestes du clic droit ont enfin été
+  exercés à la souris sur le R+1 (local 6.1.6, contour de 14 sommets) : ajout au pixel visé, suppression
+  d'une poignée, redressement d'un côté (« 2 points de moins »), menu hors édition, fermeture au clic
+  extérieur, déplacement du plan intact. **Un défaut trouvé et corrigé (D91)** : Échap ne fermait pas le
+  menu, l'écouteur clavier posé en bouillonnement ne voyait jamais la touche ; il est passé en capture.
+  Détail du banc : `thermique/nord-et-edition-plan-decisions.md` §5.
+
+> Mise à jour précédente : **2026-09-23** (reprise Codex — métrés, nord et gestes de correction terminés localement).
 - **✅ MÉTRÉS, PONTS ET ÉLÉMENTS SUR LE PLAN — F3** (`50005292`) : un clic sur un local dessine ses cotes,
   sa surface, ses ponts thermiques et ses éléments d'enveloppe ; les quatre réglages permettent d'étendre
   l'affichage au niveau entier. Le vrai R+1 recoupe 222 côtés, 289 éléments et 77 liaisons.
