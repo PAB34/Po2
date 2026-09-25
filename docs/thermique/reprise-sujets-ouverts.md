@@ -208,15 +208,69 @@ il doit ouvrir un outil de dessin pour poser une étiquette. Personne ne trouve 
    Une opération `modifier` avec le seul champ `nature` suffit : le serveur l'accepte déjà, il n'y a
    **rien à écrire côté backend**. À prévoir aussi dans le menu contextuel du plan (`PlanMenu.tsx`) :
    « Marquer comme non chauffé » sur la pièce visée.
-2. **Décider s'il faut une nature dédiée « gaine technique »**, au lieu de tout mettre sous `non_chauffe`.
-   Question pour l'utilisateur, pas décision d'implémentation. Arguments dans les deux sens :
-   - *pour* : « clairement les identifier » suppose de les distinguer d'un local non chauffé ordinaire
-     (un cellier, un garage). Une gaine traverse les niveaux, ce qui n'est pas le cas d'un cellier, et
-     cela intéressera la superposition des niveaux ;
-   - *contre* : thermiquement, une gaine se comporte comme un volume non chauffé. Ajouter une nature
-     oblige à décider son sort dans **chaque** calcul, comme pour les terrasses (sujet 5).
-   - Voie moyenne possible : garder `non_chauffe` pour le calcul et distinguer les gaines par leur **nom**,
-     déjà éditable. À trancher explicitement, pas à subir.
+2. **D115 — une nature dédiée `gaine_technique`. TRANCHÉ par l'utilisateur le 2026-09-25 : « Oui je veux
+   une catégorie gaine technique ».** Il y aura donc **quatre** natures de local :
+   `chauffe`, `circulation`, `non_chauffe`, `gaine_technique`.
+
+   **Règle thermique à retenir : une gaine se comporte comme un local non chauffé.** Elle n'a pas de
+   déperditions propres, et la paroi d'une pièce chauffée qui la borde est une paroi **sur local non
+   chauffé**, déperditive. La nature nouvelle sert à la **reconnaître et à la nommer**, pas à la calculer
+   autrement. Partout où le calcul teste `non_chauffe`, il doit désormais tester
+   `{"non_chauffe", "gaine_technique"}`.
+
+   ### ⚠️ Le piège qui fera perdre du linéaire déperditif en silence
+
+   `thermique_fiches_locaux.py:180` :
+
+   ```python
+   "deperditif": cote["adjacence"] in DEPERDITIFS and nature != "non_chauffe",
+   ```
+
+   Ce `nature != "non_chauffe"` dit : « un local non chauffé ne compte pas ses propres déperditions ».
+   Si on ajoute `gaine_technique` **sans toucher cette ligne**, chaque gaine se met à compter des
+   déperditions qui n'existent pas, et le total du niveau gonfle **sans aucune erreur visible**.
+   Même vigilance pour `DEPERDITIFS` (ligne 26) et `vises` (ligne 166) : la nature nouvelle doit entrer
+   dans le vocabulaire des **adjacences**, sinon un mur donnant sur une gaine cesse d'être déperditif —
+   et là le total **baisse** en silence, ce qui est pire.
+
+   **Attention, deux vocabulaires distincts** qu'il ne faut pas mélanger : la **nature d'un local**
+   (`chauffe` / `circulation` / `non_chauffe` / `gaine_technique`) et l'**adjacence d'un côté**
+   (`exterieur` / `non_chauffe` / `vide`), qui dit ce qu'il y a de l'autre côté du mur. Ce sont deux
+   énumérations différentes qui se ressemblent.
+
+   ### Liste exhaustive des endroits à toucher (relevée par grep, 2026-09-25)
+
+   **Serveur**
+
+   | Fichier | Ligne | Quoi |
+   | --- | --- | --- |
+   | `services/thermique_etudes.py` | 52 | `LOCAL_NATURES` — **la source**, un seul ensemble, tout le reste l'importe |
+   | `schemas/thermique.py` | 231 | le `Literal[...]` de l'opération `modifier` |
+   | `services/thermique_fiches_locaux.py` | 26, 166, 180 | `DEPERDITIFS`, `vises`, et **le piège ci-dessus** |
+   | `services/thermique_fiches_locaux.py` | 260-262 | `COULEURS` et `LIBELLES` de la planche des fiches |
+   | `services/thermique_enveloppe_pieces.py` | 54, 319-327 | `natures_du_plan` et le tri `facade_m` / `sur_non_chauffe_m` |
+   | `services/thermique_claude_agent.py` | 100, 262 | **l'enum et la consigne de l'agent.** Aujourd'hui la consigne dit littéralement `non_chauffe (local technique, gaine, escalier encloisonné)` : c'est là qu'il faut apprendre à l'agent à sortir la gaine du lot |
+   | `services/thermique_agent_benchmark.py` | 106 | le contrôle de validité des sorties d'agent |
+
+   **Front**
+
+   | Fichier | Ligne | Quoi |
+   | --- | --- | --- |
+   | `thermique/api.ts` | 71 | `StudyLocalNature` |
+   | `thermique/workspace/study.ts` | 6, 8-11, 14-17 | `NATURE_ORDER`, `NATURE_LABELS` (libellé « Gaine technique »), `NATURE_COLORS` (une couleur distincte du gris `#6b7280` du non chauffé) |
+
+   `NATURE_LABELS` et `NATURE_COLORS` sont des `Record<StudyLocalNature, …>` : **le typecheck refusera de
+   compiler** tant que la quatrième nature n'y est pas. C'est un garde-fou gratuit, s'en servir.
+
+   ### Contrôle obligatoire avant de pousser
+
+   Sur le R+1, **avant** toute reclassification : **222 côtés, 170,12 m déperditifs**. Ajouter la nature
+   sans reclasser aucune pièce doit laisser ces deux nombres **strictement identiques**. S'ils bougent,
+   c'est qu'un des tests de nature a été manqué. Reclasser ensuite une gaine et vérifier que ses voisines
+   gagnent du `sur_non_chauffe_m` et non du `facade_m`.
+
+   **Ne pas modifier `.claude/agents/thermicien-plan.md`** (règle permanente). La consigne à corriger est
+   celle de `thermique_claude_agent.py`, qui est du code.
 
 3. **« ou les dessiner quand elles ne le sont pas »** : c'est exactement le **sujet 1** (ajouter une pièce).
    Une gaine absente du relevé se dessine avec le même geste qu'une pièce oubliée, puis se classe en non
@@ -238,9 +292,10 @@ non du `facade_m`. C'est le test qui dira si le geste sert à quelque chose.
 2. **Sujet 2** (cliquer un côté → le voir sur le plan). Le patron existe, gain immédiat.
 3. **Sujet 1** (supprimer / ajouter une pièce). Déverrouille aussi les sujets 6 et 8 (dessiner une gaine absente).
 4. **Sujet 3** (50 / 50 sur les 64 angles). Touche le métré → fichier de décisions d'abord.
-5. **Sujet 5** (terrasses) et **sujet 8, second temps** (nature dédiée ?). Les deux posent la même
-   question de fond : quelles natures de local le modèle doit-il connaître, et que fait chacune dans
-   chaque calcul. À cadrer ensemble plutôt qu'une à la fois.
+5. **Sujet 8, second temps (D115, la nature `gaine_technique` — déjà tranchée)** et **sujet 5**
+   (terrasses). Les deux ajoutent une nature de local : les faire **dans cet ordre et à la suite**, la
+   gaine servant de patron à la terrasse. La gaine est la plus simple des deux, puisqu'elle se calcule
+   comme un local non chauffé ; la terrasse, non.
 6. Sujet 4 : déjà répondu ; seule la question dérivée (valider un local exige-t-il ses ponts ?) reste à
    poser à l'utilisateur.
 7. Sujets 6 et 7 : plus tard, et pas par l'interface.
