@@ -21,6 +21,15 @@ do_not_auto_read:
 
 > Mise à jour : **2026-09-25** (F0, F4 et F2 livrés ; la série F est complète).
 
+- **✅ LOCAL, NON POUSSÉ — nature des locaux accessible et gaines techniques (D115 à D122).** La nature
+  se change maintenant directement dans la fiche ou par clic droit, sans ouvrir l'édition du contour et
+  sans valider implicitement le local. La quatrième nature `gaine_technique` se comporte partout comme
+  un local non chauffé, avec un libellé et une couleur propres. L'audit a corrigé deux filtres actifs
+  oubliés dans la passation (`thermique_locaux.py`, `thermique_lecture_locaux.py`). Le vrai R+1 reste à
+  **227 éléments, 222 côtés, 170,12 m déperditifs, 289 formes et 77 liaisons**. Vérifications : 43 tests
+  backend ciblés, 86 tests frontend thermiques, typecheck et build. Aucune recette authentifiée à la
+  souris. Décisions : `thermique/nature-locaux-gaine-decisions.md`. **Prochain : Ctrl+Z / Rétablir,
+  après confirmation du sens des deux boutons précédent/suivant.**
 - **▶️ REPRENDRE ICI — éprouver F2 sur le R+1, puis décider de la suite.** Le parcours en six étapes est
   écrit et testé (82 tests front, 23 tests d'édition), mais **jamais exercé à la souris** : je n'ai pas
   accès au banc. La recette porte sur trois points : la colonne de gauche pilote-t-elle bien le panneau
