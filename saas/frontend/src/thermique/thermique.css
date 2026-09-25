@@ -1047,8 +1047,13 @@ circle.th-seg--measure {
 }
 
 /* Métrés dessinés sur le plan : ils se lisent, ils ne se cliquent pas — le geste va toujours au plan (D79). */
+/* Le plan est une image raster toujours blanche. Ce qu'on dessine dessus ne doit donc PAS suivre le
+   thème de l'application : en mode sombre, `--po2-color-ink` devient presque blanc et les cotes, la
+   surface et les sigles de ponts disparaissaient sur le plan. Encre sombre et halo blanc, toujours. */
 .th-metrics {
   pointer-events: none;
+  --th-plan-encre: #1c2430;
+  --th-plan-halo: #ffffff;
 }
 
 .th-metric-element {
@@ -1059,7 +1064,7 @@ circle.th-seg--measure {
 
 .th-metric-cote polyline {
   fill: none;
-  stroke: var(--po2-color-ink);
+  stroke: var(--th-plan-encre);
   stroke-width: 1.5;
   stroke-opacity: 0.45;
   vector-effect: non-scaling-stroke;
@@ -1074,10 +1079,10 @@ circle.th-seg--measure {
 .th-metric-cote text {
   font-size: 11px;
   paint-order: stroke;
-  stroke: var(--po2-color-paper);
+  stroke: var(--th-plan-halo);
   stroke-width: 3px;
   stroke-linejoin: round;
-  fill: var(--po2-color-ink);
+  fill: var(--th-plan-encre);
 }
 
 .th-metric-cote__valeur {
@@ -1093,10 +1098,10 @@ circle.th-seg--measure {
   font-size: 12px;
   font-weight: 700;
   paint-order: stroke;
-  stroke: var(--po2-color-paper);
+  stroke: var(--th-plan-halo);
   stroke-width: 3.5px;
   stroke-linejoin: round;
-  fill: var(--po2-color-ink);
+  fill: var(--th-plan-encre);
 }
 
 .th-metric-pont circle {
@@ -2588,19 +2593,30 @@ circle.th-seg--measure {
 }
 
 .th-metric-pont.is-selected circle:last-of-type {
-  stroke: var(--po2-color-ink);
+  stroke: var(--th-plan-encre);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
 
-/* Sigle du pont thermique, lu en vue en plan : AS angle sortant, AR angle rentrant, RF about de refend. */
+/* Étiquette du pont thermique, lue en vue en plan : AS angle sortant, AR angle rentrant,
+   RF about de refend. Fond blanc opaque et texte noir, jamais le thème : le plan est blanc. */
+.th-metric-pont__etiquette {
+  fill: #ffffff;
+  stroke: var(--th-plan-encre);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+}
+
 .th-metric-pont__sigle {
   font: 700 11px var(--po2-font-body, system-ui);
-  fill: var(--po2-color-ink);
-  paint-order: stroke;
-  stroke: #ffffff;
-  stroke-width: 3;
-  stroke-linejoin: round;
+  fill: #111827;
+  dominant-baseline: middle;
+}
+
+.th-metric-pont.is-selected .th-metric-pont__etiquette {
+  stroke-opacity: 1;
+  stroke-width: 2;
 }
 
 /* Un élément désigné occupe seul le bandeau. */

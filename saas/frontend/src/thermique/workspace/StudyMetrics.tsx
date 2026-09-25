@@ -323,12 +323,28 @@ export function StudyMetrics({
                   pas un linéaire de pont thermique. L'afficher induirait en erreur. */}
               {/* Le sigle dit de quel pont il s'agit : une pastille de couleur ne se lit pas en plan.
                   Il s'efface quand deux ponts sont trop proches pour que les deux sigles tiennent. */}
-              {(sigleLisible || pontVise(bridge, selectedElement)) && (
-                <text className="th-metric-pont__sigle" x={x + 8} y={y - 7}>
-                  {SIGLES_PONT[bridge.type] ?? "?"}
-                  {nombre > 1 ? ` ×${nombre}` : ""}
-                </text>
-              )}
+              {(sigleLisible || pontVise(bridge, selectedElement)) &&
+                (() => {
+                  const texte = `${SIGLES_PONT[bridge.type] ?? "?"}${nombre > 1 ? ` ×${nombre}` : ""}`;
+                  // Le fond est dimensionné sur le texte : une police de 11 px fait ~6,6 px par
+                  // caractère en gras, plus 3 px de marge de chaque côté.
+                  const largeur = texte.length * 6.6 + 6;
+                  return (
+                    <>
+                      <rect
+                        className="th-metric-pont__etiquette"
+                        x={x + 7}
+                        y={y - 16}
+                        width={largeur}
+                        height={14}
+                        rx={3}
+                      />
+                      <text className="th-metric-pont__sigle" x={x + 10} y={y - 9}>
+                        {texte}
+                      </text>
+                    </>
+                  );
+                })()}
               <title>
                 {`${libelle}${bridge.composant ? ` · ${bridge.composant}` : ""} · ${bridge.troncon}${
                   bridge.abscisse_m != null ? ` à ${bridge.abscisse_m.toLocaleString("fr-FR")} m` : ""
