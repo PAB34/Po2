@@ -23,7 +23,8 @@ PAS_COTE_M = 0.10
 SONDE_DEBUT_CM, SONDE_PAS_CM, SONDE_MAX_CM = 5, 3, 120
 COTE_MIN_M = 0.15
 RATTACHEMENT_M = 0.90
-DEPERDITIFS = {"exterieur", "non_chauffe", "vide"}
+LOCAUX_NON_CHAUFFES = {"non_chauffe", "gaine_technique"}
+DEPERDITIFS = {"exterieur", "vide"} | LOCAUX_NON_CHAUFFES
 ORIENTATIONS = ("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 # Le tracé d'un côté est réduit sous cette flèche : un côté droit de 14 m tient alors en deux points,
 # au lieu des 140 sondages qui l'ont mesuré (D80).
@@ -163,7 +164,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
         affectation: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for element in enveloppe_par_local.get(nom, []):
             milieu = element["_face"].interpolate(0.5, normalized=True)
-            vises = {"non_chauffe", "vide"} if par_troncon[element["troncon"]].get("ligne") == "face_interieure" else {"exterieur"}
+            vises = LOCAUX_NON_CHAUFFES | {"vide"} if par_troncon[element["troncon"]].get("ligne") == "face_interieure" else {"exterieur"}
             candidats = [(lignes_cotes[r].distance(milieu), r) for r, c in enumerate(cotes) if c["adjacence"] in vises]
             if candidats:
                 distance, rang_cote = min(candidats)
@@ -177,7 +178,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 "longueur_m": round(cote["longueur"], 2),
                 "epaisseur_cm": round(sorted(s["epaisseur"] for s in cote["sondages"])[len(cote["sondages"]) // 2]),
                 "orientation": orientation(cote["sondages"][len(cote["sondages"]) // 2]["normale"], nord_deg),
-                "deperditif": cote["adjacence"] in DEPERDITIFS and nature != "non_chauffe",
+                "deperditif": cote["adjacence"] in DEPERDITIFS and nature not in LOCAUX_NON_CHAUFFES,
                 "trace": _trace_du_cote(lignes_cotes[rang_cote], largeur, hauteur, px_par_m),
                 "enveloppe": [],
             }
@@ -257,9 +258,11 @@ def _regrouper(sondages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return fusion
 
 
-COULEURS = {"exterieur": (214, 40, 40), "non_chauffe": (240, 140, 0), "vide": (156, 54, 181),
+COULEURS = {"exterieur": (214, 40, 40), "non_chauffe": (240, 140, 0),
+            "gaine_technique": (124, 58, 237), "vide": (156, 54, 181),
             "circulation": (25, 113, 194), "chauffe": (120, 130, 140), "inconnu": (0, 0, 0)}
-LIBELLES = {"exterieur": "extérieur", "non_chauffe": "local non chauffé", "vide": "vide / patio",
+LIBELLES = {"exterieur": "extérieur", "non_chauffe": "local non chauffé",
+            "gaine_technique": "gaine technique", "vide": "vide / patio",
             "circulation": "circulation", "chauffe": "local chauffé", "inconnu": "rien trouvé"}
 
 
@@ -292,7 +295,7 @@ def planche_adjacences(page: Image.Image, analyse: dict[str, Any], manifeste: di
                 t0, t1 = k / nombre, (k + 1) / nombre
                 p = (a[0] + (b[0] - a[0]) * (t0 + t1) / 2, a[1] + (b[1] - a[1]) * (t0 + t1) / 2)
                 adjacence, _voisin, _e = _sonder(p, normale, px_par_m, nom, locaux, batiment, exterieurs, vides)
-                deperditif = adjacence in DEPERDITIFS and natures.get(nom, "chauffe") != "non_chauffe"
+                deperditif = adjacence in DEPERDITIFS and natures.get(nom, "chauffe") not in LOCAUX_NON_CHAUFFES
                 decale = 7 if deperditif else 4
                 q0 = (a[0] + (b[0] - a[0]) * t0 - normale[0] * decale, a[1] + (b[1] - a[1]) * t0 - normale[1] * decale)
                 q1 = (a[0] + (b[0] - a[0]) * t1 - normale[0] * decale, a[1] + (b[1] - a[1]) * t1 - normale[1] * decale)
@@ -312,7 +315,7 @@ def planche_adjacences(page: Image.Image, analyse: dict[str, Any], manifeste: di
     recadre = image.crop((int(min(xs)) - 120, int(min(ys)) - 170, int(max(xs)) + 120, int(max(ys)) + 120))
     legende = ImageDraw.Draw(recadre)
     x = 20
-    for cle in ("exterieur", "non_chauffe", "vide", "circulation", "chauffe", "inconnu"):
+    for cle in ("exterieur", "non_chauffe", "gaine_technique", "vide", "circulation", "chauffe", "inconnu"):
         legende.line((x, 38, x + 50, 38), fill=COULEURS[cle], width=12 if cle in DEPERDITIFS else 5)
         legende.text((x + 60, 20), LIBELLES[cle], fill=(20, 20, 20), font=police)
         x += 90 + legende.textlength(LIBELLES[cle], font=police)

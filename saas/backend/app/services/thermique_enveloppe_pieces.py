@@ -51,7 +51,7 @@ def pieces_du_plan(analyse: dict[str, Any], largeur_px: float, hauteur_px: float
 
 
 def natures_du_plan(analyse: dict[str, Any]) -> dict[str, str]:
-    """Nature de chaque pièce (chauffe, circulation, non_chauffe ; D24), sous le même nom que pieces_du_plan."""
+    """Nature de chaque pièce (chauffe, circulation, non_chauffe ou gaine ; D24, D115)."""
     objets = [o for o in analyse["objects"] if o["category"] == "piece" and len(o["points"]) >= 3]
     noms = [o.get("subtype") or o["id"] for o in objets]
     rangs: dict[str, int] = {}

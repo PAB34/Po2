@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { StudyRoom } from "../api";
-import { roomAt, sortedStudyRooms } from "./study";
+import {
+  changeLocalNatureOperation,
+  NATURE_COLORS,
+  NATURE_LABELS,
+  otherLocalNatures,
+  roomAt,
+  sortedStudyRooms,
+} from "./study";
 
 const room = (id: string, nature: StudyRoom["nature"]): StudyRoom => ({
   id,
@@ -17,16 +24,32 @@ const room = (id: string, nature: StudyRoom["nature"]): StudyRoom => ({
 });
 
 describe("locaux de l'étude", () => {
-  it("range les chauffés, puis les circulations, puis les non chauffés en gardant l'ordre du plan", () => {
+  it("range les chauffés, circulations, non chauffés puis gaines en gardant l'ordre du plan", () => {
     const rooms = [
+      room("G1", "gaine_technique"),
       room("N1", "non_chauffe"),
       room("C1", "circulation"),
       room("H1", "chauffe"),
       room("H2", "chauffe"),
       room("C2", "circulation"),
     ];
-    expect(sortedStudyRooms(rooms).map((item) => item.id)).toEqual(["H1", "H2", "C1", "C2", "N1"]);
-    expect(rooms.map((item) => item.id)).toEqual(["N1", "C1", "H1", "H2", "C2"]);
+    expect(sortedStudyRooms(rooms).map((item) => item.id)).toEqual(["H1", "H2", "C1", "C2", "N1", "G1"]);
+    expect(rooms.map((item) => item.id)).toEqual(["G1", "N1", "C1", "H1", "H2", "C2"]);
+  });
+
+  it("donne à la gaine son libellé et sa couleur propres", () => {
+    expect(NATURE_LABELS.gaine_technique).toBe("Gaine technique");
+    expect(NATURE_COLORS.gaine_technique).toBe("#7c3aed");
+    expect(NATURE_COLORS.gaine_technique).not.toBe(NATURE_COLORS.non_chauffe);
+  });
+
+  it("fabrique un geste de nature seul et omet la nature courante du clic droit", () => {
+    expect(changeLocalNatureOperation("piece-001", "gaine_technique")).toEqual({
+      type: "modifier",
+      id: "piece-001",
+      nature: "gaine_technique",
+    });
+    expect(otherLocalNatures("non_chauffe")).toEqual(["chauffe", "circulation", "gaine_technique"]);
   });
 });
 

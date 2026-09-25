@@ -43,6 +43,17 @@ def test_adjacences_epaisseurs_et_cotes_deperditifs():
     assert bureau["a_completer"] and bureau["local"] == "chauffe"
 
 
+def test_une_gaine_se_comporte_comme_un_local_non_chauffe():
+    analyse = {"objects": [_piece("piece-001", "Bureau", 30, 30, 490, 470),
+                           _piece("piece-002", "Gaine", 510, 30, 970, 470, local="gaine_technique")]}
+
+    resultat = {f["piece"]: f for f in fiches_locaux.fiches(analyse, _manifeste())}
+
+    cote_gaine = next(c for c in resultat["Bureau"]["cotes"] if c["adjacence"] == "gaine_technique")
+    assert cote_gaine["voisin"] == "Gaine" and cote_gaine["deperditif"]
+    assert resultat["Gaine"]["deperditif_m"] == 0
+
+
 def test_orientation_calee_sur_le_nord():
     assert fiches_locaux.orientation((0, -1), 0) == "N"  # normale vers le haut de la feuille, nord en haut
     assert fiches_locaux.orientation((1, 0), 0) == "E"

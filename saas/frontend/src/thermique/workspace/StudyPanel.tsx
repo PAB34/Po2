@@ -1,10 +1,10 @@
 import { Fragment, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 
-import type { PdfPoint, Study, StudyRoom } from "../api";
+import type { PdfPoint, Study, StudyLocalNature, StudyRoom } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
-import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms } from "./study";
+import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
 
 const meters = (value: number | undefined) => (value == null ? "—" : `${value.toLocaleString("fr-FR")} m`);
 const squareMeters = (value: number | undefined) => (value == null ? "—" : `${value.toLocaleString("fr-FR")} m²`);
@@ -152,9 +152,11 @@ export type StudyEdition = {
   coverage: Study["content"]["couverture"] | null;
   versions: { version_number: number; reason: string; created_at: string }[];
   rooms: StudyRoom[];
+  natureBlockedReason: string | null;
+  onNature: (nature: StudyLocalNature) => void;
   onStart: (mode: "contour" | "couper") => void;
   onCancel: () => void;
-  onDraft: (changes: Partial<Pick<StudyDraft, "nature" | "nom" | "noms">>) => void;
+  onDraft: (changes: Partial<Pick<StudyDraft, "nom" | "noms">>) => void;
   onRecompute: () => void;
   onSave: () => void;
   onMerge: (otherId: string) => void;
@@ -206,19 +208,6 @@ function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdit
               <input value={draft.nom} onChange={(event) => edition.onDraft({ nom: event.target.value })} />
             </label>
           )}
-          <label hidden={draft.mode === "couper"}>
-            Nature
-            <select
-              value={draft.nature}
-              onChange={(event) => edition.onDraft({ nature: event.target.value as StudyRoom["nature"] })}
-            >
-              {(Object.keys(NATURE_LABELS) as StudyRoom["nature"][]).map((nature) => (
-                <option key={nature} value={nature}>
-                  {NATURE_LABELS[nature]}
-                </option>
-              ))}
-            </select>
-          </label>
           <div className="th-study-actions">
             <button type="button" className="po2-button po2-button--ghost" onClick={edition.onRecompute} disabled={edition.busy}>
               Remodéliser
@@ -289,7 +278,28 @@ export function StudyRoomPanel({
     <>
       <div>
         <h2 className="th-panel__title">{room.nom}</h2>
-        <p className="th-muted">{NATURE_LABELS[room.nature]} · {squareMeters(sheet.surface_m2)} · périmètre {meters(sheet.perimetre_m)}</p>
+        {edition ? (
+          <label>
+            Nature du local
+            <select
+              aria-label={`Nature de ${room.nom}`}
+              value={room.nature}
+              disabled={edition.busy || Boolean(edition.draft) || Boolean(edition.natureBlockedReason)}
+              title={edition.natureBlockedReason ?? undefined}
+              onChange={(event) => edition.onNature(event.target.value as StudyLocalNature)}
+            >
+              {STUDY_LOCAL_NATURES.map((nature) => (
+                <option key={nature} value={nature}>
+                  {NATURE_LABELS[nature]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="th-muted">{NATURE_LABELS[room.nature]}</p>
+        )}
+        {edition?.natureBlockedReason && <small className="th-muted">{edition.natureBlockedReason}</small>}
+        <p className="th-muted">{squareMeters(sheet.surface_m2)} · périmètre {meters(sheet.perimetre_m)}</p>
         {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,
             car un local décollé de la façade cesse de déperdre et ses cotes changent de sens. */}
         <p className={sheet.deperditif_m ? "th-muted" : "th-alert th-alert--warn"}>
@@ -327,7 +337,7 @@ export function StudyRoomPanel({
       <section>
         <h2>Parois rattachées</h2>
         <EnvelopeItems items={room.synthese.parois ?? []} />
-        {(room.synthese.sur_non_chauffe_m ?? 0) > 0 && <p className="th-alert th-alert--warn">Sur local non chauffé ou vide : {meters(room.synthese.sur_non_chauffe_m)}</p>}
+        {(room.synthese.sur_non_chauffe_m ?? 0) > 0 && <p className="th-alert th-alert--warn">Sur local non chauffé, gaine ou vide : {meters(room.synthese.sur_non_chauffe_m)}</p>}
       </section>
 
       <section>

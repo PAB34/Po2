@@ -103,7 +103,9 @@ def valider_sortie(payload: Any) -> tuple[list[dict[str, Any]], list[str]]:
         if not isinstance(item.get("review_required"), bool):
             issues.append(f"{prefix}: review_required invalide")
             item_valid = False
-        if category == "piece" and "local" in item and item.get("local") not in {"chauffe", "circulation", "non_chauffe"}:
+        if category == "piece" and "local" in item and item.get("local") not in {
+            "chauffe", "circulation", "non_chauffe", "gaine_technique"
+        }:
             issues.append(f"{prefix}: nature de local invalide")
             item_valid = False
         if category != "piece" and "local" in item:

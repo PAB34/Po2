@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-export type PlanAction = { cle: string; label: string; faire: () => void };
+export type PlanAction = { cle: string; label: string; faire: () => void; disabled?: boolean; title?: string };
 
 /**
  * Menu du clic droit sur le plan.
@@ -73,6 +73,8 @@ export function PlanMenu({
           type="button"
           role="menuitem"
           autoFocus={index === 0}
+          disabled={action.disabled}
+          title={action.title}
           onClick={() => {
             action.faire();
             onClose();

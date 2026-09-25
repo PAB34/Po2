@@ -1,21 +1,39 @@
-import type { PdfPoint, Study, StudyLocalNature, StudyRoom } from "../api";
+import type { PdfPoint, Study, StudyLocalNature, StudyOperation, StudyRoom } from "../api";
 import { pointInPolygon } from "./edition";
 
 export const studyQueryKey = (sheetId: number | null) => ["thermique", "etude", sheetId] as const;
 
-const NATURE_ORDER: Record<StudyLocalNature, number> = { chauffe: 0, circulation: 1, non_chauffe: 2 };
+export const STUDY_LOCAL_NATURES: StudyLocalNature[] = ["chauffe", "circulation", "non_chauffe", "gaine_technique"];
+
+const NATURE_ORDER: Record<StudyLocalNature, number> = {
+  chauffe: 0,
+  circulation: 1,
+  non_chauffe: 2,
+  gaine_technique: 3,
+};
 
 export const NATURE_LABELS: Record<StudyLocalNature, string> = {
   chauffe: "Chauffé",
   circulation: "Circulation",
   non_chauffe: "Non chauffé",
+  gaine_technique: "Gaine technique",
 };
 
 export const NATURE_COLORS: Record<StudyLocalNature, string> = {
   chauffe: "#e58c25",
   circulation: "#3278ad",
   non_chauffe: "#6b7280",
+  gaine_technique: "#7c3aed",
 };
+
+export const otherLocalNatures = (current: StudyLocalNature): StudyLocalNature[] =>
+  STUDY_LOCAL_NATURES.filter((nature) => nature !== current);
+
+export const changeLocalNatureOperation = (id: string, nature: StudyLocalNature): StudyOperation => ({
+  type: "modifier",
+  id,
+  nature,
+});
 
 export function sortedStudyRooms(rooms: StudyRoom[]): StudyRoom[] {
   return rooms

@@ -41,3 +41,15 @@ def test_un_troncon_par_cote_deperditif_sans_le_mitoyen():
     # A : 4 + 3 + 4 m sur l'extérieur ; le côté mitoyen avec B (chauffé) n'est pas lu
     assert abs(par_local["A"] - 11.0) < 0.15
     assert abs(par_local["B"] - 11.0) < 0.15
+
+
+def test_le_cote_d_un_local_chauffe_sur_une_gaine_reste_lu():
+    analyse = _analyse()
+    analyse["objects"][1]["local"] = "gaine_technique"
+    batiment = Polygon([(80, 80), (940, 80), (940, 420), (80, 420)])
+
+    troncons = lecture.troncons_par_local(analyse, 1000, 1000, PX, batiment)
+
+    sur_gaine = [t for t in troncons if t["piece"] == "A" and t["adjacence"] == "gaine_technique"]
+    assert abs(sum(t["local_fin_m"] - t["local_debut_m"] for t in sur_gaine) - 3.0) < 0.15
+    assert all(t["piece"] != "B" for t in troncons)

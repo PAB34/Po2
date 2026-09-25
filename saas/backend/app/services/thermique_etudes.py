@@ -49,7 +49,7 @@ MAX_ETUDE_BYTES = 10 * 1024 * 1024
 MOTIF_IMPORT_INITIAL = "import_initial"
 MOTIF_IMPORT_REMPLACEMENT = "import_remplacement"
 MOTIFS_D_IMPORT = (MOTIF_IMPORT_INITIAL, MOTIF_IMPORT_REMPLACEMENT)
-LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe"}
+LOCAL_NATURES = {"chauffe", "circulation", "non_chauffe", "gaine_technique"}
 
 
 class EtudeConflict(ThermiqueError):

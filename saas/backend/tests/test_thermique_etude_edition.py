@@ -128,6 +128,9 @@ def test_fusionner_deux_locaux_mitoyens_puis_refuser_deux_locaux_distants():
 
 def test_modifier_refuse_une_nature_inconnue_et_un_contour_hors_feuille():
     analyse = _analyse_deux_locaux()
+    edition._modifier(analyse, {"type": "modifier", "id": "piece-001", "nature": "gaine_technique"})
+    piece = next(objet for objet in analyse["objects"] if objet["id"] == "piece-001")
+    assert piece["local"] == "gaine_technique"
     with pytest.raises(ThermiqueError, match="nature"):
         edition._modifier(analyse, {"type": "modifier", "id": "piece-001", "nature": "tiede"})
     with pytest.raises(ThermiqueError, match="sort de la feuille"):

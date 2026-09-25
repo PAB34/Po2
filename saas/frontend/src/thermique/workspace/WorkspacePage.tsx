@@ -22,7 +22,7 @@ import { pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
-import { roomAt, studyQueryKey } from "./study";
+import { NATURE_LABELS, otherLocalNatures, roomAt, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
@@ -237,12 +237,17 @@ export function WorkspacePage() {
   // Les corrections d'éléments s'appliquent d'abord : l'édition des contours travaille ensuite sur
   // l'étude qu'elles montrent, pour que les deux aperçus ne se contredisent jamais.
   const elementsState = useStudyElements({ token: token ?? null, sheetId, study: study ?? undefined });
+  const natureBlockedReason =
+    elementsState.pending > 0
+      ? "Enregistrez ou abandonnez d'abord les corrections d'éléments en attente."
+      : null;
   const editionState = useStudyEdition({
     token: token ?? null,
     sheetId,
     study: elementsState.shown,
     selectedRoom: study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null,
     onSelectRoom: selectRoom,
+    natureBlockedReason,
   });
   // Tant qu'un aperçu n'est pas enregistré, c'est lui qui est affiché sur le plan et dans la fiche.
   const shownStudy = editionState.shown;
@@ -515,8 +520,21 @@ export function WorkspacePage() {
                       if (!room) {
                         return [];
                       }
+                      const actionsNature: PlanAction[] = otherLocalNatures(room.nature).map((nature) => ({
+                        cle: `nature-${nature}`,
+                        label: `Classer : ${NATURE_LABELS[nature]}`,
+                        disabled: editionState.natureChangeDisabled,
+                        title:
+                          editionState.natureBlockedReason ??
+                          (editionState.natureChangeDisabled ? "Un calcul est déjà en cours." : undefined),
+                        faire: () => {
+                          selectRoom(room.id);
+                          void editionState.changeNature(room.id, nature);
+                        },
+                      }));
                       return [
                         { cle: "fiche", label: `Ouvrir « ${room.nom} »`, faire: () => selectRoom(room.id) },
+                        ...actionsNature,
                         {
                           cle: "contour",
                           label: "Reprendre le contour",

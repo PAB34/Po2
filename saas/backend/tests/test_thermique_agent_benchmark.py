@@ -55,6 +55,13 @@ def test_nature_thermique_reste_optionnelle_pour_une_ancienne_sortie():
     assert issues == []
 
 
+def test_une_gaine_technique_est_une_nature_valide():
+    gaine = _piece("Gaine", [[0, 0], [100, 0], [100, 100]], local="gaine_technique")
+    objects, issues = valider_sortie(_payload(gaine))
+    assert objects == [gaine]
+    assert issues == []
+
+
 def test_objet_avec_confiance_invalide_est_exclu_des_statistiques():
     invalid = _piece("Bureau", [[0, 0], [100, 0], [100, 100]])
     invalid["confidence"] = "forte"

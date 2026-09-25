@@ -22,7 +22,7 @@ EXTENSION_M = 1.5  # croissance maximale d'une pièce au-delà de son départ
 RATIO_SURFACE = (0.6, 1.8)
 CANDIDAT_M2 = 2.0
 SIMPLIFICATION_M = 0.05
-NATURES = ("chauffe", "circulation", "non_chauffe")
+NATURES = ("chauffe", "circulation", "non_chauffe", "gaine_technique")
 
 
 FERMETURE_M = 0.7  # encoches de moins de 1,4 m de large (mobilier, battants de porte) refermées
@@ -209,11 +209,12 @@ def consigne_locaux(analyse: dict[str, Any], recalage: dict[str, Any]) -> str:
         "",
         "Ta tâche, sans dessiner de contour (ils sont mesurés par ailleurs) :",
         "1. Pour chaque pièce : sa nature `local` = `chauffe` (bureau, salle, sanitaire, vestiaire…), `circulation`"
-        " (couloir, hall, dégagement, palier, escalier ouvert chauffé) ou `non_chauffe` (local technique, gaine,"
-        " escalier encloisonné ou local manifestement non chauffé). En cas de doute, `chauffe` et une observation.",
-        "2. Pour chaque espace libre C… : `decision` = `local` (une pièce oubliée : donne `nom` lu sur le plan ou"
-        " « circulation », et sa nature `local`), `vide` (vide sur étage inférieur, trémie, patio, puits de"
-        " lumière), `exterieur` (terrasse, dehors) ou `mur` (épaisseur de mur, gaine technique sans accès).",
+        " (couloir, hall, dégagement, palier, escalier ouvert chauffé), `gaine_technique` (gaine verticale ou"
+        " horizontale) ou `non_chauffe` (autre local technique, escalier encloisonné ou local manifestement non"
+        " chauffé). En cas de doute, `chauffe` et une observation.",
+        "2. Pour chaque espace libre C… : `decision` = `local` (une pièce ou gaine oubliée : donne `nom` lu sur"
+        " le plan ou « circulation », et sa nature `local`), `vide` (vide sur étage inférieur, trémie, patio,"
+        " puits de lumière), `exterieur` (terrasse, dehors) ou `mur` (épaisseur de mur).",
         "3. Signale en observation une pièce qui contient un vide (ex. « vide sur accueil ») : sa surface n'est pas"
         " un plancher chauffé.",
         "Réponds uniquement par le JSON demandé.",

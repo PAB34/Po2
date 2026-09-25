@@ -22,7 +22,7 @@ from app.services import thermique_fiches_locaux as fiches_locaux
 from app.services import thermique_parcours_enveloppe as env
 
 LOCAUX_LUS = {"chauffe", "circulation"}
-ADJACENCES_LUES = {"exterieur", "non_chauffe", "vide", "inconnu"}
+ADJACENCES_LUES = {"exterieur", "vide", "inconnu"} | fiches_locaux.LOCAUX_NON_CHAUFFES
 BANDE = {"interieure": 0.40, "exterieure": 0.90}
 PAS_M = 0.10
 MORCEAU_MIN_M = 0.30  # une suite de sondages plus courte rejoint ses voisins
@@ -147,7 +147,7 @@ def troncons_par_local(analyse: dict[str, Any], largeur: float, hauteur: float, 
     return resultat
 
 
-ADJACENCES_COMPLEMENT = {"non_chauffe", "vide"}
+ADJACENCES_COMPLEMENT = {"vide"} | fiches_locaux.LOCAUX_NON_CHAUFFES
 PART_EXIGEE = 0.30
 COMPLEMENT_MIN_M = 0.5
 COMPLEMENT_DEPART_M = 10000.0  # loin du périmètre de la façade : aucun raccord d'angle avec les tronçons T

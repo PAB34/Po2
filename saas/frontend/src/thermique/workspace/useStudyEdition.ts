@@ -1,7 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 
-import { thermiqueApi, type PdfPoint, type Study, type StudyOperation, type StudyPreview, type StudyRoom } from "../api";
+import {
+  thermiqueApi,
+  type PdfPoint,
+  type Study,
+  type StudyLocalNature,
+  type StudyOperation,
+  type StudyPreview,
+  type StudyRoom,
+} from "../api";
 import type { PickEvent } from "../components/TileSheetViewer";
 import type { StudyEdition } from "./StudyPanel";
 import {
@@ -16,7 +24,7 @@ import {
   type EditMode,
   type StudyDraft,
 } from "./edition";
-import { sortedStudyRooms, studyQueryKey } from "./study";
+import { changeLocalNatureOperation, sortedStudyRooms, studyQueryKey } from "./study";
 
 // Rayon de saisie d'une poignée, en pixels d'écran.
 const PRISE_PX = 10;
@@ -29,12 +37,14 @@ export function useStudyEdition({
   study,
   selectedRoom,
   onSelectRoom,
+  natureBlockedReason,
 }: {
   token: string | null;
   sheetId: number | null;
   study: Study | undefined;
   selectedRoom: StudyRoom | null;
   onSelectRoom: (id: string) => void;
+  natureBlockedReason: string | null;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<StudyDraft | null>(null);
@@ -163,6 +173,48 @@ export function useStudyEdition({
     [queryClient, reset, sheetId, token, versions],
   );
 
+  const changeNature = useCallback(
+    async (roomId: string, nature: StudyLocalNature) => {
+      if (!token || !sheetId) {
+        return;
+      }
+      if (busy) {
+        return;
+      }
+      if (draft) {
+        setMessage("Terminez ou annulez d'abord la reprise du contour.");
+        return;
+      }
+      if (natureBlockedReason) {
+        setMessage(natureBlockedReason);
+        return;
+      }
+      const room = study?.content.locaux.find((item) => item.id === roomId);
+      if (!room || room.nature === nature) {
+        return;
+      }
+      setBusy(true);
+      setMessage(null);
+      try {
+        const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
+          operations: [changeLocalNatureOperation(roomId, nature)],
+          local_id: roomId,
+          motif: "nature_local",
+          valider: false,
+        });
+        queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
+        setPreview(null);
+        setMessage("Nature enregistrée et métrés recalculés.");
+        void versions.refetch();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Le changement de nature a échoué.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, draft, natureBlockedReason, queryClient, sheetId, study, token, versions],
+  );
+
   const edition: StudyEdition | undefined = selectedRoom
     ? {
         draft,
@@ -173,6 +225,8 @@ export function useStudyEdition({
         coverage: preview?.couverture ?? study?.content.couverture ?? null,
         versions: versions.data ?? [],
         rooms: study?.content.locaux ?? [],
+        natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
+        onNature: (nature: StudyLocalNature) => void changeNature(selectedRoom.id, nature),
         onStart: (mode: EditMode) => {
           setPreview(null);
           setMessage(null);
@@ -341,6 +395,9 @@ export function useStudyEdition({
     },
     contextActions,
     startOn,
+    changeNature,
+    natureChangeDisabled: Boolean(draft || busy || natureBlockedReason),
+    natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
     reset,
   };
 }

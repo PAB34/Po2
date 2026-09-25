@@ -68,7 +68,7 @@ export type Project = {
 
 export type ProjectDetail = Project & { documents: ThermiqueDocument[] };
 
-export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe";
+export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe" | "gaine_technique";
 /** Nature d'un côté de local : sur l'enveloppe, le long d'une paroi lue, ou limite d'usage (D59). */
 export type StudyLimit = "exterieur" | "paroi" | "convention";
 export type StudyLocalState = { status: "a_verifier" | "valide" | "a_revoir"; motif: string | null };

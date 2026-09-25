@@ -176,6 +176,18 @@ def test_validation_convertit_le_repere_feuille_en_points_pdf(contexte):
     assert contenu["locaux"][0]["contour_pdf"] == [[100.0, 400.0], [300.0, 400.0], [300.0, 250.0], [100.0, 250.0]]
 
 
+def test_validation_accepte_une_gaine_technique(contexte):
+    _db, _user, _project, sheet = contexte
+    payload = _payload(sheet.document.sha256)
+    payload["analyse"]["objects"][0]["local"] = "gaine_technique"
+    payload["locaux"][0]["nature"] = "gaine_technique"
+    payload["locaux"][0]["fiche"]["local"] = "gaine_technique"
+
+    contenu = valider_et_convertir(payload, sheet, _raster())
+
+    assert contenu["locaux"][0]["nature"] == "gaine_technique"
+
+
 def test_validation_refuse_mauvais_pdf_page_et_geometrie(contexte):
     _db, _user, _project, sheet = contexte
     payload = _payload("0" * 64)

@@ -57,14 +57,14 @@ def test_integration_des_locaux_nature_et_espace_libre_nomme():
     recalage = locaux.recaler_pieces(page, analyse, PX_PAR_M, batiment)
     analyse = locaux.appliquer(analyse, recalage)
     reponse = {"pieces": [{"id": "piece-001", "local": "chauffe", "indice": ""},
-                          {"id": "piece-002", "local": "non_chauffe", "indice": "local technique"}],
+                          {"id": "piece-002", "local": "gaine_technique", "indice": "gaine verticale"}],
                "candidats": [{"id": "C1", "decision": "local", "nom": "circulation", "local": "circulation", "indice": "couloir"}],
                "observations": []}
 
     finale = locaux.integrer_locaux(analyse, recalage, reponse)
 
     pieces = [o for o in finale["objects"] if o["category"] == "piece"]
-    assert [p["local"] for p in pieces] == ["chauffe", "non_chauffe", "circulation"]
+    assert [p["local"] for p in pieces] == ["chauffe", "gaine_technique", "circulation"]
     assert pieces[2]["contour"] == "espace_libre_mesure" and pieces[2]["review_required"]
     assert pieces[0]["contour"] == "recale_sur_murs" and "points_contour_agent" in pieces[0]
 
