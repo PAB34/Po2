@@ -9,6 +9,7 @@ import {
   type StudyOperation,
 } from "../api";
 import { appliquerEnLocal, refusDeCorrection } from "./elementsLocal";
+import { annulerOperation, rejouerOperations, retablirOperation } from "./elementsHistory";
 import { memeElement, refDeElement } from "./elements";
 import { studyQueryKey } from "./study";
 
@@ -32,6 +33,7 @@ export function useStudyElements({
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<StudyElementRef | null>(null);
   const [operations, setOperations] = useState<StudyOperation[]>([]);
+  const [annulees, setAnnulees] = useState<StudyOperation[]>([]);
   // Étude telle qu'elle serait après les gestes en attente : recalculée en local, pas par le serveur.
   const [local, setLocal] = useState<StudyContent | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,6 +41,7 @@ export function useStudyElements({
 
   const reset = useCallback(() => {
     setOperations([]);
+    setAnnulees([]);
     setLocal(null);
     setMessage(null);
   }, []);
@@ -61,10 +64,39 @@ export function useStudyElements({
       }
       setLocal(appliquerEnLocal(base, operation));
       setOperations((current) => [...current, operation]);
+      setAnnulees([]);
       setMessage(null);
     },
     [local, study],
   );
+
+  const undo = useCallback(() => {
+    if (!study?.content || operations.length === 0) {
+      setMessage("Aucune correction locale à annuler.");
+      return;
+    }
+    const suivant = annulerOperation({ operations, annulees });
+    setOperations(suivant.operations);
+    setAnnulees(suivant.annulees);
+    setLocal(suivant.operations.length ? rejouerOperations(study.content, suivant.operations) : null);
+    setMessage(
+      suivant.operations.length
+        ? "Dernière correction annulée — recalculez le plan pour actualiser le résultat."
+        : "Dernière correction annulée. Aucune correction locale en attente.",
+    );
+  }, [annulees, operations, study]);
+
+  const redo = useCallback(() => {
+    if (!study?.content || annulees.length === 0) {
+      setMessage("Aucune correction locale à rétablir.");
+      return;
+    }
+    const suivant = retablirOperation({ operations, annulees });
+    setOperations(suivant.operations);
+    setAnnulees(suivant.annulees);
+    setLocal(rejouerOperations(study.content, suivant.operations));
+    setMessage("Correction rétablie — recalculez le plan pour actualiser le résultat.");
+  }, [annulees, operations, study]);
 
   /** Envoie les gestes accumulés au serveur pour voir leur effet sur le plan, sans enregistrer. */
   const recompute = useCallback(async () => {
@@ -111,11 +143,15 @@ export function useStudyElements({
     /** Étude à afficher : celle que les gestes en attente décrivent, sinon celle en base. */
     shown: local && study ? { ...study, content: local } : study,
     pending: operations.length,
+    canUndo: operations.length > 0,
+    canRedo: annulees.length > 0,
     busy,
     message,
     apply,
     recompute: () => void recompute(),
     save: () => void save(),
     cancel: reset,
+    undo,
+    redo,
   };
 }

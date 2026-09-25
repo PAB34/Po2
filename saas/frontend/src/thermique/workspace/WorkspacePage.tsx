@@ -22,6 +22,7 @@ import { pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
+import { cibleEditable } from "./elementsHistory";
 import { NATURE_LABELS, otherLocalNatures, roomAt, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
@@ -249,6 +250,25 @@ export function WorkspacePage() {
     onSelectRoom: selectRoom,
     natureBlockedReason,
   });
+
+  useEffect(() => {
+    const gererHistorique = (event: KeyboardEvent) => {
+      if (editionState.draft || cibleEditable(event.target)) return;
+      const modificateur = event.ctrlKey || event.metaKey;
+      if (!modificateur) return;
+      const touche = event.key.toLowerCase();
+      const retablir = (touche === "z" && event.shiftKey) || touche === "y";
+      const annuler = touche === "z" && !event.shiftKey;
+      if ((!annuler && !retablir) || (annuler && !elementsState.canUndo) || (retablir && !elementsState.canRedo)) {
+        return;
+      }
+      event.preventDefault();
+      if (retablir) elementsState.redo();
+      else elementsState.undo();
+    };
+    window.addEventListener("keydown", gererHistorique, true);
+    return () => window.removeEventListener("keydown", gererHistorique, true);
+  }, [editionState.draft, elementsState.canRedo, elementsState.canUndo, elementsState.redo, elementsState.undo]);
   // Tant qu'un aperçu n'est pas enregistré, c'est lui qui est affiché sur le plan et dans la fiche.
   const shownStudy = editionState.shown;
   const selectedRoom = shownStudy?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
@@ -682,18 +702,38 @@ export function WorkspacePage() {
                   )}
                 </>
               )}
-              {elementsState.pending > 0 && (
+              {(elementsState.pending > 0 || elementsState.canRedo) && (
                 <div className="th-element-enregistrer">
                   {/* D105 : le geste est immédiat, seul le plan attend un recalcul. On le dit. */}
-                  <p className="th-alert th-alert--warn">
-                    {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} en attente —
-                    recalculez pour les voir sur le plan.
-                  </p>
+                  {elementsState.pending > 0 ? (
+                    <p className="th-alert th-alert--warn">
+                      {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} en attente —
+                      recalculez pour les voir sur le plan.
+                    </p>
+                  ) : (
+                    <p className="th-alert">Aucune correction en attente. Une action peut encore être rétablie.</p>
+                  )}
                   <div className="th-inline">
                     <button
                       type="button"
+                      className="po2-button po2-button--ghost"
+                      disabled={elementsState.busy || !elementsState.canUndo}
+                      onClick={elementsState.undo}
+                    >
+                      Annuler (Ctrl+Z)
+                    </button>
+                    <button
+                      type="button"
+                      className="po2-button po2-button--ghost"
+                      disabled={elementsState.busy || !elementsState.canRedo}
+                      onClick={elementsState.redo}
+                    >
+                      Rétablir
+                    </button>
+                    <button
+                      type="button"
                       className="po2-button po2-button--primary"
-                      disabled={elementsState.busy}
+                      disabled={elementsState.busy || elementsState.pending === 0}
                       onClick={elementsState.save}
                     >
                       Enregistrer les corrections
@@ -701,12 +741,12 @@ export function WorkspacePage() {
                     <button
                       type="button"
                       className="po2-button po2-button--ghost"
-                      disabled={elementsState.busy}
+                      disabled={elementsState.busy || elementsState.pending === 0}
                       onClick={elementsState.recompute}
                     >
                       {elementsState.busy ? "Recalcul…" : "Recalculer le plan"}
                     </button>
-                    <button type="button" className="th-link" disabled={elementsState.busy} onClick={elementsState.cancel}>
+                    <button type="button" className="th-link" disabled={elementsState.busy || elementsState.pending === 0} onClick={elementsState.cancel}>
                       Tout annuler
                     </button>
                   </div>
