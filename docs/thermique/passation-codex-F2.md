@@ -156,6 +156,14 @@ Dans `workspace/elementsLocal.test.ts` ou un nouveau fichier : annuler un écart
 annuler puis rétablir revient au même contenu ; un nouveau geste après une annulation vide la pile de
 rétablissement ; annuler sur une pile vide ne casse rien.
 
+## 5bis. ⚠️ Sept sujets ouverts relevés par l'utilisateur le 2026-09-25
+
+**`docs/thermique/reprise-sujets-ouverts.md`** — à lire aussi. Supprimer et ajouter des pièces ; cliquer
+un côté dans la fiche pour le voir sur le plan ; la règle des 50 % sur les 64 angles (elle n'existe que
+pour les 13 abouts de refend) ; comment une étape est déclarée terminée (répondu) ; les terrasses comme
+pièces extérieures ; les contours parasites de portes et d'aires PMR ; le tracé trop découpé.
+Un ordre de travail y est proposé.
+
 ## 6. La recette que l'utilisateur doit encore faire sur F2
 
 Elle n'a **pas** eu lieu (rien n'est déployé). Trois points, et il a déjà donné son avis sur le principe :
