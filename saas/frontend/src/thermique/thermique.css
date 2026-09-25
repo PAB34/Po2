@@ -1046,6 +1046,13 @@ circle.th-seg--measure {
   cursor: pointer;
 }
 
+.th-viewer__pilote {
+  color: var(--po2-color-muted);
+  font-size: 0.74rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+
 /* Métrés dessinés sur le plan : ils se lisent, ils ne se cliquent pas — le geste va toujours au plan (D79). */
 /* Le plan est une image raster toujours blanche. Ce qu'on dessine dessus ne doit donc PAS suivre le
    thème de l'application : en mode sombre, `--po2-color-ink` devient presque blanc et les cotes, la
@@ -1907,17 +1914,33 @@ circle.th-seg--measure {
   content: "";
 }
 
-.th-ws-steps li.is-done::before {
+/* Les trois états du parcours (F2, D106). L'étape en cours porte un liseré : elle dit où l'on est. */
+.th-ws-steps li.th-ws-step--fait::before {
   border-color: var(--po2-color-mint);
   background: var(--po2-color-mint);
 }
 
-.th-ws-steps li.is-todo {
-  background: var(--po2-color-amber-soft);
+.th-ws-steps li.th-ws-step--en_cours::before {
+  border-color: var(--po2-color-amber, #d98a00);
 }
 
-.th-ws-steps li.is-later {
+.th-ws-steps li.th-ws-step--attente {
   color: var(--po2-color-muted);
+}
+
+.th-ws-steps li.is-current {
+  background: var(--po2-color-amber-soft);
+  box-shadow: inset 2px 0 0 var(--po2-color-amber, #d98a00);
+}
+
+.th-ws-steps li.th-ws-step--attente.is-current {
+  background: var(--po2-color-canvas);
+  box-shadow: inset 2px 0 0 var(--po2-color-line);
+}
+
+.th-ws-depart {
+  display: grid;
+  gap: 0.5rem;
 }
 
 .th-ws-steps button {
@@ -2617,6 +2640,76 @@ circle.th-seg--measure {
 .th-metric-pont.is-selected .th-metric-pont__etiquette {
   stroke-opacity: 1;
   stroke-width: 2;
+}
+
+/* Une liaison écartée reste dessinée, en clair et barrée : l'invisible ne se corrige pas (Q5). */
+.th-metric-pont.is-ecartee circle {
+  stroke-dasharray: 3 2;
+}
+
+.th-metric-pont.is-ecartee .th-metric-pont__sigle {
+  fill: #6b7280;
+  text-decoration: line-through;
+}
+
+/* Étape « ponts thermiques » : une passe, un pont à la fois (F2). */
+.th-ponts {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.th-ponts__position {
+  margin: 0;
+  color: var(--po2-color-muted);
+  font-size: 0.84rem;
+}
+
+.th-ponts__fiche {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+}
+
+.th-ponts__titre {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.th-ponts__fiche p {
+  margin: 0;
+}
+
+.th-ponts__gestes {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Les motifs pré-écrits s'empilent, pour être lus d'un coup d'œil et cliqués sans viser (Q3). */
+.th-ponts__motifs {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.th-ponts__motifs button.po2-button--ghost {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.th-ponts__motifs label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.86rem;
+}
+
+.th-ponts__nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 /* Un élément désigné occupe seul le bandeau. */

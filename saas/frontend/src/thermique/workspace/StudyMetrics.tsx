@@ -197,6 +197,7 @@ export function StudyMetrics({
   show,
   toScreen,
   selectedElement = null,
+  grouperPonts = true,
 }: {
   rooms: StudyRoom[];
   selected: StudyRoom | null;
@@ -206,6 +207,11 @@ export function StudyMetrics({
   toScreen: ToScreen;
   /** Élément désigné par le thermicien : il ressort du lot (F4). */
   selectedElement?: StudyElementRef | null;
+  /**
+   * Regrouper les pastilles qui se confondent à l'œil. L'étape « ponts thermiques » les déplie, puisque
+   * c'est précisément là qu'il faut les distinguer un à un (F2, Q4).
+   */
+  grouperPonts?: boolean;
 }) {
   // Le local sélectionné montre tout ; les cases étendent chaque famille au reste du niveau (D83).
   const cotesDe = show.metres ? rooms : selected ? [selected] : [];
@@ -231,10 +237,16 @@ export function StudyMetrics({
   // l'amas la représente ; le clic, lui, vise toujours le pont réellement le plus proche.
   const amas: { bridge: StudyBridge; x: number; y: number; sigleLisible: boolean; nombre: number }[] = [];
   for (const pont of pontsAffiches) {
-    const proche = amas.find(
-      (groupe) => Math.hypot(groupe.x - pont.x, groupe.y - pont.y) < GROUPE_PONT_PX,
-    );
-    if (proche && !pontVise(pont.bridge, selectedElement)) {
+    // Un pont visé et un pont écarté ne sont jamais absorbés : l'un est ce qu'on regarde, l'autre est
+    // un geste que l'on doit pouvoir défaire, donc voir (Q5).
+    const aPart = pontVise(pont.bridge, selectedElement) || pont.bridge.exclu;
+    const proche = grouperPonts
+      ? amas.find(
+          (groupe) =>
+            !groupe.bridge.exclu && Math.hypot(groupe.x - pont.x, groupe.y - pont.y) < GROUPE_PONT_PX,
+        )
+      : undefined;
+    if (proche && !aPart) {
       proche.nombre += 1;
     } else {
       amas.push({ ...pont, nombre: 1 });
@@ -312,20 +324,36 @@ export function StudyMetrics({
               key={`pont-${bridge.troncon}-${rang}`}
               className={`th-metric-pont${orpheline ? " is-orpheline" : ""}${
                 pontVise(bridge, selectedElement) ? " is-selected" : ""
-              }`}
+              }${bridge.exclu ? " is-ecartee" : ""}`}
             >
               {/* Un pont visé n'avait aucun état visible : on ne savait pas ce qu'on venait de cliquer. */}
               {pontVise(bridge, selectedElement) && (
                 <circle cx={x} cy={y} r={11} className="th-metric-pont__halo" />
               )}
-              <circle cx={x} cy={y} r={5} fill={orpheline ? "#9ca3af" : COULEURS_PONT[bridge.type] ?? COULEURS_PONT.about_refend} />
+              <circle
+                cx={x}
+                cy={y}
+                r={5}
+                fill={
+                  bridge.exclu
+                    ? "#ffffff"
+                    : orpheline
+                      ? "#9ca3af"
+                      : COULEURS_PONT[bridge.type] ?? COULEURS_PONT.about_refend
+                }
+                stroke={bridge.exclu ? "#9ca3af" : undefined}
+              />
               {/* Pas de longueur ici : `longueur_m` est l'emprise relevée de l'angle sur le tronçon,
                   pas un linéaire de pont thermique. L'afficher induirait en erreur. */}
               {/* Le sigle dit de quel pont il s'agit : une pastille de couleur ne se lit pas en plan.
                   Il s'efface quand deux ponts sont trop proches pour que les deux sigles tiennent. */}
-              {(sigleLisible || pontVise(bridge, selectedElement)) &&
+              {/* Un pont écarté garde toujours son étiquette, même serré contre un voisin : sans elle,
+                  rien sur le plan ne dit qu'il est écarté, et le geste redevient invisible (Q5). */}
+              {(sigleLisible || pontVise(bridge, selectedElement) || bridge.exclu) &&
                 (() => {
-                  const texte = `${SIGLES_PONT[bridge.type] ?? "?"}${nombre > 1 ? ` ×${nombre}` : ""}`;
+                  const texte = `${SIGLES_PONT[bridge.type] ?? "?"}${nombre > 1 ? ` ×${nombre}` : ""}${
+                    bridge.exclu ? " écarté" : ""
+                  }`;
                   // Le fond est dimensionné sur le texte : une police de 11 px fait ~6,6 px par
                   // caractère en gras, plus 3 px de marge de chaque côté.
                   const largeur = texte.length * 6.6 + 6;

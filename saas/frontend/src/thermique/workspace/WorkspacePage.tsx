@@ -17,10 +17,12 @@ import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
-import { viserSurLePlan } from "./elements";
+import { PontsPanel } from "./PontsPanel";
+import { pontDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
-import { roomAt, studyQueryKey, validatedRoomCount } from "./study";
+import { roomAt, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
@@ -69,6 +71,9 @@ const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
 const PRISE_ELEMENT_PX = 6;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
+// Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
+// voisins, sans perdre le bâtiment de vue (Q4).
+const ZOOM_PONT = 5;
 
 function readMetrics(sheetId: number | null): MetricsShow {
   if (sheetId == null) {
@@ -135,6 +140,10 @@ export function WorkspacePage() {
   const referenceMigration = useRef<number | null>(null);
   const [metrics, setMetrics] = useState<MetricsShow>(METRICS_DEFAUT);
   const [menu, setMenu] = useState<{ x: number; y: number; actions: PlanAction[] } | null>(null);
+  // Dès que le thermicien touche une case d'affichage, l'étape rend la main : c'est lui qui décide (Q6).
+  const [calquesLibres, setCalquesLibres] = useState(false);
+  // Niveau qu'on cherche à quitter alors que des corrections attendent (D111) : pas de départ silencieux.
+  const [departEnAttente, setDepartEnAttente] = useState<number | null>(null);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -155,13 +164,16 @@ export function WorkspacePage() {
   const panel = (PANELS.find((item) => item.id === searchParams.get("panneau"))?.id ?? (sheets.length ? "planche" : "documents")) as Panel;
 
   const setParams = useCallback(
-    (changes: { planche?: number; panneau?: Panel; local?: string | null }) => {
+    (changes: { planche?: number; panneau?: Panel; local?: string | null; etape?: EtapeId }) => {
       const next = new URLSearchParams(searchParams);
       if (changes.planche !== undefined) {
         next.set("planche", String(changes.planche));
       }
       if (changes.panneau !== undefined) {
         next.set("panneau", changes.panneau);
+      }
+      if (changes.etape !== undefined) {
+        next.set("etape", changes.etape);
       }
       if (changes.local !== undefined) {
         if (changes.local === null) next.delete("local");
@@ -183,9 +195,10 @@ export function WorkspacePage() {
   }, [sheetId]);
 
   const basculerMetrique = useCallback(
-    (cle: keyof MetricsShow) => {
-      setMetrics((current) => {
-        const suivant = { ...current, [cle]: !current[cle] };
+    (cle: keyof MetricsShow, depart: MetricsShow) => {
+      setCalquesLibres(true);
+      setMetrics(() => {
+        const suivant = { ...depart, [cle]: !depart[cle] };
         if (sheetId != null) {
           writeMetrics(sheetId, suivant);
         }
@@ -234,6 +247,30 @@ export function WorkspacePage() {
   // Tant qu'un aperçu n'est pas enregistré, c'est lui qui est affiché sur le plan et dans la fiche.
   const shownStudy = editionState.shown;
   const selectedRoom = shownStudy?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
+
+  // Le parcours (F2, D106) : il se déduit de l'étude, et c'est lui qui règle le panneau et les calques.
+  const etapes = parcours(sheet ?? null, shownStudy);
+  const demandee = searchParams.get("etape");
+  const etape = (etapes.find((item) => item.id === demandee)?.id ?? etapeCourante(etapes)) as EtapeId;
+  const etapeActive = etapes.find((item) => item.id === etape) ?? etapes[0];
+  // Les calques de l'étape s'appliquent jusqu'à ce qu'une case soit touchée ; la mention le dit (Q6).
+  const calquesPilotes = !calquesLibres && etapeActive.calques !== null;
+  const metricsAffiches = calquesPilotes ? (etapeActive.calques as MetricsShow) : metrics;
+
+  const allerEtape = (cible: EtapeId) => {
+    const trouvee = etapes.find((item) => item.id === cible);
+    setCalquesLibres(false);
+    elementsState.select(null);
+    setParams({ etape: cible, panneau: trouvee?.panneau ?? "fiche" });
+  };
+
+  // Le pont en cours amène le plan à lui : l'étape sert à les distinguer un à un (Q4).
+  const elementCourant = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
+  const pontCourant =
+    etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
+  const focusPlan = pontCourant?.point_pdf
+    ? { point: pontCourant.point_pdf, cle: `${pontCourant.troncon}|${pontCourant.abscisse_m}`, zoom: ZOOM_PONT }
+    : null;
 
   useEffect(() => {
     if (!project || !token || referenceMigration.current === project.id) return;
@@ -284,9 +321,19 @@ export function WorkspacePage() {
     }
   };
   const levelTitle = sheet ? sheetTitle(sheet) : "";
-  const selectSheet = (id: number) => {
+  const changerDeNiveau = (id: number) => {
     editionState.reset();
+    elementsState.select(null);
+    setCalquesLibres(false);
     setParams({ planche: id, local: null, panneau: panel === "fiche" ? "planche" : panel });
+  };
+  const selectSheet = (id: number) => {
+    // Des corrections en attente disparaîtraient sans un mot : on demande d'abord (D111).
+    if (elementsState.pending > 0 && id !== sheetId) {
+      setDepartEnAttente(id);
+      return;
+    }
+    changerDeNiveau(id);
   };
 
   return (
@@ -343,30 +390,64 @@ export function WorkspacePage() {
         <aside className="th-ws__side" aria-label="Étude du niveau">
           <section>
             <h2>Étude {levelTitle ? `· ${levelTitle}` : ""}</h2>
+            {/* D106 : le parcours pilote. Cliquer une étape change le panneau de droite et les calques
+                du plan. Rien n'est verrouillé : une étape en retard ne barre pas la suivante (D109). */}
             <ol className="th-ws-steps">
-              <li className={sheet?.status === "prete" ? "is-done" : "is-todo"}>
-                <button type="button" onClick={() => setParams({ panneau: sheet ? "planche" : "documents" })}>
-                  Planche classée et à l'échelle
-                </button>
-                <small>{sheet ? STATUS_LABELS[sheet.status] : "aucune planche"}</small>
-              </li>
-              <li className={study ? "is-done" : "is-later"}>
-                <span>Locaux</span>
-                <small>{study ? `${study.content.locaux.length} locaux importés` : "aucune étude importée"}</small>
-              </li>
-              <li className={study ? "is-done" : "is-later"}>
-                <span>Enveloppe</span>
-                <small>{study ? `${study.content.enveloppe.releve_brut.elements.length} éléments relevés` : "aucune étude importée"}</small>
-              </li>
-              <li className={study ? "is-todo" : "is-later"}>
-                <span>Pièce par pièce</span>
-                <small>{study ? `${validatedRoomCount(study)}/${study.content.locaux.length} validés` : "aucune étude importée"}</small>
-              </li>
-              <li className="is-later">
-                <span>Hauteurs (coupes)</span>
-                <small>à venir</small>
-              </li>
+              {etapes.map((item) => (
+                <li
+                  key={item.id}
+                  className={`th-ws-step--${item.etat}${item.id === etape ? " is-current" : ""}`}
+                  aria-current={item.id === etape ? "step" : undefined}
+                >
+                  <button type="button" onClick={() => allerEtape(item.id)}>
+                    {item.titre}
+                  </button>
+                  <small>
+                    {item.id === "planche" && sheet ? `${STATUS_LABELS[sheet.status]} · ` : ""}
+                    {item.reste}
+                  </small>
+                </li>
+              ))}
             </ol>
+            {/* D111 : pas de départ silencieux. On ne change pas de niveau sans le dire. */}
+            {departEnAttente !== null && (
+              <div className="th-alert th-alert--warn th-ws-depart">
+                <p>
+                  {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} ne sont pas
+                  encore enregistrée{elementsState.pending > 1 ? "s" : ""} sur ce niveau.
+                </p>
+                <div className="th-inline">
+                  <button
+                    type="button"
+                    className="po2-button po2-button--primary"
+                    disabled={elementsState.busy}
+                    onClick={() => {
+                      const cible = departEnAttente;
+                      elementsState.save();
+                      setDepartEnAttente(null);
+                      if (cible !== null) changerDeNiveau(cible);
+                    }}
+                  >
+                    Enregistrer puis changer de niveau
+                  </button>
+                  <button
+                    type="button"
+                    className="po2-button po2-button--ghost"
+                    onClick={() => {
+                      const cible = departEnAttente;
+                      elementsState.cancel();
+                      setDepartEnAttente(null);
+                      if (cible !== null) changerDeNiveau(cible);
+                    }}
+                  >
+                    Abandonner les corrections
+                  </button>
+                  <button type="button" className="th-link" onClick={() => setDepartEnAttente(null)}>
+                    Rester ici
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
           <section>
             <h2>Locaux</h2>
@@ -461,15 +542,22 @@ export function WorkspacePage() {
               onGrabEnd={editionState.handlers.onGrabEnd}
               initialView={views.current.get(viewKey) ?? null}
               onViewChange={(view) => views.current.set(viewKey, view)}
+              focus={focusPlan}
               renderTools={
                 shownStudy ? (
                   <div className="th-viewer__display" role="group" aria-label="Ce qui s'affiche sur le plan">
                     {METRICS_CASES.map((item) => (
                       <label key={item.cle} title={item.titre}>
-                        <input type="checkbox" checked={metrics[item.cle]} onChange={() => basculerMetrique(item.cle)} />
+                        <input
+                          type="checkbox"
+                          checked={metricsAffiches[item.cle]}
+                          onChange={() => basculerMetrique(item.cle, metricsAffiches)}
+                        />
                         {item.label}
                       </label>
                     ))}
+                    {/* Dire qui commande, sinon une case cochée par l'étape passe pour un bug (Q6). */}
+                    {calquesPilotes && <small className="th-viewer__pilote">réglés par l'étape</small>}
                   </div>
                 ) : undefined
               }
@@ -493,9 +581,10 @@ export function WorkspacePage() {
                             selected={selectedRoom}
                             shapes={shownStudy.content.enveloppe.objets ?? []}
                             bridges={shownStudy.content.enveloppe.liaisons ?? []}
-                            show={metrics}
+                            show={metricsAffiches}
                             toScreen={toScreen}
                             selectedElement={elementsState.selected}
+                            grouperPonts={etape !== "ponts"}
                           />
                       )}
                     </>
@@ -539,26 +628,41 @@ export function WorkspacePage() {
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
           {panel === "fiche" && (
             <>
-              {/* Un élément désigné prend tout le bandeau : voir la fiche du local par-dessus noyait
-                  l'information qu'on venait justement de demander. */}
-              {!elementsState.selected && (
-                <StudyRoomPanel
-                  room={selectedRoom}
-                  state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
-                  edition={editionState.edition}
-                />
-              )}
-              {/* L'étape 5 : les éléments du local, sous sa fiche et jamais en carte flottante (Q8). */}
-              {shownStudy && !editionState.draft && (
-                <ElementPanel
+              {/* Une chose à la fois (D107) : l'étape « ponts thermiques » est une passe sur le niveau,
+                  et la fiche du local n'a rien à y faire. */}
+              {etape === "ponts" && shownStudy && !editionState.draft ? (
+                <PontsPanel
                   content={shownStudy.content}
-                  room={selectedRoom}
                   selected={elementsState.selected}
                   onSelect={elementsState.select}
                   busy={elementsState.busy}
                   message={elementsState.message}
                   onOperation={elementsState.apply}
                 />
+              ) : (
+                <>
+                  {/* Un élément désigné prend tout le bandeau : voir la fiche du local par-dessus noyait
+                      l'information qu'on venait justement de demander. */}
+                  {!elementsState.selected && (
+                    <StudyRoomPanel
+                      room={selectedRoom}
+                      state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
+                      edition={editionState.edition}
+                    />
+                  )}
+                  {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). */}
+                  {shownStudy && !editionState.draft && (
+                    <ElementPanel
+                      content={shownStudy.content}
+                      room={selectedRoom}
+                      selected={elementsState.selected}
+                      onSelect={elementsState.select}
+                      busy={elementsState.busy}
+                      message={elementsState.message}
+                      onOperation={elementsState.apply}
+                    />
+                  )}
+                </>
               )}
               {elementsState.pending > 0 && (
                 <div className="th-element-enregistrer">

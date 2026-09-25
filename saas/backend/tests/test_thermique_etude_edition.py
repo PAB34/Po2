@@ -471,6 +471,32 @@ def test_un_element_ecarte_sort_du_dessin_mais_reste_dans_l_etude():
     assert len(revenu["enveloppe"]["objets"]) == avant
 
 
+def test_un_pont_ecarte_reste_dessine_mais_marque_ecarte():
+    """D113 : l'invisible ne se corrige pas.
+
+    Une liaison écartée disparaissait complètement du plan, puisque `liaisons` était calculée sur le
+    seul relevé actif. Le thermicien ne pouvait donc plus la remettre dans le calcul : le geste était
+    irréversible à l'œil. Elle reste maintenant dessinée, avec son drapeau — et aucun métré ne lit
+    `liaisons`, donc rien n'est compté en trop.
+    """
+    contenu = _etude_avec_deux_elements()
+    contenu["enveloppe"]["releve_brut"]["elements"].append(
+        {"troncon": "T01", "debut_m": 100.0, "fin_m": 100.0, "type": "angle_sortant", "composant": None,
+         "nu_exterieur_cm": 0, "nu_interieur_cm": -50, "confiance": 0.9, "a_verifier": True, "indice": "angle"}
+    )
+    ref = {"troncon": "T01", "debut_m": 100.0, "fin_m": 100.0}
+    avant = edition.reconstruire(contenu)["enveloppe"]["liaisons"]
+    assert [liaison["exclu"] for liaison in avant] == [False]
+
+    apres = edition.appliquer(contenu, [{"type": "element_ecarter", "element": ref, "motif": "angle du tracé"}])
+    liaisons = apres["enveloppe"]["liaisons"]
+    assert len(liaisons) == 1, "la liaison écartée doit rester dessinable"
+    assert liaisons[0]["exclu"] is True
+
+    revenu = edition.appliquer(apres, [{"type": "element_reactiver", "element": ref}])
+    assert revenu["enveloppe"]["liaisons"][0]["exclu"] is False
+
+
 def test_confirmer_un_element_ne_change_aucune_mesure():
     contenu = _etude_avec_deux_elements()
     avant = edition.reconstruire(contenu)

@@ -50,6 +50,11 @@ type Props = {
   // Cadrage à reprendre à l'ouverture de la planche (au lieu de l'ajuster), et suivi du cadrage courant.
   initialView?: ViewerView | null;
   onViewChange?: (view: ViewerView) => void;
+  // Point à amener au centre, demandé de l'extérieur : l'étape « ponts thermiques » y amène le pont en
+  // cours (F2, Q4). Le recentrage n'a lieu qu'au changement de `cle`, sinon le plan se rappellerait à
+  // l'ordre à chaque dessin et deviendrait impossible à déplacer à la main. `zoom` est un multiple du
+  // cadrage ajusté, et ne fait jamais reculer un zoom déjà plus serré.
+  focus?: { point: PdfPoint; cle: string; zoom?: number } | null;
 };
 
 const MAX_ZOOM = 8; // pixels écran par pixel du niveau le plus fin
@@ -84,6 +89,7 @@ export function TileSheetViewer({
   renderOverlay,
   initialView = null,
   onViewChange,
+  focus = null,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -135,6 +141,26 @@ export function TileSheetViewer({
       fittedKeyRef.current = key;
     }
   }, [manifest.sheet_id, manifest.rotation, fit, initialView]);
+
+  // Recentrage demandé de l'extérieur, une fois par `cle`. La planche doit d'abord avoir été ajustée :
+  // sans cela, `fitZoomRef` vaut encore 1 et le cadrage calculé serait faux.
+  const focusRef = useRef("");
+  useEffect(() => {
+    if (!focus || focus.cle === focusRef.current || size.width === 0) {
+      return;
+    }
+    if (fittedKeyRef.current !== `${manifest.sheet_id}|${manifest.rotation}`) {
+      return;
+    }
+    focusRef.current = focus.cle;
+    const [px, py] = pdfToRaster(manifest.transform, focus.point);
+    setView((current) => {
+      const zoom = focus.zoom
+        ? Math.min(MAX_ZOOM, Math.max(current.zoom, fitZoomRef.current * focus.zoom))
+        : current.zoom;
+      return { zoom, panX: size.width / 2 - px * zoom, panY: size.height / 2 - py * zoom };
+    });
+  }, [focus, manifest.sheet_id, manifest.rotation, manifest.transform, size.width, size.height]);
 
   const onViewChangeRef = useRef(onViewChange);
   onViewChangeRef.current = onViewChange;

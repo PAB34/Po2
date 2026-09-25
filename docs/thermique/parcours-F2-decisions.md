@@ -68,48 +68,49 @@ promesse invérifiable.
 **D112 — Recalcul aux frontières d'étape.** On recalcule en quittant une étape qui a produit des
 gestes, pas à chaque geste (D105).
 
-## 4. Questions à trancher avant de coder
+## 4. Questions tranchées (2026-09-25 : « OK recommandation » sur les huit)
 
-**Q1 — Maille de validation des ponts.** Par local (on suit les locaux, les ponts du local défilent)
-ou par niveau (une passe continue sur les 77, sans se soucier des locaux) ?
-*Recommandation : par niveau.* Un pont appartient à un tronçon, pas vraiment à une pièce ; 13 liaisons
-du R+1 ne sont rattachées à aucun local et seraient invisibles dans une passe par local.
+| # | Question | Décision retenue |
+| --- | --- | --- |
+| Q1 | Maille de validation des ponts | **Par niveau**, une passe continue sur les 77. Un pont appartient à un tronçon, pas à une pièce, et 13 liaisons du R+1 ne sont rattachées à aucun local : une passe par local les rendrait injugeables. |
+| Q2 | Geste de validation | **Deux boutons**, « Garder » et « Écarter… », avec enchaînement automatique après le geste. Jamais un « Suivant » qui vaudrait acceptation. |
+| Q3 | Motif de refus | **Trois motifs pré-écrits** (angle du tracé / doublon du pont voisin / hors enveloppe chauffée) **plus une case libre**. Taper une phrase 77 fois n'est pas tenable. |
+| Q4 | Regroupement `AS ×3` à l'étape ponts | **Déplié**, et le plan se centre sur le pont en cours à 5 fois le cadrage ajusté. Le zoom ne recule jamais si le thermicien est déjà plus serré. |
+| Q5 | Un pont écarté | **Reste dessiné**, pastille blanche cerclée de gris, sigle barré, mention « écarté ». L'invisible ne se corrige pas → D113. |
+| Q6 | Calques par étape | **Réglés par l'étape**, avec la mention « réglés par l'étape » à côté des cases. La première case touchée rend la main au thermicien jusqu'au changement d'étape. |
+| Q7 | Étape « Analyse » dans la colonne | **Oui.** Sans elle, on ne sait pas où est son niveau pendant l'attente. |
+| Q8 | Fin de parcours | **Un état affiché, pas de clôture.** Figer un niveau demande de décider ce qu'on fait d'un plan remplacé après coup : sujet à part. |
 
-**Q2 — Geste de validation.** Deux boutons (« Garder » / « Écarter ») avec passage automatique au
-suivant, ou un seul « Suivant » qui vaut acceptation ?
-*Recommandation : deux boutons, et le passage au suivant automatique après « Garder ».* Un « Suivant »
-qui valide en silence produit 77 ponts « validés » sans que personne les ait regardés.
+**D113 — Une liaison écartée reste dessinée.** `liaisons_localisees` reçoit désormais le relevé
+**complet** et reporte `exclu`, `a_verifier` et `confirme`. Avant, elle ne voyait que le relevé actif :
+un pont écarté disparaissait du plan, donc le geste devenait irréversible à l'œil. Aucun métré ne lit
+`liaisons` (la synthèse et les fiches travaillent sur le relevé actif), donc rien n'est compté en trop.
 
-**Q3 — Écarter un pont : motif obligatoire ?** F4 l'exige aujourd'hui pour un élément.
-*Recommandation : un choix parmi trois motifs pré-écrits* (« angle du tracé, pas un vrai pont »,
-« doublon du précédent », « hors enveloppe chauffée ») **plus une case libre**. Taper une phrase
-77 fois n'est pas tenable.
+**D114 — Deux régimes de validation, et c'est délibéré.** Pour les 150 parois et menuiseries, ce que
+l'agent a lu sans hésiter compte pour jugé : 150 clics sans enjeu ne sont pas du travail. Pour les
+**77 ponts, chacun passe devant le thermicien**, même ceux que l'agent a lus avec assurance — c'est la
+demande explicite, et c'est justement là que l'œil humain tranche ce que l'algorithme ne peut pas.
 
-**Q4 — Le regroupement visuel (`AS ×3`) à l'étape ponts.** Doit-il se déplier automatiquement quand on
-arrive à cette étape, puisque c'est là qu'on veut les distinguer ?
-*Recommandation : oui, et le plan se centre et zoome sur le pont en cours.*
+## 5. Ce que la livraison a mesuré sur le R+1 réel
 
-**Q5 — Un pont écarté reste-t-il visible ?**
-*Recommandation : oui, en gris barré, comme un élément écarté.* L'invisible ne se corrige pas.
+| Mesure | Avant | Après |
+| --- | --- | --- |
+| Côtés cotés | 222 | **222** |
+| Linéaire déperditif | 170,12 m | **170,12 m** |
+| Liaisons dessinées | 77 | **77** |
+| Étape « parois » | — | 150 éléments, **64 à vérifier** |
+| Étape « ponts » | — | 77 liaisons, **77 à juger** |
 
-**Q6 — Ce que montre le plan à chaque étape.** Étape 3 → contours seuls ; étape 4 → éléments + cotes
-déperditives ; étape 5 → ponts seuls, éléments estompés. Les cases à cocher redeviennent libres dès
-qu'on y touche.
-*Recommandation : oui, et une petite mention « calques réglés par l'étape » qui disparaît si on coche.*
+Et en écartant un angle sortant réel : le décompte des ponts passe de 43 à 42 angles sortants, **et rien
+d'autre ne change dans le métré** (côtés, longueurs, surfaces, empreinte du reste des fiches identiques).
+Le geste fait ce qu'il annonce, et seulement cela.
 
-**Q7 — Faut-il une étape « Analyse » distincte dans la colonne** (étape 2 ci-dessus), alors que l'écran
-de file d'attente F0 existe déjà à part ?
-*Recommandation : oui.* Sans elle, le thermicien ne sait pas où se trouve son niveau quand il attend.
+## 6. Ce que F2 ne fait pas
 
-**Q8 — Fin de parcours.** Que se passe-t-il quand les six étapes sont finies : un bouton « Clôturer le
-niveau » qui figera le relevé, ou rien de plus qu'un état affiché ?
-*Recommandation : un état affiché pour l'instant, pas de clôture.* Figer un niveau demande de décider
-ce qu'on fait d'un plan remplacé après coup — c'est un sujet à part.
-
-## 5. Ce que F2 ne fera pas
-
-- Fusionner des ponts dans le relevé (le métré changerait — voir §2.1).
+- Fusionner des ponts dans le relevé (le métré changerait — voir §2.1). Le thermicien les écarte un
+  par un, ce qui est traçable et réversible ; une fusion automatique ne l'est pas.
 - Ajouter un élément ou un pont manquant, ni déplacer les bornes d'un élément (reporté en D104).
 - Figer ou clôturer un niveau (Q8).
+- Les hauteurs, qui attendent la lecture des coupes.
 - Toucher à l'agent `thermicien-enveloppe`. Si, après validation par le thermicien, le tracé s'avère
   trop découpé, c'est un chantier distinct.

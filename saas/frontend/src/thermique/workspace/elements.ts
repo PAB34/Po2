@@ -180,6 +180,27 @@ export function elementDuPont(content: StudyContent, bridge: StudyBridge): Study
   return trouve ? refDeElement(trouve) : null;
 }
 
+/**
+ * La liaison dessinée qui correspond à un élément de type pont : l'inverse de `elementDuPont`.
+ *
+ * C'est elle qui porte `point_pdf` et `piece`. Sans ce chemin de retour, l'étape « ponts thermiques »
+ * ne peut ni dire dans quel local se trouve le pont en cours, ni amener le plan dessus.
+ */
+export function pontDeElement(content: StudyContent, element: StudyReleveElement): StudyBridge | null {
+  const milieu = (element.debut_m + element.fin_m) / 2;
+  const candidats = (content.enveloppe.liaisons ?? []).filter(
+    (bridge) => bridge.troncon === element.troncon && bridge.type === element.type,
+  );
+  return (
+    candidats.find((bridge) => bridge.abscisse_m != null && Math.abs(bridge.abscisse_m - milieu) < 1e-6) ??
+    candidats.find(
+      (bridge) =>
+        bridge.abscisse_m != null && element.debut_m <= bridge.abscisse_m && bridge.abscisse_m <= element.fin_m,
+    ) ??
+    null
+  );
+}
+
 /** Le pont thermique sous le curseur, parmi ceux dessinés. La pastille fait 5 px de rayon à l'écran. */
 export function pontAt(
   bridges: StudyBridge[],

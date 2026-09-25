@@ -289,8 +289,11 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat["enveloppe"]["demandes"] = demandes
     # Le tracé des éléments revient dans le fichier (D75) : sans lui, rien n'est dessinable sur le plan.
     resultat["enveloppe"]["objets"] = copy.deepcopy(releve.get("objets", []))
-    # Les ponts thermiques portent leur position, pour être montrés là où ils sont (D74).
-    resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(brut, manifeste, analyse)
+    # Les ponts thermiques portent leur position, pour être montrés là où ils sont (D74). Le relevé
+    # complet est passé ici, et non `brut` : une liaison écartée reste dessinée en grisé (D113).
+    resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(
+        resultat["enveloppe"]["releve_brut"], manifeste, analyse
+    )
     resultat["couverture"] = geo.controler_couverture(
         {local["id"]: local["contour"] for local in locaux}, manifeste, brut
     )

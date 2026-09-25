@@ -175,6 +175,11 @@ def liaisons_localisees(
     """Position de chaque liaison relevée et local auquel elle se rattache (D74).
 
     Sans cela, les ponts thermiques sont comptés mais introuvables sur le plan.
+
+    Reçoit le relevé **complet**, écartés compris, et reporte le drapeau `exclu` (D113) : une liaison
+    écartée doit rester dessinée, en grisé, sinon le geste est irréversible à l'œil — on ne peut pas
+    remettre dans le calcul un pont que l'on ne voit plus. Aucun métré ne lit `liaisons` : la synthèse
+    et les fiches travaillent sur le relevé actif, donc montrer les écartés ne compte rien en trop.
     """
     largeur, hauteur = (float(valeur) for valeur in manifeste["page_px"])
     px_par_m = float(manifeste["px_par_m"])
@@ -203,6 +208,9 @@ def liaisons_localisees(
                 "point": _en_normalise([point], largeur, hauteur)[0],
                 "piece": proche,
                 "composant": element.get("composant") or None,
+                "exclu": bool(element.get("exclu")),
+                "a_verifier": bool(element.get("a_verifier")),
+                "confirme": bool(element.get("confirme")),
             }
         )
     return resultat

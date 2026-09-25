@@ -19,13 +19,26 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-24** (F0 et F4 livrés en production ; il ne reste que F2).
+> Mise à jour : **2026-09-25** (F0, F4 et F2 livrés ; la série F est complète).
 
-- **▶️ REPRENDRE ICI — lot F2, le parcours en cinq étapes par niveau.** C'est le dernier lot de la série F.
-  Décisions déjà écrites : `thermique/parcours-par-niveau-E3bis-decisions.md`. Son **étape 5 est F4**, qui
-  existe désormais : il s'agit de l'héberger dans la structure en étapes, pas de la réécrire. Deux gestes
-  restent volontairement reportés (D104) : **ajouter** un élément ou un pont absent, et déplacer les bornes
-  d'un élément sur son tronçon. **Rappel permanent : rien n'est poussé sans accord explicite.**
+- **▶️ REPRENDRE ICI — éprouver F2 sur le R+1, puis décider de la suite.** Le parcours en six étapes est
+  écrit et testé (82 tests front, 23 tests d'édition), mais **jamais exercé à la souris** : je n'ai pas
+  accès au banc. La recette porte sur trois points : la colonne de gauche pilote-t-elle bien le panneau
+  et les calques ; la passe sur les **77 ponts** est-elle tenable ; un pont écarté se voit-il et revient-il.
+  Deux gestes restent volontairement reportés (D104) : **ajouter** un élément ou un pont absent, et
+  déplacer les bornes d'un élément sur son tronçon. **Rappel permanent : rien n'est poussé sans accord
+  explicite.**
+- **✅ F2 — le parcours pilote le niveau** (`docs/thermique/parcours-F2-decisions.md`, D106 à D114). Six
+  étapes : planche, analyse, locaux, parois et menuiseries, **ponts thermiques**, hauteurs. Chaque étape
+  annonce son reste à faire, ouvre son panneau et règle les calques du plan ; toucher une case rend la
+  main (Q6). L'étape des ponts est une **passe continue sur tout le niveau** (Q1) avec deux gestes
+  explicites et trois motifs de refus pré-écrits (Q2, Q3) — jamais un « Suivant » qui vaudrait
+  acceptation. Le plan se centre sur le pont en cours et **déplie** les pastilles regroupées (Q4). Une
+  liaison écartée **reste dessinée**, barrée (Q5, **D113** côté serveur). Deux régimes de validation
+  assumés (**D114**) : les 150 parois se fient à l'agent quand il n'a pas douté, les **77 ponts passent
+  tous** devant le thermicien. Rien n'est verrouillé (D109) et rien ne part en silence (D111).
+  Mesuré sur le R+1 : **222 côtés et 170,12 m déperditifs inchangés** ; écarter un angle sortant fait
+  passer le décompte de 43 à 42 **sans rien changer d'autre** au métré.
 - **✅ F4 EN PRODUCTION — les éléments d'enveloppe se corrigent** (`e8e4d764`, `44e5932d`, `283995f8`, sans
   migration). Sur le R+1, **92 des 227 éléments** arrivent marqués « à vérifier » : on peut maintenant les
   confirmer d'un clic, corriger leur type, leur composant et leurs nus, ou les écarter avec un motif. Une

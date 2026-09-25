@@ -137,6 +137,10 @@ export type StudyBridge = {
   piece: string | null;
   composant?: string | null;
   point_pdf?: PdfPoint;
+  /** État repris du relevé : une liaison écartée reste dessinée, en grisé (D113). */
+  exclu?: boolean;
+  a_verifier?: boolean;
+  confirme?: boolean;
 };
 export type StudyRoomSheet = {
   piece: string;
