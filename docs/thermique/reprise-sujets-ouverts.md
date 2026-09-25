@@ -1,5 +1,7 @@
 # Sujets ouverts, relevés par l'utilisateur le 2026-09-25
 
+**Huit sujets.** Le 8 est le moins cher et devrait passer en premier.
+
 > Écrit à la fin du quota hebdomadaire de Claude Code, pour la reprise avec Codex.
 > **Chaque sujet : ce que l'utilisateur a demandé (mot pour mot), ce que le code fait aujourd'hui
 > (vérifié, pas supposé), ce qui manque, et une piste.** Ordre = valeur décroissante, pas ordre de citation.
@@ -179,15 +181,69 @@ métré. Le choix actuel — il les écarte un par un — est traçable et réve
 
 ---
 
+## Sujet 8 — Les gaines techniques ne sont pas des pièces chauffées ⭐ priorité haute, et presque gratuit
+
+> « J'ai constaté sur le plan au aussi des gaines techniques qui ne sont pas des pièces chauffés il faut
+> pouvoir clairement les identifier, ou les dessiner quand elles ne le sont pas. »
+
+**Ce qui existe — et c'est la bonne surprise.** Changer la nature d'une pièce **est déjà implémenté**,
+de bout en bout :
+
+- serveur : l'opération `modifier` accepte un champ `nature`, validé contre `LOCAL_NATURES`
+  (`thermique_etude_edition.py:118-121`, « La nature proposée est inconnue. ») ;
+- front : un menu déroulant des natures existe dans le brouillon d'édition
+  (`StudyPanel.tsx:212-218`), envoyé par `useStudyEdition.ts:73` ;
+- affichage : chaque nature a **déjà sa couleur et son libellé** (`study.ts` : `non_chauffe` →
+  « Non chauffé », gris `#6b7280`), appliqués au contour sur le plan et dans la liste des locaux.
+
+**Le vrai problème n'est donc pas l'absence de fonction, c'est son enfouissement.** Pour reclasser une
+gaine en « non chauffé », le thermicien doit aujourd'hui faire un **clic droit → « Reprendre le contour »**,
+entrer dans un brouillon d'édition de tracé, changer le menu déroulant, puis enregistrer. Autrement dit,
+il doit ouvrir un outil de dessin pour poser une étiquette. Personne ne trouve ce chemin.
+
+**Piste — deux temps, et le premier est très court.**
+
+1. **Sortir la nature du brouillon d'édition** : la poser directement sur la fiche du local, en lecture
+   et en écriture, sans passer par l'édition du contour. C'est un geste d'un clic, pas un tracé.
+   Une opération `modifier` avec le seul champ `nature` suffit : le serveur l'accepte déjà, il n'y a
+   **rien à écrire côté backend**. À prévoir aussi dans le menu contextuel du plan (`PlanMenu.tsx`) :
+   « Marquer comme non chauffé » sur la pièce visée.
+2. **Décider s'il faut une nature dédiée « gaine technique »**, au lieu de tout mettre sous `non_chauffe`.
+   Question pour l'utilisateur, pas décision d'implémentation. Arguments dans les deux sens :
+   - *pour* : « clairement les identifier » suppose de les distinguer d'un local non chauffé ordinaire
+     (un cellier, un garage). Une gaine traverse les niveaux, ce qui n'est pas le cas d'un cellier, et
+     cela intéressera la superposition des niveaux ;
+   - *contre* : thermiquement, une gaine se comporte comme un volume non chauffé. Ajouter une nature
+     oblige à décider son sort dans **chaque** calcul, comme pour les terrasses (sujet 5).
+   - Voie moyenne possible : garder `non_chauffe` pour le calcul et distinguer les gaines par leur **nom**,
+     déjà éditable. À trancher explicitement, pas à subir.
+
+3. **« ou les dessiner quand elles ne le sont pas »** : c'est exactement le **sujet 1** (ajouter une pièce).
+   Une gaine absente du relevé se dessine avec le même geste qu'une pièce oubliée, puis se classe en non
+   chauffé. Les deux sujets se servent l'un l'autre.
+
+**Un point de vigilance sur le calcul.** Une gaine reclassée en non chauffé ne disparaît pas du métré :
+ses limites avec les pièces chauffées voisines deviennent des parois **sur local non chauffé**. Le
+mécanisme existe (`sur_non_chauffe_m`, et les tronçons marqués `face_interieure`), mais il faut
+**vérifier sur le R+1** qu'une gaine reclassée produit bien du `sur_non_chauffe_m` chez ses voisines et
+non du `facade_m`. C'est le test qui dira si le geste sert à quelque chose.
+
+---
+
 ## Ordre de travail proposé
 
-1. **Sujet 2** (cliquer un côté → le voir sur le plan). Le plus rapide, le patron existe, gain immédiat.
-2. **Sujet 1** (supprimer / ajouter une pièce). Déverrouille aussi le sujet 6.
-3. **Sujet 3** (50 / 50 sur les 64 angles). Touche le métré → fichier de décisions d'abord.
-4. **Sujet 5** (terrasses). Le plus structurant, donc celui qui mérite le cadrage le plus soigné.
-5. Sujet 4 : déjà répondu ; seule la question dérivée (valider un local exige-t-il ses ponts ?) reste à
+1. **Sujet 8, premier temps** (sortir la nature du brouillon d'édition). Le moins cher de tous : le
+   serveur sait déjà le faire, il n'y a qu'à rendre le geste atteignable. Permet immédiatement de marquer
+   les gaines techniques en non chauffé.
+2. **Sujet 2** (cliquer un côté → le voir sur le plan). Le patron existe, gain immédiat.
+3. **Sujet 1** (supprimer / ajouter une pièce). Déverrouille aussi les sujets 6 et 8 (dessiner une gaine absente).
+4. **Sujet 3** (50 / 50 sur les 64 angles). Touche le métré → fichier de décisions d'abord.
+5. **Sujet 5** (terrasses) et **sujet 8, second temps** (nature dédiée ?). Les deux posent la même
+   question de fond : quelles natures de local le modèle doit-il connaître, et que fait chacune dans
+   chaque calcul. À cadrer ensemble plutôt qu'une à la fois.
+6. Sujet 4 : déjà répondu ; seule la question dérivée (valider un local exige-t-il ses ponts ?) reste à
    poser à l'utilisateur.
-6. Sujets 6 et 7 : plus tard, et pas par l'interface.
+7. Sujets 6 et 7 : plus tard, et pas par l'interface.
 
 **Et n'oublie pas** : le Ctrl+Z demandé juste avant (annuler la dernière action) est décrit en détail au
 §5 de `passation-codex-F2.md`, avec ses cinq pièges. Il reste la tâche numéro zéro si l'utilisateur ne
