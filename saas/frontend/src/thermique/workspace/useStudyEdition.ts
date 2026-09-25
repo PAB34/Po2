@@ -439,6 +439,7 @@ export function useStudyEdition({
   return {
     draft,
     preview,
+    busy,
     edition,
     /** Étude affichée : l'aperçu tant qu'il n'est pas enregistré, sinon l'étude en base. */
     shown: preview ? { ...(study as Study), content: preview.content } : study,

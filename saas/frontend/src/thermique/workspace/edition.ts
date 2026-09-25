@@ -30,6 +30,10 @@ export type StudyDraft = {
   lasso?: Lasso | null;
 };
 
+export function peutAnnulerEditionAvecEchap(key: string, draft: StudyDraft | null, busy: boolean): boolean {
+  return key === "Escape" && draft !== null && !busy;
+}
+
 export function draftFromRoom(room: StudyRoom, mode: EditMode = "contour"): StudyDraft {
   return {
     roomId: room.id,

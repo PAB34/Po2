@@ -221,8 +221,8 @@ export function StudyRoomCreationPanel({ creation }: { creation: StudyCreation }
         >
           Créer le local
         </button>
-        <button type="button" className="po2-button po2-button--ghost" onClick={creation.onCancel} disabled={creation.busy}>
-          Annuler
+        <button type="button" className="po2-button po2-button--ghost" onClick={creation.onCancel} disabled={creation.busy} title="Raccourci : Échap">
+          Annuler l'édition
         </button>
       </div>
       {creation.busy && <p className="th-muted">Calcul du niveau en cours…</p>}
@@ -284,8 +284,8 @@ function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdit
             <button type="button" className="po2-button" onClick={edition.onSave} disabled={edition.busy || Boolean(edition.blocking)}>
               Enregistrer et suivant
             </button>
-            <button type="button" className="po2-button po2-button--ghost" onClick={edition.onCancel} disabled={edition.busy}>
-              Annuler
+            <button type="button" className="po2-button po2-button--ghost" onClick={edition.onCancel} disabled={edition.busy} title="Raccourci : Échap">
+              Annuler l'édition
             </button>
           </div>
         </>

@@ -10,6 +10,7 @@ import {
   moveVertex,
   nearestSide,
   nearestVertex,
+  peutAnnulerEditionAvecEchap,
   removeVertex,
   removeVerticesInLasso,
   straightenSide,
@@ -185,6 +186,14 @@ describe("redresser un côté", () => {
   it("commence un nouveau local exactement au point du clic droit", () => {
     const draft = draftForNewRoom([42, 84]);
     expect(draft).toMatchObject({ roomId: "", mode: "ajouter", contour: [[42, 84]], nature: "chauffe" });
+  });
+
+  it("annule une édition avec Échap, sauf pendant un calcul", () => {
+    const draft = draftFromRoom(local());
+    expect(peutAnnulerEditionAvecEchap("Escape", draft, false)).toBe(true);
+    expect(peutAnnulerEditionAvecEchap("Escape", draft, true)).toBe(false);
+    expect(peutAnnulerEditionAvecEchap("Enter", draft, false)).toBe(false);
+    expect(peutAnnulerEditionAvecEchap("Escape", null, false)).toBe(false);
   });
 
   it("reconnaît un même cap de part et d'autre de -180° / +180°", () => {

@@ -23,6 +23,7 @@ import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
+import { peutAnnulerEditionAvecEchap } from "./edition";
 import { NATURE_LABELS, otherLocalNatures, roomAt, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
@@ -250,6 +251,17 @@ export function WorkspacePage() {
     onSelectRoom: selectRoom,
     natureBlockedReason,
   });
+
+  useEffect(() => {
+    const annulerEdition = (event: KeyboardEvent) => {
+      if (!peutAnnulerEditionAvecEchap(event.key, editionState.draft, editionState.busy)) return;
+      event.preventDefault();
+      setMenu(null);
+      editionState.reset();
+    };
+    window.addEventListener("keydown", annulerEdition, true);
+    return () => window.removeEventListener("keydown", annulerEdition, true);
+  }, [editionState.busy, editionState.draft, editionState.reset]);
 
   useEffect(() => {
     const gererHistorique = (event: KeyboardEvent) => {
