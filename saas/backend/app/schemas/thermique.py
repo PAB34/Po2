@@ -217,6 +217,8 @@ class EtudeOperation(BaseModel):
         "modifier",
         "couper",
         "fusionner",
+        "local_ajouter",
+        "local_supprimer",
         "element_confirmer",
         "element_corriger",
         "element_ecarter",

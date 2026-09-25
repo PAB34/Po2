@@ -11,8 +11,9 @@ import {
   type StudyRoom,
 } from "../api";
 import type { PickEvent } from "../components/TileSheetViewer";
-import type { StudyEdition } from "./StudyPanel";
+import type { StudyCreation, StudyEdition } from "./StudyPanel";
 import {
+  draftForNewRoom,
   draftFromRoom,
   insertVertex,
   moveVertex,
@@ -80,6 +81,12 @@ export function useStudyEdition({
       }
       return [{ type: "couper", id: draft.roomId, segment_pdf: draft.cut, noms: draft.noms }];
     }
+    if (draft.mode === "ajouter") {
+      if (draft.contour.length < 3 || !draft.nom.trim()) {
+        return [];
+      }
+      return [{ type: "local_ajouter", contour_pdf: draft.contour, nature: draft.nature, nom: draft.nom.trim() }];
+    }
     return [{ type: "modifier", id: draft.roomId, contour_pdf: draft.contour, nature: draft.nature, nom: draft.nom }];
   }, [draft]);
 
@@ -117,16 +124,23 @@ export function useStudyEdition({
     }
     setBusy(true);
     setMessage(null);
+    const creation = draft?.mode === "ajouter";
+    const idsAvant = new Set(study?.content.locaux.map((room) => room.id) ?? []);
     try {
       const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
         operations: liste,
-        local_id: draft?.roomId ?? null,
-        motif: "validation_local",
-        valider: true,
+        local_id: draft?.roomId || null,
+        motif: creation ? "creation_local" : "validation_local",
+        valider: !creation,
       });
       queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
       void versions.refetch();
       reset();
+      if (creation) {
+        const nouveau = enregistre.content.locaux.find((room) => !idsAvant.has(room.id));
+        if (nouveau) onSelectRoom(nouveau.id);
+        return;
+      }
       // Enchaîner sur le premier local encore à vérifier, chauffés d'abord (D63).
       const suivant = sortedStudyRooms(enregistre.content.locaux).find(
         (room) => (enregistre.local_states[room.id]?.status ?? "a_verifier") !== "valide",
@@ -139,7 +153,36 @@ export function useStudyEdition({
     } finally {
       setBusy(false);
     }
-  }, [draft, onSelectRoom, operations, queryClient, reset, sheetId, token, versions]);
+  }, [draft, onSelectRoom, operations, queryClient, reset, sheetId, study, token, versions]);
+
+  const deleteRoom = useCallback(
+    async (roomId: string): Promise<boolean> => {
+      if (!token || !sheetId || busy || draft || natureBlockedReason) {
+        setMessage(natureBlockedReason ?? "Terminez d'abord l'action en cours.");
+        return false;
+      }
+      setBusy(true);
+      setMessage(null);
+      try {
+        const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
+          operations: [{ type: "local_supprimer", id: roomId }],
+          local_id: roomId,
+          motif: "suppression_local",
+          valider: false,
+        });
+        queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
+        void versions.refetch();
+        reset();
+        return true;
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "La suppression du local a échoué.");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, draft, natureBlockedReason, queryClient, reset, sheetId, token, versions],
+  );
 
   const merge = useCallback(
     async (otherId: string) => {
@@ -252,9 +295,19 @@ export function useStudyEdition({
     setDraft(draftFromRoom(room, mode));
   };
 
+  const startNew = (point: PdfPoint) => {
+    if (busy || draft || natureBlockedReason) {
+      setMessage(natureBlockedReason ?? "Terminez d'abord l'action en cours.");
+      return;
+    }
+    setPreview(null);
+    setMessage(null);
+    setDraft(draftForNewRoom(point));
+  };
+
   const grab = (point: PdfPoint, echelle: number, event: PickEvent): boolean => {
     pixelsPerPt.current = echelle;
-    if (!draft || draft.mode !== "contour") {
+    if (!draft || (draft.mode !== "contour" && draft.mode !== "ajouter")) {
       return false;
     }
     const index = nearestVertex(draft.contour, point, PRISE_PX / echelle);
@@ -319,7 +372,7 @@ export function useStudyEdition({
 
   /** Ce que le clic droit propose là où il tombe. Le menu ne montre que des gestes applicables. */
   const contextActions = (point: PdfPoint, echelle: number): { cle: string; label: string; faire: () => void }[] => {
-    if (!draft || draft.mode !== "contour") {
+    if (!draft || (draft.mode !== "contour" && draft.mode !== "ajouter")) {
       return [];
     }
     const tolerance = PRISE_PX / echelle;
@@ -375,6 +428,8 @@ export function useStudyEdition({
     }
     if (draft.mode === "couper") {
       setDraft({ ...draft, cut: draft.cut.length >= 2 ? [point] : [...draft.cut, point] });
+    } else if (draft.mode === "ajouter") {
+      setDraft({ ...draft, contour: [...draft.contour, [point[0], point[1]]] });
     } else {
       setDraft({ ...draft, contour: insertVertex(draft.contour, point, PRISE_PX / pixelsPerPt.current) });
     }
@@ -395,9 +450,24 @@ export function useStudyEdition({
     },
     contextActions,
     startOn,
+    startNew,
+    deleteRoom,
     changeNature,
     natureChangeDisabled: Boolean(draft || busy || natureBlockedReason),
     natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
     reset,
+    creation:
+      draft?.mode === "ajouter"
+        ? ({
+            draft,
+            busy,
+            message,
+            blocking: preview?.bloquant ?? null,
+            onCancel: reset,
+            onDraft: (changes) => setDraft((current) => (current ? { ...current, ...changes } : current)),
+            onRecompute: () => void recompute(),
+            onSave: () => void save(),
+          } satisfies StudyCreation)
+        : null,
   };
 }

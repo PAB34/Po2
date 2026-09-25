@@ -126,6 +126,34 @@ def test_fusionner_deux_locaux_mitoyens_puis_refuser_deux_locaux_distants():
         edition._fusionner(eloignes, {"type": "fusionner", "ids": ["piece-001", "piece-002"]})
 
 
+def test_ajouter_un_local_attribue_un_identifiant_et_conserve_sa_nature():
+    analyse = _analyse_deux_locaux()
+    edition._ajouter(
+        analyse,
+        {
+            "type": "local_ajouter",
+            "nom": "Gaine créée",
+            "nature": "gaine_technique",
+            "contour": [[100, 100], [200, 100], [200, 200], [100, 200]],
+        },
+    )
+    nouveau = next(objet for objet in analyse["objects"] if objet["id"] == "piece-003")
+    assert nouveau["subtype"] == "Gaine créée"
+    assert nouveau["local"] == "gaine_technique"
+    assert nouveau["evidence"] == "local tracé par le thermicien"
+
+
+def test_supprimer_un_local_est_total_et_ne_touche_pas_aux_autres_objets():
+    analyse = _analyse_deux_locaux()
+    cloison = _mur([[0, 500], [1000, 500]])
+    analyse["objects"].append(cloison)
+    edition._supprimer(analyse, {"type": "local_supprimer", "id": "piece-001"})
+    assert [objet["id"] for objet in analyse["objects"] if objet.get("category") == "piece"] == ["piece-002"]
+    assert cloison in analyse["objects"]
+    with pytest.raises(ThermiqueError, match="introuvable"):
+        edition._supprimer(analyse, {"type": "local_supprimer", "id": "piece-999"})
+
+
 def test_modifier_refuse_une_nature_inconnue_et_un_contour_hors_feuille():
     analyse = _analyse_deux_locaux()
     edition._modifier(analyse, {"type": "modifier", "id": "piece-001", "nature": "gaine_technique"})

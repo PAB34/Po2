@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PdfPoint, StudyRoom } from "../api";
 import {
   contourChanged,
+  draftForNewRoom,
   draftFromRoom,
   freeSides,
   insertVertex,
@@ -179,6 +180,11 @@ describe("redresser un côté", () => {
     const { contour, removed } = straightenSide(carre, 0);
     expect(removed).toBe(0);
     expect(contour).toBe(carre);
+  });
+
+  it("commence un nouveau local exactement au point du clic droit", () => {
+    const draft = draftForNewRoom([42, 84]);
+    expect(draft).toMatchObject({ roomId: "", mode: "ajouter", contour: [[42, 84]], nature: "chauffe" });
   });
 
   it("reconnaît un même cap de part et d'autre de -180° / +180°", () => {

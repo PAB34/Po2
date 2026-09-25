@@ -13,7 +13,7 @@ export const LIMIT_COLORS: Record<StudyLimit, string> = {
   convention: "#8a5cf6",
 };
 
-export type EditMode = "contour" | "couper";
+export type EditMode = "contour" | "couper" | "ajouter";
 
 export type StudyDraft = {
   roomId: string;
@@ -169,6 +169,18 @@ function ecartAngulaire(alpha: number, beta: number): number {
   const brut = Math.abs(((((alpha - beta + 180) % 360) + 360) % 360) - 180);
   // Un segment parcouru à l'envers reste aligné.
   return Math.min(brut, 180 - brut);
+}
+
+export function draftForNewRoom(first: PdfPoint): StudyDraft {
+  return {
+    roomId: "",
+    mode: "ajouter",
+    contour: [[first[0], first[1]]],
+    cut: [],
+    nature: "chauffe",
+    nom: "Nouveau local",
+    noms: ["", ""],
+  };
 }
 
 /**

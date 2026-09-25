@@ -23,13 +23,15 @@ ici ». Le clic ouvre un tracé de contour vide dont le premier point est le poi
 pose les autres sommets puis confirme le local, son nom et sa nature.
 
 **D133 — Supprimer est proposé sur le local visé.** Un clic droit dans un local propose « Supprimer ce
-local ». L'action demande une confirmation explicite mentionnant le nom du local et les conséquences
-calculées avant toute écriture.
+local ». L'action demande une confirmation explicite mentionnant le nom du local, la disparition de ses
+contours et métrés dans la version courante, et la possibilité de restaurer une version antérieure.
 
-**D134 — « Supprimer » écarte le local sans effacer sa trace.** Comme pour un élément d'enveloppe, le
-local reste dans l'étude avec un état `exclu` et un motif, sort des métrés actifs, apparaît en grisé et
-peut être réactivé. La surface libérée est signalée comme non affectée. Cette solution préserve la
-traçabilité et évite une cascade irréversible sur les composants associés.
+**D134 — « Supprimer » efface réellement le local.** Choix explicite de l'utilisateur le 2026-09-25 :
+pas de local grisé ni récupérable dans la version courante. L'objet `piece` est retiré de l'analyse, puis
+le niveau entier est reconstruit. Les fiches, côtés, métrés et rattachements propres à ce local
+disparaissent ; les éléments du relevé brut restent la source de vérité et sont réaffectés par le moteur
+s'ils appartiennent encore à un local voisin. La version précédente de l'étude reste restaurable depuis
+l'historique des versions.
 
 **D135 — Création et suppression sont enregistrées côté serveur.** Elles produisent une nouvelle version
 de l'étude, comme les autres éditions géométriques. Le Ctrl+Z local des corrections d'éléments ne traverse
@@ -37,8 +39,27 @@ pas cette frontière dans le premier lot.
 
 ## Questions à valider avant développement
 
-**Q2.** Pour créer un local, valides-tu le parcours proposé : clic droit dans le vide, premier point posé
-automatiquement, tracé des autres points, puis saisie du nom et de la nature avant confirmation ?
+**Q2 — Validée le 2026-09-25.** Clic droit dans le vide, premier point posé automatiquement, tracé des
+autres points, puis saisie du nom et de la nature avant confirmation.
 
-**Q3.** Pour supprimer un local, valides-tu le garde-fou proposé : confirmation obligatoire, puis local
-écarté et grisé mais récupérable, plutôt qu'un effacement irréversible avec ses composants rattachés ?
+**Q3 — Tranchée le 2026-09-25.** Suppression totale demandée. Le local disparaît de la version courante
+après confirmation ; la récupération reste possible uniquement en restaurant une version antérieure de
+l'étude.
+
+## Résultat du développement
+
+- Le clic droit dans une zone vide propose « Créer un local ici » et pose immédiatement le premier
+  point. Le panneau permet ensuite de renseigner le nom et la nature, de vérifier puis d'enregistrer.
+- Le clic droit sur un local propose sa suppression définitive. Une confirmation nomme le local et
+  rappelle que seule une version antérieure permet de le récupérer.
+- Le backend accepte les opérations versionnées `local_ajouter` et `local_supprimer`, puis reconstruit
+  l'intégralité des locaux, côtés, métrés, objets dessinés, liaisons et contrôles de couverture.
+- Tests ciblés : 25 tests backend d'édition et 92 tests frontend thermiques réussis ; typecheck et build
+  de production réussis.
+- Garde-fou R+1 avant geste : 24 locaux, 227 éléments, 222 côtés, 170,12 m déperditifs, 289 formes et
+  77 liaisons, strictement inchangés.
+- Essais en mémoire sur le R+1 : création d'une gaine `piece-025` donnant 25 locaux ; suppression totale
+  de `piece-015` donnant 23 locaux. Les 227 éléments sources et 77 liaisons restent présents ; les côtés
+  et le linéaire du local supprimé sortent bien du métré actif.
+- Aucune recette authentifiée à la souris n'a été faite : aucun identifiant ni mot de passe n'a été
+  demandé, affiché ou saisi.

@@ -15,7 +15,7 @@ import { SheetPanel, sheetSegments } from "./SheetPanel";
 import { NorthOverlay } from "./NorthOverlay";
 import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
-import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
+import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
 import { PontsPanel } from "./PontsPanel";
 import { pontDeElement, trouverElement, viserSurLePlan } from "./elements";
@@ -538,7 +538,20 @@ export function WorkspacePage() {
                   : (() => {
                       const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
                       if (!room) {
-                        return [];
+                        if (!shownStudy) return [];
+                        return [
+                          {
+                            cle: "creer-local",
+                            label: "Créer un local ici",
+                            disabled: editionState.natureChangeDisabled,
+                            title: editionState.natureBlockedReason ?? undefined,
+                            faire: () => {
+                              elementsState.select(null);
+                              setParams({ local: null, panneau: "fiche" });
+                              editionState.startNew(point);
+                            },
+                          },
+                        ];
                       }
                       const actionsNature: PlanAction[] = otherLocalNatures(room.nature).map((nature) => ({
                         cle: `nature-${nature}`,
@@ -569,6 +582,23 @@ export function WorkspacePage() {
                           faire: () => {
                             selectRoom(room.id);
                             editionState.startOn(room.id, "couper");
+                          },
+                        },
+                        {
+                          cle: "supprimer-local",
+                          label: `Supprimer définitivement « ${room.nom} »`,
+                          disabled: editionState.natureChangeDisabled,
+                          title: editionState.natureBlockedReason ?? undefined,
+                          faire: () => {
+                            if (!window.confirm(
+                              `Supprimer définitivement le local « ${room.nom} » ?\n\nSes contours et métrés disparaîtront de la version courante. Une ancienne version de l'étude permettra de le récupérer.`,
+                            )) return;
+                            void editionState.deleteRoom(room.id).then((supprime) => {
+                              if (supprime) {
+                                elementsState.select(null);
+                                setParams({ local: null, panneau: "fiche" });
+                              }
+                            });
                           },
                         },
                       ];
@@ -666,6 +696,10 @@ export function WorkspacePage() {
           {panel === "infos" && <InfoPanel key={project.id} project={project} referenceId={reference?.id ?? null} onReference={makeReference} />}
           {panel === "fiche" && (
             <>
+              {editionState.creation ? (
+                <StudyRoomCreationPanel creation={editionState.creation} />
+              ) : (
+                <>
               {/* Une chose à la fois (D107) : l'étape « ponts thermiques » est une passe sur le niveau,
                   et la fiche du local n'a rien à y faire. */}
               {etape === "ponts" && shownStudy && !editionState.draft ? (
@@ -751,6 +785,8 @@ export function WorkspacePage() {
                     </button>
                   </div>
                 </div>
+              )}
+                </>
               )}
             </>
           )}

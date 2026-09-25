@@ -30,6 +30,8 @@ OPERATIONS = (
     "modifier",
     "couper",
     "fusionner",
+    "local_ajouter",
+    "local_supprimer",
     # Gestes sur les éléments d'enveloppe (F4). Ils passent par le même mécanisme que les contours :
     # aperçu, recalcul, enregistrement versionné — pas de second chemin d'édition.
     "element_confirmer",
@@ -195,6 +197,36 @@ def _fusionner(analyse: dict[str, Any], operation: dict[str, Any]) -> None:
     analyse["objects"] = [objet for objet in analyse["objects"] if objet is not droite]
 
 
+def _ajouter(analyse: dict[str, Any], operation: dict[str, Any]) -> None:
+    nom = str(operation.get("nom") or "").strip()
+    if not nom:
+        raise ThermiqueError("Le nom du nouveau local ne peut pas être vide.")
+    nature = operation.get("nature") or "chauffe"
+    if nature not in LOCAL_NATURES:
+        raise ThermiqueError("La nature proposée est inconnue.")
+    points = _controler_contour(operation.get("contour"), f"« {nom} »")
+    analyse.setdefault("objects", []).append(
+        {
+            "id": _identifiant_libre(analyse),
+            "category": "piece",
+            "subtype": nom,
+            "geometry_type": "polygon",
+            "local": nature,
+            "points": _contour(_polygone(points)),
+            "review_required": True,
+            "evidence": "local tracé par le thermicien",
+        }
+    )
+
+
+def _supprimer(analyse: dict[str, Any], operation: dict[str, Any]) -> None:
+    identifiant = str(operation.get("id") or "")
+    objet = _objets_pieces(analyse).get(identifiant)
+    if objet is None:
+        raise ThermiqueError("Le local à supprimer est introuvable.")
+    analyse["objects"] = [item for item in analyse.get("objects", []) if item is not objet]
+
+
 def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict[str, Any]:
     """Applique les gestes du thermicien à l'analyse, puis reconstruit tout ce qui en découle."""
     if not isinstance(operations, list) or not operations:
@@ -209,6 +241,10 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
             _couper(resultat["analyse"], operation)
+        elif operation["type"] == "local_ajouter":
+            _ajouter(resultat["analyse"], operation)
+        elif operation["type"] == "local_supprimer":
+            _supprimer(resultat["analyse"], operation)
         else:
             _fusionner(resultat["analyse"], operation)
     return reconstruire(resultat)

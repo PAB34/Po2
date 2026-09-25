@@ -90,6 +90,11 @@ export function StudyOverlay({
       })}
       {draft && (
         <g className="th-study-draft">
+          {draft.mode === "ajouter" && draft.contour.length >= 2 && (
+            draft.contour.length >= 3
+              ? <polygon points={trace(draft.contour)} />
+              : <polyline points={trace(draft.contour)} fill="none" />
+          )}
           {draft.contour.map((vertex, index) => {
             const [x, y] = toScreen(vertex);
             return <circle key={`poignee-${index}`} cx={x} cy={y} r={5} />;
@@ -156,12 +161,76 @@ export type StudyEdition = {
   onNature: (nature: StudyLocalNature) => void;
   onStart: (mode: "contour" | "couper") => void;
   onCancel: () => void;
-  onDraft: (changes: Partial<Pick<StudyDraft, "nom" | "noms">>) => void;
+  onDraft: (changes: Partial<Pick<StudyDraft, "nom" | "noms" | "nature">>) => void;
   onRecompute: () => void;
   onSave: () => void;
   onMerge: (otherId: string) => void;
   onRestore: (numero: number) => void;
 };
+
+export type StudyCreation = {
+  draft: StudyDraft;
+  busy: boolean;
+  message: string | null;
+  blocking: string | null;
+  onCancel: () => void;
+  onDraft: (changes: Partial<Pick<StudyDraft, "nom" | "nature">>) => void;
+  onRecompute: () => void;
+  onSave: () => void;
+};
+
+export function StudyRoomCreationPanel({ creation }: { creation: StudyCreation }) {
+  const { draft } = creation;
+  return (
+    <section className="th-study-edit">
+      <h2>Créer un local</h2>
+      <p className="th-muted">
+        Le premier point est posé. Cliquez sur le plan pour ajouter au moins deux autres sommets, puis
+        vérifiez le local avant de l'enregistrer.
+      </p>
+      <label>
+        Nom
+        <input value={draft.nom} onChange={(event) => creation.onDraft({ nom: event.target.value })} />
+      </label>
+      <label>
+        Nature du local
+        <select
+          value={draft.nature}
+          onChange={(event) => creation.onDraft({ nature: event.target.value as StudyLocalNature })}
+        >
+          {STUDY_LOCAL_NATURES.map((nature) => (
+            <option key={nature} value={nature}>{NATURE_LABELS[nature]}</option>
+          ))}
+        </select>
+      </label>
+      <p className="th-muted">{draft.contour.length} point{draft.contour.length > 1 ? "s" : ""} posé{draft.contour.length > 1 ? "s" : ""}.</p>
+      <div className="th-study-actions">
+        <button
+          type="button"
+          className="po2-button po2-button--ghost"
+          onClick={creation.onRecompute}
+          disabled={creation.busy || draft.contour.length < 3 || !draft.nom.trim()}
+        >
+          Vérifier le local
+        </button>
+        <button
+          type="button"
+          className="po2-button"
+          onClick={creation.onSave}
+          disabled={creation.busy || draft.contour.length < 3 || !draft.nom.trim() || Boolean(creation.blocking)}
+        >
+          Créer le local
+        </button>
+        <button type="button" className="po2-button po2-button--ghost" onClick={creation.onCancel} disabled={creation.busy}>
+          Annuler
+        </button>
+      </div>
+      {creation.busy && <p className="th-muted">Calcul du niveau en cours…</p>}
+      {creation.blocking && <p className="th-alert th-alert--error">{creation.blocking}</p>}
+      {creation.message && <p className="th-alert th-alert--warn">{creation.message}</p>}
+    </section>
+  );
+}
 
 function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdition }) {
   const { draft } = edition;

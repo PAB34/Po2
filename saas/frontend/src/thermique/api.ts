@@ -234,6 +234,8 @@ export type StudyOperation =
   | { type: "modifier"; id: string; contour_pdf?: PdfPoint[]; nature?: StudyLocalNature; nom?: string }
   | { type: "couper"; id: string; segment_pdf: PdfPoint[]; noms?: string[] }
   | { type: "fusionner"; ids: string[]; nom?: string }
+  | { type: "local_ajouter"; contour_pdf: PdfPoint[]; nature: StudyLocalNature; nom: string }
+  | { type: "local_supprimer"; id: string }
   | { type: "element_confirmer"; element: StudyElementRef }
   | { type: "element_corriger"; element: StudyElementRef; changes: StudyElementChanges; portee?: StudyElementScope }
   | { type: "element_ecarter"; element: StudyElementRef; motif: string }
