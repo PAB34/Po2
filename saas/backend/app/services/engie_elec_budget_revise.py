@@ -44,6 +44,7 @@ from app.services.invoice_bpu import (
     load_historical_bpu_prices,
     normalize_bpu_supplier,
 )
+from app.services.prm_scope import in_scope_clause
 
 # --------------------------------------------------------------------------- codes
 # Classification des lignes ENGIE (``normalized_code`` = normalized_component du
@@ -617,6 +618,7 @@ def _fetch_lines(db: Session, city_id: int | None, supplier: str) -> dict[str, d
             EnergyInvoice.city_id == city_id,
             EnergyInvoice.energy_type == "electricity",
             EnergyInvoiceSite.prm_id.isnot(None),
+            in_scope_clause(city_id),
         )
     ).all()
 
