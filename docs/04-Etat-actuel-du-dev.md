@@ -37,6 +37,9 @@ déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul do
   de coupe et repères de façade, cliquables pour ouvrir la vue ; pièces de la coupe rattachées aux locaux
   du plan ; **hauteur sous plafond lue par local** ; hauteur des menuiseries lue en élévation).
   ⚠️ S4 ne se vérifie qu'avec **deux niveaux étudiés et calés** : seul le R+1 l'est.
+  **S5 choisi en reprise (2026-09-28)** : cadrage `thermique/coupes-elevations-S5-decisions.md` (existant,
+  lecture des planches réelles des deux projets, lots S5a–S5e, **Q34–Q41 en attente de réponse**). Le R+1
+  étudié est celui du **projet 1** (Frontignan, PC04, 1/100).
 - `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
   Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
   menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;
