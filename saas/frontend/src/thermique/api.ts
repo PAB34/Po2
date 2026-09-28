@@ -284,7 +284,15 @@ export type StudyOperation =
   | { type: "element_ecarter"; element: StudyElementRef; motif: string }
   | { type: "element_reactiver"; element: StudyElementRef }
   /** Un pont que l'agent n'a pas vu, posé là où le thermicien clique (remarque C, D157). */
-  | { type: "pont_ajouter"; point_pdf: PdfPoint; type_pont: string; reference_pont?: string };
+  | {
+      type: "pont_ajouter";
+      point_pdf: PdfPoint;
+      type_pont: string;
+      reference_pont?: string;
+      /** Position calculée par l'écran, que le serveur vérifie au lieu de la recalculer (P5, D164). */
+      troncon?: string;
+      abscisse_m?: number;
+    };
 export type StudyPreview = {
   content: StudyContent;
   couverture: StudyCoverage;

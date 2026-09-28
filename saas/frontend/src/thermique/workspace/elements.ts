@@ -197,6 +197,12 @@ export function pontDeElement(content: StudyContent, element: StudyReleveElement
       (bridge) =>
         bridge.abscisse_m != null && element.debut_m <= bridge.abscisse_m && bridge.abscisse_m <= element.fin_m,
     ) ??
+    // Un pont réattribué change de type dans l'écran avant que le plan soit recalculé : on le retrouve
+    // alors à sa place exacte, quel que soit le type encore porté par la liaison dessinée.
+    (content.enveloppe.liaisons ?? []).find(
+      (bridge) =>
+        bridge.troncon === element.troncon && bridge.abscisse_m != null && Math.abs(bridge.abscisse_m - milieu) < 1e-6,
+    ) ??
     null
   );
 }

@@ -296,6 +296,21 @@ def _ajouter_pont(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[st
         raise ThermiqueError(f"Pont type inconnu du catalogue NF EN ISO 14683 : « {reference} ».")
 
     manifeste = contenu["enveloppe"]["manifeste"]
+    elements = contenu["enveloppe"]["releve_brut"]["elements"]
+    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in elements}
+    # P5, D164 : l'écran a déjà situé le pont, avec la même règle, pour le poser sans attendre. On vérifie sa
+    # position au lieu de la recalculer : c'est elle qui fait l'identité que ses gestes suivants visent.
+    if operation.get("troncon") is not None and operation.get("abscisse_m") is not None:
+        troncon = next((t for t in manifeste["troncons"] if t["id"] == operation["troncon"]), None)
+        if troncon is None:
+            raise ThermiqueError(f"Le tronçon « {operation['troncon']} » n'existe pas sur ce niveau.")
+        abscisse = round(float(operation["abscisse_m"]), 3)
+        if not troncon["debut_m"] - 0.01 <= abscisse <= troncon["fin_m"] + 0.01:
+            raise ThermiqueError("La position du pont sort de son tronçon.")
+        if (troncon["id"], abscisse, abscisse) in prises:
+            raise ThermiqueError("Un élément occupe déjà exactement cette position.")
+        return _inserer_pont(elements, troncon["id"], abscisse, type_pont, x, y, reference)
+
     largeur, hauteur = (float(valeur) for valeur in manifeste["page_px"])
     px_par_m = float(manifeste["px_par_m"])
     px, py = x * largeur / 1000, y * hauteur / 1000
@@ -313,14 +328,24 @@ def _ajouter_pont(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[st
         raise ThermiqueError("Ce niveau n'a aucun tronçon d'enveloppe : le pont ne peut pas être situé.")
     _distance, troncon, abscisse = meilleur
 
-    elements = contenu["enveloppe"]["releve_brut"]["elements"]
-    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in elements}
     abscisse = round(abscisse, 3)
     # Deux ponts au même endroit restent deux éléments distincts : l'identité ne doit jamais se dédoubler.
     while (troncon["id"], abscisse, abscisse) in prises:
         abscisse = round(abscisse + 0.001, 3)
+    return _inserer_pont(elements, troncon["id"], abscisse, type_pont, x, y, reference)
+
+
+def _inserer_pont(
+    elements: list[dict[str, Any]],
+    troncon: str,
+    abscisse: float,
+    type_pont: str,
+    x: float,
+    y: float,
+    reference: Any,
+) -> dict[str, Any]:
     element = {
-        "troncon": troncon["id"],
+        "troncon": troncon,
         "debut_m": abscisse,
         "fin_m": abscisse,
         "type": type_pont,

@@ -12,10 +12,8 @@ import {
 import { appliquerEnLocal, refusDeCorrection } from "./elementsLocal";
 import { annulerOperation, rejouerOperations, retablirOperation } from "./elementsHistory";
 import { memeElement, refDeElement } from "./elements";
+import { preparerAjout } from "./pontsAjoutes";
 import { studyQueryKey } from "./study";
-
-const cle = (ref: StudyElementRef) => `${ref.troncon}|${ref.debut_m}|${ref.fin_m}`;
-const avecAjout = (liste: StudyOperation[]) => liste.some((operation) => operation.type === "pont_ajouter");
 
 /**
  * Gestes sur les éléments d'enveloppe (F4, D68, D103 et D105).
@@ -74,13 +72,7 @@ export function useStudyElements({
     [local, study],
   );
 
-  /**
-   * Envoie une liste de gestes au serveur et affiche le niveau qu'elle donne, sans enregistrer.
-   *
-   * Un pont ajouté ne s'applique pas dans l'écran : seul le serveur sait sur quel tronçon il tombe, donc
-   * quelle identité il prend dans le relevé (D157). Dès qu'un ajout est dans la liste, l'aperçu passe par
-   * ici — sinon le pont disparaîtrait de l'écran et les gestes qui le visent ne viseraient plus rien.
-   */
+  /** Envoie une liste de gestes au serveur et affiche le niveau qu'elle donne, sans enregistrer. */
   const apercevoir = useCallback(
     async (liste: StudyOperation[], reussite: string) => {
       if (!token || !sheetId || liste.length === 0) {
@@ -117,10 +109,7 @@ export function useStudyElements({
         ? "Dernière correction annulée — recalculez le plan pour actualiser le résultat."
         : "Dernière correction annulée. Aucune correction locale en attente.",
     );
-    if (avecAjout(suivant.operations)) {
-      void apercevoir(suivant.operations, "Dernière correction annulée. Plan recalculé, rien n'est encore enregistré.");
-    }
-  }, [annulees, apercevoir, operations, study]);
+  }, [annulees, operations, study]);
 
   const redo = useCallback(() => {
     if (!study?.content || annulees.length === 0) {
@@ -132,10 +121,7 @@ export function useStudyElements({
     setAnnulees(suivant.annulees);
     setLocal(rejouerOperations(study.content, suivant.operations));
     setMessage("Correction rétablie — recalculez le plan pour actualiser le résultat.");
-    if (avecAjout(suivant.operations)) {
-      void apercevoir(suivant.operations, "Correction rétablie. Plan recalculé, rien n'est encore enregistré.");
-    }
-  }, [annulees, apercevoir, operations, study]);
+  }, [annulees, operations, study]);
 
   /** Envoie les gestes accumulés au serveur pour voir leur effet sur le plan, sans enregistrer. */
   const recompute = useCallback(async () => {
@@ -143,32 +129,26 @@ export function useStudyElements({
   }, [apercevoir, operations]);
 
   /**
-   * Pose un pont que l'agent n'a pas vu, là où le thermicien a cliqué (remarque C, D157), puis le désigne
-   * pour qu'il puisse aussitôt lui donner son pont type.
+   * Pose un pont que l'agent n'a pas vu, là où le thermicien a cliqué (remarque C, D157), **aussitôt**
+   * (P5, D164), puis le désigne pour qu'il puisse lui donner son pont type.
    */
   const ajouterPont = useCallback(
-    async (point_pdf: PdfPoint, type_pont: string) => {
+    (point_pdf: PdfPoint, type_pont: string, reference_pont?: string) => {
       const base = local ?? study?.content;
       if (!base) return;
-      const avant = new Set(base.enveloppe.releve_brut.elements.map((element) => cle(refDeElement(element))));
-      const liste: StudyOperation[] = [...operations, { type: "pont_ajouter", point_pdf, type_pont }];
-      setOperations(liste);
-      setAnnulees([]);
-      const apercu = await apercevoir(
-        liste,
-        "Pont ajouté. Donnez-lui son pont type avec « Réattribuer… » ; rien n'est encore enregistré.",
-      );
-      const nouveau = apercu?.enveloppe.releve_brut.elements.find(
-        (element) => element.ajoute && !avant.has(cle(refDeElement(element))),
-      );
-      if (nouveau) {
-        setSelected(refDeElement(nouveau));
-      } else if (!apercu) {
-        // Le serveur a refusé : le geste ne reste pas dans la liste, sinon il bloquerait l'enregistrement.
-        setOperations(operations);
+      const operation = preparerAjout(base, point_pdf, type_pont);
+      if (!operation) {
+        setMessage("Ce niveau n'a pas d'enveloppe relevée : le pont ne peut pas être situé.");
+        return;
       }
+      const geste = reference_pont ? { ...operation, reference_pont } : operation;
+      setLocal(appliquerEnLocal(base, geste));
+      setOperations((current) => [...current, geste]);
+      setAnnulees([]);
+      setSelected({ troncon: geste.troncon, debut_m: geste.abscisse_m, fin_m: geste.abscisse_m });
+      setMessage("Pont ajouté. Il sera enregistré avec les autres corrections.");
     },
-    [apercevoir, local, operations, study],
+    [local, study],
   );
 
   const save = useCallback(async () => {
@@ -205,7 +185,7 @@ export function useStudyElements({
     busy,
     message,
     apply,
-    ajouterPont: (point: PdfPoint, type: string) => void ajouterPont(point, type),
+    ajouterPont,
     recompute: () => void recompute(),
     save: () => void save(),
     saveAsync: save,

@@ -230,6 +230,9 @@ class EtudeOperation(BaseModel):
     point_pdf: list[float] | None = None
     type_pont: Literal["angle_sortant", "angle_rentrant", "about_refend"] | None = None
     reference_pont: str | None = None
+    # Position calculée par l'écran pour un pont posé : le serveur la vérifie (P5, D164).
+    troncon: str | None = None
+    abscisse_m: float | None = None
     ids: list[str] | None = None
     contour: list[list[float]] | None = None
     contour_pdf: list[list[float]] | None = None

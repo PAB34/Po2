@@ -6,6 +6,7 @@ import type {
   StudyReleveElement,
 } from "../api";
 import { memeElement, refDeElement } from "./elements";
+import { appliquerAjout } from "./pontsAjoutes";
 
 /**
  * Application des gestes d'élément **dans l'écran**, sans serveur (D105).
@@ -69,6 +70,10 @@ function majElement(
 
 /** Applique un geste à l'étude affichée et rend une nouvelle étude, sans toucher à l'originale. */
 export function appliquerEnLocal(content: StudyContent, operation: StudyOperation): StudyContent {
+  // Un pont posé à la main s'ajoute aussi dans l'écran, dès que sa position est connue (P5, D164).
+  if (operation.type === "pont_ajouter") {
+    return appliquerAjout(content, operation);
+  }
   if (!operation.type.startsWith("element_")) {
     return content;
   }

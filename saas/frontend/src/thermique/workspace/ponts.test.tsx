@@ -143,7 +143,7 @@ describe("un pont posé par le thermicien (remarque C, D157)", () => {
     expect(html).toContain("déjà jugé");
   });
 
-  it("l'ajout ne s'applique pas dans l'écran : seul le serveur sait sur quel tronçon il tombe", () => {
+  it("un ajout sans position calculée n'est pas appliqué à l'écran (la position vient de preparerAjout, D164)", () => {
     const content = etude([pont()], [liaison()]);
     expect(
       appliquerEnLocal(content, { type: "pont_ajouter", point_pdf: [10, 10], type_pont: "angle_sortant" }),

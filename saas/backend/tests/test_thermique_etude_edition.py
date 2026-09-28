@@ -624,6 +624,27 @@ def test_un_pont_ajoute_hors_feuille_ou_de_type_inconnu_est_refuse():
         edition.appliquer(contenu, [_ajout(420.0, 200.0, reference_pont="Z9")])
 
 
+def test_la_position_calculee_par_l_ecran_est_reprise_telle_quelle():
+    """P5, D164 : l'écran situe le pont pour le poser sans attendre ; le serveur vérifie, il ne recalcule pas."""
+    contenu = _etude_avec_deux_elements()
+    apres = edition.appliquer(contenu, [_ajout(420.0, 200.0, troncon="T01", abscisse_m=41.999)])
+    ajoute = next(e for e in apres["enveloppe"]["releve_brut"]["elements"] if e.get("ajoute"))
+    assert (ajoute["troncon"], ajoute["debut_m"]) == ("T01", 41.999), "l'identité vue par l'écran est gardée"
+
+
+def test_une_position_d_ecran_impossible_est_refusee():
+    contenu = _etude_avec_deux_elements()
+    with pytest.raises(ThermiqueError, match="n'existe pas"):
+        edition.appliquer(contenu, [_ajout(420.0, 200.0, troncon="T99", abscisse_m=42.0)])
+    with pytest.raises(ThermiqueError, match="sort de son tronçon"):
+        edition.appliquer(contenu, [_ajout(420.0, 200.0, troncon="T01", abscisse_m=150.0)])
+    with pytest.raises(ThermiqueError, match="occupe déjà"):
+        edition.appliquer(
+            contenu,
+            [_ajout(420.0, 200.0, troncon="T01", abscisse_m=42.0), _ajout(420.0, 200.0, troncon="T01", abscisse_m=42.0)],
+        )
+
+
 def test_le_point_pdf_d_un_pont_ajoute_passe_en_repere_de_feuille():
     """L'écran n'envoie que des points PDF : la conversion se fait une fois, comme pour les contours."""
     converti = edition._operations_en_feuille(
