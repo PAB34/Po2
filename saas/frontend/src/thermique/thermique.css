@@ -2156,6 +2156,24 @@ circle.th-seg--measure {
   outline: none;
 }
 
+/* Parois et ponts : le zonage s'efface derrière le plan et ne se confond plus avec les pastilles (D156).
+   Placé après la règle du local ouvert pour l'emporter à spécificité égale. */
+.th-study-room.is-discret polygon {
+  fill-opacity: 0.04;
+  stroke-width: 1;
+  stroke-opacity: 0.45;
+  stroke-dasharray: 4 3;
+  filter: none;
+}
+
+/* Le local ouvert reste repérable, d'un trait fin et plein. */
+.th-study-room.is-discret.is-selected polygon {
+  fill-opacity: 0.08;
+  stroke-width: 1.5;
+  stroke-opacity: 0.8;
+  stroke-dasharray: none;
+}
+
 .th-study-badge--a_verifier {
   background: var(--po2-color-amber-soft);
 }

@@ -17,6 +17,7 @@ export function StudyOverlay({
   draft,
   gaps,
   locked = false,
+  discret = false,
 }: {
   rooms: StudyRoom[];
   selectedId: string | null;
@@ -26,6 +27,11 @@ export function StudyOverlay({
   gaps?: PdfPoint[][];
   /** Vrai quand le plan est occupé par un autre geste (mesure, calage, édition) : les locaux s'effacent. */
   locked?: boolean;
+  /**
+   * Étapes des parois et des ponts : le zonage s'estompe pour laisser lire le plan dessous. Le trait épais
+   * du local ouvert se confondait avec les pastilles de ponts posées sur sa limite (D156).
+   */
+  discret?: boolean;
 }) {
   // Le pointeur n'est jamais retenu ici : il doit atteindre le plan pour pouvoir le déplacer, même posé
   // sur un local. La sélection se fait donc au clic simple, côté visionneuse, qui seule sait distinguer
@@ -50,7 +56,12 @@ export function StudyOverlay({
         // Pendant une édition, une mesure ou un calage, les polygones laissent passer les clics :
         // ils vont au plan, pas à la sélection.
         const inerte = Boolean(draft) || locked;
-        const classes = ["th-study-room", selected ? "is-selected" : "", inerte ? "is-locked" : ""].filter(Boolean);
+        const classes = [
+          "th-study-room",
+          selected ? "is-selected" : "",
+          inerte ? "is-locked" : "",
+          discret ? "is-discret" : "",
+        ].filter(Boolean);
         return (
           <g
             key={room.id}
@@ -65,6 +76,7 @@ export function StudyOverlay({
               <title>{`${room.nom} · ${NATURE_LABELS[room.nature]} · ${squareMeters(room.surface_m2)}`}</title>
             </polygon>
             {selected &&
+              !discret &&
               edited.map((vertex, index) => {
                 const next = edited[(index + 1) % edited.length];
                 const limite = room.limites?.[index] ?? "convention";
@@ -387,14 +399,16 @@ export type StudyRoomValidation = {
   busy: boolean;
   message: string | null;
   onValider: () => void;
+  /** Les parois se jugent à leur étape : le bouton y mène, local ouvert (D155). */
+  onVoirParois?: () => void;
 };
 
 function ValidationLocal({ validation, valide }: { validation: StudyRoomValidation; valide: boolean }) {
-  const { restants, bloque, busy, message, onValider } = validation;
+  const { restants, bloque, busy, message, onValider, onVoirParois } = validation;
   const raison = bloque
     ? bloque
     : restants > 0
-      ? `Encore ${restants} mur${restants > 1 ? "s" : ""} ou menuiserie${restants > 1 ? "s" : ""} à vérifier : confirmez, corrigez ou écartez-les ci-dessous. Les ponts thermiques ne bloquent pas la validation.`
+      ? `Encore ${restants} mur${restants > 1 ? "s" : ""} ou menuiserie${restants > 1 ? "s" : ""} à vérifier : confirmez, corrigez ou écartez-les. Les ponts thermiques ne bloquent pas la validation.`
       : null;
   return (
     <div className="th-study-valider">
@@ -409,6 +423,11 @@ function ValidationLocal({ validation, valide }: { validation: StudyRoomValidati
         </button>
       )}
       {!valide && raison && <small className="th-muted">{raison}</small>}
+      {!valide && !bloque && restants > 0 && onVoirParois && (
+        <button type="button" className="po2-button po2-button--ghost" onClick={onVoirParois}>
+          Vérifier ses parois →
+        </button>
+      )}
       {message && <p className="th-alert th-alert--warn">{message}</p>}
     </div>
   );

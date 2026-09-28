@@ -272,6 +272,7 @@ export function ElementPanel({
   busy,
   message,
   onOperation,
+  parois = false,
 }: {
   content: StudyContent;
   room: StudyRoom | null;
@@ -280,9 +281,11 @@ export function ElementPanel({
   busy: boolean;
   message: string | null;
   onOperation: (operation: StudyOperation) => void;
+  /** Étape « parois et menuiseries » : les ponts ont leur propre étape, ils n'ont rien à faire ici (D155). */
+  parois?: boolean;
 }) {
   const [motif, setMotif] = useState("");
-  const liste = elementsDuLocal(content, room);
+  const liste = elementsDuLocal(content, room).filter((item) => !parois || !estPont(item));
   const element = trouverElement(content, selected);
   const comptes = compterElements(content);
   const douteuxIci = liste.filter((item) => !item.exclu && item.a_verifier).length;
@@ -317,7 +320,9 @@ export function ElementPanel({
 
   return (
     <section className="th-elements">
-      <h2>Éléments d'enveloppe</h2>
+      {/* Seule à l'étape des parois, la liste doit dire de quel local il s'agit. */}
+      {parois && room && <h2 className="th-panel__title">{room.nom}</h2>}
+      <h2>{parois ? "Parois et menuiseries" : "Éléments d'enveloppe"}</h2>
       <p className="th-muted">
         {liste.length} sur ce local · {douteuxIci} à vérifier — niveau : {comptes.aVerifier} sur {comptes.total}
         {comptes.ecartes > 0 ? ` · ${comptes.ecartes} écarté${comptes.ecartes > 1 ? "s" : ""}` : ""}

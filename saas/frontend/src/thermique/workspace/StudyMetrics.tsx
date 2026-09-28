@@ -212,6 +212,7 @@ export function StudyMetrics({
   selectedElement = null,
   grouperPonts = true,
   coteVisee = null,
+  familles = { cotes: true, elements: true, ponts: true },
 }: {
   rooms: StudyRoom[];
   selected: StudyRoom | null;
@@ -228,9 +229,14 @@ export function StudyMetrics({
   grouperPonts?: boolean;
   /** Rang, dans la fiche du local sélectionné, du côté désigné depuis la fiche ou le plan (sujet 2). */
   coteVisee?: number | null;
+  /**
+   * Familles que l'étape en cours autorise, local ouvert compris (D155). Sans cette borne, le local ouvert
+   * montrait tout à toutes les étapes, et un pont se perdait parmi les cotes et les murs.
+   */
+  familles?: { cotes: boolean; elements: boolean; ponts: boolean };
 }) {
-  // Le local sélectionné montre tout ; les cases étendent chaque famille au reste du niveau (D83).
-  const cotesDe = show.metres ? rooms : selected ? [selected] : [];
+  // Le local sélectionné montre tout ce que l'étape permet ; les cases étendent au reste du niveau (D83).
+  const cotesDe = !familles.cotes ? [] : show.metres ? rooms : selected ? [selected] : [];
   const nomsVises = new Set((show.ponts || show.elements ? rooms : selected ? [selected] : []).map((room) => room.nom));
   const nomSelection = selected?.nom ?? null;
   const visible = (piece: string | null | undefined, etendu: boolean) =>
@@ -238,7 +244,7 @@ export function StudyMetrics({
 
   // Les ponts affichés, avec leur position à l'écran : c'est elle qui décide si le sigle tient.
   // Sur le R+1, 77 ponts n'occupent que 48 emplacements distincts — beaucoup se marchent dessus.
-  const pontsAffiches = bridges
+  const pontsAffiches = (familles.ponts ? bridges : [])
     .filter(
       (bridge) =>
         // Une liaison que le relevé n'a rattachée à aucun local doit rester visible : l'invisible ne
@@ -276,7 +282,7 @@ export function StudyMetrics({
 
   return (
     <g className="th-metrics">
-      {shapes
+      {(familles.elements ? shapes : [])
         .filter((shape) => (shape.points_pdf?.length ?? 0) >= 2 && visible(shape.source_parcours?.piece, show.elements))
         // La forme visée passe en dernier : dessinée avant les autres couches du mur, elle disparaissait
         // dessous. C'est ce qui faisait dire « on ne voit pas l'élément clairement sur le plan ».
@@ -336,7 +342,7 @@ export function StudyMetrics({
 
       {/* Le côté désigné passe après toutes les cotes, sinon celles des voisins le recouvrent ; les
           pastilles de ponts restent au-dessus de lui pour rester lisibles (D147). */}
-      {selected && coteVisee != null && selected.fiche.cotes[coteVisee] && (
+      {familles.cotes && selected && coteVisee != null && selected.fiche.cotes[coteVisee] && (
         <Cote
           cote={selected.fiche.cotes[coteVisee]}
           contour={selected.contour_pdf.map(toScreen) as [number, number][]}

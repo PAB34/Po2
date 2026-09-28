@@ -21,6 +21,13 @@ do_not_auto_read:
 
 > Mise à jour : **2026-09-28** (reprise Claude après les lots Codex du 25 au 28).
 
+- **▶️ REPRENDRE ICI — retours d'usage du 2026-09-28** (`thermique/retours-usage-2026-09-28-decisions.md`).
+  **LOT LOCAL NON POUSSÉ** (l'utilisateur poussera plus tard) : correctif de l'**erreur 422** (plus de
+  50 gestes refusés à l'enregistrement des ponts), sujet 2, « Valider ce local », puis **A** (chaque
+  étape ne montre que ses objets, D155) et **B** (ponts attrapables, zonage estompé, D156). En attente
+  des réponses **Q8 à Q18** : créer un pont (C), réattribuer / « à modéliser » (D), minoration des angles
+  (E, 27 angles sur 64 très ouverts au R+1), terrasses (F), coller au plan réel (G : 10 côtés
+  déperditifs sans paroi rattachée, 8 écarts ≥ 50 cm).
 - **✅ « Valider ce local » rétabli (Q7, D152 à D154).** Depuis le lot Codex D139, plus aucun geste ne
   validait un local. Nouveau bouton sur la fiche et route dédiée sans recalcul ; refus tant qu'un mur ou
   une menuiserie « à vérifier » du local n'est pas tranché ; les ponts ne comptent pas. R+1 : 11 locaux

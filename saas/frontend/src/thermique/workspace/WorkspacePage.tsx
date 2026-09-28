@@ -19,8 +19,8 @@ import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreat
 import { ElementPanel } from "./ElementPanel";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
-import { paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
-import { etapeCourante, parcours, type EtapeId } from "./parcours";
+import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
@@ -74,6 +74,8 @@ const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
 const PRISE_ELEMENT_PX = 6;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
+// À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
+const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
 // voisins, sans perdre le bâtiment de vue (Q4).
 const ZOOM_PONT = 5;
@@ -314,6 +316,8 @@ export function WorkspacePage() {
   const demandee = searchParams.get("etape");
   const etape = (etapes.find((item) => item.id === demandee)?.id ?? etapeCourante(etapes)) as EtapeId;
   const etapeActive = etapes.find((item) => item.id === etape) ?? etapes[0];
+  // Ce que l'étape montre et laisse attraper (D155).
+  const vue = vueDeLEtape(etape);
   // Les calques de l'étape s'appliquent jusqu'à ce qu'une case soit touchée ; la mention le dit (Q6).
   const calquesPilotes = !calquesLibres && etapeActive.calques !== null;
   const metricsAffiches = calquesPilotes ? (etapeActive.calques as MetricsShow) : metrics;
@@ -331,7 +335,7 @@ export function WorkspacePage() {
     etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
   // Le côté désigné, s'il est toujours le même côté du local ouvert. Pas à l'étape des ponts, où la
   // fiche du local n'est pas affichée (D150).
-  const rangCote = etape !== "ponts" && !elementsState.selected ? rangVise(selectedRoom, coteVisee) : null;
+  const rangCote = vue.cotes && vue.ficheLocal && !elementsState.selected ? rangVise(selectedRoom, coteVisee) : null;
   const milieuDuCote = rangCote != null && selectedRoom ? milieuCote(selectedRoom.fiche.cotes[rangCote]) : null;
   const focusPlan = pontCourant?.point_pdf
     ? { point: pontCourant.point_pdf, cle: `${pontCourant.troncon}|${pontCourant.abscisse_m}`, zoom: ZOOM_PONT }
@@ -616,10 +620,23 @@ export function WorkspacePage() {
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
                 // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
                 if (shownStudy) {
+                  const liaisons = shownStudy.content.enveloppe.liaisons ?? [];
+                  // Étape des ponts : le clic ne vise que les ponts, large, et rien d'autre ne lui dispute —
+                  // ni le local, ni sa limite, ni le mur qui porte le pont (D156). Un clic dans le vide ne
+                  // change rien : on ne perd pas le pont en cours.
+                  if (vue.clic === "ponts") {
+                    const pont = pontAt(liaisons, point, PRISE_PONT_ETAPE_PX / pixelsPerPt);
+                    const ref = pont ? elementDuPont(shownStudy.content, pont) : null;
+                    if (ref) {
+                      elementsState.select(ref);
+                      setParams({ panneau: "fiche" });
+                    }
+                    return;
+                  }
                   // Un côté du local ouvert se désigne de l'intérieur, près de son tracé ; le mur qui le
                   // porte est au-delà du trait, donc toujours attrapable. Un pont passe avant (D149).
-                  if (selectedRoom && etape !== "ponts" && !editionState.draft) {
-                    const pont = pontAt(shownStudy.content.enveloppe.liaisons ?? [], point, PRISE_PONT_PX / pixelsPerPt);
+                  if (selectedRoom && (vue.clic === "locaux" || vue.clic === "tout") && !editionState.draft) {
+                    const pont = vue.ponts ? pontAt(liaisons, point, PRISE_PONT_PX / pixelsPerPt) : null;
                     const rang = pont ? null : coteAt(selectedRoom, point, PRISE_COTE_PX / pixelsPerPt);
                     if (rang != null) {
                       viserCote(rang, "plan");
@@ -629,11 +646,19 @@ export function WorkspacePage() {
                   }
                   // On cherche l'élément dans tout le niveau, et non dans le seul local ouvert : un mur
                   // est en dehors du contour de son local, donc introuvable autrement. Le pont passe en
-                  // premier, sinon le mur qui le porte l'emporterait toujours.
-                  const vise = viserSurLePlan(shownStudy.content, shownStudy.content.locaux, point, {
-                    element: PRISE_ELEMENT_PX / pixelsPerPt,
-                    pont: PRISE_PONT_PX / pixelsPerPt,
-                  });
+                  // premier, sinon le mur qui le porte l'emporterait toujours. À l'étape des parois, les
+                  // ponts ne sont pas attrapables ; à celle des locaux, rien de l'enveloppe ne l'est.
+                  const vise =
+                    vue.clic === "locaux"
+                      ? null
+                      : viserSurLePlan(
+                          vue.clic === "elements"
+                            ? { ...shownStudy.content, enveloppe: { ...shownStudy.content.enveloppe, liaisons: [] } }
+                            : shownStudy.content,
+                          shownStudy.content.locaux,
+                          point,
+                          { element: PRISE_ELEMENT_PX / pixelsPerPt, pont: PRISE_PONT_PX / pixelsPerPt },
+                        );
                   if (vise) {
                     setCoteVisee(null);
                     elementsState.select(vise.ref);
@@ -762,6 +787,7 @@ export function WorkspacePage() {
                           draft={editionState.draft}
                           locked={tool !== "pan"}
                           gaps={shownStudy.content.couverture?.zones_non_affectees_pdf ?? []}
+                          discret={vue.locauxDiscrets && !editionState.draft}
                         />
                         {!editionState.draft && (
                           <StudyMetrics
@@ -774,6 +800,7 @@ export function WorkspacePage() {
                             selectedElement={elementsState.selected}
                             grouperPonts={etape !== "ponts"}
                             coteVisee={rangCote}
+                            familles={vue}
                           />
                       )}
                     </>
@@ -836,7 +863,12 @@ export function WorkspacePage() {
                 <>
                   {/* Un élément désigné prend tout le bandeau : voir la fiche du local par-dessus noyait
                       l'information qu'on venait justement de demander. */}
-                  {!elementsState.selected && (
+                  {!vue.ficheLocal && !selectedRoom && !elementsState.selected && (
+                    <p className="th-muted">
+                      Cliquez un mur ou une menuiserie sur le plan, ou ouvrez un local, pour vérifier ses parois.
+                    </p>
+                  )}
+                  {vue.ficheLocal && !elementsState.selected && (
                     <StudyRoomPanel
                       room={selectedRoom}
                       state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
@@ -851,14 +883,17 @@ export function WorkspacePage() {
                               busy: validation.busy || editionState.busy || elementsState.busy,
                               message: validation.message,
                               onValider: () => void validerLocal(),
+                              onVoirParois: vue.listeElements === "aucune" ? () => allerEtape("enveloppe") : undefined,
                             }
                           : undefined
                       }
                     />
                   )}
-                  {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). */}
-                  {shownStudy && !editionState.draft && (
+                  {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). À l'étape des
+                      locaux, ils n'apparaissent que si l'un d'eux a été désigné ailleurs (D155). */}
+                  {shownStudy && !editionState.draft && (vue.listeElements !== "aucune" || elementsState.selected) && (
                     <ElementPanel
+                      parois={vue.listeElements === "parois"}
                       content={shownStudy.content}
                       room={selectedRoom}
                       selected={elementsState.selected}

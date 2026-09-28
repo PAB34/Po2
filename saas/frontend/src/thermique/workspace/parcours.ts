@@ -167,6 +167,41 @@ export function parcours(sheet: Sheet | null, study: Study | undefined): Etape[]
 }
 
 /**
+ * Ce que l'étape montre et laisse attraper (retour d'usage du 2026-09-28, D155) : « quand je suis dans une
+ * étape, je ne dois voir que les objets concernés par la catégorie et les actions prévues à cet effet ».
+ *
+ * Les calques (`calques`) règlent ce qui s'étend au reste du niveau ; ceci borne ce qui existe **du tout**
+ * à l'étape, y compris pour le local ouvert — qui, sinon, montrait toujours tout (D83).
+ */
+export type VueEtape = {
+  /** Familles dessinées sur le plan. */
+  cotes: boolean;
+  elements: boolean;
+  ponts: boolean;
+  /** Ce qu'un clic sur le plan attrape : `tout` garde l'aiguillage complet d'avant. */
+  clic: "tout" | "locaux" | "elements" | "ponts";
+  /** Fiche du local (nature, côtés, validation, édition du contour). */
+  ficheLocal: boolean;
+  /** Liste des éléments d'enveloppe du local, et laquelle. */
+  listeElements: "aucune" | "parois" | "toutes";
+  /** Les locaux s'estompent : on regarde le plan dessous, pas le zonage. */
+  locauxDiscrets: boolean;
+};
+
+export function vueDeLEtape(etape: EtapeId): VueEtape {
+  switch (etape) {
+    case "locaux":
+      return { cotes: true, elements: false, ponts: false, clic: "locaux", ficheLocal: true, listeElements: "aucune", locauxDiscrets: false };
+    case "enveloppe":
+      return { cotes: true, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "parois", locauxDiscrets: true };
+    case "ponts":
+      return { cotes: false, elements: false, ponts: true, clic: "ponts", ficheLocal: false, listeElements: "aucune", locauxDiscrets: true };
+    default:
+      return { cotes: true, elements: true, ponts: true, clic: "tout", ficheLocal: true, listeElements: "toutes", locauxDiscrets: false };
+  }
+}
+
+/**
  * L'étape où l'on se trouve quand rien n'est demandé : la première qui n'est pas finie.
  *
  * Le parcours n'interdit rien (D109) : c'est une proposition d'entrée, pas un verrou. Tout étant fini,
