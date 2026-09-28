@@ -235,7 +235,7 @@ export function WorkspacePage() {
   });
   const study = studyQuery.data;
   const selectedLocalId = searchParams.get("local");
-  const selectRoom = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
+  const selectRoomDirect = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
   // Les corrections d'éléments s'appliquent d'abord : l'édition des contours travaille ensuite sur
   // l'étude qu'elles montrent, pour que les deux aperçus ne se contredisent jamais.
   const elementsState = useStudyElements({ token: token ?? null, sheetId, study: study ?? undefined });
@@ -248,9 +248,20 @@ export function WorkspacePage() {
     sheetId,
     study: elementsState.shown,
     selectedRoom: study?.content.locaux.find((room) => room.id === selectedLocalId) ?? null,
-    onSelectRoom: selectRoom,
+    onSelectRoom: selectRoomDirect,
     natureBlockedReason,
   });
+  const selectRoom = useCallback(
+    (id: string) => {
+      if (editionState.draft?.mode === "contour" && editionState.draft.roomId !== id) {
+        editionState.keepDraft();
+      } else if (editionState.draft && editionState.draft.roomId !== id) {
+        return;
+      }
+      selectRoomDirect(id);
+    },
+    [editionState.draft, editionState.keepDraft, selectRoomDirect],
+  );
 
   useEffect(() => {
     const annulerEdition = (event: KeyboardEvent) => {
@@ -360,13 +371,14 @@ export function WorkspacePage() {
   const levelTitle = sheet ? sheetTitle(sheet) : "";
   const changerDeNiveau = (id: number) => {
     editionState.reset();
+    editionState.cancelPending();
     elementsState.select(null);
     setCalquesLibres(false);
     setParams({ planche: id, local: null, panneau: panel === "fiche" ? "planche" : panel });
   };
   const selectSheet = (id: number) => {
     // Des corrections en attente disparaîtraient sans un mot : on demande d'abord (D111).
-    if (elementsState.pending > 0 && id !== sheetId) {
+    if ((elementsState.pending > 0 || editionState.pending > 0) && id !== sheetId) {
       setDepartEnAttente(id);
       return;
     }
@@ -450,20 +462,23 @@ export function WorkspacePage() {
             {departEnAttente !== null && (
               <div className="th-alert th-alert--warn th-ws-depart">
                 <p>
-                  {elementsState.pending} correction{elementsState.pending > 1 ? "s" : ""} ne sont pas
-                  encore enregistrée{elementsState.pending > 1 ? "s" : ""} sur ce niveau.
+                  {elementsState.pending + editionState.pending} modification
+                  {elementsState.pending + editionState.pending > 1 ? "s" : ""} ne sont pas encore enregistrée
+                  {elementsState.pending + editionState.pending > 1 ? "s" : ""} sur ce niveau.
                 </p>
                 <div className="th-inline">
                   <button
                     type="button"
                     className="po2-button po2-button--primary"
-                    disabled={elementsState.busy}
-                    onClick={() => {
+                    disabled={elementsState.busy || editionState.busy}
+                    onClick={() => void (async () => {
                       const cible = departEnAttente;
-                      elementsState.save();
+                      const elementsOk = await elementsState.saveAsync();
+                      const locauxOk = await editionState.savePendingAsync();
+                      if (!elementsOk || !locauxOk) return;
                       setDepartEnAttente(null);
                       if (cible !== null) changerDeNiveau(cible);
-                    }}
+                    })()}
                   >
                     Enregistrer puis changer de niveau
                   </button>
@@ -473,6 +488,7 @@ export function WorkspacePage() {
                     onClick={() => {
                       const cible = departEnAttente;
                       elementsState.cancel();
+                      editionState.cancelPending();
                       setDepartEnAttente(null);
                       if (cible !== null) changerDeNiveau(cible);
                     }}
@@ -494,6 +510,27 @@ export function WorkspacePage() {
               <StudyRoomList study={shownStudy} selectedId={selectedRoom?.id ?? null} onSelect={selectRoom} />
             ) : (
               <p className="th-muted">Les locaux du niveau, chauffés d'abord, apparaîtront ici une fois l'étude importée.</p>
+            )}
+            {editionState.pending > 0 && (
+              <div className="th-element-enregistrer">
+                <p className="th-alert th-alert--warn">
+                  {editionState.pending} modification{editionState.pending > 1 ? "s" : ""} de locaux en attente —
+                  contours provisoires, métrés actualisés au prochain enregistrement.
+                </p>
+                <div className="th-inline">
+                  <button
+                    type="button"
+                    className="po2-button po2-button--primary"
+                    disabled={editionState.busy}
+                    onClick={editionState.savePending}
+                  >
+                    {editionState.busy ? "Calcul…" : "Enregistrer les modifications"}
+                  </button>
+                  <button type="button" className="th-link" disabled={editionState.busy} onClick={editionState.cancelPending}>
+                    Tout annuler
+                  </button>
+                </div>
+              </div>
             )}
           </section>
         </aside>
@@ -599,18 +636,16 @@ export function WorkspacePage() {
                         {
                           cle: "supprimer-local",
                           label: `Supprimer définitivement « ${room.nom} »`,
-                          disabled: editionState.natureChangeDisabled,
-                          title: editionState.natureBlockedReason ?? undefined,
+                          disabled: editionState.busy || Boolean(editionState.draft) || Boolean(natureBlockedReason),
+                          title: natureBlockedReason ?? undefined,
                           faire: () => {
                             if (!window.confirm(
-                              `Supprimer définitivement le local « ${room.nom} » ?\n\nSes contours et métrés disparaîtront de la version courante. Une ancienne version de l'étude permettra de le récupérer.`,
+                              `Retirer le local « ${room.nom} » du brouillon ?\n\nLa suppression deviendra définitive lorsque vous enregistrerez les modifications. Avant cela, « Tout annuler » permet encore de le récupérer.`,
                             )) return;
-                            void editionState.deleteRoom(room.id).then((supprime) => {
-                              if (supprime) {
-                                elementsState.select(null);
-                                setParams({ local: null, panneau: "fiche" });
-                              }
-                            });
+                            if (editionState.deleteRoom(room.id)) {
+                              elementsState.select(null);
+                              setParams({ local: null, panneau: "fiche" });
+                            }
                           },
                         },
                       ];

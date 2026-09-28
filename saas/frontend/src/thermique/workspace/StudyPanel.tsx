@@ -278,11 +278,13 @@ function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdit
             </label>
           )}
           <div className="th-study-actions">
-            <button type="button" className="po2-button po2-button--ghost" onClick={edition.onRecompute} disabled={edition.busy}>
-              Remodéliser
-            </button>
+            {draft.mode !== "contour" && (
+              <button type="button" className="po2-button po2-button--ghost" onClick={edition.onRecompute} disabled={edition.busy}>
+                Remodéliser
+              </button>
+            )}
             <button type="button" className="po2-button" onClick={edition.onSave} disabled={edition.busy || Boolean(edition.blocking)}>
-              Enregistrer et suivant
+              {draft.mode === "contour" ? "Conserver la modification" : "Enregistrer"}
             </button>
             <button type="button" className="po2-button po2-button--ghost" onClick={edition.onCancel} disabled={edition.busy} title="Raccourci : Échap">
               Annuler l'édition

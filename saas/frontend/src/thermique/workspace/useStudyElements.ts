@@ -118,7 +118,7 @@ export function useStudyElements({
 
   const save = useCallback(async () => {
     if (!token || !sheetId || operations.length === 0) {
-      return;
+      return true;
     }
     setBusy(true);
     setMessage(null);
@@ -130,8 +130,10 @@ export function useStudyElements({
       });
       queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
       reset();
+      return true;
     } catch (echec) {
       setMessage(echec instanceof Error ? echec.message : "L'enregistrement a échoué.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -150,6 +152,7 @@ export function useStudyElements({
     apply,
     recompute: () => void recompute(),
     save: () => void save(),
+    saveAsync: save,
     cancel: reset,
     undo,
     redo,

@@ -26,6 +26,7 @@ import {
   type StudyDraft,
 } from "./edition";
 import { changeLocalNatureOperation, sortedStudyRooms, studyQueryKey } from "./study";
+import { appliquerGeometrieLocale } from "./localGeometry";
 
 // Rayon de saisie d'une poignée, en pixels d'écran.
 const PRISE_PX = 10;
@@ -52,6 +53,8 @@ export function useStudyEdition({
   const [preview, setPreview] = useState<StudyPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingOperations, setPendingOperations] = useState<StudyOperation[]>([]);
+  const [localContent, setLocalContent] = useState<Study["content"] | null>(null);
   const dragIndex = useRef<number | null>(null);
   // Tracé du lasso en cours. Hors état React : il se remplit à chaque mouvement de souris.
   const lassoPath = useRef<PdfPoint[] | null>(null);
@@ -155,33 +158,62 @@ export function useStudyEdition({
     }
   }, [draft, onSelectRoom, operations, queryClient, reset, sheetId, study, token, versions]);
 
+  const keepDraft = useCallback(() => {
+    const operation = operations()[0];
+    if (!study || !operation || operation.type !== "modifier") {
+      setMessage("Le contour doit contenir au moins trois points.");
+      return;
+    }
+    const base = localContent ?? study.content;
+    setLocalContent(appliquerGeometrieLocale(base, operation));
+    setPendingOperations((current) => [...current, operation]);
+    reset();
+  }, [localContent, operations, reset, study]);
+
+  const savePending = useCallback(async () => {
+    if (!token || !sheetId || pendingOperations.length === 0) return true;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
+        operations: pendingOperations,
+        motif: "modifications_locaux",
+        valider: false,
+      });
+      queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
+      setPendingOperations([]);
+      setLocalContent(null);
+      void versions.refetch();
+      setMessage("Modifications enregistrées et métrés recalculés.");
+      return true;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "L'enregistrement du lot a échoué.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [pendingOperations, queryClient, sheetId, token, versions]);
+
+  const cancelPending = useCallback(() => {
+    setPendingOperations([]);
+    setLocalContent(null);
+    setMessage(null);
+  }, []);
+
   const deleteRoom = useCallback(
-    async (roomId: string): Promise<boolean> => {
-      if (!token || !sheetId || busy || draft || natureBlockedReason) {
+    (roomId: string): boolean => {
+      if (!study || busy || draft || natureBlockedReason) {
         setMessage(natureBlockedReason ?? "Terminez d'abord l'action en cours.");
         return false;
       }
-      setBusy(true);
+      const operation = { type: "local_supprimer", id: roomId } as const;
+      const base = localContent ?? study.content;
+      setLocalContent(appliquerGeometrieLocale(base, operation));
+      setPendingOperations((current) => [...current, operation]);
       setMessage(null);
-      try {
-        const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
-          operations: [{ type: "local_supprimer", id: roomId }],
-          local_id: roomId,
-          motif: "suppression_local",
-          valider: false,
-        });
-        queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
-        void versions.refetch();
-        reset();
-        return true;
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "La suppression du local a échoué.");
-        return false;
-      } finally {
-        setBusy(false);
-      }
+      return true;
     },
-    [busy, draft, natureBlockedReason, queryClient, reset, sheetId, token, versions],
+    [busy, draft, localContent, natureBlockedReason, study],
   );
 
   const merge = useCallback(
@@ -189,11 +221,15 @@ export function useStudyEdition({
       if (!selectedRoom) {
         return;
       }
+      if (pendingOperations.length > 0) {
+        setMessage("Enregistrez ou abandonnez d'abord les modifications locales en attente.");
+        return;
+      }
       await recompute([{ type: "fusionner", ids: [selectedRoom.id, otherId] }]);
       setDraft({ ...draftFromRoom(selectedRoom), mode: "contour" });
       setMessage("Fusion calculée : vérifiez le plan puis enregistrez.");
     },
-    [recompute, selectedRoom],
+    [pendingOperations.length, recompute, selectedRoom],
   );
 
   const restore = useCallback(
@@ -228,6 +264,10 @@ export function useStudyEdition({
         setMessage("Terminez ou annulez d'abord la reprise du contour.");
         return;
       }
+      if (pendingOperations.length > 0) {
+        setMessage("Enregistrez ou abandonnez d'abord les modifications locales en attente.");
+        return;
+      }
       if (natureBlockedReason) {
         setMessage(natureBlockedReason);
         return;
@@ -255,10 +295,14 @@ export function useStudyEdition({
         setBusy(false);
       }
     },
-    [busy, draft, natureBlockedReason, queryClient, sheetId, study, token, versions],
+    [busy, draft, natureBlockedReason, pendingOperations.length, queryClient, sheetId, study, token, versions],
   );
 
-  const edition: StudyEdition | undefined = selectedRoom
+  const selectedShownRoom = selectedRoom
+    ? (localContent?.locaux.find((room) => room.id === selectedRoom.id) ?? selectedRoom)
+    : null;
+
+  const edition: StudyEdition | undefined = selectedShownRoom
     ? {
         draft,
         busy,
@@ -269,16 +313,16 @@ export function useStudyEdition({
         versions: versions.data ?? [],
         rooms: study?.content.locaux ?? [],
         natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
-        onNature: (nature: StudyLocalNature) => void changeNature(selectedRoom.id, nature),
+        onNature: (nature: StudyLocalNature) => void changeNature(selectedShownRoom.id, nature),
         onStart: (mode: EditMode) => {
           setPreview(null);
           setMessage(null);
-          setDraft(draftFromRoom(selectedRoom, mode));
+          setDraft(draftFromRoom(selectedShownRoom, mode));
         },
         onCancel: reset,
         onDraft: (changes) => setDraft((current) => (current ? { ...current, ...changes } : current)),
         onRecompute: () => void recompute(),
-        onSave: () => void save(),
+        onSave: () => (draft?.mode === "contour" ? keepDraft() : void save()),
         onMerge: (otherId: string) => void merge(otherId),
         onRestore: (numero: number) => void restore(numero),
       }
@@ -286,7 +330,15 @@ export function useStudyEdition({
 
   /** Ouvre l'édition sur un local désigné, sans attendre qu'il soit déjà sélectionné (clic droit). */
   const startOn = (roomId: string, mode: EditMode) => {
-    const room = study?.content.locaux.find((item) => item.id === roomId);
+    if (natureBlockedReason) {
+      setMessage(natureBlockedReason);
+      return;
+    }
+    if (mode === "couper" && pendingOperations.length > 0) {
+      setMessage("Enregistrez ou abandonnez d'abord les modifications locales en attente.");
+      return;
+    }
+    const room = (localContent ?? study?.content)?.locaux.find((item) => item.id === roomId);
     if (!room) {
       return;
     }
@@ -296,8 +348,13 @@ export function useStudyEdition({
   };
 
   const startNew = (point: PdfPoint) => {
-    if (busy || draft || natureBlockedReason) {
-      setMessage(natureBlockedReason ?? "Terminez d'abord l'action en cours.");
+    if (busy || draft || natureBlockedReason || pendingOperations.length > 0) {
+      setMessage(
+        natureBlockedReason ??
+          (pendingOperations.length > 0
+            ? "Enregistrez ou abandonnez d'abord les modifications locales en attente."
+            : "Terminez d'abord l'action en cours."),
+      );
       return;
     }
     setPreview(null);
@@ -442,7 +499,11 @@ export function useStudyEdition({
     busy,
     edition,
     /** Étude affichée : l'aperçu tant qu'il n'est pas enregistré, sinon l'étude en base. */
-    shown: preview ? { ...(study as Study), content: preview.content } : study,
+    shown: preview
+      ? { ...(study as Study), content: preview.content }
+      : localContent && study
+        ? { ...study, content: localContent }
+        : study,
     handlers: {
       onGrab: grab,
       onGrabMove: grabMove,
@@ -454,8 +515,17 @@ export function useStudyEdition({
     startNew,
     deleteRoom,
     changeNature,
-    natureChangeDisabled: Boolean(draft || busy || natureBlockedReason),
-    natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
+    pending: pendingOperations.length,
+    keepDraft,
+    savePending: () => void savePending(),
+    savePendingAsync: savePending,
+    cancelPending,
+    natureChangeDisabled: Boolean(draft || busy || natureBlockedReason || pendingOperations.length),
+    natureBlockedReason: draft
+      ? "Terminez ou annulez d'abord la reprise du contour."
+      : pendingOperations.length
+        ? "Enregistrez ou abandonnez d'abord les modifications locales en attente."
+        : natureBlockedReason,
     reset,
     creation:
       draft?.mode === "ajouter"
