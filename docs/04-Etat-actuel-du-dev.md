@@ -28,6 +28,12 @@ do_not_auto_read:
   des réponses **Q8 à Q18** : créer un pont (C), réattribuer / « à modéliser » (D), minoration des angles
   (E, 27 angles sur 64 très ouverts au R+1), terrasses (F), coller au plan réel (G : 10 côtés
   déperditifs sans paroi rattachée, 8 écarts ≥ 50 cm).
+  **Réponses reçues → D157 à D162.** Références = normes de `Po2/Thermique/NORMES` (pas Th-Bât) ;
+  **catalogue NF EN ISO 14683 tableau C.2 transcrit** (76 ponts types, ψi retenu) ; minoration
+  proportionnelle des angles ; nature « extérieur » avec pont automatique ; G1 à G4 dans l'ordre. **G1
+  fait** (contrôle côté ↔ parois dans la fiche). **Prochain : D** (réattribuer un pont vers une référence
+  du catalogue, afficher ψ), puis C, E, F, G2, G3, G4. ⚠️ Licence CSTB nominative de la 14683 à vérifier
+  avant ouverture à des tiers.
 - **✅ « Valider ce local » rétabli (Q7, D152 à D154).** Depuis le lot Codex D139, plus aucun geste ne
   validait un local. Nouveau bouton sur la fiche et route dédiée sans recalcul ; refus tant qu'un mur ou
   une menuiserie « à vérifier » du local n'est pas tranché ; les ponts ne comptent pas. R+1 : 11 locaux

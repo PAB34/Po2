@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { StudyRoom, StudySide } from "../api";
-import { coteAt, empreinteCote, milieuCote, rangVise } from "./cotes";
+import { controleCote, coteAt, empreinteCote, milieuCote, rangVise } from "./cotes";
 import { StudyMetrics } from "./StudyMetrics";
 import { StudyRoomPanel } from "./StudyPanel";
 
@@ -122,6 +122,39 @@ describe("le côté désigné sur le plan (D147)", () => {
 
   it("sans côté désigné, aucun halo", () => {
     expect(plan(null)).not.toContain("th-metric-cote__halo");
+  });
+});
+
+describe("contrôle d'un côté par ses parois (G1)", () => {
+  const paroi = (lineaire_m: number) => ({ composant: "P1", lineaire_m });
+
+  it("un côté déperditif sans paroi rattachée est signalé : sa composition est inconnue", () => {
+    expect(controleCote(cote({ enveloppe: [] })).etat).toBe("sans_paroi");
+  });
+
+  it("un écart de 20 cm ou plus est signalé, avec son sens", () => {
+    expect(controleCote(cote({ longueur_m: 10, enveloppe: [paroi(8.06), paroi(1.5)] }))).toEqual({
+      etat: "ecart",
+      paroisM: 9.56,
+      ecartM: -0.44,
+    });
+  });
+
+  it("en deçà, les arrondis du relevé ne font pas d'alerte", () => {
+    expect(controleCote(cote({ longueur_m: 10, enveloppe: [paroi(9.9)] })).etat).toBe("ok");
+  });
+
+  it("un côté qui ne déperd pas n'est pas contrôlé", () => {
+    expect(controleCote(cote({ deperditif: false, enveloppe: [] })).etat).toBe("hors_champ");
+  });
+
+  it("la fiche le dit, côté par côté et en tête de liste", () => {
+    const html = renderToStaticMarkup(
+      <StudyRoomPanel room={bureau([cote({ enveloppe: [] }), cote({ longueur_m: 10, enveloppe: [paroi(8)] })])} />,
+    );
+    expect(html).toContain("Aucune paroi rattachée");
+    expect(html).toContain("pour un côté de");
+    expect(html).toContain("1 côté déperditif sans paroi rattachée · 1 dont les parois s&#x27;écartent");
   });
 });
 

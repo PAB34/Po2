@@ -3,6 +3,7 @@ import type { CSSProperties, KeyboardEvent } from "react";
 
 import type { PdfPoint, Study, StudyLocalNature, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
+import { controleCote } from "./cotes";
 import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
 import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
 
@@ -362,7 +363,14 @@ function CoteLigne({
     if (vise) ligne.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }, [vise]);
   const trace = (side.trace_pdf?.length ?? 0) >= 2;
-  const classes = [side.deperditif ? "is-loss" : "", vise ? "is-selected" : ""].filter(Boolean).join(" ");
+  const controle = controleCote(side);
+  const classes = [
+    side.deperditif ? "is-loss" : "",
+    vise ? "is-selected" : "",
+    controle.etat === "sans_paroi" || controle.etat === "ecart" ? "is-douteux" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const contenu = (
     <>
       <div><strong>{side.adjacence.replace(/_/g, " ")}</strong><span>{meters(side.longueur_m)}</span></div>
@@ -384,6 +392,20 @@ function CoteLigne({
         </button>
       ) : (
         contenu
+      )}
+      {/* G1 : la longueur vient du contour, la composition des parois rattachées. On dit quand elles
+          manquent ou ne couvrent pas le côté, sans quoi le calcul se trompe en silence. */}
+      {controle.etat === "sans_paroi" && (
+        <small className="th-study-side__alerte">
+          Aucune paroi rattachée : la composition de ce côté est inconnue du calcul.
+        </small>
+      )}
+      {controle.etat === "ecart" && (
+        <small className="th-study-side__alerte">
+          Parois : {meters(controle.paroisM)} pour un côté de {meters(side.longueur_m)} (
+          {controle.ecartM > 0 ? "+" : "−"}
+          {meters(Math.abs(controle.ecartM))}).
+        </small>
       )}
       {(side.enveloppe ?? []).length > 0 && <EnvelopeItems items={side.enveloppe ?? []} />}
     </article>
@@ -501,6 +523,24 @@ export function StudyRoomPanel({
           être dessinés sur le plan. Recalculez le niveau pour les obtenir.
         </p>
       )}
+
+      {(() => {
+        const controles = sheet.cotes.map(controleCote);
+        const sans = controles.filter((c) => c.etat === "sans_paroi").length;
+        const ecarts = controles.filter((c) => c.etat === "ecart").length;
+        if (!sans && !ecarts) return null;
+        return (
+          <p className="th-alert th-alert--warn">
+            {[
+              sans ? `${sans} côté${sans > 1 ? "s" : ""} déperditif${sans > 1 ? "s" : ""} sans paroi rattachée` : "",
+              ecarts ? `${ecarts} dont les parois s'écartent de la longueur du côté` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            . Recadrez le contour ou corrigez les parois avant de valider.
+          </p>
+        );
+      })()}
 
       <section>
         <h2>Côtés et adjacences</h2>

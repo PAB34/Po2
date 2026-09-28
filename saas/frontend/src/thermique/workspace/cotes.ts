@@ -52,6 +52,35 @@ export function coteAt(room: StudyRoom, point: PdfPoint, tolerance: number): num
   return meilleur?.rang ?? null;
 }
 
+// En deçà, l'écart entre un côté et ses parois tient aux arrondis du relevé et aux angles : pas d'alerte.
+export const ECART_COTE_TOLERE_M = 0.2;
+
+export type ControleCote =
+  | { etat: "hors_champ" }
+  | { etat: "sans_paroi" }
+  | { etat: "ecart"; paroisM: number; ecartM: number }
+  | { etat: "ok"; paroisM: number; ecartM: number };
+
+/**
+ * Le côté a-t-il les parois qui le composent (G1, D162) ?
+ *
+ * La longueur déperditive vient du contour ; la composition — donc le U — vient des parois rattachées au
+ * côté. Sur le R+1, 10 côtés déperditifs n'en ont aucune et 8 s'en écartent de 50 cm ou plus : c'est là
+ * que le calcul peut se tromper sans que rien ne le dise. Seuls les côtés déperditifs sont contrôlés.
+ */
+export function controleCote(cote: StudySide): ControleCote {
+  if (!cote.deperditif) {
+    return { etat: "hors_champ" };
+  }
+  const items = cote.enveloppe ?? [];
+  if (items.length === 0) {
+    return { etat: "sans_paroi" };
+  }
+  const paroisM = Math.round(items.reduce((total, item) => total + (item.lineaire_m ?? 0), 0) * 100) / 100;
+  const ecartM = Math.round((paroisM - cote.longueur_m) * 100) / 100;
+  return Math.abs(ecartM) >= ECART_COTE_TOLERE_M ? { etat: "ecart", paroisM, ecartM } : { etat: "ok", paroisM, ecartM };
+}
+
 /** Le milieu du tracé, mesuré le long de la polyligne : c'est là que le plan se centre (D148). */
 export function milieuCote(cote: StudySide): PdfPoint | null {
   const trace = cote.trace_pdf ?? [];

@@ -65,10 +65,12 @@ insère l'élément dans le relevé, avec la mention « ajouté par le thermicie
 ou d'un plancher, à l'intérieur du bâtiment.
 - (a) Non, pour commencer : un pont ajouté se pose toujours sur l'enveloppe, au tronçon le plus proche.
 - (b) Oui : un pont peut être posé n'importe où, rattaché au local sous le curseur, sans tronçon.
+REPONSE : Délicat, normalement c'est toujours à l'intersection de deux tronçons mais faut il que les tronçons soient biens existants. Donc c'est le mélange de a et de b mais pllutot b puisque ce sera l'utilisateur qui le définiera.
 
 **Q9 — Quels types proposer à la création ?** Aujourd'hui trois : angle sortant, angle rentrant, about de
 refend. À ajouter selon vous : liaison plancher intermédiaire, plancher bas, toiture, balcon ou terrasse,
 appui, linteau ou tableau de baie, autre (à modéliser) ?
+REPONSE : Il faut travailler à l'extraction de tous les ponts thermiques et autres éléments qui pourraient nous servir des normes faisant références aux éléments qui constituent une bibliothèque en vu de la réalisation des déperditions et apports thermiques "C:\Users\pa.borja\Documents\Po2\Thermique\NORMES", ceci nous permettra d'obtenir une bibliothèque Dans laquelle puiser ces ponts thermique en vue de réaliser la bibliothèque projet.
 
 ## D — Réattribuer un pont mal reconnu, et le « à modéliser »
 
@@ -87,9 +89,12 @@ signalé dans la fiche et l'export, et attend une valeur ψ calculée à part.
 **Q10 — D'où viennent les références de ponts ?**
 - (a) Un catalogue de ponts **dans la bibliothèque du projet**, comme les parois (L1, L2) : le thermicien
   crée ses ponts types (nom, ψ, source), réutilisables.
+Il faut travailler à l'extraction de tous les ponts thermiques et autres éléments qui pourraient nous servir des normes faisant références aux éléments qui constituent une bibliothèque en vu de la réalisation des déperditions et apports thermiques "C:\Users\pa.borja\Documents\Po2\Thermique\NORMES"
 - (b) Le **catalogue réglementaire Th-Bât** (fascicule ponts thermiques) intégré à l'outil, puis la
   bibliothèque du projet pour le reste.
+C'est pas la bonne réglementation nous devons précisemment travailler sur les normes liées aux déperditions et apports thermiques en vue de fournir aux entreprises de travaux CVC une étude parfaite pour leur travail de dimensionnement provenant de "C:\Users\pa.borja\Documents\Po2\Thermique\NORMES" et si besoin d enouvelles normes tu me dis je te les fournirai
 - (c) Seulement l'état « à modéliser » pour l'instant, sans aucune valeur ψ dans l'outil.
+Il faut que les valeurs puisses s'affiher donc il faut ces valeurs
 
 ## E — Minorer les angles de moins de 90°
 
@@ -110,9 +115,11 @@ candidats « à écarter » signalés d'office.
 - (a) Proportionnelle au changement de direction : ψ(θ) = ψ₉₀ × θ / 90.
 - (b) Les valeurs du catalogue réglementaire à 90° et à 135°, interpolées entre les deux.
 - (c) Une autre règle que vous me donnez (référence normative à citer dans le fichier).
+REPONSE : Il faut ce fier aux normes provenant de "C:\Users\pa.borja\Documents\Po2\Thermique\NORMES", si aucune précision dan sla norme alors utiliser la proportionnalité (peut être le plus simple et cohérent)
 
 **Q12 — Et un angle plus fermé que 90° (changement de direction > 90°) ?** Majoré, plafonné à ψ₉₀,
 ou signalé à vérifier ?
+Tout dépend du type de pont thermique mais normalement cela entre dans la même problématique que la question précédente non ?
 
 ## F — Les terrasses sont des locaux extérieurs
 
@@ -129,10 +136,13 @@ le long du côté commun).
 
 **Q13 — Terrasse seulement, ou toute pièce extérieure ?** (balcon, loggia, coursive, patio…) : une nature
 « terrasse » ou une nature « extérieur » plus large ?
+REPONSE : toute pièce extérieures comme tu les as cités entre autres
 **Q14 — Le pont linéique le long du côté commun est-il créé automatiquement** dès qu'un local est classé
 terrasse (à juger ensuite dans la passe des ponts), ou ajouté à la main ?
+REPONSE : créer automatiquement
 **Q15 — L'agent doit-il apprendre à reconnaître les terrasses** dès l'analyse (consigne ajoutée à
 l'agent de lecture des locaux, dans le code — pas `.claude/agents/thermicien-plan.md`) ?
+REPONSE : Oui dès l'analyse
 
 ## G — Coller au plan réel : vides, longueurs, points des éléments, agent de liaison
 
@@ -156,24 +166,74 @@ l'agent de lecture des locaux, dans le code — pas `.claude/agents/thermicien-p
 - **G1 — Un contrôle visible par côté** : dans la fiche, chaque côté déperditif affiche l'écart entre sa
   longueur et celle de ses parois, et une alerte « aucune paroi rattachée ». Peu coûteux, rend le risque
   visible avant tout calcul.
+REPONSE : OK
 - **G2 — Dessiner l'emprise des angles et abouts** : les « vides » visuels aux coins disparaissent.
   Affichage seul (D99), le calcul ne change pas.
+REPONSE : OK
 - **G3 — Déplacer les bornes d'un élément sur le plan** (reporté par D104) : poignées aux deux extrémités
   de l'élément désigné, glissées le long de son tronçon ; le voisin suit, pour qu'aucun vide ne se crée.
+REPONSE : OK
 - **G4 — Un agent de liaison** : après le recadrage d'un local, un agent Claude Code (sur le poste, sans
   clé d'API, comme les deux autres) relit le contour recadré et le relevé, et **propose** les rattachements
   paroi ↔ côté, les bornes à déplacer et les vides à combler, **comme des gestes à valider**, jamais
   appliqués en silence.
+REPONSE : OK
 
 **Q16 — Dans quel ordre ?** Proposition : G1, puis G2, puis G3, puis G4 (G4 s'appuie sur G1 pour dire ce
-qui cloche, et sur G3 pour exprimer ses propositions).
+qui cloche, et sur G3 pour exprimer ses propositions). 
+REPONSE : Ok de G1 à G4
 **Q17 — Déplacer une borne d'élément : le voisin suit-il ?**
 - (a) Oui, la borne est partagée : allonger un mur raccourcit son voisin (aucun vide possible).
 - (b) Non, chaque élément bouge seul : un vide ou un recouvrement peut apparaître, signalé en alerte.
+REPONSE : Ok (a)
 **Q18 — L'agent de liaison se déclenche quand ?**
 - (a) À la validation de chaque local (il relit ce local seul).
 - (b) Sur demande, pour le niveau entier, une fois les recadrages faits.
 - (c) Les deux.
+REPONSE : OK (b)
+---
+
+## Décisions tirées des réponses (2026-09-28)
+
+**D157 — Un pont ajouté est posé par le thermicien, là où il le dit (Q8 : « plutôt b »).** Il est
+d'ordinaire à l'intersection de deux tronçons, mais ceux-ci peuvent manquer ou être faux : le point posé
+fait foi, rattaché au local sous le curseur ; le tronçon le plus proche n'est qu'une proposition.
+
+**D158 — La référence des ponts, ce sont les normes du dossier `Thermique/NORMES`, pas Th-Bât (Q9, Q10).**
+Objectif : une étude de déperditions et d'apports utilisable par une entreprise CVC pour dimensionner.
+Premier fruit : le **tableau C.2 de la NF EN ISO 14683** transcrit dans
+`saas/backend/app/data/thermique_ponts_iso14683.json` — **76 ponts types** (toitures R1–R12, balcons
+B1–B4, angles C1–C8, planchers intermédiaires IF1–IF8, murs intérieurs IW1–IW6, planchers bas GF1–GF16,
+poteaux P1–P4, baies W1–W18), chacun avec ψe, ψoi et ψi et la page de son croquis. Ces valeurs
+**s'affichent** (Q10 c : « il faut ces valeurs »). La bibliothèque du projet y puisera ; ce qui n'y est
+pas devient « à modéliser » (calcul selon la NF EN ISO 10211).
+
+**D159 — ψi, dimensions intérieures.** Les longueurs de l'outil sont prises au nu intérieur ; la NF EN
+12831-1 (annexe C) impose alors ψ rapporté aux dimensions intérieures. **Un angle ou un about de refend
+est vertical : sa longueur est la hauteur d'étage**, d'où la dépendance à l'étape « Hauteurs ».
+
+**D160 — Angles hors 90° : la norme d'abord, sinon la proportionnalité (Q11, Q12).** Aucune des normes du
+dossier ne traite de minoration d'angle (recherche texte sur 14683, 12831-1, 12831-2, 10211 ; le tableau
+C.2 ne dessine que des angles droits). Règle retenue : ψ(θ) = ψ₉₀ × θ / 90, θ étant le changement de
+direction ; la même règle vaut au-delà de 90° (Q12 : « même problématique »), avec un signalement au-delà
+de 135° où le tracé est suspect.
+
+**D161 — Une nature « extérieur » pour toute pièce extérieure** — terrasse, balcon, loggia, coursive,
+patio (Q13). Le pont linéique le long d'un côté commun avec un local chauffé est **créé automatiquement**
+(Q14), puis jugé dans la passe des ponts. L'agent de lecture apprend à les reconnaître **dès l'analyse**
+(Q15).
+
+**D162 — Coller au plan : G1, G2, G3, G4 dans cet ordre (Q16).** Déplacer une borne **entraîne le voisin**
+(Q17 a). L'agent de liaison se lance **sur demande, pour le niveau entier**, une fois les recadrages faits
+(Q18 b).
+
+**Point d'attention — licence.** Le PDF de la 14683 porte la mention « CSTB Editions pour DEXO — licence
+nominative ». Reprendre ses valeurs dans un outil utilisé par d'autres bureaux d'études relève des
+conditions de licence AFNOR/CSTB : à vérifier avant d'ouvrir la bibliothèque à des tiers.
+
+**Normes à demander à l'utilisateur.** L'annexe nationale française de la NF EN 12831-1 (températures
+extérieures de base par département, températures intérieures, valeurs nationales par défaut), si elle
+existe sous forme de document séparé : la norme elle-même renvoie ces valeurs au niveau national.
 
 ---
 
@@ -185,6 +245,16 @@ qui cloche, et sur G3 pour exprimer ses propositions).
 4. **C** (créer un pont au clic droit), selon Q8 et Q9.
 5. **E** (angle porté par chaque pont, minoration) puis **Q10** (valeurs ψ).
 6. **F** (nature terrasse), **G2**, **G3**, **G4**.
+
+## Résultat — G1 et catalogue ISO 14683 (2026-09-28)
+
+- **G1 fait** : chaque côté déperditif de la fiche dit « Aucune paroi rattachée : la composition de ce
+  côté est inconnue du calcul », ou « Parois : x m pour un côté de y m (± z m) » dès 20 cm d'écart
+  (`controleCote`, `cotes.ts`) ; un bandeau en tête de liste les compte. Sur le R+1 : **10 côtés sans
+  paroi** et **15 écarts de 20 cm ou plus** seront signalés.
+- **Catalogue** : `app/data/thermique_ponts_iso14683.json` (76 ponts types) et
+  `tests/test_thermique_ponts_catalogue.py` (complétude par famille, grille de 0,05, angles).
+- 5 tests front nouveaux : **126 tests frontend thermiques**, typecheck ; 3 tests backend.
 
 ## Résultat de ce lot (A et B)
 

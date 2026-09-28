@@ -2208,6 +2208,18 @@ circle.th-seg--measure {
   border-left-color: #d66f25;
 }
 
+/* G1 : un côté déperditif sans parois, ou qu'elles ne couvrent pas. */
+.th-study-sides article.is-douteux {
+  border-left-color: #b45309;
+  border-left-style: dashed;
+}
+
+/* Plus spécifique que `.th-study-sides small`, qui la passerait en gris. */
+.th-study-sides .th-study-side__alerte {
+  color: #b45309;
+  font-weight: 600;
+}
+
 /* « Valider ce local » et ce qui l'empêche encore (Q7). */
 .th-study-valider {
   display: grid;
