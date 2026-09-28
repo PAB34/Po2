@@ -18,7 +18,8 @@ import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
 import { PontsPanel } from "./PontsPanel";
-import { pontDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
+import { pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
@@ -76,6 +77,10 @@ const PRISE_PONT_PX = 8;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
 // voisins, sans perdre le bâtiment de vue (Q4).
 const ZOOM_PONT = 5;
+// Un côté se lit sur toute sa longueur : on serre moins que sur un pont (D148).
+const ZOOM_COTE = 3;
+// Un côté se désigne de l'intérieur du local, à cette distance de son tracé (D149).
+const PRISE_COTE_PX = 8;
 
 function readMetrics(sheetId: number | null): MetricsShow {
   if (sheetId == null) {
@@ -146,6 +151,9 @@ export function WorkspacePage() {
   const [calquesLibres, setCalquesLibres] = useState(false);
   // Niveau qu'on cherche à quitter alors que des corrections attendent (D111) : pas de départ silencieux.
   const [departEnAttente, setDepartEnAttente] = useState<number | null>(null);
+  // Le côté désigné, partagé entre la fiche et le plan (sujet 2, D145).
+  const [coteVisee, setCoteVisee] = useState<CoteVisee | null>(null);
+  const clicsCote = useRef(0);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -258,6 +266,8 @@ export function WorkspacePage() {
       } else if (editionState.draft && editionState.draft.roomId !== id) {
         return;
       }
+      // Ouvrir un local, ou recliquer dans le sien hors d'un côté, relâche le côté désigné (D149).
+      setCoteVisee(null);
       selectRoomDirect(id);
     },
     [editionState.draft, editionState.keepDraft, selectRoomDirect],
@@ -316,9 +326,32 @@ export function WorkspacePage() {
   const elementCourant = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
   const pontCourant =
     etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
+  // Le côté désigné, s'il est toujours le même côté du local ouvert. Pas à l'étape des ponts, où la
+  // fiche du local n'est pas affichée (D150).
+  const rangCote = etape !== "ponts" && !elementsState.selected ? rangVise(selectedRoom, coteVisee) : null;
+  const milieuDuCote = rangCote != null && selectedRoom ? milieuCote(selectedRoom.fiche.cotes[rangCote]) : null;
   const focusPlan = pontCourant?.point_pdf
     ? { point: pontCourant.point_pdf, cle: `${pontCourant.troncon}|${pontCourant.abscisse_m}`, zoom: ZOOM_PONT }
-    : null;
+    : milieuDuCote && coteVisee?.clic != null
+      ? { point: milieuDuCote, cle: `cote|${coteVisee.clic}`, zoom: ZOOM_COTE }
+      : null;
+  // Désigner un côté relâche l'élément désigné, sinon la fiche resterait masquée (D150). Un second clic
+  // sur le même côté le relâche (D146). Depuis la fiche, le plan va au côté ; depuis le plan, le côté est
+  // déjà sous les yeux et le plan ne bouge pas.
+  const viserCote = (rang: number, depuis: "fiche" | "plan") => {
+    if (!selectedRoom || rang === rangCote) {
+      setCoteVisee(null);
+      return;
+    }
+    elementsState.select(null);
+    if (depuis === "fiche") clicsCote.current += 1;
+    setCoteVisee({
+      localId: selectedRoom.id,
+      rang,
+      empreinte: empreinteCote(selectedRoom.fiche.cotes[rang]),
+      clic: depuis === "fiche" ? clicsCote.current : null,
+    });
+  };
 
   useEffect(() => {
     if (!project || !token || referenceMigration.current === project.id) return;
@@ -556,6 +589,17 @@ export function WorkspacePage() {
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
                 // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
                 if (shownStudy) {
+                  // Un côté du local ouvert se désigne de l'intérieur, près de son tracé ; le mur qui le
+                  // porte est au-delà du trait, donc toujours attrapable. Un pont passe avant (D149).
+                  if (selectedRoom && etape !== "ponts" && !editionState.draft) {
+                    const pont = pontAt(shownStudy.content.enveloppe.liaisons ?? [], point, PRISE_PONT_PX / pixelsPerPt);
+                    const rang = pont ? null : coteAt(selectedRoom, point, PRISE_COTE_PX / pixelsPerPt);
+                    if (rang != null) {
+                      viserCote(rang, "plan");
+                      setParams({ panneau: "fiche" });
+                      return;
+                    }
+                  }
                   // On cherche l'élément dans tout le niveau, et non dans le seul local ouvert : un mur
                   // est en dehors du contour de son local, donc introuvable autrement. Le pont passe en
                   // premier, sinon le mur qui le porte l'emporterait toujours.
@@ -564,6 +608,7 @@ export function WorkspacePage() {
                     pont: PRISE_PONT_PX / pixelsPerPt,
                   });
                   if (vise) {
+                    setCoteVisee(null);
                     elementsState.select(vise.ref);
                     setParams({ local: vise.room?.id ?? selectedLocalId, panneau: "fiche" });
                     return;
@@ -577,6 +622,7 @@ export function WorkspacePage() {
                   selectRoom(room.id);
                 } else if (selectedLocalId) {
                   elementsState.select(null);
+                  setCoteVisee(null);
                   setParams({ local: null, panneau: panel === "fiche" ? "planche" : panel });
                 }
               }}
@@ -700,6 +746,7 @@ export function WorkspacePage() {
                             toScreen={toScreen}
                             selectedElement={elementsState.selected}
                             grouperPonts={etape !== "ponts"}
+                            coteVisee={rangCote}
                           />
                       )}
                     </>
@@ -767,6 +814,8 @@ export function WorkspacePage() {
                       room={selectedRoom}
                       state={selectedRoom ? study?.local_states[selectedRoom.id] : undefined}
                       edition={editionState.edition}
+                      coteVisee={rangCote}
+                      onCote={editionState.draft ? undefined : (rang) => viserCote(rang, "fiche")}
                     />
                   )}
                   {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). */}

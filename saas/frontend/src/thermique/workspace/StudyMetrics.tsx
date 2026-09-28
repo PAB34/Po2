@@ -146,7 +146,17 @@ function boite(points: [number, number][]): { largeur: number; hauteur: number }
   return { largeur: Math.max(...xs) - Math.min(...xs), hauteur: Math.max(...ys) - Math.min(...ys) };
 }
 
-function Cote({ cote, contour, toScreen }: { cote: StudySide; contour: [number, number][]; toScreen: ToScreen }) {
+function Cote({
+  cote,
+  contour,
+  toScreen,
+  vise = false,
+}: {
+  cote: StudySide;
+  contour: [number, number][];
+  toScreen: ToScreen;
+  vise?: boolean;
+}) {
   const trace = (cote.trace_pdf ?? []).map(toScreen) as [number, number][];
   if (trace.length < 2) {
     return null;
@@ -155,7 +165,9 @@ function Cote({ cote, contour, toScreen }: { cote: StudySide; contour: [number, 
   if (!point) {
     return null;
   }
-  const lisible = longueurEcran(trace) >= COTE_LISIBLE_PX;
+  // Le côté désigné garde son étiquette même court : c'est lui qu'on est venu voir (D147).
+  const lisible = vise || longueurEcran(trace) >= COTE_LISIBLE_PX;
+  const polyligne = trace.map(([x, y]) => `${x},${y}`).join(" ");
   const centre = ancre(contour);
   // Perpendiculaire au côté, poussée du côté opposé au centre du local.
   let nx = -point.uy;
@@ -166,8 +178,9 @@ function Cote({ cote, contour, toScreen }: { cote: StudySide; contour: [number, 
   }
   const orientation = orientationLisible(cote);
   return (
-    <g className={`th-metric-cote${cote.deperditif ? " is-deperditif" : ""}`}>
-      <polyline points={trace.map(([x, y]) => `${x},${y}`).join(" ")} />
+    <g className={`th-metric-cote${cote.deperditif ? " is-deperditif" : ""}${vise ? " is-selected" : ""}`}>
+      {vise && <polyline points={polyligne} className="th-metric-cote__halo" />}
+      <polyline points={polyligne} />
       {lisible && (
         <text x={point.x + nx * ECART_ETIQUETTE_PX} y={point.y + ny * ECART_ETIQUETTE_PX} textAnchor="middle">
           <tspan className="th-metric-cote__valeur">{metres(cote.longueur_m)}</tspan>
@@ -198,6 +211,7 @@ export function StudyMetrics({
   toScreen,
   selectedElement = null,
   grouperPonts = true,
+  coteVisee = null,
 }: {
   rooms: StudyRoom[];
   selected: StudyRoom | null;
@@ -212,6 +226,8 @@ export function StudyMetrics({
    * c'est précisément là qu'il faut les distinguer un à un (F2, Q4).
    */
   grouperPonts?: boolean;
+  /** Rang, dans la fiche du local sélectionné, du côté désigné depuis la fiche ou le plan (sujet 2). */
+  coteVisee?: number | null;
 }) {
   // Le local sélectionné montre tout ; les cases étendent chaque famille au reste du niveau (D83).
   const cotesDe = show.metres ? rooms : selected ? [selected] : [];
@@ -302,11 +318,13 @@ export function StudyMetrics({
         const tout = show.toutesCotes || room.id === selected?.id;
         return (
           <g key={`metres-${room.id}`}>
-            {room.fiche.cotes
-              .filter((cote) => (tout || cote.deperditif) && (cote.trace_pdf?.length ?? 0) >= 2)
-              .map((cote, rang) => (
+            {room.fiche.cotes.map((cote, rang) =>
+              (tout || cote.deperditif) &&
+              (cote.trace_pdf?.length ?? 0) >= 2 &&
+              !(room.id === selected?.id && rang === coteVisee) ? (
                 <Cote key={`${room.id}-cote-${rang}`} cote={cote} contour={contour} toScreen={toScreen} />
-              ))}
+              ) : null,
+            )}
             {Math.min(taille.largeur, taille.hauteur) >= SURFACE_LISIBLE_PX && (
               <text className="th-metric-surface" x={centre.x} y={centre.y} textAnchor="middle">
                 {room.surface_m2?.toLocaleString("fr-FR")} m²
@@ -315,6 +333,17 @@ export function StudyMetrics({
           </g>
         );
       })}
+
+      {/* Le côté désigné passe après toutes les cotes, sinon celles des voisins le recouvrent ; les
+          pastilles de ponts restent au-dessus de lui pour rester lisibles (D147). */}
+      {selected && coteVisee != null && selected.fiche.cotes[coteVisee] && (
+        <Cote
+          cote={selected.fiche.cotes[coteVisee]}
+          contour={selected.contour_pdf.map(toScreen) as [number, number][]}
+          toScreen={toScreen}
+          vise
+        />
+      )}
 
       {amas.map(({ bridge, x, y, sigleLisible, nombre }, rang) => {
           const libelle = LIBELLES_PONT[bridge.type] ?? bridge.type;

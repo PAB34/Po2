@@ -100,7 +100,7 @@ export function elementsDuLocal(content: StudyContent, room: StudyRoom | null): 
   );
 }
 
-function distanceAuSegment(point: PdfPoint, a: PdfPoint, b: PdfPoint): number {
+export function distanceAuSegment(point: PdfPoint, a: PdfPoint, b: PdfPoint): number {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const longueur = dx * dx + dy * dy;

@@ -1,7 +1,7 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 
-import type { PdfPoint, Study, StudyLocalNature, StudyRoom } from "../api";
+import type { PdfPoint, Study, StudyLocalNature, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
 import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
@@ -332,14 +332,65 @@ function EditionSection({ room, edition }: { room: StudyRoom; edition: StudyEdit
   );
 }
 
+/**
+ * Une ligne de « Côtés et adjacences ». Son en-tête est un bouton qui désigne le côté sur le plan ; la liste
+ * de ses éléments reste hors du bouton (D146). Désignée depuis le plan, elle se met en vue (D149).
+ */
+function CoteLigne({
+  side,
+  vise,
+  onCote,
+}: {
+  side: StudySide;
+  vise: boolean;
+  onCote?: () => void;
+}) {
+  const ligne = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (vise) ligne.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [vise]);
+  const trace = (side.trace_pdf?.length ?? 0) >= 2;
+  const classes = [side.deperditif ? "is-loss" : "", vise ? "is-selected" : ""].filter(Boolean).join(" ");
+  const contenu = (
+    <>
+      <div><strong>{side.adjacence.replace(/_/g, " ")}</strong><span>{meters(side.longueur_m)}</span></div>
+      <small>{side.voisin || "voisin non identifié"} · {side.epaisseur_cm == null ? "épaisseur inconnue" : `${side.epaisseur_cm} cm`} · {side.orientation || "orientation inconnue"}</small>
+    </>
+  );
+  return (
+    <article ref={ligne} className={classes || undefined}>
+      {onCote ? (
+        <button
+          type="button"
+          className="th-study-side__viser"
+          aria-pressed={vise}
+          disabled={!trace}
+          title={trace ? (vise ? "Relâcher ce côté" : "Voir ce côté sur le plan") : "Ce côté n'a pas de tracé : il ne peut pas être montré sur le plan."}
+          onClick={onCote}
+        >
+          {contenu}
+        </button>
+      ) : (
+        contenu
+      )}
+      {(side.enveloppe ?? []).length > 0 && <EnvelopeItems items={side.enveloppe ?? []} />}
+    </article>
+  );
+}
+
 export function StudyRoomPanel({
   room,
   state,
   edition,
+  coteVisee = null,
+  onCote,
 }: {
   room: StudyRoom | null;
   state?: Study["local_states"][string];
   edition?: StudyEdition;
+  /** Rang du côté désigné, partagé avec le plan (sujet 2). */
+  coteVisee?: number | null;
+  onCote?: (rang: number) => void;
 }) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
@@ -396,11 +447,12 @@ export function StudyRoomPanel({
         <h2>Côtés et adjacences</h2>
         <div className="th-study-sides">
           {sheet.cotes.map((side, index) => (
-            <article key={`${side.adjacence}-${index}`} className={side.deperditif ? "is-loss" : undefined}>
-              <div><strong>{side.adjacence.replace(/_/g, " ")}</strong><span>{meters(side.longueur_m)}</span></div>
-              <small>{side.voisin || "voisin non identifié"} · {side.epaisseur_cm == null ? "épaisseur inconnue" : `${side.epaisseur_cm} cm`} · {side.orientation || "orientation inconnue"}</small>
-              {(side.enveloppe ?? []).length > 0 && <EnvelopeItems items={side.enveloppe ?? []} />}
-            </article>
+            <CoteLigne
+              key={`${side.adjacence}-${index}`}
+              side={side}
+              vise={index === coteVisee}
+              onCote={onCote ? () => onCote(index) : undefined}
+            />
           ))}
         </div>
       </section>

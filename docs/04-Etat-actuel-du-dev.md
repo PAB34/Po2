@@ -19,9 +19,24 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-25** (F0, F4 et F2 livrés ; la série F est complète).
+> Mise à jour : **2026-09-28** (reprise Claude après les lots Codex du 25 au 28).
 
-- **✅ LOCAL, NON POUSSÉ — nature des locaux accessible et gaines techniques (D115 à D122).** La nature
+- **✅ LOCAL, NON POUSSÉ — sujet 2 : un côté se désigne de la fiche au plan et retour (D145 à D151).**
+  Cliquer un côté dans « Côtés et adjacences » le surligne sur le plan et l'y amène ; cliquer à
+  l'intérieur d'un local près d'un côté le désigne dans la fiche. Sur le R+1, 207 côtés sur 222 se
+  désignent au clic sur le plan, les 15 autres (courts, dans des redents) depuis la fiche. Aucun calcul
+  touché. 108 tests front thermiques, typecheck et build. Décisions : `thermique/cote-vers-plan-decisions.md`.
+  **Question tranchée (Q7)** : valider un local n'exige **pas** ses ponts, **uniquement ses côtés** — le
+  sens de « côté jugé » reste à préciser avant de coder (deux lectures dans le fichier de décisions).
+- **✅ EN PRODUCTION (`15e07ccc`, 2026-09-28) — lots Codex.** Annuler / Rétablir des corrections
+  d'éléments (`Ctrl+Z`, `Ctrl+Maj+Z`, `Ctrl+Y`, D116–D124) ; créer un local au clic droit dans le vide et
+  le supprimer définitivement au clic droit (`creation-suppression-locaux-decisions.md`) ; `Échap` et
+  « Annuler l'édition » abandonnent un contour en cours (`annulation-edition-contour-decisions.md`) ;
+  recadrages et suppressions groupés en un lot local, un seul recalcul à « Enregistrer les
+  modifications » (D139–D144, `edition-locale-par-lot-decisions.md`). **Jamais recettés à la souris.**
+- **Suite proposée** : sujet 3 (50/50 sur les 64 angles, touche le métré → décisions d'abord), puis
+  sujet 5 (terrasses). Liste complète : `thermique/reprise-sujets-ouverts.md`.
+- **✅ EN PRODUCTION — nature des locaux accessible et gaines techniques (D115 à D122).** La nature
   se change maintenant directement dans la fiche ou par clic droit, sans ouvrir l'édition du contour et
   sans valider implicitement le local. La quatrième nature `gaine_technique` se comporte partout comme
   un local non chauffé, avec un libellé et une couleur propres. L'audit a corrigé deux filtres actifs
