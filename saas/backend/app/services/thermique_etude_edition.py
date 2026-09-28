@@ -22,6 +22,7 @@ from app.services import thermique_elements as elements_releve
 from app.services import thermique_enveloppe_pieces as pieces
 from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
+from app.services import thermique_lecture_coupes as lecture_coupes
 from app.services import thermique_parcours_enveloppe as enveloppe
 from app.services.thermique import ThermiqueError
 from app.services.thermique_etudes import LOCAL_NATURES, _noms_locaux
@@ -128,6 +129,12 @@ def _modifier(analyse: dict[str, Any], operation: dict[str, Any]) -> None:
         if not nom:
             raise ThermiqueError("Le nom d'un local ne peut pas être vide.")
         objet["subtype"] = nom
+    # Hauteur sous plafond fini (D178) saisie ou validée par le thermicien. `retirer_hauteur` rend la main
+    # à la hauteur lue dans les coupes (les gestes voyagent sans leurs champs vides : pas de `None`).
+    if operation.get("retirer_hauteur"):
+        objet.pop("hauteur_m", None)
+    elif "hauteur_m" in operation:
+        objet["hauteur_m"] = lecture_coupes.controler_hauteur(operation["hauteur_m"])
 
 
 def _couper(analyse: dict[str, Any], operation: dict[str, Any]) -> None:
@@ -406,6 +413,7 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
                 "id": identifiant,
                 "nom": nom,
                 "nature": objet.get("local") or "chauffe",
+                "hauteur_m": objet.get("hauteur_m"),
                 "contour": copy.deepcopy(objet["points"]),
                 "limites": limites.get(identifiant, []),
                 "surface_m2": fiche.get("surface_m2"),

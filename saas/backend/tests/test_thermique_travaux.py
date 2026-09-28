@@ -222,7 +222,7 @@ def test_un_remplacement_d_etude_ne_compte_pas_comme_du_travail_humain(db_sessio
 @pytest.mark.parametrize(
     ("nature", "echelle", "motif"),
     [
-        ("coupe", 100, "ce n'est pas un plan de niveau"),
+        ("coupe", None, "l'échelle n'est pas définie"),
         (None, 100, "ce n'est pas un plan de niveau"),
         ("plan", None, "l'échelle n'est pas définie"),
     ],
@@ -246,6 +246,53 @@ def test_demander_deux_fois_ne_met_pas_le_niveau_deux_fois(db_session):
     assert second["ajoutes"] == []
     assert second["ecartes"][0]["motif"] == "déjà dans la file"
     assert len(travaux.file_du_relais(db_session, user)) == 1
+
+
+# --- Lectures de coupes (S5, D181) ---------------------------------------------
+
+
+def test_les_coupes_et_les_traits_des_plans_suivent_les_niveaux(db_session):
+    user, projet, document = _socle(db_session)
+    plan = _planche(db_session, projet, document, 0, "R+1")
+    coupe = _planche(db_session, projet, document, 1, None, nature="coupe")
+    facade = _planche(db_session, projet, document, 2, None, nature="facade")
+
+    resultat = travaux.mettre_en_file(db_session, projet, user)
+    assert resultat["ecartes"] == []
+    types = sorted((t["sheet_id"], t["type"]) for t in resultat["ajoutes"])
+    assert types == [(plan.id, "niveau"), (plan.id, "traits"), (coupe.id, "coupes"), (facade.id, "coupes")]
+    ordre = [t.type for t in travaux.file_du_relais(db_session, user, travaux.TYPES)]
+    assert ordre == ["niveau", "traits", "coupes", "coupes"]
+    # Un second clic ne double rien.
+    second = travaux.mettre_en_file(db_session, projet, user)
+    assert second["ajoutes"] == []
+    assert {e["motif"] for e in second["ecartes"]} == {"déjà dans la file"}
+
+
+def test_un_ancien_relais_ne_recoit_que_des_niveaux(db_session):
+    """Un relais qui ne sait faire qu'une étude de niveau la lancerait sur une planche de coupes."""
+    user, projet, document = _socle(db_session)
+    _planche(db_session, projet, document, 0, "R+1")
+    _planche(db_session, projet, document, 1, None, nature="coupe")
+    travaux.mettre_en_file(db_session, projet, user)
+
+    assert [t.type for t in travaux.file_du_relais(db_session, user)] == ["niveau"]
+
+
+def test_sans_coupe_dans_le_projet_pas_de_traits_a_relever(db_session):
+    user, projet, document = _socle(db_session)
+    _planche(db_session, projet, document, 0, "R+1")
+    resultat = travaux.mettre_en_file(db_session, projet, user)
+    assert [t["type"] for t in resultat["ajoutes"]] == ["niveau"]
+
+
+def test_un_travail_de_coupes_porte_son_type_dans_les_consignes(db_session):
+    user, projet, document = _socle(db_session)
+    _planche(db_session, projet, document, 1, None, nature="coupe")
+    travaux.mettre_en_file(db_session, projet, user)
+    travail = travaux.file_du_relais(db_session, user, travaux.TYPES)[0]
+    travaux.prendre(db_session, travail)
+    assert travaux.consignes_du_travail(db_session, travail)["type"] == "coupes"
 
 
 # --- Cycle de vie d'un travail -------------------------------------------------

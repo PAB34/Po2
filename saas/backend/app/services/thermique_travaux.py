@@ -60,10 +60,21 @@ def rang_du_niveau(label: str | None) -> int | None:
     return None
 
 
-def _travail_vivant(db: Session, sheet_id: int) -> ThermiqueTravail | None:
+# Types de travail (S5, D181). Les lectures de coupes passent après tous les niveaux.
+NIVEAU, TRAITS, COUPES = "niveau", "traits", "coupes"
+TYPES = (NIVEAU, TRAITS, COUPES)
+RANG_TRAITS = 1000
+RANG_COUPES = 1001
+
+
+def _travail_vivant(db: Session, sheet_id: int, type_travail: str = NIVEAU) -> ThermiqueTravail | None:
     return db.scalar(
         select(ThermiqueTravail)
-        .where(ThermiqueTravail.sheet_id == sheet_id, ThermiqueTravail.statut.in_(VIVANTS))
+        .where(
+            ThermiqueTravail.sheet_id == sheet_id,
+            ThermiqueTravail.statut.in_(VIVANTS),
+            ThermiqueTravail.type == type_travail,
+        )
         .order_by(ThermiqueTravail.id.desc())
     )
 
@@ -113,28 +124,60 @@ def motif_d_exclusion(db: Session, sheet: ThermiqueSheet) -> str | None:
     return None
 
 
+def _lectures_de_coupes(db: Session, sheet: ThermiqueSheet, avec_coupes: bool) -> list[tuple[str, int]]:
+    """Les lectures de coupes à demander pour cette planche (D181), sans jamais en doubler une en file.
+
+    Une planche de coupes ou de façades est lue en entier ; un plan voit ses traits de coupe relevés dès
+    que le projet a des coupes. Une lecture n'écrase que des données d'agent : pas de garde-fou D94.
+    """
+    if sheet.scale_denominator is None:
+        return []
+    if sheet.nature in ("coupe", "facade"):
+        return [] if _travail_vivant(db, sheet.id, COUPES) else [(COUPES, RANG_COUPES)]
+    if sheet.nature == "plan" and avec_coupes and not sheet.traits_coupe_json:
+        return [] if _travail_vivant(db, sheet.id, TRAITS) else [(TRAITS, RANG_TRAITS)]
+    return []
+
+
 def mettre_en_file(db: Session, project: ThermiqueProject, user: User) -> dict[str, list[dict[str, Any]]]:
-    """Met en file tous les niveaux éligibles du projet, et dit ce qui a été écarté et pourquoi (D93)."""
+    """Met en file tous les niveaux éligibles du projet, et dit ce qui a été écarté et pourquoi (D93).
+
+    Les planches de coupes et de façades, et les traits de coupe des plans, suivent les niveaux (D181).
+    """
     planches = db.scalars(
         select(ThermiqueSheet).where(ThermiqueSheet.project_id == project.id).order_by(ThermiqueSheet.id)
     ).all()
+    avec_coupes = any(p.nature == "coupe" for p in planches)
     ajoutes: list[ThermiqueTravail] = []
     ecartes: list[dict[str, Any]] = []
+
+    def ajouter(sheet: ThermiqueSheet, type_travail: str, rang: int) -> None:
+        travail = ThermiqueTravail(
+            project_id=project.id,
+            sheet_id=sheet.id,
+            statut="en_attente",
+            type=type_travail,
+            rang=rang,
+            demande_par_user_id=user.id,
+        )
+        db.add(travail)
+        ajoutes.append(travail)
+
     for sheet in planches:
+        lectures = _lectures_de_coupes(db, sheet, avec_coupes)
+        for type_travail, rang in lectures:
+            ajouter(sheet, type_travail, rang)
+        if sheet.nature in ("coupe", "facade"):
+            if not lectures:
+                motif = "l'échelle n'est pas définie" if sheet.scale_denominator is None else "déjà dans la file"
+                ecartes.append({"sheet_id": sheet.id, "label": sheet.label, "motif": motif})
+            continue
         motif = motif_d_exclusion(db, sheet)
         if motif:
             ecartes.append({"sheet_id": sheet.id, "label": sheet.label, "motif": motif})
             continue
         rang = rang_du_niveau(sheet.level_label)
-        travail = ThermiqueTravail(
-            project_id=project.id,
-            sheet_id=sheet.id,
-            statut="en_attente",
-            rang=RANG_INCONNU if rang is None else rang,
-            demande_par_user_id=user.id,
-        )
-        db.add(travail)
-        ajoutes.append(travail)
+        ajouter(sheet, NIVEAU, RANG_INCONNU if rang is None else rang)
     db.commit()
     for travail in ajoutes:
         db.refresh(travail)
@@ -151,13 +194,21 @@ def travaux_du_projet(db: Session, project_id: int) -> list[ThermiqueTravail]:
     )
 
 
-def file_du_relais(db: Session, user: User) -> list[ThermiqueTravail]:
-    """Ce que le relais doit faire, tous projets du thermicien confondus, dans l'ordre des niveaux (D95)."""
+def file_du_relais(db: Session, user: User, types: tuple[str, ...] = (NIVEAU,)) -> list[ThermiqueTravail]:
+    """Ce que le relais doit faire, tous projets du thermicien confondus, dans l'ordre des niveaux (D95).
+
+    Un relais ne reçoit que les types de travail qu'il annonce savoir faire : un ancien relais, qui ne
+    connaît que l'étude d'un niveau, lancerait sinon cette étude sur une planche de coupes.
+    """
     return list(
         db.scalars(
             select(ThermiqueTravail)
             .join(ThermiqueProject, ThermiqueProject.id == ThermiqueTravail.project_id)
-            .where(ThermiqueProject.owner_user_id == user.id, ThermiqueTravail.statut.in_(VIVANTS))
+            .where(
+                ThermiqueProject.owner_user_id == user.id,
+                ThermiqueTravail.statut.in_(VIVANTS),
+                ThermiqueTravail.type.in_(types),
+            )
             .order_by(ThermiqueTravail.project_id, ThermiqueTravail.rang, ThermiqueTravail.id)
         ).all()
     )
@@ -214,6 +265,7 @@ def serialize_travail(db: Session, travail: ThermiqueTravail) -> dict[str, Any]:
         "sheet_id": travail.sheet_id,
         "label": sheet.label if sheet else "",
         "level_label": sheet.level_label if sheet else None,
+        "type": travail.type or NIVEAU,
         "statut": travail.statut,
         "rang": travail.rang,
         "message": travail.message,
@@ -234,6 +286,7 @@ def consignes_du_travail(db: Session, travail: ThermiqueTravail) -> dict[str, An
         raise ThermiqueError("La planche de ce travail n'existe plus.")
     return {
         "travail_id": travail.id,
+        "type": travail.type or NIVEAU,
         "sheet_id": sheet.id,
         "project_id": sheet.project_id,
         "document_id": sheet.document_id,

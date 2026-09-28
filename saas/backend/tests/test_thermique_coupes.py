@@ -156,6 +156,158 @@ def test_sol_et_plafond_mesures_sont_cales_sur_les_lignes_de_niveau():
     assert piece["plafond_m"] - piece["sol_m"] == pytest.approx(2.5)
 
 
+@pytest.mark.parametrize(
+    ("trait", "vue", "meme"),
+    [("A", "COUPE A", True), ("C", "CC", True), ("C", "Coupe C-C", True), ("A", "AA", True),
+     ("A", "B", False), ("A", "Zoom sur menuiserie coupe BB", False), ("1", "11", True)],
+)
+def test_un_trait_retrouve_sa_vue_par_le_nom(trait, vue, meme):
+    from app.services import thermique_lecture_coupes as lecture
+
+    assert lecture.meme_coupe(trait, vue) is meme
+
+
+@pytest.fixture()
+def db_session():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.core.db import Base
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield session
+
+
+def _projet_avec_coupe(db):
+    import json
+
+    from app.core.security import get_password_hash
+    from app.models.thermique import ThermiqueDocument, ThermiqueEtude, ThermiqueProject, ThermiqueSheet
+    from app.models.user import User
+
+    user = User(email="t@b.fr", password_hash=get_password_hash("motdepasse-solide"), nom="N", prenom="P", role="USER", is_active=True)
+    db.add(user)
+    db.flush()
+    projet = ThermiqueProject(owner_user_id=user.id, name="Médiathèque")
+    db.add(projet)
+    db.flush()
+    document = ThermiqueDocument(project_id=projet.id, original_filename="p.pdf", stored_filename="p.pdf", file_format="pdf", size_bytes=1, sha256="x" * 64, page_count=2)
+    db.add(document)
+    db.flush()
+
+    def planche(page, nature):
+        sheet = ThermiqueSheet(project_id=projet.id, document_id=document.id, page_index=page, label=nature, nature=nature,
+                               level_label="R+1" if nature == "plan" else None, scale_denominator=100, rotation_deg=0,
+                               page_width_pt=1684, page_height_pt=2384)
+        db.add(sheet)
+        db.flush()
+        return sheet
+
+    plan, coupe = planche(0, "plan"), planche(1, "coupe")
+    contenu = {"locaux": [{**l, "nature": "chauffe"} for l in LOCAUX]}
+    contenu["locaux"][7]["hauteur_m"] = 2.65  # piece-008 : saisie par le thermicien
+    db.add(ThermiqueEtude(project_id=projet.id, sheet_id=plan.id, format_version=3, content_json=json.dumps(contenu), local_states_json="{}"))
+    db.commit()
+    return plan, coupe
+
+
+def test_des_lectures_rangees_a_la_hauteur_de_chaque_local(db_session):
+    from app.services import thermique_lecture_coupes as lecture
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    lecture.enregistrer_traits(db_session, plan, [TRAIT_A, TRAIT_C])
+    lecture.enregistrer_vues(db_session, coupe, [
+        {**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003]},
+        {"nom": "Zoom sur menuiserie", "nature": "detail", "cadre": [0, 0, 10, 10], "pieces": []},
+    ])
+
+    resultat = lecture.hauteurs_du_plan(db_session, plan)
+    assert resultat["traits_sans_vue"] == ["C"]
+    assert [c["vue"] for c in resultat["coupes"]] == ["COUPE A"]
+    locaux = resultat["locaux"]
+    assert locaux["piece-003"]["hauteur_m"] == 2.88 and locaux["piece-003"]["source"] == "lue"
+    assert locaux["piece-019"]["source"] == "deduite"
+    # La saisie du thermicien l'emporte, la proposition des coupes reste visible.
+    assert locaux["piece-008"]["hauteur_m"] == 2.65
+    assert locaux["piece-008"]["source"] == "saisie"
+    assert locaux["piece-008"]["proposee_m"] == 2.88
+
+
+def test_une_lecture_illisible_est_refusee_a_l_entree(db_session):
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services.thermique import ThermiqueError
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    with pytest.raises(ThermiqueError, match="illisible"):
+        lecture.enregistrer_vues(db_session, coupe, [{"nom": "A", "nature": "coupe", "cadre": [0, 0, 1, 1],
+                                                     "pieces": [{"debut": 0, "fin": 1, "sol": "H99"}]}])
+    with pytest.raises(ThermiqueError, match="sur un plan"):
+        lecture.enregistrer_traits(db_session, coupe, [TRAIT_A])
+    with pytest.raises(ThermiqueError, match="sens"):
+        lecture.enregistrer_traits(db_session, plan, [{**TRAIT_A, "sens": [0, 0]}])
+
+
+@pytest.mark.parametrize(("valeur", "attendu"), [(2.5, 2.5), (None, None)])
+def test_hauteur_saisie_controlee(valeur, attendu):
+    from app.services import thermique_lecture_coupes as lecture
+
+    assert lecture.controler_hauteur(valeur) == attendu
+
+
+@pytest.mark.parametrize("valeur", [0.5, 40, "2,5"])
+def test_hauteur_saisie_hors_bornes_refusee(valeur):
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services.thermique import ThermiqueError
+
+    with pytest.raises(ThermiqueError):
+        lecture.controler_hauteur(valeur)
+
+
+def test_le_geste_modifier_pose_et_retire_la_hauteur():
+    from app.services import thermique_etude_edition as edition
+
+    analyse = {"objects": [{"id": "piece-001", "category": "piece", "subtype": "Bureau", "points": [[0, 0], [10, 0], [10, 10]]}]}
+    edition._modifier(analyse, {"id": "piece-001", "hauteur_m": 2.7})
+    assert analyse["objects"][0]["hauteur_m"] == 2.7
+    edition._modifier(analyse, {"id": "piece-001", "retirer_hauteur": True})
+    assert "hauteur_m" not in analyse["objects"][0]
+
+
+def test_migration_0088_monte_et_redescend_isolee():
+    import importlib.util
+    from pathlib import Path
+
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import inspect
+
+    moteur = sa.create_engine("sqlite:///:memory:")
+    metadata = sa.MetaData()
+    sa.Table("thermique_projects", metadata, sa.Column("id", sa.Integer(), primary_key=True))
+    sa.Table("thermique_sheets", metadata, sa.Column("id", sa.Integer(), primary_key=True))
+    sa.Table("thermique_travaux", metadata, sa.Column("id", sa.Integer(), primary_key=True))
+    metadata.create_all(moteur)
+    chemin = Path(__file__).parents[1] / "alembic" / "versions" / "0088_thermique_coupes.py"
+    spec = importlib.util.spec_from_file_location("migration_0088", chemin)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    with moteur.begin() as connexion:
+        migration.op = Operations(MigrationContext.configure(connexion))
+        migration.upgrade()
+        inspection = inspect(connexion)
+        assert "thermique_vues" in inspection.get_table_names()
+        assert "traits_coupe_json" in {c["name"] for c in inspection.get_columns("thermique_sheets")}
+        assert "type" in {c["name"] for c in inspection.get_columns("thermique_travaux")}
+        migration.downgrade()
+        inspection = inspect(connexion)
+        assert "thermique_vues" not in inspection.get_table_names()
+        assert "type" not in {c["name"] for c in inspection.get_columns("thermique_travaux")}
+
+
 def test_ligne_de_niveau_sans_cote_est_refusee():
     vue = {"nom": "X", "haut": [0, 1], "niveaux": [{"nom": "H1"}], "pieces": [{"debut": 0, "fin": 1, "sol": "H1"}]}
     with pytest.raises(ValueError):

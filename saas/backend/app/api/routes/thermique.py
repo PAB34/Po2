@@ -39,6 +39,8 @@ from app.schemas.thermique import (
     EtudeVersionRead,
     ExternalAccountCreate,
     ExternalAccountRead,
+    HauteursDuPlan,
+    LectureCoupes,
     MiseEnFileResult,
     CalageRequest,
     NordRequest,
@@ -86,6 +88,7 @@ from app.services.thermique_composants import (
 )
 from app.services import thermique_etude_edition as edition
 from app.services import thermique_calage
+from app.services import thermique_lecture_coupes as lecture_coupes
 from app.services import thermique_nord
 from app.services import thermique_ponts_catalogue as ponts_catalogue
 from app.services import thermique_travaux as travaux
@@ -893,11 +896,17 @@ def lire_travaux_du_projet(
 
 @router.get("/travaux", response_model=list[TravailRead])
 def lire_file_du_relais(
+    types: str = travaux.NIVEAU,
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> list[dict]:
-    """Ce que le relais doit faire, dans l'ordre des niveaux : le catalogue monte du bas vers le haut."""
-    return [travaux.serialize_travail(db, t) for t in travaux.file_du_relais(db, user)]
+    """Ce que le relais doit faire, dans l'ordre des niveaux : le catalogue monte du bas vers le haut.
+
+    `types` : les types de travail que le relais sait faire (« niveau,traits,coupes ») ; un relais qui ne
+    le dit pas ne reçoit que des niveaux (S5, D181).
+    """
+    demandes = tuple(t for t in (s.strip() for s in types.split(",")) if t in travaux.TYPES) or (travaux.NIVEAU,)
+    return [travaux.serialize_travail(db, t) for t in travaux.file_du_relais(db, user, demandes)]
 
 
 @router.post("/travaux/{travail_id}/prendre", response_model=TravailConsignes)
@@ -928,6 +937,11 @@ def rendre_un_travail(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Ce travail n'est pas en cours (état : {travail.statut}).",
         )
+    if (travail.type or travaux.NIVEAU) != travaux.NIVEAU:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ce travail est une lecture de coupes : il se rend par « rendre-lecture ».",
+        )
     sheet = _sheet_or_404(db, user, travail.sheet_id)
     payload = _lire_etude_envoyee(fichier)
     rotation = payload["source"]["viewer_rotation_deg"]
@@ -945,6 +959,47 @@ def rendre_un_travail(
         raise _bad_request(exc) from exc
     travaux.terminer(db, travail)
     return serialize_etude(db, etude)
+
+
+@router.post("/travaux/{travail_id}/rendre-lecture", response_model=TravailRead)
+def rendre_une_lecture_de_coupes(
+    travail_id: int,
+    lecture: LectureCoupes,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Range les traits de coupe d'un plan ou les vues d'une planche de coupes, et clôt le travail (D181)."""
+    travail = _travail_or_404(db, user, travail_id)
+    if travail.statut != "en_cours":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ce travail n'est pas en cours (état : {travail.statut}).",
+        )
+    sheet = _sheet_or_404(db, user, travail.sheet_id)
+    try:
+        if travail.type == travaux.TRAITS and lecture.traits is not None:
+            lecture_coupes.enregistrer_traits(db, sheet, lecture.traits)
+        elif travail.type == travaux.COUPES and lecture.vues is not None:
+            lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
+        else:
+            raise ThermiqueError("La lecture rendue ne correspond pas au type du travail.")
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+    return travaux.serialize_travail(db, travaux.terminer(db, travail))
+
+
+@router.get("/sheets/{sheet_id}/hauteurs", response_model=HauteursDuPlan)
+def lire_hauteurs_des_locaux(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Hauteur sous plafond de chaque local du niveau : saisie, lue dans les coupes ou déduite (D178 à D189)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return lecture_coupes.hauteurs_du_plan(db, sheet)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.post("/travaux/{travail_id}/echec", response_model=TravailRead)

@@ -87,6 +87,8 @@ class ThermiqueSheet(Base):
     # Calage sur la planche de référence du projet (S2, D173) : similitude de ses points PDF vers ceux de
     # la référence, et les deux paires de points qui l'ont donnée. Voir `thermique_calage.py`.
     calage_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Traits de coupe relevés sur un plan (S5, D186) : [{"nom", "points", "sens"}] en points PDF.
+    traits_coupe_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     rotation_deg: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     page_width_pt: Mapped[float] = mapped_column(Float, nullable=False)
     page_height_pt: Mapped[float] = mapped_column(Float, nullable=False)
@@ -178,6 +180,34 @@ class ThermiqueEtudeVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class ThermiqueVue(Base):
+    """Une vue d'une planche de coupes ou de façades : une page en porte souvent plusieurs (S5, D185).
+
+    `lecture_json` garde ce que l'agent a lu : le haut de la vue dans la page, ses lignes de niveau et ses
+    pièces (voir `thermique_coupes.py` pour le format), en points PDF de la page.
+    """
+
+    __tablename__ = "thermique_vues"
+    __table_args__ = (UniqueConstraint("sheet_id", "nom", name="uq_thermique_vue_nom"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sheet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("thermique_sheets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nom: Mapped[str] = mapped_column(String(80), nullable=False)
+    # « coupe », « facade » ou « detail » (un détail ne se rattache à aucun trait).
+    nature: Mapped[str] = mapped_column(String(20), nullable=False)
+    cadre_json: Mapped[str] = mapped_column(Text, nullable=False)
+    lecture_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ThermiqueTravail(Base):
     """Un niveau à analyser, en attente du relais qui tourne sur le poste du thermicien (D92).
 
@@ -196,6 +226,9 @@ class ThermiqueTravail(Base):
     )
     # en_attente → en_cours → fini ; refuse (garde-fou D94) et echec sont des fins de course.
     statut: Mapped[str] = mapped_column(String(20), nullable=False, default="en_attente")
+    # « niveau » : étude d'un plan ; « traits » : traits de coupe d'un plan ; « coupes » : vues d'une
+    # planche de coupes ou de façades (S5, D181).
+    type: Mapped[str] = mapped_column(String(20), nullable=False, default="niveau", server_default="niveau")
     # Ordre de passage : le catalogue monte du niveau le plus bas au plus haut (D95).
     rang: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)

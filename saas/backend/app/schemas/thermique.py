@@ -251,6 +251,9 @@ class EtudeOperation(BaseModel):
     nature: Literal["chauffe", "circulation", "non_chauffe", "gaine_technique", "exterieur"] | None = None
     nom: str | None = None
     noms: list[str] | None = None
+    # Hauteur sous plafond fini d'un local (S5, D178), ou son retrait au profit de celle des coupes.
+    hauteur_m: float | None = None
+    retirer_hauteur: bool | None = None
     # Gestes sur un élément d'enveloppe.
     element: ElementReference | None = None
     changes: dict[str, Any] | None = None
@@ -294,6 +297,7 @@ class TravailRead(BaseModel):
     sheet_id: int
     label: str
     level_label: str | None
+    type: str = "niveau"
     statut: str
     rang: int
     message: str | None
@@ -317,6 +321,7 @@ class TravailConsignes(BaseModel):
     """Ce que le relais doit passer à ``run_etude_niveau.py`` pour ce niveau."""
 
     travail_id: int
+    type: str = "niveau"
     sheet_id: int
     project_id: int
     document_id: int
@@ -328,3 +333,18 @@ class TravailConsignes(BaseModel):
 
 class TravailIncident(BaseModel):
     message: str
+
+
+class LectureCoupes(BaseModel):
+    """Ce que rend le relais pour un travail « traits » (un plan) ou « coupes » (une planche) (S5, D181)."""
+
+    traits: list[dict[str, Any]] | None = None
+    vues: list[dict[str, Any]] | None = None
+
+
+class HauteursDuPlan(BaseModel):
+    sheet_id: int
+    locaux: dict[str, dict[str, Any]]
+    coupes: list[dict[str, Any]]
+    traits_sans_vue: list[str]
+    traits: list[dict[str, Any]]
